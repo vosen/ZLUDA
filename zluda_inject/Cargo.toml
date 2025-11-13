@@ -20,7 +20,7 @@ winapi = { version = "0.3", features = [
 zluda_windows = { path = "../zluda_windows" }
 tempfile = "3"
 argh = "0.1"
-bpaf = { version = "0.9.19", features = ["derive"] }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 detours-sys = { path = "../detours-sys" }
 
 [dev-dependencies]

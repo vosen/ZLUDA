@@ -3,71 +3,140 @@ use trie_hard::TrieHard;
 use uuid::uuid;
 use widestring::{u16str, U16Str};
 
-pub static LIBRARIES: &'static [LibraryInfo] =
-    &[NVCUDA, NVML, DNN8, DNN9, BLAS, BLAS_LT, SPARSE, FFT];
+pub static LIBRARIES: &'static [LibraryInfo] = &[
+    NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS_LT13, BLAS_LT12, SPARSE12, SPARSE11, FFT12,
+    FFT11,
+];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
     short_name: "nvcuda",
-    ascii_names: &["nvcuda.dll"],
-    utf16_names: &[u16str!("nvcuda.dll")],
+    is_alias: false,
+    ascii_name: "nvcuda.dll",
+    utf16_name: u16str!("nvcuda.dll"),
     guid: uuid!("9ab28276-52f4-4fe4-bc19-4c966f3aa468"),
+    trace_env_var: "ZLUDA_CUDA_LIB",
+    in_system32: true,
 };
 
 pub const NVML: LibraryInfo = LibraryInfo {
     short_name: "nvml",
-    ascii_names: &["nvml.dll"],
-    utf16_names: &[u16str!("nvml.dll")],
+    is_alias: false,
+    ascii_name: "nvml.dll",
+    utf16_name: u16str!("nvml.dll"),
     guid: uuid!("4fd0ef13-df98-40a7-b34b-6cf55f34a8e9"),
+    trace_env_var: "ZLUDA_ML_LIB",
+    in_system32: true,
 };
 
 pub const DNN8: LibraryInfo = LibraryInfo {
     short_name: "cudnn8",
-    ascii_names: &["cudnn64_8.dll"],
-    utf16_names: &[u16str!("cudnn64_8.dll")],
+    is_alias: false,
+    ascii_name: "cudnn64_8.dll",
+    utf16_name: u16str!("cudnn64_8.dll"),
     guid: uuid!("7ed2e46c-82ce-4779-adbd-b39cd6d9da80"),
+    trace_env_var: "ZLUDA_DNN8_LIB",
+    in_system32: false,
 };
 
 pub const DNN9: LibraryInfo = LibraryInfo {
     short_name: "cudnn9",
-    ascii_names: &["cudnn64_9.dll"],
-    utf16_names: &[u16str!("cudnn64_9.dll")],
+    is_alias: false,
+    ascii_name: "cudnn64_9.dll",
+    utf16_name: u16str!("cudnn64_9.dll"),
     guid: uuid!("6c258b11-104a-4ab0-b343-4e490e136ddd"),
+    trace_env_var: "ZLUDA_DNN9_LIB",
+    in_system32: false,
 };
 
-pub const BLAS: LibraryInfo = LibraryInfo {
-    short_name: "cublas",
-    ascii_names: &["cublas64_13.dll", "cublas64_12.dll"],
-    utf16_names: &[u16str!("cublas64_13.dll"), u16str!("cublas64_12.dll")],
+pub const BLAS13: LibraryInfo = LibraryInfo {
+    short_name: "cublas13",
+    is_alias: false,
+    ascii_name: "cublas64_13.dll",
+    utf16_name: u16str!("cublas64_13.dll"),
     guid: uuid!("b9dcf552-c7a1-4dfe-b27a-58b56695effe"),
+    trace_env_var: "ZLUDA_BLAS_LIB",
+    in_system32: false,
 };
 
-pub const BLAS_LT: LibraryInfo = LibraryInfo {
+pub const BLAS12: LibraryInfo = LibraryInfo {
+    short_name: "cublas12",
+    is_alias: true,
+    ascii_name: "cublas64_12.dll",
+    utf16_name: u16str!("cublas64_12.dll"),
+    guid: uuid!("2c77f12f-e7dc-4dac-88a0-f06f43ceb566"),
+    trace_env_var: "ZLUDA_BLAS_LIB",
+    in_system32: false,
+};
+
+pub const BLAS_LT13: LibraryInfo = LibraryInfo {
     short_name: "cublaslt",
-    ascii_names: &["cublaslt64_13.dll", "cublaslt64_12.dll"],
-    utf16_names: &[u16str!("cublaslt64_13.dll"), u16str!("cublaslt64_12.dll")],
+    is_alias: false,
+    ascii_name: "cublaslt64_13.dll",
+    utf16_name: u16str!("cublaslt64_13.dll"),
     guid: uuid!("667b6076-c4c2-44f4-8b81-073dea1d6125"),
+    trace_env_var: "ZLUDA_BLASLT_LIB",
+    in_system32: false,
 };
 
-pub const SPARSE: LibraryInfo = LibraryInfo {
+pub const BLAS_LT12: LibraryInfo = LibraryInfo {
+    short_name: "cublaslt",
+    is_alias: true,
+    ascii_name: "cublaslt64_12.dll",
+    utf16_name: u16str!("cublaslt64_12.dll"),
+    guid: uuid!("14aeb961-4ef2-480b-9813-df4a6dde454f"),
+    trace_env_var: "ZLUDA_BLASLT_LIB",
+    in_system32: false,
+};
+
+pub const SPARSE12: LibraryInfo = LibraryInfo {
     short_name: "cusparse",
-    ascii_names: &["cusparse64_12.dll", "cusparse64_11.dll"],
-    utf16_names: &[u16str!("cusparse64_12.dll"), u16str!("cusparse64_11.dll")],
+    is_alias: false,
+    ascii_name: "cusparse64_12.dll",
+    utf16_name: u16str!("cusparse64_12.dll"),
     guid: uuid!("741fb1b7-2e24-4484-8205-4794175ccb78"),
+    trace_env_var: "ZLUDA_SPARSE_LIB",
+    in_system32: false,
 };
 
-pub const FFT: LibraryInfo = LibraryInfo {
+pub const SPARSE11: LibraryInfo = LibraryInfo {
+    short_name: "cusparse",
+    is_alias: true,
+    ascii_name: "cusparse64_11.dll",
+    utf16_name: u16str!("cusparse64_11.dll"),
+    guid: uuid!("7d03e8d0-6153-48de-af82-5a53828c9568"),
+    trace_env_var: "ZLUDA_SPARSE_LIB",
+    in_system32: false,
+};
+
+pub const FFT12: LibraryInfo = LibraryInfo {
     short_name: "cufft",
-    ascii_names: &["cufft64_12.dll", "cufft64_11.dll"],
-    utf16_names: &[u16str!("cufft64_12.dll"), u16str!("cufft64_11.dll")],
+    is_alias: false,
+    ascii_name: "cufft64_12.dll",
+    utf16_name: u16str!("cufft64_12.dll"),
     guid: uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8"),
+    trace_env_var: "ZLUDA_FFT_LIB",
+    in_system32: false,
+};
+
+pub const FFT11: LibraryInfo = LibraryInfo {
+    short_name: "cufft",
+    is_alias: true,
+    ascii_name: "cufft64_11.dll",
+    utf16_name: u16str!("cufft64_11.dll"),
+    guid: uuid!("34d2be7e-e992-4aee-8502-b5fc14a02db3"),
+    trace_env_var: "ZLUDA_FFT_LIB",
+    in_system32: false,
 };
 
 #[derive(Debug)]
 pub struct LibraryInfo {
     pub short_name: &'static str,
-    pub ascii_names: &'static [&'static str],
-    pub utf16_names: &'static [&'static U16Str],
+    pub is_alias: bool,
+    pub ascii_name: &'static str,
+    pub utf16_name: &'static U16Str,
     pub guid: uuid::Uuid,
+    pub trace_env_var: &'static str,
+    pub in_system32: bool,
 }
 
 pub struct DllLookup {
@@ -80,11 +149,9 @@ impl DllLookup {
     pub fn new() -> Self {
         let library_names = LIBRARIES
             .iter()
-            .flat_map(|lib| {
-                lib.ascii_names.iter().map(move |dll_name| {
-                    let ascii_bytes = dll_name.as_bytes();
-                    (ascii_bytes, lib)
-                })
+            .map(|lib| {
+                let ascii_bytes = lib.ascii_name.as_bytes();
+                (ascii_bytes, lib)
             })
             .collect::<Vec<_>>();
         let ascii_trie = TrieHard::new(library_names);
@@ -95,11 +162,9 @@ impl DllLookup {
             .unwrap_or(0);
         let library_names_utf16 = LIBRARIES
             .iter()
-            .flat_map(|lib| {
-                lib.utf16_names.iter().map(move |dll_name| {
-                    let utf16_bytes = Self::to_byte_slice(dll_name.as_slice());
-                    (utf16_bytes, lib)
-                })
+            .map(|lib| {
+                let utf16_bytes = Self::to_byte_slice(lib.utf16_name.as_slice());
+                (utf16_bytes, lib)
             })
             .collect::<Vec<_>>();
         let utf16_trie = TrieHard::new(library_names_utf16);
@@ -202,7 +267,7 @@ mod tests {
         let lookup = DllLookup::new();
         let path = r#"cusparse64_11.dll"#;
         assert_eq!(
-            SPARSE.guid,
+            SPARSE11.guid,
             lookup.lookup_ascii(path.as_bytes()).unwrap().guid
         );
     }
@@ -212,7 +277,7 @@ mod tests {
         let lookup = DllLookup::new();
         let path = u16str!("\\cublaslt64_13.dll");
         assert_eq!(
-            BLAS_LT.guid,
+            BLAS_LT13.guid,
             lookup.lookup_utf16(path.as_slice()).unwrap().guid
         );
     }
@@ -222,7 +287,7 @@ mod tests {
         let lookup = DllLookup::new();
         let path = u16str!("\\CUBLASLT64_13.dll");
         assert_eq!(
-            BLAS_LT.guid,
+            BLAS_LT13.guid,
             lookup.lookup_utf16(path.as_slice()).unwrap().guid
         );
     }

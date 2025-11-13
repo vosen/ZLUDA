@@ -1,25 +1,37 @@
-use bpaf::{choice, construct, pure, Parser};
-use std::path::PathBuf;
+use bpaf::{choice, construct, pure, Bpaf, Parser};
+use std::{ffi::OsString, path::PathBuf};
+
+/// Launch an application and redirect its CUDA calls
+#[derive(Debug, Clone, Bpaf)]
+pub struct Arguments {
+    /// Configuration set defining which CUDA libraries to redirect and their paths
+    #[bpaf(external(config_set))]
+    pub paths: ConfigSet,
+
+    /// Executable to be injected with custom CUDA libraries
+    #[bpaf(positional("EXE"))]
+    pub exe: OsString,
+
+    /// Arguments to the executable
+    #[bpaf(positional("ARGS"))]
+    pub args: Vec<OsString>,
+}
 
 #[derive(Clone, Debug)]
 pub enum ConfigSet {
     Zluda,
     ZludaTrace,
     NvidiaTrace,
-    Custom(Vec<CustomLibrary>),
-}
-
-struct CustomLibraryList {
-    custom_libs: Vec<CustomLibrary>,
+    Custom(Vec<LibraryWithPath>),
 }
 
 #[derive(Clone, Debug)]
-struct CustomLibrary {
-    library: &'static zluda_windows::LibraryInfo,
-    path: Option<PathBuf>,
+pub struct LibraryWithPath {
+    pub library: &'static zluda_windows::LibraryInfo,
+    pub path: PathBuf,
 }
 
-pub fn config_sets() -> impl Parser<ConfigSet> {
+pub fn config_set() -> impl Parser<ConfigSet> {
     let mut temp_dir = std::env::temp_dir();
     temp_dir.push("zluda");
     let temp_dir = temp_dir.display();
@@ -51,33 +63,27 @@ pub fn config_sets() -> impl Parser<ConfigSet> {
     .fallback(ConfigSet::Zluda)
 }
 
-pub fn custom_args() -> Box<dyn Parser<Vec<CustomLibrary>>> {
-    zluda_windows::LIBRARIES
-        .iter()
-        .fold(
-            pure(Vec::with_capacity(zluda_windows::LIBRARIES.len())).boxed(),
-            |parser, library| {
-                let dlls = library
-                    .ascii_names
-                    .iter()
-                    .map(|&name| name.to_lowercase())
-                    .collect::<Vec<_>>()
-                    .join(" or ");
-                let arg = bpaf::long(library.short_name)
-                    .help(&*format!("Path to {dlls}"))
-                    .argument::<PathBuf>("PATH")
-                    .optional()
-                    .map(|path| CustomLibrary { library, path });
-                construct!(parser, arg)
-                    .map(|(mut acc, cur)| {
+pub fn custom_args() -> impl Parser<Vec<LibraryWithPath>> {
+    zluda_windows::LIBRARIES.iter().fold(
+        pure(Vec::with_capacity(zluda_windows::LIBRARIES.len())).boxed(),
+        |parser, library| {
+            let dlls = library.ascii_name;
+            let arg = bpaf::long(library.short_name)
+                .help(&*format!("Path to file {dlls}"))
+                .argument::<PathBuf>("PATH")
+                .optional()
+                .hide()
+                .map(|path| path.map(|path| LibraryWithPath { library, path }));
+            construct!(parser, arg)
+                .map(|(mut acc, cur)| {
+                    if let Some(cur) = cur {
                         acc.push(cur);
-                        acc
-                    })
-                    .boxed()
-            },
-        )
-        .group_help("Manual configuration of library paths:")
-        .boxed()
+                    }
+                    acc
+                })
+                .boxed()
+        },
+    )
 }
 
 #[cfg(test)]
@@ -87,14 +93,14 @@ mod tests {
     #[test]
     fn fail_on_duplicate_config_sets() {
         let args = ["--zluda", "--zluda-trace"];
-        let parser = config_sets().to_options();
+        let parser = config_set().to_options();
         parser.run_inner(&args[..]).unwrap_err();
     }
 
     #[test]
     fn succeed_on_empty_config_set() {
         let args: [&'static str; 0] = [];
-        let parser = config_sets().to_options();
+        let parser = config_set().to_options();
         assert!(matches!(
             parser.run_inner(&args[..]).unwrap(),
             ConfigSet::Zluda
@@ -107,7 +113,7 @@ mod tests {
             "--nvcuda=c:\\path\\to\\nvcuda.dll",
             "--cusparse=c:\\path\\to\\sparse.dll",
         ];
-        let parser = config_sets().to_options();
+        let parser = config_set().to_options();
         let result = parser.run_inner(&args[..]).unwrap();
         assert!(matches!(result, ConfigSet::Custom(_)));
     }
@@ -118,7 +124,7 @@ mod tests {
             "--nvcuda=c:\\path\\to\\nvcuda.dll",
             "--cufoobar=c:\\path\\to\\sparse.dll",
         ];
-        let parser = config_sets().to_options();
+        let parser = config_set().to_options();
         let err = parser.run_inner(&args[..]).unwrap_err();
         assert!(format!("{:?}", err).contains("cufoobar"));
     }

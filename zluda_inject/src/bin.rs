@@ -1,14 +1,15 @@
+use argh::FromArgs;
+use bpaf::{OptionParser, Parser};
+use mem::size_of_val;
 use std::env;
 use std::os::windows;
 use std::os::windows::ffi::OsStrExt;
 use std::{error::Error, process};
 use std::{fs, io, ptr};
 use std::{mem, path::PathBuf};
-
-use argh::FromArgs;
-use mem::size_of_val;
 use tempfile::TempDir;
 use winapi::um::processenv::SearchPathW;
+use winapi::um::winbase::{INFINITE, WAIT_FAILED};
 use winapi::um::{
     jobapi2::{AssignProcessToJobObject, SetInformationJobObject},
     processthreadsapi::{GetExitCodeProcess, ResumeThread},
@@ -19,36 +20,16 @@ use winapi::um::{
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
 };
+use zluda_windows::LibraryInfo;
 
-use winapi::um::winbase::{INFINITE, WAIT_FAILED};
-
-static REDIRECT_DLL: &'static str = "zluda_redirect.dll";
-static NVCUDA_DLL: &'static str = "nvcuda.dll";
-static NVML_DLL: &'static str = "nvml.dll";
-
-include!("../../zluda_redirect/src/payload_guid.rs");
-
-#[derive(FromArgs)]
-/// Launch application with custom CUDA libraries
-struct ProgramArguments {
-    /// DLL to be injected instead of system nvcuda.dll. If not provided {0} will use nvcuda.dll from its directory
-    #[argh(option)]
-    nvcuda: Option<PathBuf>,
-
-    /// DLL to be injected instead of system nvml.dll. If not provided {0} will use nvml.dll from its directory
-    #[argh(option)]
-    nvml: Option<PathBuf>,
-
-    /// executable to be injected with custom CUDA libraries
-    #[argh(positional)]
-    exe: String,
-
-    /// arguments to the executable
-    #[argh(positional)]
-    args: Vec<String>,
-}
+use crate::args::{self, Arguments, LibraryWithPath};
 
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
+    let args = args::arguments().run();
+    let injection_env = InjectionConfig::new(args.clone())?;
+    dbg!(injection_env);
+    todo!()
+    /*
     let raw_args = argh::from_env::<ProgramArguments>();
     let normalized_args = NormalizedArguments::new(raw_args)?;
     let mut environment = Environment::setup(normalized_args)?;
@@ -105,8 +86,174 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         |x| x != 0
     );
     process::exit(child_exit_code as i32)
+     */
 }
 
+#[derive(Debug)]
+struct InjectionConfig {
+    dll_paths: Vec<LibraryWithPath>,
+    env_vars: Vec<(&'static str, PathBuf)>,
+}
+
+impl InjectionConfig {
+    fn new(args: Arguments) -> Result<Self, Box<dyn Error>> {
+        match args.paths {
+            args::ConfigSet::Custom(libs) => Self::custom(libs),
+            args::ConfigSet::Zluda => Self::zluda(),
+            args::ConfigSet::ZludaTrace => Self::zluda_trace(),
+            args::ConfigSet::NvidiaTrace => Self::nvidia_trace(),
+        }
+    }
+
+    fn custom(libs: Vec<LibraryWithPath>) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            dll_paths: libs,
+            env_vars: Vec::new(),
+        })
+    }
+
+    fn zluda() -> Result<Self, Box<dyn Error>> {
+        let current_exe_dir = Self::current_exe_dir()?;
+        let dll_paths = zluda_windows::LIBRARIES
+            .iter()
+            .map(|lib| {
+                let mut path = current_exe_dir.clone();
+                path.push(lib.ascii_name);
+                LibraryWithPath { library: lib, path }
+            })
+            .collect();
+        Ok(Self {
+            dll_paths,
+            env_vars: Vec::new(),
+        })
+    }
+
+    fn zluda_trace() -> Result<Self, Box<dyn Error>> {
+        let current_exe_dir = Self::current_exe_dir()?;
+        let trace_dir = Self::trace_dir()?;
+        let dll_paths = zluda_windows::LIBRARIES
+            .iter()
+            .map(|lib| {
+                let mut path = trace_dir.clone();
+                path.push(lib.ascii_name);
+                LibraryWithPath { library: lib, path }
+            })
+            .collect::<Vec<_>>();
+        let env_vars = zluda_windows::LIBRARIES
+            .iter()
+            .filter_map(|lib| {
+                if lib.is_alias {
+                    None
+                } else {
+                    let mut path = current_exe_dir.clone();
+                    path.push(lib.ascii_name);
+                    Some((lib.trace_env_var, path))
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(Self {
+            dll_paths,
+            env_vars,
+        })
+    }
+
+    fn nvidia_trace() -> Result<Self, Box<dyn Error>> {
+        fn check_single_library(
+            trace_dir: &PathBuf,
+            cuda_install_lib_path: &Option<PathBuf>,
+            lib: &'static LibraryInfo,
+        ) -> Result<Option<(LibraryWithPath, &'static str, PathBuf)>, Box<dyn Error>> {
+            let path = if lib.in_system32 {
+                Some((
+                    PathBuf::from_iter(["C:\\Windows", "System32", lib.ascii_name]),
+                    true,
+                ))
+            } else {
+                cuda_install_lib_path.clone().map(|mut path| {
+                    path.push(lib.ascii_name);
+                    (path, false)
+                })
+            };
+            let dll_path = match path {
+                Some((path, mandatory)) => {
+                    if !path.exists() {
+                        if mandatory {
+                            return Err(format!(
+                                "DLL {} not found at path {:?}",
+                                lib.ascii_name, path
+                            )
+                            .into());
+                        } else {
+                            return Ok(None);
+                        }
+                    } else {
+                        path
+                    }
+                }
+                _ => return Ok(None),
+            };
+            let mut trace_path = trace_dir.clone();
+            trace_path.push(lib.ascii_name);
+            Ok(Some((
+                LibraryWithPath {
+                    library: lib,
+                    path: trace_path,
+                },
+                lib.trace_env_var,
+                dll_path,
+            )))
+        }
+        let trace_dir = Self::trace_dir()?;
+        let cuda_install_lib_path =
+            std::env::var("CUDA_PATH")
+                .ok()
+                .map(PathBuf::from)
+                .map(|mut path| {
+                    path.push("bin");
+                    path.push("x64");
+                    path
+                });
+        let (dll_paths, env_vars) = zluda_windows::LIBRARIES.iter().try_fold(
+            (Vec::new(), Vec::new()),
+            |(mut dll_paths, mut env_vars), lib| {
+                Ok::<_, Box<dyn Error>>(
+                    match check_single_library(&trace_dir, &cuda_install_lib_path, lib)? {
+                        Some((dll_path, env_var, trace_path)) => (
+                            {
+                                dll_paths.push(dll_path);
+                                dll_paths
+                            },
+                            {
+                                env_vars.push((env_var, trace_path));
+                                env_vars
+                            },
+                        ),
+                        None => (dll_paths, env_vars),
+                    },
+                )
+            },
+        )?;
+        Ok(Self {
+            dll_paths,
+            env_vars,
+        })
+    }
+
+    fn current_exe_dir() -> Result<PathBuf, Box<dyn Error>> {
+        let mut current_exe_dir = env::current_exe()?;
+        current_exe_dir.pop();
+        Ok(current_exe_dir)
+    }
+
+    fn trace_dir() -> Result<PathBuf, Box<dyn Error>> {
+        let mut trace_dir = env::current_exe()?;
+        trace_dir.pop();
+        trace_dir.push("trace");
+        Ok(trace_dir)
+    }
+}
+
+/*
 struct NormalizedArguments {
     nvml_path: PathBuf,
     nvcuda_path: PathBuf,
@@ -309,3 +456,4 @@ fn construct_command_line(args: impl Iterator<Item = String>) -> Vec<u16> {
     cmd_line.push(0);
     cmd_line
 }
+ */
