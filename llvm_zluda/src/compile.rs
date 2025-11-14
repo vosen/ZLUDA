@@ -71,6 +71,7 @@ fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, String
 
     // used by ockl
     add_constant(ctx, &module, c"__oclc_wavefrontsize64", 0);
+    add_constant(ctx, &module, c"__oclc_wavefrontsize_log2", 5);
     add_constant(ctx, &module, c"__oclc_ABI_version", 500);
     add_constant(
         ctx,

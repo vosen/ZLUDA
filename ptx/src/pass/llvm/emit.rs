@@ -75,7 +75,7 @@ pub(crate) fn run<'input>(
     }
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
-            panic!("{:?}", err);
+            panic!("{}\n{:?}", module.print_module_to_string(), err);
         }
     }
     Ok(module)
@@ -2509,8 +2509,8 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let name_lo = match data.type_ {
-            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24",
-            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24",
+            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24.i32",
+            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24.i32",
             _ => return Err(error_unreachable()),
         };
         let res_lo = self.emit_intrinsic(
