@@ -1,0 +1,14 @@
+[package]
+name = "zluda_windows"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+name = "zluda_windows"
+
+[dependencies]
+uuid = "1.18.1"
+trie-hard = "0.1.0"
+widestring = "1.2.1"
+alloca = "0.4.0"

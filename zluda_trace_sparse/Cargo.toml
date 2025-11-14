@@ -25,3 +25,4 @@ linux_symlinks = [
     "trace/libcusparse.so.12",
     "trace/libcusparse.so.13"
 ]
+windows_paths = ["trace/cusparse64_12.dll", "trace/cusparse64_13.dll"]
