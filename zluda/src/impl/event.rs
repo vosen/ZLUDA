@@ -20,3 +20,7 @@ pub(crate) unsafe fn record(event: hipEvent_t, stream: hipStream_t) -> hipError_
 pub(crate) unsafe fn synchronize(event: hipEvent_t) -> hipError_t {
     hipEventSynchronize(event)
 }
+
+pub(crate) unsafe fn elapsed_time(ms: *mut f32, start: hipEvent_t, end: hipEvent_t) -> hipError_t {
+    hipEventElapsedTime(ms, start, end)
+}
