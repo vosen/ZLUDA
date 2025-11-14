@@ -1,7 +1,6 @@
 [submodule "ext/llvm-project"]
 	path = ext/llvm-project
 	url = https://github.com/ROCm/llvm-project
-	branch = rocm-6.4.0
 	shallow = true
 [submodule "ext/HiGHS"]
 	path = ext/HiGHS

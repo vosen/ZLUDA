@@ -135,10 +135,10 @@ fn report_pass_time(pass: &str, start: &mut Instant) {
 }
 
 struct LLVMArtifacts {
-    context: llvm_zluda::utils::Context,
     main: llvm_zluda::utils::Module,
-    linked_bitcode: Vec<u8>,
     attributes: llvm_zluda::utils::Module,
+    context: llvm_zluda::utils::Context,
+    linked_bitcode: Vec<u8>,
     llvm_ir: Vec<u8>,
 }
 

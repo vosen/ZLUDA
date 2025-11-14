@@ -55,23 +55,28 @@ fn path_to_cstring(path: &std::path::Path) -> Result<CString, String> {
     CString::new(path_str).map_err(|_| ("path includes invalid null byte").to_string())
 }
 
+fn get_isa_version_from_gcn_arch(gcn_arch: &str) -> Result<u32, String> {
+    let base: u32 = gcn_arch
+        .replace("gfx", "")
+        .parse()
+        .map_err(|_| ("could not get ISA version from gcn_arch").to_string())?;
+    let stepping = base % 10;
+    let minor = (base / 10) % 10;
+    let major = base / 100;
+    Ok(major * 1000 + minor * 100 + stepping)
+}
+
 fn create_oclc_constants(ctx: &Context, gcn_arch: &str) -> Result<Module, String> {
     let module = Module::new(ctx, c"oclc_constants");
 
     // used by ockl
     add_constant(ctx, &module, c"__oclc_wavefrontsize64", 0);
-    // This is set by Clang
-    // https://github.com/ROCm/llvm-project/blob/fb71c301a9a021ee5025b3ca7497970b4eb677df/clang/include/clang/Driver/RocmInstallationDetector.h#L21 and
-    // https://github.com/ROCm/llvm-project/blob/fb71c301a9a021ee5025b3ca7497970b4eb677df/clang/lib/Driver/ToolChains/CommonArgs.cpp#L3089
-    add_constant(ctx, &module, c"__oclc_ABI_version", 600);
+    add_constant(ctx, &module, c"__oclc_ABI_version", 500);
     add_constant(
         ctx,
         &module,
         c"__oclc_ISA_version",
-        gcn_arch
-            .replace("gfx", "")
-            .parse()
-            .map_err(|_| ("could not get ISA version from gcn_arch").to_string())?,
+        get_isa_version_from_gcn_arch(gcn_arch)?,
     );
 
     // used by ocml
@@ -97,8 +102,8 @@ pub fn compile(
         c"llvm_zluda",
         c"-ignore-tti-inline-compatible",
         // c"-amdgpu-early-inline-all=true",
-        // To consider
         c"-amdgpu-internalize-symbols",
+        c"-amdhsa-code-object-version=5",
     ]
     .into_iter();
     let opt_options = if cfg!(debug_assertions) {

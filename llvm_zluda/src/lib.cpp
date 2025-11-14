@@ -219,18 +219,17 @@ int LLVMZludaLinkWithLLD(const char *input_path, const char *output_path, char *
     args.push_back("-o");
     args.push_back(output_path);
     args.push_back("--threads=1");
+    args.push_back("--no-undefined");
 
     std::string log_out_str;
     std::string log_err_str;
     llvm::raw_string_ostream log_out(log_out_str);
     llvm::raw_string_ostream log_err(log_err_str);
 
-    // We don't want to leak memory as ZLUDA is running, so we destroy the linker context after every call, and wrap the invocation in a mutex.
+    // lldMain does not seem to be thread-safe, so we wrap it in a mutex.
     std::lock_guard<std::mutex> guard(lld_mutex);
     lld::Result result = lld::lldMain(args, log_out, log_err,
                                       {{lld::Gnu, &lld::elf::link}});
-
-    lld::CommonLinkerContext::destroy();
 
     if (result.retCode != 0)
     {
