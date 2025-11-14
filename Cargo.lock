@@ -4013,6 +4013,7 @@ dependencies = [
  "argh",
  "bpaf",
  "detours-sys",
+ "rustc-hash 2.1.1",
  "tempfile",
  "windows",
  "windows-core",

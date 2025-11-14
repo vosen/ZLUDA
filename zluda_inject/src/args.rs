@@ -21,8 +21,8 @@ impl Arguments {
     pub fn command_line_zero_terminated(&self) -> Vec<u16> {
         let mut cmdline = Vec::with_capacity(1 + self.exe.len());
         cmdline.extend(self.exe.encode_wide());
-        cmdline.push(' ' as u16);
         for arg in self.args.iter() {
+            cmdline.push(' ' as u16);
             cmdline.extend(arg.encode_wide());
         }
         cmdline.push(0);

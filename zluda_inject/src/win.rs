@@ -4,17 +4,10 @@ use std::error;
 use std::fmt;
 
 mod c {
-    use std::ffi::c_void;
     use std::os::raw::c_ulong;
 
     pub type DWORD = c_ulong;
-    pub type HANDLE = LPVOID;
-    pub type LPVOID = *mut c_void;
-    pub type HINSTANCE = HANDLE;
-    pub type HMODULE = HINSTANCE;
     pub type WCHAR = u16;
-    pub type LPCWSTR = *const WCHAR;
-    pub type LPWSTR = *mut WCHAR;
 
     pub const FACILITY_NT_BIT: DWORD = 0x1000_0000;
     pub const FORMAT_MESSAGE_FROM_HMODULE: DWORD = 0x00000800;
@@ -32,6 +25,8 @@ macro_rules! last_ident {
 }
 
 #[derive(Debug)]
+// Not sure why it's reported as dead, while it's used by a macro
+#[allow(dead_code)]
 pub struct OsError {
     pub function: &'static str,
     pub error_code: u32,
