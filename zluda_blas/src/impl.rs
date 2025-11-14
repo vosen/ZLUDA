@@ -234,6 +234,40 @@ pub(crate) unsafe fn gemm_ex(
     )
 }
 
+pub(crate) unsafe fn hgemm(
+    handle: &Handle,
+    transa: rocblas_operation,
+    transb: rocblas_operation,
+    m: ::core::ffi::c_int,
+    n: ::core::ffi::c_int,
+    k: ::core::ffi::c_int,
+    alpha: *const cuda_types::cublas::__half,
+    a: *const cuda_types::cublas::__half,
+    lda: ::core::ffi::c_int,
+    b: *const cuda_types::cublas::__half,
+    ldb: ::core::ffi::c_int,
+    beta: *const cuda_types::cublas::__half,
+    c: *mut cuda_types::cublas::__half,
+    ldc: ::core::ffi::c_int,
+) -> rocblas_status {
+    rocblas_hgemm(
+        handle.handle,
+        transa,
+        transb,
+        m,
+        n,
+        k,
+        alpha.cast(),
+        a.cast(),
+        lda,
+        b.cast(),
+        ldb,
+        beta.cast(),
+        c.cast(),
+        ldc,
+    )
+}
+
 pub(crate) unsafe fn gemm_batched_ex(
     handle: &Handle,
     transa: rocblas_operation,
