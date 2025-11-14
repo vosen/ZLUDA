@@ -79,13 +79,15 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
 
 #[derive(Debug)]
 struct InjectionConfig {
+    redirect_dll_path: PathBuf,
     dll_paths: Vec<LibraryWithPath>,
     env_vars: Vec<(&'static str, PathBuf)>,
 }
 
 impl InjectionConfig {
     fn get_injection_paths_zero_terminated(&self) -> Result<Vec<CString>, Box<dyn Error>> {
-        self.dll_paths
+        let mut injection_paths = self
+            .dll_paths
             .iter()
             .map(|lib| {
                 let path_utf16 = lib.path.as_os_str().to_str().ok_or_else(|| {
@@ -100,7 +102,18 @@ impl InjectionConfig {
                     CString::from_vec_unchecked(path_utf16.as_bytes().to_vec())
                 })
             })
-            .collect::<Result<Vec<CString>, _>>()
+            .collect::<Result<Vec<CString>, _>>()?;
+        injection_paths.push(CString::new(self.redirect_dll_path.to_str().ok_or_else(
+            || {
+                let err: Box<dyn Error> = format!(
+                    "Failed to convert path {:?} to UTF-8 string",
+                    self.redirect_dll_path.as_os_str()
+                )
+                .into();
+                err
+            },
+        )?)?);
+        Ok(injection_paths)
     }
 
     fn new(args: Arguments) -> Result<Self, Box<dyn Error>> {
@@ -114,6 +127,7 @@ impl InjectionConfig {
 
     fn custom(libs: Vec<LibraryWithPath>) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
+            redirect_dll_path: Self::redirect_dll_path(Self::current_exe_dir()?),
             dll_paths: libs,
             env_vars: Vec::new(),
         })
@@ -130,6 +144,7 @@ impl InjectionConfig {
             })
             .collect();
         Ok(Self {
+            redirect_dll_path: Self::redirect_dll_path(current_exe_dir),
             dll_paths,
             env_vars: Vec::new(),
         })
@@ -159,6 +174,7 @@ impl InjectionConfig {
             })
             .collect::<Vec<_>>();
         Ok(Self {
+            redirect_dll_path: Self::redirect_dll_path(current_exe_dir),
             dll_paths,
             env_vars,
         })
@@ -241,6 +257,7 @@ impl InjectionConfig {
             },
         )?;
         Ok(Self {
+            redirect_dll_path: Self::redirect_dll_path(Self::current_exe_dir()?),
             dll_paths,
             env_vars,
         })
@@ -257,6 +274,11 @@ impl InjectionConfig {
         trace_dir.pop();
         trace_dir.push("trace");
         Ok(trace_dir)
+    }
+
+    fn redirect_dll_path(mut current_exe_dir: PathBuf) -> PathBuf {
+        current_exe_dir.push("zluda_redirect.dll");
+        current_exe_dir
     }
 
     fn copy_payloads_to_process(

@@ -4042,8 +4042,6 @@ name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [
  "detours-sys",
- "wchar",
- "winapi",
  "zluda_windows",
 ]
 

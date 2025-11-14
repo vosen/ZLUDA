@@ -24,3 +24,4 @@ linux_symlinks = [
     "trace/libcudnn.so",
     "trace/libcudnn.so.9"
 ]
+windows_paths = ["trace/cudnn64_9.dll"]

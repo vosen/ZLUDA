@@ -19,7 +19,11 @@ regex = "1.4"
 dynasm = "1.2"
 dynasmrt = "1.2"
 # we don't need elf32, but goblin has a bug where elf64 does not build without elf32
-goblin = { version = "0.9", default-features = false, features = ["elf64", "elf32", "archive"] }
+goblin = { version = "0.9", default-features = false, features = [
+    "elf64",
+    "elf32",
+    "archive",
+] }
 paste = "1.0"
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
@@ -45,3 +49,4 @@ linux_symlinks = [
     "trace_nvidia/libcuda.so",
     "trace_nvidia/libcuda.so.1",
 ]
+windows_paths = ["trace/nvcuda.dll"]
