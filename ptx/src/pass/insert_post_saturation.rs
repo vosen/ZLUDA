@@ -120,6 +120,7 @@ fn run_instruction<'input>(
                 },
             ..
         }
+        | ast::Instruction::CvtPack { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
         | ast::Instruction::Dp4a { .. }
@@ -199,6 +200,7 @@ fn run_instruction<'input>(
         | ast::Instruction::ReduxSync { .. }
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
+        | ast::Instruction::Prefetch { .. }
         | ast::Instruction::Mma { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:
