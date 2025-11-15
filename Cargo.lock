@@ -36,13 +36,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
-name = "amd_comgr-sys"
-version = "0.0.0"
-dependencies = [
- "libloading",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -356,21 +349,11 @@ checksum = "cbd0f76e066e64fdc5631e3bb46381254deab9ef1158292f27c8c57e3bf3fe59"
 
 [[package]]
 name = "cmake"
-version = "0.1.51"
+version = "0.1.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb1e43aa7fd152b1f968787f7dbcdeb306d1867ff373c69955211876c053f91a"
+checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "comgr"
-version = "0.0.0"
-dependencies = [
- "amd_comgr-sys",
- "libloading",
- "ptx",
- "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -378,8 +361,8 @@ name = "compiler"
 version = "0.0.0"
 dependencies = [
  "bpaf",
- "comgr",
  "libloading",
+ "llvm_zluda",
  "ptx",
  "ptx_parser",
  "thiserror 2.0.12",
@@ -2120,9 +2103,9 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llvm-sys"
-version = "170.2.0"
+version = "191.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff1ee92492ae76bb6e24495ce15e311ba13ffb58c0140d89ac9910b92477cec8"
+checksum = "893cddf1adf0354b93411e413553dd4daf5c43195d73f1acfa1e394bdd371456"
 dependencies = [
  "anyhow",
  "cc",
@@ -2136,10 +2119,10 @@ dependencies = [
 name = "llvm_zluda"
 version = "0.1.0"
 dependencies = [
- "bitflags 2.9.1",
  "cc",
  "cmake",
  "llvm-sys",
+ "tempfile",
 ]
 
 [[package]]
@@ -2543,7 +2526,6 @@ version = "0.0.0"
 dependencies = [
  "bit-vec",
  "bitflags 1.3.2",
- "comgr",
  "cuda_macros",
  "cuda_types",
  "fixedbitset",
@@ -2609,7 +2591,6 @@ name = "ptxas"
 version = "0.0.0"
 dependencies = [
  "bpaf",
- "comgr",
  "hip_runtime-sys",
  "ptx",
  "ptx_parser",
@@ -3660,7 +3641,6 @@ name = "zluda"
 version = "0.0.0"
 dependencies = [
  "blake3",
- "comgr",
  "cuda_macros",
  "cuda_types",
  "dark_api",
@@ -3669,6 +3649,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libloading",
+ "llvm_zluda",
  "lz4-sys",
  "num_enum",
  "paste",
@@ -3751,7 +3732,7 @@ dependencies = [
  "cuda_types",
  "hip_runtime-sys",
  "miopen-sys",
- "rustc-hash 2.0.0",
+ "rustc-hash 2.1.1",
  "zluda_common",
 ]
 

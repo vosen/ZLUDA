@@ -1,6 +1,5 @@
 use super::read_test_file;
 use crate::pass;
-use comgr::Comgr;
 use cuda_types::cuda::CUstream;
 use hip_runtime_sys::hipError_t;
 use pretty_assertions;
@@ -1155,7 +1154,6 @@ macro_rules! dynamic_fns {
 
 cuda_macros::cuda_function_declarations!(dynamic_fns);
 
-static COMGR: std::sync::LazyLock<Comgr> = std::sync::LazyLock::new(|| Comgr::new().unwrap());
 static CUDA: std::sync::LazyLock<DynamicCuda> =
     std::sync::LazyLock::new(|| DynamicCuda::new().unwrap());
 
@@ -1168,7 +1166,6 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
 ) -> Result<Vec<Output>, hipError_t> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }.unwrap();
-    let comgr = &*COMGR;
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
@@ -1176,21 +1173,18 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
-        let elf_module = comgr::compile_bitcode(
-            &comgr,
+        let ptx_impl = module.linked_bitcode();
+        let elf_module = llvm_zluda::compile(
+            &module.context,
             unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
                 .to_str()
                 .unwrap(),
-            &*module.llvm_ir.write_bitcode_to_memory(),
-            module.linked_bitcode(),
-            &*module.attributes_ir.write_bitcode_to_memory(),
+            module.llvm_ir,
+            ptx_impl,
+            module.attributes_ir,
             None,
         )
         .unwrap();
-        // TODO: Re-enable when we are able to privatize function-scoped
-        // globals and constants
-        // let fns = comgr::get_symbols(&comgr, &elf_module).unwrap();
-        // verify_symbols(fns);
         let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };

@@ -3,12 +3,10 @@
 resolver = "2"
 
 members = [
-    "comgr",
     "cuda_macros",
     "cuda_types",
     "dark_api",
     "detours-sys",
-    "ext/amd_comgr-sys",
     "ext/highs-sys",
     "ext/hip_runtime-sys",
     "ext/hipblaslt-sys",

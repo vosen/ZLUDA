@@ -9,7 +9,6 @@ name = "ptxas"
 path = "src/main.rs"
 
 [dependencies]
-comgr = { path = "../comgr" }
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
