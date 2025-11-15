@@ -1,18 +1,17 @@
 [package]
-name = "ptxas"
+name = "zluda_precompile"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [[bin]]
-name = "ptxas"
+name = "zluda_precompile"
 path = "src/main.rs"
 
 [dependencies]
-comgr = { path = "../comgr" }
-ptx = { path = "../ptx" }
-ptx_parser = { path = "../ptx_parser" }
-hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
+rayon = "1.11.0"
+walkdir = "2"
+indicatif = "0.18.3"
 
 [package.metadata.zluda]
