@@ -30,6 +30,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_LibraryLoader",
 ] }
 unwrap_or = "1.0.1"
+widestring = "1.2.1"
 
 [package.metadata.zluda]
 windows_only = true

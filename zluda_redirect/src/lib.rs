@@ -2,11 +2,12 @@
 
 use detours_sys::{
     DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort,
-    DetourTransactionBegin, DetourTransactionCommit, DetourUpdateProcessWithDll,
-    DetourUpdateThread, LPCSTR, LPCWSTR,
+    DetourTransactionBegin, DetourTransactionCommit, DetourUpdateThread, LPCWSTR,
 };
+use std::ffi::CStr;
 use std::{ffi::c_void, mem, ptr, slice, usize};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+use widestring::{U16CStr, U16CString};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
@@ -28,29 +29,99 @@ use windows_sys::Win32::{
     Foundation::HMODULE,
     System::LibraryLoader::{LoadLibraryA, LoadLibraryW},
 };
+use zluda_windows::DllLookup;
 
-static mut DETOUR_STATE: Option<DetourDetachGuard> = None;
+static mut DETOUR_DROP: Option<DetourDetachGuard> = None;
+static mut DETOUR_PATHS: Option<DetourPaths> = None;
+
+struct DetourPaths {
+    lookup: DllLookup,
+    override_paths: [Option<(&'static CStr, Vec<u16>)>; zluda_windows::LIBRARIES.len()],
+}
+
+impl DetourPaths {
+    fn new() -> Self {
+        let lookup = DllLookup::new();
+        let paths = zluda_windows::LIBRARIES.each_ref().map(|lib| {
+            get_payload(unsafe { mem::transmute(&lib.guid) }).map(|payload| {
+                let utf8 = unsafe { CStr::from_bytes_with_nul_unchecked(payload) };
+                let utf16 =
+                    unsafe { U16CString::from_str_unchecked(utf8.to_string_lossy()) }.into_vec();
+                (utf8, utf16)
+            })
+        });
+        DetourPaths {
+            lookup,
+            override_paths: paths,
+        }
+    }
+
+    fn ascii_override(this: &Option<Self>, path: *const u8) -> *const u8 {
+        Self::override_impl(
+            this,
+            path,
+            |p| {
+                let cstr = unsafe { CStr::from_ptr(p.cast()) };
+                cstr.to_bytes()
+            },
+            |lookup, buffer| lookup.lookup_ascii(buffer),
+            |(override_ascii, _)| override_ascii.as_ptr().cast(),
+        )
+    }
+
+    fn utf16_override(this: &Option<Self>, path: *const u16) -> *const u16 {
+        Self::override_impl(
+            this,
+            path,
+            |p| {
+                let u16cstr = unsafe { U16CStr::from_ptr_str(p) };
+                u16cstr.as_slice()
+            },
+            |lookup, buffer| lookup.lookup_utf16(buffer),
+            |(_, override_utf16)| override_utf16.as_ptr(),
+        )
+    }
+
+    fn override_impl<T: 'static>(
+        this: &Option<Self>,
+        path: *const T,
+        get_buffer: impl FnOnce(*const T) -> &'static [T],
+        lookup: impl FnOnce(&DllLookup, &[T]) -> Option<usize>,
+        get_pointer: impl FnOnce(&(&'static CStr, Vec<u16>)) -> *const T,
+    ) -> *const T {
+        this.as_ref()
+            .map(|this| {
+                let buffer = get_buffer(path);
+                let index = lookup(&this.lookup, buffer);
+                index
+                    .map(|index| this.override_paths[index].as_ref().map(|p| get_pointer(p)))
+                    .flatten()
+            })
+            .flatten()
+            .unwrap_or(path)
+    }
+}
 
 #[no_mangle]
 #[used]
 pub static ZLUDA_REDIRECT: () = ();
 
-static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lpLibFileName: PCSTR) -> HMODULE =
+static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lp_lib_file_name: PCSTR) -> HMODULE =
     LoadLibraryA;
 
-static mut LOAD_LIBRARY_W: unsafe extern "system" fn(lpLibFileName: PCWSTR) -> HMODULE =
+static mut LOAD_LIBRARY_W: unsafe extern "system" fn(lp_lib_file_name: PCWSTR) -> HMODULE =
     LoadLibraryW;
 
 static mut LOAD_LIBRARY_EX_A: unsafe extern "system" fn(
-    lpLibFileName: PCSTR,
-    hFile: windows_sys::Win32::Foundation::HANDLE,
-    dwFlags: LOAD_LIBRARY_FLAGS,
+    lp_lib_file_name: PCSTR,
+    file: windows_sys::Win32::Foundation::HANDLE,
+    flags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE = LoadLibraryExA;
 
 static mut LOAD_LIBRARY_EX_W: unsafe extern "system" fn(
-    lpLibFileName: LPCWSTR,
-    hFile: windows_sys::Win32::Foundation::HANDLE,
-    dwFlags: LOAD_LIBRARY_FLAGS,
+    lp_lib_file_name: LPCWSTR,
+    file: windows_sys::Win32::Foundation::HANDLE,
+    flags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE = LoadLibraryExW;
 
 static mut CREATE_PROCESS_A: unsafe extern "system" fn(
@@ -135,31 +206,45 @@ unsafe extern "system" fn ZludaLoadLibraryW_NoRedirect(lpLibFileName: LPCWSTR) -
 }
 
 #[allow(non_snake_case)]
-unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: PCSTR) -> HMODULE {
-    LOAD_LIBRARY_A(lpLibFileName)
+unsafe extern "system" fn ZludaLoadLibraryA(file_name: PCSTR) -> HMODULE {
+    LOAD_LIBRARY_A(DetourPaths::ascii_override(
+        &*&raw const DETOUR_PATHS,
+        file_name,
+    ))
 }
 
 #[allow(non_snake_case)]
-unsafe extern "system" fn ZludaLoadLibraryW(lpLibFileName: LPCWSTR) -> HMODULE {
-    LOAD_LIBRARY_W(lpLibFileName)
+unsafe extern "system" fn ZludaLoadLibraryW(file_name: LPCWSTR) -> HMODULE {
+    LOAD_LIBRARY_W(DetourPaths::utf16_override(
+        &*&raw const DETOUR_PATHS,
+        file_name,
+    ))
 }
 
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryExA(
-    lplibfilename: PCSTR,
+    file_name: PCSTR,
     hfile: windows_sys::Win32::Foundation::HANDLE,
     dwflags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE {
-    LOAD_LIBRARY_EX_A(lplibfilename, hfile, dwflags)
+    LOAD_LIBRARY_EX_A(
+        DetourPaths::ascii_override(&*&raw const DETOUR_PATHS, file_name),
+        hfile,
+        dwflags,
+    )
 }
 
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryExW(
-    lplibfilename: PCWSTR,
+    file_name: PCWSTR,
     hfile: windows_sys::Win32::Foundation::HANDLE,
     dwflags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE {
-    LOAD_LIBRARY_EX_W(lplibfilename, hfile, dwflags)
+    LOAD_LIBRARY_EX_W(
+        DetourPaths::utf16_override(&*&raw const DETOUR_PATHS, file_name),
+        hfile,
+        dwflags,
+    )
 }
 
 #[allow(non_snake_case)]
@@ -489,13 +574,15 @@ unsafe extern "system" fn DllMain(_inst_dll: *mut c_void, dwReason: u32, _: *con
         }
         match DetourDetachGuard::new() {
             Some(g) => {
-                DETOUR_STATE = Some(g);
+                DETOUR_DROP = Some(g);
+                DETOUR_PATHS = Some(DetourPaths::new());
                 TRUE
             }
             None => FALSE,
         }
     } else if dwReason == DLL_PROCESS_DETACH {
-        match (&mut *&raw mut DETOUR_STATE).take() {
+        DETOUR_PATHS = None;
+        match (&mut *&raw mut DETOUR_DROP).take() {
             Some(_) => TRUE,
             None => FALSE,
         }

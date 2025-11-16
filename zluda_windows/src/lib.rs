@@ -3,7 +3,7 @@ use trie_hard::TrieHard;
 use uuid::uuid;
 use widestring::{u16str, U16Str};
 
-pub static LIBRARIES: &'static [LibraryInfo] = &[
+pub static LIBRARIES: [LibraryInfo; 12] = [
     NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS_LT13, BLAS_LT12, SPARSE12, SPARSE11, FFT12,
     FFT11,
 ];
@@ -141,17 +141,18 @@ pub struct LibraryInfo {
 
 pub struct DllLookup {
     max_dll_len: usize,
-    ascii_trie: TrieHard<'static, &'static LibraryInfo>,
-    utf16_trie: TrieHard<'static, &'static LibraryInfo>,
+    ascii_trie: TrieHard<'static, usize>,
+    utf16_trie: TrieHard<'static, usize>,
 }
 
 impl DllLookup {
     pub fn new() -> Self {
         let library_names = LIBRARIES
             .iter()
-            .map(|lib| {
+            .enumerate()
+            .map(|(i, lib)| {
                 let ascii_bytes = lib.ascii_name.as_bytes();
-                (ascii_bytes, lib)
+                (ascii_bytes, i)
             })
             .collect::<Vec<_>>();
         let ascii_trie = TrieHard::new(library_names);
@@ -162,9 +163,10 @@ impl DllLookup {
             .unwrap_or(0);
         let library_names_utf16 = LIBRARIES
             .iter()
-            .map(|lib| {
+            .enumerate()
+            .map(|(i, lib)| {
                 let utf16_bytes = Self::to_byte_slice(lib.utf16_name.as_slice());
-                (utf16_bytes, lib)
+                (utf16_bytes, i)
             })
             .collect::<Vec<_>>();
         let utf16_trie = TrieHard::new(library_names_utf16);
@@ -183,11 +185,11 @@ impl DllLookup {
 
     pub fn lookup_impl<T: Copy>(
         max_dll_len: usize,
-        trie: &TrieHard<'static, &'static LibraryInfo>,
+        trie: &TrieHard<'static, usize>,
         dll_name: &[T],
         as_char: impl Fn(T) -> char,
         lower_case: impl Fn(T) -> T,
-    ) -> Option<&'static LibraryInfo> {
+    ) -> Option<usize> {
         let file_name_len = dll_name
             .iter()
             .rev()
@@ -223,7 +225,7 @@ impl DllLookup {
         })
     }
 
-    pub fn lookup_ascii(&self, dll_name: &[u8]) -> Option<&'static LibraryInfo> {
+    pub fn lookup_ascii(&self, dll_name: &[u8]) -> Option<usize> {
         Self::lookup_impl(
             self.max_dll_len,
             &self.ascii_trie,
@@ -233,7 +235,7 @@ impl DllLookup {
         )
     }
 
-    pub fn lookup_utf16(&self, dll_name: &[u16]) -> Option<&'static LibraryInfo> {
+    pub fn lookup_utf16(&self, dll_name: &[u16]) -> Option<usize> {
         Self::lookup_impl(
             self.max_dll_len,
             &self.utf16_trie,
@@ -258,7 +260,7 @@ mod tests {
         let path = r#"C:\Windows\System32\nvml.dll"#;
         assert_eq!(
             NVML.guid,
-            lookup.lookup_ascii(path.as_bytes()).unwrap().guid
+            LIBRARIES[lookup.lookup_ascii(path.as_bytes()).unwrap()].guid
         );
     }
 
@@ -268,7 +270,7 @@ mod tests {
         let path = r#"cusparse64_11.dll"#;
         assert_eq!(
             SPARSE11.guid,
-            lookup.lookup_ascii(path.as_bytes()).unwrap().guid
+            LIBRARIES[lookup.lookup_ascii(path.as_bytes()).unwrap()].guid
         );
     }
 
@@ -278,7 +280,7 @@ mod tests {
         let path = u16str!("\\cublaslt64_13.dll");
         assert_eq!(
             BLAS_LT13.guid,
-            lookup.lookup_utf16(path.as_slice()).unwrap().guid
+            LIBRARIES[lookup.lookup_utf16(path.as_slice()).unwrap()].guid
         );
     }
 
@@ -288,7 +290,7 @@ mod tests {
         let path = u16str!("\\CUBLASLT64_13.dll");
         assert_eq!(
             BLAS_LT13.guid,
-            lookup.lookup_utf16(path.as_slice()).unwrap().guid
+            LIBRARIES[lookup.lookup_utf16(path.as_slice()).unwrap()].guid
         );
     }
 

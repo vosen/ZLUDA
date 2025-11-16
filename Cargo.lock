@@ -4052,6 +4052,7 @@ version = "0.0.0"
 dependencies = [
  "detours-sys",
  "unwrap_or",
+ "widestring",
  "windows",
  "windows-sys 0.61.2",
  "zluda_windows",
