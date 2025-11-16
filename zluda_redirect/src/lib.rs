@@ -1,8 +1,9 @@
 #![cfg(target_os = "windows")]
 
 use detours_sys::{
-    DetourAttach, DetourRestoreAfterWith, DetourTransactionAbort, DetourTransactionBegin,
-    DetourTransactionCommit, DetourUpdateProcessWithDll, DetourUpdateThread, LPCSTR, LPCWSTR,
+    DetourAttach, DetourDetach, DetourRestoreAfterWith, DetourTransactionAbort,
+    DetourTransactionBegin, DetourTransactionCommit, DetourUpdateProcessWithDll,
+    DetourUpdateThread, LPCSTR, LPCWSTR,
 };
 use std::{ffi::c_void, mem, ptr, slice, usize};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
@@ -10,8 +11,8 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, GetCurrentThreadId, OpenThread, ResumeThread, SuspendThread,
-    THREAD_SUSPEND_RESUME,
+    GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread, ResumeThread,
+    SuspendThread, THREAD_SUSPEND_RESUME,
 };
 use windows_sys::core::{BOOL, PCSTR, PCWSTR, PSTR, PWSTR};
 use windows_sys::Win32::Foundation::{FARPROC, NO_ERROR};
@@ -134,13 +135,13 @@ unsafe extern "system" fn ZludaLoadLibraryW_NoRedirect(lpLibFileName: LPCWSTR) -
 }
 
 #[allow(non_snake_case)]
-unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: LPCSTR) -> HMODULE {
-    todo!()
+unsafe extern "system" fn ZludaLoadLibraryA(lpLibFileName: PCSTR) -> HMODULE {
+    LOAD_LIBRARY_A(lpLibFileName)
 }
 
 #[allow(non_snake_case)]
 unsafe extern "system" fn ZludaLoadLibraryW(lpLibFileName: LPCWSTR) -> HMODULE {
-    todo!()
+    LOAD_LIBRARY_W(lpLibFileName)
 }
 
 #[allow(non_snake_case)]
@@ -149,7 +150,7 @@ unsafe extern "system" fn ZludaLoadLibraryExA(
     hfile: windows_sys::Win32::Foundation::HANDLE,
     dwflags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE {
-    todo!()
+    LOAD_LIBRARY_EX_A(lplibfilename, hfile, dwflags)
 }
 
 #[allow(non_snake_case)]
@@ -158,7 +159,7 @@ unsafe extern "system" fn ZludaLoadLibraryExW(
     hfile: windows_sys::Win32::Foundation::HANDLE,
     dwflags: LOAD_LIBRARY_FLAGS,
 ) -> HMODULE {
-    todo!()
+    LOAD_LIBRARY_EX_W(lplibfilename, hfile, dwflags)
 }
 
 #[allow(non_snake_case)]
@@ -171,10 +172,21 @@ unsafe extern "system" fn ZludaCreateProcessA(
     dwcreationflags: windows_sys::Win32::System::Threading::PROCESS_CREATION_FLAGS,
     lpenvironment: *const c_void,
     lpcurrentdirectory: PCSTR,
-    lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOW,
+    lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOA,
     lpprocessinformation: *mut windows_sys::Win32::System::Threading::PROCESS_INFORMATION,
 ) -> BOOL {
-    todo!()
+    CREATE_PROCESS_A(
+        lpapplicationname,
+        lpcommandline,
+        lpprocessattributes,
+        lpthreadattributes,
+        binherithandles,
+        dwcreationflags,
+        lpenvironment,
+        lpcurrentdirectory,
+        lpstartupinfo,
+        lpprocessinformation,
+    )
 }
 
 #[allow(non_snake_case)]
@@ -190,7 +202,18 @@ unsafe extern "system" fn ZludaCreateProcessW(
     lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOW,
     lpprocessinformation: *mut windows_sys::Win32::System::Threading::PROCESS_INFORMATION,
 ) -> BOOL {
-    todo!()
+    CREATE_PROCESS_W(
+        lpapplicationname,
+        lpcommandline,
+        lpprocessattributes,
+        lpthreadattributes,
+        binherithandles,
+        dwcreationflags,
+        lpenvironment,
+        lpcurrentdirectory,
+        lpstartupinfo,
+        lpprocessinformation,
+    )
 }
 
 #[allow(non_snake_case)]
@@ -207,7 +230,19 @@ unsafe extern "system" fn ZludaCreateProcessAsUserW(
     lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOW,
     lpprocessinformation: *mut windows_sys::Win32::System::Threading::PROCESS_INFORMATION,
 ) -> BOOL {
-    todo!()
+    CREATE_PROCESS_AS_USER_W(
+        htoken,
+        lpapplicationname,
+        lpcommandline,
+        lpprocessattributes,
+        lpthreadattributes,
+        binherithandles,
+        dwcreationflags,
+        lpenvironment,
+        lpcurrentdirectory,
+        lpstartupinfo,
+        lpprocessinformation,
+    )
 }
 
 #[allow(non_snake_case)]
@@ -224,7 +259,19 @@ unsafe extern "system" fn ZludaCreateProcessWithLogonW(
     lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOW,
     lpprocessinformation: *mut windows_sys::Win32::System::Threading::PROCESS_INFORMATION,
 ) -> BOOL {
-    todo!()
+    CREATE_PROCESS_WITH_LOGON_W(
+        lpusername,
+        lpdomain,
+        lppassword,
+        dwlogonflags,
+        lpapplicationname,
+        lpcommandline,
+        dwcreationflags,
+        lpenvironment,
+        lpcurrentdirectory,
+        lpstartupinfo,
+        lpprocessinformation,
+    )
 }
 
 #[allow(non_snake_case)]
@@ -239,7 +286,17 @@ unsafe extern "system" fn ZludaCreateProcessWithTokenW(
     lpstartupinfo: *const windows_sys::Win32::System::Threading::STARTUPINFOW,
     lpprocessinformation: *mut windows_sys::Win32::System::Threading::PROCESS_INFORMATION,
 ) -> BOOL {
-    todo!()
+    CREATE_PROCESS_WITH_TOKEN_W(
+        htoken,
+        dwlogonflags,
+        lpapplicationname,
+        lpcommandline,
+        dwcreationflags,
+        lpenvironment,
+        lpcurrentdirectory,
+        lpstartupinfo,
+        lpprocessinformation,
+    )
 }
 
 // This type encapsulates typical calling sequence of detours and cleanup.
@@ -280,36 +337,39 @@ impl DetourDetachGuard {
         }
         result.overriden_non_cuda_fns.extend_from_slice(&[
             (
-                &mut LOAD_LIBRARY_A as *mut _ as *mut *mut c_void,
+                &raw mut LOAD_LIBRARY_A as *mut _ as *mut *mut c_void,
                 ZludaLoadLibraryA as *mut c_void,
             ),
-            (&mut LOAD_LIBRARY_W as *mut _ as _, ZludaLoadLibraryW as _),
             (
-                &mut LOAD_LIBRARY_EX_A as *mut _ as _,
+                &raw mut LOAD_LIBRARY_W as *mut _ as _,
+                ZludaLoadLibraryW as _,
+            ),
+            (
+                &raw mut LOAD_LIBRARY_EX_A as *mut _ as _,
                 ZludaLoadLibraryExA as _,
             ),
             (
-                &mut LOAD_LIBRARY_EX_W as *mut _ as _,
+                &raw mut LOAD_LIBRARY_EX_W as *mut _ as _,
                 ZludaLoadLibraryExW as _,
             ),
             (
-                &mut CREATE_PROCESS_A as *mut _ as _,
+                &raw mut CREATE_PROCESS_A as *mut _ as _,
                 ZludaCreateProcessA as _,
             ),
             (
-                &mut CREATE_PROCESS_W as *mut _ as _,
+                &raw mut CREATE_PROCESS_W as *mut _ as _,
                 ZludaCreateProcessW as _,
             ),
             (
-                &mut CREATE_PROCESS_AS_USER_W as *mut _ as _,
+                &raw mut CREATE_PROCESS_AS_USER_W as *mut _ as _,
                 ZludaCreateProcessAsUserW as _,
             ),
             (
-                &mut CREATE_PROCESS_WITH_LOGON_W as *mut _ as _,
+                &raw mut CREATE_PROCESS_WITH_LOGON_W as *mut _ as _,
                 ZludaCreateProcessWithLogonW as _,
             ),
             (
-                &mut CREATE_PROCESS_WITH_TOKEN_W as *mut _ as _,
+                &raw mut CREATE_PROCESS_WITH_TOKEN_W as *mut _ as _,
                 ZludaCreateProcessWithTokenW as _,
             ),
         ]);
@@ -345,7 +405,7 @@ impl DetourDetachGuard {
         let mut thread = THREADENTRY32::default();
         thread.dwSize = mem::size_of::<THREADENTRY32>() as u32;
         if Thread32First(thread_snapshot, &mut thread).is_err() {
-            CloseHandle(thread_snapshot);
+            CloseHandle(thread_snapshot).ok();
             return false;
         }
         loop {
@@ -355,13 +415,13 @@ impl DetourDetachGuard {
                     OpenThread(THREAD_SUSPEND_RESUME, false, thread.th32ThreadID),
                     _,
                     {
-                        CloseHandle(thread_snapshot);
+                        CloseHandle(thread_snapshot).ok();
                         return false;
                     }
                 );
                 if SuspendThread(thread_handle) == (-1i32 as u32) {
-                    CloseHandle(thread_handle);
-                    CloseHandle(thread_snapshot);
+                    CloseHandle(thread_handle).ok();
+                    CloseHandle(thread_snapshot).ok();
                     return false;
                 }
                 threads.push(thread_handle);
@@ -370,7 +430,7 @@ impl DetourDetachGuard {
                 break;
             }
         }
-        CloseHandle(thread_snapshot);
+        CloseHandle(thread_snapshot).ok();
         true
     }
 
@@ -397,9 +457,14 @@ impl Drop for DetourDetachGuard {
                 unsafe { DetourTransactionAbort() };
                 unsafe { self.resume_threads() };
             }
-            DetourUndoState::DetachDetours => {
-                // TODO: implement
-            }
+            DetourUndoState::DetachDetours => unsafe {
+                DetourTransactionBegin();
+                DetourUpdateThread(GetCurrentThread().0);
+                for (original_fn, new_fn) in self.overriden_non_cuda_fns.iter().copied() {
+                    DetourDetach(original_fn, new_fn);
+                }
+                DetourTransactionCommit();
+            },
         }
     }
 }
@@ -411,52 +476,6 @@ enum DetourUndoState {
     DoNothing,
     AbortTransactionResumeThreads,
     DetachDetours,
-}
-
-fn is_dll_utf8(lib: *const u8, name: &[u8]) -> bool {
-    is_dll_impl(lib, 0, name, |c| {
-        if c >= 'a' as u8 && c <= 'z' as u8 {
-            c - 32
-        } else {
-            c
-        }
-    })
-}
-
-fn is_dll_utf16(lib: *const u16, name: &[u16]) -> bool {
-    is_dll_impl(lib, 0u16, name, |c| {
-        if c >= 'a' as u16 && c <= 'z' as u16 {
-            c - 32
-        } else {
-            c
-        }
-    })
-}
-
-fn is_dll_impl<T: Copy + PartialEq>(
-    lib: *const T,
-    zero: T,
-    dll_name: &[T],
-    uppercase: impl Fn(T) -> T,
-) -> bool {
-    let mut len = 0;
-    loop {
-        if unsafe { *lib.offset(len) } == zero {
-            break;
-        }
-        len += 1;
-    }
-    if (len as usize) < dll_name.len() {
-        return false;
-    }
-    let slice =
-        unsafe { slice::from_raw_parts(lib.offset(len - dll_name.len() as isize), dll_name.len()) };
-    for i in 0..dll_name.len() {
-        if uppercase(slice[i]) != dll_name[i] {
-            return false;
-        }
-    }
-    true
 }
 
 #[allow(non_snake_case)]
