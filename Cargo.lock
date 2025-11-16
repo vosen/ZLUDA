@@ -4024,6 +4024,7 @@ dependencies = [
  "detours-sys",
  "rustc-hash 2.1.1",
  "tempfile",
+ "widestring",
  "windows",
  "windows-core",
  "zluda_ml",

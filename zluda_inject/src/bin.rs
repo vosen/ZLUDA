@@ -12,7 +12,8 @@ use windows::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows::Win32::System::Threading::{
-    self, GetExitCodeProcess, ResumeThread, WaitForSingleObject,
+    self, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_SUSPENDED,
+    CREATE_UNICODE_ENVIRONMENT,
 };
 use zluda_windows::LibraryInfo;
 
@@ -58,7 +59,7 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
             ptr::null_mut(),
             ptr::null_mut(),
             0,
-            0,
+            (CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT).0,
             env_vars_block.as_mut_ptr().cast(),
             ptr::null(),
             std::ptr::from_mut(&mut startup_info),
@@ -307,9 +308,9 @@ impl InjectionConfig {
         Ok(())
     }
 
-    fn get_env_variables_block(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        use std::io::Write;
-        let mut result = Vec::new();
+    fn get_env_variables_block(&self) -> Result<Vec<u16>, Box<dyn Error>> {
+        use std::fmt::Write;
+        let mut result = widestring::U16String::new();
         let mut known_vars = FxHashSet::default();
         for (var, value) in env::vars_os() {
             write!(&mut result, "{}={}\0", var.display(), value.display())?;
@@ -322,9 +323,9 @@ impl InjectionConfig {
             }
             write!(&mut result, "{}={}\0", key, value.display())?;
         }
-        result.push(0);
-        result.push(0);
-        Ok(result)
+        result.push_char('\0');
+        result.push_char('\0');
+        Ok(result.into_vec())
     }
 }
 

@@ -24,6 +24,7 @@ argh = "0.1"
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 detours-sys = { path = "../detours-sys" }
 rustc-hash = "2.0.0"
+widestring = "1.2.1"
 
 [dev-dependencies]
 # all of those are used in integration tests
