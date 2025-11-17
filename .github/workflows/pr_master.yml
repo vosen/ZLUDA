@@ -94,10 +94,10 @@ jobs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
     - uses: jlumbroso/free-disk-space@v1.3.1
-    - name: Install Git and build-essential
+    - name: Install build tools
       run: |
         sudo apt update
-        sudo apt install -y git build-essential
+        sudo apt install -y git build-essential cmake
     - uses: actions/checkout@v4
       with:
         submodules: true
