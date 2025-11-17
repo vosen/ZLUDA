@@ -154,7 +154,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
-            if method.is_kernel { // LLVM complains if alignment is set on function parameters for non-kernels
+            // LLVM complains if alignment is set on function parameters for non-kernels
+            if method.is_kernel {
                 if let Some(align) = param.info.align {
                     unsafe { LLVMSetParamAlignment(value, align) };
                 }
