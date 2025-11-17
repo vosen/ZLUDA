@@ -162,7 +162,7 @@ impl InjectionConfig {
                 LibraryWithPath { library: lib, path }
             })
             .collect::<Vec<_>>();
-        let env_vars = zluda_windows::LIBRARIES
+        let mut env_vars = zluda_windows::LIBRARIES
             .iter()
             .filter_map(|lib| {
                 if lib.is_alias {
@@ -174,6 +174,9 @@ impl InjectionConfig {
                 }
             })
             .collect::<Vec<_>>();
+        let mut temp_dir = std::env::temp_dir();
+        temp_dir.push("zluda");
+        env_vars.push(("ZLUDA_LOG_DIR", temp_dir));
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(current_exe_dir),
             dll_paths,
@@ -237,7 +240,7 @@ impl InjectionConfig {
                     path.push("x64");
                     path
                 });
-        let (dll_paths, env_vars) = zluda_windows::LIBRARIES.iter().try_fold(
+        let (dll_paths, mut env_vars) = zluda_windows::LIBRARIES.iter().try_fold(
             (Vec::new(), Vec::new()),
             |(mut dll_paths, mut env_vars), lib| {
                 Ok::<_, Box<dyn Error>>(
@@ -257,6 +260,9 @@ impl InjectionConfig {
                 )
             },
         )?;
+        let mut temp_dir = std::env::temp_dir();
+        temp_dir.push("zluda");
+        env_vars.push(("ZLUDA_LOG_DIR", temp_dir));
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(Self::current_exe_dir()?),
             dll_paths,

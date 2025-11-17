@@ -102,10 +102,6 @@ impl DetourPaths {
     }
 }
 
-#[no_mangle]
-#[used]
-pub static ZLUDA_REDIRECT: () = ();
-
 static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lp_lib_file_name: PCSTR) -> HMODULE =
     LoadLibraryA;
 

@@ -89,8 +89,8 @@ pub(crate) mod os {
             }
             path
         }
-        let driver = open_driver()?;
-        match driver.get::<unsafe extern "C" fn(*const u16) -> isize>(
+        let redirect_dll = os::windows::Library::open_already_loaded("zluda_redirect")?;
+        match redirect_dll.get::<unsafe extern "C" fn(*const u16) -> isize>(
             c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
         ) {
             Ok(load_library) => {
