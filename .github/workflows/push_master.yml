@@ -106,7 +106,7 @@ jobs:
         tag: "v${{ steps.prepare_artifacts.outputs.VERSION }}"
   build_tests:
     name: Build AMD GPU unit tests
-    runs-on: ubuntu-22.04
+    runs-on: gpu_small
     outputs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:

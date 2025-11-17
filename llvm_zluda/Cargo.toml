@@ -6,7 +6,6 @@ edition = "2021"
 links = "LLVM"
 
 [lib]
-crate-type = ["dylib"]
 
 [dependencies]
 tempfile = "3"
