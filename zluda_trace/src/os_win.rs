@@ -10,6 +10,11 @@ use std::{
 use windows::core::PCSTR;
 use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
 
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetProcAddress(hModule: *mut c_void, lpProcName: *const i8) -> *mut c_void;
+}
+
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedirect\0";
 
@@ -24,11 +29,14 @@ pub fn dlopen_local_noredirect<'a>(
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
     use libloading::os::windows;
     static ZLUDA_REDIRECT: LazyLock<
-        Option<extern "system" fn(*mut c_void, *const i8) -> *mut c_void>,
+        Option<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>,
     > = LazyLock::new(|| {
-        let lib = windows::Library::open_already_loaded("zluda_redirect").ok()?;
+        let lib = match windows::Library::open_already_loaded("zluda_redirect") {
+            Ok(lib) => lib,
+            Err(_) => return Some(GetProcAddress),
+        };
         unsafe {
-            lib.get::<extern "system" fn(*mut c_void, *const i8) -> *mut c_void>(
+            lib.get::<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>(
                 GET_PROC_ADDRESS_NO_REDIRECT,
             )
         }

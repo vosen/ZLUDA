@@ -301,7 +301,8 @@ impl InjectionConfig {
                 .into();
                 err
             })?;
-            let mut path = path.to_string();
+            let mut path = path.as_bytes().to_vec();
+            path.push(0);
             os_call! {
                 detours_sys::DetourCopyPayloadToProcess(
                     h_process,

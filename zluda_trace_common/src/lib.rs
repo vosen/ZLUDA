@@ -89,7 +89,10 @@ pub(crate) mod os {
             }
             path
         }
-        let redirect_dll = os::windows::Library::open_already_loaded("zluda_redirect")?;
+        let redirect_dll = match os::windows::Library::open_already_loaded("zluda_redirect") {
+            Ok(lib) => lib,
+            Err(_) => return libloading::Library::new(&*path),
+        };
         match redirect_dll.get::<unsafe extern "C" fn(*const u16) -> isize>(
             c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
         ) {
