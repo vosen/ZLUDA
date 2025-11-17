@@ -179,6 +179,7 @@ from_cuda_nop!(
     CUlibrary,
     CUmodule,
     CUcontext,
+    CUoccupancyB2DSize,
     cublasHandle_t,
     cublasStatus_t,
     CUlaunchConfig,
@@ -207,6 +208,7 @@ from_cuda_nop!(
 from_cuda_transmute!(
     CUuuid => hipUUID,
     CUfunction => hipFunction_t,
+    CUjit_option => hipJitOption,
     CUstream => hipStream_t,
     CUpointer_attribute => hipPointer_attribute,
     CUdeviceptr_v2 => hipDeviceptr_t,
