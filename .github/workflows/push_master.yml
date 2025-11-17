@@ -111,6 +111,10 @@ jobs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
     - uses: jlumbroso/free-disk-space@v1.3.1
+    - name: Install Git
+      run: |
+        sudo apt update
+        sudo apt install -y git
     - uses: actions/checkout@v4
       with:
         submodules: true
