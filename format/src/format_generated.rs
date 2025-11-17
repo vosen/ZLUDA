@@ -7387,36 +7387,6 @@ pub fn write_cuModuleLoadData(
     crate::CudaDisplay::write(&image, "cuModuleLoadData", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cuModuleLoadDataEx(
-    writer: &mut (impl std::io::Write + ?Sized),
-    module: *mut cuda_types::cuda::CUmodule,
-    image: *const ::core::ffi::c_void,
-    numOptions: ::core::ffi::c_uint,
-    options: *mut cuda_types::cuda::CUjit_option,
-    optionValues: *mut *mut ::core::ffi::c_void,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&module, "cuModuleLoadDataEx", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&image, "cuModuleLoadDataEx", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&numOptions, "cuModuleLoadDataEx", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&options, "cuModuleLoadDataEx", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&optionValues, "cuModuleLoadDataEx", arg_idx, writer)?;
-    writer.write_all(b")")
-}
 pub fn write_cuModuleLoadFatBinary(
     writer: &mut (impl std::io::Write + ?Sized),
     module: *mut cuda_types::cuda::CUmodule,

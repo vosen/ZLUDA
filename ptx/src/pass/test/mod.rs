@@ -8,6 +8,7 @@ use std::{
 
 mod expand_operands;
 mod insert_implicit_conversions;
+mod normalize_basic_blocks;
 
 #[macro_export]
 macro_rules! test_pass {
@@ -199,17 +200,22 @@ fn statement_to_string(
     resolver: &GlobalStringIdentResolver2,
     stmt: Statement<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> String {
-    let op = match &stmt {
-        Statement::Variable(var) => format!("{}", var),
-        Statement::Instruction(instr) => format!("{}", instr),
-        Statement::Conversion(conv) => format!("{}", conv),
-        Statement::Constant(constant) => format!("{}", constant),
-        Statement::RepackVector(repack) => format!("{}", repack),
+    let (op, visit_args) = match &stmt {
+        Statement::Variable(var) => (format!("{}", var), true),
+        Statement::Instruction(instr) => (format!("{}", instr), true),
+        Statement::Conversion(conv) => (format!("{}", conv), true),
+        Statement::Constant(constant) => (format!("{}", constant), true),
+        Statement::RepackVector(repack) => (format!("{}", repack), true),
+        Statement::Label(label) => (format!("{}:", label), false),
         _ => todo!(),
     };
-    let mut args_formatter = StatementFormatter::new(resolver);
-    stmt.visit_map(&mut args_formatter).unwrap();
-    args_formatter.format(&op)
+    if visit_args {
+        let mut args_formatter = StatementFormatter::new(resolver);
+        stmt.visit_map(&mut args_formatter).unwrap();
+        args_formatter.format(&op)
+    } else {
+        op
+    }
 }
 
 fn test_pass_assert<F, D>(
