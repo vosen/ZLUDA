@@ -15,7 +15,5 @@ rocblas-sys = { path = "../ext/rocblas-sys" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 
 [package.metadata.zluda]
-linux_symlinks = [
-    "libcublas.so.12",
-    "libcublas.so.13",
-]
+linux_symlinks = ["libcublas.so.12", "libcublas.so.13"]
+windows_paths = ["cublas64_12.dll", "cublas64_13.dll"]
