@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn fails_on_mismatch() {
         let lookup = DllLookup::new();
-        let path = u16str!("cusparse64_13.dll");
+        let path = u16str!("cusparse64_99.dll");
         assert!(lookup.lookup_utf16(path.as_slice()).is_none());
     }
 
