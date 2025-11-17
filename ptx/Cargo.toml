@@ -5,7 +5,6 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
-crate-type = ["dylib"]
 
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
