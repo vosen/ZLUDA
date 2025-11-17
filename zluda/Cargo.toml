@@ -28,9 +28,6 @@ blake3 = "1.8.2"
 serde = "1.0.219"
 serde_json = "1.0.142"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["heapapi", "std"] }
-
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
 dtor = "0.0.7"

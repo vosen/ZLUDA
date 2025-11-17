@@ -2533,12 +2533,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-hack"
-version = "0.5.20+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3450,28 +3444,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wchar"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c74d010bf16569f942b0b7d3c777dd674f8ee539b48d809dc548b3453039c2df"
-dependencies = [
- "proc-macro-hack",
- "wchar-impl",
-]
-
-[[package]]
-name = "wchar-impl"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f135922b9303f899bfa446fce1eb149f43462f1e9ac7f50e24ea6b913416dd84"
-dependencies = [
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "widestring"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3915,7 +3887,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "vergen-gix",
- "winapi",
  "zluda_cache",
  "zluda_common",
 ]
@@ -4089,8 +4060,7 @@ dependencies = [
  "regex",
  "rustc-hash 2.1.1",
  "unwrap_or",
- "wchar",
- "winapi",
+ "windows",
  "zluda_common",
  "zluda_trace_common",
  "zstd-safe",
