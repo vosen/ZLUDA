@@ -1,8 +1,8 @@
 declare hidden i32 @__zluda_ptx_impl_redux_sync_add_s32(i32, i32) #0
 
-declare hidden i32 @__zluda_ptx_impl_redux_sync_min_s32(i32, i32) #0
-
 declare hidden i32 @__zluda_ptx_impl_redux_sync_max_s32(i32, i32) #0
+
+declare hidden i32 @__zluda_ptx_impl_redux_sync_min_s32(i32, i32) #0
 
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
