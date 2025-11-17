@@ -1,5 +1,4 @@
 use cuda_types::cuda::CUuuid;
-use windows::core::PCSTR;
 use std::borrow::Cow;
 use std::os::windows::io::AsRawHandle;
 use std::ptr::NonNull;
@@ -8,6 +7,7 @@ use std::{
     mem, ptr,
     sync::LazyLock,
 };
+use windows::core::PCSTR;
 use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
