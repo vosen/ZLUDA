@@ -3751,7 +3751,7 @@ dependencies = [
  "cuda_types",
  "hip_runtime-sys",
  "miopen-sys",
- "rustc-hash 2.0.0",
+ "rustc-hash 2.1.1",
  "zluda_common",
 ]
 

@@ -741,19 +741,19 @@ impl<T: CudaDisplay + 'static> CudaDisplay for *const T {
         index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        if *self == ptr::null() {
-            writer.write_all(b"NULL")
-        } else {
-            if fn_name.len() > 2
+        match unsafe { self.as_ref() } {
+            None => writer.write_all(b"NULL"),
+            Some(this) => {
+                if fn_name.len() > 2
                 && fn_name.starts_with("cu")
                 && fn_name.as_bytes()[2].is_ascii_lowercase()
                 && (TypeId::of::<T>() == TypeId::of::<f32>()
                     || TypeId::of::<T>() == TypeId::of::<f64>())
-            {
-                CudaDisplay::write(&self.cast::<c_void>(), fn_name, index, writer)
-            } else {
-                let this: &T = unsafe { &**self };
-                this.write(fn_name, index, writer)
+                {
+                    CudaDisplay::write(&self.cast::<c_void>(), fn_name, index, writer)
+                } else {
+                    this.write(fn_name, index, writer)
+                }
             }
         }
     }
@@ -1239,6 +1239,49 @@ pub fn write_cudnnBackendSetAttribute(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(arrayOfElements), ": ").as_bytes())?;
     cudnn9_print_elements(writer, attributeType, elementCount, arrayOfElements)?;
+    writer.write_all(b")")
+}
+
+#[allow(non_snake_case)]
+pub fn write_cuModuleLoadDataEx(
+    writer: &mut (impl std::io::Write + ?Sized),
+    module: *mut cuda_types::cuda::CUmodule,
+    image: *const ::core::ffi::c_void,
+    numOptions: ::core::ffi::c_uint,
+    options: *mut cuda_types::cuda::CUjit_option,
+    optionValues: *mut *mut ::core::ffi::c_void,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(module), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&module, "cuModuleLoadDataEx", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(image), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&image, "cuModuleLoadDataEx", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(numOptions), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&numOptions, "cuModuleLoadDataEx", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(options), ": ").as_bytes())?;
+    if numOptions == 0 {
+        write!(writer, "{:p}", options)?;
+    } else {
+        let options = unsafe { std::slice::from_raw_parts(options, numOptions as usize) };
+        crate::CudaDisplay::write(options, "cuModuleLoadDataEx", arg_idx, writer)?;
+    }
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(optionValues), ": ").as_bytes())?;
+    if numOptions == 0 {
+        write!(writer, "{:p}", optionValues)?;
+    } else {
+        let optionValues =
+            unsafe { std::slice::from_raw_parts(optionValues, numOptions as usize) };
+        crate::CudaDisplay::write(optionValues, "cuModuleLoadDataEx", arg_idx, writer)?;
+    }
     writer.write_all(b")")
 }
 

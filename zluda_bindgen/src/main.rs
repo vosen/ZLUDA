@@ -1717,6 +1717,7 @@ fn generate_display_cuda(
         "cuGraphKernelNodeSetAttribute",
         "cuPointerGetAttribute",
         "cuPointerGetAttributes",
+        "cuModuleLoadDataEx"
     ];
     let count_selectors = [
         ("cuCtxCreate_v3", 1, 2),
