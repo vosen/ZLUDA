@@ -1,0 +1,24 @@
+.version 6.5
+.target sm_30
+.address_size 64
+.visible .entry trap(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	trap;
+	ret;
+}
+
+// %%% output %%%
+
+.visible .entry %1 (
+    .param .u64 %2,
+    .param .u64 %3
+)
+{
+    %4:
+    <Trap>;
+    %5:
+    ret;
+}
