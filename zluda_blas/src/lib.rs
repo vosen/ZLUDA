@@ -54,6 +54,8 @@ cuda_macros::cublas_function_declarations!(
             cublasGetMathMode,
             cublasHgemm,
             cublasSetMathMode,
+            cublasSetPointerMode,
+            cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
             cublasSgemmStridedBatched,
