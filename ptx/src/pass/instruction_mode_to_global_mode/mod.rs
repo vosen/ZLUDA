@@ -2038,9 +2038,6 @@ fn optimize_mode_insertions<
     solver.make_quiet();
     // Takes minutes for a problem that is solved sub-second
     solver.set_option("presolve", "off");
-    // "pdlp" is slightly faster, but ignores integer constraints and produces
-    // floating point solutions
-    solver.set_option("solver", "simplex");
     solver.set_option("parallel", "off");
     solver.set_option("threads", 1);
     let solved_model = solver.try_solve()?;
