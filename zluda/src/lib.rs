@@ -103,6 +103,7 @@ cuda_macros::cuda_function_declarations!(
             cuDriverGetVersion,
             cuEventCreate,
             cuEventDestroy_v2,
+            cuEventElapsedTime,
             cuEventQuery,
             cuEventRecord,
             cuEventSynchronize,
