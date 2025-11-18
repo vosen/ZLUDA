@@ -174,8 +174,8 @@ mod tests {
         api.cuCtxCreate_v2(&mut mem::zeroed(), 0, 0);
         let mut context = CUcontext(1 as _);
         let mut mem_type = mem::transmute::<_, CUmemorytype>(u32::MAX);
-        let mut dev_ptr = std::ptr::without_provenance_mut::<c_void>(usize::MAX);
-        let mut host_ptr = std::ptr::without_provenance_mut::<c_void>(usize::MAX);
+        let mut dev_ptr = mem::transmute::<_, *mut c_void>(usize::MAX);
+        let mut host_ptr = mem::transmute::<_, *mut c_void>(usize::MAX);
         let mut is_managed = true;
         let mut ordinal = i32::MAX;
         let mut attrs = [
