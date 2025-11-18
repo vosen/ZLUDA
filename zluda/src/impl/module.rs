@@ -186,6 +186,16 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
     Ok(())
 }
 
+pub(crate) fn load_data_ex(
+    module: &mut CUmodule,
+    image: &std::ffi::c_void,
+    _num_options: ::std::os::raw::c_uint,
+    _options: Option<&mut CUjit_option_enum>,
+    _option_values: Option<&mut *mut ::core::ffi::c_void>,
+) -> CUresult {
+    load_data(module, image)
+}
+
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {
     zluda_common::drop_checked::<Module>(hmod)
 }

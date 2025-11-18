@@ -166,6 +166,20 @@ pub(crate) fn destroy_v2(handle: cublasHandle_t) -> cublasStatus_t {
     zluda_common::drop_checked::<Handle>(handle)
 }
 
+pub(crate) unsafe fn set_pointer_mode(
+    handle: &Handle,
+    mode: rocblas_pointer_mode,
+) -> rocblas_status {
+    rocblas_set_pointer_mode(handle.handle, mode)
+}
+
+pub(crate) unsafe fn set_pointer_mode_v2(
+    handle: &Handle,
+    mode: rocblas_pointer_mode,
+) -> rocblas_status {
+    rocblas_set_pointer_mode(handle.handle, mode)
+}
+
 pub(crate) unsafe fn set_stream_v2(handle: &Handle, stream: hipStream_t) -> rocblas_status {
     rocblas_set_stream(handle.handle, stream)
 }

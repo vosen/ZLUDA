@@ -511,6 +511,24 @@ pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
     Ok(())
 }
 
+pub(crate) unsafe fn occupancy_max_potential_block_size(
+    grid_size: &mut ::core::ffi::c_int,
+    block_size: &mut ::core::ffi::c_int,
+    f: hipFunction_t,
+    _block_size_to_dynamic_smem_size: CUoccupancyB2DSize,
+    dyn_shared_mem_per_blk: usize,
+    block_size_limit: ::core::ffi::c_int,
+) -> hipError_t {
+    hipModuleOccupancyMaxPotentialBlockSize(
+        grid_size,
+        block_size,
+        f,
+        dyn_shared_mem_per_blk,
+        block_size_limit,
+    )?;
+    Ok(())
+}
+
 pub(crate) unsafe fn launch_kernel_ex(
     config: &cuda_types::cuda::CUlaunchConfig,
     f: hipFunction_t,
