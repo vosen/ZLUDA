@@ -3999,8 +3999,12 @@ name = "zluda_precompile"
 version = "0.0.0"
 dependencies = [
  "bpaf",
+ "cuda_types",
+ "goblin",
  "indicatif",
+ "libloading",
  "rayon",
+ "unwrap_or",
  "walkdir",
 ]
 

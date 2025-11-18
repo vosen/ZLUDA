@@ -9,9 +9,13 @@ name = "zluda_precompile"
 path = "src/main.rs"
 
 [dependencies]
+cuda_types = { path = "../cuda_types" }
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 rayon = "1.11.0"
 walkdir = "2"
 indicatif = "0.18.3"
+goblin = { version = "0.9", default-features = false, features = ["elf32", "elf64", "pe64"] }
+unwrap_or = "1.0.1"
+libloading = "0.8"
 
 [package.metadata.zluda]
