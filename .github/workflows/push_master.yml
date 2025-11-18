@@ -106,14 +106,21 @@ jobs:
         tag: "v${{ steps.prepare_artifacts.outputs.VERSION }}"
   build_tests:
     name: Build AMD GPU unit tests
-    runs-on: ubuntu-22.04
+    runs-on: gpu_small
     outputs:
       test_package: ${{ steps.upload_artifacts.outputs.artifact-id }}
     steps:
     - uses: jlumbroso/free-disk-space@v1.3.1
+    - name: Install build tools
+      run: |
+        sudo apt update
+        sudo apt install -y git build-essential cmake
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        rustflags: ""
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }} ${{ env.AMDGPU_VERSION }}
     - name: Run sccache-cache
