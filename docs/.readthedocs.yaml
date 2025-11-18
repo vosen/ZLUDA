@@ -5,7 +5,7 @@ build:
     rust: latest
   jobs:
     install:
-      - cargo install mdbook --version 0.4.52 mdbook-alerts --root .
+      - cargo install mdbook@0.4.52 mdbook-alerts --root .
     build:
       html:
         - PATH=$PATH:./bin mdbook build docs --dest-dir $READTHEDOCS_OUTPUT/html
