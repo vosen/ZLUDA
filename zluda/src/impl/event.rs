@@ -5,6 +5,15 @@ pub(crate) unsafe fn create(event: *mut hipEvent_t, flags: ::core::ffi::c_uint) 
     hipEventCreateWithFlags(event, flags)
 }
 
+pub(crate) unsafe fn elapsed_time(
+    milliseconds: *mut ::core::ffi::c_float,
+    start: hipEvent_t,
+    end: hipEvent_t,
+) -> hipError_t {
+    // Flag values are compatible between CUDA and HIP for 0,1,2,4
+    hipEventElapsedTime(milliseconds, start, end)
+}
+
 pub(crate) unsafe fn query(event: hipEvent_t) -> hipError_t {
     hipEventQuery(event)
 }
