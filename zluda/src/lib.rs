@@ -102,6 +102,7 @@ cuda_macros::cuda_function_declarations!(
             cuEventCreate,
             cuEventDestroy_v2,
             cuEventQuery,
+            cuEventElapsedTime,
             cuEventRecord,
             cuEventSynchronize,
             cuFuncGetAttribute,
