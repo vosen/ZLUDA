@@ -224,6 +224,7 @@ from_cuda_transmute!(
     cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
     cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
     cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t,
+cublasPointerMode_t => rocblas_pointer_mode,
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t
