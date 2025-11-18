@@ -236,11 +236,17 @@ impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
             CUjit_option::CU_JIT_THREADS_PER_BLOCK => hipJitOption::hipJitOptionThreadsPerBlock,
             CUjit_option::CU_JIT_WALL_TIME => hipJitOption::hipJitOptionWallTime,
             CUjit_option::CU_JIT_INFO_LOG_BUFFER => hipJitOption::hipJitOptionInfoLogBuffer,
-            CUjit_option::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES => hipJitOption::hipJitOptionInfoLogBufferSizeBytes,
+            CUjit_option::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES => {
+                hipJitOption::hipJitOptionInfoLogBufferSizeBytes
+            }
             CUjit_option::CU_JIT_ERROR_LOG_BUFFER => hipJitOption::hipJitOptionErrorLogBuffer,
-            CUjit_option::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES => hipJitOption::hipJitOptionErrorLogBufferSizeBytes,
+            CUjit_option::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES => {
+                hipJitOption::hipJitOptionErrorLogBufferSizeBytes
+            }
             CUjit_option::CU_JIT_OPTIMIZATION_LEVEL => hipJitOption::hipJitOptionOptimizationLevel,
-            CUjit_option::CU_JIT_TARGET_FROM_CUCONTEXT => hipJitOption::hipJitOptionTargetFromContext,
+            CUjit_option::CU_JIT_TARGET_FROM_CUCONTEXT => {
+                hipJitOption::hipJitOptionTargetFromContext
+            }
             CUjit_option::CU_JIT_TARGET => hipJitOption::hipJitOptionTarget,
             CUjit_option::CU_JIT_FALLBACK_STRATEGY => hipJitOption::hipJitOptionFallbackStrategy,
             CUjit_option::CU_JIT_GENERATE_DEBUG_INFO => hipJitOption::hipJitOptionGenerateDebugInfo,
@@ -250,17 +256,25 @@ impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
             CUjit_option::CU_JIT_NEW_SM3X_OPT => hipJitOption::hipJitOptionSm3xOpt,
             CUjit_option::CU_JIT_FAST_COMPILE => hipJitOption::hipJitOptionFastCompile,
             CUjit_option::CU_JIT_GLOBAL_SYMBOL_NAMES => hipJitOption::hipJitOptionGlobalSymbolNames,
-            CUjit_option::CU_JIT_GLOBAL_SYMBOL_ADDRESSES => hipJitOption::hipJitOptionGlobalSymbolAddresses,
+            CUjit_option::CU_JIT_GLOBAL_SYMBOL_ADDRESSES => {
+                hipJitOption::hipJitOptionGlobalSymbolAddresses
+            }
             CUjit_option::CU_JIT_GLOBAL_SYMBOL_COUNT => hipJitOption::hipJitOptionGlobalSymbolCount,
             CUjit_option::CU_JIT_LTO => hipJitOption::hipJitOptionLto,
             CUjit_option::CU_JIT_FTZ => hipJitOption::hipJitOptionFtz,
             CUjit_option::CU_JIT_PREC_DIV => hipJitOption::hipJitOptionPrecDiv,
             CUjit_option::CU_JIT_PREC_SQRT => hipJitOption::hipJitOptionPrecSqrt,
             CUjit_option::CU_JIT_FMA => hipJitOption::hipJitOptionFma,
-            CUjit_option::CU_JIT_POSITION_INDEPENDENT_CODE => hipJitOption::hipJitOptionPositionIndependentCode,
+            CUjit_option::CU_JIT_POSITION_INDEPENDENT_CODE => {
+                hipJitOption::hipJitOptionPositionIndependentCode
+            }
             CUjit_option::CU_JIT_MIN_CTA_PER_SM => hipJitOption::hipJitOptionMinCTAPerSM,
-            CUjit_option::CU_JIT_MAX_THREADS_PER_BLOCK => hipJitOption::hipJitOptionMaxThreadsPerBlock,
-            CUjit_option::CU_JIT_OVERRIDE_DIRECTIVE_VALUES => hipJitOption::hipJitOptionOverrideDirectiveValues,
+            CUjit_option::CU_JIT_MAX_THREADS_PER_BLOCK => {
+                hipJitOption::hipJitOptionMaxThreadsPerBlock
+            }
+            CUjit_option::CU_JIT_OVERRIDE_DIRECTIVE_VALUES => {
+                hipJitOption::hipJitOptionOverrideDirectiveValues
+            }
             _ => return Err(E::NOT_SUPPORTED),
         })
     }
