@@ -113,6 +113,11 @@ test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
+test_ptx!(
+    cvt_pack,
+    [-257i32, 257i32, -130436883i32],
+    [2968322303u32, 2968354943]
+);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
@@ -178,6 +183,11 @@ test_ptx!(
     fma_bf16x2,
     [0x40004040, 0x40404080, 0x40A04040],
     [0x41304170]
+);
+test_ptx!(
+    fma_f16x2,
+    [0x40004040, 0x40404080, 0x40A04040],
+    [1183860456u32]
 );
 test_ptx!(shared_variable, [513u64], [513u64]);
 test_ptx!(shared_ptr_32, [513u64], [513u64]);
@@ -358,6 +368,25 @@ test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 //    [0xce16728dead1ceb1u64, 0xe7728e3c390b7fb8]
 //);
 test_ptx!(copysign, [0x0BDA2A2Cu32, 0xe31a8fd7u32], [0x631A8FD7u32]);
+test_ptx!(cvt_f16x2_f32, [1.0f32, 2.0f32], [0x3C004000u32]);
+test_ptx!(
+    cvt_relu_f16x2_f32,
+    // Not testing for NaN because AMDG GPUs returns a different NaN
+    [-1.0f32, 1.0f32, 3.14, f32::NEG_INFINITY],
+    [15360u32, 1112014848]
+);
+test_ptx!(
+    set_f16,
+    [
+        half::f16::NAN,
+        half::f16::NAN,
+        half::f16::from_f32(3.14),
+        half::f16::NEG_INFINITY,
+        half::f16::from_f32(-0.0),
+        half::f16::from_f32(0.0)
+    ],
+    [4294967295u32, 65535]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported

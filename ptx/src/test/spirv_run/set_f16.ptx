@@ -1,0 +1,28 @@
+.version 6.5
+.target sm_60
+.address_size 64
+
+.visible .entry set_f16(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b16 	    in16_<2>;
+    .reg .b32 	    in32_<2>;
+    .reg .b32 	    result<2>;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.b16              in16_0, [in_addr];
+    ld.b16              in16_1, [in_addr+2];
+    ld.b32              in32_0, [in_addr+4];
+    ld.b32              in32_1, [in_addr+8];
+	set.gtu.u32.f16     result0, in16_0, in16_1;
+	set.gtu.u32.f16x2   result1, in32_0, in32_1;
+    st.u32              [out_addr], result0;
+    st.u32              [out_addr+4], result1;
+	ret;
+}

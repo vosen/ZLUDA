@@ -3,7 +3,7 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
+    CacheLevel, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
     PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
@@ -240,6 +240,27 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
                 },
+            }
+        },
+        CvtPack {
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                },
+                src1: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src3: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
             }
         },
         Cvta {
@@ -745,6 +766,18 @@ ptx_parser_macros::generate_instruction_type!(
                 src1: T,
                 src2: T,
             }
+        },
+        Prefetch {
+            type: !,
+            data: PrefetchData,
+            arguments<T>: {
+                src: {
+                    repr: T,
+                    type: Type::from(ScalarType::B8),
+                    space: { data.space },
+                    relaxed_type_check: true
+                }
+            }
         }
     }
 );
@@ -1167,6 +1200,10 @@ impl ScalarType {
             ScalarType::B128 => 16,
             ScalarType::Pred => 1,
         }
+    }
+
+    pub fn bit_size(self) -> u8 {
+        self.layout().size() as u8 * 8u8
     }
 
     pub fn layout(self) -> Layout {
@@ -1716,6 +1753,7 @@ pub struct SetData {
     pub base: SetpData,
 }
 
+#[derive(Copy, Clone)]
 pub struct SetpData {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
@@ -2021,6 +2059,7 @@ pub enum CvtMode {
         is_integer_rounding: bool,
         flush_to_zero: Option<bool>,
         saturate: bool,
+        relu: bool,
     },
     FPRound {
         integer_rounding: Option<RoundingMode>,
@@ -2053,6 +2092,7 @@ impl CvtDetails {
         rnd: Option<RawRoundingMode>,
         ftz: bool,
         saturate: bool,
+        relu: bool,
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
@@ -2097,6 +2137,7 @@ impl CvtDetails {
                         is_integer_rounding,
                         flush_to_zero,
                         saturate,
+                        relu,
                     }
                 }
                 Ordering::Equal => CvtMode::FPRound {
@@ -2455,4 +2496,9 @@ impl MmaDetails {
     pub fn ctype(&self) -> Type {
         Type::Vector(4, ScalarType::F32)
     }
+}
+
+pub struct PrefetchData {
+    pub space: StateSpace,
+    pub level: CacheLevel,
 }
