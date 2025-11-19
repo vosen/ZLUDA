@@ -490,10 +490,10 @@ pub(crate) fn get_primary_context(
 
 pub(crate) fn primary_context_set_flags(
     hip_dev: hipDevice_t,
-    flags: ::core::ffi::c_uint,
+    _flags: ::core::ffi::c_uint,
 ) -> CUresult {
     let (ctx, _) = get_primary_context(hip_dev)?;
-    ctx.with_state_mut(|state| {
+    ctx.with_state_mut(|_state| {
         // Do nothing
         Ok(())
     })?;

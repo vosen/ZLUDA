@@ -1,4 +1,5 @@
 use super::*;
+use ptx_parser::CallArgs;
 
 // This pass normalizes ptx modules in two ways that makes mode computation pass
 // and code emissions passes much simpler:
@@ -132,7 +133,7 @@ fn is_block_terminator(
         // Normally call is not a terminator, but we treat it as such because it
         // makes the "instruction modes to global modes" pass possible
         | Statement::Instruction(ast::Instruction::Ret { .. }) => TerminatorKind::Real,
-        Statement::Instruction(ast::Instruction::Call { .. }) => TerminatorKind::Fake,
+        Statement::Instruction(ast::Instruction::Call { arguments: CallArgs {  is_external: false, .. }, .. })  => TerminatorKind::Fake,
         _ => TerminatorKind::Not,
     }
 }
