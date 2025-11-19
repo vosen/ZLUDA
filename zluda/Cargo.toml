@@ -9,7 +9,7 @@ name = "nvcuda"
 crate-type = ["cdylib"]
 
 [dependencies]
-comgr = { path = "../comgr" }
+llvm_zluda = { path = "../llvm_zluda" }
 ptx_parser = { path = "../ptx_parser" }
 ptx = { path = "../ptx" }
 cuda_types = { path = "../cuda_types" }

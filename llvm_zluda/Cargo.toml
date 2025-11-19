@@ -2,14 +2,16 @@
 name = "llvm_zluda"
 version = "0.1.0"
 edition = "2021"
+# Used for the metadata environment variables (ie, DEP_LLVM_ROOT is set)
+links = "LLVM"
 
 [lib]
 
 [dependencies]
-bitflags = "2.4"
+tempfile = "3"
 
 [dependencies.llvm-sys]
-version = "170"
+version = "191"
 features = [ "disable-alltargets-init", "no-llvm-linking" ]
 
 [build-dependencies]

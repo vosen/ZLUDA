@@ -44,7 +44,6 @@ fn main() -> ExitCode {
 
 fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
-    let comgr = comgr::Comgr::new()?;
 
     let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
     let filename_base = ptx_path
@@ -80,21 +79,20 @@ fn main_core() -> Result<(), CompilerError> {
 
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
 
-    let comgr_hook = |bytes: &Vec<u8>, extension: String| {
+    let compiler_hook = |bytes: &Vec<u8>, extension: String| {
         let output_path = output_path.with_extension(extension);
         write_to_file(bytes, &output_path).unwrap();
     };
 
     let mut start = Instant::now();
-    comgr::compile_bitcode(
-        &comgr,
+    llvm_zluda::compile(
+        &llvm.context,
         &arch,
-        &llvm.bitcode,
+        llvm.main,
         &llvm.linked_bitcode,
-        &llvm.attributes_bitcode,
-        Some(&comgr_hook),
-    )
-    .map_err(CompilerError::from)?;
+        llvm.attributes,
+        Some(&compiler_hook),
+    )?;
     report_pass_time("compile_bitcode", &mut start);
 
     Ok(())
@@ -117,14 +115,15 @@ fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, Compiler
         },
     )
     .map_err(CompilerError::from)?;
-    let bitcode = module.llvm_ir.write_bitcode_to_memory().to_vec();
-    let linked_bitcode = module.linked_bitcode().to_vec();
-    let attributes_bitcode = module.attributes_ir.write_bitcode_to_memory().to_vec();
     let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
+    let linked_bitcode = module.linked_bitcode().to_vec();
+    let main = module.llvm_ir;
+    let attributes = module.attributes_ir;
     Ok(LLVMArtifacts {
-        bitcode,
+        context: module.context,
+        main,
         linked_bitcode,
-        attributes_bitcode,
+        attributes,
         llvm_ir,
     })
 }
@@ -135,11 +134,11 @@ fn report_pass_time(pass: &str, start: &mut Instant) {
     *start = Instant::now();
 }
 
-#[derive(Debug)]
 struct LLVMArtifacts {
-    bitcode: Vec<u8>,
+    main: llvm_zluda::utils::Module,
+    attributes: llvm_zluda::utils::Module,
+    context: llvm_zluda::utils::Context,
     linked_bitcode: Vec<u8>,
-    attributes_bitcode: Vec<u8>,
     llvm_ir: Vec<u8>,
 }
 
