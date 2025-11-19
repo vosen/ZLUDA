@@ -23,7 +23,7 @@ define amdgpu_kernel void @mul24_lo_s32(ptr addrspace(4) byref(i64) %"38", ptr a
   store i32 %"49", ptr addrspace(5) %"43", align 4
   %7 = load i32, ptr addrspace(5) %"43", align 4
   %8 = load i32, ptr addrspace(5) %"42", align 4
-  %"51" = call i32 @llvm.amdgcn.mul.i24(i32 %7, i32 %8)
+  %"51" = call i32 @llvm.amdgcn.mul.i24.i32(i32 %7, i32 %8)
   store i32 %"51", ptr addrspace(5) %"44", align 4
   %9 = load i64, ptr addrspace(5) %"41", align 8
   %10 = load i32, ptr addrspace(5) %"44", align 4
@@ -33,7 +33,7 @@ define amdgpu_kernel void @mul24_lo_s32(ptr addrspace(4) byref(i64) %"38", ptr a
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.amdgcn.mul.i24(i32, i32) #1
+declare i32 @llvm.amdgcn.mul.i24.i32(i32, i32) #1
 
 attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "uniform-work-group-size"="true" }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

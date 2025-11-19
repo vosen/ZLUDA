@@ -1,11 +1,13 @@
 use super::*;
 use smallvec::*;
+use std::collections::{btree_map, BTreeMap};
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
-    let mut fn_declarations = FxHashMap::default();
+    // We use BTreeMap here to have deterministic ordering of function declarations.
+    let mut fn_declarations = BTreeMap::default();
     let remapped_directives = directives
         .into_iter()
         .map(|directive| run_directive(resolver, &mut fn_declarations, directive))
@@ -35,7 +37,7 @@ pub(super) fn run<'input>(
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    fn_declarations: &mut FxHashMap<
+    fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
             Vec<ast::Variable<SpirvWord>>,
@@ -59,22 +61,21 @@ fn run_directive<'input>(
 
 fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    fn_declarations: &mut HashMap<
+    fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
             Vec<ptx_parser::Variable<SpirvWord>>,
             SpirvWord,
             Vec<ptx_parser::Variable<SpirvWord>>,
         ),
-        rustc_hash::FxBuildHasher,
     >,
     name: S,
     return_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
     input_arguments: &Vec<(ptx_parser::Type, ptx_parser::StateSpace)>,
 ) -> SpirvWord {
     let func = match fn_declarations.entry(name.into()) {
-        hash_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
-        hash_map::Entry::Vacant(vacant_entry) => {
+        btree_map::Entry::Occupied(occupied_entry) => occupied_entry.get().1,
+        btree_map::Entry::Vacant(vacant_entry) => {
             let name = vacant_entry.key().clone();
             let full_name = [ZLUDA_PTX_PREFIX, &*name].concat();
             let name = resolver.register_named(Cow::Owned(full_name.clone()), None);
@@ -91,7 +92,7 @@ fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
 
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    fn_declarations: &mut FxHashMap<
+    fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
             Vec<ast::Variable<SpirvWord>>,
@@ -280,7 +281,7 @@ fn run_statements<'input>(
 
 fn run_instruction<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    fn_declarations: &mut FxHashMap<
+    fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
             Vec<ast::Variable<SpirvWord>>,
@@ -499,7 +500,7 @@ fn run_instruction<'input>(
 
 fn to_call<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    fn_declarations: &mut FxHashMap<
+    fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
             Vec<ast::Variable<SpirvWord>>,
