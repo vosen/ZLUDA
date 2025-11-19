@@ -19,7 +19,7 @@ define amdgpu_kernel void @mul24_hi_u32(ptr addrspace(4) byref(i64) %"37", ptr a
   store i32 %5, ptr addrspace(5) %"41", align 4
   %6 = load i32, ptr addrspace(5) %"41", align 4
   %7 = load i32, ptr addrspace(5) %"41", align 4
-  %8 = call i32 @llvm.amdgcn.mul.u24(i32 %6, i32 %7)
+  %8 = call i32 @llvm.amdgcn.mul.u24.i32(i32 %6, i32 %7)
   %9 = call i32 @llvm.amdgcn.mulhi.u24(i32 %6, i32 %7)
   %10 = lshr i32 %8, 16
   %11 = shl i32 %9, 16
@@ -33,7 +33,7 @@ define amdgpu_kernel void @mul24_hi_u32(ptr addrspace(4) byref(i64) %"37", ptr a
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare i32 @llvm.amdgcn.mul.u24(i32, i32) #1
+declare i32 @llvm.amdgcn.mul.u24.i32(i32, i32) #1
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.amdgcn.mulhi.u24(i32, i32) #1
