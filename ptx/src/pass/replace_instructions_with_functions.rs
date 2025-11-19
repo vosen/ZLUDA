@@ -173,6 +173,7 @@ fn run_statements<'input>(
                                 return_arguments: vec![packed_var],
                                 func,
                                 input_arguments: vec![src, src_lane, src_opts, src_membermask],
+                                is_external: true
                             },
                         }),
                         Statement::RepackVector(RepackVectorDetails {
@@ -246,6 +247,7 @@ fn run_statements<'input>(
                                 return_arguments: vec![packed_output],
                                 func,
                                 input_arguments: vec![src],
+                                is_external: true,
                             },
                         }),
                         Statement::Instruction(ast::Instruction::Cvt {
@@ -544,6 +546,7 @@ fn to_call<'input>(
             return_arguments: arguments_return,
             func: fn_name,
             input_arguments: arguments_input,
+            is_external: true,
         },
     })
 }

@@ -287,6 +287,7 @@ fn run_statement<'input>(
                         return_arguments: vec![fma_4, fma_1, fma3_, numerator_scaled_flag],
                         func: *part1,
                         input_arguments: vec![arguments.src1, arguments.src2],
+                        is_external: true,
                     },
                     data: ast::CallDetails {
                         uniform: false,
@@ -333,6 +334,7 @@ fn run_statement<'input>(
                             fma3_,
                             numerator_scaled_flag
                         ],
+                        is_external: true,
                     },
                     data: ast::CallDetails {
                         uniform: false,

@@ -764,7 +764,12 @@ fn create_control_flow_graph(
                             bb_state.end(&[arguments.src]);
                         }
                         Statement::Instruction(ast::Instruction::Call {
-                            arguments: ast::CallArgs { func, .. },
+                            arguments:
+                                ast::CallArgs {
+                                    func,
+                                    is_external: false,
+                                    ..
+                                },
                             ..
                         }) => {
                             let after_call_label = match body_iter.next() {
@@ -997,7 +1002,12 @@ fn apply_global_mode_controls(
                         bb_state.start(*label, &mut result)?;
                     }
                     Statement::Instruction(ast::Instruction::Call {
-                        arguments: ast::CallArgs { func, .. },
+                        arguments:
+                            ast::CallArgs {
+                                func,
+                                is_external: false,
+                                ..
+                            },
                         ..
                     }) => {
                         bb_state.redirect_jump(func)?;
