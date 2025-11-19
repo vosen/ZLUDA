@@ -646,7 +646,7 @@ pub(crate) fn run<'input>(
     flat_resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
-    let (cfg, declaration_only_fns) = create_control_flow_graph(&directives)?;
+    let cfg = create_control_flow_graph(&directives)?;
     let (denormal_f32, denormal_f16f64, rounding_f32, rounding_f16f64) =
         compute_minimal_mode_insertions(&cfg)?;
     let temp = compute_full_mode_insertions(
@@ -658,7 +658,7 @@ pub(crate) fn run<'input>(
         rounding_f32,
         rounding_f16f64,
     )?;
-    apply_global_mode_controls(declaration_only_fns, directives, temp)
+    apply_global_mode_controls(directives, temp)
 }
 
 // For every basic block this pass computes:
@@ -746,17 +746,10 @@ fn compute_minimal_mode_insertions(
 // flow graph expresses function calls as edges in the control flow graph
 fn create_control_flow_graph(
     directives: &Vec<Directive2<ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-) -> Result<(ControlFlowGraph, FxHashSet<SpirvWord>), TranslateError> {
+) -> Result<ControlFlowGraph, TranslateError> {
     let mut cfg = ControlFlowGraph::new();
-    let mut declaration_only_fns = FxHashSet::default();
     for directive in directives.iter() {
         match directive {
-            Directive2::Method(Function2 {
-                name, body: None, ..
-            }) => {
-                // function declaration
-                declaration_only_fns.insert(*name);
-            }
             super::Directive2::Method(Function2 {
                 name,
                 body: Some(body),
@@ -771,9 +764,14 @@ fn create_control_flow_graph(
                             bb_state.end(&[arguments.src]);
                         }
                         Statement::Instruction(ast::Instruction::Call {
-                            arguments: ast::CallArgs { func, .. },
+                            arguments:
+                                ast::CallArgs {
+                                    func,
+                                    is_external: false,
+                                    ..
+                                },
                             ..
-                        }) if !declaration_only_fns.contains(func) => {
+                        }) => {
                             let after_call_label = match body_iter.next() {
                                 Some(Statement::Instruction(ast::Instruction::Bra {
                                     arguments: ast::BraArgs { src },
@@ -815,7 +813,7 @@ fn create_control_flow_graph(
         }
     }
     cfg.fixup_function_calls()?;
-    Ok((cfg, declaration_only_fns))
+    Ok(cfg)
 }
 
 fn join_modes(
@@ -958,7 +956,6 @@ struct TwinMode<T> {
 // * Insert additional "prelude" basic blocks that sets mode
 // * Redirect some jumps to "prelude" basic blocks
 fn apply_global_mode_controls(
-    declaration_only_fns: FxHashSet<SpirvWord>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
     global_modes: FullModeInsertion,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
@@ -1005,9 +1002,14 @@ fn apply_global_mode_controls(
                         bb_state.start(*label, &mut result)?;
                     }
                     Statement::Instruction(ast::Instruction::Call {
-                        arguments: ast::CallArgs { func, .. },
+                        arguments:
+                            ast::CallArgs {
+                                func,
+                                is_external: false,
+                                ..
+                            },
                         ..
-                    }) if !declaration_only_fns.contains(func) => {
+                    }) => {
                         bb_state.redirect_jump(func)?;
                         call_target = Some(*func);
                     }

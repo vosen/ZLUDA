@@ -169,6 +169,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
                     .iter()
                     .map(|(name, _, _)| ast::ParsedOperand::Reg(*name))
                     .collect(),
+                is_external: true,
             };
             self.result
                 .push(Statement::Instruction(ast::Instruction::Call {
