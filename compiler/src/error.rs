@@ -15,8 +15,6 @@ pub enum CompilerError {
     #[error(transparent)]
     Libloading(#[from] libloading::Error),
     #[error(transparent)]
-    ComgrError(#[from] comgr::Error),
-    #[error(transparent)]
     IoError(#[from] io::Error),
     #[error(transparent)]
     Utf8Error(#[from] Utf8Error),
@@ -56,5 +54,14 @@ impl From<TranslateError> for CompilerError {
         let message = format!("PTX TranslateError::{}", cause.as_ref());
         let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
         CompilerError::GenericError { cause, message }
+    }
+}
+
+impl From<String> for CompilerError {
+    fn from(message: String) -> Self {
+        Self::GenericError {
+            cause: None,
+            message,
+        }
     }
 }

@@ -29,6 +29,8 @@ use std::{i8, ptr, u64};
 
 use super::*;
 use crate::pass::*;
+use llvm_zluda::utils as llvm;
+use llvm_zluda::utils::Context;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
@@ -73,7 +75,7 @@ pub(crate) fn run<'input>(
     }
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
-            panic!("{:?}", err);
+            panic!("{}\n{:?}", module.print_module_to_string(), err);
         }
     }
     Ok(module)
@@ -154,8 +156,11 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
-            if let Some(align) = param.info.align {
-                unsafe { LLVMSetParamAlignment(value, align) };
+            // LLVM complains if alignment is set on function parameters for non-kernels
+            if method.is_kernel {
+                if let Some(align) = param.info.align {
+                    unsafe { LLVMSetParamAlignment(value, align) };
+                }
             }
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
             self.resolver.register(param.name, value);
@@ -483,6 +488,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
+            ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
             ast::Instruction::Shf { data, arguments } => self.emit_shf(data, arguments),
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
@@ -521,6 +527,8 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             ast::Instruction::GridDepControl { .. } => Ok(()), // nop
+            ast::Instruction::Prefetch { .. } => Ok(()),       // nop
+            ast::Instruction::Mma { data, arguments } => self.emit_mma(data, arguments),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -532,7 +540,6 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
-            | ast::Instruction::Mma { .. }
             | ast::Instruction::Prmt { .. } => return Err(error_unreachable()),
         }
     }
@@ -1490,7 +1497,9 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpData,
         arguments: ptx_parser::SetpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let dst = self.emit_setp_impl(data, arguments.dst2, arguments.src1, arguments.src2)?;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let dst = self.emit_setp_impl(data, arguments.dst2, src1, src2)?;
         self.resolver.register(arguments.dst1, dst);
         Ok(())
     }
@@ -1499,8 +1508,8 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         data: ptx_parser::SetpData,
         dst2: Option<SpirvWord>,
-        src1: SpirvWord,
-        src2: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslateError> {
         if dst2.is_some() {
             return Err(error_todo_msg(
@@ -1520,8 +1529,8 @@ impl<'a> MethodEmitContext<'a> {
     fn emit_setp_int(
         &mut self,
         setp: ptx_parser::SetpCompareInt,
-        src1: SpirvWord,
-        src2: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslateError> {
         let op = match setp {
             ptx_parser::SetpCompareInt::Eq => LLVMIntPredicate::LLVMIntEQ,
@@ -1535,16 +1544,14 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::SetpCompareInt::SignedGreater => LLVMIntPredicate::LLVMIntSGT,
             ptx_parser::SetpCompareInt::SignedGreaterOrEq => LLVMIntPredicate::LLVMIntSGE,
         };
-        let src1 = self.resolver.value(src1)?;
-        let src2 = self.resolver.value(src2)?;
         Ok(unsafe { LLVMBuildICmp(self.builder, op, src1, src2, LLVM_UNNAMED.as_ptr()) })
     }
 
     fn emit_setp_float(
         &mut self,
         setp: ptx_parser::SetpCompareFloat,
-        src1: SpirvWord,
-        src2: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslateError> {
         let op = match setp {
             ptx_parser::SetpCompareFloat::Eq => LLVMRealPredicate::LLVMRealOEQ,
@@ -1562,8 +1569,6 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::SetpCompareFloat::IsNotNan => LLVMRealPredicate::LLVMRealORD,
             ptx_parser::SetpCompareFloat::IsAnyNan => LLVMRealPredicate::LLVMRealUNO,
         };
-        let src1 = self.resolver.value(src1)?;
-        let src2 = self.resolver.value(src2)?;
         Ok(unsafe { LLVMBuildFCmp(self.builder, op, src1, src2, LLVM_UNNAMED.as_ptr()) })
     }
 
@@ -1666,6 +1671,10 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
         let src = self.resolver.value(arguments.src)?;
+        let emit_relu = matches!(
+            data.mode,
+            ptx_parser::CvtMode::FPTruncate { relu: true, .. }
+        );
         if let Some(src2) = arguments.src2 {
             let packed_type = get_scalar_type(
                 self.context,
@@ -1674,11 +1683,25 @@ impl<'a> MethodEmitContext<'a> {
                     .ok_or_else(|| error_mismatched_type())?,
             );
             let src2 = self.resolver.value(src2)?;
+            let mut src_result =
+                unsafe { llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()) };
+            let mut src2_result =
+                unsafe { llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()) };
+            if emit_relu {
+                src_result = self.emit_relu(
+                    data.to.packed_type().ok_or_else(error_unreachable)?,
+                    src_result,
+                )?;
+                src2_result = self.emit_relu(
+                    data.to.packed_type().ok_or_else(error_unreachable)?,
+                    src2_result,
+                )?;
+            }
             let vec = unsafe {
                 LLVMBuildInsertElement(
                     self.builder,
                     LLVMGetPoison(dst_type),
-                    llvm_fn(self.builder, src, packed_type, LLVM_UNNAMED.as_ptr()),
+                    src_result,
                     LLVMConstInt(LLVMInt32TypeInContext(self.context), 1, false as i32),
                     LLVM_UNNAMED.as_ptr(),
                 )
@@ -1687,16 +1710,102 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuildInsertElement(
                     self.builder,
                     vec,
-                    llvm_fn(self.builder, src2, packed_type, LLVM_UNNAMED.as_ptr()),
+                    src2_result,
                     LLVMConstInt(LLVMInt32TypeInContext(self.context), 0, false as i32),
                     dst,
                 )
-            })
+            });
         } else {
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                llvm_fn(self.builder, src, dst_type, dst)
-            })
+            let mut result = unsafe { llvm_fn(self.builder, src, dst_type, LLVM_UNNAMED.as_ptr()) };
+            if emit_relu {
+                result = self.emit_relu(data.to, result)?;
+            }
+            self.resolver.register(arguments.dst, result);
         };
+        Ok(())
+    }
+
+    fn emit_relu(
+        &mut self,
+        type_: ast::ScalarType,
+        src: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let zero = unsafe { LLVMConstNull(llvm_type) };
+        let intrinsic = format!("llvm.maximum.{}\0", LLVMTypeDisplay(type_));
+        self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            None,
+            Some(&type_.into()),
+            vec![(src, llvm_type), (zero, llvm_type)],
+        )
+    }
+
+    fn emit_cvt_pack(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::CvtPackArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mut src1_saturated =
+            self.emit_saturate_integer(ast::ScalarType::S32, type_, arguments.src1)?;
+        let mut src2_saturated =
+            self.emit_saturate_integer(ast::ScalarType::S32, type_, arguments.src2)?;
+        let dest_ty = get_scalar_type(self.context, ast::ScalarType::U32);
+        if type_.kind() == ast::ScalarKind::Signed {
+            let type_llvm = get_scalar_type(self.context, type_);
+            let src1_truncated = unsafe {
+                LLVMBuildTrunc(
+                    self.builder,
+                    src1_saturated,
+                    type_llvm,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            src1_saturated = unsafe {
+                LLVMBuildZExt(self.builder, src1_truncated, dest_ty, LLVM_UNNAMED.as_ptr())
+            };
+            let src2_truncated = unsafe {
+                LLVMBuildTrunc(
+                    self.builder,
+                    src2_saturated,
+                    type_llvm,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            src2_saturated = unsafe {
+                LLVMBuildZExt(self.builder, src2_truncated, dest_ty, LLVM_UNNAMED.as_ptr())
+            };
+        }
+        // result is 32 bit integer packed {src3, src1, src2}
+        let input_bit_size = type_.bit_size();
+        let src1_shifted = unsafe {
+            LLVMBuildShl(
+                self.builder,
+                src1_saturated,
+                LLVMConstInt(dest_ty, input_bit_size as u64, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let src3 = self.resolver.value(arguments.src3)?;
+        let src3_shifted = unsafe {
+            LLVMBuildShl(
+                self.builder,
+                src3,
+                LLVMConstInt(dest_ty, input_bit_size as u64 * 2, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let src1_src2 = unsafe {
+            LLVMBuildOr(
+                self.builder,
+                src1_shifted,
+                src2_saturated,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildOr(self.builder, src1_src2, src3_shifted, dst)
+        });
         Ok(())
     }
 
@@ -1706,7 +1815,7 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
+        let clamped = self.emit_saturate_integer(from, to, arguments.src)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildSExtOrBitCast
         } else {
@@ -1723,7 +1832,7 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
-        arguments: &ptx_parser::CvtArgs<SpirvWord>,
+        src: SpirvWord,
     ) -> Result<LLVMValueRef, TranslateError> {
         let from_llvm = get_scalar_type(self.context, from);
         match from.kind() {
@@ -1745,10 +1854,7 @@ impl<'a> MethodEmitContext<'a> {
                     unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
                     None,
                     Some(&from.into()),
-                    vec![
-                        (self.resolver.value(arguments.src)?, from_llvm),
-                        (max, from_llvm),
-                    ],
+                    vec![(self.resolver.value(src)?, from_llvm), (max, from_llvm)],
                 )?;
                 Ok(clamped)
             }
@@ -1781,10 +1887,7 @@ impl<'a> MethodEmitContext<'a> {
                     unsafe { CStr::from_bytes_with_nul_unchecked(max_intrinsic.as_bytes()) },
                     None,
                     Some(&from.into()),
-                    vec![
-                        (self.resolver.value(arguments.src)?, from_llvm),
-                        (min, from_llvm),
-                    ],
+                    vec![(self.resolver.value(src)?, from_llvm), (min, from_llvm)],
                 )?;
                 let clamped = self.emit_intrinsic(
                     unsafe { CStr::from_bytes_with_nul_unchecked(min_intrinsic.as_bytes()) },
@@ -1804,7 +1907,7 @@ impl<'a> MethodEmitContext<'a> {
         to: ptx_parser::ScalarType,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let clamped = self.emit_saturate_integer(from, to, &arguments)?;
+        let clamped = self.emit_saturate_integer(from, to, arguments.src)?;
         let resize_fn = if to.layout().size() >= from.layout().size() {
             LLVMBuildZExtOrBitCast
         } else {
@@ -2507,8 +2610,8 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let name_lo = match data.type_ {
-            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24",
-            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24",
+            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24.i32",
+            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24.i32",
             _ => return Err(error_unreachable()),
         };
         let res_lo = self.emit_intrinsic(
@@ -2689,6 +2792,51 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    fn emit_mma(
+        &mut self,
+        data: ast::MmaDetails,
+        arguments: ast::MmaArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let ast::MmaDetails {
+            alayout,
+            blayout,
+            atype_scalar,
+            btype_scalar,
+            ..
+        } = data;
+
+        if alayout != ast::MatrixLayout::Row || blayout != ast::MatrixLayout::Col {
+            return Err(error_unreachable());
+        }
+
+        if atype_scalar != ast::ScalarType::BF16 || btype_scalar != ast::ScalarType::BF16 {
+            return Err(error_unreachable());
+        }
+
+        // Hard-coding .m16n8k16
+        let atype = &ast::Type::Vector(4, ast::ScalarType::B32);
+        let btype = &ast::Type::Vector(2, ast::ScalarType::B32);
+        let ctype = &ast::Type::Vector(4, ast::ScalarType::F32);
+        let dtype = &ast::Type::Vector(4, ast::ScalarType::F32);
+
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+
+        self.emit_intrinsic(
+            c"llvm.zluda.mma.m16n8k16",
+            Some(arguments.dst),
+            Some(dtype),
+            vec![
+                (a, get_type(self.context, atype)?),
+                (b, get_type(self.context, btype)?),
+                (c, get_type(self.context, ctype)?),
+            ],
+        )?;
+
+        Ok(())
+    }
+
     fn flush_denormals(
         &mut self,
         type_: ptx_parser::ScalarType,
@@ -2742,8 +2890,66 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetData,
         arguments: ptx_parser::SetArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let setp_result = self.emit_setp_impl(data.base, None, arguments.src1, arguments.src2)?;
-        self.setp_to_set(arguments.dst, data.dtype, setp_result)?;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let result = if let Some(scalar_type) = data.base.type_.packed_type() {
+            let u8_llvm = get_scalar_type(self.context, ast::ScalarType::B8);
+            let zero = unsafe { LLVMConstInt(u8_llvm, 0, 0) };
+            let one = unsafe { LLVMConstInt(u8_llvm, 1, 0) };
+            let src1_0 =
+                unsafe { LLVMBuildExtractElement(self.builder, src1, zero, LLVM_UNNAMED.as_ptr()) };
+            let src1_1 =
+                unsafe { LLVMBuildExtractElement(self.builder, src1, one, LLVM_UNNAMED.as_ptr()) };
+            let src2_0 =
+                unsafe { LLVMBuildExtractElement(self.builder, src2, zero, LLVM_UNNAMED.as_ptr()) };
+            let src2_1 =
+                unsafe { LLVMBuildExtractElement(self.builder, src2, one, LLVM_UNNAMED.as_ptr()) };
+            let dtype = data.dtype;
+            let data = ptx_parser::SetpData {
+                type_: scalar_type,
+                ..data.base
+            };
+            let setp_result_0 = self.emit_setp_impl(data, None, src1_0, src2_0)?;
+            let setp_result_1 = self.emit_setp_impl(data, None, src1_1, src2_1)?;
+            if dtype != ast::ScalarType::U32 {
+                return Err(error_unreachable());
+            }
+            let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
+            let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
+            let vector_result = unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    LLVMGetPoison(get_type(
+                        self.context,
+                        &ast::Type::Vector(2, ast::ScalarType::U16),
+                    )?),
+                    setp_result_0,
+                    zero,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let vector_result = unsafe {
+                LLVMBuildInsertElement(
+                    self.builder,
+                    vector_result,
+                    setp_result_1,
+                    one,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            unsafe {
+                LLVMBuildBitCast(
+                    self.builder,
+                    vector_result,
+                    get_scalar_type(self.context, dtype),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            }
+        } else {
+            let setp_result = self.emit_setp_impl(data.base, None, src1, src2)?;
+            self.setp_to_set(data.dtype, setp_result)?
+        };
+        self.resolver.register(arguments.dst, result);
         Ok(())
     }
 
@@ -2752,9 +2958,10 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetBoolData,
         arguments: ptx_parser::SetBoolArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let result =
+        let result_bool =
             self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, arguments.src3)?;
-        self.setp_to_set(arguments.dst, data.dtype, result)?;
+        let set_result = self.setp_to_set(data.dtype, result_bool)?;
+        self.resolver.register(arguments.dst, set_result);
         Ok(())
     }
 
@@ -2775,6 +2982,8 @@ impl<'a> MethodEmitContext<'a> {
         src2: SpirvWord,
         src3: SpirvWord,
     ) -> Result<LLVMValueRef, TranslateError> {
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
         let bool_result = self.emit_setp_impl(data.base, None, src1, src2)?;
         let bool_result = if data.negate_src3 {
             let constant =
@@ -2792,12 +3001,12 @@ impl<'a> MethodEmitContext<'a> {
         Ok(unsafe { post_op(self.builder, bool_result, src3, LLVM_UNNAMED.as_ptr()) })
     }
 
+    #[must_use]
     fn setp_to_set(
         &mut self,
-        dst: SpirvWord,
         dtype: ast::ScalarType,
         setp_result: LLVMValueRef,
-    ) -> Result<(), TranslateError> {
+    ) -> Result<LLVMValueRef, TranslateError> {
         let llvm_dtype = get_scalar_type(self.context, dtype);
         let zero = unsafe { LLVMConstNull(llvm_dtype) };
         let one = if dtype.kind() == ast::ScalarKind::Float {
@@ -2805,10 +3014,7 @@ impl<'a> MethodEmitContext<'a> {
         } else {
             unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 0) }
         };
-        self.resolver.with_result(dst, |dst| unsafe {
-            LLVMBuildSelect(self.builder, setp_result, one, zero, dst)
-        });
-        Ok(())
+        Ok(unsafe { LLVMBuildSelect(self.builder, setp_result, one, zero, LLVM_UNNAMED.as_ptr()) })
     }
 
     // TODO: revisit this on gfx1250 which has native tanh support

@@ -48,9 +48,13 @@ cuda_macros::cublas_function_declarations!(
         <= [
             cublasCreate_v2,
             cublasDestroy_v2,
+            cublasGemmBatchedEx,
             cublasGemmEx,
+            cublasGemmStridedBatchedEx,
             cublasGetMathMode,
+            cublasHgemm,
             cublasSetMathMode,
+            cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
             cublasSgemmStridedBatched,

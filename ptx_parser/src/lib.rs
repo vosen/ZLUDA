@@ -1603,6 +1603,7 @@ fn call<'a, 'input>(
         return_arguments,
         func: name,
         input_arguments,
+        is_external: false,
     };
     Ok(ast::Instruction::Call { data, arguments })
 }
@@ -1621,6 +1622,7 @@ fn empty_call<'input>(
             return_arguments: Vec::new(),
             func: name,
             input_arguments: Vec::new(),
+            is_external: false,
         },
     }
 }
@@ -1877,6 +1879,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum MatrixLayout { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum CacheLevel { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -2363,6 +2368,19 @@ derive_parser!(
             arguments: SetArgs { dst: d, src1: a, src2: b }
         }
     }
+
+    set.CmpOp{.ftz}.u32.f16x2         d, a, b => {
+        let base = ast::SetpData::try_parse(state, cmpop, ftz, ScalarType::F16x2);
+        let data = ast::SetData {
+            base,
+            dtype: ScalarType::U32
+        };
+        ast::Instruction::Set {
+            data,
+            arguments: SetArgs { dst: d, src1: a, src2: b }
+        }
+    }
+
     set.CmpOp.BoolOp{.ftz}.dtype.stype  d, a, b, {!}c => {
         let (negate_src3, c) = c;
         let base = ast::SetpData::try_parse(state, cmpop, ftz, stype);
@@ -2385,7 +2403,7 @@ derive_parser!(
                                   .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
     .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
     .dtype: ScalarType = { .u32, .s32, .f32 };
-    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f32, .f64 };
+    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .f32, .f64 };
 
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
@@ -2455,7 +2473,7 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
     cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
-        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, dtype, atype);
+        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, dtype, atype);
         let arguments = ast::CvtArgs { dst: d, src: a, src2: None };
         ast::Instruction::Cvt {
             data, arguments
@@ -2465,10 +2483,10 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
     cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
-        if relu || satfinite {
+        if satfinite {
             state.errors.push(PtxError::Todo);
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, x2_to_type, x2_from_type);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
             data,
             arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
@@ -2480,7 +2498,7 @@ derive_parser!(
         if relu {
             state.errors.push(PtxError::Todo);
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, f8x2type, ScalarType::F32);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, f8x2type, ScalarType::F32);
         ast::Instruction::Cvt {
             data,
             arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
@@ -2512,6 +2530,17 @@ derive_parser!(
     .f8x2type: ScalarType =         { .e4m3x2, .e5m2x2 };
     .x2_to_type: ScalarType =      { .f16x2, .bf16x2 };
     .x2_from_type: ScalarType =    { .e4m3x2, .e5m2x2, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
+    cvt.pack.sat.convertType.s32.b32        d, a, b, c => {
+        ast::Instruction::CvtPack {
+            data: converttype,
+            arguments: ast::CvtPackArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .convertType: ScalarType = { .u8, .s8 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
     shl.type d, a, b => {
         ast::Instruction::Shl { data: type_, arguments: ShlArgs { dst: d, src1: a, src2: b } }
@@ -2783,13 +2812,13 @@ derive_parser!(
     //fma.rnd{.ftz}.relu.f16      d, a, b, c;
     //fma.rnd{.ftz}.relu.f16x2    d, a, b, c;
     //fma.rnd{.relu}.bf16         d, a, b, c;
-    fma.rnd{.relu}.bf16x2       d, a, b, c => {
+    fma.rnd{.relu}.type_x2       d, a, b, c => {
         if relu {
             state.errors.push(PtxError::Todo);
         }
         ast::Instruction::Fma {
             data: ast::ArithFloat {
-                type_: bf16x2,
+                type_: type_x2,
                 rounding: rnd.into(),
                 flush_to_zero: None,
                 saturate: false,
@@ -2799,7 +2828,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn };
-    ScalarType =            { .bf16x2 };
+    .type_x2: ScalarType =            { .bf16x2, .f16x2 };
     //fma.rnd.oob.{relu}.type     d, a, b, c;
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sub
@@ -3965,6 +3994,17 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .f32, .f64 };
+
+    prefetch{.space}.level [a] => {
+        let space = space.unwrap_or(StateSpace::Generic);
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space, level, },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+
+    .space: StateSpace =    { .global, .local };
+    .level: CacheLevel =    { .L1, .L2 };
 );
 
 #[cfg(test)]

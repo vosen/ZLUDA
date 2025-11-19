@@ -1,6 +1,5 @@
 use super::read_test_file;
 use crate::pass;
-use comgr::Comgr;
 use cuda_types::cuda::CUstream;
 use hip_runtime_sys::hipError_t;
 use pretty_assertions;
@@ -114,6 +113,11 @@ test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
+test_ptx!(
+    cvt_pack,
+    [-257i32, 257i32, -130436883i32],
+    [2968322303u32, 2968354943]
+);
 test_ptx!(cvt_sat_s_u, [-1i32], [0i32]);
 test_ptx!(cvta, [3.0f32], [3.0f32]);
 test_ptx!(block, [1u64], [2u64]);
@@ -179,6 +183,11 @@ test_ptx!(
     fma_bf16x2,
     [0x40004040, 0x40404080, 0x40A04040],
     [0x41304170]
+);
+test_ptx!(
+    fma_f16x2,
+    [0x40004040, 0x40404080, 0x40A04040],
+    [1183860456u32]
 );
 test_ptx!(shared_variable, [513u64], [513u64]);
 test_ptx!(shared_ptr_32, [513u64], [513u64]);
@@ -360,6 +369,24 @@ test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 //);
 test_ptx!(copysign, [0x0BDA2A2Cu32, 0xe31a8fd7u32], [0x631A8FD7u32]);
 test_ptx!(cvt_f16x2_f32, [1.0f32, 2.0f32], [0x3C004000u32]);
+test_ptx!(
+    cvt_relu_f16x2_f32,
+    // Not testing for NaN because AMDG GPUs returns a different NaN
+    [-1.0f32, 1.0f32, 3.14, f32::NEG_INFINITY],
+    [15360u32, 1112014848]
+);
+test_ptx!(
+    set_f16,
+    [
+        half::f16::NAN,
+        half::f16::NAN,
+        half::f16::from_f32(3.14),
+        half::f16::NEG_INFINITY,
+        half::f16::from_f32(-0.0),
+        half::f16::from_f32(0.0)
+    ],
+    [4294967295u32, 65535]
+);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
@@ -1113,20 +1140,18 @@ macro_rules! dynamic_fns {
 
 cuda_macros::cuda_function_declarations!(dynamic_fns);
 
-static COMGR: std::sync::LazyLock<Comgr> = std::sync::LazyLock::new(|| Comgr::new().unwrap());
 static CUDA: std::sync::LazyLock<DynamicCuda> =
     std::sync::LazyLock::new(|| DynamicCuda::new().unwrap());
 
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
-    ast: ptx_parser::Module,
+    module: pass::Module,
     input: Option<&[Input]>,
     output: &[Output],
     block_dim_x: u32,
 ) -> Result<Vec<Output>, hipError_t> {
     use hip_runtime_sys::*;
     unsafe { hipInit(0) }.unwrap();
-    let comgr = &*COMGR;
     let mut result = vec![0u8.into(); output.len()];
     {
         let dev = 0;
@@ -1134,29 +1159,12 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
-        let gcn_arch_name = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
-            .to_str()
-            .unwrap();
-        let gfx_version = gcn_arch_name
-            .strip_prefix("gfx")
-            .unwrap()
-            .parse::<u32>()
-            .unwrap();
-        let module = pass::to_llvm_module(
-            ast,
-            pass::Attributes {
-                clock_rate: 2124000,
-                gfx_version,
-            },
-            |_| {},
-        )
-        .unwrap();
-        let elf_module = comgr::compile_bitcode(
-            &comgr,
-            gcn_arch_name,
-            &*module.llvm_ir.write_bitcode_to_memory(),
-            module.linked_bitcode(),
-            &*module.attributes_ir.write_bitcode_to_memory(),
+        let ptx_impl = module.linked_bitcode();
+        let elf_module = llvm_zluda::compile(
+            &module.context,
+            module.llvm_ir,
+            ptx_impl,
+            module.attributes_ir,
             None,
         )
         .unwrap();

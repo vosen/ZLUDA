@@ -100,7 +100,7 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
-    let context = llvm::Context::new();
+    let context = llvm_zluda::utils::Context::new();
     let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
@@ -108,19 +108,19 @@ pub fn to_llvm_module<'input>(
         llvm_ir,
         attributes_ir,
         kernel_info: HashMap::new(),
-        _context: context,
+        context,
     })
 }
 
 pub struct Module {
-    pub llvm_ir: llvm::Module,
-    pub attributes_ir: llvm::Module,
+    pub llvm_ir: llvm_zluda::utils::Module,
+    pub attributes_ir: llvm_zluda::utils::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
-    _context: llvm::Context,
+    pub context: llvm_zluda::utils::Context,
 }
 
 impl Module {
-    pub fn linked_bitcode(&self) -> &[u8] {
+    pub fn linked_bitcode(&self) -> &'static [u8] {
         ZLUDA_PTX_IMPL
     }
 }

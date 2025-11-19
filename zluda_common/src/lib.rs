@@ -158,6 +158,8 @@ from_cuda_nop!(
     *const f32,
     *mut f32,
     *const ::core::ffi::c_void,
+    *const *const ::core::ffi::c_void,
+    *const *mut ::core::ffi::c_void,
     *const ::core::ffi::c_char,
     *mut ::core::ffi::c_void,
     *mut *mut ::core::ffi::c_void,
@@ -177,6 +179,7 @@ from_cuda_nop!(
     CUlibrary,
     CUmodule,
     CUcontext,
+    CUoccupancyB2DSize,
     cublasHandle_t,
     cublasStatus_t,
     CUlaunchConfig,
@@ -196,7 +199,11 @@ from_cuda_nop!(
     CUfunction_attribute,
     CUgraphExecUpdateResultInfo,
     *mut cudnn9::cudnnHandle_t,
-    cudnn9::cudnnHandle_t
+    cudnn9::cudnnHandle_t,
+    cudnn9::cudnnMathType_t,
+    cudnn9::cudnnConvolutionFwdAlgoPerfStruct,
+    *mut cuda_types::cublas::__half,
+    *const cuda_types::cublas::__half
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -216,8 +223,62 @@ from_cuda_transmute!(
     cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
     cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
     cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t,
-    cudnn9::cudnnHandle_t => miopenHandle_t
+    cublasPointerMode_t => rocblas_pointer_mode,
+    cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
+    cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
+    cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t
 );
+
+impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
+    fn from_cuda(option: &'a CUjit_option) -> Result<Self, E> {
+        Ok(match *option {
+            CUjit_option::CU_JIT_MAX_REGISTERS => hipJitOption::hipJitOptionMaxRegisters,
+            CUjit_option::CU_JIT_THREADS_PER_BLOCK => hipJitOption::hipJitOptionThreadsPerBlock,
+            CUjit_option::CU_JIT_WALL_TIME => hipJitOption::hipJitOptionWallTime,
+            CUjit_option::CU_JIT_INFO_LOG_BUFFER => hipJitOption::hipJitOptionInfoLogBuffer,
+            CUjit_option::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES => {
+                hipJitOption::hipJitOptionInfoLogBufferSizeBytes
+            }
+            CUjit_option::CU_JIT_ERROR_LOG_BUFFER => hipJitOption::hipJitOptionErrorLogBuffer,
+            CUjit_option::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES => {
+                hipJitOption::hipJitOptionErrorLogBufferSizeBytes
+            }
+            CUjit_option::CU_JIT_OPTIMIZATION_LEVEL => hipJitOption::hipJitOptionOptimizationLevel,
+            CUjit_option::CU_JIT_TARGET_FROM_CUCONTEXT => {
+                hipJitOption::hipJitOptionTargetFromContext
+            }
+            CUjit_option::CU_JIT_TARGET => hipJitOption::hipJitOptionTarget,
+            CUjit_option::CU_JIT_FALLBACK_STRATEGY => hipJitOption::hipJitOptionFallbackStrategy,
+            CUjit_option::CU_JIT_GENERATE_DEBUG_INFO => hipJitOption::hipJitOptionGenerateDebugInfo,
+            CUjit_option::CU_JIT_LOG_VERBOSE => hipJitOption::hipJitOptionLogVerbose,
+            CUjit_option::CU_JIT_GENERATE_LINE_INFO => hipJitOption::hipJitOptionGenerateLineInfo,
+            CUjit_option::CU_JIT_CACHE_MODE => hipJitOption::hipJitOptionCacheMode,
+            CUjit_option::CU_JIT_NEW_SM3X_OPT => hipJitOption::hipJitOptionSm3xOpt,
+            CUjit_option::CU_JIT_FAST_COMPILE => hipJitOption::hipJitOptionFastCompile,
+            CUjit_option::CU_JIT_GLOBAL_SYMBOL_NAMES => hipJitOption::hipJitOptionGlobalSymbolNames,
+            CUjit_option::CU_JIT_GLOBAL_SYMBOL_ADDRESSES => {
+                hipJitOption::hipJitOptionGlobalSymbolAddresses
+            }
+            CUjit_option::CU_JIT_GLOBAL_SYMBOL_COUNT => hipJitOption::hipJitOptionGlobalSymbolCount,
+            CUjit_option::CU_JIT_LTO => hipJitOption::hipJitOptionLto,
+            CUjit_option::CU_JIT_FTZ => hipJitOption::hipJitOptionFtz,
+            CUjit_option::CU_JIT_PREC_DIV => hipJitOption::hipJitOptionPrecDiv,
+            CUjit_option::CU_JIT_PREC_SQRT => hipJitOption::hipJitOptionPrecSqrt,
+            CUjit_option::CU_JIT_FMA => hipJitOption::hipJitOptionFma,
+            CUjit_option::CU_JIT_POSITION_INDEPENDENT_CODE => {
+                hipJitOption::hipJitOptionPositionIndependentCode
+            }
+            CUjit_option::CU_JIT_MIN_CTA_PER_SM => hipJitOption::hipJitOptionMinCTAPerSM,
+            CUjit_option::CU_JIT_MAX_THREADS_PER_BLOCK => {
+                hipJitOption::hipJitOptionMaxThreadsPerBlock
+            }
+            CUjit_option::CU_JIT_OVERRIDE_DIRECTIVE_VALUES => {
+                hipJitOption::hipJitOptionOverrideDirectiveValues
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUlimit, E> for hipLimit_t {
     fn from_cuda(limit: &'a CUlimit) -> Result<Self, E> {
@@ -582,6 +643,90 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *mut cublasLtMatmulHeuristicResult_t, E>
             Some(x) => Ok(x),
             None => Err(E::INVALID_VALUE),
         }
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnTensorFormat_t, E> for miopenTensorLayout_t {
+    fn from_cuda(format: &'a cudnn9::cudnnTensorFormat_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NCHW => {
+                miopenTensorLayout_t::miopenTensorNCHW
+            }
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NHWC => {
+                miopenTensorLayout_t::miopenTensorNHWC
+            }
+            cudnn9::cudnnTensorFormat_t::CUDNN_TENSOR_NCHW_VECT_C => {
+                miopenTensorLayout_t::miopenTensorNCHWc4
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnDataType_t, E> for miopenDataType_t {
+    fn from_cuda(format: &'a cudnn9::cudnnDataType_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnDataType_t::CUDNN_DATA_HALF => miopenDataType_t::miopenHalf,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FLOAT => miopenDataType_t::miopenFloat,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT32 => miopenDataType_t::miopenInt32,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT8 => miopenDataType_t::miopenInt8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_BFLOAT16 => miopenDataType_t::miopenBFloat16,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_DOUBLE => miopenDataType_t::miopenDouble,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FP8_E4M3 => miopenDataType_t::miopenFloat8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_FP8_E5M2 => miopenDataType_t::miopenBFloat8,
+            cudnn9::cudnnDataType_t::CUDNN_DATA_INT64 => miopenDataType_t::miopenInt64,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionMode_t, E>
+    for miopenConvolutionMode_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionMode_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionMode_t::CUDNN_CROSS_CORRELATION => {
+                miopenConvolutionMode_t::miopenConvolution
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionFwdAlgo_t, E>
+    for miopenConvFwdAlgorithm_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionFwdAlgo_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoImplicitGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM => {
+                // No direct MIOpen equivalent; map to closest available
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoImplicitGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_DIRECT => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoDirect
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_FFT => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoFFT
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING => {
+                // No direct MIOpen equivalent; map to FFT variant
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoFFT
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD => {
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoWinograd
+            }
+            cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED => {
+                // No direct MIOpen equivalent; map to Winograd variant
+                miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoWinograd
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
     }
 }
 
