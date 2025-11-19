@@ -90,7 +90,13 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     });
     let cached_binary = load_cached_binary(&mut cache_with_key);
     let elf_module = cached_binary.ok_or(CUerror::UNKNOWN).or_else(|_| {
-        compile_from_ptx_and_cache(gcn_arch, attributes, &text, &mut cache_with_key)
+        compile_from_ptx_and_cache(
+            gcn_arch,
+            gfx_version,
+            attributes,
+            &text,
+            &mut cache_with_key,
+        )
     })?;
     let mut hip_module = unsafe { mem::zeroed() };
     unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;

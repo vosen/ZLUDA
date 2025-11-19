@@ -359,15 +359,20 @@ fn run_instruction<'input>(
                 ast::MmaDetails {
                     alayout,
                     blayout,
-                    dtype_scalar,
-                    atype_scalar,
-                    btype_scalar,
-                    ctype_scalar,
+                    cd_type_scalar,
+                    ab_type_scalar,
                 },
             ..
         } => {
+            let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
+            let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
+            let dimensions = if cd_type_scalar.kind() == ast::ScalarKind::Float {
+                "m16n8k16"
+            } else {
+                "m16n8k32"
+            };
             let name = format!(
-                "mma_sync_aligned_m16n8k16_{}_{}_{}_{}_{}_{}",
+                "mma_sync_aligned_{dimensions}_{}_{}_{cd_type_name}_{ab_type_name}_{ab_type_name}_{cd_type_name}",
                 match alayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
@@ -375,11 +380,7 @@ fn run_instruction<'input>(
                 match blayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
-                },
-                scalar_to_ptx_name(dtype_scalar),
-                scalar_to_ptx_name(atype_scalar),
-                scalar_to_ptx_name(btype_scalar),
-                scalar_to_ptx_name(ctype_scalar),
+                }
             );
             to_call(resolver, fn_declarations, name.into(), i)?
         }

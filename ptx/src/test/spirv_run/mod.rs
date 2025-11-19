@@ -1145,7 +1145,7 @@ static CUDA: std::sync::LazyLock<DynamicCuda> =
 
 fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
     name: &CStr,
-    module: pass::Module,
+    ast: ptx_parser::Module,
     input: Option<&[Input]>,
     output: &[Output],
     block_dim_x: u32,
@@ -1159,9 +1159,29 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipStreamCreate(&mut stream) }.unwrap();
         let mut dev_props = unsafe { mem::zeroed() };
         unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
+        let gcn_arch_name = unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+            .to_str()
+            .unwrap();
+        let gfx_version = gcn_arch_name
+            .strip_prefix("gfx")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        let module = pass::to_llvm_module(
+            ast,
+            pass::Attributes {
+                clock_rate: 2124000,
+                gfx_version,
+            },
+            |_| {},
+        )
+        .unwrap();
         let ptx_impl = module.linked_bitcode();
         let elf_module = llvm_zluda::compile(
             &module.context,
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+                .to_str()
+                .unwrap(),
             module.llvm_ir,
             ptx_impl,
             module.attributes_ir,

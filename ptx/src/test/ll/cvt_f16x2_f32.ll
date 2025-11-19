@@ -30,9 +30,9 @@ define amdgpu_kernel void @cvt_f16x2_f32(ptr addrspace(4) byref(i64) %"40", ptr 
   %"62" = bitcast i32 %8 to float
   %"63" = bitcast i32 %9 to float
   %10 = fptrunc float %"62" to half
-  %11 = insertelement <2 x half> poison, half %10, i32 1
-  %12 = fptrunc float %"63" to half
-  %"53" = insertelement <2 x half> %11, half %12, i32 0
+  %11 = fptrunc float %"63" to half
+  %12 = insertelement <2 x half> poison, half %10, i32 1
+  %"53" = insertelement <2 x half> %12, half %11, i32 0
   store <2 x half> %"53", ptr addrspace(5) %"46", align 4
   %13 = load i64, ptr addrspace(5) %"43", align 8
   %14 = load <2 x half>, ptr addrspace(5) %"46", align 4
