@@ -55,8 +55,6 @@ quick_error! {
 pub struct Attributes {
     /// Clock frequency in kHz.
     pub clock_rate: u32,
-    /// AMDGPU GFX version, e.g. 1030 for gfx1030
-    pub gfx_version: u32,
 }
 
 pub fn to_llvm_module<'input>(

@@ -37,7 +37,6 @@ fn compile_and_assert(ptx_text: &str) -> Result<(), TranslateError> {
     let ast = ast::parse_module_checked(ptx_text).unwrap();
     let attributes = pass::Attributes {
         clock_rate: 2124000,
-        gfx_version: 1010,
     };
     crate::to_llvm_module(ast, attributes, |_| {})?;
     Ok(())
