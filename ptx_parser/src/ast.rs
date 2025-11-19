@@ -1918,6 +1918,23 @@ pub struct CallArgs<T: Operand> {
     pub return_arguments: Vec<T::Ident>,
     pub func: T::Ident,
     pub input_arguments: Vec<T>,
+    // This is a sad hack for `instruction_mode_to_global_mode` pass,
+    // The problem is that `instruction_mode_to_global_mode` pass right now
+    // treats function calls rather suboptimally:
+    // If basic blocks A and B call into function F. It models it by first
+    // splitting A into sequence [A, F, A'] and B into [B, F, B'], where A'
+    // and B' are the continuations after the function call.
+    // This would imply that B' is reachable from A (through A -> F -> B'),
+    // which is not technically true, but true for the purpose of the analysis.
+    // The problem arises when we replace sregs with function calls, then we
+    // suddenly have a lot more function calls, which leads to cfg exploding
+    //  and quality of `instruction_mode_to_global_mode` pass degrading
+    // significantly.
+    // One day `instruction_mode_to_global_mode` pass will be rewritten to
+    // duplicate and deduplicate function calls properly, but until then,
+    // we use this flag to mark function calls that are not actually function
+    // calls
+    pub is_external: bool,
 }
 
 impl<T: Operand> CallArgs<T> {
@@ -2011,6 +2028,7 @@ impl<T: Operand> CallArgs<T> {
             return_arguments,
             func,
             input_arguments,
+            is_external: self.is_external,
         })
     }
 }

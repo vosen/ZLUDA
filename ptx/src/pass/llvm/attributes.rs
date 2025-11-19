@@ -3,6 +3,9 @@ use std::ffi::CStr;
 use super::super::*;
 use super::*;
 use llvm_zluda::core::*;
+use llvm_zluda::utils::Context;
+
+use llvm_zluda::utils as llvm;
 
 pub(crate) fn run(
     context: &Context,

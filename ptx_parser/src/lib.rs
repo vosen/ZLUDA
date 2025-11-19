@@ -1603,6 +1603,7 @@ fn call<'a, 'input>(
         return_arguments,
         func: name,
         input_arguments,
+        is_external: false,
     };
     Ok(ast::Instruction::Call { data, arguments })
 }
@@ -1621,6 +1622,7 @@ fn empty_call<'input>(
             return_arguments: Vec::new(),
             func: name,
             input_arguments: Vec::new(),
+            is_external: false,
         },
     }
 }

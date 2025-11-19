@@ -29,6 +29,8 @@ use std::{i8, ptr, u64};
 
 use super::*;
 use crate::pass::*;
+use llvm_zluda::utils as llvm;
+use llvm_zluda::utils::Context;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
@@ -73,7 +75,7 @@ pub(crate) fn run<'input>(
     }
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
-            panic!("{:?}", err);
+            panic!("{}\n{:?}", module.print_module_to_string(), err);
         }
     }
     Ok(module)
@@ -154,8 +156,11 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
-            if let Some(align) = param.info.align {
-                unsafe { LLVMSetParamAlignment(value, align) };
+            // LLVM complains if alignment is set on function parameters for non-kernels
+            if method.is_kernel {
+                if let Some(align) = param.info.align {
+                    unsafe { LLVMSetParamAlignment(value, align) };
+                }
             }
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
             self.resolver.register(param.name, value);
@@ -523,6 +528,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
             ast::Instruction::GridDepControl { .. } => Ok(()), // nop
             ast::Instruction::Prefetch { .. } => Ok(()),       // nop
+            ast::Instruction::Mma { data, arguments } => self.emit_mma(data, arguments),
             // replaced by a function call
             ast::Instruction::Bfe { .. }
             | ast::Instruction::Bar { .. }
@@ -534,7 +540,6 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
-            | ast::Instruction::Mma { .. }
             | ast::Instruction::Prmt { .. } => return Err(error_unreachable()),
         }
     }
@@ -2605,8 +2610,8 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let name_lo = match data.type_ {
-            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24",
-            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24",
+            ast::ScalarType::U32 => c"llvm.amdgcn.mul.u24.i32",
+            ast::ScalarType::S32 => c"llvm.amdgcn.mul.i24.i32",
             _ => return Err(error_unreachable()),
         };
         let res_lo = self.emit_intrinsic(
@@ -2784,6 +2789,51 @@ impl<'a> MethodEmitContext<'a> {
         unsafe {
             LLVMSetAlignment(store, cp_size.as_u64() as u32);
         }
+        Ok(())
+    }
+
+    fn emit_mma(
+        &mut self,
+        data: ast::MmaDetails,
+        arguments: ast::MmaArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let ast::MmaDetails {
+            alayout,
+            blayout,
+            atype_scalar,
+            btype_scalar,
+            ..
+        } = data;
+
+        if alayout != ast::MatrixLayout::Row || blayout != ast::MatrixLayout::Col {
+            return Err(error_unreachable());
+        }
+
+        if atype_scalar != ast::ScalarType::BF16 || btype_scalar != ast::ScalarType::BF16 {
+            return Err(error_unreachable());
+        }
+
+        // Hard-coding .m16n8k16
+        let atype = &ast::Type::Vector(4, ast::ScalarType::B32);
+        let btype = &ast::Type::Vector(2, ast::ScalarType::B32);
+        let ctype = &ast::Type::Vector(4, ast::ScalarType::F32);
+        let dtype = &ast::Type::Vector(4, ast::ScalarType::F32);
+
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+
+        self.emit_intrinsic(
+            c"llvm.zluda.mma.m16n8k16",
+            Some(arguments.dst),
+            Some(dtype),
+            vec![
+                (a, get_type(self.context, atype)?),
+                (b, get_type(self.context, btype)?),
+                (c, get_type(self.context, ctype)?),
+            ],
+        )?;
+
         Ok(())
     }
 

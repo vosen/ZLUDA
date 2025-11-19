@@ -764,7 +764,12 @@ fn create_control_flow_graph(
                             bb_state.end(&[arguments.src]);
                         }
                         Statement::Instruction(ast::Instruction::Call {
-                            arguments: ast::CallArgs { func, .. },
+                            arguments:
+                                ast::CallArgs {
+                                    func,
+                                    is_external: false,
+                                    ..
+                                },
                             ..
                         }) => {
                             let after_call_label = match body_iter.next() {
@@ -997,7 +1002,12 @@ fn apply_global_mode_controls(
                         bb_state.start(*label, &mut result)?;
                     }
                     Statement::Instruction(ast::Instruction::Call {
-                        arguments: ast::CallArgs { func, .. },
+                        arguments:
+                            ast::CallArgs {
+                                func,
+                                is_external: false,
+                                ..
+                            },
                         ..
                     }) => {
                         bb_state.redirect_jump(func)?;
@@ -2038,8 +2048,6 @@ fn optimize_mode_insertions<
     solver.make_quiet();
     // Takes minutes for a problem that is solved sub-second
     solver.set_option("presolve", "off");
-    // Experimentally, the fastest mode, simplex with simplex_strategy = 0 is slightly slower
-    solver.set_option("solver", "pdlp");
     solver.set_option("parallel", "off");
     solver.set_option("threads", 1);
     let solved_model = solver.try_solve()?;

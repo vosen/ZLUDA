@@ -1,5 +1,3 @@
-declare hidden <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32>, <2 x i32>, <4 x float>) #0
-
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
 define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32_2x(ptr addrspace(4) byref(i64) %"94") #1 {
@@ -154,7 +152,7 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32_2x(ptr addrspace(4) by
   %67 = insertelement <4 x float> %66, float %63, i8 1
   %68 = insertelement <4 x float> %67, float %64, i8 2
   %"71" = insertelement <4 x float> %68, float %65, i8 3
-  %"68" = call <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32> %"69", <2 x i32> %"70", <4 x float> %"71")
+  %"68" = call <4 x float> @llvm.zluda.mma.m16n8k16(<4 x i32> %"69", <2 x i32> %"70", <4 x float> %"71")
   %"176" = extractelement <4 x float> %"68", i8 0
   %"177" = extractelement <4 x float> %"68", i8 1
   %"178" = extractelement <4 x float> %"68", i8 2
@@ -183,7 +181,7 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32_2x(ptr addrspace(4) by
   %84 = insertelement <4 x float> %83, float %80, i8 1
   %85 = insertelement <4 x float> %84, float %81, i8 2
   %"75" = insertelement <4 x float> %85, float %82, i8 3
-  %"72" = call <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32> %"73", <2 x i32> %"74", <4 x float> %"75")
+  %"72" = call <4 x float> @llvm.zluda.mma.m16n8k16(<4 x i32> %"73", <2 x i32> %"74", <4 x float> %"75")
   %"190" = extractelement <4 x float> %"72", i8 0
   %"191" = extractelement <4 x float> %"72", i8 1
   %"192" = extractelement <4 x float> %"72", i8 2
@@ -243,6 +241,8 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32_2x(ptr addrspace(4) by
   store float %105, ptr %"90", align 4
   ret void
 }
+
+declare <4 x float> @llvm.zluda.mma.m16n8k16(<4 x i32>, <2 x i32>, <4 x float>)
 
 attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "uniform-work-group-size"="true" }
 attributes #1 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }

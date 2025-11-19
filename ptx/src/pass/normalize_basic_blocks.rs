@@ -1,4 +1,5 @@
 use super::*;
+use ptx_parser::CallArgs;
 
 // This pass normalizes ptx modules in two ways that makes mode computation pass
 // and code emissions passes much simpler:
@@ -30,13 +31,14 @@ pub(crate) fn run(
         let body = std::mem::replace(body_ref, Vec::new());
         let mut result = Vec::with_capacity(body.len());
         let mut previous_instruction_was_terminator = TerminatorKind::Not;
-        let mut body_iterator = body.into_iter();
+        let mut body_iterator = body.into_iter().peekable();
         let mut return_statements = Vec::new();
-        match body_iterator.next() {
-            Some(Statement::Label(_)) => {}
-            Some(statement) => {
+        match body_iterator.peek() {
+            Some(Statement::Label(_)) => {
+                body_iterator.next();
+            }
+            Some(_) => {
                 result.push(Statement::Label(flat_resolver.register_unnamed(None)));
-                result.push(statement);
             }
             None => {}
         }
@@ -126,11 +128,12 @@ fn is_block_terminator(
 ) -> TerminatorKind {
     match statement {
         Statement::Conditional(..)
+        | Statement::Instruction(ast::Instruction::Trap { .. })
         | Statement::Instruction(ast::Instruction::Bra { .. })
         // Normally call is not a terminator, but we treat it as such because it
         // makes the "instruction modes to global modes" pass possible
         | Statement::Instruction(ast::Instruction::Ret { .. }) => TerminatorKind::Real,
-        Statement::Instruction(ast::Instruction::Call { .. }) => TerminatorKind::Fake,
+        Statement::Instruction(ast::Instruction::Call { arguments: CallArgs {  is_external: false, .. }, .. })  => TerminatorKind::Fake,
         _ => TerminatorKind::Not,
     }
 }
