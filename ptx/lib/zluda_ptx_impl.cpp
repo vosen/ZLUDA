@@ -23,7 +23,7 @@ typedef __bf16 bf16;
 typedef __bf16 bf16x2 __attribute__((ext_vector_type(2)));
 typedef __bf16 bf16x4 __attribute__((ext_vector_type(4)));
 typedef __bf16 bf16x8 __attribute__((ext_vector_type(8)));
-typedef int8_t s8x4 __attribute__((ext_vector_type(4)));
+typedef char s8x4 __attribute__((ext_vector_type(4)));
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
@@ -34,7 +34,7 @@ typedef int8_t s8x4 __attribute__((ext_vector_type(4)));
 
 extern "C"
 {
-    DECLARE_ATTR(uint32_t, GFX_VERSION);
+    extern "C" __attribute__((constant)) CONSTANT_SPACE uint32_t __oclc_ISA_version __device__;
 
     uint32_t FUNC(activemask)()
     {
@@ -731,16 +731,17 @@ __device__ int32_t dot_product<int32_t, s8x4>(int32_t initial_value, s8x4 row[8]
     int32_t result = initial_value;
     for (int i = 0; i < 8; i++)
     {
-        if (ATTR(GFX_VERSION) >= 1030)
-        {
-            result = __builtin_amdgcn_sdot4(std::bit_cast<int32_t>(row[i]), std::bit_cast<int32_t>(column[i]), result, false);
-        }
-        else
+        // ockl bug
+        if (__oclc_ISA_version == 10103)
         {
             result += int32_t(row[i].x) * int32_t(column[i].x);
             result += int32_t(row[i].y) * int32_t(column[i].y);
             result += int32_t(row[i].z) * int32_t(column[i].z);
             result += int32_t(row[i].w) * int32_t(column[i].w);
+        }
+        else
+        {
+            result = __ockl_sdot4(row[i], column[i], result, false);
         }
     }
     return result;
@@ -764,14 +765,15 @@ __device__ float dot_product<float, f16x2>(float initial_value, f16x2 row[8], f1
     float result = initial_value;
     for (int i = 0; i < 8; i++)
     {
-        if (ATTR(GFX_VERSION) >= 1030)
-        {
-            result = __builtin_amdgcn_fdot2(row[i], column[i], result, false);
-        }
-        else
+        // ockl bug
+        if (__oclc_ISA_version == 10103)
         {
             result = std::fma(float(row[i].x), float(column[i].x), result);
             result = std::fma(float(row[i].y), float(column[i].y), result);
+        }
+        else
+        {
+            result = __ockl_fdot2(row[i], column[i], result, false);
         }
     }
     return result;
