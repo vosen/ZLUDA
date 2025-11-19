@@ -1,0 +1,30 @@
+.version 6.5
+.target sm_75
+.address_size 64
+
+.visible .entry cvt_pack(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    src1;
+    .reg .b32       src2;
+    .reg .b32 	    src3;
+    
+    .reg .u32 	    result1;
+    .reg .u32 	    result2;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b32                  src1, [in_addr];
+    ld.b32                  src2, [in_addr+4];
+    ld.b32                  src3, [in_addr+8];
+	cvt.pack.sat.u8.s32.b32 result1, src1, src2, src3;
+    cvt.pack.sat.s8.s32.b32	result2, src1, src2, src3;
+    st.s32                  [out_addr], result1;
+    st.s32                  [out_addr+4], result2;
+	ret;
+}
