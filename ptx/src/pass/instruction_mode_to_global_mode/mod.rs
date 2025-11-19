@@ -2038,8 +2038,6 @@ fn optimize_mode_insertions<
     solver.make_quiet();
     // Takes minutes for a problem that is solved sub-second
     solver.set_option("presolve", "off");
-    // Experimentally, the fastest mode, simplex with simplex_strategy = 0 is slightly slower
-    solver.set_option("solver", "pdlp");
     solver.set_option("parallel", "off");
     solver.set_option("threads", 1);
     let solved_model = solver.try_solve()?;
