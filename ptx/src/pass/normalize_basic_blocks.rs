@@ -1,3 +1,6 @@
+use ptx_parser::CallArgs;
+use rustc_hash::FxHashSet;
+
 use super::*;
 
 // This pass normalizes ptx modules in two ways that makes mode computation pass
@@ -18,6 +21,7 @@ pub(crate) fn run(
     flat_resolver: &mut GlobalStringIdentResolver2<'_>,
     mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    let mut declaration_only_fns = FxHashSet::default();
     for directive in directives.iter_mut() {
         let (body_ref, is_kernel) = match directive {
             Directive2::Method(Function2 {
@@ -25,6 +29,12 @@ pub(crate) fn run(
                 is_kernel,
                 ..
             }) => (body, *is_kernel),
+            Directive2::Method(Function2 {
+                body: None, name, ..
+            }) => {
+                declaration_only_fns.insert(*name);
+                continue;
+            }
             _ => continue,
         };
         let body = std::mem::replace(body_ref, Vec::new());
@@ -83,7 +93,8 @@ pub(crate) fn run(
                 }
                 _ => {}
             }
-            previous_instruction_was_terminator = is_block_terminator(&statement);
+            previous_instruction_was_terminator =
+                is_block_terminator(&declaration_only_fns, &statement);
             result.push(statement);
         }
         convert_from_multiple_returns_to_single_return(
@@ -123,6 +134,7 @@ fn convert_from_multiple_returns_to_single_return(
 }
 
 fn is_block_terminator(
+    declaration_only_fns: &FxHashSet<SpirvWord>,
     statement: &Statement<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> TerminatorKind {
     match statement {
@@ -132,7 +144,7 @@ fn is_block_terminator(
         // Normally call is not a terminator, but we treat it as such because it
         // makes the "instruction modes to global modes" pass possible
         | Statement::Instruction(ast::Instruction::Ret { .. }) => TerminatorKind::Real,
-        Statement::Instruction(ast::Instruction::Call { .. }) => TerminatorKind::Fake,
+        Statement::Instruction(ast::Instruction::Call { arguments: CallArgs { func, .. }, .. }) if !declaration_only_fns.contains(func) => TerminatorKind::Fake,
         _ => TerminatorKind::Not,
     }
 }
