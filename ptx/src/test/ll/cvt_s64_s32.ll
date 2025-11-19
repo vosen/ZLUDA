@@ -18,12 +18,12 @@ define amdgpu_kernel void @cvt_s64_s32(ptr addrspace(4) byref(i64) %"37", ptr ad
   %5 = load i32, ptr %"52", align 4
   store i32 %5, ptr addrspace(5) %"41", align 4
   %6 = load i32, ptr addrspace(5) %"41", align 4
-  %"47" = sext i32 %6 to i64
-  store i64 %"47", ptr addrspace(5) %"42", align 8
-  %7 = load i64, ptr addrspace(5) %"40", align 8
-  %8 = load i64, ptr addrspace(5) %"42", align 8
-  %"53" = inttoptr i64 %7 to ptr
-  store i64 %8, ptr %"53", align 8
+  %7 = sext i32 %6 to i64
+  store i64 %7, ptr addrspace(5) %"42", align 8
+  %8 = load i64, ptr addrspace(5) %"40", align 8
+  %9 = load i64, ptr addrspace(5) %"42", align 8
+  %"53" = inttoptr i64 %8 to ptr
+  store i64 %9, ptr %"53", align 8
   ret void
 }
 

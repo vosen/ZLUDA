@@ -5,158 +5,155 @@ declare hidden <4 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x4_trans_b16(ptr addrsp
 
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
-define amdgpu_kernel void @ldmatrix_trans(ptr addrspace(4) byref(i64) %"89") #1 {
-  %"90" = alloca i64, align 8, addrspace(5)
-  %"91" = alloca i32, align 4, addrspace(5)
+define amdgpu_kernel void @ldmatrix_trans(ptr addrspace(4) byref(i64) %"88") #1 {
+  %"89" = alloca i64, align 8, addrspace(5)
+  %"90" = alloca i32, align 4, addrspace(5)
+  %"91" = alloca i64, align 8, addrspace(5)
   %"92" = alloca i64, align 8, addrspace(5)
-  %"93" = alloca i64, align 8, addrspace(5)
-  %"94" = alloca i32, align 4, addrspace(5)
-  %"95" = alloca i64, align 8, addrspace(5)
-  %"96" = alloca i32, align 4, addrspace(5)
+  %"93" = alloca i32, align 4, addrspace(5)
+  %"94" = alloca i64, align 8, addrspace(5)
+  %"95" = alloca i32, align 4, addrspace(5)
+  %"96" = alloca i64, align 8, addrspace(5)
   %"97" = alloca i64, align 8, addrspace(5)
-  %"98" = alloca i64, align 8, addrspace(5)
+  %"98" = alloca i32, align 4, addrspace(5)
   %"99" = alloca i32, align 4, addrspace(5)
   %"100" = alloca i32, align 4, addrspace(5)
   %"101" = alloca i32, align 4, addrspace(5)
-  %"102" = alloca i32, align 4, addrspace(5)
+  %"102" = alloca <2 x i16>, align 4, addrspace(5)
   %"103" = alloca <2 x i16>, align 4, addrspace(5)
   %"104" = alloca <2 x i16>, align 4, addrspace(5)
   %"105" = alloca <2 x i16>, align 4, addrspace(5)
-  %"106" = alloca <2 x i16>, align 4, addrspace(5)
-  %"111" = alloca i1, align 1, addrspace(5)
+  %"110" = alloca i1, align 1, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
   br label %"86"
 
 "86":                                             ; preds = %1
-  %2 = load i64, ptr addrspace(4) %"89", align 8
-  store i64 %2, ptr addrspace(5) %"90", align 8
+  %2 = load i64, ptr addrspace(4) %"88", align 8
+  store i64 %2, ptr addrspace(5) %"89", align 8
   %"55" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
-  br label %"87"
+  store i32 %"55", ptr addrspace(5) %"90", align 4
+  %3 = load i32, ptr addrspace(5) %"90", align 4
+  %4 = zext i32 %3 to i64
+  store i64 %4, ptr addrspace(5) %"91", align 8
+  %5 = load i32, ptr addrspace(5) %"90", align 4
+  %6 = icmp uge i32 %5, 32
+  store i1 %6, ptr addrspace(5) %"110", align 1
+  %7 = load i1, ptr addrspace(5) %"110", align 1
+  br i1 %7, label %"13", label %"33"
 
-"87":                                             ; preds = %"86"
-  store i32 %"55", ptr addrspace(5) %"91", align 4
-  %3 = load i32, ptr addrspace(5) %"91", align 4
-  %"109" = zext i32 %3 to i64
-  store i64 %"109", ptr addrspace(5) %"92", align 8
-  %4 = load i32, ptr addrspace(5) %"91", align 4
-  %5 = icmp uge i32 %4, 32
-  store i1 %5, ptr addrspace(5) %"111", align 1
-  %6 = load i1, ptr addrspace(5) %"111", align 1
-  br i1 %6, label %"13", label %"33"
-
-"33":                                             ; preds = %"87"
-  store i64 ptrtoint (ptr addrspace(1) @values_g to i64), ptr addrspace(5) %"93", align 8
-  %7 = load i64, ptr addrspace(5) %"92", align 8
-  %8 = load i64, ptr addrspace(5) %"93", align 8
-  %9 = mul i64 %7, 16
-  %"116" = add i64 %9, %8
-  store i64 %"116", ptr addrspace(5) %"93", align 8
-  %10 = load i64, ptr addrspace(5) %"93", align 8
-  %"169" = inttoptr i64 %10 to ptr addrspace(1)
-  %11 = load <2 x i64>, ptr addrspace(1) %"169", align 16
-  %"170" = extractelement <2 x i64> %11, i8 0
-  %"171" = extractelement <2 x i64> %11, i8 1
+"33":                                             ; preds = %"86"
+  store i64 ptrtoint (ptr addrspace(1) @values_g to i64), ptr addrspace(5) %"92", align 8
+  %8 = load i64, ptr addrspace(5) %"91", align 8
+  %9 = load i64, ptr addrspace(5) %"92", align 8
+  %10 = mul i64 %8, 16
+  %"115" = add i64 %10, %9
+  store i64 %"115", ptr addrspace(5) %"92", align 8
+  %11 = load i64, ptr addrspace(5) %"92", align 8
+  %"168" = inttoptr i64 %11 to ptr addrspace(1)
+  %12 = load <2 x i64>, ptr addrspace(1) %"168", align 16
+  %"169" = extractelement <2 x i64> %12, i8 0
+  %"170" = extractelement <2 x i64> %12, i8 1
+  store i64 %"169", ptr addrspace(5) %"96", align 8
   store i64 %"170", ptr addrspace(5) %"97", align 8
-  store i64 %"171", ptr addrspace(5) %"98", align 8
-  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"94", align 4
-  %12 = load i32, ptr addrspace(5) %"91", align 4
-  %13 = load i32, ptr addrspace(5) %"94", align 4
-  %14 = mul i32 %12, 16
-  %"173" = add i32 %14, %13
-  store i32 %"173", ptr addrspace(5) %"94", align 4
-  %15 = load i64, ptr addrspace(5) %"97", align 8
-  %16 = load i64, ptr addrspace(5) %"98", align 8
-  %17 = insertelement <2 x i64> undef, i64 %15, i8 0
-  %"60" = insertelement <2 x i64> %17, i64 %16, i8 1
-  %18 = load i32, ptr addrspace(5) %"94", align 4
-  %"177" = inttoptr i32 %18 to ptr addrspace(3)
-  store <2 x i64> %"60", ptr addrspace(3) %"177", align 16
-  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"94", align 4
-  %19 = load i32, ptr addrspace(5) %"91", align 4
-  %20 = load i32, ptr addrspace(5) %"94", align 4
-  %21 = mul i32 %19, 16
-  %"179" = add i32 %21, %20
-  store i32 %"179", ptr addrspace(5) %"94", align 4
-  %22 = load i32, ptr addrspace(5) %"94", align 4
-  %"181" = inttoptr i32 %22 to ptr addrspace(3)
-  %"62" = call <4 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x4_trans_b16(ptr addrspace(3) %"181")
-  %"134" = extractelement <4 x i32> %"62", i8 0
-  %"135" = extractelement <4 x i32> %"62", i8 1
-  %"136" = extractelement <4 x i32> %"62", i8 2
-  %"137" = extractelement <4 x i32> %"62", i8 3
+  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"93", align 4
+  %13 = load i32, ptr addrspace(5) %"90", align 4
+  %14 = load i32, ptr addrspace(5) %"93", align 4
+  %15 = mul i32 %13, 16
+  %"172" = add i32 %15, %14
+  store i32 %"172", ptr addrspace(5) %"93", align 4
+  %16 = load i64, ptr addrspace(5) %"96", align 8
+  %17 = load i64, ptr addrspace(5) %"97", align 8
+  %18 = insertelement <2 x i64> undef, i64 %16, i8 0
+  %"60" = insertelement <2 x i64> %18, i64 %17, i8 1
+  %19 = load i32, ptr addrspace(5) %"93", align 4
+  %"176" = inttoptr i32 %19 to ptr addrspace(3)
+  store <2 x i64> %"60", ptr addrspace(3) %"176", align 16
+  store i32 ptrtoint (ptr addrspace(3) @values_s to i32), ptr addrspace(5) %"93", align 4
+  %20 = load i32, ptr addrspace(5) %"90", align 4
+  %21 = load i32, ptr addrspace(5) %"93", align 4
+  %22 = mul i32 %20, 16
+  %"178" = add i32 %22, %21
+  store i32 %"178", ptr addrspace(5) %"93", align 4
+  %23 = load i32, ptr addrspace(5) %"93", align 4
+  %"180" = inttoptr i32 %23 to ptr addrspace(3)
+  %"62" = call <4 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x4_trans_b16(ptr addrspace(3) %"180")
+  %"133" = extractelement <4 x i32> %"62", i8 0
+  %"134" = extractelement <4 x i32> %"62", i8 1
+  %"135" = extractelement <4 x i32> %"62", i8 2
+  %"136" = extractelement <4 x i32> %"62", i8 3
+  store i32 %"133", ptr addrspace(5) %"98", align 4
   store i32 %"134", ptr addrspace(5) %"99", align 4
   store i32 %"135", ptr addrspace(5) %"100", align 4
   store i32 %"136", ptr addrspace(5) %"101", align 4
-  store i32 %"137", ptr addrspace(5) %"102", align 4
-  %23 = load i64, ptr addrspace(5) %"92", align 8
-  %24 = load i64, ptr addrspace(5) %"90", align 8
-  %25 = mul i64 %23, 32
-  %"138" = add i64 %25, %24
-  store i64 %"138", ptr addrspace(5) %"90", align 8
-  %26 = load i32, ptr addrspace(5) %"99", align 4
-  %"141" = bitcast i32 %26 to <2 x i16>
-  store <2 x i16> %"141", ptr addrspace(5) %"103", align 4
-  %27 = load <2 x i16>, ptr addrspace(5) %"103", align 4
-  %"64" = extractelement <2 x i16> %27, i8 0
-  %28 = load i64, ptr addrspace(5) %"90", align 8
-  %"183" = inttoptr i64 %28 to ptr
-  store i16 %"64", ptr %"183", align 2
-  %29 = load i64, ptr addrspace(5) %"90", align 8
-  %"184" = inttoptr i64 %29 to ptr
-  %"66" = getelementptr inbounds i8, ptr %"184", i64 4
-  %30 = load <2 x i16>, ptr addrspace(5) %"103", align 4
-  %"67" = extractelement <2 x i16> %30, i8 1
+  %24 = load i64, ptr addrspace(5) %"91", align 8
+  %25 = load i64, ptr addrspace(5) %"89", align 8
+  %26 = mul i64 %24, 32
+  %"137" = add i64 %26, %25
+  store i64 %"137", ptr addrspace(5) %"89", align 8
+  %27 = load i32, ptr addrspace(5) %"98", align 4
+  %"140" = bitcast i32 %27 to <2 x i16>
+  store <2 x i16> %"140", ptr addrspace(5) %"102", align 4
+  %28 = load <2 x i16>, ptr addrspace(5) %"102", align 4
+  %"64" = extractelement <2 x i16> %28, i8 0
+  %29 = load i64, ptr addrspace(5) %"89", align 8
+  %"182" = inttoptr i64 %29 to ptr
+  store i16 %"64", ptr %"182", align 2
+  %30 = load i64, ptr addrspace(5) %"89", align 8
+  %"183" = inttoptr i64 %30 to ptr
+  %"66" = getelementptr inbounds i8, ptr %"183", i64 4
+  %31 = load <2 x i16>, ptr addrspace(5) %"102", align 4
+  %"67" = extractelement <2 x i16> %31, i8 1
   store i16 %"67", ptr %"66", align 2
-  %31 = load i32, ptr addrspace(5) %"100", align 4
-  %"147" = bitcast i32 %31 to <2 x i16>
-  store <2 x i16> %"147", ptr addrspace(5) %"104", align 4
-  %32 = load i64, ptr addrspace(5) %"90", align 8
-  %"186" = inttoptr i64 %32 to ptr
-  %"69" = getelementptr inbounds i8, ptr %"186", i64 8
-  %33 = load <2 x i16>, ptr addrspace(5) %"104", align 4
-  %"70" = extractelement <2 x i16> %33, i8 0
+  %32 = load i32, ptr addrspace(5) %"99", align 4
+  %"146" = bitcast i32 %32 to <2 x i16>
+  store <2 x i16> %"146", ptr addrspace(5) %"103", align 4
+  %33 = load i64, ptr addrspace(5) %"89", align 8
+  %"185" = inttoptr i64 %33 to ptr
+  %"69" = getelementptr inbounds i8, ptr %"185", i64 8
+  %34 = load <2 x i16>, ptr addrspace(5) %"103", align 4
+  %"70" = extractelement <2 x i16> %34, i8 0
   store i16 %"70", ptr %"69", align 2
-  %34 = load i64, ptr addrspace(5) %"90", align 8
-  %"187" = inttoptr i64 %34 to ptr
-  %"72" = getelementptr inbounds i8, ptr %"187", i64 12
-  %35 = load <2 x i16>, ptr addrspace(5) %"104", align 4
-  %"73" = extractelement <2 x i16> %35, i8 1
+  %35 = load i64, ptr addrspace(5) %"89", align 8
+  %"186" = inttoptr i64 %35 to ptr
+  %"72" = getelementptr inbounds i8, ptr %"186", i64 12
+  %36 = load <2 x i16>, ptr addrspace(5) %"103", align 4
+  %"73" = extractelement <2 x i16> %36, i8 1
   store i16 %"73", ptr %"72", align 2
-  %36 = load i32, ptr addrspace(5) %"101", align 4
-  %"153" = bitcast i32 %36 to <2 x i16>
-  store <2 x i16> %"153", ptr addrspace(5) %"105", align 4
-  %37 = load i64, ptr addrspace(5) %"90", align 8
-  %"189" = inttoptr i64 %37 to ptr
-  %"75" = getelementptr inbounds i8, ptr %"189", i64 16
-  %38 = load <2 x i16>, ptr addrspace(5) %"105", align 4
-  %"76" = extractelement <2 x i16> %38, i8 0
+  %37 = load i32, ptr addrspace(5) %"100", align 4
+  %"152" = bitcast i32 %37 to <2 x i16>
+  store <2 x i16> %"152", ptr addrspace(5) %"104", align 4
+  %38 = load i64, ptr addrspace(5) %"89", align 8
+  %"188" = inttoptr i64 %38 to ptr
+  %"75" = getelementptr inbounds i8, ptr %"188", i64 16
+  %39 = load <2 x i16>, ptr addrspace(5) %"104", align 4
+  %"76" = extractelement <2 x i16> %39, i8 0
   store i16 %"76", ptr %"75", align 2
-  %39 = load i64, ptr addrspace(5) %"90", align 8
-  %"190" = inttoptr i64 %39 to ptr
-  %"78" = getelementptr inbounds i8, ptr %"190", i64 20
-  %40 = load <2 x i16>, ptr addrspace(5) %"105", align 4
-  %"79" = extractelement <2 x i16> %40, i8 1
+  %40 = load i64, ptr addrspace(5) %"89", align 8
+  %"189" = inttoptr i64 %40 to ptr
+  %"78" = getelementptr inbounds i8, ptr %"189", i64 20
+  %41 = load <2 x i16>, ptr addrspace(5) %"104", align 4
+  %"79" = extractelement <2 x i16> %41, i8 1
   store i16 %"79", ptr %"78", align 2
-  %41 = load i32, ptr addrspace(5) %"102", align 4
-  %"159" = bitcast i32 %41 to <2 x i16>
-  store <2 x i16> %"159", ptr addrspace(5) %"106", align 4
-  %42 = load i64, ptr addrspace(5) %"90", align 8
-  %"192" = inttoptr i64 %42 to ptr
-  %"81" = getelementptr inbounds i8, ptr %"192", i64 24
-  %43 = load <2 x i16>, ptr addrspace(5) %"106", align 4
-  %"82" = extractelement <2 x i16> %43, i8 0
+  %42 = load i32, ptr addrspace(5) %"101", align 4
+  %"158" = bitcast i32 %42 to <2 x i16>
+  store <2 x i16> %"158", ptr addrspace(5) %"105", align 4
+  %43 = load i64, ptr addrspace(5) %"89", align 8
+  %"191" = inttoptr i64 %43 to ptr
+  %"81" = getelementptr inbounds i8, ptr %"191", i64 24
+  %44 = load <2 x i16>, ptr addrspace(5) %"105", align 4
+  %"82" = extractelement <2 x i16> %44, i8 0
   store i16 %"82", ptr %"81", align 2
-  %44 = load i64, ptr addrspace(5) %"90", align 8
-  %"193" = inttoptr i64 %44 to ptr
-  %"84" = getelementptr inbounds i8, ptr %"193", i64 28
-  %45 = load <2 x i16>, ptr addrspace(5) %"106", align 4
-  %"85" = extractelement <2 x i16> %45, i8 1
+  %45 = load i64, ptr addrspace(5) %"89", align 8
+  %"192" = inttoptr i64 %45 to ptr
+  %"84" = getelementptr inbounds i8, ptr %"192", i64 28
+  %46 = load <2 x i16>, ptr addrspace(5) %"105", align 4
+  %"85" = extractelement <2 x i16> %46, i8 1
   store i16 %"85", ptr %"84", align 2
   br label %"13"
 
-"13":                                             ; preds = %"33", %"87"
+"13":                                             ; preds = %"33", %"86"
   ret void
 }
 

@@ -19,13 +19,13 @@ define amdgpu_kernel void @cvt_s16_s8(ptr addrspace(4) byref(i64) %"37", ptr add
   store i32 %5, ptr addrspace(5) %"42", align 4
   %6 = load i32, ptr addrspace(5) %"42", align 4
   %7 = trunc i32 %6 to i8
-  %"52" = sext i8 %7 to i16
-  %"47" = sext i16 %"52" to i32
+  %8 = sext i8 %7 to i16
+  %"47" = sext i16 %8 to i32
   store i32 %"47", ptr addrspace(5) %"41", align 4
-  %8 = load i64, ptr addrspace(5) %"40", align 8
-  %9 = load i32, ptr addrspace(5) %"41", align 4
-  %"54" = inttoptr i64 %8 to ptr
-  store i32 %9, ptr %"54", align 4
+  %9 = load i64, ptr addrspace(5) %"40", align 8
+  %10 = load i32, ptr addrspace(5) %"41", align 4
+  %"54" = inttoptr i64 %9 to ptr
+  store i32 %10, ptr %"54", align 4
   ret void
 }
 

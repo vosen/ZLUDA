@@ -26,9 +26,9 @@ define amdgpu_kernel void @cvt_rn_bf16x2_f32(ptr addrspace(4) byref(i64) %"40", 
   %8 = load float, ptr addrspace(5) %"44", align 4
   %9 = load float, ptr addrspace(5) %"45", align 4
   %10 = fptrunc float %8 to bfloat
-  %11 = insertelement <2 x bfloat> poison, bfloat %10, i32 1
-  %12 = fptrunc float %9 to bfloat
-  %"60" = insertelement <2 x bfloat> %11, bfloat %12, i32 0
+  %11 = fptrunc float %9 to bfloat
+  %12 = insertelement <2 x bfloat> poison, bfloat %10, i32 1
+  %"60" = insertelement <2 x bfloat> %12, bfloat %11, i32 0
   %"53" = bitcast <2 x bfloat> %"60" to i32
   store i32 %"53", ptr addrspace(5) %"46", align 4
   %13 = load i64, ptr addrspace(5) %"43", align 8
