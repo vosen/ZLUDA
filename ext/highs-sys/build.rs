@@ -82,7 +82,10 @@ fn try_use_sccache(cmake: &mut cmake::Config) {
         cmake.define("CMAKE_C_COMPILER_LAUNCHER", &*sccache);
         match std::env::var_os("CARGO_CFG_TARGET_OS") {
             Some(os) if os == "windows" => {
-                cmake.define("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>");
+                cmake.define(
+                    "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT",
+                    "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>",
+                );
                 cmake.define("CMAKE_POLICY_CMP0141", "NEW");
             }
             _ => {}
