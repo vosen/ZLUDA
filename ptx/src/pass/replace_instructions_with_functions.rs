@@ -354,6 +354,36 @@ fn run_instruction<'input>(
             let name = "sqrt_rn_ftz_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Mma {
+            data:
+                ast::MmaDetails {
+                    alayout,
+                    blayout,
+                    cd_type_scalar,
+                    ab_type_scalar,
+                },
+            ..
+        } => {
+            let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
+            let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
+            let dimensions = if cd_type_scalar.kind() == ast::ScalarKind::Float {
+                "m16n8k16"
+            } else {
+                "m16n8k32"
+            };
+            let name = format!(
+                "mma_sync_aligned_{dimensions}_{}_{}_{cd_type_name}_{ab_type_name}_{ab_type_name}_{cd_type_name}",
+                match alayout {
+                    ast::MatrixLayout::Row => "row",
+                    ast::MatrixLayout::Col => "col",
+                },
+                match blayout {
+                    ast::MatrixLayout::Row => "row",
+                    ast::MatrixLayout::Col => "col",
+                }
+            );
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Sqrt {
             data:
                 ast::RcpData {

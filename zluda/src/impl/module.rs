@@ -68,6 +68,7 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     } else {
         maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
     };
+    // TODO: get this information on initialization
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
     let attributes = ExtraCacheAttributes {
