@@ -38,10 +38,7 @@ fn main() {
         .define("LLVM_OPTIMIZED_TABLEGEN", "ON")
         //.define("LLVM_USE_LINKER", "lld")
         .define("LLVM_TARGETS_TO_BUILD", "AMDGPU")
-        // Clang target here is just generated, it's _not_ being built, this
-        // is to to allow you to regenerate zluda_ptx_impl.cpp without
-        // starting the whole llvm build from scratch
-        .define("LLVM_ENABLE_PROJECTS", "llvm;lld;clang");
+        .define("LLVM_ENABLE_PROJECTS", "llvm;lld");
     // Debug build is so slow that no debugging of ZLUDA is possible.
     // If you want to build with debug symbols, use dev-llvm profile.
     if try_get_build_profile_name() == "debug" {
