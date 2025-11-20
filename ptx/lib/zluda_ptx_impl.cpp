@@ -810,7 +810,7 @@ __device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_col
 }
 
 template <typename Acc, typename T>
-__device__ HIP_vector_base<Acc, 4> mma_sync_aligned_m16n8k16_row_col_f32_x16_impl(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
+__device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
 {
     uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
     uint8_t quad_index = laneid % 4;
@@ -872,16 +872,24 @@ extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
     }
 
+    __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k16");
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        if (__oclc_ISA_version >= 11000)
+        {
+            return __llvm_zluda_mma_m16n8k16(a_reg, b_reg, c_reg);
+        }
+        else 
+        {
+            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        }
     }
 
     uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
-        return std::bit_cast<uint4::Native_vec_>(mma_sync_aligned_m16n8k16_row_col_f32_x16_impl<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
+        return std::bit_cast<uint4::Native_vec_>(fallback_mma_sync_aligned<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
     }
 }
