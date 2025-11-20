@@ -2,7 +2,7 @@ use super::driver;
 use crate::r#impl::driver::GlobalState;
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use hip_runtime_sys::*;
-use std::{borrow::Cow, ffi::CStr, mem};
+use std::{borrow::Cow, ffi::CStr, mem, ops::ControlFlow};
 use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 
 pub(crate) struct Module {
@@ -44,23 +44,39 @@ fn get_best_ptx_and_compile(
             _ => {}
         })
     };
-    let mut parsed_modules = ptx_modules
+    let maybe_module = ptx_modules
         .iter()
         .rev() // TODO: actually sort by SM
-        .filter_map(|src| {
-            if cfg!(debug_assertions) {
-                let ast = ptx_parser::parse_module_checked(src).ok()?;
-                Some((src, ast))
-            } else {
-                Some((src, ptx_parser::parse_module_unchecked(src)))
-            }
-        })
-        .collect::<Vec<_>>();
-    parsed_modules.sort_by_key(|(_, ast)| ast.invalid_directives);
-    let maybe_module = parsed_modules.into_iter().next();
+        .try_fold(
+            None,
+            |acc: Option<(&Cow<'_, str>, ptx_parser::Module<'_>)>, src| {
+                let maybe_ast = ptx_parser::parse_module_checked(src);
+                match maybe_ast {
+                    Err(_) => ControlFlow::Continue(acc),
+                    Ok(ast) => {
+                        if ast.invalid_directives == 0 {
+                            return ControlFlow::Break((src, ast));
+                        } else {
+                            ControlFlow::Continue(Some(match acc {
+                                Some(best_known) => {
+                                    if ast.invalid_directives < best_known.1.invalid_directives {
+                                        (src, ast)
+                                    } else {
+                                        best_known
+                                    }
+                                }
+                                None => (src, ast),
+                            }))
+                        }
+                    }
+                }
+            },
+        );
     let (text, module) = match maybe_module {
-        Some((text, ast)) => (Some(text), ast),
-        None => {
+        ControlFlow::Break((ast, module)) | ControlFlow::Continue(Some((ast, module))) => {
+            (Some(ast), module)
+        }
+        ControlFlow::Continue(None) => {
             if cfg!(debug_assertions) {
                 return Err(CUerror::NO_BINARY_FOR_GPU);
             }
