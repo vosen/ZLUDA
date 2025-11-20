@@ -1,7 +1,8 @@
 use cmake::Config;
-use std::io;
+use core::panic;
 use std::path::PathBuf;
 use std::process::Command;
+use std::{env, io};
 
 const COMPONENTS: &[&'static str] = &[
     "LLVMCore",
@@ -37,7 +38,15 @@ fn main() {
         .define("LLVM_OPTIMIZED_TABLEGEN", "ON")
         //.define("LLVM_USE_LINKER", "lld")
         .define("LLVM_TARGETS_TO_BUILD", "AMDGPU")
-        .define("LLVM_ENABLE_PROJECTS", "llvm;lld");
+        // Clang target here is just generated, it's _not_ being built, this
+        // is to to allow you to regenerate zluda_ptx_impl.cpp without
+        // starting the whole llvm build from scratch
+        .define("LLVM_ENABLE_PROJECTS", "llvm;lld;clang");
+    // Debug build is so slow that no debugging of ZLUDA is possible.
+    // If you want to build with debug symbols, use dev-llvm profile.
+    if try_get_build_profile_name() == "debug" {
+        cmake.profile("Release");
+    }
     cmake.build_target("llvm-config");
     let llvm_dir = cmake.build();
     for c in COMPONENTS {
@@ -66,7 +75,10 @@ fn try_use_sccache(cmake: &mut Config) {
         cmake.define("CMAKE_C_COMPILER_LAUNCHER", &*sccache);
         match std::env::var_os("CARGO_CFG_TARGET_OS") {
             Some(os) if os == "windows" => {
-                cmake.define("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", "Embedded");
+                cmake.define(
+                    "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT",
+                    "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>",
+                );
                 cmake.define("CMAKE_POLICY_CMP0141", "NEW");
             }
             _ => {}
@@ -82,6 +94,21 @@ fn try_use_ninja(cmake: &mut Config) {
             cmake.generator("Ninja");
         }
     }
+}
+
+// Source: https://stackoverflow.com/a/73603419
+// We resort to this garbage because Cargo is ideologically opposed to
+// being useful, see here: https://github.com/rust-lang/cargo/issues/11054
+fn try_get_build_profile_name() -> String {
+    let mut path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    path.pop();
+    path.pop();
+    path.pop();
+    let name = path.file_name().unwrap().to_str().unwrap();
+    if !["debug", "dev-llvm", "release", "release-lto"].contains(&name) {
+        panic!("Unknown build profile: {}", name);
+    }
+    name.to_string()
 }
 
 fn get_llvm_build_path(llvm_build_dir: &PathBuf, cmake_profile: &str) -> PathBuf {
