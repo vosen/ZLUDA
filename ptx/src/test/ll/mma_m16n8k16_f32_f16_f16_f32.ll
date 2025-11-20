@@ -1,8 +1,8 @@
-declare hidden <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32>, <2 x i32>, <4 x float>) #0
+declare hidden <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32(<4 x i32>, <2 x i32>, <4 x float>) #0
 
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
-define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref(i64) %"75") #1 {
+define amdgpu_kernel void @mma_m16n8k16_f32_f16_f16_f32(ptr addrspace(4) byref(i64) %"75") #1 {
   %"76" = alloca i64, align 8, addrspace(5)
   %"77" = alloca i64, align 8, addrspace(5)
   %"78" = alloca i32, align 4, addrspace(5)
@@ -63,51 +63,51 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref
   store float %"115", ptr addrspace(5) %"86", align 4
   %12 = load float, ptr addrspace(5) %"79", align 4
   %13 = load float, ptr addrspace(5) %"80", align 4
-  %14 = fptrunc float %12 to bfloat
-  %15 = fptrunc float %13 to bfloat
-  %16 = insertelement <2 x bfloat> poison, bfloat %14, i32 1
-  %"164" = insertelement <2 x bfloat> %16, bfloat %15, i32 0
-  %"117" = bitcast <2 x bfloat> %"164" to i32
+  %14 = fptrunc float %12 to half
+  %15 = fptrunc float %13 to half
+  %16 = insertelement <2 x half> poison, half %14, i32 1
+  %"164" = insertelement <2 x half> %16, half %15, i32 0
+  %"117" = bitcast <2 x half> %"164" to i32
   store i32 %"117", ptr addrspace(5) %"87", align 4
   %17 = load float, ptr addrspace(5) %"81", align 4
   %18 = load float, ptr addrspace(5) %"82", align 4
-  %19 = fptrunc float %17 to bfloat
-  %20 = fptrunc float %18 to bfloat
-  %21 = insertelement <2 x bfloat> poison, bfloat %19, i32 1
-  %"165" = insertelement <2 x bfloat> %21, bfloat %20, i32 0
-  %"120" = bitcast <2 x bfloat> %"165" to i32
+  %19 = fptrunc float %17 to half
+  %20 = fptrunc float %18 to half
+  %21 = insertelement <2 x half> poison, half %19, i32 1
+  %"165" = insertelement <2 x half> %21, half %20, i32 0
+  %"120" = bitcast <2 x half> %"165" to i32
   store i32 %"120", ptr addrspace(5) %"88", align 4
   %22 = load float, ptr addrspace(5) %"83", align 4
   %23 = load float, ptr addrspace(5) %"84", align 4
-  %24 = fptrunc float %22 to bfloat
-  %25 = fptrunc float %23 to bfloat
-  %26 = insertelement <2 x bfloat> poison, bfloat %24, i32 1
-  %"166" = insertelement <2 x bfloat> %26, bfloat %25, i32 0
-  %"123" = bitcast <2 x bfloat> %"166" to i32
+  %24 = fptrunc float %22 to half
+  %25 = fptrunc float %23 to half
+  %26 = insertelement <2 x half> poison, half %24, i32 1
+  %"166" = insertelement <2 x half> %26, half %25, i32 0
+  %"123" = bitcast <2 x half> %"166" to i32
   store i32 %"123", ptr addrspace(5) %"89", align 4
   %27 = load float, ptr addrspace(5) %"85", align 4
   %28 = load float, ptr addrspace(5) %"86", align 4
-  %29 = fptrunc float %27 to bfloat
-  %30 = fptrunc float %28 to bfloat
-  %31 = insertelement <2 x bfloat> poison, bfloat %29, i32 1
-  %"167" = insertelement <2 x bfloat> %31, bfloat %30, i32 0
-  %"126" = bitcast <2 x bfloat> %"167" to i32
+  %29 = fptrunc float %27 to half
+  %30 = fptrunc float %28 to half
+  %31 = insertelement <2 x half> poison, half %29, i32 1
+  %"167" = insertelement <2 x half> %31, half %30, i32 0
+  %"126" = bitcast <2 x half> %"167" to i32
   store i32 %"126", ptr addrspace(5) %"90", align 4
   %32 = load float, ptr addrspace(5) %"79", align 4
   %33 = load float, ptr addrspace(5) %"80", align 4
-  %34 = fptrunc float %32 to bfloat
-  %35 = fptrunc float %33 to bfloat
-  %36 = insertelement <2 x bfloat> poison, bfloat %34, i32 1
-  %"168" = insertelement <2 x bfloat> %36, bfloat %35, i32 0
-  %"129" = bitcast <2 x bfloat> %"168" to i32
+  %34 = fptrunc float %32 to half
+  %35 = fptrunc float %33 to half
+  %36 = insertelement <2 x half> poison, half %34, i32 1
+  %"168" = insertelement <2 x half> %36, half %35, i32 0
+  %"129" = bitcast <2 x half> %"168" to i32
   store i32 %"129", ptr addrspace(5) %"91", align 4
   %37 = load float, ptr addrspace(5) %"81", align 4
   %38 = load float, ptr addrspace(5) %"82", align 4
-  %39 = fptrunc float %37 to bfloat
-  %40 = fptrunc float %38 to bfloat
-  %41 = insertelement <2 x bfloat> poison, bfloat %39, i32 1
-  %"169" = insertelement <2 x bfloat> %41, bfloat %40, i32 0
-  %"132" = bitcast <2 x bfloat> %"169" to i32
+  %39 = fptrunc float %37 to half
+  %40 = fptrunc float %38 to half
+  %41 = insertelement <2 x half> poison, half %39, i32 1
+  %"169" = insertelement <2 x half> %41, half %40, i32 0
+  %"132" = bitcast <2 x half> %"169" to i32
   store i32 %"132", ptr addrspace(5) %"92", align 4
   %42 = load i32, ptr addrspace(5) %"87", align 4
   %43 = load i32, ptr addrspace(5) %"88", align 4
@@ -129,7 +129,7 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref
   %57 = insertelement <4 x float> %56, float %53, i8 1
   %58 = insertelement <4 x float> %57, float %54, i8 2
   %"65" = insertelement <4 x float> %58, float %55, i8 3
-  %"62" = call <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32(<4 x i32> %"63", <2 x i32> %"64", <4 x float> %"65")
+  %"62" = call <4 x float> @__zluda_ptx_impl_mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32(<4 x i32> %"63", <2 x i32> %"64", <4 x float> %"65")
   %"145" = extractelement <4 x float> %"62", i8 0
   %"146" = extractelement <4 x float> %"62", i8 1
   %"147" = extractelement <4 x float> %"62", i8 2
