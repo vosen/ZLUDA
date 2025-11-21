@@ -469,7 +469,7 @@ fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module
         )
             .map(
                 |(version, _, _, (directives, invalid_directives), _)| ast::Module {
-                    version,
+                    ptx_version: version,
                     directives,
                     invalid_directives,
                 },
