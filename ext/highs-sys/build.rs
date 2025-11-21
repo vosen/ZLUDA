@@ -35,6 +35,7 @@ fn generate_bindings<'a>(include_paths: impl Iterator<Item = &'a Path>) {
 fn build() -> bool {
     use cmake::Config;
     let mut dst = Config::new("../HiGHS");
+    try_use_sccache(&mut dst);
     try_use_ninja(&mut dst);
 
     // Avoid using downstream project's profile setting for HiGHS build.
@@ -72,6 +73,24 @@ fn build() -> bool {
     println!("cargo:rerun-if-changed=../HiGHS/highs/interfaces/highs_c_api.h");
 
     true
+}
+
+// https://github.com/mozilla/sccache/blob/main/README.md#usage
+fn try_use_sccache(cmake: &mut cmake::Config) {
+    if let Ok(sccache) = std::env::var("SCCACHE_PATH") {
+        cmake.define("CMAKE_CXX_COMPILER_LAUNCHER", &*sccache);
+        cmake.define("CMAKE_C_COMPILER_LAUNCHER", &*sccache);
+        match std::env::var_os("CARGO_CFG_TARGET_OS") {
+            Some(os) if os == "windows" => {
+                cmake.define(
+                    "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT",
+                    "$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>",
+                );
+                cmake.define("CMAKE_POLICY_CMP0141", "NEW");
+            }
+            _ => {}
+        }
+    }
 }
 
 fn try_use_ninja(cmake: &mut cmake::Config) {
