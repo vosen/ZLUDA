@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
-comgr = { path = "../comgr" }
+llvm_zluda = { path = "../llvm_zluda" }
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
 libloading = "0.8"

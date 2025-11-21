@@ -68,6 +68,7 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     } else {
         maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
     };
+    // TODO: get this information on initialization
     let hip_properties = get_hip_properties()?;
     let gcn_arch = get_gcn_arch(&hip_properties)?;
     let attributes = ExtraCacheAttributes {
@@ -76,18 +77,12 @@ pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CU
     };
     let mut cache_with_key = global_state.cache_path.as_ref().and_then(|p| {
         let cache = zluda_cache::ModuleCache::open(p)?;
-        let key = get_cache_key(global_state, gcn_arch, &text, &attributes)?;
+        let key = get_cache_key(gcn_arch, &text, &attributes)?;
         Some((cache, key))
     });
     let cached_binary = load_cached_binary(&mut cache_with_key);
     let elf_module = cached_binary.ok_or(CUerror::UNKNOWN).or_else(|_| {
-        compile_from_ptx_and_cache(
-            &global_state.comgr,
-            gcn_arch,
-            attributes,
-            &text,
-            &mut cache_with_key,
-        )
+        compile_from_ptx_and_cache(gcn_arch, attributes, &text, &mut cache_with_key)
     })?;
     let mut hip_module = unsafe { mem::zeroed() };
     unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
@@ -113,7 +108,6 @@ fn get_gcn_arch<'a>(props: &'a hipDeviceProp_tR0600) -> Result<&'a str, CUerror>
 }
 
 fn get_cache_key<'a, 'b>(
-    global_state: &'static driver::GlobalState,
     isa: &'a str,
     text: &str,
     attributes: &impl serde::Serialize,
@@ -126,7 +120,7 @@ fn get_cache_key<'a, 'b>(
     let serialized_attributes = serde_json::to_string(attributes).ok()?;
     Some(zluda_cache::ModuleKey {
         hash: blake3::hash(text.as_bytes()).to_hex(),
-        compiler_version: &*global_state.comgr_clang_version,
+        compiler_version: "builtin",
         zluda_version: env!("VERGEN_GIT_SHA"),
         device: isa,
         backend_key: serialized_attributes,
@@ -143,7 +137,6 @@ fn load_cached_binary(
 }
 
 fn compile_from_ptx_and_cache(
-    comgr: &comgr::Comgr,
     gcn_arch: &str,
     attributes: ExtraCacheAttributes,
     text: &str,
@@ -162,12 +155,13 @@ fn compile_from_ptx_and_cache(
         |_| {},
     )
     .map_err(|_| CUerror::UNKNOWN)?;
-    let elf_module = comgr::compile_bitcode(
-        comgr,
+    let ptx_impl = llvm_module.linked_bitcode();
+    let elf_module = llvm_zluda::compile(
+        &llvm_module.context,
         gcn_arch,
-        &*llvm_module.llvm_ir.write_bitcode_to_memory(),
-        llvm_module.linked_bitcode(),
-        &*llvm_module.attributes_ir.write_bitcode_to_memory(),
+        llvm_module.llvm_ir,
+        ptx_impl,
+        llvm_module.attributes_ir,
         None,
     )
     .map_err(|_| CUerror::UNKNOWN)?;
@@ -184,6 +178,16 @@ pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUre
     let hip_module = load_hip_module(library)?;
     *module = Module { base: hip_module }.wrap();
     Ok(())
+}
+
+pub(crate) fn load_data_ex(
+    module: &mut CUmodule,
+    image: &std::ffi::c_void,
+    _num_options: ::std::os::raw::c_uint,
+    _options: Option<&mut CUjit_option_enum>,
+    _option_values: Option<&mut *mut ::core::ffi::c_void>,
+) -> CUresult {
+    load_data(module, image)
 }
 
 pub(crate) fn unload(hmod: CUmodule) -> CUresult {

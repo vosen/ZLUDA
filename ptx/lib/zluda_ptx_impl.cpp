@@ -1,6 +1,45 @@
-// Every time this file changes it must te rebuilt, you need `rocm-llvm-dev` and `llvm-17`
-// `fdenormal-fp-math=dynamic` is required to make functions eligible for inlining
-//  /opt/rocm/llvm/bin/clang -std=c++20 -Xclang -fdenormal-fp-math=dynamic  -Wall -Wextra -Wsign-compare -Wconversion -x hip zluda_ptx_impl.cpp -nogpulib -O3 -mno-wavefrontsize64 -o zluda_ptx_impl.bc -emit-llvm -c --offload-device-only --offload-arch=gfx1100 && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc -o - | sed '/@llvm.used/d' | sed '/wchar_size/d' | sed '/llvm.module.flags/d' | sed 's/define hidden/define linkonce_odr/g' | sed 's/\"target-cpu\"=\"gfx1100\"//g' | sed -E 's/\"target-features\"=\"[^\"]+\"//g' | sed 's/ nneg / /g' | sed 's/ disjoint / /g' | sed '/__hip_cuid/d' | sed 's/external protected/external hidden/g' | sed 's/trunc nuw/trunc/' | sed 's/trunc nsw/trunc/' | llvm-as-17 - -o  zluda_ptx_impl.bc && /opt/rocm/llvm/bin/llvm-dis zluda_ptx_impl.bc
+/*
+Every time this file changes it must be rebuilt.
+You must use LLVM from ZLUDA submodule dir ext/llvm-project:
+
+cd ext/llvm-project && \
+mkdir -p build && \
+cd build && \
+cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_PROJECTS="clang" \
+    -DLLVM_TARGETS_TO_BUILD="AMDGPU;X86" \
+    -GNinja \
+    ../llvm && \
+ninja clang llvm-dis llvm-as
+
+then cd to the directory with this file and run this simple command:
+
+../../ext/llvm-project/build/bin/clang \
+    -std=c++20 \
+    -Xclang -fdenormal-fp-math=dynamic \
+    -Wall -Wextra -Wsign-compare -Wconversion \
+    -x hip \
+    zluda_ptx_impl.cpp \
+    -nogpulib \
+    -O3 \
+    -mno-wavefrontsize64 \
+    -o zluda_ptx_impl.bc \
+    -emit-llvm \
+    -c \
+    --offload-device-only --offload-arch=gfx1030 && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc -o - \
+    | sed '/@llvm.used/d' \
+    | sed '/wchar_size/d' \
+    | sed '/llvm.module.flags/d' \
+    | sed '/__hip_cuid/d' \
+    | sed 's/optnone//g' \
+    | sed 's/define hidden/define linkonce_odr/g' \
+    | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
+    | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
+../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc
+*/
 
 #include <cstddef>
 #include <cstdint>
@@ -14,17 +53,28 @@
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
-typedef float    float8 __attribute__((ext_vector_type(8)));
+typedef float float8 __attribute__((ext_vector_type(8)));
+typedef _Float16 f16;
+typedef _Float16 f16x2 __attribute__((ext_vector_type(2)));
+typedef _Float16 f16x4 __attribute__((ext_vector_type(4)));
+typedef _Float16 f16x8 __attribute__((ext_vector_type(8)));
+typedef __bf16 bf16;
+typedef __bf16 bf16x2 __attribute__((ext_vector_type(2)));
+typedef __bf16 bf16x4 __attribute__((ext_vector_type(4)));
+typedef __bf16 bf16x8 __attribute__((ext_vector_type(8)));
+typedef char s8x4 __attribute__((ext_vector_type(4)));
 
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME) \
+#define DECLARE_ATTR(TYPE, NAME)                                        \
     extern "C" __attribute__((constant)) CONSTANT_SPACE TYPE ATTR(NAME) \
     __device__
 
 extern "C"
 {
+    extern "C" __attribute__((constant)) CONSTANT_SPACE uint32_t __oclc_ISA_version __device__;
+
     uint32_t FUNC(activemask)()
     {
         return __builtin_amdgcn_read_exec_lo();
@@ -189,8 +239,7 @@ extern "C"
     BAR_RED_IMPL(and);
     BAR_RED_IMPL(or);
 
-
-typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
+    typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
 
     // shfl.sync opts consists of two values, the warp end ID and the subsection mask.
     //
@@ -219,12 +268,12 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
             idx = self;                                                                                                                         \
         }                                                                                                                                       \
         int32_t output = __builtin_amdgcn_ds_bpermute(idx << 2, (int32_t)input);                                                                \
-        return {(uint32_t)output, uint32_t(!out_of_bounds)};                                                                                              \
+        return {(uint32_t)output, uint32_t(!out_of_bounds)};                                                                                    \
     }                                                                                                                                           \
                                                                                                                                                 \
     uint32_t FUNC(shfl_sync_##mode##_b32)(uint32_t input, int32_t delta, uint32_t opts, uint32_t membermask)                                    \
     {                                                                                                                                           \
-        return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).x;                                             \
+        return __zluda_ptx_impl_shfl_sync_##mode##_b32_pred(input, delta, opts, membermask).x;                                                  \
     }
 
     // We are using the HIP __shfl intrinsics to implement these, rather than the __shfl_sync
@@ -493,10 +542,10 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     }
 
     float FUNC(div_f32_part2)(float x, float y,
-                                     float fma_4,
-                                     float fma_1,
-                                     float fma_3,
-                                     uint8_t numerator_scaled_flag)
+                              float fma_4,
+                              float fma_1,
+                              float fma_3,
+                              uint8_t numerator_scaled_flag)
     {
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
@@ -596,35 +645,34 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
     REDUX_SYNC_IMPL(min);
     REDUX_SYNC_IMPL(max);
 
-
-    __device__ inline static uint32_t load_single_matrix(void SHARED_SPACE * lds_address, uint32_t warp_offset)
+    __device__ inline static uint32_t load_single_matrix(void SHARED_SPACE *lds_address, uint32_t warp_offset)
     {
         uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
         int32_t row_address = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + (laneid / 4U)) << 2U, (int32_t)lds_address);
         uint32_t matrix_cell_address = (uint32_t)row_address + ((laneid % 4) * 4);
-        return *((uint32_t SHARED_SPACE*)matrix_cell_address);
+        return *((uint32_t SHARED_SPACE *)matrix_cell_address);
     }
 
-    __device__ inline static uint32_t load_single_matrix_trans(void SHARED_SPACE * lds_address, uint32_t warp_offset)
+    __device__ inline static uint32_t load_single_matrix_trans(void SHARED_SPACE *lds_address, uint32_t warp_offset)
     {
         uint32_t laneid = __zluda_ptx_impl_sreg_laneid();
         int32_t row_address_lo = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2)) << 2U, (int32_t)lds_address);
         uint32_t address_lo = (uint32_t)row_address_lo + ((laneid / 4) * 2);
-        uint16_t lo = *((uint16_t SHARED_SPACE*)address_lo);
+        uint16_t lo = *((uint16_t SHARED_SPACE *)address_lo);
         int32_t row_address_hi = __builtin_amdgcn_ds_bpermute((int32_t)(warp_offset + ((laneid % 4U) * 2) + 1) << 2U, (int32_t)lds_address);
         uint32_t address_hi = (uint32_t)row_address_hi + ((laneid / 4) * 2);
-        uint16_t hi = *((uint16_t SHARED_SPACE*)address_hi);
-        return std::bit_cast<uint32_t>(ushort2::Native_vec_ { lo, hi });
+        uint16_t hi = *((uint16_t SHARED_SPACE *)address_hi);
+        return std::bit_cast<uint32_t>(ushort2::Native_vec_{lo, hi});
     }
 
-    uint2::Native_vec_ FUNC(ldmatrix_m8n8_x2_b16)(void SHARED_SPACE * address)
+    uint2::Native_vec_ FUNC(ldmatrix_m8n8_x2_b16)(void SHARED_SPACE *address)
     {
         uint32_t x0 = load_single_matrix(address, 0);
         uint32_t x1 = load_single_matrix(address, 8);
         return uint2::Native_vec_{x0, x1};
     }
 
-    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_b16)(void SHARED_SPACE * address)
+    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_b16)(void SHARED_SPACE *address)
     {
         uint32_t x0 = load_single_matrix(address, 0);
         uint32_t x1 = load_single_matrix(address, 8);
@@ -633,165 +681,13 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         return uint4::Native_vec_{x0, x1, x2, x3};
     }
 
-    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_trans_b16)(void SHARED_SPACE * address)
+    uint4::Native_vec_ FUNC(ldmatrix_m8n8_x4_trans_b16)(void SHARED_SPACE *address)
     {
         uint32_t x0 = load_single_matrix_trans(address, 0);
         uint32_t x1 = load_single_matrix_trans(address, 8);
         uint32_t x2 = load_single_matrix_trans(address, 16);
         uint32_t x3 = load_single_matrix_trans(address, 24);
         return uint4::Native_vec_{x0, x1, x2, x3};
-    }
-
-    static inline __device__ _Float16 top16_as_fp16(uint32_t value) {
-        uint16_t half_bits = static_cast<uint16_t>((value >> 16) & 0xFFFF);
-        return *reinterpret_cast<_Float16*>(&half_bits);
-    }
-    static inline __device__ _Float16 bottom16_as_fp16(uint32_t value) {
-        uint16_t half_bits = static_cast<uint16_t>(value & 0xFFFF);
-        return *reinterpret_cast<_Float16*>(&half_bits);
-    }
-
-    static inline __device__ float bpermute_lane(int lane, float x) {
-        return __hip_ds_bpermutef(4 * lane, x);
-    }
-    static inline __device__ uint32_t bpermute_lane(int lane, uint32_t x) {
-        return __hip_ds_bpermute(4 * lane, x);
-    }
-
-    static __device__ half16 shuffle_a(uint4::Native_vec_ a_reg) {
-        const unsigned lIdx = threadIdx.x;
-        const int lane = lIdx % 16; // Lanes 0-15 (the other 16 lanes are a duplicate in w32 mode)
-        half16 aFrag;
-
-        for (int vGPR = 0; vGPR < 8; ++vGPR) {
-            int cudaChunk = (vGPR / 4) * 2;  // will be 0 or 2
-            int cudaTID   = (vGPR % 4 + lane * 4) % 32;
-            uint32_t reg0, reg1;
-            // Select the two consecutive elements from a_reg:
-            if (cudaChunk == 0) {
-                reg0 = a_reg.x;
-                reg1 = a_reg.y;
-            } else { // cudaChunk==2
-                reg0 = a_reg.z;
-                reg1 = a_reg.w;
-            }
-            uint32_t a_tmp0 = bpermute_lane(cudaTID, reg0);
-            uint32_t a_tmp1 = bpermute_lane(cudaTID, reg1);
-            uint32_t a_Frag_reg = (lane < 8) ? a_tmp0 : a_tmp1;
-            aFrag[2 * vGPR]     = bottom16_as_fp16(a_Frag_reg);
-            aFrag[2 * vGPR + 1] = top16_as_fp16(a_Frag_reg);
-        }
-        return aFrag;
-    }
-
-    static __device__ half16 shuffle_b(uint2::Native_vec_ b_reg) {
-        const unsigned lIdx = threadIdx.x;
-        const int lane = lIdx % 16;
-        half16 bFrag;
-
-        for (int vGPR = 0; vGPR < 8; ++vGPR) {
-            int cudaChunk = vGPR / 4;  // will be 0 or 1
-            int cudaTID   = vGPR % 4 + (lane * 4) % 64;
-            uint32_t reg = (cudaChunk == 0) ? b_reg.x : b_reg.y;
-            uint32_t b_Frag_reg = bpermute_lane(cudaTID, reg);
-            if (lane < 8) {
-                bFrag[2 * vGPR]     = bottom16_as_fp16(b_Frag_reg);
-                bFrag[2 * vGPR + 1] = top16_as_fp16(b_Frag_reg);
-            } else {
-                bFrag[2 * vGPR]     = 0.0f;
-                bFrag[2 * vGPR + 1] = 0.0f;
-            }
-        }
-        return bFrag;
-    }
-
-    static __device__ float8 shuffle_c(float4::Native_vec_ c_reg) {
-        const int lIdx = (int)threadIdx.x;
-        float8 cFrag;
-
-        // Loop over the eight vector GPRs.
-        for (int vGPR = 0; vGPR < 8; ++vGPR) {
-            int cudaChunk = (vGPR / 4) * 2;  // will be 0 or 2: selects which pair of components to use.
-            int lIdx8     = (lIdx < 8) ? lIdx : lIdx - 8;
-            int cudaTID   = (vGPR % 4) * 8 + lIdx8 / 2;
-            float ctmp0, ctmp1;
-
-            if (cudaChunk == 0) {
-                ctmp0 = bpermute_lane(cudaTID, c_reg.x);
-                ctmp1 = bpermute_lane(cudaTID, c_reg.y);
-            } else { // cudaChunk == 2
-                ctmp0 = bpermute_lane(cudaTID, c_reg.z);
-                ctmp1 = bpermute_lane(cudaTID, c_reg.w);
-            }
-
-            // Select one of the two values based on the thread index's LSB.
-            cFrag[vGPR] = (lIdx & 1) ? ctmp1 : ctmp0;
-
-            // Zero out for specific thread indices.
-            if ((lIdx > 7 && lIdx < 16) || (lIdx > 23 && lIdx < 32))
-                cFrag[vGPR] = 0.0f;
-        }
-        return cFrag;
-    }
-
-    static inline __device__ float4::Native_vec_ shuffle_d(float8 dFrag) {
-        const int lIdx = (int)threadIdx.x;
-        float4::Native_vec_ d_out;
-
-        for (int cChunk = 0; cChunk < 4; ++cChunk) {
-            int r_vGPR = (cChunk / 2) * 4;
-            int add8   = (lIdx & 0x4) ? 8 : 0;
-            int r_lIdx = (cChunk % 2) + (lIdx % 8) * 2 + add8;
-            float d_tmp0 = bpermute_lane(r_lIdx, dFrag[r_vGPR]);
-            float d_tmp1 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 1]);
-            float d_tmp2 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 2]);
-            float d_tmp3 = bpermute_lane(r_lIdx, dFrag[r_vGPR + 3]);
-            float val;
-            if (lIdx < 8) {
-                val = d_tmp0;
-            } else if (lIdx < 16) {
-                val = d_tmp1;
-            } else if (lIdx < 24) {
-                val = d_tmp2;
-            } else {
-                val = d_tmp3;
-            }
-            if (cChunk == 0)      d_out.x = val;
-            else if (cChunk == 1) d_out.y = val;
-            else if (cChunk == 2) d_out.z = val;
-            else                  d_out.w = val;
-        }
-        return d_out;
-    }
-
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
-        // Reshuffle from Nvidia-like register layout to AMD layout:
-        half16  aFrag = shuffle_a(a_reg);
-        half16  bFrag = shuffle_b(b_reg);
-        float8  cFrag = shuffle_c(c_reg);
-
-        // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
-        float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_f16_w32(aFrag, bFrag, cFrag);
-
-        // Unshuffle back into Nvidia expected float4 result
-        float4::Native_vec_ d_out = shuffle_d(dFrag);
-
-        return d_out;
-    }
-
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg) {
-        // Reshuffle from Nvidia-like register layout to AMD layout:
-        half16  aFrag = shuffle_a(a_reg);
-        half16  bFrag = shuffle_b(b_reg);
-        float8  cFrag = shuffle_c(c_reg);
-
-        // Call the (built‐in) 16x16 MMA instruction. It returns a float8.
-        float8 dFrag = __builtin_amdgcn_wmma_f32_16x16x16_bf16_w32(aFrag, bFrag, cFrag);
-
-        // Unshuffle back into Nvidia expected float4 result
-        float4::Native_vec_ d_out = shuffle_d(dFrag);
-
-        return d_out;
     }
 
     struct byte4
@@ -862,5 +758,184 @@ typedef uint32_t ShflSyncResult __attribute__((ext_vector_type(2)));
         // to write SSA passes
         // Use https://github.com/ROCm/llvm-project/blob/99a81d16b9d811cadd420190bed16981a0a57bc6/llvm/lib/Transforms/Utils/AMDGPUEmitPrintf.cpp#L426
         return -1;
+    }
+}
+
+template <typename Acc, typename T>
+__device__ static Acc dot_product(Acc initial_value, T row[8], T column[8]);
+
+template <>
+__device__ int32_t dot_product<int32_t, s8x4>(int32_t initial_value, s8x4 row[8], s8x4 column[8])
+{
+    int32_t result = initial_value;
+    for (int i = 0; i < 8; i++)
+    {
+        // ockl bug
+        if (__oclc_ISA_version == 10103)
+        {
+            result += int32_t(row[i].x) * int32_t(column[i].x);
+            result += int32_t(row[i].y) * int32_t(column[i].y);
+            result += int32_t(row[i].z) * int32_t(column[i].z);
+            result += int32_t(row[i].w) * int32_t(column[i].w);
+        }
+        else
+        {
+            result = __ockl_sdot4(row[i], column[i], result, false);
+        }
+    }
+    return result;
+}
+
+template <>
+__device__ float dot_product<float, bf16x2>(float initial_value, bf16x2 row[8], bf16x2 column[8])
+{
+    float result = initial_value;
+    for (int i = 0; i < 8; i++)
+    {
+        result = std::fma(float(row[i].x), float(column[i].x), result);
+        result = std::fma(float(row[i].y), float(column[i].y), result);
+    }
+    return result;
+}
+
+template <>
+__device__ float dot_product<float, f16x2>(float initial_value, f16x2 row[8], f16x2 column[8])
+{
+    float result = initial_value;
+    for (int i = 0; i < 8; i++)
+    {
+        // ockl bug
+        if (__oclc_ISA_version == 10103)
+        {
+            result = std::fma(float(row[i].x), float(column[i].x), result);
+            result = std::fma(float(row[i].y), float(column[i].y), result);
+        }
+        else
+        {
+            result = __ockl_fdot2(row[i], column[i], result, false);
+        }
+    }
+    return result;
+}
+
+// Template function because DPP mask must be a compile time constant
+template <typename T, const int DPP_MASK>
+__device__ static void mma_load_rowcol(T upper_row[8], T lower_row[8], T left_column[8], T right_column[8],
+                                       int index, int left_column_start,
+                                       uint8_t quad_index,
+                                       uint32_t a0a1, uint32_t a2a3,
+                                       uint32_t b0b1)
+{
+    uint8_t laneid = uint8_t(__lane_id());
+    uint8_t quad_source = (laneid + quad_index) % 4;
+    upper_row[index] = std::bit_cast<T>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a0a1), DPP_MASK, 0xf, 0xf, 1));
+    lower_row[index] = std::bit_cast<T>(__builtin_amdgcn_mov_dpp(std::bit_cast<int32_t>(a2a3), DPP_MASK, 0xf, 0xf, 1));
+    left_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    right_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+}
+
+template <typename T>
+__device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_column[16], T right_column[16],
+                                    int index, int left_column_start,
+                                    uint32_t a0a1, uint32_t a2a3,
+                                    uint32_t b0b1)
+{
+    uint8_t laneid = uint8_t(__lane_id());
+    uint8_t quad_source = laneid % 4;
+    upper_row[index] = std::bit_cast<T>(a0a1);
+    lower_row[index] = std::bit_cast<T>(a2a3);
+    left_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+    right_column[index] = std::bit_cast<T>(__builtin_amdgcn_ds_bpermute((left_column_start + 4 + quad_source) << 2, std::bit_cast<int32_t>(b0b1)));
+}
+
+template <typename Acc, typename T>
+__device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
+{
+    uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
+    uint8_t quad_index = laneid % 4;
+    const Acc c0 = c_reg.x;
+    const Acc c1 = c_reg.y;
+    const Acc c2 = c_reg.z;
+    const Acc c3 = c_reg.w;
+    uint8_t left_column_start = quad_index * 8;
+    T upper_row[8];
+    T lower_row[8];
+    T left_column[8];
+    T right_column[8];
+    mma_load_col<T>(upper_row, lower_row, left_column, right_column,
+                    0, left_column_start,
+                    a_reg[0], a_reg[1],
+                    b_reg[0]);
+    mma_load_rowcol<T, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                      1, left_column_start,
+                                      1,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_rowcol<T, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                      2, left_column_start,
+                                      2,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_rowcol<T, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                      3, left_column_start,
+                                      3,
+                                      a_reg[0], a_reg[1],
+                                      b_reg[0]);
+    mma_load_col<T>(upper_row, lower_row, left_column, right_column,
+                    4, left_column_start,
+                    a_reg[2], a_reg[3],
+                    b_reg[1]);
+    mma_load_rowcol<T, 0b00'11'10'01>(upper_row, lower_row, left_column, right_column,
+                                      5, left_column_start,
+                                      1,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    mma_load_rowcol<T, 0b01'00'11'10>(upper_row, lower_row, left_column, right_column,
+                                      6, left_column_start,
+                                      2,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    mma_load_rowcol<T, 0b10'01'00'11>(upper_row, lower_row, left_column, right_column,
+                                      7, left_column_start,
+                                      3,
+                                      a_reg[2], a_reg[3],
+                                      b_reg[1]);
+    Acc d0 = dot_product<Acc, T>(c0, upper_row, left_column);
+    Acc d1 = dot_product<Acc, T>(c1, upper_row, right_column);
+    Acc d2 = dot_product<Acc, T>(c2, lower_row, left_column);
+    Acc d3 = dot_product<Acc, T>(c3, lower_row, right_column);
+    return {d0, d1, d2, d3};
+}
+
+extern "C"
+{
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
+        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+    }
+
+    // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
+    // passes from optimizing away the intrinsic call
+    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
+        __device__ float4::Native_vec_  __llvm_zluda_mma_m16n8k16(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k16");
+        return __llvm_zluda_mma_m16n8k16(a_reg, b_reg, c_reg);
+    }
+
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32) (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    {
+        if (__oclc_ISA_version >= 11000)
+        {
+            return __llvm_zluda_mma_m16n8k16_optnone(a_reg, b_reg, c_reg);
+        }
+        else 
+        {
+            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        }
+    }
+
+    uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
+    {
+        return std::bit_cast<uint4::Native_vec_>(fallback_mma_sync_aligned<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
     }
 }

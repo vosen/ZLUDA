@@ -56,7 +56,6 @@ fn transitive_mixed() {
         super::compute_single_mode_insertions(&graph, |node| node.denormal_f32, true).unwrap();
     assert_eq!(partial_result.bb_must_insert_mode.len(), 0);
     let kernel_insert_mode = unwrap_slow_mode(&partial_result.bb_maybe_insert_mode);
-    dbg!(kernel_insert_mode.keys());
     assert_eq!(kernel_insert_mode.len(), 1);
     assert_eq!(
         kernel_insert_mode[&false_id],

@@ -1,0 +1,93 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.func (.reg .u32 result) pack_u8 (.reg.v4.u16 input)
+{
+    .reg.u32        input_<4>;
+    cvt.u32.u16     input_0, input.x;
+    cvt.u32.u16     input_1, input.y;
+    cvt.u32.u16     input_2, input.z;
+    cvt.u32.u16     input_3, input.w;
+    shl.b32         input_1, input_1, 8;
+    shl.b32         input_2, input_2, 16;
+    shl.b32         input_3, input_3, 24;
+    mov.b32         result, input_0;
+    or.b32          result, result, input_1;
+    or.b32          result, result, input_2;
+    or.b32          result, result, input_3;
+    ret;
+}
+
+.visible .entry mma_m16n8k32_s32_s8_s8_s32(
+    .param .u64 output
+)
+{
+    .reg .u64       out_addr;
+    .reg .u64       out_index;
+    .reg .u32       thread_id;
+
+    .reg .u16       in<16>;
+    .reg .u32       in32_<4>;
+
+    .reg .b32       a0a1a2a3, a4a5a6a7, a8a9a10a11, a12a13a14a15;
+    .reg .b32       b0b1b2b3, b4b5b6b7;
+    .reg .b32       d<4>;
+
+    ld.param.u64    out_addr, [output];
+    mov.u32         thread_id, %tid.x;
+
+    cvt.u16.u32     in0, thread_id;
+    mul.lo.u16      in0, in0, 16;
+    add.u16         in1, in0, 1;
+    add.u16         in2, in0, 2;
+    add.u16         in3, in0, 3;
+    add.u16         in4, in0, 4;
+    add.u16         in5, in0, 5;
+    add.u16         in6, in0, 6;
+    add.u16         in7, in0, 7;
+    add.u16         in8, in0, 8;
+    add.u16         in9, in0, 9;
+    add.u16         in10, in0, 10;
+    add.u16         in11, in0, 11;
+    add.u16         in12, in0, 12;
+    add.u16         in13, in0, 13;
+    add.u16         in14, in0, 14;
+    add.u16         in15, in0, 15;
+
+    .reg.v4.u16 input;
+
+    mov.v4.u16 input,  {in0, in1, in2, in3};
+    call (a0a1a2a3), pack_u8, (input);
+    mov.v4.u16 input,  {in4, in5, in6, in7};
+    call (a4a5a6a7), pack_u8, (input);
+    mov.v4.u16 input,  {in8, in9, in10, in11};
+    call (a8a9a10a11), pack_u8, (input);
+    mov.v4.u16 input,  {in12, in13, in14, in15};
+    call (a12a13a14a15), pack_u8, (input);
+
+    mov.v4.u16 input,  {in0, in1, in2, in3};
+    call (b0b1b2b3), pack_u8, (input);
+    mov.v4.u16 input,  {in0, in1, in2, in3};
+    call (b4b5b6b7), pack_u8, (input);
+
+    cvt.u32.u16         in32_0, in0;
+    cvt.u32.u16         in32_1, in1;
+    cvt.u32.u16         in32_2, in2;
+    cvt.u32.u16         in32_3, in3;
+
+    mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32
+        {d0, d1, d2, d3},
+        {a0a1a2a3, a4a5a6a7, a8a9a10a11, a12a13a14a15},
+        {b0b1b2b3, b4b5b6b7},
+        {in32_0, in32_1, in32_2, in32_3};
+
+    cvt.u64.u32     out_index, thread_id;
+    mul.lo.u64      out_index, out_index, 16;
+    add.u64         out_addr, out_addr, out_index;
+    st.f32          [out_addr], d0;
+    st.f32          [out_addr+4], d1;
+    st.f32          [out_addr+8], d2;
+    st.f32          [out_addr+12], d3;
+    ret;
+}

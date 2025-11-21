@@ -3,7 +3,7 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
+    CacheLevel, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
     PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
@@ -240,6 +240,27 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
                 },
+            }
+        },
+        CvtPack {
+            data: ScalarType,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                },
+                src1: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src2: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::S32) },
+                },
+                src3: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
             }
         },
         Cvta {
@@ -745,6 +766,18 @@ ptx_parser_macros::generate_instruction_type!(
                 src1: T,
                 src2: T,
             }
+        },
+        Prefetch {
+            type: !,
+            data: PrefetchData,
+            arguments<T>: {
+                src: {
+                    repr: T,
+                    type: Type::from(ScalarType::B8),
+                    space: { data.space },
+                    relaxed_type_check: true
+                }
+            }
         }
     }
 );
@@ -1167,6 +1200,10 @@ impl ScalarType {
             ScalarType::B128 => 16,
             ScalarType::Pred => 1,
         }
+    }
+
+    pub fn bit_size(self) -> u8 {
+        self.layout().size() as u8 * 8u8
     }
 
     pub fn layout(self) -> Layout {
@@ -1716,6 +1753,7 @@ pub struct SetData {
     pub base: SetpData,
 }
 
+#[derive(Copy, Clone)]
 pub struct SetpData {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
@@ -1880,6 +1918,23 @@ pub struct CallArgs<T: Operand> {
     pub return_arguments: Vec<T::Ident>,
     pub func: T::Ident,
     pub input_arguments: Vec<T>,
+    // This is a sad hack for `instruction_mode_to_global_mode` pass,
+    // The problem is that `instruction_mode_to_global_mode` pass right now
+    // treats function calls rather suboptimally:
+    // If basic blocks A and B call into function F. It models it by first
+    // splitting A into sequence [A, F, A'] and B into [B, F, B'], where A'
+    // and B' are the continuations after the function call.
+    // This would imply that B' is reachable from A (through A -> F -> B'),
+    // which is not technically true, but true for the purpose of the analysis.
+    // The problem arises when we replace sregs with function calls, then we
+    // suddenly have a lot more function calls, which leads to cfg exploding
+    //  and quality of `instruction_mode_to_global_mode` pass degrading
+    // significantly.
+    // One day `instruction_mode_to_global_mode` pass will be rewritten to
+    // duplicate and deduplicate function calls properly, but until then,
+    // we use this flag to mark function calls that are not actually function
+    // calls
+    pub is_external: bool,
 }
 
 impl<T: Operand> CallArgs<T> {
@@ -1973,6 +2028,7 @@ impl<T: Operand> CallArgs<T> {
             return_arguments,
             func,
             input_arguments,
+            is_external: self.is_external,
         })
     }
 }
@@ -2003,6 +2059,7 @@ pub enum CvtMode {
         is_integer_rounding: bool,
         flush_to_zero: Option<bool>,
         saturate: bool,
+        relu: bool,
     },
     FPRound {
         integer_rounding: Option<RoundingMode>,
@@ -2035,6 +2092,7 @@ impl CvtDetails {
         rnd: Option<RawRoundingMode>,
         ftz: bool,
         saturate: bool,
+        relu: bool,
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
@@ -2079,6 +2137,7 @@ impl CvtDetails {
                         is_integer_rounding,
                         flush_to_zero,
                         saturate,
+                        relu,
                     }
                 }
                 Ordering::Equal => CvtMode::FPRound {
@@ -2418,15 +2477,17 @@ pub struct ReduxSyncData {
 pub struct MmaDetails {
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
-    pub dtype_scalar: ScalarType,
-    pub atype_scalar: ScalarType,
-    pub btype_scalar: ScalarType,
-    pub ctype_scalar: ScalarType,
+    pub cd_type_scalar: ScalarType,
+    pub ab_type_scalar: ScalarType,
 }
 
 impl MmaDetails {
     pub fn dtype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
     pub fn atype(&self) -> Type {
         Type::Vector(4, ScalarType::U32)
@@ -2435,6 +2496,15 @@ impl MmaDetails {
         Type::Vector(2, ScalarType::U32)
     }
     pub fn ctype(&self) -> Type {
-        Type::Vector(4, ScalarType::F32)
+        if self.cd_type_scalar.kind() == ScalarKind::Float {
+            Type::Vector(4, ScalarType::F32)
+        } else {
+            Type::Vector(4, ScalarType::U32)
+        }
     }
+}
+
+pub struct PrefetchData {
+    pub space: StateSpace,
+    pub level: CacheLevel,
 }

@@ -1,0 +1,27 @@
+.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry cvt_relu_f16x2_f32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	            in_addr;
+    .reg .u64 	            out_addr;
+    .reg .b32 	            temp<4>;
+    .reg .f16x2             result<2>;
+
+	ld.param.u64 	        in_addr, [input];
+    ld.param.u64 	        out_addr, [output];
+
+    ld.f32                  temp0, [in_addr];
+    ld.f32                  temp1, [in_addr+4];
+    ld.f32                  temp2, [in_addr+8];
+    ld.f32                  temp3, [in_addr+12];
+    cvt.rn.relu.f16x2.f32   result0, temp0, temp1;
+    cvt.rn.relu.f16x2.f32   result1, temp2, temp3;
+    st.global.b32           [out_addr], result0;
+    st.global.b32           [out_addr+4], result1;
+    ret;
+}
