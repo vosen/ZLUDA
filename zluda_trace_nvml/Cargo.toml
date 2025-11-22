@@ -24,3 +24,4 @@ linux_symlinks = [
     "trace/libnvidia-ml.so",
     "trace/libnvidia-ml.so.1",
 ]
+windows_paths = ["trace/nvml.dll"]

@@ -24,8 +24,8 @@ pub(crate) unsafe fn device_get_count_v2(_device_count: &mut ::core::ffi::c_uint
 }
 
 pub(crate) unsafe fn device_get_handle_by_pci_bus_id_v2(
-    pci_bus_id: &std::ffi::CStr,
-    device: &mut cuda_types::nvml::nvmlDevice_t,
+    _pci_bus_id: &std::ffi::CStr,
+    _device: &mut cuda_types::nvml::nvmlDevice_t,
 ) -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
