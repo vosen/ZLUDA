@@ -5,7 +5,7 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [dependencies]
-bpaf = { version = "0.9.15", features = ["derive"] }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 cargo_metadata = "0.19.1"
 serde = "1.0.219"
 serde_json = "1.0.142"
