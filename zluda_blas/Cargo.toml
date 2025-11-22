@@ -14,6 +14,9 @@ zluda_common = { path = "../zluda_common" }
 rocblas-sys = { path = "../ext/rocblas-sys" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 
+[target.'cfg(windows)'.dependencies]
+zluda_windows = { path = "../zluda_windows" }
+
 [package.metadata.zluda]
 linux_symlinks = ["libcublas.so.12", "libcublas.so.13"]
 windows_paths = ["cublas64_12.dll", "cublas64_13.dll"]

@@ -1,7 +1,23 @@
-use std::ops::ControlFlow;
+use std::{
+    ffi::{c_void, CStr, CString, OsString},
+    iter,
+    ops::ControlFlow,
+    os::windows::ffi::{OsStrExt, OsStringExt},
+    path::PathBuf,
+};
 use trie_hard::TrieHard;
 use uuid::uuid;
 use widestring::{u16str, U16Str};
+use windows::{
+    core::PCWSTR,
+    Win32::{
+        Foundation::HMODULE,
+        System::LibraryLoader::{
+            GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryW,
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        },
+    },
+};
 
 pub static LIBRARIES: [LibraryInfo; 12] = [
     NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS_LT13, BLAS_LT12, SPARSE12, SPARSE11, FFT12,
@@ -248,6 +264,115 @@ impl DllLookup {
             },
         )
     }
+}
+
+pub type DWORD = u32;
+pub type LPCSTR = *const i8;
+pub type FARPROC = Option<unsafe extern "system" fn() -> isize>;
+pub type PCImgDelayDescr = *const c_void;
+pub type DelayLoadProc = *const c_void;
+
+#[repr(C)]
+pub struct DelayLoadInfo {
+    pub cb: u32,
+    pub pidd: PCImgDelayDescr,
+    pub ppfn: *mut FARPROC,
+    pub sz_dll: LPCSTR,
+    pub dlp: DelayLoadProc,
+    pub hmod_cur: *mut c_void,
+    pub pfn_cur: FARPROC,
+    pub dw_last_error: u32,
+}
+
+#[repr(C)]
+enum DliNotify {
+    _NoteStartProcessing,
+    _NotePreLoadLibrary,
+    _NotePreGetProcAddress,
+    FailLoadLib,
+    _FailGetProc,
+    _NoteEndProcessing,
+}
+
+pub type PfnDliHook =
+    unsafe extern "system" fn(dli_notify: u32, pdli: *const DelayLoadInfo) -> *mut std::ffi::c_void;
+
+pub unsafe fn delay_load_failure_hook(
+    redirect_name: &'static str,
+    dli_notify: u32,
+    pdli: *const DelayLoadInfo,
+) -> Option<HMODULE> {
+    if dli_notify == DliNotify::FailLoadLib as u32 {
+        return None;
+    }
+    let pdli = pdli.as_ref()?;
+    let name = CStr::from_ptr(pdli.sz_dll);
+    if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
+        return None;
+    }
+    try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+}
+
+unsafe fn try_load_from_self_dir(redirect_name: &'static str) -> Option<HMODULE> {
+    let mut hm = HMODULE::default();
+    GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        PCWSTR(delay_load_failure_hook as usize as *const _),
+        &mut hm,
+    )
+    .ok()?;
+    let path = get_module_path_utf16(hm);
+    let mut path_buf = PathBuf::from(path);
+    path_buf.pop();
+    path_buf.push(redirect_name);
+    let path_utf16 = path_buf
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect::<Vec<_>>();
+    LoadLibraryW(PCWSTR(path_utf16.as_ptr())).ok()
+}
+
+unsafe fn try_load_from_hip_path(redirect_name: &'static str) -> Option<HMODULE> {
+    let hip_path = std::env::var_os("HIP_PATH")?;
+    let hip_dll_path = PathBuf::from(hip_path)
+        .join("bin")
+        .join(redirect_name)
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect::<Vec<_>>();
+    LoadLibraryW(PCWSTR(hip_dll_path.as_ptr())).ok()
+}
+
+pub fn get_module_path(instance_handle: *mut c_void) -> CString {
+    let mut buffer = vec![0u8; windows::Win32::Foundation::MAX_PATH as usize];
+    let mut copied;
+    loop {
+        copied = unsafe { GetModuleFileNameA(Some(HMODULE(instance_handle)), &mut buffer) };
+        if (copied as usize) < buffer.len() {
+            break;
+        } else {
+            buffer.resize(buffer.len() * 2, 0);
+        }
+    }
+    buffer.truncate(copied as usize + 1);
+    unsafe { CString::from_vec_with_nul_unchecked(buffer) }
+}
+
+fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
+    let mut buffer = vec![0u16; windows::Win32::Foundation::MAX_PATH as usize];
+    let mut copied;
+    loop {
+        copied = unsafe { GetModuleFileNameW(Some(instance_handle), &mut buffer) };
+        if (copied as usize) < buffer.len() {
+            break;
+        } else {
+            buffer.resize(buffer.len() * 2, 0);
+        }
+    }
+    buffer.truncate(copied as usize);
+    OsString::from_wide(&buffer)
 }
 
 #[cfg(test)]

@@ -84,7 +84,7 @@ pub(crate) mod os {
         path: Cow<'a, str>,
     ) -> Result<libloading::Library, libloading::Error> {
         fn terminate_with_nul(mut path: Vec<u16>) -> Vec<u16> {
-            if path.last().copied() == Some(0) {
+            if path.last().copied() != Some(0) {
                 path.push(0);
             }
             path
@@ -93,7 +93,7 @@ pub(crate) mod os {
             Ok(lib) => lib,
             Err(_) => return libloading::Library::new(&*path),
         };
-        match redirect_dll.get::<unsafe extern "C" fn(*const u16) -> isize>(
+        match redirect_dll.get::<unsafe extern "system" fn(*const u16) -> isize>(
             c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
         ) {
             Ok(load_library) => {

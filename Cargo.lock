@@ -3914,6 +3914,7 @@ dependencies = [
  "hip_runtime-sys",
  "rocblas-sys",
  "zluda_common",
+ "zluda_windows",
 ]
 
 [[package]]
@@ -4176,6 +4177,7 @@ dependencies = [
  "trie-hard",
  "uuid",
  "widestring",
+ "windows",
 ]
 
 [[package]]

@@ -12,7 +12,6 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
-use windows::Win32::System::LibraryLoader::GetModuleFileNameA;
 use windows::Win32::System::Threading::{
     GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, OpenThread, ResumeThread,
     SuspendThread, TerminateProcess, THREAD_SUSPEND_RESUME,
@@ -720,7 +719,7 @@ unsafe extern "system" fn DllMain(
             Some(g) => {
                 DETOUR_DROP = Some(g);
                 DETOUR_PATHS = Some(DetourPaths::new());
-                SELF_PATH = Some(get_self_path(instance_handle));
+                SELF_PATH = Some(zluda_windows::get_module_path(instance_handle));
                 TRUE
             }
             None => FALSE,
@@ -734,26 +733,6 @@ unsafe extern "system" fn DllMain(
     } else {
         TRUE
     }
-}
-
-fn get_self_path(instance_handle: *mut c_void) -> CString {
-    let mut buffer = vec![0u8; windows::Win32::Foundation::MAX_PATH as usize];
-    let mut copied;
-    loop {
-        copied = unsafe {
-            GetModuleFileNameA(
-                Some(windows::Win32::Foundation::HMODULE(instance_handle)),
-                &mut buffer,
-            )
-        };
-        if (copied as usize) < buffer.len() {
-            break;
-        } else {
-            buffer.resize(buffer.len() * 2, 0);
-        }
-    }
-    buffer.truncate(copied as usize + 1);
-    unsafe { CString::from_vec_with_nul_unchecked(buffer) }
 }
 
 fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u8]> {

@@ -12,3 +12,7 @@ uuid = "1.18.1"
 trie-hard = "0.1.0"
 widestring = "1.2.1"
 alloca = "0.4.0"
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+] }
