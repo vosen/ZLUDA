@@ -9,6 +9,7 @@ name = "zluda_precompile"
 path = "src/main.rs"
 
 [dependencies]
+cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 rayon = "1.11.0"

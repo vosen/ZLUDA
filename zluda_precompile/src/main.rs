@@ -1,20 +1,16 @@
 use bpaf::{Bpaf, Parser};
-use cuda_types::cuda::{CUcontext, CUmodule, CUresult};
+use cuda_types::{
+    cuda::{CUcontext, CUmodule},
+    dark_api::FatbinHeader,
+};
 use goblin::{
     container::{Ctx, Endian},
     elf::SectionHeader,
 };
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressDrawTarget};
 use rayon::Scope;
-use std::{
-    error::Error,
-    ffi::{c_uint, CStr},
-    fs::File,
-    io::Read,
-    mem,
-    path::{Path, PathBuf},
-    ptr,
-};
+use std::{error::Error, ffi::CStr, fs::File, io::Read, mem, path::PathBuf, ptr, sync::Arc};
+use walkdir::DirEntry;
 
 #[derive(Clone, Debug, Bpaf)]
 struct Arguments {
@@ -25,193 +21,224 @@ struct Arguments {
     /// Follow symbolic links when traversing directories
     follow_links: bool,
 
-    /// Directory or file to precompile CUDA code from
+    /// Directory or file to scan for CUDA binaries and precompile
     #[bpaf(positional)]
     input: PathBuf,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = arguments().run();
-    let mut current_exe = std::env::current_exe()?;
-    current_exe.pop();
-    current_exe.push("libcuda.so");
-    let library = unsafe { libloading::Library::new(current_exe) }?;
-    let cu_init =
-        unsafe { library.get::<unsafe extern "system" fn(c_uint) -> CUresult>(b"cuInit\0") }?;
-    let cu_ctx_create = unsafe {
-        library.get::<unsafe extern "system" fn(
-            pctx: *mut cuda_types::cuda::CUcontext,
-            flags: ::core::ffi::c_uint,
-            dev: cuda_types::cuda::CUdevice,
-        ) -> CUresult>(b"cuCtxCreate_v2\0")
-    }?;
-    let cu_ctx_set_current = unsafe {
-        library.get::<unsafe extern "system" fn(ctx: cuda_types::cuda::CUcontext) -> CUresult>(
-            b"cuCtxSetCurrent\0",
-        )
-    }?;
-    let cu_module_load_data = unsafe {
-        library.get::<unsafe extern "system" fn(
-            module: *mut cuda_types::cuda::CUmodule,
-            image: *const ::core::ffi::c_void,
-        ) -> CUresult>(b"cuModuleLoadData\0")
-    }?;
-    unsafe { cu_init(0) }.map_err(|_| "Failed to initialize CUDA")?;
-    let mut ctx = CUcontext(ptr::null_mut());
-    unsafe { cu_ctx_create(&mut ctx, 0, config.device as i32) }
-        .map_err(|_| "Failed to create CUDA context")?;
-    let pool = rayon::ThreadPoolBuilder::new().build()?;
+    let (_lib_handle, cuda) = unsafe { CudaContext::new()? };
+    unsafe { (cuda.cuInit)(0) }.map_err(|_| "Failed to initialize ZLUDA")?;
+    let mut cu_ctx = CUcontext(ptr::null_mut());
+    unsafe { (cuda.cuCtxCreate_v2)(&mut cu_ctx, 0, config.device as i32) }
+        .map_err(|_| "Failed to create ZLUDA context")?;
     let progress = indicatif::MultiProgress::new();
-    let file_scan = progress.insert(0, ProgressBar::no_length());
-    file_scan.set_style(
+    let all_files_progress = progress.insert(0, ProgressBar::no_length());
+    all_files_progress.set_style(
         indicatif::ProgressStyle::with_template(
-            "1/2 Building file list... {spinner} {pos} file(s) scanned",
+            "[1/2] Building file list... {spinner} {pos} file(s) scanned",
         )?
-        .tick_chars("/|\\- "),
+        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "),
     );
     let extract_ptx = progress.insert(1, ProgressBar::new(0));
     extract_ptx.set_style(indicatif::ProgressStyle::with_template(
-        "2/2 {wide_bar} {pos}/{len} file(s) compiled",
+        "[2/2] {wide_bar} {pos}/{len} file(s) compiled",
     )?);
-    pool.scope(|scope| {
-        scope.spawn(|scope| {
-            read_files_from_path(
-                scope,
-                &config.input,
-                config.follow_links,
-                ctx,
-                *cu_module_load_data,
-                *cu_ctx_set_current,
-                file_scan,
-                extract_ptx.clone(),
-            )
-        });
+    let parallel_context = ParallelContext {
+        cuda: cuda,
+        cu_ctx,
+        extract_ptx: extract_ptx.clone(),
+    };
+    parallel_context
+        .extract_ptx
+        .set_draw_target(ProgressDrawTarget::hidden());
+    rayon::scope(|scope| {
+        let context = Context {
+            parallel_context: &parallel_context,
+            all_files_progress: &all_files_progress,
+            scope,
+        };
+        read_and_count_files_from_path(&context, &config.input, config.follow_links);
     });
     extract_ptx.finish();
     Ok(())
 }
 
-fn read_files_from_path(
-    scope: &Scope,
-    path: &PathBuf,
-    follow_links: bool,
-    ctx: CUcontext,
-    cu_module_load_data: unsafe extern "system" fn(
-        module: *mut cuda_types::cuda::CUmodule,
-        image: *const ::core::ffi::c_void,
-    ) -> CUresult,
-    cu_ctx_set_current: unsafe extern "system" fn(ctx: cuda_types::cuda::CUcontext) -> CUresult,
-    file_scan: ProgressBar,
-    extract_ptx: ProgressBar,
-) {
-    let mut extract_counter = 0;
-    if path.is_file() {
-        file_scan.set_position(1);
-        check_if_elf_and_enqueue(
-            ctx,
-            cu_module_load_data,
-            cu_ctx_set_current,
-            &mut extract_counter,
-            scope,
-            path,
-        );
-    } else if path.is_dir() {
-        let mut pos = 0;
-        walkdir::WalkDir::new(path)
-            .follow_links(follow_links)
-            .into_iter()
-            .filter_map(|dir_entry| dir_entry.ok())
-            .for_each(|entry| {
-                let entry_path = entry.path();
-                if entry_path.is_file() {
-                    pos += 1;
-                    file_scan.set_position(pos);
-                    check_if_elf_and_enqueue(
-                        ctx,
-                        cu_module_load_data,
-                        cu_ctx_set_current,
-                        &mut extract_counter,
-                        scope,
-                        entry_path,
-                    );
-                }
-            });
-    }
-    extract_ptx.inc_length(extract_counter);
-    file_scan.finish();
+struct Context<'a, 's> {
+    parallel_context: &'a ParallelContext,
+    all_files_progress: &'a ProgressBar,
+    scope: &'a Scope<'s>,
 }
 
-fn check_if_elf_and_enqueue(
-    ctx: CUcontext,
-    cu_module_load_data: unsafe extern "system" fn(
-        module: *mut cuda_types::cuda::CUmodule,
-        image: *const ::core::ffi::c_void,
-    ) -> CUresult,
-    cu_ctx_set_current: unsafe extern "system" fn(ctx: cuda_types::cuda::CUcontext) -> CUresult,
-    extract_count: &mut u64,
-    scope: &Scope,
-    path: &Path,
-) {
-    if let Ok(mut file) = File::open(path) {
+#[derive(Clone)]
+struct ParallelContext {
+    cuda: CudaContext,
+    cu_ctx: CUcontext,
+    extract_ptx: ProgressBar,
+}
+
+fn read_and_count_files_from_path(context: &Context, path: &PathBuf, follow_links: bool) {
+    let elf_count = walkdir::WalkDir::new(path)
+        .follow_links(follow_links)
+        .into_iter()
+        .filter_map(|dir_entry| dir_entry.ok())
+        .map(|entry| {
+            context.all_files_progress.inc(1);
+            check_if_elf_and_enqueue(context, entry) as u64
+        })
+        .sum();
+    context.parallel_context.extract_ptx.set_length(elf_count);
+    context
+        .parallel_context
+        .extract_ptx
+        .set_draw_target(ProgressDrawTarget::stdout());
+    context.all_files_progress.finish();
+}
+
+fn check_if_elf_and_enqueue(context: &Context, entry: DirEntry) -> bool {
+    if let Ok(mut file) = File::open(entry.path()) {
         let mut header = [0u8; 4];
         if let Ok(bytes) = file.read(&mut header) {
             if bytes < 4 {
-                return;
+                return false;
             }
             if &header == goblin::elf::header::ELFMAG {
-                *extract_count += 1;
-                scope.spawn(move |_| {
-                    extract_from_elf(ctx, cu_module_load_data, cu_ctx_set_current, file);
+                let parallel_context = context.parallel_context.clone();
+                context.scope.spawn(move |scope| {
+                    if extract_from_elf(scope, parallel_context, file).is_some() {}
                 });
+                return true;
             }
         }
     }
+    false
 }
 
-fn extract_from_elf(
-    cu_ctx: CUcontext,
-    cu_module_load_data: unsafe extern "system" fn(
-        module: *mut cuda_types::cuda::CUmodule,
-        image: *const ::core::ffi::c_void,
-    ) -> CUresult,
-    cu_ctx_set_current: unsafe extern "system" fn(ctx: cuda_types::cuda::CUcontext) -> CUresult,
-    mut file: File,
-) -> Option<()> {
-    let mut buf = Vec::new();
-    buf.extend_from_slice(goblin::elf::header::ELFMAG);
-    file.read_to_end(&mut buf).ok()?;
-    let ctx = Ctx::new(goblin::container::Container::Big, Endian::Little);
-    let header = goblin::elf64::header::Header::parse(&buf).ok()?;
-    let section_headers =
-        SectionHeader::parse(&buf, header.e_shoff as usize, header.e_shnum as usize, ctx).ok()?;
+fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> Option<()> {
+    let mut compilation = Arc::new(CompilationContext {
+        buffer: Vec::new(),
+        progress: context.extract_ptx.clone(),
+    });
+    let buffer = &mut Arc::get_mut(&mut compilation).unwrap().buffer;
+    buffer.extend_from_slice(goblin::elf::header::ELFMAG);
+    file.read_to_end(buffer).ok()?;
+    let goblin_ctx = Ctx::new(goblin::container::Container::Big, Endian::Little);
+    let header = goblin::elf64::header::Header::parse(&compilation.buffer).ok()?;
+    let section_headers = SectionHeader::parse(
+        &compilation.buffer,
+        header.e_shoff as usize,
+        header.e_shnum as usize,
+        goblin_ctx,
+    )
+    .ok()?;
     let string_table_section = &section_headers[header.e_shstrndx as usize];
     let string_table_start = string_table_section.sh_offset as usize;
-    let fatbin_data = section_headers.into_iter().find_map(|section| {
+    let fatbin_section = section_headers.into_iter().find_map(|section| {
         let section_name = unsafe {
             CStr::from_ptr(
-                buf.as_ptr()
+                compilation
+                    .buffer
+                    .as_ptr()
                     .add(string_table_start)
                     .add(section.sh_name as usize)
                     .cast(),
             )
         };
         if section_name.to_bytes() == b".nv_fatbin" {
-            let section_data =
-                &buf[section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize];
-            Some(section_data)
+            let range = section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize;
+            Some(range)
         } else {
             None
         }
     });
-    let fatbin_data = unwrap_or::unwrap_some_or!(fatbin_data, return None);
-    unsafe { cu_ctx_set_current(cu_ctx) }.ok()?;
-    let mut module = CUmodule(ptr::null_mut());
-    unsafe {
-        cu_module_load_data(
-            &mut module,
-            fatbin_data.as_ptr() as *const ::core::ffi::c_void,
-        )
+    let mut fatbin_range = unwrap_or::unwrap_some_or!(fatbin_section, return None);
+    loop {
+        if fatbin_range.len() < mem::size_of::<FatbinHeader>() {
+            break;
+        }
+        let header = unsafe {
+            &*(compilation.buffer[fatbin_range.clone()]
+                .as_ptr()
+                .cast::<FatbinHeader>())
+        };
+        if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
+            break;
+        }
+        {
+            let compilation = compilation.clone();
+            let fatbin_range = fatbin_range.clone();
+            let context = context.clone();
+            scope.spawn(move |_| {
+                (|| {
+                    unsafe { (context.cuda.cuCtxSetCurrent)(context.cu_ctx) }.ok()?;
+                    let mut module = CUmodule(ptr::null_mut());
+                    if unsafe {
+                        (context.cuda.cuModuleLoadData)(
+                            &mut module,
+                            compilation.buffer[fatbin_range].as_ptr().cast(),
+                        )
+                    }
+                    .is_ok()
+                    {
+                        unsafe { (context.cuda.cuModuleUnload)(module) }.ok()?;
+                    }
+                    Some(())
+                })();
+            });
+        }
+        fatbin_range.start += header.header_size as usize + header.files_size as usize;
     }
-    .ok()?;
     Some(())
+}
+
+macro_rules! do_nothing {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
+}
+
+macro_rules! dynamic_fns {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        #[derive(Clone)]
+        struct CudaContext {
+            $(
+                #[allow(dead_code)]
+                $fn_name: unsafe extern $abi fn ( $($arg_type),* ) -> $ret_type,
+            )*
+        }
+
+        impl CudaContext {
+            unsafe fn new() -> Result<(libloading::Library, Self), Box<dyn Error>> {
+                let mut current_exe = std::env::current_exe().map_err(|_| "Current executable not found")?;
+                current_exe.pop();
+                current_exe.push("libcuda.so");
+                let library = unsafe { libloading::Library::new(current_exe) }?;
+                $(
+                    let $fn_name = *unsafe { library.get::<unsafe extern $abi fn ($($arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }?;
+                )*
+                Ok((library, CudaContext { $($fn_name),*}))
+            }
+        }
+    };
+}
+
+cuda_macros::cuda_function_declarations! {
+    do_nothing,
+    dynamic_fns <= [
+        cuInit,
+        cuCtxCreate_v2,
+        cuCtxSetCurrent,
+        cuModuleLoadData,
+        cuModuleUnload
+    ]
+}
+
+struct CompilationContext {
+    buffer: Vec<u8>,
+    progress: ProgressBar,
+}
+
+impl Drop for CompilationContext {
+    fn drop(&mut self) {
+        self.progress.inc(1);
+    }
 }
