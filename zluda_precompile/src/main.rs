@@ -106,7 +106,7 @@ fn check_if_elf_and_enqueue(context: &Context, entry: DirEntry) -> bool {
             if &header == goblin::elf::header::ELFMAG {
                 let parallel_context = context.parallel_context.clone();
                 context.scope.spawn(move |scope| {
-                    if extract_from_elf(scope, parallel_context, file).is_some() {}
+                    extract_from_elf(scope, parallel_context, file);
                 });
                 return true;
             }
