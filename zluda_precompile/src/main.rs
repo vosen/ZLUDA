@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "[2/2] {wide_bar} {pos}/{len} file(s) compiled",
     )?);
     let parallel_context = ParallelContext {
-        cuda: cuda,
+        cuda,
         cu_ctx,
         extract_ptx: extract_ptx.clone(),
     };
@@ -132,21 +132,16 @@ fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> 
         goblin_ctx,
     )
     .ok()?;
-    let string_table_section = &section_headers[header.e_shstrndx as usize];
+    let string_table_section = section_headers.get(header.e_shstrndx as usize)?;
     let string_table_start = string_table_section.sh_offset as usize;
     let fatbin_section = section_headers.into_iter().find_map(|section| {
-        let section_name = unsafe {
-            CStr::from_ptr(
-                compilation
-                    .buffer
-                    .as_ptr()
-                    .add(string_table_start)
-                    .add(section.sh_name as usize)
-                    .cast(),
-            )
-        };
+        let section_name = CStr::from_bytes_until_nul(
+            &compilation.buffer[string_table_start + section.sh_name as usize..],
+        )
+        .ok()?;
         if section_name.to_bytes() == b".nv_fatbin" {
-            let range = section.sh_offset as usize..(section.sh_offset + section.sh_size) as usize;
+            let range = section.sh_offset as usize
+                ..(section.sh_offset.saturating_add(section.sh_size)) as usize;
             Some(range)
         } else {
             None
@@ -158,9 +153,10 @@ fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> 
             break;
         }
         let header = unsafe {
-            &*(compilation.buffer[fatbin_range.clone()]
+            compilation.buffer[fatbin_range.clone()]
                 .as_ptr()
-                .cast::<FatbinHeader>())
+                .cast::<FatbinHeader>()
+                .read_unaligned()
         };
         if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
             break;
@@ -187,7 +183,10 @@ fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> 
                 })();
             });
         }
-        fatbin_range.start += header.header_size as usize + header.files_size as usize;
+        fatbin_range.start = fatbin_range
+            .start
+            .saturating_add(header.header_size as usize)
+            .saturating_add(header.files_size as usize);
     }
     Some(())
 }
