@@ -313,18 +313,18 @@ pub unsafe fn delay_load_failure_hook(
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
 }
 
-unsafe fn try_load_from_self_dir(redirect_name: &'static str) -> Option<HMODULE> {
+pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
     let mut hm = HMODULE::default();
     GetModuleHandleExW(
         GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        PCWSTR(delay_load_failure_hook as usize as *const _),
+        PCWSTR(try_load_from_self_dir as _),
         &mut hm,
     )
     .ok()?;
     let path = get_module_path_utf16(hm);
     let mut path_buf = PathBuf::from(path);
     path_buf.pop();
-    path_buf.push(redirect_name);
+    path_buf.push(libname);
     let path_utf16 = path_buf
         .as_os_str()
         .encode_wide()
