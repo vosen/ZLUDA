@@ -54,7 +54,7 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
         .allowlist_var("^MIOPEN_.*")
         .must_use_type("miopenStatus_t")
         .constified_enum("miopenStatus_t")
-        .new_type_alias("^miopenHandle$")
+        .new_type_alias("^miopenHandle_t$")
         .new_type_alias("^miopenFusionOpDescriptor_t$")
         .new_type_alias("^miopenTensorDescriptor_t$")
         .new_type_alias("^miopenSeqTensorDescriptor_t$")
@@ -74,7 +74,12 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
         .new_type_alias("^miopenProblem_t$")
         .new_type_alias("^miopenFindOptions_t$")
         .new_type_alias("^miopenSolution_t$")
-        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-xc++"])
+        .clang_args([
+            "-I/opt/rocm/include",
+            "-D__HIP_PLATFORM_AMD__",
+            "-DMIOPEN_BETA_API",
+            "-xc++",
+        ])
         .generate()
         .unwrap()
         .to_string();
@@ -103,7 +108,7 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
         })
         .collect();
     converter.flush(&mut module.items);
-    add_send_sync(&mut module.items, &["miopenHandle"]);
+    add_send_sync(&mut module.items, &["miopenHandle_t"]);
     add_send_sync(&mut module.items, &["miopenFusionOpDescriptor_t"]);
     add_send_sync(&mut module.items, &["miopenTensorDescriptor_t"]);
     add_send_sync(&mut module.items, &["miopenSeqTensorDescriptor_t"]);
@@ -1712,6 +1717,7 @@ fn generate_display_cuda(
         "cuGraphKernelNodeSetAttribute",
         "cuPointerGetAttribute",
         "cuPointerGetAttributes",
+        "cuModuleLoadDataEx",
     ];
     let count_selectors = [
         ("cuCtxCreate_v3", 1, 2),

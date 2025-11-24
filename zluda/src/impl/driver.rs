@@ -1,5 +1,4 @@
 use crate::r#impl::{self, context, device, function};
-use comgr::Comgr;
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use libloading::Library;
@@ -18,10 +17,9 @@ mod os;
 
 pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
-    pub comgr: Comgr,
-    pub comgr_clang_version: String,
     pub cache_path: Option<String>,
     pub allocations: Mutex<Allocations>,
+    pub should_zero_allocations: bool,
 }
 
 pub(crate) struct Allocations {
@@ -93,13 +91,9 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
         .get_or_init(|| {
             let mut device_count = 0;
             unsafe { hipGetDeviceCount(&mut device_count) }?;
-            let comgr = Comgr::new().map_err(|_| CUerror::UNKNOWN)?;
-            let comgr_clang_version =
-                comgr::get_clang_version(&comgr).map_err(|_| CUerror::UNKNOWN)?;
             let allocations = Mutex::new(Allocations::new());
             Ok(GlobalState {
-                comgr,
-                comgr_clang_version,
+                should_zero_allocations: should_zero_allocations().unwrap_or(false),
                 allocations,
                 devices: (0..device_count)
                     .map(|i| {
@@ -120,6 +114,17 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
         })
         .as_ref()
         .map_err(|e| *e)
+}
+
+fn should_zero_allocations() -> Option<bool> {
+    let current_exe_path = std::env::current_exe().ok()?;
+    let current_exe_file = current_exe_path.file_name()?;
+    let current_exe_file = current_exe_file.to_str()?.to_ascii_lowercase();
+    Some(
+        current_exe_file.contains("geekbench")
+            || current_exe_file.starts_with("train_gpt")
+            || current_exe_file.starts_with("test_gpt"),
+    )
 }
 
 pub(crate) fn init(flags: ::core::ffi::c_uint) -> CUresult {
@@ -535,6 +540,24 @@ pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
         flags,
     )?;
     *num_blocks = (*num_blocks).max(1);
+    Ok(())
+}
+
+pub(crate) unsafe fn occupancy_max_potential_block_size(
+    grid_size: &mut ::core::ffi::c_int,
+    block_size: &mut ::core::ffi::c_int,
+    f: hipFunction_t,
+    _block_size_to_dynamic_smem_size: CUoccupancyB2DSize,
+    dyn_shared_mem_per_blk: usize,
+    block_size_limit: ::core::ffi::c_int,
+) -> hipError_t {
+    hipModuleOccupancyMaxPotentialBlockSize(
+        grid_size,
+        block_size,
+        f,
+        dyn_shared_mem_per_blk,
+        block_size_limit,
+    )?;
     Ok(())
 }
 

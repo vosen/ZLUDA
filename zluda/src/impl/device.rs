@@ -488,6 +488,25 @@ pub(crate) fn get_primary_context(
     Ok(dev.primary_context())
 }
 
+pub(crate) fn primary_context_set_flags(
+    hip_dev: hipDevice_t,
+    _flags: ::core::ffi::c_uint,
+) -> CUresult {
+    let (ctx, _) = get_primary_context(hip_dev)?;
+    ctx.with_state_mut(|_state| {
+        // Do nothing
+        Ok(())
+    })?;
+    Ok(())
+}
+
+pub(crate) fn primary_context_set_flags_v2(
+    hip_dev: hipDevice_t,
+    flags: ::core::ffi::c_uint,
+) -> CUresult {
+    primary_context_set_flags(hip_dev, flags)
+}
+
 pub(crate) fn primary_context_retain(pctx: &mut CUcontext, hip_dev: hipDevice_t) -> CUresult {
     let (ctx, cu_ctx) = get_primary_context(hip_dev)?;
 
