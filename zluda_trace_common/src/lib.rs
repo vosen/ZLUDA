@@ -199,6 +199,30 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
     }
 }
 
+impl ReprUsize for cuda_types::cudnn8::cudnnStatus_t {
+    fn to_usize(self) -> usize {
+        match self {
+            Ok(()) => 0,
+            Err(err) => err.0.get() as usize,
+        }
+    }
+
+    fn from_usize(x: usize) -> Self {
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cudnn8::cudnnError_t(err)),
+        }
+    }
+
+    const INTERNAL_ERROR: usize = cuda_types::cudnn8::cudnnError_t::INTERNAL_ERROR.0.get() as usize;
+
+    extern "C" fn format_status(x: usize) -> ByteVecFfi {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        ByteVecFfi::new(writer)
+    }
+}
+
 impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
     fn to_usize(self) -> usize {
         match self {
@@ -214,9 +238,7 @@ impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
         }
     }
 
-    // TODO: handle this after cudnn fix
-
-    const INTERNAL_ERROR: usize = 14;
+    const INTERNAL_ERROR: usize = cuda_types::cudnn9::cudnnError_t::INTERNAL_ERROR.0.get() as usize;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();
