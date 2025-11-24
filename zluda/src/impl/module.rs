@@ -1,7 +1,8 @@
 use super::driver;
+use crate::r#impl::driver::GlobalState;
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use hip_runtime_sys::*;
-use std::{borrow::Cow, ffi::CStr, mem};
+use std::{borrow::Cow, ffi::CStr, mem, ops::ControlFlow};
 use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 
 pub(crate) struct Module {
@@ -20,20 +21,17 @@ impl ZludaObject for Module {
     }
 }
 
-static EMPTY_PTX: &str = ".version 6.5
-.target sm_30
-.address_size 64";
-
-// get_ptx takes an `image` that can be anything we support and returns a
-// String containing a ptx extracted from `image`.
-fn get_ptx<'a>(image: CodeLibraryRef<'a>) -> Result<Cow<'a, str>, CUerror> {
+fn get_best_ptx_and_compile(
+    global_state: &GlobalState,
+    image: CodeLibraryRef<'_>,
+) -> Result<hipModule_t, CUerror> {
     let mut ptx_modules = Vec::new();
     unsafe {
         CodeLibraryRef::iterate_modules(image, |_, module| match module {
             Ok(CodeModuleRef::Text(ptx)) => {
-                ptx_modules.push(Cow::<'a, _>::Borrowed(ptx));
+                ptx_modules.push(Cow::Borrowed(ptx));
             }
-            Ok(CodeModuleRef::<'a>::File(file)) => {
+            Ok(CodeModuleRef::File(file)) => {
                 if file.header.kind != FatbinFileHeader::HEADER_KIND_PTX {
                     return;
                 }
@@ -46,11 +44,74 @@ fn get_ptx<'a>(image: CodeLibraryRef<'a>) -> Result<Cow<'a, str>, CUerror> {
             _ => {}
         })
     };
-    // TODO: instead of getting first PTX module, try and get the best match
-    ptx_modules
-        .into_iter()
-        .next()
-        .ok_or(CUerror::NO_BINARY_FOR_GPU)
+    let maybe_module = ptx_modules
+        .iter()
+        .rev() // TODO: actually sort by SM
+        .try_fold(
+            None,
+            |acc: Option<(&Cow<'_, str>, ptx_parser::Module<'_>)>, src| {
+                let maybe_ast = ptx_parser::parse_module_checked(src);
+                match maybe_ast {
+                    Err(_) => ControlFlow::Continue(acc),
+                    Ok(ast) => {
+                        if ast.invalid_directives == 0 {
+                            return ControlFlow::Break((src, ast));
+                        } else {
+                            ControlFlow::Continue(Some(match acc {
+                                Some(best_known) => {
+                                    if ast.invalid_directives < best_known.1.invalid_directives {
+                                        (src, ast)
+                                    } else {
+                                        best_known
+                                    }
+                                }
+                                None => (src, ast),
+                            }))
+                        }
+                    }
+                }
+            },
+        );
+    let (text, module) = match maybe_module {
+        ControlFlow::Break((ast, module)) | ControlFlow::Continue(Some((ast, module))) => {
+            (Some(ast), module)
+        }
+        ControlFlow::Continue(None) => {
+            if cfg!(debug_assertions) {
+                return Err(CUerror::NO_BINARY_FOR_GPU);
+            }
+            (
+                None,
+                ptx_parser::Module {
+                    ptx_version: (1, 0),
+                    directives: Vec::new(),
+                    invalid_directives: usize::MAX,
+                },
+            )
+        }
+    };
+    // TODO: get this information on initialization
+    let hip_properties = get_hip_properties()?;
+    let gcn_arch = get_gcn_arch(&hip_properties)?;
+    let attributes = ExtraCacheAttributes {
+        clock_rate: hip_properties.clockRate as u32,
+        is_debug: cfg!(debug_assertions),
+    };
+    let mut cache_with_key = match (text, global_state.cache_path.as_ref()) {
+        (Some(text), Some(p)) => (|| {
+            let cache = zluda_cache::ModuleCache::open(p)?;
+            let key = get_cache_key(gcn_arch, &text, &attributes)?;
+            Some((cache, key))
+        })(),
+        _ => None,
+    };
+    let cached_binary = load_cached_binary(&mut cache_with_key);
+    let elf_module = cached_binary
+        .ok_or(CUerror::UNKNOWN)
+        .or_else(|_| compile_and_cache(gcn_arch, attributes, module, &mut cache_with_key))?;
+    let mut hip_module = unsafe { mem::zeroed() };
+    unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
+    Ok(hip_module)
 }
 
 fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
@@ -62,31 +123,7 @@ fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
 
 pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<hipModule_t, CUerror> {
     let global_state = driver::global_state()?;
-    let maybe_ptx = get_ptx(library);
-    let text = if cfg!(debug_assertions) {
-        maybe_ptx?
-    } else {
-        maybe_ptx.unwrap_or_else(|_| Cow::Borrowed(EMPTY_PTX))
-    };
-    // TODO: get this information on initialization
-    let hip_properties = get_hip_properties()?;
-    let gcn_arch = get_gcn_arch(&hip_properties)?;
-    let attributes = ExtraCacheAttributes {
-        clock_rate: hip_properties.clockRate as u32,
-        is_debug: cfg!(debug_assertions),
-    };
-    let mut cache_with_key = global_state.cache_path.as_ref().and_then(|p| {
-        let cache = zluda_cache::ModuleCache::open(p)?;
-        let key = get_cache_key(gcn_arch, &text, &attributes)?;
-        Some((cache, key))
-    });
-    let cached_binary = load_cached_binary(&mut cache_with_key);
-    let elf_module = cached_binary.ok_or(CUerror::UNKNOWN).or_else(|_| {
-        compile_from_ptx_and_cache(gcn_arch, attributes, &text, &mut cache_with_key)
-    })?;
-    let mut hip_module = unsafe { mem::zeroed() };
-    unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
-    Ok(hip_module)
+    get_best_ptx_and_compile(global_state, library)
 }
 
 #[derive(serde::Serialize)]
@@ -136,17 +173,12 @@ fn load_cached_binary(
         .and_then(|(c, key)| c.get_module_binary(key))
 }
 
-fn compile_from_ptx_and_cache(
+fn compile_and_cache(
     gcn_arch: &str,
     attributes: ExtraCacheAttributes,
-    text: &str,
+    ast: ptx_parser::Module,
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
 ) -> Result<Vec<u8>, CUerror> {
-    let ast = if cfg!(debug_assertions) {
-        ptx_parser::parse_module_checked(text).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?
-    } else {
-        ptx_parser::parse_module_unchecked(text)
-    };
     let llvm_module = ptx::to_llvm_module(
         ast,
         ptx::Attributes {
