@@ -4,9 +4,9 @@ use std::sync::LazyLock;
 static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
 
 fn get_library() -> Option<Library> {
-    let cuda_lib = std::env::var("ZLUDA_DNN_LIB")
+    let cuda_lib = std::env::var("ZLUDA_DNN8_LIB")
         .ok()
-        .unwrap_or_else(|| "/usr/lib/x86_64-linux-gnu/libcudnn.so.9".to_string());
+        .unwrap_or_else(|| "/usr/lib/x86_64-linux-gnu/libcudnn.so.8".to_string());
     zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()
 }
 
@@ -45,4 +45,4 @@ macro_rules! unimplemented {
     };
 }
 
-cuda_macros::cudnn9_function_declarations!(unimplemented);
+cuda_macros::cudnn8_function_declarations!(unimplemented);

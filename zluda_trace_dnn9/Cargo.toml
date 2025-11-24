@@ -1,11 +1,11 @@
 [package]
-name = "zluda_trace_dnn"
+name = "zluda_trace_dnn9"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
-name = "zluda_trace_dnn"
+name = "zluda_trace_dnn9"
 crate-type = ["cdylib"]
 
 [dependencies]

@@ -4094,7 +4094,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "zluda_trace_dnn"
+name = "zluda_trace_dnn8"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
+name = "zluda_trace_dnn9"
 version = "0.0.0"
 dependencies = [
  "cglue",
