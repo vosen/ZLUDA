@@ -10,7 +10,7 @@ name = "zoc"
 path = "src/main.rs"
 
 [dependencies]
-bpaf = { version = "0.9.19", features = ["derive"] }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 llvm_zluda = { path = "../llvm_zluda" }
 ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
