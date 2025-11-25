@@ -6,6 +6,7 @@ use cuda_types::{
 use goblin::{
     container::{Ctx, Endian},
     elf::SectionHeader,
+    pe::options::ParseOptions,
 };
 use indicatif::{ProgressBar, ProgressDrawTarget};
 use rayon::Scope;
@@ -103,10 +104,28 @@ fn check_if_elf_and_enqueue(context: &Context, entry: DirEntry) -> bool {
             if bytes < 4 {
                 return false;
             }
-            if &header == goblin::elf::header::ELFMAG {
+            if header[..2] == goblin::pe::header::DOS_MAGIC.to_le_bytes() {
                 let parallel_context = context.parallel_context.clone();
                 context.scope.spawn(move |scope| {
-                    extract_from_elf(scope, parallel_context, file);
+                    extract_from_binary(
+                        scope,
+                        parallel_context,
+                        file,
+                        header,
+                        pe_find_fatbin_section,
+                    );
+                });
+                return true;
+            } else if &header == goblin::elf::header::ELFMAG {
+                let parallel_context = context.parallel_context.clone();
+                context.scope.spawn(move |scope| {
+                    extract_from_binary(
+                        scope,
+                        parallel_context,
+                        file,
+                        header,
+                        elf_find_fatbin_section,
+                    );
                 });
                 return true;
             }
@@ -115,18 +134,34 @@ fn check_if_elf_and_enqueue(context: &Context, entry: DirEntry) -> bool {
     false
 }
 
-fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> Option<()> {
-    let mut compilation = Arc::new(CompilationContext {
-        buffer: Vec::new(),
-        progress: context.extract_ptx.clone(),
-    });
-    let buffer = &mut Arc::get_mut(&mut compilation).unwrap().buffer;
-    buffer.extend_from_slice(goblin::elf::header::ELFMAG);
-    file.read_to_end(buffer).ok()?;
+fn pe_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
+    let pe_header = goblin::pe::PE::parse_with_opts(
+        bytes,
+        &ParseOptions {
+            resolve_rva: true,
+            parse_attribute_certificates: false,
+        },
+    )
+    .ok()?;
+    pe_header.sections.iter().find_map(|section| {
+        // PE section name field is limited to 8 chars
+        if section.name == *b".nv_fatb" {
+            let range = section.pointer_to_raw_data as usize
+                ..(section
+                    .pointer_to_raw_data
+                    .saturating_add(section.size_of_raw_data)) as usize;
+            Some(range)
+        } else {
+            None
+        }
+    })
+}
+
+fn elf_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
     let goblin_ctx = Ctx::new(goblin::container::Container::Big, Endian::Little);
-    let header = goblin::elf64::header::Header::parse(&compilation.buffer).ok()?;
+    let header = goblin::elf64::header::Header::parse(bytes).ok()?;
     let section_headers = SectionHeader::parse(
-        &compilation.buffer,
+        bytes,
         header.e_shoff as usize,
         header.e_shnum as usize,
         goblin_ctx,
@@ -134,11 +169,10 @@ fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> 
     .ok()?;
     let string_table_section = section_headers.get(header.e_shstrndx as usize)?;
     let string_table_start = string_table_section.sh_offset as usize;
-    let fatbin_section = section_headers.into_iter().find_map(|section| {
-        let section_name = CStr::from_bytes_until_nul(
-            &compilation.buffer[string_table_start + section.sh_name as usize..],
-        )
-        .ok()?;
+    section_headers.into_iter().find_map(|section| {
+        let section_name =
+            CStr::from_bytes_until_nul(&bytes[string_table_start + section.sh_name as usize..])
+                .ok()?;
         if section_name.to_bytes() == b".nv_fatbin" {
             let range = section.sh_offset as usize
                 ..(section.sh_offset.saturating_add(section.sh_size)) as usize;
@@ -146,8 +180,24 @@ fn extract_from_elf(scope: &Scope, context: ParallelContext, mut file: File) -> 
         } else {
             None
         }
+    })
+}
+
+fn extract_from_binary(
+    scope: &Scope,
+    context: ParallelContext,
+    mut file: File,
+    header: [u8; 4],
+    get_fatbin_section: impl FnOnce(&[u8]) -> Option<std::ops::Range<usize>>,
+) -> Option<()> {
+    let mut compilation = Arc::new(CompilationContext {
+        buffer: Vec::new(),
+        progress: context.extract_ptx.clone(),
     });
-    let mut fatbin_range = unwrap_or::unwrap_some_or!(fatbin_section, return None);
+    let buffer = &mut Arc::get_mut(&mut compilation).unwrap().buffer;
+    buffer.extend_from_slice(&header);
+    file.read_to_end(buffer).ok()?;
+    let mut fatbin_range = get_fatbin_section(&compilation.buffer)?;
     loop {
         if fatbin_range.len() < mem::size_of::<FatbinHeader>() {
             break;
@@ -195,6 +245,11 @@ macro_rules! do_nothing {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
 }
 
+#[cfg(not(windows))]
+static LIBCUDA: &str = "libcuda.so";
+#[cfg(windows)]
+static LIBCUDA: &str = "nvcuda.dll";
+
 macro_rules! dynamic_fns {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         #[derive(Clone)]
@@ -209,7 +264,7 @@ macro_rules! dynamic_fns {
             unsafe fn new() -> Result<(libloading::Library, Self), Box<dyn Error>> {
                 let mut current_exe = std::env::current_exe().map_err(|_| "Current executable not found")?;
                 current_exe.pop();
-                current_exe.push("libcuda.so");
+                current_exe.push(LIBCUDA);
                 let library = unsafe { libloading::Library::new(current_exe) }?;
                 $(
                     let $fn_name = *unsafe { library.get::<unsafe extern $abi fn ($($arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }?;
