@@ -1,3 +1,4 @@
+#![cfg(windows)]
 use std::{
     ffi::{c_void, CStr, CString, OsString},
     iter,
