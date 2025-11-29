@@ -131,7 +131,7 @@ impl Project {
         target_dir: &'a PathBuf,
         profile: &'a str,
         libname: &'a str,
-    ) -> impl Iterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
         Self::relative_paths(
             self,
             target_dir,
@@ -147,7 +147,7 @@ impl Project {
         profile: &'a str,
         libname: &'a str,
         source: &'a [String],
-    ) -> impl Iterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+    ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
         source.iter().map(move |source| {
             let mut link = target_dir.clone();
             link.extend([profile, source]);
@@ -328,7 +328,7 @@ mod os {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod os {
     use std::{fs::File, io, path::PathBuf};
     use zip::{write::SimpleFileOptions, ZipWriter};
@@ -358,13 +358,24 @@ mod os {
         zip.add_directory("zluda", SimpleFileOptions::default())
             .unwrap();
         for project in projects.iter() {
-            let file_name = project.file_name();
-            let mut file =
-                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
-            let file_options = file_options_from_time(&file).unwrap_or_default();
-            zip.start_file(format!("zluda/{file_name}"), file_options)
-                .unwrap();
-            io::copy(&mut file, &mut zip).unwrap();
+            let libname = project.file_name();
+            let windows_paths = project.windows_paths(&target_dir, &profile, &libname);
+            if windows_paths.len() == 0 {
+                let mut file =
+                    File::open(format!("{}/{profile}/{libname}", target_dir.display())).unwrap();
+                let file_options = file_options_from_time(&file).unwrap_or_default();
+                zip.start_file(format!("zluda/{libname}"), file_options)
+                    .unwrap();
+                io::copy(&mut file, &mut zip).unwrap();
+            } else {
+                for (source, full_path, _) in windows_paths {
+                    let mut file = File::open(full_path).unwrap();
+                    let file_options = file_options_from_time(&file).unwrap();
+                    zip.start_file(format!("zluda/{source}"), file_options)
+                        .unwrap();
+                    io::copy(&mut file, &mut zip).unwrap();
+                }
+            }
         }
         zip.finish().unwrap();
     }
