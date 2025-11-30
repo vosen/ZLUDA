@@ -373,4 +373,16 @@ extern "system" {
         policy: cuda_types::cufft::cufftXtWorkAreaPolicy,
         workSize: *mut usize,
     ) -> cuda_types::cufft::cufftResult;
+    fn cufftXtMakePlanGuru64(
+        param_1: ::core::ffi::c_uint,
+        param_2: ::core::ffi::c_int,
+        param_3: ::core::ffi::c_ulonglong,
+        param_4: ::core::ffi::c_int,
+        param_5: ::core::ffi::c_ulonglong,
+        param_6: ::core::ffi::c_uint,
+        param_7: ::core::ffi::c_uint,
+        param_8: ::core::ffi::c_uint,
+        param_9: ::core::ffi::c_ulonglong,
+        param_10: ::core::ffi::c_uint,
+    ) -> cuda_types::cufft::cufftResult;
 }

@@ -2219,6 +2219,61 @@ pub fn write_cufftXtSetWorkAreaPolicy(
     crate::CudaDisplay::write(&workSize, "cufftXtSetWorkAreaPolicy", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_cufftXtMakePlanGuru64(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_uint,
+    param_2: ::core::ffi::c_int,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_int,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_uint,
+    param_7: ::core::ffi::c_uint,
+    param_8: ::core::ffi::c_uint,
+    param_9: ::core::ffi::c_ulonglong,
+    param_10: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_3, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_4, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_5, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_6, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_7, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_8, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_9, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_10, "cufftXtMakePlanGuru64", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 impl crate::CudaDisplay for cuda_types::cufft::cufftResult {
     fn write(
         &self,
