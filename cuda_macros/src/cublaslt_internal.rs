@@ -4,12 +4,28 @@ extern "system" {
     fn cublasLtShutdownCtx(param_1: ::core::ffi::c_long) -> ::core::ffi::c_uint;
 }
 extern "system" {
+    fn cublasLtSetEnvironmentMode(
+        param_1: ::core::ffi::c_long,
+        param_2: ::core::ffi::c_uint,
+    ) -> ::core::ffi::c_ulonglong;
+}
+extern "system" {
+    fn cublasLtGetEnvironmentMode(
+        param_1: ::core::ffi::c_long,
+        param_2: *mut ::core::ffi::c_uint,
+    ) -> ::core::ffi::c_ulonglong;
+}
+extern "system" {
     fn cublasLtCtxInit(param_1: ::core::ffi::c_long) -> ::core::ffi::c_int;
+}
+extern "system" {
+    fn cublasLtHeuristicsCacheDestroy(param_1: ::core::ffi::c_long)
+        -> ::core::ffi::c_ulonglong;
 }
 extern "system" {
     fn cublasLtHeuristicLutSerializeEntry(
         param_1: ::core::ffi::c_ulonglong,
-        param_2: *mut ::core::ffi::c_ulonglong,
+        param_2: ::core::ffi::c_ulonglong,
         param_3: ::core::ffi::c_ulonglong,
         param_4: ::core::ffi::c_ulonglong,
         param_5: ::core::ffi::c_ulonglong,
@@ -23,6 +39,44 @@ extern "system" {
         param_13: *mut ::core::ffi::c_ulonglong,
         param_14: ::core::ffi::c_ulonglong,
         param_15: *mut ::core::ffi::c_ulonglong,
+    ) -> ::core::ffi::c_ulonglong;
+}
+extern "system" {
+    fn cublasLtHeuristicsCachePut(
+        param_1: ::core::ffi::c_ulonglong,
+        param_2: ::core::ffi::c_ulonglong,
+        param_3: ::core::ffi::c_ulonglong,
+        param_4: ::core::ffi::c_ulonglong,
+        param_5: ::core::ffi::c_ulonglong,
+        param_6: ::core::ffi::c_ulonglong,
+        param_7: ::core::ffi::c_ulonglong,
+        param_8: ::core::ffi::c_ulonglong,
+        param_9: ::core::ffi::c_ulonglong,
+        param_10: ::core::ffi::c_ulonglong,
+        param_11: ::core::ffi::c_ulonglong,
+        param_12: ::core::ffi::c_ulonglong,
+    ) -> ::core::ffi::c_ulonglong;
+}
+extern "system" {
+    fn cublasLtHeuristicsCacheGet(
+        param_1: ::core::ffi::c_ulonglong,
+        param_2: ::core::ffi::c_ulonglong,
+        param_3: ::core::ffi::c_ulonglong,
+        param_4: ::core::ffi::c_ulonglong,
+        param_5: ::core::ffi::c_ulonglong,
+        param_6: ::core::ffi::c_ulonglong,
+        param_7: ::core::ffi::c_ulonglong,
+        param_8: ::core::ffi::c_ulonglong,
+        param_9: ::core::ffi::c_ulonglong,
+        param_10: ::core::ffi::c_ulonglong,
+        param_11: ::core::ffi::c_ulonglong,
+        param_12: ::core::ffi::c_ulonglong,
+        param_13: ::core::ffi::c_ulonglong,
+    ) -> ::core::ffi::c_ulonglong;
+}
+extern "system" {
+    fn cublasLtHeuristicsCacheCreate(
+        param_1: *mut ::core::ffi::c_long,
     ) -> ::core::ffi::c_ulonglong;
 }
 extern "system" {
@@ -150,23 +204,6 @@ extern "system" {
     ) -> ::core::ffi::c_ulonglong;
 }
 extern "system" {
-    fn cublasLtLegacyGemmUtilizationCCC(
-        param_1: ::core::ffi::c_ulonglong,
-        param_2: ::core::ffi::c_uint,
-        param_3: ::core::ffi::c_uint,
-        param_4: ::core::ffi::c_uint,
-        param_5: ::core::ffi::c_uint,
-        param_6: ::core::ffi::c_uint,
-        param_7: ::core::ffi::c_uint,
-        param_8: ::core::ffi::c_uint,
-        param_9: ::core::ffi::c_uint,
-        param_10: ::core::ffi::c_uint,
-        param_11: ::core::ffi::c_uint,
-        param_12: ::core::ffi::c_ulonglong,
-        param_13: ::core::ffi::c_ulonglong,
-    ) -> ();
-}
-extern "system" {
     fn cublasLtLegacyGemmDDD(
         param_1: ::core::ffi::c_ulonglong,
         param_2: ::core::ffi::c_ulonglong,
@@ -196,23 +233,6 @@ extern "system" {
         param_26: ::core::ffi::c_ulonglong,
         param_27: ::core::ffi::c_ulonglong,
     ) -> ::core::ffi::c_ulonglong;
-}
-extern "system" {
-    fn cublasLtLegacyGemmUtilizationDDD(
-        param_1: ::core::ffi::c_ulonglong,
-        param_2: ::core::ffi::c_uint,
-        param_3: ::core::ffi::c_uint,
-        param_4: ::core::ffi::c_uint,
-        param_5: ::core::ffi::c_uint,
-        param_6: ::core::ffi::c_uint,
-        param_7: ::core::ffi::c_uint,
-        param_8: ::core::ffi::c_uint,
-        param_9: ::core::ffi::c_uint,
-        param_10: ::core::ffi::c_uint,
-        param_11: ::core::ffi::c_uint,
-        param_12: ::core::ffi::c_ulonglong,
-        param_13: ::core::ffi::c_ulonglong,
-    ) -> ();
 }
 extern "system" {
     fn cublasLtLegacyGemmHHH(
@@ -432,21 +452,7 @@ extern "system" {
     ) -> ::core::ffi::c_ulonglong;
 }
 extern "system" {
-    fn cublasLtLegacyGemmUtilizationZZZ(
-        param_1: ::core::ffi::c_ulonglong,
-        param_2: ::core::ffi::c_uint,
-        param_3: ::core::ffi::c_uint,
-        param_4: ::core::ffi::c_uint,
-        param_5: ::core::ffi::c_uint,
-        param_6: ::core::ffi::c_uint,
-        param_7: ::core::ffi::c_uint,
-        param_8: ::core::ffi::c_uint,
-        param_9: ::core::ffi::c_uint,
-        param_10: ::core::ffi::c_uint,
-        param_11: ::core::ffi::c_uint,
-        param_12: ::core::ffi::c_ulonglong,
-        param_13: ::core::ffi::c_ulonglong,
-    ) -> ();
+    fn cublasLtClearNvjetCache(param_1: ::core::ffi::c_long) -> ();
 }
 extern "system" {
     fn cublasLtAlgoCharacteristicGetAttribute(
@@ -455,7 +461,7 @@ extern "system" {
         param_3: ::core::ffi::c_int,
         param_4: ::core::ffi::c_int,
         param_5: ::core::ffi::c_int,
-        param_6: ::core::ffi::c_ulonglong,
+        param_6: *mut ::core::ffi::c_char,
         param_7: ::core::ffi::c_ulonglong,
         param_8: ::core::ffi::c_ulonglong,
     ) -> ::core::ffi::c_uint;
@@ -1864,9 +1870,6 @@ extern "system" {
     fn cublasLt_for_cublas_BSS() -> *mut ::core::ffi::c_void;
 }
 extern "system" {
-    fn cublasLt_for_cublas_CCC() -> *mut ::core::ffi::c_void;
-}
-extern "system" {
     fn cublasLt_for_cublas_DDD() -> *mut ::core::ffi::c_void;
 }
 extern "system" {
@@ -1886,7 +1889,4 @@ extern "system" {
 }
 extern "system" {
     fn cublasLt_for_cublas_TST() -> *mut ::core::ffi::c_void;
-}
-extern "system" {
-    fn cublasLt_for_cublas_ZZZ() -> *mut ::core::ffi::c_void;
 }

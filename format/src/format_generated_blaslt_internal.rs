@@ -11,6 +11,36 @@ pub fn write_cublasLtShutdownCtx(
     crate::CudaDisplay::write(&param_1, "cublasLtShutdownCtx", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_cublasLtSetEnvironmentMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cublasLtSetEnvironmentMode", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cublasLtSetEnvironmentMode", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cublasLtGetEnvironmentMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_long,
+    param_2: *mut ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cublasLtGetEnvironmentMode", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cublasLtGetEnvironmentMode", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 pub fn write_cublasLtCtxInit(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_long,
@@ -21,10 +51,25 @@ pub fn write_cublasLtCtxInit(
     crate::CudaDisplay::write(&param_1, "cublasLtCtxInit", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_cublasLtHeuristicsCacheDestroy(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_long,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &param_1,
+        "cublasLtHeuristicsCacheDestroy",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
 pub fn write_cublasLtHeuristicLutSerializeEntry(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: *mut ::core::ffi::c_ulonglong,
+    param_2: ::core::ffi::c_ulonglong,
     param_3: ::core::ffi::c_ulonglong,
     param_4: ::core::ffi::c_ulonglong,
     param_5: ::core::ffi::c_ulonglong,
@@ -171,6 +216,156 @@ pub fn write_cublasLtHeuristicLutSerializeEntry(
     crate::CudaDisplay::write(
         &param_15,
         "cublasLtHeuristicLutSerializeEntry",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cublasLtHeuristicsCachePut(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_ulonglong,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
+    param_7: ::core::ffi::c_ulonglong,
+    param_8: ::core::ffi::c_ulonglong,
+    param_9: ::core::ffi::c_ulonglong,
+    param_10: ::core::ffi::c_ulonglong,
+    param_11: ::core::ffi::c_ulonglong,
+    param_12: ::core::ffi::c_ulonglong,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_3, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_4, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_5, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_6, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_7, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_8, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_9, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_10, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_11), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_11, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_12), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_12, "cublasLtHeuristicsCachePut", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cublasLtHeuristicsCacheGet(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_ulonglong,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
+    param_7: ::core::ffi::c_ulonglong,
+    param_8: ::core::ffi::c_ulonglong,
+    param_9: ::core::ffi::c_ulonglong,
+    param_10: ::core::ffi::c_ulonglong,
+    param_11: ::core::ffi::c_ulonglong,
+    param_12: ::core::ffi::c_ulonglong,
+    param_13: ::core::ffi::c_ulonglong,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_3, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_4, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_5, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_6, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_7, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_8, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_9, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_10, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_11), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_11, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_12), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_12, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_13), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_13, "cublasLtHeuristicsCacheGet", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cublasLtHeuristicsCacheCreate(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: *mut ::core::ffi::c_long,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &param_1,
+        "cublasLtHeuristicsCacheCreate",
         arg_idx,
         writer,
     )?;
@@ -736,141 +931,6 @@ pub fn write_cublasLtLegacyGemmCCC(
     crate::CudaDisplay::write(&param_27, "cublasLtLegacyGemmCCC", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cublasLtLegacyGemmUtilizationCCC(
-    writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_uint,
-    param_3: ::core::ffi::c_uint,
-    param_4: ::core::ffi::c_uint,
-    param_5: ::core::ffi::c_uint,
-    param_6: ::core::ffi::c_uint,
-    param_7: ::core::ffi::c_uint,
-    param_8: ::core::ffi::c_uint,
-    param_9: ::core::ffi::c_uint,
-    param_10: ::core::ffi::c_uint,
-    param_11: ::core::ffi::c_uint,
-    param_12: ::core::ffi::c_ulonglong,
-    param_13: ::core::ffi::c_ulonglong,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_1,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_2,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_3,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_4,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_5,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_6,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_7,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_8,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_9,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_10,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_11), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_11,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_12), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_12,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_13), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_13,
-        "cublasLtLegacyGemmUtilizationCCC",
-        arg_idx,
-        writer,
-    )?;
-    writer.write_all(b")")
-}
 pub fn write_cublasLtLegacyGemmDDD(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
@@ -1009,141 +1069,6 @@ pub fn write_cublasLtLegacyGemmDDD(
     writer.write_all(b", ")?;
     writer.write_all(concat!(stringify!(param_27), ": ").as_bytes())?;
     crate::CudaDisplay::write(&param_27, "cublasLtLegacyGemmDDD", arg_idx, writer)?;
-    writer.write_all(b")")
-}
-pub fn write_cublasLtLegacyGemmUtilizationDDD(
-    writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_uint,
-    param_3: ::core::ffi::c_uint,
-    param_4: ::core::ffi::c_uint,
-    param_5: ::core::ffi::c_uint,
-    param_6: ::core::ffi::c_uint,
-    param_7: ::core::ffi::c_uint,
-    param_8: ::core::ffi::c_uint,
-    param_9: ::core::ffi::c_uint,
-    param_10: ::core::ffi::c_uint,
-    param_11: ::core::ffi::c_uint,
-    param_12: ::core::ffi::c_ulonglong,
-    param_13: ::core::ffi::c_ulonglong,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_1,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_2,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_3,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_4,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_5,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_6,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_7,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_8,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_9,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_10,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_11), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_11,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_12), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_12,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_13), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_13,
-        "cublasLtLegacyGemmUtilizationDDD",
-        arg_idx,
-        writer,
-    )?;
     writer.write_all(b")")
 }
 pub fn write_cublasLtLegacyGemmHHH(
@@ -2126,139 +2051,14 @@ pub fn write_cublasLtLegacyGemmZZZ(
     crate::CudaDisplay::write(&param_27, "cublasLtLegacyGemmZZZ", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cublasLtLegacyGemmUtilizationZZZ(
+pub fn write_cublasLtClearNvjetCache(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_uint,
-    param_3: ::core::ffi::c_uint,
-    param_4: ::core::ffi::c_uint,
-    param_5: ::core::ffi::c_uint,
-    param_6: ::core::ffi::c_uint,
-    param_7: ::core::ffi::c_uint,
-    param_8: ::core::ffi::c_uint,
-    param_9: ::core::ffi::c_uint,
-    param_10: ::core::ffi::c_uint,
-    param_11: ::core::ffi::c_uint,
-    param_12: ::core::ffi::c_ulonglong,
-    param_13: ::core::ffi::c_ulonglong,
+    param_1: ::core::ffi::c_long,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
     writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_1,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_2,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_3,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_4,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_5,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_6,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_7,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_8), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_8,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_9), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_9,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_10), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_10,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_11), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_11,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_12), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_12,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(param_13), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &param_13,
-        "cublasLtLegacyGemmUtilizationZZZ",
-        arg_idx,
-        writer,
-    )?;
+    crate::CudaDisplay::write(&param_1, "cublasLtClearNvjetCache", arg_idx, writer)?;
     writer.write_all(b")")
 }
 pub fn write_cublasLtAlgoCharacteristicGetAttribute(
@@ -2268,7 +2068,7 @@ pub fn write_cublasLtAlgoCharacteristicGetAttribute(
     param_3: ::core::ffi::c_int,
     param_4: ::core::ffi::c_int,
     param_5: ::core::ffi::c_int,
-    param_6: ::core::ffi::c_ulonglong,
+    param_6: *mut ::core::ffi::c_char,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -9161,11 +8961,6 @@ pub fn write_cublasLt_for_cublas_BSS(
 ) -> std::io::Result<()> {
     writer.write_all(b"()")
 }
-pub fn write_cublasLt_for_cublas_CCC(
-    writer: &mut (impl std::io::Write + ?Sized),
-) -> std::io::Result<()> {
-    writer.write_all(b"()")
-}
 pub fn write_cublasLt_for_cublas_DDD(
     writer: &mut (impl std::io::Write + ?Sized),
 ) -> std::io::Result<()> {
@@ -9197,11 +8992,6 @@ pub fn write_cublasLt_for_cublas_TSS(
     writer.write_all(b"()")
 }
 pub fn write_cublasLt_for_cublas_TST(
-    writer: &mut (impl std::io::Write + ?Sized),
-) -> std::io::Result<()> {
-    writer.write_all(b"()")
-}
-pub fn write_cublasLt_for_cublas_ZZZ(
     writer: &mut (impl std::io::Write + ?Sized),
 ) -> std::io::Result<()> {
     writer.write_all(b"()")
