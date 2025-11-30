@@ -3,7 +3,7 @@
 #![allow(warnings)]
 pub fn write_cublasLtShutdownCtx(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
@@ -13,7 +13,7 @@ pub fn write_cublasLtShutdownCtx(
 }
 pub fn write_cublasLtSetEnvironmentMode(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
     param_2: ::core::ffi::c_uint,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -28,7 +28,7 @@ pub fn write_cublasLtSetEnvironmentMode(
 }
 pub fn write_cublasLtGetEnvironmentMode(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
     param_2: *mut ::core::ffi::c_uint,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -43,7 +43,7 @@ pub fn write_cublasLtGetEnvironmentMode(
 }
 pub fn write_cublasLtCtxInit(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
@@ -53,7 +53,7 @@ pub fn write_cublasLtCtxInit(
 }
 pub fn write_cublasLtHeuristicsCacheDestroy(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
@@ -358,7 +358,7 @@ pub fn write_cublasLtHeuristicsCacheGet(
 }
 pub fn write_cublasLtHeuristicsCacheCreate(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: *mut ::core::ffi::c_long,
+    param_1: *mut ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
@@ -2053,7 +2053,7 @@ pub fn write_cublasLtLegacyGemmZZZ(
 }
 pub fn write_cublasLtClearNvjetCache(
     writer: &mut (impl std::io::Write + ?Sized),
-    param_1: ::core::ffi::c_long,
+    param_1: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
     writer.write_all(b"(")?;
@@ -2064,7 +2064,7 @@ pub fn write_cublasLtClearNvjetCache(
 pub fn write_cublasLtAlgoCharacteristicGetAttribute(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
     param_3: ::core::ffi::c_int,
     param_4: ::core::ffi::c_int,
     param_5: ::core::ffi::c_int,
@@ -2161,7 +2161,7 @@ pub fn write_cublasLtHHHMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -2404,11 +2404,11 @@ pub fn write_cublasLtHHHMatmul(
 pub fn write_cublasLtHHHMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -2449,11 +2449,11 @@ pub fn write_cublasLtHHHMatmulAlgoCheck(
 pub fn write_cublasLtHHHMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -2561,7 +2561,7 @@ pub fn write_cublasLtHSHMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -2804,11 +2804,11 @@ pub fn write_cublasLtHSHMatmul(
 pub fn write_cublasLtHSHMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -2849,11 +2849,11 @@ pub fn write_cublasLtHSHMatmulAlgoCheck(
 pub fn write_cublasLtHSHMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -2961,7 +2961,7 @@ pub fn write_cublasLtSSSMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -3204,11 +3204,11 @@ pub fn write_cublasLtSSSMatmul(
 pub fn write_cublasLtSSSMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -3249,11 +3249,11 @@ pub fn write_cublasLtSSSMatmulAlgoCheck(
 pub fn write_cublasLtSSSMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -3361,7 +3361,7 @@ pub fn write_cublasLtDDDMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -3604,11 +3604,11 @@ pub fn write_cublasLtDDDMatmul(
 pub fn write_cublasLtDDDMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -3649,11 +3649,11 @@ pub fn write_cublasLtDDDMatmulAlgoCheck(
 pub fn write_cublasLtDDDMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -3761,7 +3761,7 @@ pub fn write_cublasLtBSSMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -4004,11 +4004,11 @@ pub fn write_cublasLtBSSMatmul(
 pub fn write_cublasLtBSSMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -4049,11 +4049,11 @@ pub fn write_cublasLtBSSMatmulAlgoCheck(
 pub fn write_cublasLtBSSMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -4161,7 +4161,7 @@ pub fn write_cublasLtCCCMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -4404,11 +4404,11 @@ pub fn write_cublasLtCCCMatmul(
 pub fn write_cublasLtCCCMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -4449,11 +4449,11 @@ pub fn write_cublasLtCCCMatmulAlgoCheck(
 pub fn write_cublasLtCCCMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -4561,7 +4561,7 @@ pub fn write_cublasLtZZZMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -4804,11 +4804,11 @@ pub fn write_cublasLtZZZMatmul(
 pub fn write_cublasLtZZZMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -4849,11 +4849,11 @@ pub fn write_cublasLtZZZMatmulAlgoCheck(
 pub fn write_cublasLtZZZMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -4961,7 +4961,7 @@ pub fn write_cublasLtACCMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -5204,11 +5204,11 @@ pub fn write_cublasLtACCMatmul(
 pub fn write_cublasLtACCMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -5249,11 +5249,11 @@ pub fn write_cublasLtACCMatmulAlgoCheck(
 pub fn write_cublasLtACCMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -5361,7 +5361,7 @@ pub fn write_cublasLtBIIMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -5604,11 +5604,11 @@ pub fn write_cublasLtBIIMatmul(
 pub fn write_cublasLtBIIMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -5649,11 +5649,11 @@ pub fn write_cublasLtBIIMatmulAlgoCheck(
 pub fn write_cublasLtBIIMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -5761,7 +5761,7 @@ pub fn write_cublasLtBSBMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -6004,11 +6004,11 @@ pub fn write_cublasLtBSBMatmul(
 pub fn write_cublasLtBSBMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -6049,11 +6049,11 @@ pub fn write_cublasLtBSBMatmulAlgoCheck(
 pub fn write_cublasLtBSBMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -6161,7 +6161,7 @@ pub fn write_cublasLtHSSMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -6404,11 +6404,11 @@ pub fn write_cublasLtHSSMatmul(
 pub fn write_cublasLtHSSMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -6449,11 +6449,11 @@ pub fn write_cublasLtHSSMatmulAlgoCheck(
 pub fn write_cublasLtHSSMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -6561,7 +6561,7 @@ pub fn write_cublasLtKCCMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -6804,11 +6804,11 @@ pub fn write_cublasLtKCCMatmul(
 pub fn write_cublasLtKCCMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -6849,11 +6849,11 @@ pub fn write_cublasLtKCCMatmulAlgoCheck(
 pub fn write_cublasLtKCCMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -6961,7 +6961,7 @@ pub fn write_cublasLtKCKMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -7204,11 +7204,11 @@ pub fn write_cublasLtKCKMatmul(
 pub fn write_cublasLtKCKMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -7249,11 +7249,11 @@ pub fn write_cublasLtKCKMatmulAlgoCheck(
 pub fn write_cublasLtKCKMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -7361,7 +7361,7 @@ pub fn write_cublasLtTSSMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -7604,11 +7604,11 @@ pub fn write_cublasLtTSSMatmul(
 pub fn write_cublasLtTSSMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -7649,11 +7649,11 @@ pub fn write_cublasLtTSSMatmulAlgoCheck(
 pub fn write_cublasLtTSSMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -7761,7 +7761,7 @@ pub fn write_cublasLtTSTMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -8004,11 +8004,11 @@ pub fn write_cublasLtTSTMatmul(
 pub fn write_cublasLtTSTMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -8049,11 +8049,11 @@ pub fn write_cublasLtTSTMatmulAlgoCheck(
 pub fn write_cublasLtTSTMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -8161,7 +8161,7 @@ pub fn write_cublasLtVCCMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -8404,11 +8404,11 @@ pub fn write_cublasLtVCCMatmul(
 pub fn write_cublasLtVCCMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -8449,11 +8449,11 @@ pub fn write_cublasLtVCCMatmulAlgoCheck(
 pub fn write_cublasLtVCCMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,
@@ -8561,7 +8561,7 @@ pub fn write_cublasLtVCVMatmulAlgoGetIds(
     param_6: ::core::ffi::c_uint,
     param_7: ::core::ffi::c_uint,
     param_8: ::core::ffi::c_int,
-    param_9: ::core::ffi::c_long,
+    param_9: ::core::ffi::c_ulonglong,
     param_10: *mut ::core::ffi::c_int,
 ) -> std::io::Result<()> {
     let mut arg_idx = 0usize;
@@ -8804,11 +8804,11 @@ pub fn write_cublasLtVCVMatmul(
 pub fn write_cublasLtVCVMatmulAlgoCheck(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_ulonglong,
 ) -> std::io::Result<()> {
@@ -8849,11 +8849,11 @@ pub fn write_cublasLtVCVMatmulAlgoCheck(
 pub fn write_cublasLtVCVMatmulAlgoGetHeuristic(
     writer: &mut (impl std::io::Write + ?Sized),
     param_1: ::core::ffi::c_ulonglong,
-    param_2: ::core::ffi::c_long,
-    param_3: ::core::ffi::c_long,
-    param_4: ::core::ffi::c_long,
-    param_5: ::core::ffi::c_long,
-    param_6: ::core::ffi::c_long,
+    param_2: ::core::ffi::c_ulonglong,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_ulonglong,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_ulonglong,
     param_7: *mut ::core::ffi::c_ulonglong,
     param_8: ::core::ffi::c_uint,
     param_9: ::core::ffi::c_ulonglong,

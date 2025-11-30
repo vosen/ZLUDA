@@ -1,6 +1,7 @@
 # Modified from here: https://github.com/galoget/ghidra-headless-scripts/
 # Usage: analyzeHeadless <PROJECT_PATH> cublaslt -import /usr/local/cuda/lib64/libcublasLt.so -scriptPath . -postScript decompile_cublaslt_internal.py
 
+import re
 from ghidra.app.decompiler import DecompInterface
 from ghidra.util.task import ConsoleTaskMonitor
 
@@ -31,6 +32,9 @@ with open(EXTERNAL_HEADER, 'r') as header:
                 continue
             decompile_results = decompinterface.decompileFunction(function, 0, monitor)
             signature = decompile_results.getDecompiledFunction().getSignature()
+            # By default ghidra uses 'long' for 8-byte integers,
+            # but this leads to problems on Windows where 'long' is 4 bytes
+            signature = re.sub(r'\blong\b', "ulong", signature)
             # Ghidra disssasembles cublasLtShutdownCtx to return void, but
             # looking at the assembly I'm convinced it returns a value
             # On the other hand, cublasLtLegacyGemmUtilization* seem to return void
