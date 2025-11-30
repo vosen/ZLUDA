@@ -110,13 +110,45 @@ impl Project {
     // * symlink absolute file path
     // * target actual file (relative to symlink file)
     #[cfg_attr(not(unix), allow(unused))]
-    fn symlinks<'a>(
+    fn linux_symlinks<'a>(
         &'a self,
         target_dir: &'a PathBuf,
         profile: &'a str,
         libname: &'a str,
     ) -> impl Iterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
-        self.meta.linux_symlinks.iter().map(move |source| {
+        Self::relative_paths(
+            self,
+            target_dir,
+            profile,
+            libname,
+            self.meta.linux_symlinks.as_slice(),
+        )
+    }
+
+    #[cfg_attr(unix, allow(unused))]
+    fn windows_paths<'a>(
+        &'a self,
+        target_dir: &'a PathBuf,
+        profile: &'a str,
+        libname: &'a str,
+    ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+        Self::relative_paths(
+            self,
+            target_dir,
+            profile,
+            libname,
+            self.meta.windows_paths.as_slice(),
+        )
+    }
+
+    fn relative_paths<'a>(
+        &'a self,
+        target_dir: &'a PathBuf,
+        profile: &'a str,
+        libname: &'a str,
+        source: &'a [String],
+    ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+        source.iter().map(move |source| {
             let mut link = target_dir.clone();
             link.extend([profile, source]);
             let relative_link = PathBuf::from(source);
@@ -164,6 +196,8 @@ struct ZludaMetadata {
     #[cfg_attr(not(unix), allow(unused))]
     #[serde(default)]
     linux_symlinks: Vec<String>,
+    #[serde(default)]
+    windows_paths: Vec<String>,
 }
 
 fn main() {
@@ -258,7 +292,9 @@ mod os {
         use std::os::unix::fs as unix_fs;
         for project in projects.iter() {
             let libname = project.file_name();
-            for (_, full_path, target) in project.symlinks(target_directory, profile, &libname) {
+            for (_, full_path, target) in
+                project.linux_symlinks(target_directory, profile, &libname)
+            {
                 let mut dir = full_path.clone();
                 assert!(dir.pop());
                 fs::create_dir_all(dir).unwrap();
@@ -282,7 +318,8 @@ mod os {
                 File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
             tar.append_file(format!("zluda/{file_name}"), &mut file)
                 .unwrap();
-            for (source, full_path, _) in project.symlinks(&target_dir, &profile, &file_name) {
+            for (source, full_path, _) in project.linux_symlinks(&target_dir, &profile, &file_name)
+            {
                 tar.append_path_with_name(&full_path, format!("zluda/{source}"))
                     .unwrap();
             }
@@ -291,16 +328,27 @@ mod os {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 mod os {
     use std::{fs::File, io, path::PathBuf};
     use zip::{write::SimpleFileOptions, ZipWriter};
 
     pub fn make_symlinks(
-        _target_directory: &std::path::PathBuf,
-        _projects: &[super::Project],
-        _profile: &str,
+        target_directory: &std::path::PathBuf,
+        projects: &[super::Project],
+        profile: &str,
     ) {
+        for project in projects.iter() {
+            let libname = project.file_name();
+            for (_, full_path, target) in project.windows_paths(target_directory, profile, &libname)
+            {
+                let mut dir = full_path.clone();
+                assert!(dir.pop());
+                std::fs::create_dir_all(&dir).unwrap();
+                dir.push(&target);
+                std::fs::copy(dir, full_path).unwrap();
+            }
+        }
     }
 
     pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
@@ -310,13 +358,24 @@ mod os {
         zip.add_directory("zluda", SimpleFileOptions::default())
             .unwrap();
         for project in projects.iter() {
-            let file_name = project.file_name();
-            let mut file =
-                File::open(format!("{}/{profile}/{file_name}", target_dir.display())).unwrap();
-            let file_options = file_options_from_time(&file).unwrap_or_default();
-            zip.start_file(format!("zluda/{file_name}"), file_options)
-                .unwrap();
-            io::copy(&mut file, &mut zip).unwrap();
+            let libname = project.file_name();
+            let windows_paths = project.windows_paths(&target_dir, &profile, &libname);
+            if windows_paths.len() == 0 {
+                let mut file =
+                    File::open(format!("{}/{profile}/{libname}", target_dir.display())).unwrap();
+                let file_options = file_options_from_time(&file).unwrap_or_default();
+                zip.start_file(format!("zluda/{libname}"), file_options)
+                    .unwrap();
+                io::copy(&mut file, &mut zip).unwrap();
+            } else {
+                for (source, full_path, _) in windows_paths {
+                    let mut file = File::open(full_path).unwrap();
+                    let file_options = file_options_from_time(&file).unwrap();
+                    zip.start_file(format!("zluda/{source}"), file_options)
+                        .unwrap();
+                    io::copy(&mut file, &mut zip).unwrap();
+                }
+            }
         }
         zip.finish().unwrap();
     }

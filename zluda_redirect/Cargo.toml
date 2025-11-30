@@ -9,8 +9,28 @@ crate-type = ["cdylib"]
 
 [target.'cfg(windows)'.dependencies]
 detours-sys = { path = "../detours-sys" }
-wchar = "0.6"
-winapi = { version = "0.3", features = [ "sysinfoapi", "memoryapi", "processthreadsapi", "winbase", "winnt", "winerror", "libloaderapi", "tlhelp32", "handleapi", "std"] }
+zluda_windows = { path = "../zluda_windows" }
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemServices",
+] }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_LibraryLoader",
+] }
+unwrap_or = "1.0.1"
+widestring = "1.2.1"
 
 [package.metadata.zluda]
 windows_only = true

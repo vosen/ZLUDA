@@ -2655,6 +2655,7 @@ pub type cudnnStatus_t = ::core::result::Result<(), cudnnError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<cudnnStatus_t, u32>;
 };
+
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {
