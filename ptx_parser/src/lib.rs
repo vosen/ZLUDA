@@ -1980,7 +1980,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
         let (a, unified) = a;
-        if level_eviction_priority.is_some() || level_cache_hint || unified || cache_policy.is_some() {
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || unified || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
         }
         Instruction::Ld {
@@ -2010,7 +2010,7 @@ derive_parser!(
         }
     }
     ld.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
         }
         Instruction::Ld {
@@ -2025,7 +2025,7 @@ derive_parser!(
         }
     }
     ld.acquire.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
         }
         Instruction::Ld {
@@ -2074,7 +2074,7 @@ derive_parser!(
                 state.errors.push(PtxError::SyntaxError(format!("cannot have both {} and {} in {:?}", cop, level_eviction_priority, state.text)));
             }
         }
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
+        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
             state.errors.push(PtxError::Todo);
         }
         Instruction::Ld {
@@ -3787,7 +3787,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
                              [dst], [src], cp-size{, src-size}{, cache-policy} => {
-        if level_cache_hint || cache_policy.is_some() {
+        if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
             state.errors.push(PtxError::Todo);
         }
 
