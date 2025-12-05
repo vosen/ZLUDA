@@ -239,10 +239,10 @@ define amdgpu_kernel void @mma_m16n8k32_s32_s8_s8_s32_interleave(ptr addrspace(4
   br label %"168"
 
 "168":                                            ; preds = %"167"
-  %61 = load i16, ptr addrspace(5) %"201", align 2
-  %62 = load i16, ptr addrspace(5) %"202", align 2
-  %63 = load i16, ptr addrspace(5) %"203", align 2
-  %64 = load i16, ptr addrspace(5) %"204", align 2
+  %61 = load i16, ptr addrspace(5) %"205", align 2
+  %62 = load i16, ptr addrspace(5) %"206", align 2
+  %63 = load i16, ptr addrspace(5) %"207", align 2
+  %64 = load i16, ptr addrspace(5) %"208", align 2
   %65 = insertelement <4 x i16> undef, i16 %61, i8 0
   %66 = insertelement <4 x i16> %65, i16 %62, i8 1
   %67 = insertelement <4 x i16> %66, i16 %63, i8 2
@@ -332,8 +332,8 @@ define amdgpu_kernel void @mma_m16n8k32_s32_s8_s8_s32_interleave(ptr addrspace(4
   %116 = insertelement <4 x i32> %115, i32 %112, i8 1
   %117 = insertelement <4 x i32> %116, i32 %113, i8 2
   %"124" = insertelement <4 x i32> %117, i32 %114, i8 3
-  %118 = load i32, ptr addrspace(5) %"225", align 4
-  %119 = load i32, ptr addrspace(5) %"226", align 4
+  %118 = load i32, ptr addrspace(5) %"226", align 4
+  %119 = load i32, ptr addrspace(5) %"225", align 4
   %120 = insertelement <2 x i32> undef, i32 %118, i8 0
   %"125" = insertelement <2 x i32> %120, i32 %119, i8 1
   %121 = load i32, ptr addrspace(5) %"217", align 4
@@ -361,7 +361,7 @@ define amdgpu_kernel void @mma_m16n8k32_s32_s8_s8_s32_interleave(ptr addrspace(4
   %133 = insertelement <4 x i32> %132, i32 %129, i8 1
   %134 = insertelement <4 x i32> %133, i32 %130, i8 2
   %"128" = insertelement <4 x i32> %134, i32 %131, i8 3
-  %135 = load i32, ptr addrspace(5) %"226", align 4
+  %135 = load i32, ptr addrspace(5) %"225", align 4
   %136 = load i32, ptr addrspace(5) %"225", align 4
   %137 = insertelement <2 x i32> undef, i32 %135, i8 0
   %"129" = insertelement <2 x i32> %137, i32 %136, i8 1
@@ -395,98 +395,82 @@ define amdgpu_kernel void @mma_m16n8k32_s32_s8_s8_s32_interleave(ptr addrspace(4
   %150 = load i64, ptr addrspace(5) %"198", align 8
   %151 = load i32, ptr addrspace(5) %"227", align 4
   %"488" = inttoptr i64 %150 to ptr
-  %"489" = bitcast i32 %151 to float
-  store float %"489", ptr %"488", align 4
+  store i32 %151, ptr %"488", align 4
   %152 = load i64, ptr addrspace(5) %"198", align 8
-  %"490" = inttoptr i64 %152 to ptr
-  %"133" = getelementptr inbounds i8, ptr %"490", i64 4
+  %"489" = inttoptr i64 %152 to ptr
+  %"133" = getelementptr inbounds i8, ptr %"489", i64 4
   %153 = load i32, ptr addrspace(5) %"228", align 4
-  %"491" = bitcast i32 %153 to float
-  store float %"491", ptr %"133", align 4
+  store i32 %153, ptr %"133", align 4
   %154 = load i64, ptr addrspace(5) %"198", align 8
-  %"492" = inttoptr i64 %154 to ptr
-  %"135" = getelementptr inbounds i8, ptr %"492", i64 8
+  %"490" = inttoptr i64 %154 to ptr
+  %"135" = getelementptr inbounds i8, ptr %"490", i64 8
   %155 = load i32, ptr addrspace(5) %"229", align 4
-  %"493" = bitcast i32 %155 to float
-  store float %"493", ptr %"135", align 4
+  store i32 %155, ptr %"135", align 4
   %156 = load i64, ptr addrspace(5) %"198", align 8
-  %"494" = inttoptr i64 %156 to ptr
-  %"137" = getelementptr inbounds i8, ptr %"494", i64 12
+  %"491" = inttoptr i64 %156 to ptr
+  %"137" = getelementptr inbounds i8, ptr %"491", i64 12
   %157 = load i32, ptr addrspace(5) %"230", align 4
-  %"495" = bitcast i32 %157 to float
-  store float %"495", ptr %"137", align 4
+  store i32 %157, ptr %"137", align 4
   %158 = load i64, ptr addrspace(5) %"198", align 8
-  %"496" = inttoptr i64 %158 to ptr
-  %"139" = getelementptr inbounds i8, ptr %"496", i64 16
+  %"492" = inttoptr i64 %158 to ptr
+  %"139" = getelementptr inbounds i8, ptr %"492", i64 16
   %159 = load i32, ptr addrspace(5) %"231", align 4
-  %"497" = bitcast i32 %159 to float
-  store float %"497", ptr %"139", align 4
+  store i32 %159, ptr %"139", align 4
   %160 = load i64, ptr addrspace(5) %"198", align 8
-  %"498" = inttoptr i64 %160 to ptr
-  %"141" = getelementptr inbounds i8, ptr %"498", i64 20
+  %"493" = inttoptr i64 %160 to ptr
+  %"141" = getelementptr inbounds i8, ptr %"493", i64 20
   %161 = load i32, ptr addrspace(5) %"232", align 4
-  %"499" = bitcast i32 %161 to float
-  store float %"499", ptr %"141", align 4
+  store i32 %161, ptr %"141", align 4
   %162 = load i64, ptr addrspace(5) %"198", align 8
-  %"500" = inttoptr i64 %162 to ptr
-  %"143" = getelementptr inbounds i8, ptr %"500", i64 24
+  %"494" = inttoptr i64 %162 to ptr
+  %"143" = getelementptr inbounds i8, ptr %"494", i64 24
   %163 = load i32, ptr addrspace(5) %"233", align 4
-  %"501" = bitcast i32 %163 to float
-  store float %"501", ptr %"143", align 4
+  store i32 %163, ptr %"143", align 4
   %164 = load i64, ptr addrspace(5) %"198", align 8
-  %"502" = inttoptr i64 %164 to ptr
-  %"145" = getelementptr inbounds i8, ptr %"502", i64 28
+  %"495" = inttoptr i64 %164 to ptr
+  %"145" = getelementptr inbounds i8, ptr %"495", i64 28
   %165 = load i32, ptr addrspace(5) %"234", align 4
-  %"503" = bitcast i32 %165 to float
-  store float %"503", ptr %"145", align 4
+  store i32 %165, ptr %"145", align 4
   %166 = load i64, ptr addrspace(5) %"198", align 8
-  %"504" = inttoptr i64 %166 to ptr
-  %"147" = getelementptr inbounds i8, ptr %"504", i64 32
+  %"496" = inttoptr i64 %166 to ptr
+  %"147" = getelementptr inbounds i8, ptr %"496", i64 32
   %167 = load i32, ptr addrspace(5) %"235", align 4
-  %"505" = bitcast i32 %167 to float
-  store float %"505", ptr %"147", align 4
+  store i32 %167, ptr %"147", align 4
   %168 = load i64, ptr addrspace(5) %"198", align 8
-  %"506" = inttoptr i64 %168 to ptr
-  %"149" = getelementptr inbounds i8, ptr %"506", i64 36
+  %"497" = inttoptr i64 %168 to ptr
+  %"149" = getelementptr inbounds i8, ptr %"497", i64 36
   %169 = load i32, ptr addrspace(5) %"236", align 4
-  %"507" = bitcast i32 %169 to float
-  store float %"507", ptr %"149", align 4
+  store i32 %169, ptr %"149", align 4
   %170 = load i64, ptr addrspace(5) %"198", align 8
-  %"508" = inttoptr i64 %170 to ptr
-  %"151" = getelementptr inbounds i8, ptr %"508", i64 40
+  %"498" = inttoptr i64 %170 to ptr
+  %"151" = getelementptr inbounds i8, ptr %"498", i64 40
   %171 = load i32, ptr addrspace(5) %"237", align 4
-  %"509" = bitcast i32 %171 to float
-  store float %"509", ptr %"151", align 4
+  store i32 %171, ptr %"151", align 4
   %172 = load i64, ptr addrspace(5) %"198", align 8
-  %"510" = inttoptr i64 %172 to ptr
-  %"153" = getelementptr inbounds i8, ptr %"510", i64 44
+  %"499" = inttoptr i64 %172 to ptr
+  %"153" = getelementptr inbounds i8, ptr %"499", i64 44
   %173 = load i32, ptr addrspace(5) %"238", align 4
-  %"511" = bitcast i32 %173 to float
-  store float %"511", ptr %"153", align 4
+  store i32 %173, ptr %"153", align 4
   %174 = load i64, ptr addrspace(5) %"198", align 8
-  %"512" = inttoptr i64 %174 to ptr
-  %"155" = getelementptr inbounds i8, ptr %"512", i64 48
+  %"500" = inttoptr i64 %174 to ptr
+  %"155" = getelementptr inbounds i8, ptr %"500", i64 48
   %175 = load i32, ptr addrspace(5) %"239", align 4
-  %"513" = bitcast i32 %175 to float
-  store float %"513", ptr %"155", align 4
+  store i32 %175, ptr %"155", align 4
   %176 = load i64, ptr addrspace(5) %"198", align 8
-  %"514" = inttoptr i64 %176 to ptr
-  %"157" = getelementptr inbounds i8, ptr %"514", i64 52
+  %"501" = inttoptr i64 %176 to ptr
+  %"157" = getelementptr inbounds i8, ptr %"501", i64 52
   %177 = load i32, ptr addrspace(5) %"240", align 4
-  %"515" = bitcast i32 %177 to float
-  store float %"515", ptr %"157", align 4
+  store i32 %177, ptr %"157", align 4
   %178 = load i64, ptr addrspace(5) %"198", align 8
-  %"516" = inttoptr i64 %178 to ptr
-  %"159" = getelementptr inbounds i8, ptr %"516", i64 56
+  %"502" = inttoptr i64 %178 to ptr
+  %"159" = getelementptr inbounds i8, ptr %"502", i64 56
   %179 = load i32, ptr addrspace(5) %"241", align 4
-  %"517" = bitcast i32 %179 to float
-  store float %"517", ptr %"159", align 4
+  store i32 %179, ptr %"159", align 4
   %180 = load i64, ptr addrspace(5) %"198", align 8
-  %"518" = inttoptr i64 %180 to ptr
-  %"161" = getelementptr inbounds i8, ptr %"518", i64 60
+  %"503" = inttoptr i64 %180 to ptr
+  %"161" = getelementptr inbounds i8, ptr %"503", i64 60
   %181 = load i32, ptr addrspace(5) %"242", align 4
-  %"519" = bitcast i32 %181 to float
-  store float %"519", ptr %"161", align 4
+  store i32 %181, ptr %"161", align 4
   ret void
 }
 

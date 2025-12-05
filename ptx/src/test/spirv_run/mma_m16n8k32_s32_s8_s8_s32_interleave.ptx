@@ -68,7 +68,7 @@
 
     mov.v4.u16 input,  {in0, in1, in2, in3};
     call (b0b1b2b3), pack_u8, (input);
-    mov.v4.u16 input,  {in0, in1, in2, in3};
+    mov.v4.u16 input,  {in4, in5, in6, in7};
     call (b4b5b6b7), pack_u8, (input);
 
     cvt.u32.u16         in32_0, in0;
@@ -91,33 +91,33 @@
     mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32
         {d8, d9, d10, d11},
         {a0a1a2a3, a4a5a6a7, a8a9a10a11, a12a13a14a15},
-        {b0b1b2b3, b4b5b6b7},
+        {b4b5b6b7, b0b1b2b3},
         {in32_0, in32_1, in32_2, in32_3};
 
     mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32
         {d12, d13, d14, d15},
         {a12a13a14a15, a8a9a10a11, a4a5a6a7, a0a1a2a3},
-        {b4b5b6b7, b0b1b2b3},
+        {b0b1b2b3, b0b1b2b3},
         {in32_0, in32_1, in32_2, in32_3};
 
     cvt.u64.u32     out_index, thread_id;
     mul.lo.u64      out_index, out_index, 64;
     add.u64         out_addr, out_addr, out_index;
-    st.f32          [out_addr], d0;
-    st.f32          [out_addr+4], d1;
-    st.f32          [out_addr+8], d2;
-    st.f32          [out_addr+12], d3;
-    st.f32          [out_addr+16], d4;
-    st.f32          [out_addr+20], d5;
-    st.f32          [out_addr+24], d6;
-    st.f32          [out_addr+28], d7;
-    st.f32          [out_addr+32], d8;
-    st.f32          [out_addr+36], d9;
-    st.f32          [out_addr+40], d10;
-    st.f32          [out_addr+44], d11;
-    st.f32          [out_addr+48], d12;
-    st.f32          [out_addr+52], d13;
-    st.f32          [out_addr+56], d14;
-    st.f32          [out_addr+60], d15;
+    st.b32          [out_addr], d0;
+    st.b32          [out_addr+4], d1;
+    st.b32          [out_addr+8], d2;
+    st.b32          [out_addr+12], d3;
+    st.b32          [out_addr+16], d4;
+    st.b32          [out_addr+20], d5;
+    st.b32          [out_addr+24], d6;
+    st.b32          [out_addr+28], d7;
+    st.b32          [out_addr+32], d8;
+    st.b32          [out_addr+36], d9;
+    st.b32          [out_addr+40], d10;
+    st.b32          [out_addr+44], d11;
+    st.b32          [out_addr+48], d12;
+    st.b32          [out_addr+52], d13;
+    st.b32          [out_addr+56], d14;
+    st.b32          [out_addr+60], d15;
     ret;
 }
