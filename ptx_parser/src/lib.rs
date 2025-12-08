@@ -1881,7 +1881,7 @@ derive_parser!(
             arguments: MovArgs { dst: d, src: a },
         }
     }
-    .vec: VectorPrefix = { .v2, .v4 };
+    .vec: VectorPrefix = { .v2, .v4, .v8 };
     .type: ScalarType =  { .pred,
                            .b16, .b32, .b64,
                            .u16, .u32, .u64,
@@ -1960,7 +1960,7 @@ derive_parser!(
     .level::cache_hint =        { .L2::cache_hint };
     .cop: RawStCacheOperator =  { .wb, .cg, .cs, .wt };
     .scope: MemScope =          { .cta, .cluster, .gpu, .sys };
-    .vec: VectorPrefix =        { .v2, .v4 };
+    .vec: VectorPrefix =        { .v2, .v4, .v8 };
     .type: ScalarType =         { .b8, .b16, .b32, .b64, .b128,
                                   .u8, .u16, .u32, .u64,
                                   .s8, .s16, .s32, .s64,
