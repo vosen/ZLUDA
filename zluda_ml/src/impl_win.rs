@@ -62,14 +62,14 @@ pub(crate) fn device_get_compute_running_processes(
 }
 
 pub(crate) unsafe fn device_get_memory_info(
-    device: &Device,
+    device: cuda_types::nvml::nvmlDevice_t,
     memory: &mut cuda_types::nvml::nvmlMemory_t,
 ) -> nvmlReturn_t {
     crate::impl_common::unimplemented()
 }
 
 pub(crate) fn device_get_name(
-    device: &Device,
+    device: cuda_types::nvml::nvmlDevice_t,
     name: *mut ::core::ffi::c_char,
     length: ::core::ffi::c_uint,
 ) -> nvmlReturn_t {
