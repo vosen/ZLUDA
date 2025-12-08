@@ -1,0 +1,22 @@
+.version 8.8
+.target sm_120
+.address_size 64
+
+.visible .entry vector8(
+    .param .u64 input_p,
+    .param .u64 output_p
+)
+{
+    .reg .u64       in_addr;
+    .reg .u64       out_addr;
+    .reg .u32       dst<8>;
+    .reg .u32       temp_scalar;
+
+    ld.param.u64    in_addr, [input_p];
+    ld.param.u64    out_addr, [output_p];
+
+   ld.global.v8.u32 {dst0, dst1, dst2, dst3, dst4, dst5, dst6, dst7}, [in_addr];
+    mov.b32         temp_scalar, dst7;
+    st.u32          [out_addr], temp_scalar;
+    ret;
+}

@@ -125,6 +125,7 @@ test_ptx!(local_align, [1u64], [1u64]);
 test_ptx!(call, [1u64], [2u64]);
 test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 test_ptx!(vector4, [1u32, 2u32, 3u32, 4u32], [4u32]);
+test_ptx!(vector8, [1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32], [8u32]);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
 test_ptx!(ntid, [3u32], [4u32]);
 test_ptx!(reg_local, [12u64], [13u64]);
