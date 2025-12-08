@@ -180,7 +180,7 @@ pub(crate) unsafe fn device_get_memory_info(
 
     *memory = nvmlMemory_t {
         total,
-        free: total - used,
+        free: total.saturating_sub(used),
         used,
     };
 
