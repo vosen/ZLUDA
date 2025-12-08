@@ -147,6 +147,11 @@ test_ptx!(
     [0x1_00_00_00_00_00_00i64]
 );
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
+test_ptx!(
+    vector8_extract,
+    [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8],
+    [8u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8]
+);
 test_ptx!(vector_operand, [0x1234u16], [0x12345678]);
 test_ptx!(shr, [-2i32], [-1i32]);
 test_ptx!(shr_oob, [-32768i16], [-1i16]);

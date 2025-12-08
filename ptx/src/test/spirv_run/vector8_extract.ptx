@@ -1,0 +1,21 @@
+.version 8.8
+.target sm_120
+.address_size 64
+
+.visible .entry vector8_extract(
+    .param .u64 input_p,
+    .param .u64 output_p
+)
+{
+    .reg .u64           in_addr;
+    .reg .u64           out_addr;
+    .reg .u16           temp<8>;
+
+	ld.param.u64    in_addr, [input_p];
+    ld.param.u64    out_addr, [output_p];
+
+    ld.global.v8.u8     {temp0, temp1, temp2, temp3, temp4, temp5, temp6, temp7}, [in_addr];
+    mov.v8.u16          {temp4, temp5, temp6, temp7, temp0, temp1, temp2, temp3}, {temp3, temp4, temp5, temp6, temp7, temp0, temp1, temp2};
+    st.global.v8.u8     [out_addr], {temp0, temp1, temp2, temp3, temp4, temp5, temp6, temp7};
+    ret;
+}
