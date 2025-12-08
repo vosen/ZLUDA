@@ -18,6 +18,27 @@ use std::{
     str::Utf8Error,
 };
 
+pub const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
+pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
+pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
+
+pub fn append_suffix(name: *mut ::core::ffi::c_char, len: usize) {
+    let buffer = unsafe { std::slice::from_raw_parts(name, len) };
+    let Some(first_zero) = buffer.iter().position(|c| *c == 0) else {
+        return;
+    };
+    if (first_zero + PROJECT_SUFFIX.len()) > len {
+        return;
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(
+            PROJECT_SUFFIX.as_ptr() as _,
+            name.add(first_zero),
+            PROJECT_SUFFIX.len(),
+        )
+    };
+}
+
 pub trait CudaErrorType {
     const INVALID_VALUE: Self;
     const NOT_SUPPORTED: Self;
@@ -188,6 +209,7 @@ from_cuda_nop!(
     nvmlProcessInfo_v1_t,
     nvmlFieldValue_t,
     nvmlGpuFabricInfo_t,
+    nvmlMemory_t,
     cublasLtHandle_t,
     cublasLtMatmulDesc_t,
     cublasLtMatmulPreference_t,

@@ -159,6 +159,44 @@ pub(crate) fn device_get_compute_running_processes(
     Ok(())
 }
 
+pub(crate) unsafe fn device_get_memory_info(
+    device: &Device,
+    memory: &mut cuda_types::nvml::nvmlMemory_t,
+) -> nvmlReturn_t {
+    let mut total = mem::zeroed();
+
+    rsmi_dev_memory_total_get(
+        device._index,
+        rsmi_memory_type_t::RSMI_MEM_TYPE_VRAM,
+        &mut total,
+    )?;
+    let mut used = mem::zeroed();
+
+    rsmi_dev_memory_usage_get(
+        device._index,
+        rsmi_memory_type_t::RSMI_MEM_TYPE_VRAM,
+        &mut used,
+    )?;
+
+    *memory = nvmlMemory_t {
+        total,
+        free: total - used,
+        used,
+    };
+
+    Ok(())
+}
+
+pub(crate) fn device_get_name(
+    device: &Device,
+    name: *mut ::core::ffi::c_char,
+    length: ::core::ffi::c_uint,
+) -> nvmlReturn_t {
+    unsafe { rsmi_dev_name_get(device._index, name, length as usize) }?;
+    zluda_common::append_suffix(name, length as usize);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

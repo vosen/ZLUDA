@@ -1,5 +1,6 @@
 use cuda_types::nvml::*;
 use std::{ffi::CStr, ptr};
+use zluda_common::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
 
 const VERSION: &'static CStr = c"550.77";
 
@@ -28,6 +29,17 @@ pub(crate) fn system_get_driver_version(
         *null = 0;
     }
     nvmlReturn_t::SUCCESS
+}
+
+pub(crate) unsafe fn device_get_cuda_compute_capability(
+    _device: cuda_types::nvml::nvmlDevice_t,
+    major: *mut ::core::ffi::c_int,
+    minor: *mut ::core::ffi::c_int,
+) -> nvmlReturn_t {
+    // ZLUDA emulates a specific device so ignore the device parameter.
+    *major = COMPUTE_CAPABILITY_MAJOR;
+    *minor = COMPUTE_CAPABILITY_MINOR;
+    Ok(())
 }
 
 pub(crate) fn error_string(_result: nvmlReturn_t) -> *const ::core::ffi::c_char {
