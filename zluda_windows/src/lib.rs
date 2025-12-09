@@ -14,8 +14,9 @@ use windows::{
     Win32::{
         Foundation::HMODULE,
         System::LibraryLoader::{
-            GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryW,
+            GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
         },
     },
 };
@@ -300,7 +301,6 @@ pub type PfnDliHook =
 
 pub unsafe fn delay_load_failure_hook(
     redirect_name: &'static str,
-    dependencies: &[&'static str],
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
@@ -311,9 +311,6 @@ pub unsafe fn delay_load_failure_hook(
     let name = CStr::from_ptr(pdli.sz_dll);
     if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
         return None;
-    }
-    for d in dependencies {
-        try_load_from_self_dir(d).or_else(|| try_load_from_hip_path(d))?;
     }
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
 }
@@ -335,7 +332,12 @@ pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
         .encode_wide()
         .chain(iter::once(0))
         .collect::<Vec<_>>();
-    LoadLibraryW(PCWSTR(path_utf16.as_ptr())).ok()
+    LoadLibraryExW(
+        PCWSTR(path_utf16.as_ptr()),
+        None,
+        LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    )
+    .ok()
 }
 
 unsafe fn try_load_from_hip_path(redirect_name: &'static str) -> Option<HMODULE> {
@@ -347,7 +349,12 @@ unsafe fn try_load_from_hip_path(redirect_name: &'static str) -> Option<HMODULE>
         .encode_wide()
         .chain(iter::once(0))
         .collect::<Vec<_>>();
-    LoadLibraryW(PCWSTR(hip_dll_path.as_ptr())).ok()
+    LoadLibraryExW(
+        PCWSTR(hip_dll_path.as_ptr()),
+        None,
+        LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    )
+    .ok()
 }
 
 pub fn get_module_path(instance_handle: *mut c_void) -> CString {
