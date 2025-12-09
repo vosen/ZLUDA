@@ -25,3 +25,5 @@ linux_symlinks = [
     "trace/libcublasLt.so.12",
     "trace/libcublasLt.so.13"
 ]
+
+windows_paths = ["trace/cublasLt64_12.dll", "trace/cublasLt64_13.dll"]

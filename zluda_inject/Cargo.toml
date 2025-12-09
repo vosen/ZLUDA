@@ -5,14 +5,26 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [[bin]]
-name = "zluda_with"
+name = "zluda"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["jobapi2", "processthreadsapi", "synchapi", "winbase", "std", "processenv"] }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+] }
+windows-core = { version = "0.62.2" }
+zluda_windows = { path = "../zluda_windows" }
 tempfile = "3"
 argh = "0.1"
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 detours-sys = { path = "../detours-sys" }
+rustc-hash = "2.0.0"
+widestring = "1.2.1"
 
 [dev-dependencies]
 # all of those are used in integration tests

@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
 
 fn get_library() -> Option<Library> {
-    let cuda_lib = std::env::var("ZLUDA_DNN_LIB")
+    let cuda_lib = std::env::var("ZLUDA_DNN9_LIB")
         .ok()
         .unwrap_or_else(|| "/usr/lib/x86_64-linux-gnu/libcudnn.so.9".to_string());
     zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()
@@ -25,7 +25,7 @@ macro_rules! unimplemented {
                 let export_table = unwrap_or::unwrap_some_or!(::zluda_trace_common::get_export_table(), return internal_error);
                 let format_args = dark_api::FnFfiWrapper(|| {
                     let mut writer = Vec::new();
-                    let formatter = paste::paste! { ::format:: [< write_  $fn_name>] };
+                    let formatter = paste::paste! { ::format:: dnn9 :: [< write_  $fn_name>] };
                     formatter(&mut writer $(, $arg_id)* ).ok();
                     dark_api::ByteVecFfi::new(writer)
                 });

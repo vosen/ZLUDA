@@ -465,6 +465,19 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiTrace {
         }
     }
 
+    dark_api_fn_redirect_log! {
+        HYBRID_CUDART {
+            [1] = hybrid_runtime_load_get_proc_address(
+                name: *const std::ffi::c_char,
+                fn_ptr: *mut *const std::ffi::c_void,
+                token: *mut usize
+            ) -> cuda_types::cuda::CUresult,
+            [2] = hybrid_runtime_free(
+                handle: usize
+            ) -> cuda_types::cuda::CUresult
+        }
+    }
+
     unsafe extern "system" fn integrity_check(
         version: u32,
         unix_seconds: u64,

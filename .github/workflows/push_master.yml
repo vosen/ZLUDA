@@ -25,6 +25,7 @@ jobs:
       with:
         fetch-depth: 0
         fetch-tags: true
+        lfs: true
         submodules: true
     - name: Install ROCm
       run: sudo bash .github/workflows/rocm_setup_build.sh ${{ env.ROCM_VERSION }}
@@ -71,6 +72,7 @@ jobs:
       with:
         fetch-depth: 0
         fetch-tags: true
+        lfs: true
         submodules: true
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
@@ -114,9 +116,10 @@ jobs:
     - name: Install build tools
       run: |
         sudo apt update
-        sudo apt install -y git build-essential cmake
+        sudo apt install -y git git-lfs build-essential cmake
     - uses: actions/checkout@v4
       with:
+        lfs: true
         submodules: true
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
@@ -130,7 +133,11 @@ jobs:
         tool: cargo-export
     - name: Build
       run: |
-        cargo export target/tests -- test --features ci_build --workspace --exclude cuda_macros --exclude ptx_parser_macros
+        cargo export target/tests -- test --features ci_build --workspace \
+          --exclude cuda_macros \
+          --exclude ptx_parser_macros \
+          --exclude zluda_inject \
+          --exclude zluda_redirect
         mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
         strip target/amdgpu/*

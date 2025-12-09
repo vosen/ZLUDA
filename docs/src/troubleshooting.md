@@ -43,22 +43,21 @@ Run your application like this:
 #### AMD GPU:
 
 ```bash
-export ZLUDA_CUDA_LIB=<ZLUDA_DIRECTORY>/nvcuda.dll
-export ZLUDA_LOG_DIR=<LOG_DIRECTORY>
-zluda_with.exe --nvcuda <ZLUDA_DIRECTORY>/zluda_trace.dll -- <APPLICATION> <APPLICATION_ARGUMENTS>
+zluda.exe --zluda-trace -- <APPLICATION> <APPLICATION_ARGUMENTS>
 ```
 
 #### NVIDIA GPU:
 
 ```bash
-export ZLUDA_LOG_DIR=<LOG_DIRECTORY>
-zluda_with.exe --nvcuda <ZLUDA_DIRECTORY>/zluda_trace.dll -- <APPLICATION> <APPLICATION_ARGUMENTS>
+zluda.exe --nvidia-trace -- <APPLICATION> <APPLICATION_ARGUMENTS>
 ```
+
+This will create a new directory with executable name with the log output in `C:\Users\%USERNAME%\AppData\Local\Temp\zluda` (`%TEMP%\zluda`).
 
 If you're [filing a GitHub
 issue](https://github.com/vosen/ZLUDA/issues/new/choose), please create
-a .zip file with your logs from `<LOG_DIRECTORY>` to attach to the
-issue. In Windows Explorer, right click on `<LOG_DIRECTORY>` and select
+a .zip file with your logs from `C:\Users\%USERNAME%\AppData\Local\Temp\zluda` to attach to the
+issue. In Windows Explorer, right click on the directory  and select
 "Send to"/"Compressed (zipped) folder". Exact steps may vary between
 Windows versions.
 

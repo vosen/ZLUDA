@@ -15,8 +15,8 @@ hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 zluda_common = { path = "../zluda_common" }
 
 [package.metadata.zluda]
-linux_symlinks = [
-    "libcublasLt.so",
-    "libcublasLt.so.12",
-    "libcublasLt.so.13",
-]
+linux_symlinks = ["libcublasLt.so", "libcublasLt.so.12", "libcublasLt.so.13"]
+windows_paths = ["cublasLt64_12.dll", "cublasLt64_13.dll"]
+
+[target.'cfg(windows)'.dependencies]
+zluda_windows = { path = "../zluda_windows" }

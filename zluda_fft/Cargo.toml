@@ -16,3 +16,4 @@ linux_symlinks = [
     "libcufft.so.11",
     "libcufft.so.12",
 ]
+windows_paths = ["cufft64_11.dll", "cufft64_12.dll"]

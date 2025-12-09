@@ -383,3 +383,25 @@ pub(crate) unsafe fn gemm_strided_batched_ex(
         0,
     )
 }
+
+pub(crate) unsafe fn set_vector(
+    n: ::core::ffi::c_int,
+    elem_size: ::core::ffi::c_int,
+    x: *const ::core::ffi::c_void,
+    incx: ::core::ffi::c_int,
+    device_ptr: *mut ::core::ffi::c_void,
+    incy: ::core::ffi::c_int,
+) -> rocblas_status {
+    rocblas_set_vector(n, elem_size, x, incx, device_ptr, incy)
+}
+
+pub(crate) unsafe fn get_vector(
+    n: ::core::ffi::c_int,
+    elem_size: ::core::ffi::c_int,
+    x: *const ::core::ffi::c_void,
+    incx: ::core::ffi::c_int,
+    y: *mut ::core::ffi::c_void,
+    incy: ::core::ffi::c_int,
+) -> rocblas_status {
+    rocblas_get_vector(n, elem_size, x, incx, y, incy)
+}

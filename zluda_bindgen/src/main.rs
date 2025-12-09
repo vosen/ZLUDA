@@ -853,6 +853,10 @@ fn get_structs<'a>(cudnn_module: &'a syn::File) -> FxHashMap<&'a Ident, Cow<'a, 
 
 fn generate_cublas(crate_root: &PathBuf) {
     let cublas_header = new_builder()
+        .header_contents(
+            "cublas_wrapper.h",
+            include_str!("../build/cublas_wrapper.h"),
+        )
         .header("/usr/local/cuda/include/cublas_v2.h")
         .allowlist_type("^cublas.*")
         .allowlist_function("^cublas.*")

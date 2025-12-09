@@ -16,3 +16,6 @@ zluda_dnn = { path = "../zluda_dnn" }
 linux_symlinks = [
     "libcudnn.so.8",
 ]
+
+[target.'cfg(windows)'.dependencies]
+zluda_windows = { path = "../zluda_windows" }

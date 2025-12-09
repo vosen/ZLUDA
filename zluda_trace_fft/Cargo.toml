@@ -25,3 +25,7 @@ linux_symlinks = [
     "trace/libcufft.so.11",
     "trace/libcufft.so.12"
 ]
+windows_paths = [
+    "trace/cufft64_11.dll",
+    "trace/cufft64_12.dll"
+]
