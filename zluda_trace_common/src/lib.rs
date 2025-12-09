@@ -84,13 +84,16 @@ pub(crate) mod os {
         path: Cow<'a, str>,
     ) -> Result<libloading::Library, libloading::Error> {
         fn terminate_with_nul(mut path: Vec<u16>) -> Vec<u16> {
-            if path.last().copied() == Some(0) {
+            if path.last().copied() != Some(0) {
                 path.push(0);
             }
             path
         }
-        let driver = open_driver()?;
-        match driver.get::<unsafe extern "C" fn(*const u16) -> isize>(
+        let redirect_dll = match os::windows::Library::open_already_loaded("zluda_redirect") {
+            Ok(lib) => lib,
+            Err(_) => return libloading::Library::new(&*path),
+        };
+        match redirect_dll.get::<unsafe extern "system" fn(*const u16) -> isize>(
             c"ZludaLoadLibraryW_NoRedirect".to_bytes_with_nul(),
         ) {
             Ok(load_library) => {
@@ -196,6 +199,30 @@ impl ReprUsize for cuda_types::cublas::cublasStatus_t {
     }
 }
 
+impl ReprUsize for cuda_types::cudnn8::cudnnStatus_t {
+    fn to_usize(self) -> usize {
+        match self {
+            Ok(()) => 0,
+            Err(err) => err.0.get() as usize,
+        }
+    }
+
+    fn from_usize(x: usize) -> Self {
+        match NonZero::new(x as u32) {
+            None => Ok(()),
+            Some(err) => Err(cuda_types::cudnn8::cudnnError_t(err)),
+        }
+    }
+
+    const INTERNAL_ERROR: usize = cuda_types::cudnn8::cudnnError_t::INTERNAL_ERROR.0.get() as usize;
+
+    extern "C" fn format_status(x: usize) -> ByteVecFfi {
+        let mut writer = Vec::new();
+        format::CudaDisplay::write(&Self::from_usize(x), "", 0, &mut writer).ok();
+        ByteVecFfi::new(writer)
+    }
+}
+
 impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
     fn to_usize(self) -> usize {
         match self {
@@ -211,9 +238,7 @@ impl ReprUsize for cuda_types::cudnn9::cudnnStatus_t {
         }
     }
 
-    // TODO: handle this after cudnn fix
-
-    const INTERNAL_ERROR: usize = 14;
+    const INTERNAL_ERROR: usize = cuda_types::cudnn9::cudnnError_t::INTERNAL_ERROR.0.get() as usize;
 
     extern "C" fn format_status(x: usize) -> ByteVecFfi {
         let mut writer = Vec::new();

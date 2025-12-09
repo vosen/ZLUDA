@@ -1,6 +1,7 @@
 use crate::r#impl::{self, context, device, function};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
+use libloading::Library;
 use std::{
     collections::BTreeMap,
     ffi::{c_void, CStr, CString},
@@ -361,7 +362,46 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     unsafe extern "system" fn check_fn3() -> u32 {
         0
     }
+
+    unsafe extern "system" fn hybrid_runtime_load_get_proc_address(
+        name: *const std::ffi::c_char,
+        fn_ptr: *mut *const std::ffi::c_void,
+        token: *mut usize,
+    ) -> cuda_types::cuda::CUresult {
+        let name = CStr::from_ptr(name)
+            .to_str()
+            .map_err(|_| CUerror::INVALID_VALUE)?;
+        if name != "nvcudart_hybrid64.dll" && name != "nvcudart_hybrid64a.dll" {
+            return CUresult::ERROR_INVALID_VALUE;
+        }
+        let hybrid_runtime = &mut *HYBRID_RUNTIME_HANDLE.lock().map_err(|_| CUerror::UNKNOWN)?;
+        let library = match hybrid_runtime {
+            Some(lib) => lib,
+            None => {
+                let library =
+                    crate::os::try_load_library(name).map_err(|_| CUerror::FILE_NOT_FOUND)?;
+                *hybrid_runtime = Some(library);
+                hybrid_runtime.as_ref().unwrap()
+            }
+        };
+        let fn_ = library
+            .get::<*const std::ffi::c_void>(b"__cudaGetProcAddress\0")
+            .map_err(|_| CUerror::OPERATING_SYSTEM)?;
+
+        *fn_ptr = *fn_;
+        *token = 302100128;
+        Ok(())
+    }
+
+    unsafe extern "system" fn hybrid_runtime_free(token: usize) -> cuda_types::cuda::CUresult {
+        if token != 302100128 {
+            return CUresult::ERROR_INVALID_HANDLE;
+        }
+        CUresult::SUCCESS
+    }
 }
+
+static HYBRID_RUNTIME_HANDLE: Mutex<Option<Library>> = Mutex::new(None);
 
 fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
     let mut device_count = 0;

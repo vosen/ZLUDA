@@ -7,14 +7,15 @@ use std::{
     mem, ptr,
     sync::LazyLock,
 };
-use winapi::{
-    shared::minwindef::{FARPROC, HMODULE},
-    um::debugapi::OutputDebugStringA,
-    um::libloaderapi::{GetProcAddress, LoadLibraryW},
-};
+use windows::core::PCSTR;
+use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetProcAddress(hModule: *mut c_void, lpProcName: *const i8) -> *mut c_void;
+}
 
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
-const LOAD_LIBRARY_NO_REDIRECT: &'static [u8] = b"ZludaLoadLibraryW_NoRedirect\0";
 const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedirect\0";
 
 pub fn dlopen_local_noredirect<'a>(
@@ -25,64 +26,24 @@ pub fn dlopen_local_noredirect<'a>(
     NonNull::new(lib.into_raw() as *mut _).ok_or(libloading::Error::DlOpenUnknown)
 }
 
-static PLATFORM_LIBRARY: LazyLock<PlatformLibrary> =
-    LazyLock::new(|| unsafe { PlatformLibrary::new() });
-
-#[allow(non_snake_case)]
-struct PlatformLibrary {
-    LoadLibraryW: unsafe extern "system" fn(*const u16) -> HMODULE,
-    GetProcAddress: unsafe extern "system" fn(hModule: HMODULE, lpProcName: *const u8) -> FARPROC,
-}
-
-impl PlatformLibrary {
-    #[allow(non_snake_case)]
-    unsafe fn new() -> Self {
-        let (LoadLibraryW, GetProcAddress) = match Self::get_detourer_module() {
-            None => (
-                LoadLibraryW as unsafe extern "system" fn(*const u16) -> HMODULE,
-                mem::transmute(
-                    GetProcAddress
-                        as unsafe extern "system" fn(
-                            hModule: HMODULE,
-                            lpProcName: *const i8,
-                        ) -> FARPROC,
-                ),
-            ),
-            Some(zluda_with) => (
-                mem::transmute(GetProcAddress(
-                    zluda_with,
-                    LOAD_LIBRARY_NO_REDIRECT.as_ptr() as _,
-                )),
-                mem::transmute(GetProcAddress(
-                    zluda_with,
-                    GET_PROC_ADDRESS_NO_REDIRECT.as_ptr() as _,
-                )),
-            ),
-        };
-        PlatformLibrary {
-            LoadLibraryW,
-            GetProcAddress,
-        }
-    }
-
-    unsafe fn get_detourer_module() -> Option<HMODULE> {
-        let mut module = ptr::null_mut();
-        loop {
-            module = detours_sys::DetourEnumerateModules(module);
-            if module == ptr::null_mut() {
-                break;
-            }
-            let payload = GetProcAddress(module as _, b"ZLUDA_REDIRECT\0".as_ptr() as _);
-            if payload != ptr::null_mut() {
-                return Some(module as _);
-            }
-        }
-        None
-    }
-}
-
 pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
-    (PLATFORM_LIBRARY.GetProcAddress)(handle as _, func.as_ptr() as _) as _
+    use libloading::os::windows;
+    static ZLUDA_REDIRECT: LazyLock<
+        Option<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>,
+    > = LazyLock::new(|| {
+        let lib = match windows::Library::open_already_loaded("zluda_redirect") {
+            Ok(lib) => lib,
+            Err(_) => return Some(GetProcAddress),
+        };
+        unsafe {
+            lib.get::<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>(
+                GET_PROC_ADDRESS_NO_REDIRECT,
+            )
+        }
+        .ok()
+        .map(|symbol| *symbol)
+    });
+    unwrap_or::unwrap_some_or!(&*ZLUDA_REDIRECT, return ptr::null_mut())(handle, func.as_ptr())
 }
 
 #[macro_export]
@@ -110,7 +71,7 @@ pub fn __log_impl(s: String) {
         win_str.push_str("[ZLUDA_TRACE] ");
         win_str.push_str(&s);
         win_str.push_str("\n\0");
-        unsafe { OutputDebugStringA(win_str.as_ptr() as *const _) };
+        unsafe { OutputDebugStringA(PCSTR(win_str.as_ptr() as *const _)) };
     }
 }
 
@@ -151,26 +112,46 @@ pub fn get_thunk(
     use dynasmrt::{dynasm, DynasmApi};
     let mut ops = dynasmrt::x86::Assembler::new().unwrap();
     let start = ops.offset();
-    // Let's hope there's never more than 4 arguments
+    // Source: https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/windows-x64-calling-convention-stack-frame
     dynasm!(ops
         ; .arch x64
-        ; push rbp
-        ; mov rbp, rsp
-        ; push rcx
-        ; push rdx
-        ; push r8
-        ; push r9
+        // tuck args in shadow space
+        ; mov [rsp+0x20], r9
+        ; mov [rsp+0x18], r8
+        ; mov [rsp+0x10], rdx
+        ; mov [rsp+0x08], rcx
+        // 0x20 for shadow space, 0x48 for 9 stack args
+        // `call` instruction will push rsp making this aligned to 16 bytes
+        ; sub rsp, 0x68
         ; mov rcx, QWORD guid as i64
         ; mov rdx, QWORD idx as i64
         ; mov rax, QWORD report_fn as i64
         ; call rax
-        ; pop r9
-        ; pop r8
-        ; pop rdx
-        ; pop rcx
+        ; mov rax, [rsp+0x68+0x68]
+        ; mov [rsp+0x60], rax
+        ; mov rax, [rsp+0x60+0x68]
+        ; mov [rsp+0x58], rax
+        ; mov rax, [rsp+0x58+0x68]
+        ; mov [rsp+0x50], rax
+        ; mov rax, [rsp+0x50+0x68]
+        ; mov [rsp+0x48], rax
+        ; mov rax, [rsp+0x48+0x68]
+        ; mov [rsp+0x40], rax
+        ; mov rax, [rsp+0x40+0x68]
+        ; mov [rsp+0x38], rax
+        ; mov rax, [rsp+0x38+0x68]
+        ; mov [rsp+0x30], rax
+        ; mov rax, [rsp+0x30+0x68]
+        ; mov [rsp+0x28], rax
+        ; mov rax, [rsp+0x28+0x68]
+        ; mov [rsp+0x20], rax
+        ; mov r9,  [rsp+0x20+0x68]
+        ; mov r8,  [rsp+0x18+0x68]
+        ; mov rdx, [rsp+0x10+0x68]
+        ; mov rcx, [rsp+0x08+0x68]
         ; mov rax, QWORD original_fn as i64
         ; call rax
-        ; pop rbp
+        ; add rsp, 0x68
         ; ret
         ; int 3
     );

@@ -6868,4 +6868,9 @@ extern "system" {
         C_mult: ::core::ffi::c_int,
         C_shift: ::core::ffi::c_int,
     ) -> cuda_types::cublas::cublasStatus_t;
+    #[must_use]
+    fn cublasSetEnvironmentMode(
+        param_1: ::core::ffi::c_ulonglong,
+        param_2: ::core::ffi::c_uint,
+    ) -> cuda_types::cublas::cublasStatus_t;
 }

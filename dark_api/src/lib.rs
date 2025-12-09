@@ -329,6 +329,19 @@ dark_api! {
             result2: *mut *const std::ffi::c_void
         ) -> cuda_types::cuda::CUresult,
         [3] = check_fn3() -> u32 // seeems to always return 0
+    },
+    // On Windows, applications linking to CUDART rely on loading
+    // `nvcudart_hybrid64.dll` and getting `__cudaGetProcAddress`
+    "{DD9E98A4-F410-4844-99B0-E2AEB7B432B5}" => HYBRID_CUDART[3] {
+        [0] = SIZE_OF,
+        [1] = hybrid_runtime_load_get_proc_address(
+            name: *const std::ffi::c_char,
+            fn_ptr: *mut *const std::ffi::c_void,
+            token: *mut usize
+        ) -> cuda_types::cuda::CUresult,
+        [2] = hybrid_runtime_free(
+            token: usize
+        ) -> cuda_types::cuda::CUresult
     }
 }
 
