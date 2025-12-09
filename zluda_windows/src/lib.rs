@@ -300,16 +300,20 @@ pub type PfnDliHook =
 
 pub unsafe fn delay_load_failure_hook(
     redirect_name: &'static str,
+    dependencies: &[&'static str],
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
-    if dli_notify == DliNotify::FailLoadLib as u32 {
+    if dli_notify != DliNotify::FailLoadLib as u32 {
         return None;
     }
     let pdli = pdli.as_ref()?;
     let name = CStr::from_ptr(pdli.sz_dll);
     if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
         return None;
+    }
+    for d in dependencies {
+        try_load_from_self_dir(d).or_else(|| try_load_from_hip_path(d))?;
     }
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
 }

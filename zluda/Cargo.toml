@@ -46,3 +46,5 @@ linux_symlinks = [
     "libcuda.so",
     "libcuda.so.1",
 ]
+[package.metadata.zluda.windows_extra_files]
+"nvcudart_hybrid64.dll" = "bin/nvcudart_hybrid64.dll"

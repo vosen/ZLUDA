@@ -52,11 +52,13 @@ cuda_macros::cublas_function_declarations!(
             cublasGemmEx,
             cublasGemmStridedBatchedEx,
             cublasGetMathMode,
+            cublasGetVector,
             cublasHgemm,
             cublasSetMathMode,
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
+            cublasSetVector,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
         ],
@@ -79,7 +81,7 @@ mod windows {
         dli_notify: u32,
         pdli: *const zluda_windows::DelayLoadInfo,
     ) -> *mut std::ffi::c_void {
-        zluda_windows::delay_load_failure_hook("rocblas.dll", dli_notify, pdli)
+        zluda_windows::delay_load_failure_hook("rocblas.dll", &[&"hipblaslt.dll"], dli_notify, pdli)
             .map(|hm| hm.0 as *mut std::ffi::c_void)
             .unwrap_or(std::ptr::null_mut())
     }

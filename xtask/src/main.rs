@@ -1,7 +1,7 @@
 use bpaf::{Args, Bpaf, Parser};
 use cargo_metadata::{MetadataCommand, Package};
 use serde::Deserialize;
-use std::{env, ffi::OsString, path::PathBuf, process::Command};
+use std::{collections::HashMap, env, ffi::OsString, path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options)]
@@ -42,6 +42,7 @@ struct Cargo {
 }
 
 struct Project {
+    manifest_path: PathBuf,
     name: String,
     target_name: String,
     target_kind: ProjectTarget,
@@ -51,6 +52,7 @@ struct Project {
 impl Project {
     fn try_new(p: Package) -> Option<Project> {
         let name = p.name;
+        let manifest_path = p.manifest_path.into();
         serde_json::from_value::<Option<Metadata>>(p.metadata)
             .unwrap()
             .map(|m| {
@@ -68,12 +70,18 @@ impl Project {
                     })
                     .unwrap();
                 Self {
+                    manifest_path,
                     name,
                     target_name,
                     target_kind,
                     meta: m.zluda,
                 }
             })
+    }
+
+    #[cfg(windows)]
+    fn zip_compiler_output(&self) -> bool {
+        self.meta.windows_paths.is_empty()
     }
 
     #[cfg(unix)]
@@ -126,18 +134,47 @@ impl Project {
     }
 
     #[cfg_attr(unix, allow(unused))]
-    fn windows_paths<'a>(
+    fn additional_windows_paths<'a>(
         &'a self,
         target_dir: &'a PathBuf,
         profile: &'a str,
         libname: &'a str,
-    ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
+    ) -> impl Iterator<Item = WindowsPaths> + 'a {
         Self::relative_paths(
             self,
             target_dir,
             profile,
             libname,
             self.meta.windows_paths.as_slice(),
+        )
+        .map(move |(.., full_path, target)| {
+            let copy_output = full_path.clone();
+            let mut compilation_output = copy_output.clone();
+            compilation_output.pop();
+            compilation_output.push(target);
+            WindowsPaths {
+                zip_path: pathdiff::diff_paths(&copy_output, target_dir.join(profile)).unwrap(),
+                copy_output,
+                compilation_output,
+            }
+        })
+        .chain(
+            self.meta
+                .windows_extra_files
+                .iter()
+                .map(move |(source, target)| {
+                    let mut existing_file = self.manifest_path.clone();
+                    existing_file.pop();
+                    existing_file.push(target);
+                    let mut new_file = target_dir.clone();
+                    new_file.extend([profile, source]);
+                    WindowsPaths {
+                        zip_path: pathdiff::diff_paths(&new_file, target_dir.join(profile))
+                            .unwrap(),
+                        compilation_output: existing_file,
+                        copy_output: new_file,
+                    }
+                }),
         )
     }
 
@@ -149,7 +186,7 @@ impl Project {
         source: &'a [String],
     ) -> impl ExactSizeIterator<Item = (&'a str, PathBuf, PathBuf)> + 'a {
         source.iter().map(move |source| {
-            let mut link = target_dir.clone();
+            let mut link: PathBuf = target_dir.clone();
             link.extend([profile, source]);
             let relative_link = PathBuf::from(source);
             let ancestors = relative_link.as_path().ancestors().count();
@@ -171,6 +208,15 @@ impl Project {
         let suffix = self.suffix();
         format!("{prefix}{target_name}{suffix}")
     }
+}
+
+struct WindowsPaths {
+    // relative path inside zip file, excluding "zluda" prefix
+    zip_path: PathBuf,
+    // this is where the file is created by the compiler
+    compilation_output: PathBuf,
+    // this is where the file is to be copied to
+    copy_output: PathBuf,
 }
 
 #[derive(Clone, Copy)]
@@ -198,6 +244,8 @@ struct ZludaMetadata {
     linux_symlinks: Vec<String>,
     #[serde(default)]
     windows_paths: Vec<String>,
+    #[serde(default)]
+    windows_extra_files: HashMap<String, String>,
 }
 
 fn main() {
@@ -330,6 +378,7 @@ mod os {
 
 #[cfg(windows)]
 mod os {
+    use super::WindowsPaths;
     use std::{fs::File, io, path::PathBuf};
     use zip::{write::SimpleFileOptions, ZipWriter};
 
@@ -340,13 +389,14 @@ mod os {
     ) {
         for project in projects.iter() {
             let libname = project.file_name();
-            for (_, full_path, target) in project.windows_paths(target_directory, profile, &libname)
+            for WindowsPaths {
+                compilation_output,
+                copy_output,
+                ..
+            } in project.additional_windows_paths(target_directory, profile, &libname)
             {
-                let mut dir = full_path.clone();
-                assert!(dir.pop());
-                std::fs::create_dir_all(&dir).unwrap();
-                dir.push(&target);
-                std::fs::copy(dir, full_path).unwrap();
+                std::fs::create_dir_all(copy_output.parent().unwrap()).unwrap();
+                std::fs::copy(compilation_output, copy_output).unwrap();
             }
         }
     }
@@ -359,22 +409,26 @@ mod os {
             .unwrap();
         for project in projects.iter() {
             let libname = project.file_name();
-            let windows_paths = project.windows_paths(&target_dir, &profile, &libname);
-            if windows_paths.len() == 0 {
+            if project.zip_compiler_output() {
                 let mut file =
                     File::open(format!("{}/{profile}/{libname}", target_dir.display())).unwrap();
                 let file_options = file_options_from_time(&file).unwrap_or_default();
                 zip.start_file(format!("zluda/{libname}"), file_options)
                     .unwrap();
                 io::copy(&mut file, &mut zip).unwrap();
-            } else {
-                for (source, full_path, _) in windows_paths {
-                    let mut file = File::open(full_path).unwrap();
-                    let file_options = file_options_from_time(&file).unwrap();
-                    zip.start_file(format!("zluda/{source}"), file_options)
-                        .unwrap();
-                    io::copy(&mut file, &mut zip).unwrap();
-                }
+            }
+            for WindowsPaths {
+                compilation_output,
+                zip_path,
+                ..
+            } in project.additional_windows_paths(&target_dir, &profile, &libname)
+            {
+                let mut file = File::open(compilation_output).unwrap();
+                let file_options = file_options_from_time(&file).unwrap();
+                let zip_path = zip_path.to_str().unwrap().replace("\\", "/");
+                zip.start_file(format!("zluda/{zip_path}"), file_options)
+                    .unwrap();
+                io::copy(&mut file, &mut zip).unwrap();
             }
         }
         zip.finish().unwrap();
