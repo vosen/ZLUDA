@@ -1,4 +1,4 @@
-use super::BrachCondition;
+use super::BranchCondition;
 use super::Directive2;
 use super::Function2;
 use super::GlobalStringIdentResolver2;
@@ -753,11 +753,11 @@ fn create_control_flow_graph(
             super::Directive2::Method(Function2 {
                 name,
                 body: Some(body),
-                is_kernel,
+                kernel_attributes,
                 ..
             }) => {
                 let (mut bb_state, mut body_iter) =
-                    BasicBlockState::new(&mut cfg, *name, body, *is_kernel)?;
+                    BasicBlockState::new(&mut cfg, *name, body, kernel_attributes.is_some())?;
                 while let Some(statement) = body_iter.next() {
                     match statement {
                         Statement::Instruction(ast::Instruction::Bra { arguments }) => {
@@ -782,14 +782,14 @@ fn create_control_flow_graph(
                         }
                         Statement::RetValue(..)
                         | Statement::Instruction(ast::Instruction::Ret { .. }) => {
-                            if !is_kernel {
+                            if kernel_attributes.is_none() {
                                 bb_state.record_ret(*name)?;
                             }
                         }
                         Statement::Label(label) => {
                             bb_state.start(*label);
                         }
-                        Statement::Conditional(BrachCondition {
+                        Statement::Conditional(BranchCondition {
                             if_true, if_false, ..
                         }) => {
                             bb_state.end(&[*if_true, *if_false]);
@@ -886,7 +886,7 @@ fn join_modes(
             Directive2::Method(Function2 {
                 name,
                 body: None,
-                is_kernel: false,
+                kernel_attributes: None,
                 ..
             }) => {
                 let fn_bb = match cfg.basic_blocks.get(name) {
@@ -905,7 +905,7 @@ fn join_modes(
             Directive2::Method(Function2 {
                 name,
                 body: Some(_),
-                is_kernel: false,
+                kernel_attributes: None,
                 ..
             }) => {
                 let ret_bb = cfg.functions_rets.get(name).unwrap();
@@ -979,14 +979,18 @@ fn apply_global_mode_controls(
                         .ok_or_else(error_unreachable)?;
                     let denormal_mode = initial_mode.denormal.twin_mode;
                     let rounding_mode = initial_mode.rounding.twin_mode;
-                    method.flush_to_zero_f32 =
-                        denormal_mode.f32.ok_or_else(error_unreachable)?.to_ftz();
-                    method.flush_to_zero_f16f64 =
-                        denormal_mode.f16f64.ok_or_else(error_unreachable)?.to_ftz();
-                    method.rounding_mode_f32 =
-                        rounding_mode.f32.ok_or_else(error_unreachable)?.to_ast();
-                    method.rounding_mode_f16f64 =
-                        rounding_mode.f16f64.ok_or_else(error_unreachable)?.to_ast();
+
+                    if let Some(kernel_attrs) = &mut method.kernel_attributes {
+                        kernel_attrs.flush_to_zero_f32 =
+                            denormal_mode.f32.ok_or_else(error_unreachable)?.to_ftz();
+                        kernel_attrs.flush_to_zero_f16f64 =
+                            denormal_mode.f16f64.ok_or_else(error_unreachable)?.to_ftz();
+                        kernel_attrs.rounding_mode_f32 =
+                            rounding_mode.f32.ok_or_else(error_unreachable)?.to_ast();
+                        kernel_attrs.rounding_mode_f16f64 =
+                            rounding_mode.f16f64.ok_or_else(error_unreachable)?.to_ast();
+                    }
+
                     (method, initial_mode)
                 }
             };
@@ -1013,7 +1017,7 @@ fn apply_global_mode_controls(
                         bb_state.redirect_jump(func)?;
                         call_target = Some(*func);
                     }
-                    Statement::Conditional(BrachCondition {
+                    Statement::Conditional(BranchCondition {
                         if_true, if_false, ..
                     }) => {
                         bb_state.redirect_jump(if_true)?;

@@ -1,0 +1,58 @@
+.version 6.5
+.target sm_50
+.address_size 64
+
+.func (.reg .f32 result) compute(.reg .f32 input)
+{
+    mov.f32 result, input;
+    ret;
+}
+
+.visible .entry kernel()
+{
+    .reg .f32 %f<4>;
+
+    mov.f32 %f0, 0f3f800000;
+
+    mul.ftz.f32 %f1, %f0, %f0;
+    call (%f2), compute, (%f1);
+
+    mul.f32 %f1, %f0, %f0;
+    call (%f3), compute, (%f1);
+
+    ret;
+}
+
+// %%% output %%%
+
+.func (.reg .f32 %2) %1 (
+    .reg .f32 %3
+)
+{
+%10:
+    mov.f32 %2, %3;
+    ret;
+}
+.visible .entry %4 .pragma "zluda set_mode.denormal.f32 on, set_mode.denormal.f16f64 on"  (
+)
+{
+%11:
+    .reg .f32 %5 %5;
+    .reg .f32 %6 %6;
+    .reg .f32 %7 %7;
+    .reg .f32 %8 %8;
+    .reg.f32 %9 = zluda.constant.f32 1;
+    mov.f32 %5, %9;
+    mul.rn.ftz.f32 %6, %5, %5;
+    <Call> %7, %1, %6;
+    bra %14;
+%14:
+    zluda.set_mode.denormal.f32::off.f16f64::on;
+    bra %12;
+%12:
+    mul.rn.f32 %6, %5, %5;
+    <Call> %8, %1, %6;
+    bra %13;
+%13:
+    ret;
+}

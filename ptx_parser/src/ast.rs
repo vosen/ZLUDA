@@ -56,7 +56,8 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
-            }
+            },
+            display: write!(f, "add{}", data)?
         },
         And {
             data: ScalarType,
@@ -173,7 +174,8 @@ ptx_parser_macros::generate_instruction_type!(
             type: !,
             arguments<T::Ident>: {
                 src: T
-            }
+            },
+            display: write!(f, "bra")?
         },
         Brev {
             type: Type::Scalar(data.clone()),
@@ -430,7 +432,8 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src1: T,
                 src2: T,
-            }
+            },
+            display: write!(f, "mul{}", data)?
         },
         Mul24 {
             type: { Type::from(data.type_) },
@@ -1553,10 +1556,34 @@ impl ArithDetails {
     }
 }
 
+impl std::fmt::Display for ArithDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArithDetails::Integer(int) => {
+                write!(f, "{}", int)?;
+            }
+            ArithDetails::Float(float) => {
+                write!(f, "{}", float)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct ArithInteger {
     pub type_: ScalarType,
     pub saturate: bool,
+}
+
+impl std::fmt::Display for ArithInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -1572,6 +1599,20 @@ pub struct ArithFloat {
     // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
     // instructions on the target device.
     pub is_fusable: bool,
+}
+
+impl std::fmt::Display for ArithFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.rounding)?;
+        if let Some(true) = self.flush_to_zero {
+            write!(f, ".ftz")?;
+        }
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1602,6 +1643,18 @@ pub enum RoundingMode {
     Zero,
     NegativeInf,
     PositiveInf,
+}
+
+impl std::fmt::Display for RoundingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RoundingMode::NearestEven => write!(f, ".rn")?,
+            RoundingMode::Zero => write!(f, ".rz")?,
+            RoundingMode::NegativeInf => write!(f, ".rm")?,
+            RoundingMode::PositiveInf => write!(f, ".rp")?,
+        }
+        Ok(())
+    }
 }
 
 pub struct LdDetails {
@@ -1801,11 +1854,34 @@ impl MulDetails {
     }
 }
 
+impl std::fmt::Display for MulDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulDetails::Integer { type_, control } => {
+                write!(f, "{}{}", type_, control)
+            }
+            MulDetails::Float(arith) => {
+                write!(f, "{}", arith)
+            }
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MulIntControl {
     Low,
     High,
     Wide,
+}
+
+impl std::fmt::Display for MulIntControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulIntControl::Low => write!(f, ".lo"),
+            MulIntControl::High => write!(f, ".hi"),
+            MulIntControl::Wide => write!(f, ".wide"),
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
