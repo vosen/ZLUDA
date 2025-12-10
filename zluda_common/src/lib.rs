@@ -18,6 +18,8 @@ use std::{
     str::Utf8Error,
 };
 
+pub mod handle;
+
 pub const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
 pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
 pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
@@ -156,16 +158,17 @@ macro_rules! from_cuda_transmute {
 macro_rules! from_cuda_object {
     ($($type_:ty),*) => {
         $(
-            impl<'a> zluda_common::FromCuda<'a, <$type_ as zluda_common::ZludaObject>::CudaHandle, <$type_ as zluda_common::ZludaObject>::Error> for &'a $type_ {
-                fn from_cuda(handle: &'a <$type_ as zluda_common::ZludaObject>::CudaHandle) -> Result<&'a $type_, <$type_ as zluda_common::ZludaObject>::Error> {
-                    use zluda_common::CudaErrorType;
-                    Ok(zluda_common::as_ref(handle).ok_or(<$type_ as zluda_common::ZludaObject>::Error::INVALID_VALUE)?.as_result()?)
+            #[allow(unused_imports)]
+            impl<'a> $crate::FromCuda<'a, <$type_ as $crate::ZludaObject>::CudaHandle, <$type_ as $crate::ZludaObject>::Error> for &'a $type_ {
+                fn from_cuda(handle: &'a <$type_ as $crate::ZludaObject>::CudaHandle) -> Result<&'a $type_, <$type_ as $crate::ZludaObject>::Error> {
+                    use $crate::CudaErrorType;
+                    Ok($crate::as_ref(handle).ok_or(<$type_ as $crate::ZludaObject>::Error::INVALID_VALUE)?.as_result()?)
                 }
             }
 
             // If the CUDA handle is not pointer sized it will break assumptions in `as_ref`
             const _: fn() = || {
-                let _ = std::mem::transmute::<<$type_ as zluda_common::ZludaObject>::CudaHandle, usize>;
+                let _ = std::mem::transmute::<<$type_ as $crate::ZludaObject>::CudaHandle, usize>;
             };
         )*
     };
