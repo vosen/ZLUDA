@@ -924,7 +924,7 @@ extern "C"
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32) (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        if (__oclc_ISA_version >= 11000)
+        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone(a_reg, b_reg, c_reg);
         }
@@ -944,7 +944,7 @@ extern "C"
 
     uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
-        if (__oclc_ISA_version >= 11000)
+        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone(a_reg, b_reg, c_reg);
         }
