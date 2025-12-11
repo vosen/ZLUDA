@@ -1,0 +1,9 @@
+.version 6.4
+.target sm_70
+.address_size 64
+
+.visible .entry noreturn(
+) .noreturn
+{
+    trap;
+}

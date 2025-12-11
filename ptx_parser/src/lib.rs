@@ -676,6 +676,7 @@ fn tuning_directive<'a, 'input>(
         (Token::DotMaxntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::MaxNtid(nx, ny, nz)),
         (Token::DotReqntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNtid(nx, ny, nz)),
         (Token::DotMinnctapersm, _) => u32.map(ast::TuningDirective::MinNCtaPerSm),
+        (Token::DotNoreturn, _) => empty.map(|_| ast::TuningDirective::NoReturn),
         _ => fail
     }
     .parse_next(stream)
@@ -1819,7 +1820,9 @@ derive_parser!(
         #[token(".file")]
         DotFile,
         #[token(".ptr")]
-        DotPtr
+        DotPtr,
+        #[token(".noreturn")]
+        DotNoreturn
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -4332,5 +4335,27 @@ mod tests {
         let module = module.parse(stream).unwrap();
         assert_eq!(module.directives.len(), 1);
         assert_eq!(module.invalid_directives, 2);
+    }
+
+    #[test]
+    fn extern_func_noreturn() {
+        let text = ".version 6.4
+.target sm_70
+.address_size 64
+
+.extern .func __assertfail() .noreturn;
+";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = module.parse(stream);
+        assert!(result.is_ok(), "Failed to parse extern func with .noreturn");
+        assert_eq!(errors.len(), 0);
     }
 }
