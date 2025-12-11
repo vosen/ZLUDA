@@ -89,6 +89,7 @@ fn run_instruction<'input>(
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }
         | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::CreatePolicyFractional { .. }
         | ast::Instruction::Cvt {
             data:
                 ast::CvtDetails {

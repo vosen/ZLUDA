@@ -1,0 +1,14 @@
+.version 7.4
+.target sm_80
+.address_size 64
+
+.visible .entry createpolicy(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .b64 policy;
+    createpolicy.fractional.L2::evict_last.b64 policy, 1.0;
+
+    ret;
+}
