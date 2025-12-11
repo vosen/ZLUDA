@@ -136,6 +136,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
             self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
+        self.emit_tuning(fn_, &method.tuning)?;
         if !method.is_kernel {
             self.resolver.register(method.name, fn_);
             self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
@@ -315,6 +316,34 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             )
         };
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
+    }
+
+    fn emit_tuning(
+        &self,
+        fn_: LLVMValueRef,
+        tuning_directives: &[ast::TuningDirective],
+    ) -> Result<(), TranslateError> {
+        for tuning in tuning_directives {
+            match tuning {
+                // Not really applicable
+                ptx_parser::TuningDirective::MaxNReg(_) => {}
+                ptx_parser::TuningDirective::MaxNtid(x, y, z) => {
+                    let size = x * y * z;
+                    let value = format!("1,{size}");
+                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                }
+                ptx_parser::TuningDirective::ReqNtid(x, y, z) => {
+                    let size = x * y * z;
+                    let value = format!("{size},{size}");
+                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                }
+                ptx_parser::TuningDirective::MinNCtaPerSm(ctas) => {
+                    let value = format!("{ctas},1024");
+                    self.emit_fn_attribute(fn_, "amdgpu-waves-per-eu", &value);
+                }
+            }
+        }
+        Ok(())
     }
 }
 
