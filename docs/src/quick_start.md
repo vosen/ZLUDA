@@ -13,12 +13,12 @@ Periodically, we mark a pre-release version as stable, you can download it from 
 ### Windows
 You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") installed.\
 To run your application either:
-* (_Recommended_) Copy all ZLUDA files (including `nvcuda.dll`) from `zluda` (if you downloaded a zip package) or `target\release` (if you built from sources) into a path which your application uses to load CUDA. Paths vary application to application, but usually it's the directory where the .exe file is located
-* Use ZLUDA launcher:
+* (_Recommended_) Use ZLUDA launcher:
     ```
-    <ZLUDA_DIRECTORY>\zluda_with.exe -- <APPLICATION> <APPLICATION_ARGUMENTS>
+    <ZLUDA_DIRECTORY>\zluda.exe -- <APPLICATION> <APPLICATION_ARGUMENTS>
     ```
-    ZLUDA launcher is known to be buggy and incomplete, but it's less invasive
+* Copy all ZLUDA files (including `nvcuda.dll`) from `zluda` (if you downloaded a zip package) or `target\release` (if you built from sources) into a path which your application uses to load CUDA. Paths vary application to application, but usually it's the directory where the .exe file is located
+
 
 ### Linux
 

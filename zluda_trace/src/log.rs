@@ -504,13 +504,13 @@ impl WriteTrailingZeroAware for Stderr {
 mod os {
     use super::WriteTrailingZeroAware;
     use std::{os::windows::prelude::AsRawHandle, ptr};
-    use winapi::um::debugapi::OutputDebugStringA;
+    use windows::{core::PCSTR, Win32::System::Diagnostics::Debug::OutputDebugStringA};
 
     struct OutputDebugString {}
 
     impl WriteTrailingZeroAware for OutputDebugString {
         fn write_zero_aware(&mut self, buf: &[u8]) -> std::io::Result<()> {
-            unsafe { OutputDebugStringA(buf.as_ptr() as *const _) };
+            unsafe { OutputDebugStringA(PCSTR(buf.as_ptr() as *const _)) };
             Ok(())
         }
 

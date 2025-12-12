@@ -676,6 +676,7 @@ fn tuning_directive<'a, 'input>(
         (Token::DotMaxntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::MaxNtid(nx, ny, nz)),
         (Token::DotReqntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNtid(nx, ny, nz)),
         (Token::DotMinnctapersm, _) => u32.map(ast::TuningDirective::MinNCtaPerSm),
+        (Token::DotNoreturn, _) => empty.map(|_| ast::TuningDirective::NoReturn),
         _ => fail
     }
     .parse_next(stream)
@@ -1328,7 +1329,6 @@ impl<Ident> ast::ParsedOperand<Ident> {
         stream: &mut PtxParser<'a, 'input>,
     ) -> PResult<ast::ParsedOperand<&'input str>> {
         use winnow::combinator::*;
-        use winnow::token::any;
         fn vector_index<'input>(inp: &'input str) -> Result<u8, PtxError<'input>> {
             match inp {
                 ".x" | ".r" => Ok(0),
@@ -1357,19 +1357,11 @@ impl<Ident> ast::ParsedOperand<Ident> {
         fn vector_operand<'a, 'input>(
             stream: &mut PtxParser<'a, 'input>,
         ) -> PResult<Vec<ast::RegOrImmediate<&'input str>>> {
-            let (_, r1, _, r2) = (
+            delimited(
                 Token::LBrace,
-                reg_or_immediate,
-                Token::Comma,
-                reg_or_immediate,
+                separated(1..=8, reg_or_immediate, Token::Comma),
+                Token::RBrace,
             )
-                .parse_next(stream)?;
-            // TODO: parse .v8 literals
-            dispatch! {any;
-                (Token::RBrace, _) => empty.map(|_| vec![r1, r2]),
-                (Token::Comma, _) => (reg_or_immediate, Token::Comma, reg_or_immediate, Token::RBrace).map(|(r3, _, r4, _)| vec![r1, r2, r3, r4]),
-                _ => fail
-            }
             .parse_next(stream)
         }
         trace(
@@ -1828,7 +1820,9 @@ derive_parser!(
         #[token(".file")]
         DotFile,
         #[token(".ptr")]
-        DotPtr
+        DotPtr,
+        #[token(".noreturn")]
+        DotNoreturn
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -1890,7 +1884,7 @@ derive_parser!(
             arguments: MovArgs { dst: d, src: a },
         }
     }
-    .vec: VectorPrefix = { .v2, .v4 };
+    .vec: VectorPrefix = { .v2, .v4, .v8 };
     .type: ScalarType =  { .pred,
                            .b16, .b32, .b64,
                            .u16, .u32, .u64,
@@ -1969,7 +1963,7 @@ derive_parser!(
     .level::cache_hint =        { .L2::cache_hint };
     .cop: RawStCacheOperator =  { .wb, .cg, .cs, .wt };
     .scope: MemScope =          { .cta, .cluster, .gpu, .sys };
-    .vec: VectorPrefix =        { .v2, .v4 };
+    .vec: VectorPrefix =        { .v2, .v4, .v8 };
     .type: ScalarType =         { .b8, .b16, .b32, .b64, .b128,
                                   .u8, .u16, .u32, .u64,
                                   .s8, .s16, .s32, .s64,
@@ -2059,7 +2053,7 @@ derive_parser!(
     .level::cache_hint =                    { .L2::cache_hint };
     .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
     .scope: MemScope =                      { .cta, .cluster, .gpu, .sys };
-    .vec: VectorPrefix =                    { .v2, .v4 };
+    .vec: VectorPrefix =                    { .v2, .v4, .v8 };
     .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
                                               .u8, .u16, .u32, .u64,
                                               .s8, .s16, .s32, .s64,
@@ -4341,5 +4335,27 @@ mod tests {
         let module = module.parse(stream).unwrap();
         assert_eq!(module.directives.len(), 1);
         assert_eq!(module.invalid_directives, 2);
+    }
+
+    #[test]
+    fn extern_func_noreturn() {
+        let text = ".version 6.4
+.target sm_70
+.address_size 64
+
+.extern .func __assertfail() .noreturn;
+";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = module.parse(stream);
+        assert!(result.is_ok(), "Failed to parse extern func with .noreturn");
+        assert_eq!(errors.len(), 0);
     }
 }

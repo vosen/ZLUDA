@@ -30296,6 +30296,21 @@ pub fn write_cublasUint8gemmBias(
     crate::CudaDisplay::write(&C_shift, "cublasUint8gemmBias", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_cublasSetEnvironmentMode(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_ulonglong,
+    param_2: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cublasSetEnvironmentMode", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cublasSetEnvironmentMode", arg_idx, writer)?;
+    writer.write_all(b")")
+}
 impl crate::CudaDisplay for cuda_types::cublas::cublasStatus_t {
     fn write(
         &self,

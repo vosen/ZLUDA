@@ -23,5 +23,6 @@ cglue = "0.3.5"
 linux_symlinks = [
     "trace/libcublas.so",
     "trace/libcublas.so.12",
-    "trace/libcublas.so.13"
+    "trace/libcublas.so.13",
 ]
+windows_paths = ["trace/cublas64_12.dll", "trace/cublas64_13.dll"]

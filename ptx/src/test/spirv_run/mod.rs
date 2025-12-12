@@ -125,6 +125,11 @@ test_ptx!(local_align, [1u64], [1u64]);
 test_ptx!(call, [1u64], [2u64]);
 test_ptx!(vector, [1u32, 2u32], [3u32, 3u32]);
 test_ptx!(vector4, [1u32, 2u32, 3u32, 4u32], [4u32]);
+test_ptx!(
+    vector8,
+    [1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32],
+    [8u32]
+);
 test_ptx!(ld_st_offset, [1u32, 2u32], [2u32, 1u32]);
 test_ptx!(ntid, [3u32], [4u32]);
 test_ptx!(reg_local, [12u64], [13u64]);
@@ -142,6 +147,11 @@ test_ptx!(
     [0x1_00_00_00_00_00_00i64]
 );
 test_ptx!(vector_extract, [1u8, 2u8, 3u8, 4u8], [3u8, 4u8, 1u8, 2u8]);
+test_ptx!(
+    vector8_extract,
+    [1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8],
+    [8u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8]
+);
 test_ptx!(vector_operand, [0x1234u16], [0x12345678]);
 test_ptx!(shr, [-2i32], [-1i32]);
 test_ptx!(shr_oob, [-32768i16], [-1i16]);
@@ -394,6 +404,7 @@ test_ptx!(assertfail);
 test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
 test_ptx!(trap);
+test_ptx!(noreturn);
 
 test_ptx_warp!(
     tid,

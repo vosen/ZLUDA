@@ -191,6 +191,16 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             Self::func_call_convention()
         };
         unsafe { LLVMSetFunctionCallConv(fn_, call_conv) };
+        for directive in method.tuning {
+            match directive {
+                ptx_parser::TuningDirective::NoReturn => {
+                    self.emit_fn_attribute(fn_, "noreturn", "true")
+                }
+                _ => {
+                    // Ignore other tuning directives for now
+                }
+            };
+        }
         if let Some(statements) = method.body {
             let variables_bb =
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
