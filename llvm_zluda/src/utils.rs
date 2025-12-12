@@ -7,6 +7,8 @@ use llvm_sys::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_sys::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
 use llvm_sys::core::*;
 use llvm_sys::linker::LLVMLinkModules2;
+use llvm_sys::object::{LLVMBinaryRef, LLVMObjectFileIsSymbolIteratorAtEnd, LLVMSymbolIteratorRef};
+use llvm_sys::object::{LLVMCreateBinary, LLVMObjectFileCopySymbolIterator};
 use llvm_sys::prelude::*;
 use llvm_sys::target_machine::{
     LLVMCodeGenFileType, LLVMCodeGenOptLevel, LLVMCodeModel, LLVMCreateTargetMachine,
@@ -166,6 +168,12 @@ impl Message {
 }
 pub struct MemoryBuffer(LLVMMemoryBufferRef);
 
+impl MemoryBuffer {
+    pub fn get(&self) -> LLVMMemoryBufferRef {
+        self.0
+    }
+}
+
 impl Drop for MemoryBuffer {
     fn drop(&mut self) {
         unsafe {
@@ -262,6 +270,70 @@ impl Drop for PassBuilderOptions {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassBuilderOptions(self.0);
+        }
+    }
+}
+
+pub struct Binary(LLVMBinaryRef);
+
+impl Binary {
+    pub fn new(ctx: &Context, file: &[u8]) -> Option<Self> {
+        let membuf = MemoryBuffer(unsafe {
+            LLVMCreateMemoryBufferWithMemoryRange(file.as_ptr().cast(), file.len(), ptr::null(), 0)
+        });
+        let binary = unsafe { LLVMCreateBinary(membuf.get(), ctx.get(), ptr::null_mut()) };
+        if binary.is_null() {
+            return None;
+        }
+        Some(Self(binary))
+    }
+
+    pub fn get(&self) -> LLVMBinaryRef {
+        self.0
+    }
+}
+
+impl Drop for Binary {
+    fn drop(&mut self) {
+        unsafe {
+            llvm_sys::object::LLVMDisposeBinary(self.0);
+        }
+    }
+}
+
+pub struct SymbolIterator(LLVMSymbolIteratorRef);
+
+impl SymbolIterator {
+    pub fn new(binary: &Binary) -> Self {
+        let symbols_iterator = unsafe { LLVMObjectFileCopySymbolIterator(binary.get()) };
+        Self(symbols_iterator)
+    }
+
+    pub fn is_at_end(&self, binary: &Binary) -> bool {
+        let at_end = unsafe { LLVMObjectFileIsSymbolIteratorAtEnd(binary.get(), self.0) };
+        at_end != 0
+    }
+
+    pub fn move_to_next(&self) {
+        unsafe {
+            llvm_sys::object::LLVMMoveToNextSymbol(self.0);
+        }
+    }
+
+    pub fn get_name<'a>(&'a self) -> Option<&'a CStr> {
+        let name_ptr = unsafe { llvm_sys::object::LLVMGetSymbolName(self.0) };
+        if name_ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { CStr::from_ptr(name_ptr) })
+        }
+    }
+}
+
+impl Drop for SymbolIterator {
+    fn drop(&mut self) {
+        unsafe {
+            llvm_sys::object::LLVMDisposeSymbolIterator(self.0);
         }
     }
 }

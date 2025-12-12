@@ -136,6 +136,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
             self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
+        self.emit_target_features(fn_);
+        self.emit_tuning(fn_, &method.tuning);
         if !method.is_kernel {
             self.resolver.register(method.name, fn_);
             self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
@@ -325,6 +327,45 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             )
         };
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
+    }
+
+    fn emit_tuning(&self, fn_: LLVMValueRef, tuning_directives: &[ast::TuningDirective]) {
+        for tuning in tuning_directives {
+            match tuning {
+                // We could implement it for the completeness sake, but it's
+                // not particularly important. The functions with .noreturn in
+                // PTX are noreturn in LLVM already
+                ptx_parser::TuningDirective::NoReturn => {}
+                // Not really applicable
+                ptx_parser::TuningDirective::MaxNReg(_) => {}
+                ptx_parser::TuningDirective::MaxNtid(x, y, z) => {
+                    let size = x * y * z;
+                    let value = format!("1,{size}");
+                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                }
+                ptx_parser::TuningDirective::ReqNtid(x, y, z) => {
+                    let size = x * y * z;
+                    let value = format!("{size},{size}");
+                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                }
+                ptx_parser::TuningDirective::MinNCtaPerSm(ctas) => {
+                    let value = format!("{ctas},1024");
+                    self.emit_fn_attribute(fn_, "amdgpu-waves-per-eu", &value);
+                }
+            }
+        }
+    }
+
+    fn emit_target_features(&mut self, fn_: LLVMValueRef) {
+        let value = format!(
+            "+wavefrontsize32,-wavefrontsize64,+cumode{}",
+            if cfg!(debug_assertions) {
+                ",+precise-memory"
+            } else {
+                ""
+            }
+        );
+        self.emit_fn_attribute(fn_, "target-features", &*value)
     }
 }
 

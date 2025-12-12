@@ -1,8 +1,8 @@
 use crate::utils::{Context, Message, PassBuilderOptions, TargetMachine};
+use crate::LLVMZludaParseCommandLineOptions;
 use crate::{ffi::LLVMZludaLinkWithLLD, utils::Module};
 use llvm_sys::{
     core::*,
-    support::LLVMParseCommandLineOptions,
     target::{
         LLVMInitializeAMDGPUAsmPrinter, LLVMInitializeAMDGPUTarget, LLVMInitializeAMDGPUTargetInfo,
         LLVMInitializeAMDGPUTargetMC,
@@ -96,7 +96,7 @@ pub fn compile(
     attributes: Module,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<Vec<u8>, String> {
-    init_globals();
+    init_globals()?;
 
     let linked = Module::new(ctx, c"llvm-link");
 
@@ -219,44 +219,53 @@ pub fn compile(
     Ok(executable)
 }
 
-fn init_globals() {
-    static INIT_AMDGPU: OnceLock<()> = OnceLock::new();
-    INIT_AMDGPU.get_or_init(|| {
-        let common_options = vec![
-            // Uncomment for LLVM debug
-            //c"-debug",
-            // Uncomment to save passes
-            // c"-print-before-all",
-            c"llvm_zluda",
-            c"-ignore-tti-inline-compatible",
-            // c"-amdgpu-early-inline-all=true",
-            c"-amdgpu-internalize-symbols",
-            c"-amdhsa-code-object-version=5",
-        ]
-        .into_iter();
-        let opt_options = if cfg!(debug_assertions) {
-            vec![c"-amdgpu-precise-memory-op"]
-        } else {
-            vec![
-                // default inlining threshold times 10
-                c"-inline-threshold=2250",
-                c"-inlinehint-threshold=3250",
+fn init_globals() -> Result<(), String> {
+    static INIT_AMDGPU: OnceLock<Result<(), Message>> = OnceLock::new();
+    INIT_AMDGPU
+        .get_or_init(|| {
+            let common_options = vec![
+                // Uncomment for LLVM debug
+                //c"-debug",
+                // Uncomment to save passes
+                // c"-print-before-all",
+                c"llvm_zluda",
+                c"-ignore-tti-inline-compatible",
+                // c"-amdgpu-early-inline-all=true",
+                c"-amdgpu-internalize-symbols",
+                c"-amdhsa-code-object-version=5",
             ]
-        };
-        let llvm_args_ptrs: Vec<*const i8> = common_options
-            .chain(opt_options)
-            .map(|s| s.as_ptr())
-            .collect();
-        unsafe {
-            LLVMParseCommandLineOptions(
-                llvm_args_ptrs.len() as i32,
-                llvm_args_ptrs.as_ptr(),
-                std::ptr::null(),
-            )
-        };
-        unsafe { LLVMInitializeAMDGPUTargetInfo() };
-        unsafe { LLVMInitializeAMDGPUTarget() };
-        unsafe { LLVMInitializeAMDGPUTargetMC() };
-        unsafe { LLVMInitializeAMDGPUAsmPrinter() };
-    });
+            .into_iter();
+            let opt_options = if cfg!(debug_assertions) {
+                vec![]
+            } else {
+                vec![
+                    // default inlining threshold times 10
+                    c"-inline-threshold=2250",
+                    c"-inlinehint-threshold=3250",
+                ]
+            };
+            let llvm_args_ptrs: Vec<*const i8> = common_options
+                .chain(opt_options)
+                .map(|s| s.as_ptr())
+                .collect();
+            let mut err_msg = std::ptr::null_mut();
+            let success = unsafe {
+                LLVMZludaParseCommandLineOptions(
+                    llvm_args_ptrs.len() as i32,
+                    llvm_args_ptrs.as_ptr(),
+                    &mut err_msg,
+                )
+            };
+            if !success {
+                return Err(Message::new(unsafe { CStr::from_ptr(err_msg) }));
+            }
+            unsafe { LLVMInitializeAMDGPUTargetInfo() };
+            unsafe { LLVMInitializeAMDGPUTarget() };
+            unsafe { LLVMInitializeAMDGPUTargetMC() };
+            unsafe { LLVMInitializeAMDGPUAsmPrinter() };
+            Ok(())
+        })
+        .as_ref()
+        .map(|()| ())
+        .map_err(|e| e.to_str().to_owned())
 }
