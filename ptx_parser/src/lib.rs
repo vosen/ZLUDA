@@ -1408,8 +1408,8 @@ pub enum PtxError<'input> {
     },
     #[error("Context error: {0}")]
     Parser(ContextError),
-    #[error("")]
-    Todo,
+    #[error("Not yet implemented: {0}")]
+    Todo(String),
     #[error("Syntax error: {0}")]
     SyntaxError(String),
     #[error("")]
@@ -1909,7 +1909,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st
     st{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.vec}.type  [a], b{, cache_policy} => {
         if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("st instruction with cache policy/eviction priority/cache hints".to_string()));
         }
         Instruction::St {
             data: StData {
@@ -1934,7 +1934,7 @@ derive_parser!(
     }
     st.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
         if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("st.relaxed instruction with cache policy/eviction priority/cache hints".to_string()));
         }
         Instruction::St {
             data: StData {
@@ -1948,7 +1948,7 @@ derive_parser!(
     }
     st.release.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
         if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("st.release instruction with cache policy/eviction priority/cache hints".to_string()));
         }
         Instruction::St {
             data: StData {
@@ -1961,7 +1961,7 @@ derive_parser!(
         }
     }
     st.mmio.relaxed.sys{.global}.type                                               [a], b => {
-        state.errors.push(PtxError::Todo);
+        state.errors.push(PtxError::Todo("st.mmio.relaxed.sys instruction (MMIO store operations)".to_string()));
         Instruction::St {
             data: ast::StData {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -1990,7 +1990,7 @@ derive_parser!(
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
         let (a, unified) = a;
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || unified || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("ld instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
         }
         Instruction::Ld {
             data: LdDetails {
@@ -2005,7 +2005,7 @@ derive_parser!(
     }
     ld.volatile{.ss}{.level::prefetch_size}{.vec}.type                                                      d, [a] => {
         if level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("ld.volatile instruction with prefetch size".to_string()));
         }
         Instruction::Ld {
             data: LdDetails {
@@ -2020,7 +2020,7 @@ derive_parser!(
     }
     ld.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("ld.relaxed instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
         }
         Instruction::Ld {
             data: LdDetails {
@@ -2035,7 +2035,7 @@ derive_parser!(
     }
     ld.acquire.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("ld.acquire instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
         }
         Instruction::Ld {
             data: LdDetails {
@@ -2049,7 +2049,7 @@ derive_parser!(
         }
     }
     ld.mmio.relaxed.sys{.global}.type                                                                       d, [a] => {
-        state.errors.push(PtxError::Todo);
+        state.errors.push(PtxError::Todo("ld.mmio.relaxed.sys instruction (MMIO load operations)".to_string()));
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -2084,7 +2084,7 @@ derive_parser!(
             }
         }
         if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("ld.global.nc instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
         }
         Instruction::Ld {
             data: LdDetails {
@@ -2493,7 +2493,7 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
     cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
         if satfinite {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("cvt.frnd2 instruction with satfinite modifier".to_string()));
         }
         let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
@@ -2505,7 +2505,7 @@ derive_parser!(
     // cvt.frnd2{.relu}.tf32.f32                   d, a;
     cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b => {
         if relu {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("cvt.rn.satfinite.f8x2 instruction with relu modifier".to_string()));
         }
         let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, f8x2type, ScalarType::F32);
         ast::Instruction::Cvt {
@@ -2517,7 +2517,7 @@ derive_parser!(
     /*
     cvt.rn{.relu}.f16x2.f8x2type              d, a => {
         if relu {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("cvt.rn.f16x2.f8x2 instruction with relu modifier".to_string()));
         }
         let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, ScalarType::F16x2, f8x2type);
         ast::Instruction::Cvt {
@@ -2823,7 +2823,7 @@ derive_parser!(
     //fma.rnd{.relu}.bf16         d, a, b, c;
     fma.rnd{.relu}.type_x2       d, a, b, c => {
         if relu {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("fma instruction with relu modifier for bf16x2/f16x2 types".to_string()));
         }
         ast::Instruction::Fma {
             data: ast::ArithFloat {
@@ -3335,7 +3335,7 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-atom
     atom{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("atom instruction with cache policy/cache hints".to_string()));
         }
         ast::Instruction::Atom {
             data: AtomDetails {
@@ -3361,7 +3361,7 @@ derive_parser!(
     }
     atom{.sem}{.scope}{.space}.exch{.level::cache_hint}.b128                                    d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("atom.exch.b128 instruction with cache policy/cache hints".to_string()));
         }
         ast::Instruction::Atom {
             data: AtomDetails {
@@ -3376,7 +3376,7 @@ derive_parser!(
     }
     atom{.sem}{.scope}{.global}.float_op{.level::cache_hint}.vec_32_bit.f32                     d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("atom float operation on f32 with cache policy/cache hints".to_string()));
         }
         ast::Instruction::Atom {
             data: AtomDetails {
@@ -3391,7 +3391,7 @@ derive_parser!(
     }
     atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("atom float operation on f16/bf16 with cache policy/cache hints".to_string()));
         }
         ast::Instruction::Atom {
             data: AtomDetails {
@@ -3406,7 +3406,7 @@ derive_parser!(
     }
     atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
         if level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("atom float operation on packed types with cache policy/cache hints".to_string()));
         }
         ast::Instruction::Atom {
             data: AtomDetails {
@@ -3797,7 +3797,7 @@ derive_parser!(
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
                              [dst], [src], cp-size{, src-size}{, cache-policy} => {
         if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo);
+            state.errors.push(PtxError::Todo("cp.async instruction with cache policy/cache hints/prefetch size".to_string()));
         }
 
         let cp_size = cp_size
