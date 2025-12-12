@@ -332,6 +332,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     fn emit_tuning(&self, fn_: LLVMValueRef, tuning_directives: &[ast::TuningDirective]) {
         for tuning in tuning_directives {
             match tuning {
+                // We could implement it for the completeness sake, but it's
+                // not particularly important. The functions with .noreturn in 
+                // PTX are noreturn in LLVM already
+                ptx_parser::TuningDirective::NoReturn => {}
                 // Not really applicable
                 ptx_parser::TuningDirective::MaxNReg(_) => {}
                 ptx_parser::TuningDirective::MaxNtid(x, y, z) => {
