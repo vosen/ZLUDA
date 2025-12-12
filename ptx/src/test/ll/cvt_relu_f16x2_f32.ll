@@ -79,5 +79,5 @@ define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"49",
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
 declare half @llvm.maximum.f16(half, half) #1
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

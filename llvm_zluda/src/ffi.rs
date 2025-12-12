@@ -88,4 +88,10 @@ extern "C" {
         output_path: *const i8,
         error_message: *mut *mut i8,
     ) -> i32;
+
+    pub fn LLVMZludaParseCommandLineOptions(
+        argc: i32,
+        argv: *const *const i8,
+        error_message: *mut *mut i8,
+    ) -> bool;
 }

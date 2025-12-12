@@ -136,7 +136,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
             self.emit_fn_attribute(fn_, "no-trapping-math", "true");
         }
-        self.emit_tuning(fn_, &method.tuning)?;
+        self.emit_target_features(fn_);
+        self.emit_tuning(fn_, &method.tuning);
         if !method.is_kernel {
             self.resolver.register(method.name, fn_);
             self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
@@ -318,11 +319,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
     }
 
-    fn emit_tuning(
-        &self,
-        fn_: LLVMValueRef,
-        tuning_directives: &[ast::TuningDirective],
-    ) -> Result<(), TranslateError> {
+    fn emit_tuning(&self, fn_: LLVMValueRef, tuning_directives: &[ast::TuningDirective]) {
         for tuning in tuning_directives {
             match tuning {
                 // Not really applicable
@@ -343,7 +340,18 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 }
             }
         }
-        Ok(())
+    }
+
+    fn emit_target_features(&mut self, fn_: LLVMValueRef) {
+        let value = format!(
+            "+wavefrontsize32,-wavefrontsize64,+cumode{}",
+            if cfg!(debug_assertions) {
+                ",+precise-memory"
+            } else {
+                ""
+            }
+        );
+        self.emit_fn_attribute(fn_, "target-features", &*value)
     }
 }
 
