@@ -533,6 +533,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
             ast::Instruction::Copysign { data, arguments } => self.emit_copysign(data, arguments),
+            ast::Instruction::CreatePolicyFractional { data, arguments } => {
+                self.emit_createpolicy_fractional(data, arguments)
+            }
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -3064,6 +3067,18 @@ impl<'a> MethodEmitContext<'a> {
                 (src1, get_scalar_type(self.context, type_)),
             ],
         )?;
+        Ok(())
+    }
+
+    fn emit_createpolicy_fractional(
+        &mut self,
+        _data: ast::CreatePolicyFractionalDetails,
+        arguments: ast::CreatePolicyFractionalArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // Implement this as a nop for now.
+        self.resolver.register(arguments.dst_policy, unsafe {
+            LLVMConstInt(get_scalar_type(self.context, ast::ScalarType::B64), 0, 0)
+        });
         Ok(())
     }
 
