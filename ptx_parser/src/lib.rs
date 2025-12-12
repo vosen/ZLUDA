@@ -4025,12 +4025,12 @@ derive_parser!(
                                     cache-policy{, fraction} => {
         let fraction = fraction
             .and_then(|op| op.as_immediate())
-            .and_then(|imm| imm.as_f32());
+            .and_then(|imm| imm.as_f64()).unwrap_or(1.0) as f32;
 
         Instruction::CreatePolicyFractional {
             data: CreatePolicyFractionalDetails {
                 primary_priority: level_primary_priority,
-                fraction: fraction.unwrap_or(1.0),
+                fraction,
             },
             arguments: CreatePolicyFractionalArgs {
                 dst_policy: cache_policy,

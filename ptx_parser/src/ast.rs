@@ -1457,9 +1457,9 @@ impl ImmediateValue {
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
     }
-    pub fn as_f32(&self) -> Option<f32> {
+    pub fn as_f64(&self) -> Option<f64> {
         match *self {
-            ImmediateValue::F32(n) => Some(n),
+            ImmediateValue::F64(n) => Some(n),
             _ => None,
         }
     }
