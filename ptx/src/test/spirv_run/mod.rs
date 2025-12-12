@@ -405,6 +405,7 @@ test_ptx!(lanemask_lt);
 test_ptx!(extern_func);
 test_ptx!(trap);
 test_ptx!(noreturn);
+test_ptx!(createpolicy);
 
 test_ptx_warp!(
     tid,

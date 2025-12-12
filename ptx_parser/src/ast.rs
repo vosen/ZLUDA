@@ -3,8 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    CacheLevel, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape, Mul24Control, PtxError,
-    PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
+    CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape,
+    Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -221,6 +221,13 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         CpAsyncWaitAll { },
+        CreatePolicyFractional {
+            type: Type::Scalar(ScalarType::U64),
+            data: CreatePolicyFractionalDetails,
+            arguments<T>: {
+                dst_policy: T
+            }
+        },
         Cvt {
             data: CvtDetails,
             arguments<T>: {
@@ -1450,6 +1457,12 @@ impl ImmediateValue {
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
     }
+    pub fn as_f64(&self) -> Option<f64> {
+        match *self {
+            ImmediateValue::F64(n) => Some(n),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for ImmediateValue {
@@ -2032,6 +2045,11 @@ impl<T: Operand> CallArgs<T> {
             is_external: self.is_external,
         })
     }
+}
+
+pub struct CreatePolicyFractionalDetails {
+    pub primary_priority: EvictionPriority,
+    pub fraction: f32,
 }
 
 pub struct CvtDetails {

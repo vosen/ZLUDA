@@ -251,7 +251,7 @@ fn int_immediate<'a, 'input>(input: &mut PtxParser<'a, 'input>) -> PResult<ast::
 
 fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
     take_error(any.verify_map(|(t, _)| match t {
-        Token::F32(f) => Some(match u32::from_str_radix(&f[2..], 16) {
+        Token::F32Hex(f) => Some(match u32::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f32::from_bits(x)),
             Err(err) => Err((0.0, PtxError::from(err))),
         }),
@@ -262,8 +262,12 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     take_error(any.verify_map(|(t, _)| match t {
-        Token::F64(f) => Some(match u64::from_str_radix(&f[2..], 16) {
+        Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f64::from_bits(x)),
+            Err(err) => Err((0.0, PtxError::from(err))),
+        }),
+        Token::F64(f) => Some(match f.parse::<f64>() {
+            Ok(x) => Ok(x),
             Err(err) => Err((0.0, PtxError::from(err))),
         }),
         _ => None,
@@ -485,8 +489,14 @@ fn address_size<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
 }
 
 fn version<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u8, u8)> {
-    (Token::DotVersion, u8, Token::Dot, u8)
-        .map(|(_, major, _, minor)| (major, minor))
+    (Token::DotVersion, f64)
+        .map(|(_, version)| {
+            // This is a bit imprecise but should work for now
+            // A better solution might be to include major and minor in the DotVersion token
+            let major = version.floor() as u8;
+            let minor = ((version - version.floor()) * 10.0).round() as u8;
+            (major, minor)
+        })
         .parse_next(stream)
 }
 
@@ -1770,11 +1780,13 @@ derive_parser!(
         #[token(">")]
         Gt,
         #[regex(r"0[fF][0-9a-zA-Z]{8}", |lex| lex.slice())]
-        F32(&'input str),
+        F32Hex(&'input str),
         #[regex(r"0[dD][0-9a-zA-Z]{16}", |lex| lex.slice())]
-        F64(&'input str),
+        F64Hex(&'input str),
         #[regex(r"0[xX][0-9a-zA-Z]+U?", |lex| lex.slice())]
         Hex(&'input str),
+        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice())]
+        F64(&'input str),
         #[regex(r"[0-9]+U?", |lex| lex.slice())]
         Decimal(&'input str),
         #[token("-")]
@@ -1876,6 +1888,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum CacheLevel { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum EvictionPriority { }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -3999,6 +4014,35 @@ derive_parser!(
 
     .space: StateSpace =    { .global, .local };
     .level: CacheLevel =    { .L1, .L2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-createpolicy
+    // createpolicy.range{.global}.level::primary_priority{.level::secondary_priority}.b64
+    //                                 cache-policy, [a], primary-size, total-size;
+
+    // I'm ignoring the secondary priority for now, since it might require changes to the parser
+    // and it's not used for the current workload I'm enabling.
+    createpolicy.fractional.level::primary_priority.b64
+                                    cache-policy{, fraction} => {
+        let fraction = fraction
+            .and_then(|op| op.as_immediate())
+            .and_then(|imm| imm.as_f64()).unwrap_or(1.0) as f32;
+
+        Instruction::CreatePolicyFractional {
+            data: CreatePolicyFractionalDetails {
+                primary_priority: level_primary_priority,
+                fraction,
+            },
+            arguments: CreatePolicyFractionalArgs {
+                dst_policy: cache_policy,
+            }
+        }
+    }
+
+    // createpolicy.cvt.L2.b64            cache-policy, access-property;
+
+    .level::primary_priority: EvictionPriority =   { .L2::evict_last, .L2::evict_normal,
+                                .L2::evict_first, .L2::evict_unchanged };
+    // .level::secondary_priority: EvictionPriority = { .L2::evict_first, .L2::evict_unchanged };
 );
 
 #[cfg(test)]
