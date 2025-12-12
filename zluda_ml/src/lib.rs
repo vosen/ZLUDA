@@ -28,6 +28,19 @@ macro_rules! implemented_fn {
     };
 }
 
+macro_rules! implemented_in_common {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[no_mangle]
+            #[allow(improper_ctypes_definitions)]
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                cuda_macros::nvml_normalize_fn!( crate::r#impl_common::$fn_name ) ( $( zluda_common::FromCuda::<_, cuda_types::nvml::nvmlError_t>::from_cuda(&$arg_id )?),*)?;
+                Ok(())
+            }
+        )*
+    };
+}
+
 macro_rules! implemented_unnormalized {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
@@ -54,7 +67,10 @@ cuda_macros::nvml_function_declarations!(
             nvmlInit_v2,
             nvmlShutdown,
             nvmlSystemGetDriverVersion,
-            nvmlDeviceGetComputeRunningProcesses
+            nvmlDeviceGetComputeRunningProcesses,
+            nvmlDeviceGetMemoryInfo,
+            nvmlDeviceGetName
         ],
+    implemented_in_common <= [nvmlDeviceGetCudaComputeCapability],
     implemented_unnormalized <= [nvmlErrorString,]
 );
