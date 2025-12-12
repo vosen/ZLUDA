@@ -333,7 +333,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for tuning in tuning_directives {
             match tuning {
                 // We could implement it for the completeness sake, but it's
-                // not particularly important. The functions with .noreturn in 
+                // not particularly important. The functions with .noreturn in
                 // PTX are noreturn in LLVM already
                 ptx_parser::TuningDirective::NoReturn => {}
                 // Not really applicable
