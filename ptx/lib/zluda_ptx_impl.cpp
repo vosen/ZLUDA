@@ -916,17 +916,17 @@ extern "C"
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
     // passes from optimizing away the intrinsic call
-    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        __device__ float4::Native_vec_  __llvm_zluda_mma_m16n8k16(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k16");
-        return __llvm_zluda_mma_m16n8k16(a_reg, b_reg, c_reg);
+        __device__ uint4::Native_vec_  __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k16.f32.bf16.bf16.f32");
+        return std::bit_cast<float4::Native_vec_>(__llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(a_reg, b_reg, std::bit_cast<uint4::Native_vec_>(c_reg)));
     }
 
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32) (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        if (__oclc_ISA_version >= 11000)
+        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
-            return __llvm_zluda_mma_m16n8k16_optnone(a_reg, b_reg, c_reg);
+            [[clang::always_inline]] return __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone(a_reg, b_reg, c_reg);
         }
         else 
         {
@@ -934,8 +934,20 @@ extern "C"
         }
     }
 
+    // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
+    // passes from optimizing away the intrinsic call
+    static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
+    {
+        __device__ uint4::Native_vec_  __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k32.s32.s8.s8.s32");
+        return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(a_reg, b_reg, c_reg);
+    }
+
     uint4::Native_vec_ FUNC(mma_sync_aligned_m16n8k32_row_col_s32_s8_s8_s32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
+        if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
+        {
+            [[clang::always_inline]] return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone(a_reg, b_reg, c_reg);
+        }
         return std::bit_cast<uint4::Native_vec_>(fallback_mma_sync_aligned<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
     }
 }

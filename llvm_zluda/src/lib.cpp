@@ -7,6 +7,8 @@
 #include <lld/Common/Driver.h>
 #include <lld/Common/CommonLinkerContext.h>
 #include <llvm/Support/raw_ostream.h>
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #pragma GCC diagnostic pop
 
 #include <mutex>
@@ -248,6 +250,19 @@ int LLVMZludaLinkWithLLD(const char *input_path, const char *output_path, char *
     }
 
     return 0;
+}
+
+bool LLVMZludaParseCommandLineOptions(int argc, const char *const *argv,
+                                      char **ErrorMessage)
+{
+    std::string log_out_str;
+    llvm::raw_string_ostream log_err_str(log_out_str);
+    bool result = llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(""), &log_err_str);
+    if (!result && ErrorMessage)
+    {
+        *ErrorMessage = strdup(log_out_str.c_str());
+    }
+    return result;
 }
 
 LLVM_C_EXTERN_C_END

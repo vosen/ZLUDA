@@ -177,6 +177,7 @@ fn compile_cxx_lib(cxxflags: String, llvm_build_path: &PathBuf) {
     cc.include(&lld_build_include);
 
     cc.cpp(true).file("src/lib.cpp").compile("llvm_zluda_cpp");
+    println!("cargo:rerun-if-changed=../ext/llvm-project");
     println!("cargo:rerun-if-changed=src/lib.cpp");
     println!("cargo:rerun-if-changed=src/lib.rs");
 }
