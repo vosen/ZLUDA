@@ -1276,10 +1276,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             None,
         )
         .unwrap();
-        // TODO: Re-enable when we are able to privatize function-scoped
-        // globals and constants
-        // let fns = comgr::get_symbols(&comgr, &elf_module).unwrap();
-        // verify_symbols(fns);
+        verify_symbols(name.to_str().unwrap(), &module.context, &elf_module);
         let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };
@@ -1340,29 +1337,31 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
     Ok(result)
 }
 
-// TODO: Re-enable when we are able to privatize function-scoped
-// globals and constants
-/*
-fn verify_symbols(mut symbols: Vec<(u32, String)>) {
-    symbols.sort();
-    if symbols.len() != 2 {
-        panic!("Expected exactly two symbols, found: {:?}", symbols);
+pub fn verify_symbols(test_name: &str, ctx: &llvm_zluda::utils::Context, elf_module: &[u8]) {
+    let llvm_binary = llvm_zluda::utils::Binary::new(ctx, elf_module).unwrap();
+    let symbols_iterator = llvm_zluda::utils::SymbolIterator::new(&llvm_binary);
+    let mut symbols = Vec::new();
+    while !symbols_iterator.is_at_end(&llvm_binary) {
+        symbols.push(
+            symbols_iterator
+                .get_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string(),
+        );
+        symbols_iterator.move_to_next();
     }
-    assert_eq!(
-        symbols[0].0, 1,
-        "Wrong symbols exported from binary: {:?}",
-        symbols
-    );
-    assert_eq!(
-        symbols[1].0, 2,
-        "Wrong symbols exported from binary: {:?}",
-        symbols
-    );
-    assert_eq!(
-        symbols[0].1,
-        format!("{}.kd", symbols[1].1),
-        "Wrong symbols exported from binary: {:?}",
-        symbols
-    );
+    symbols.sort();
+    let expected = [
+        "_DYNAMIC".to_string(),
+        test_name.to_string(),
+        format!("{}.kd", test_name),
+    ];
+    if symbols != expected {
+        panic!(
+            "Wrong symbols found: {:?}, expected: {:?}",
+            symbols, expected
+        );
+    }
 }
- */
