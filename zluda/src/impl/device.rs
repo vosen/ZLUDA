@@ -1,11 +1,8 @@
 use super::{context, driver};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use std::{mem, ptr};
-
-const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
-pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
-pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
+use std::mem;
+use zluda_common::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
 
 pub(crate) fn compute_capability(major: &mut i32, minor: &mut i32, _dev: hipDevice_t) -> CUresult {
     *major = COMPUTE_CAPABILITY_MAJOR;
@@ -433,24 +430,7 @@ pub(crate) fn get_name(
     dev: hipDevice_t,
 ) -> CUresult {
     unsafe { hipDeviceGetName(name, len, dev) }?;
-    let len = len as usize;
-    let buffer = unsafe { std::slice::from_raw_parts(name, len) };
-    let first_zero = buffer.iter().position(|c| *c == 0);
-    let first_zero = if let Some(x) = first_zero {
-        x
-    } else {
-        return Ok(());
-    };
-    if (first_zero + PROJECT_SUFFIX.len()) > len {
-        return Ok(());
-    }
-    unsafe {
-        ptr::copy_nonoverlapping(
-            PROJECT_SUFFIX.as_ptr() as _,
-            name.add(first_zero),
-            PROJECT_SUFFIX.len(),
-        )
-    };
+    zluda_common::append_suffix(name, len as usize);
     Ok(())
 }
 
