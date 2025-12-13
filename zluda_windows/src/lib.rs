@@ -287,7 +287,7 @@ pub struct DelayLoadInfo {
 }
 
 #[repr(C)]
-enum DliNotify {
+pub enum DliNotify {
     _NoteStartProcessing,
     _NotePreLoadLibrary,
     _NotePreGetProcAddress,
