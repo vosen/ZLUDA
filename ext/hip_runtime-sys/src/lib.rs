@@ -12460,28 +12460,6 @@ extern "C" {
 }
 extern "C" {
     #[must_use]
-    /** @brief Creates a memset node and adds it to a graph.
-
- @param [out] phGraphNode - pointer to graph node to create.
- @param [in] hGraph - instance of graph to add the created node to.
- @param [in] dependencies - const pointer to the dependencies on the memset execution node.
- @param [in] numDependencies - number of the dependencies.
- @param [in] memsetParams - const pointer to the parameters for the memory set.
- @param [in] ctx - cotext related to current device.
- @returns #hipSuccess, #hipErrorInvalidValue
- @warning This API is marked as Beta. While this feature is complete, it can
-          change and might have outstanding issues.*/
-    pub fn hipDrvGraphAddMemsetNode(
-        phGraphNode: *mut hipGraphNode_t,
-        hGraph: hipGraph_t,
-        dependencies: *const hipGraphNode_t,
-        numDependencies: usize,
-        memsetParams: *const HIP_MEMSET_NODE_PARAMS,
-        ctx: hipCtx_t,
-    ) -> hipError_t;
-}
-extern "C" {
-    #[must_use]
     /** @brief Creates a memory free node and adds it to a graph
 
  @param [out] phGraphNode - Pointer to the graph node to create and add to the graph
@@ -12515,24 +12493,6 @@ extern "C" {
         hGraphExec: hipGraphExec_t,
         hNode: hipGraphNode_t,
         copyParams: *const HIP_MEMCPY3D,
-        ctx: hipCtx_t,
-    ) -> hipError_t;
-}
-extern "C" {
-    #[must_use]
-    /** @brief Sets the parameters for a memset node in the given graphExec.
-
- @param [in] hGraphExec - instance of the executable graph with the node.
- @param [in] hNode - instance of the node to set parameters to.
- @param [in] memsetParams - pointer to the parameters.
- @param [in] ctx - cotext related to current device.
- @returns #hipSuccess, #hipErrorInvalidValue
- @warning This API is marked as Beta. While this feature is complete, it can
-          change and might have outstanding issues.*/
-    pub fn hipDrvGraphExecMemsetNodeSetParams(
-        hGraphExec: hipGraphExec_t,
-        hNode: hipGraphNode_t,
-        memsetParams: *const HIP_MEMSET_NODE_PARAMS,
         ctx: hipCtx_t,
     ) -> hipError_t;
 }
