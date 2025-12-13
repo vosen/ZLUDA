@@ -13,7 +13,7 @@ fn main() -> Result<(), VarError> {
             println!("cargo:rustc-link-search=native=C:\\Windows\\System32");
         };
     } else {
-        println!("cargo:rustc-link-lib=dylib:+verbatim=libamdhip64.so.6");
+        println!("cargo:rustc-link-lib=dylib=amdhip64");
         println!("cargo:rustc-link-search=native=/opt/rocm/lib/");
     }
     Ok(())
