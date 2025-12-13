@@ -1216,7 +1216,18 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
         success: ("hipSuccess", "Success"),
         hip_types: vec![],
     });
-    module.items = converter.convert(module.items).collect::<Vec<Item>>();
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]),
+                );
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect::<Vec<Item>>();
     converter.flush(&mut module.items);
     add_send_sync(
         &mut module.items,

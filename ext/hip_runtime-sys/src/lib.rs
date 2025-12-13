@@ -3010,6 +3010,7 @@ impl hipPointer_attribute {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct hipPointer_attribute(pub ::core::ffi::c_uint);
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     pub fn hipCreateChannelDesc(
         x: ::core::ffi::c_int,
@@ -4853,11 +4854,13 @@ pub struct hipGraphEdgeData {
     ///< This should be populated with a value from hipGraphDependencyType
     pub type_: ::core::ffi::c_uchar,
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n  @defgroup API HIP API\n  @{\n\n  Defines the HIP API.  See the individual sections for more information.\n/\n/**\n  @defgroup Driver Initialization and Version\n  @{\n  This section describes the initializtion and version functions of HIP runtime API.\n\n/\n/**\n @brief Explicitly initializes the HIP runtime.\n\n @param [in] flags  Initialization flag, should be zero.\n\n Most HIP APIs implicitly initialize the HIP runtime.\n This API provides control over the timing of the initialization.\n\n @returns #hipSuccess, #hipErrorInvalidValue"]
     pub fn hipInit(flags: ::core::ffi::c_uint) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the approximate HIP driver version.
@@ -4877,6 +4880,7 @@ extern "C" {
  @see hipRuntimeGetVersion*/
     pub fn hipDriverGetVersion(driverVersion: *mut ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the approximate HIP Runtime version.
@@ -4893,6 +4897,7 @@ extern "C" {
  @see hipDriverGetVersion*/
     pub fn hipRuntimeGetVersion(runtimeVersion: *mut ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a handle to a compute device
@@ -4905,6 +4910,7 @@ extern "C" {
         ordinal: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the compute capability of the device
@@ -4919,6 +4925,7 @@ extern "C" {
         device: hipDevice_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns an identifer string for the device.
@@ -4933,6 +4940,7 @@ extern "C" {
         device: hipDevice_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns an UUID for the device.[BETA]
@@ -4946,6 +4954,7 @@ extern "C" {
  #hipErrorDeinitialized*/
     pub fn hipDeviceGetUuid(uuid: *mut hipUUID, device: hipDevice_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a value for attribute of link between two devices
@@ -4962,6 +4971,7 @@ extern "C" {
         dstDevice: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a PCI Bus Id string for the device, overloaded to take int device ID.
@@ -4976,6 +4986,7 @@ extern "C" {
         device: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a handle to a compute device.
@@ -4988,6 +4999,7 @@ extern "C" {
         pciBusId: *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the total amount of memory on the device.
@@ -4997,11 +5009,13 @@ extern "C" {
  @returns #hipSuccess, #hipErrorInvalidDevice*/
     pub fn hipDeviceTotalMem(bytes: *mut usize, device: hipDevice_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n  @defgroup Device Device Management\n  @{\n  This section describes the device management functions of HIP runtime API.\n/\n/**\n @brief Waits on all active streams on current device\n\n When this command is invoked, the host thread gets blocked until all the commands associated\n with streams associated with the device. HIP does not support multiple blocking modes (yet!).\n\n @returns #hipSuccess\n\n @see hipSetDevice, hipDeviceReset"]
     pub fn hipDeviceSynchronize() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief The state of current device is discarded and updated to a fresh state.
@@ -5015,6 +5029,7 @@ extern "C" {
  @see hipDeviceSynchronize*/
     pub fn hipDeviceReset() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set default device to be used for subsequent hip API calls from this thread.
@@ -5048,6 +5063,7 @@ extern "C" {
  @see #hipGetDevice, #hipGetDeviceCount*/
     pub fn hipSetDevice(deviceId: ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set a list of devices that can be used.
@@ -5064,6 +5080,7 @@ extern "C" {
         len: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return the default device id for the calling host thread.
@@ -5079,6 +5096,7 @@ extern "C" {
  @see hipSetDevice, hipGetDevicesizeBytes*/
     pub fn hipGetDevice(deviceId: *mut ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return number of compute-capable devices.
@@ -5093,6 +5111,7 @@ extern "C" {
  devices can be found, then hipGetDeviceCount returns #hipSuccess.*/
     pub fn hipGetDeviceCount(count: *mut ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query for a specific device attribute.
@@ -5108,6 +5127,7 @@ extern "C" {
         deviceId: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the default memory pool of the specified device
@@ -5127,6 +5147,7 @@ extern "C" {
         device: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the current memory pool of a device
@@ -5153,6 +5174,7 @@ extern "C" {
         mem_pool: hipMemPool_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the current memory pool for the specified device
@@ -5177,6 +5199,7 @@ extern "C" {
         device: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns device properties.
@@ -5195,6 +5218,7 @@ extern "C" {
         deviceId: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the maximum width for 1D linear textures on the specified device
@@ -5214,6 +5238,7 @@ extern "C" {
         device: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set L1/Shared cache partition.
@@ -5227,6 +5252,7 @@ extern "C" {
 */
     pub fn hipDeviceSetCacheConfig(cacheConfig: hipFuncCache_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get Cache configuration for a specific Device
@@ -5239,6 +5265,7 @@ extern "C" {
 */
     pub fn hipDeviceGetCacheConfig(cacheConfig: *mut hipFuncCache_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets resource limits of current device
@@ -5254,6 +5281,7 @@ extern "C" {
 */
     pub fn hipDeviceGetLimit(pValue: *mut usize, limit: hipLimit_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets resource limits of current device.
@@ -5275,6 +5303,7 @@ extern "C" {
 */
     pub fn hipDeviceSetLimit(limit: hipLimit_t, value: usize) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns bank width of shared memory for current device
@@ -5288,6 +5317,7 @@ extern "C" {
 */
     pub fn hipDeviceGetSharedMemConfig(pConfig: *mut hipSharedMemConfig) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the flags set for current device
@@ -5297,6 +5327,7 @@ extern "C" {
  @returns #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue*/
     pub fn hipGetDeviceFlags(flags: *mut ::core::ffi::c_uint) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief The bank width of shared memory on current device is set
@@ -5310,6 +5341,7 @@ extern "C" {
 */
     pub fn hipDeviceSetSharedMemConfig(config: hipSharedMemConfig) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief The current device behavior is changed according to the flags passed.
@@ -5343,6 +5375,7 @@ extern "C" {
 */
     pub fn hipSetDeviceFlags(flags: ::core::ffi::c_uint) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Device which matches hipDeviceProp_t is returned
@@ -5356,6 +5389,7 @@ extern "C" {
         prop: *const hipDeviceProp_tR0600,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the link type and hop count between two devices
@@ -5375,6 +5409,7 @@ extern "C" {
         hopcount: *mut u32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets an interprocess memory handle for an existing device memory allocation.
@@ -5399,6 +5434,7 @@ extern "C" {
         devPtr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Opens an interprocess memory handle exported from another process and returns a device
@@ -5437,6 +5473,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Close memory mapped with ::hipIpcOpenMemHandle
@@ -5454,6 +5491,7 @@ extern "C" {
 */
     pub fn hipIpcCloseMemHandle(devPtr: *mut ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets an opaque interprocess handle for an event.
@@ -5476,6 +5514,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Opens an interprocess event handle.
@@ -5499,6 +5538,7 @@ extern "C" {
         handle: hipIpcEventHandle_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n\n  @defgroup Execution Execution Control\n  @{\n  This section describes the execution control functions of HIP runtime API.\n\n/\n/**\n @brief Set attribute for a specific function\n\n @param [in] func Pointer of the function\n @param [in] attr Attribute to set\n @param [in] value Value to set\n\n @returns #hipSuccess, #hipErrorInvalidDeviceFunction, #hipErrorInvalidValue\n\n Note: AMD devices and some Nvidia GPUS do not support shared cache banking, and the hint is\n ignored on those architectures.\n"]
@@ -5508,6 +5548,7 @@ extern "C" {
         value: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set Cache configuration for a specific function
@@ -5524,6 +5565,7 @@ extern "C" {
         config: hipFuncCache_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set shared memory configuation for a specific function
@@ -5541,11 +5583,13 @@ extern "C" {
         config: hipSharedMemConfig,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup Error Error Handling\n  @{\n  This section describes the error handling functions of HIP runtime API.\n/\n/**\n @brief Return last error returned by any HIP runtime API call and resets the stored error code to\n #hipSuccess\n\n @returns return code from last HIP called from the active host thread\n\n Returns the last error that has been returned by any of the runtime calls in the same host\n thread, and then resets the saved error to #hipSuccess.\n\n @see hipGetErrorString, hipGetLastError, hipPeakAtLastError, hipError_t"]
     pub fn hipGetLastError() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return last error returned by any HIP runtime API call and resets the stored error code to
@@ -5559,6 +5603,7 @@ extern "C" {
  @see hipGetErrorString, hipGetLastError, hipPeakAtLastError, hipError_t*/
     pub fn hipExtGetLastError() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return last error returned by any HIP runtime API call.
@@ -5571,6 +5616,7 @@ extern "C" {
  @see hipGetErrorString, hipGetLastError, hipPeakAtLastError, hipError_t*/
     pub fn hipPeekAtLastError() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Return hip error as text string form.
 
@@ -5580,6 +5626,7 @@ extern "C" {
  @see hipGetErrorString, hipGetLastError, hipPeakAtLastError, hipError_t*/
     pub fn hipGetErrorName(hip_error: hipError_t) -> *const ::core::ffi::c_char;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Return handy text string message to explain the error which occurred
 
@@ -5589,6 +5636,7 @@ extern "C" {
  @see hipGetErrorName, hipGetLastError, hipPeakAtLastError, hipError_t*/
     pub fn hipGetErrorString(hipError: hipError_t) -> *const ::core::ffi::c_char;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return hip error as text string form.
@@ -5603,6 +5651,7 @@ extern "C" {
         errorString: *mut *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return handy text string message to explain the error which occurred
@@ -5617,6 +5666,7 @@ extern "C" {
         errorString: *mut *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create an asynchronous stream.
@@ -5635,6 +5685,7 @@ extern "C" {
  @see hipStreamCreateWithFlags, hipStreamCreateWithPriority, hipStreamSynchronize, hipStreamWaitEvent, hipStreamDestroy*/
     pub fn hipStreamCreate(stream: *mut hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create an asynchronous stream.
@@ -5656,6 +5707,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create an asynchronous stream with the specified priority.
@@ -5679,6 +5731,7 @@ extern "C" {
         priority: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns numerical values that correspond to the least and greatest stream priority.
@@ -5698,6 +5751,7 @@ extern "C" {
         greatestPriority: *mut ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the specified stream.
@@ -5717,6 +5771,7 @@ extern "C" {
  hipStreamWaitEvent, hipStreamSynchronize*/
     pub fn hipStreamDestroy(stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return #hipSuccess if all of the operations in the specified @p stream have completed, or
@@ -5734,6 +5789,7 @@ extern "C" {
  hipStreamSynchronize, hipStreamDestroy*/
     pub fn hipStreamQuery(stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Wait for all commands in stream to complete.
@@ -5756,6 +5812,7 @@ extern "C" {
 */
     pub fn hipStreamSynchronize(stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Make the specified compute stream wait for an event
@@ -5787,6 +5844,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return flags associated with this stream.
@@ -5805,6 +5863,7 @@ extern "C" {
         flags: *mut ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query the priority of a stream.
@@ -5823,6 +5882,7 @@ extern "C" {
         priority: *mut ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the device assocaited with the stream
@@ -5838,6 +5898,7 @@ extern "C" {
         device: *mut hipDevice_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create an asynchronous stream with the specified CU mask.
@@ -5863,6 +5924,7 @@ extern "C" {
         cuMask: *const u32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get CU mask associated with an asynchronous stream
@@ -5889,6 +5951,7 @@ pub type hipStreamCallback_t = ::core::option::Option<
         userData: *mut ::core::ffi::c_void,
     ),
 >;
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Adds a callback to be called on the host after all currently enqueued
@@ -5911,6 +5974,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues a wait command to the stream.[BETA]
@@ -5954,6 +6018,7 @@ extern "C" {
         mask: u32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues a wait command to the stream.[BETA]
@@ -5997,6 +6062,7 @@ extern "C" {
         mask: u64,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues a write command to the stream.[BETA]
@@ -6023,6 +6089,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues a write command to the stream.[BETA]
@@ -6049,6 +6116,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues an array of stream memory operations in the stream.[BETA]
@@ -6074,6 +6142,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a batch memory operation node and adds it to a graph.[BETA]
@@ -6099,6 +6168,7 @@ extern "C" {
         nodeParams: *const hipBatchMemOpNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a batch mem op node's parameters.[BETA]
@@ -6123,6 +6193,7 @@ extern "C" {
         nodeParams_out: *mut hipBatchMemOpNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the batch mem op node's parameters.[BETA]
@@ -6144,6 +6215,7 @@ extern "C" {
         nodeParams: *mut hipBatchMemOpNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a batch mem op node in the given graphExec.[BETA]
@@ -6169,6 +6241,7 @@ extern "C" {
         nodeParams: *const hipBatchMemOpNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup Event Event Management\n  @{\n  This section describes the event management functions of HIP runtime API.\n/\n/**\n @brief Create an event with the specified flags\n\n @param[in,out] event Returns the newly created event.\n @param[in] flags     Flags to control event behavior.  Valid values are #hipEventDefault,\n#hipEventBlockingSync, #hipEventDisableTiming, #hipEventInterprocess\n #hipEventDefault : Default flag.  The event will use active synchronization and will support\ntiming.  Blocking synchronization provides lowest possible latency at the expense of dedicating a\nCPU to poll on the event.\n #hipEventBlockingSync : The event will use blocking synchronization : if hipEventSynchronize is\ncalled on this event, the thread will block until the event completes.  This can increase latency\nfor the synchroniation but can result in lower power and more resources for other CPU threads.\n #hipEventDisableTiming : Disable recording of timing information. Events created with this flag\nwould not record profiling data and provide best performance if used for synchronization.\n #hipEventInterprocess : The event can be used as an interprocess event. hipEventDisableTiming\nflag also must be set when hipEventInterprocess flag is set.\n #hipEventDisableSystemFence : Disable acquire and release system scope fence. This may\nimprove performance but device memory may not be visible to the host and other devices\nif this flag is set.\n\n @returns #hipSuccess, #hipErrorNotInitialized, #hipErrorInvalidValue,\n#hipErrorLaunchFailure, #hipErrorOutOfMemory\n\n @see hipEventCreate, hipEventSynchronize, hipEventDestroy, hipEventElapsedTime"]
@@ -6177,6 +6250,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  Create an event
@@ -6190,6 +6264,7 @@ extern "C" {
  hipEventDestroy, hipEventElapsedTime*/
     pub fn hipEventCreate(event: *mut hipEvent_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Record an event in the specified stream.
@@ -6232,10 +6307,12 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipEventRecord(event: hipEvent_t, stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Destroy the specified event.
@@ -6254,6 +6331,7 @@ extern "C" {
  @returns #hipSuccess*/
     pub fn hipEventDestroy(event: hipEvent_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Wait for an event to complete.
@@ -6274,6 +6352,7 @@ extern "C" {
  hipEventElapsedTime*/
     pub fn hipEventSynchronize(event: hipEvent_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return the elapsed time between two events.
@@ -6308,6 +6387,7 @@ extern "C" {
         stop: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query event status
@@ -6326,6 +6406,7 @@ extern "C" {
  hipEventSynchronize, hipEventElapsedTime*/
     pub fn hipEventQuery(event: hipEvent_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Sets information on the specified pointer.[BETA]
@@ -6345,6 +6426,7 @@ extern "C" {
         ptr: hipDeviceptr_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Returns attributes for the specified pointer
@@ -6369,6 +6451,7 @@ extern "C" {
         ptr: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Returns information about the specified pointer.[BETA]
@@ -6389,6 +6472,7 @@ extern "C" {
         ptr: hipDeviceptr_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Returns information about the specified pointer.[BETA]
@@ -6412,6 +6496,7 @@ extern "C" {
         ptr: hipDeviceptr_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = "-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup External External Resource Interoperability\n  @{\n  @ingroup API\n\n  This section describes the external resource interoperability functions of HIP runtime API.\n\n/\n/**\n  @brief Imports an external semaphore.\n\n  @param[out] extSem_out  External semaphores to be waited on\n  @param[in] semHandleDesc Semaphore import handle descriptor\n\n  @returns #hipSuccess, #hipErrorInvalidDevice, #hipErrorInvalidValue\n\n  @see\n\n  @note  This API is currently not supported on Linux.\n"]
@@ -6420,6 +6505,7 @@ extern "C" {
         semHandleDesc: *const hipExternalSemaphoreHandleDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Signals a set of external semaphore objects.
@@ -6442,6 +6528,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Waits on a set of external semaphore objects
@@ -6464,6 +6551,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Destroys an external semaphore object and releases any references to the underlying resource. Any outstanding signals or waits must have completed before the semaphore is destroyed.
@@ -6478,6 +6566,7 @@ extern "C" {
 */
     pub fn hipDestroyExternalSemaphore(extSem: hipExternalSemaphore_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Imports an external memory object.
@@ -6493,6 +6582,7 @@ extern "C" {
         memHandleDesc: *const hipExternalMemoryHandleDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Maps a buffer onto an imported memory object.
@@ -6510,6 +6600,7 @@ extern "C" {
         bufferDesc: *const hipExternalMemoryBufferDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Destroys an external memory object.
@@ -6521,6 +6612,7 @@ extern "C" {
   @see*/
     pub fn hipDestroyExternalMemory(extMem: hipExternalMemory_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Maps a mipmapped array onto an external memory object.
@@ -6540,11 +6632,13 @@ extern "C" {
         mipmapDesc: *const hipExternalMemoryMipmappedArrayDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n  @brief Allocate memory on the default accelerator\n\n  @param[out] ptr Pointer to the allocated memory\n  @param[in]  size Requested memory size\n\n  If size is 0, no memory is allocated, *ptr returns nullptr, and hipSuccess is returned.\n\n  @returns #hipSuccess, #hipErrorOutOfMemory, #hipErrorInvalidValue (bad context, null *ptr)\n\n  @see hipMallocPitch, hipFree, hipMallocArray, hipFreeArray, hipMalloc3D, hipMalloc3DArray,\n hipHostFree, hipHostMalloc"]
     pub fn hipMalloc(ptr: *mut *mut ::core::ffi::c_void, size: usize) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate memory on the default accelerator
@@ -6570,6 +6664,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate pinned host memory [Deprecated]
@@ -6584,6 +6679,7 @@ extern "C" {
   @warning  This API is deprecated, use hipHostMalloc() instead*/
     pub fn hipMallocHost(ptr: *mut *mut ::core::ffi::c_void, size: usize) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate pinned host memory [Deprecated]
@@ -6601,6 +6697,7 @@ extern "C" {
         size: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocates device accessible page locked (pinned) host memory
@@ -6640,6 +6737,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = "-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup MemoryM Managed Memory\n\n  @ingroup Memory\n @{\n  This section describes the managed memory management functions of HIP runtime API.\n\n  @note  The managed memory management APIs are implemented on Linux, under developement\n  on Windows.\n\n/\n/**\n @brief Allocates memory that will be automatically managed by HIP.\n\n This API is used for managed memory, allows data be shared and accessible to both CPU and\n GPU using a single pointer.\n\n The API returns the allocation pointer, managed by HMM, can be used further to execute kernels\n on device and fetch data between the host and device as needed.\n\n @note   It is recommend to do the capability check before call this API.\n\n @param [out] dev_ptr - pointer to allocated device memory\n @param [in]  size    - requested allocation size in bytes, it should be granularity of 4KB\n @param [in]  flags   - must be either hipMemAttachGlobal or hipMemAttachHost\n                        (defaults to hipMemAttachGlobal)\n\n @returns #hipSuccess, #hipErrorMemoryAllocation, #hipErrorNotSupported, #hipErrorInvalidValue\n"]
@@ -6649,6 +6747,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Prefetches memory to the specified destination device using HIP.
@@ -6668,6 +6767,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Advise about the usage of a given memory range to HIP.
@@ -6694,6 +6794,7 @@ extern "C" {
         device: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query an attribute of a given memory range in HIP.
@@ -6716,6 +6817,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query attributes of a given memory range in HIP.
@@ -6741,6 +6843,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Attach memory to a stream asynchronously in HIP.
@@ -6763,6 +6866,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Allocates memory with stream ordered semantics
@@ -6800,6 +6904,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Frees memory with stream ordered semantics
@@ -6829,6 +6934,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Releases freed memory back to the OS
@@ -6861,6 +6967,7 @@ extern "C" {
         min_bytes_to_hold: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets attributes of a memory pool
@@ -6905,6 +7012,7 @@ extern "C" {
         value: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets attributes of a memory pool
@@ -6949,6 +7057,7 @@ extern "C" {
         value: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Controls visibility of the specified pool between devices
@@ -6972,6 +7081,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the accessibility of a pool from a device
@@ -6997,6 +7107,7 @@ extern "C" {
         location: *mut hipMemLocation,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memory pool
@@ -7025,6 +7136,7 @@ extern "C" {
         pool_props: *const hipMemPoolProps,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the specified memory pool
@@ -7053,6 +7165,7 @@ extern "C" {
  @note  This API is implemented on Linux and is under development on Microsoft Windows.*/
     pub fn hipMemPoolDestroy(mem_pool: hipMemPool_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Allocates memory from a specified pool with stream ordered semantics.
@@ -7093,6 +7206,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Exports a memory pool to the requested handle type.
@@ -7126,6 +7240,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Imports a memory pool from a shared handle.
@@ -7156,6 +7271,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Export data to share a memory pool allocation between processes.
@@ -7180,6 +7296,7 @@ extern "C" {
         dev_ptr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Import a memory pool allocation from another process.
@@ -7214,6 +7331,7 @@ extern "C" {
         export_data: *mut hipMemPoolPtrExportData,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate device accessible page locked host memory
@@ -7237,6 +7355,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Get Device pointer from Host Pointer allocated through hipHostMalloc
@@ -7254,6 +7373,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Return flags associated with host pointer
@@ -7268,6 +7388,7 @@ extern "C" {
         hostPtr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Register host memory so it can be accessed from the current device.
@@ -7310,6 +7431,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Un-register host pointer
@@ -7320,6 +7442,7 @@ extern "C" {
   @see hipHostRegister*/
     pub fn hipHostUnregister(hostPtr: *mut ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  Allocates at least width (in bytes) * height bytes of linear memory
@@ -7345,6 +7468,7 @@ extern "C" {
         height: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  Allocates at least width (in bytes) * height bytes of linear memory
@@ -7375,6 +7499,7 @@ extern "C" {
         elementSizeBytes: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Free memory allocated by the hcc hip memory allocation API.
@@ -7390,6 +7515,7 @@ extern "C" {
  hipMalloc3DArray, hipHostMalloc*/
     pub fn hipFree(ptr: *mut ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Frees page-locked memory
@@ -7403,6 +7529,7 @@ extern "C" {
 */
     pub fn hipFreeHost(ptr: *mut ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Free memory allocated by the hcc hip host memory allocation API
@@ -7421,6 +7548,7 @@ extern "C" {
 */
     pub fn hipHostFree(ptr: *mut ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from src to dst.
@@ -7457,6 +7585,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Memory copy on the stream.
@@ -7479,6 +7608,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Host to Device
@@ -7502,6 +7632,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Device to Host
@@ -7525,6 +7656,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Device to Device
@@ -7548,6 +7680,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies from one 1D array to device memory.
@@ -7573,6 +7706,7 @@ extern "C" {
         ByteCount: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies from device memory to a 1D array.
@@ -7598,6 +7732,7 @@ extern "C" {
         ByteCount: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies from one 1D array to another.
@@ -7625,6 +7760,7 @@ extern "C" {
         ByteCount: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Host to Device asynchronously
@@ -7650,6 +7786,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Device to Host asynchronously
@@ -7675,6 +7812,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from Device to Device asynchronously
@@ -7700,6 +7838,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Copies from one 1D array to host memory.
@@ -7727,6 +7866,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Copies from host memory to a 1D array.
@@ -7754,6 +7894,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Returns a global pointer from a module.
@@ -7777,6 +7918,7 @@ extern "C" {
         name: *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Gets device pointer associated with symbol on the device.
@@ -7791,6 +7933,7 @@ extern "C" {
         symbol: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Gets the size of the given symbol on the device.
@@ -7805,6 +7948,7 @@ extern "C" {
         symbol: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the pointer of requested HIP driver function.
@@ -7832,6 +7976,7 @@ extern "C" {
         symbolStatus: *mut hipDriverProcAddressQueryResult,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data to the given symbol on the device.
@@ -7860,6 +8005,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data to the given symbol on the device asynchronously.
@@ -7882,6 +8028,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data from the given symbol on the device.
@@ -7902,6 +8049,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data from the given symbol on the device asynchronously.
@@ -7924,6 +8072,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copy data from src to dst asynchronously.
@@ -7961,6 +8110,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dest with the constant
@@ -7976,6 +8126,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dest with the constant
@@ -7991,6 +8142,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dest with the constant
@@ -8013,6 +8165,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dest with the constant
@@ -8028,6 +8181,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dest with the constant
@@ -8050,6 +8204,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the memory area pointed to by dest with the constant integer
@@ -8065,6 +8220,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the first sizeBytes bytes of the memory area pointed to by dev with the constant
@@ -8087,6 +8243,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the memory area pointed to by dev with the constant integer
@@ -8109,6 +8266,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills the memory area pointed to by dst with the constant value.
@@ -8127,6 +8285,7 @@ extern "C" {
         height: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills asynchronously the memory area pointed to by dst with the constant value.
@@ -8147,6 +8306,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills synchronously the memory area pointed to by pitchedDevPtr with the constant value.
@@ -8161,6 +8321,7 @@ extern "C" {
         extent: hipExtent,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Fills asynchronously the memory area pointed to by pitchedDevPtr with the constant value.
@@ -8177,6 +8338,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query memory info.
@@ -8195,6 +8357,7 @@ extern "C" {
 */
     pub fn hipMemGetInfo(free: *mut usize, total: *mut usize) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get allocated memory size via memory pointer.
@@ -8211,6 +8374,7 @@ extern "C" {
         size: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate an array on the device.
@@ -8231,6 +8395,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Create an array memory pointer on the device.
@@ -8246,6 +8411,7 @@ extern "C" {
         pAllocateArray: *const HIP_ARRAY_DESCRIPTOR,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Destroy an array memory pointer on the device.
@@ -8257,6 +8423,7 @@ extern "C" {
   @see hipArrayCreate, hipArrayDestroy, hipFreeArray*/
     pub fn hipArrayDestroy(array: hipArray_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Create a 3D array memory pointer on the device.
@@ -8272,6 +8439,7 @@ extern "C" {
         pAllocateArray: *const HIP_ARRAY3D_DESCRIPTOR,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Create a 3D memory pointer on the device.
@@ -8287,6 +8455,7 @@ extern "C" {
         extent: hipExtent,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Frees an array on the device.
@@ -8297,6 +8466,7 @@ extern "C" {
   @see hipMalloc, hipMallocPitch, hipFree, hipMallocArray, hipHostMalloc, hipHostFree*/
     pub fn hipFreeArray(array: hipArray_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Allocate an array on the device.
@@ -8315,6 +8485,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets info about the specified array
@@ -8334,6 +8505,7 @@ extern "C" {
         array: hipArray_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a 1D or 2D array descriptor
@@ -8356,6 +8528,7 @@ extern "C" {
         array: hipArray_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a 3D array descriptor
@@ -8378,6 +8551,7 @@ extern "C" {
         array: hipArray_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8404,6 +8578,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies memory for 2D arrays.
@@ -8415,6 +8590,7 @@ extern "C" {
  hipMemcpyToSymbol, hipMemcpyAsync*/
     pub fn hipMemcpyParam2D(pCopy: *const hip_Memcpy2D) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies memory for 2D arrays.
@@ -8430,6 +8606,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8458,6 +8635,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8486,6 +8664,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8516,6 +8695,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8546,6 +8726,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device [Deprecated]
@@ -8573,6 +8754,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device [Deprecated]
@@ -8600,6 +8782,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8628,6 +8811,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device asynchronously.
@@ -8658,6 +8842,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8678,6 +8863,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8698,6 +8884,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8710,6 +8897,7 @@ extern "C" {
  hipMemcpyAsync*/
     pub fn hipMemcpy3D(p: *const hipMemcpy3DParms) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device asynchronously.
@@ -8726,6 +8914,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device.
@@ -8738,6 +8927,7 @@ extern "C" {
  hipMemcpyAsync*/
     pub fn hipDrvMemcpy3D(pCopy: *const HIP_MEMCPY3D) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /**  @brief Copies data between host and device asynchronously.
@@ -8754,6 +8944,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup PeerToPeer PeerToPeer Device Memory Access\n  @{\n  @warning PeerToPeer support is experimental.\n  This section describes the PeerToPeer device memory access functions of HIP runtime API.\n/\n/**\n @brief Determine if a device can access a peer's memory.\n\n @param [out] canAccessPeer Returns the peer access capability (0 or 1)\n @param [in] deviceId - device from where memory may be accessed.\n @param [in] peerDeviceId - device where memory is physically located\n\n Returns \"1\" in @p canAccessPeer if the specified @p device is capable\n of directly accessing memory physically located on peerDevice , or \"0\" if not.\n\n Returns \"0\" in @p canAccessPeer if deviceId == peerDeviceId, and both are valid devices : a\n device is not a peer of itself.\n\n @returns #hipSuccess,\n @returns #hipErrorInvalidDevice if deviceId or peerDeviceId are not valid devices"]
@@ -8763,6 +8954,7 @@ extern "C" {
         peerDeviceId: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enable direct access from current device's virtual address space to memory allocations
@@ -8784,6 +8976,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Disable direct access from current device's virtual address space to memory allocations
@@ -8797,6 +8990,7 @@ extern "C" {
  @returns #hipSuccess, #hipErrorPeerAccessNotEnabled*/
     pub fn hipDeviceDisablePeerAccess(peerDeviceId: ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get information on memory allocations.
@@ -8815,6 +9009,7 @@ extern "C" {
         dptr: hipDeviceptr_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Copies memory from one device to memory on another device.
@@ -8834,6 +9029,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Copies memory from one device to memory on another device.
@@ -8855,6 +9051,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create a context and set it as current/default context
@@ -8877,6 +9074,7 @@ extern "C" {
         device: hipDevice_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroy a HIP context [Deprecated]
@@ -8892,6 +9090,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxDestroy(ctx: hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Pop the current/default context and return the popped context [Deprecated]
@@ -8907,6 +9106,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxPopCurrent(ctx: *mut hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Push the context to be set as current/ default context [Deprecated]
@@ -8922,6 +9122,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxPushCurrent(ctx: hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set the passed context as current/default [Deprecated]
@@ -8937,6 +9138,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxSetCurrent(ctx: hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the handle of the current/ default context [Deprecated]
@@ -8952,6 +9154,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxGetCurrent(ctx: *mut hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the handle of the device associated with current/default context [Deprecated]
@@ -8967,6 +9170,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxGetDevice(device: *mut hipDevice_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the approximate HIP api version.
@@ -8992,6 +9196,7 @@ extern "C" {
         apiVersion: *mut ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get Cache configuration for a specific function [Deprecated]
@@ -9010,6 +9215,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxGetCacheConfig(cacheConfig: *mut hipFuncCache_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set L1/Shared cache partition [Deprecated]
@@ -9028,6 +9234,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxSetCacheConfig(cacheConfig: hipFuncCache_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set Shared memory bank configuration  [Deprecated]
@@ -9046,6 +9253,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxSetSharedMemConfig(config: hipSharedMemConfig) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get Shared memory bank configuration [Deprecated]
@@ -9064,6 +9272,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxGetSharedMemConfig(pConfig: *mut hipSharedMemConfig) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Blocks until the default context has completed all preceding requested tasks [Deprecated]
@@ -9080,6 +9289,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxSynchronize() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return flags used for creating default context [Deprecated]
@@ -9095,6 +9305,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxGetFlags(flags: *mut ::core::ffi::c_uint) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enables direct access to memory allocations in a peer context [Deprecated]
@@ -9122,6 +9333,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Disable direct access from current context's virtual address space to memory allocations
@@ -9143,6 +9355,7 @@ extern "C" {
  NVIDIA platform.*/
     pub fn hipCtxDisablePeerAccess(peerCtx: hipCtx_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the state of the primary context [Deprecated]
@@ -9164,6 +9377,7 @@ extern "C" {
         active: *mut ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Release the primary context on the GPU.
@@ -9181,6 +9395,7 @@ extern "C" {
  platform.*/
     pub fn hipDevicePrimaryCtxRelease(dev: hipDevice_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Retain the primary context on the GPU [Deprecated]
@@ -9200,6 +9415,7 @@ extern "C" {
         dev: hipDevice_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Resets the primary context on the GPU [Deprecated]
@@ -9215,6 +9431,7 @@ extern "C" {
  platform.*/
     pub fn hipDevicePrimaryCtxReset(dev: hipDevice_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set flags for the primary context [Deprecated]
@@ -9234,6 +9451,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n\n  @defgroup Module Module Management\n  @{\n  @ingroup API\n  This section describes the module management functions of HIP runtime API.\n\n/\n/**\n @brief Loads code object from file into a module the currrent context.\n\n @param [in] fname  Filename of code object to load\n\n @param [out] module  Module\n\n @warning File/memory resources allocated in this function are released only in hipModuleUnload.\n\n @returns #hipSuccess, #hipErrorInvalidValue, #hipErrorInvalidContext, #hipErrorFileNotFound,\n #hipErrorOutOfMemory, #hipErrorSharedObjectInitFailed, #hipErrorNotInitialized\n"]
@@ -9242,6 +9460,7 @@ extern "C" {
         fname: *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Frees the module
@@ -9253,6 +9472,7 @@ extern "C" {
  The module is freed, and the code objects associated with it are destroyed.*/
     pub fn hipModuleUnload(module: hipModule_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Function with kname will be extracted if present in module
@@ -9269,6 +9489,7 @@ extern "C" {
         kname: *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Find out attributes for a given function.
@@ -9282,6 +9503,7 @@ extern "C" {
         func: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Find out a specific attribute for a given function.
@@ -9297,6 +9519,7 @@ extern "C" {
         hfunc: hipFunction_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets pointer to device entry function that matches entry function symbolPtr.
@@ -9311,6 +9534,7 @@ extern "C" {
         symbolPtr: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief returns the handle of the texture reference with the name from the module.
@@ -9326,6 +9550,7 @@ extern "C" {
         name: *const ::core::ffi::c_char,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief builds module from code object which resides in host memory. Image is pointer to that
@@ -9340,6 +9565,7 @@ extern "C" {
         image: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief builds module from code object which resides in host memory. Image is pointer to that
@@ -9360,6 +9586,7 @@ extern "C" {
         optionValues: *mut *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Completes the linking of the given program.
@@ -9389,6 +9616,7 @@ extern "C" {
         optionValues: *mut *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Adds a file with bit code to be linked with options
@@ -9414,6 +9642,7 @@ extern "C" {
         optionValues: *mut *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Completes the linking of the given program.
@@ -9433,6 +9662,7 @@ extern "C" {
         sizeOut: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates the link instance via hip APIs.
@@ -9451,6 +9681,7 @@ extern "C" {
         stateOut: *mut hipLinkState_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Deletes the link instance via hip APIs.
@@ -9461,6 +9692,7 @@ extern "C" {
  @see hipSuccess*/
     pub fn hipLinkDestroy(state: hipLinkState_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief launches kernel f with launch parameters and shared memory on stream with arguments passed
@@ -9503,6 +9735,7 @@ extern "C" {
         extra: *mut *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " \\addtogroup ModuleCooperativeG Cooperative groups kernel launch of Module management.\n \\ingroup Module\n  @{ */\n/**\n @brief launches kernel f with launch parameters and shared memory on stream with arguments passed\n to kernelParams, where thread blocks can cooperate and synchronize as they execute\n\n @param [in] f              Kernel to launch.\n @param [in] gridDimX       X grid dimension specified as multiple of blockDimX.\n @param [in] gridDimY       Y grid dimension specified as multiple of blockDimY.\n @param [in] gridDimZ       Z grid dimension specified as multiple of blockDimZ.\n @param [in] blockDimX      X block dimension specified in work-items.\n @param [in] blockDimY      Y block dimension specified in work-items.\n @param [in] blockDimZ      Z block dimension specified in work-items.\n @param [in] sharedMemBytes Amount of dynamic shared memory to allocate for this kernel. The\n HIP-Clang compiler provides support for extern shared declarations.\n @param [in] stream         Stream where the kernel should be dispatched. May be 0,\n in which case the default stream is used with associated synchronization rules.\n @param [in] kernelParams   A list of kernel arguments.\n\n Please note, HIP does not support kernel launch with total work items defined in dimension with\n size \\f$ gridDim \\cdot blockDim \\geq 2^{32} \\f$.\n\n @returns #hipSuccess, #hipErrorDeinitialized, #hipErrorNotInitialized, #hipErrorInvalidContext,\n #hipErrorInvalidHandle, #hipErrorInvalidImage, #hipErrorInvalidValue,\n #hipErrorInvalidConfiguration, #hipErrorLaunchFailure, #hipErrorLaunchOutOfResources,\n #hipErrorLaunchTimeOut, #hipErrorCooperativeLaunchTooLarge, #hipErrorSharedObjectInitFailed"]
@@ -9519,6 +9752,7 @@ extern "C" {
         kernelParams: *mut *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches kernels on multiple devices where thread blocks can cooperate and
@@ -9539,6 +9773,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches kernel f with launch parameters and shared memory on stream with arguments passed
@@ -9568,6 +9803,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches kernels on multiple devices where thread blocks can cooperate and
@@ -9585,6 +9821,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches kernels on multiple devices and guarantees all specified kernels are dispatched
@@ -9601,6 +9838,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = "-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup Occupancy Occupancy\n  @{\n  This section describes the occupancy functions of HIP runtime API.\n\n/\n/**\n @brief determine the grid and block sizes to achieves maximum occupancy for a kernel\n\n @param [out] gridSize           minimum grid size for maximum potential occupancy\n @param [out] blockSize          block size for maximum potential occupancy\n @param [in]  f                  kernel function for which occupancy is calulated\n @param [in]  dynSharedMemPerBlk dynamic shared memory usage (in bytes) intended for each block\n @param [in]  blockSizeLimit     the maximum block size for the kernel, use 0 for no limit\n\n Please note, HIP does not support kernel launch with total work items defined in dimension with\n size gridDim x blockDim >= 2^32.\n\n @returns #hipSuccess, #hipErrorInvalidValue"]
@@ -9612,6 +9850,7 @@ extern "C" {
         blockSizeLimit: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief determine the grid and block sizes to achieves maximum occupancy for a kernel
@@ -9636,6 +9875,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns occupancy for a device function.
@@ -9652,6 +9892,7 @@ extern "C" {
         dynSharedMemPerBlk: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns occupancy for a device function.
@@ -9670,6 +9911,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns occupancy for a device function.
@@ -9686,6 +9928,7 @@ extern "C" {
         dynSharedMemPerBlk: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns occupancy for a device function.
@@ -9704,6 +9947,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief determine the grid and block sizes to achieves maximum occupancy for a kernel
@@ -9726,6 +9970,7 @@ extern "C" {
         blockSizeLimit: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Start recording of profiling information [Deprecated]
@@ -9734,6 +9979,7 @@ extern "C" {
  @warning hipProfilerStart API is deprecated, use roctracer/rocTX instead.*/
     pub fn hipProfilerStart() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Stop recording of profiling information [Deprecated]
@@ -9742,6 +9988,7 @@ extern "C" {
  @warning  hipProfilerStart API is deprecated, use roctracer/rocTX instead.*/
     pub fn hipProfilerStop() -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     #[doc = " @}\n/\n/**\n-------------------------------------------------------------------------------------------------\n-------------------------------------------------------------------------------------------------\n  @defgroup Clang Launch API to support the triple-chevron syntax\n  @{\n  This section describes the API to support the triple-chevron syntax.\n/\n/**\n @brief Configure a kernel launch.\n\n @param [in] gridDim   grid dimension specified as multiple of blockDim.\n @param [in] blockDim  block dimensions specified in work-items\n @param [in] sharedMem Amount of dynamic shared memory to allocate for this kernel. The\n HIP-Clang compiler provides support for extern shared declarations.\n @param [in] stream    Stream where the kernel should be dispatched.  May be 0, in which case the\n default stream is used with associated synchronization rules.\n\n Please note, HIP does not support kernel launch with total work items defined in dimension with\n size gridDim x blockDim >= 2^32.\n\n @returns #hipSuccess, #hipErrorNotInitialized, #hipErrorInvalidValue\n"]
@@ -9752,6 +9999,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set a kernel argument.
@@ -9768,6 +10016,7 @@ extern "C" {
         offset: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launch a kernel.
@@ -9778,6 +10027,7 @@ extern "C" {
 */
     pub fn hipLaunchByPtr(func: *const ::core::ffi::c_void) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief C compliant kernel launch API
@@ -9803,6 +10053,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enqueues a host function call in a stream.
@@ -9834,6 +10085,7 @@ extern "C" {
         userData: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** Copies memory for 2D arrays.
@@ -9843,6 +10095,7 @@ extern "C" {
  @returns #hipSuccess, #hipErrorInvalidValue*/
     pub fn hipDrvMemcpy2DUnaligned(pCopy: *const hip_Memcpy2D) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches kernel from the pointer address, with arguments and shared memory on stream.
@@ -9876,6 +10129,7 @@ extern "C" {
         flags: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a texture object.
@@ -9897,6 +10151,7 @@ extern "C" {
         pResViewDesc: *const hipResourceViewDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys a texture object.
@@ -9907,6 +10162,7 @@ extern "C" {
 */
     pub fn hipDestroyTextureObject(textureObject: hipTextureObject_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the channel descriptor in an array.
@@ -9921,6 +10177,7 @@ extern "C" {
         array: hipArray_const_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets resource descriptor for the texture object.
@@ -9935,6 +10192,7 @@ extern "C" {
         textureObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets resource view descriptor for the texture object.
@@ -9949,6 +10207,7 @@ extern "C" {
         textureObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets texture descriptor for the texture object.
@@ -9963,6 +10222,7 @@ extern "C" {
         textureObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a texture object.
@@ -9981,6 +10241,7 @@ extern "C" {
         pResViewDesc: *const HIP_RESOURCE_VIEW_DESC,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys a texture object.
@@ -9991,6 +10252,7 @@ extern "C" {
 */
     pub fn hipTexObjectDestroy(texObject: hipTextureObject_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets resource descriptor of a texture object.
@@ -10005,6 +10267,7 @@ extern "C" {
         texObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets resource view descriptor of a texture object.
@@ -10019,6 +10282,7 @@ extern "C" {
         texObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets texture descriptor of a texture object.
@@ -10033,6 +10297,7 @@ extern "C" {
         texObject: hipTextureObject_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Allocate a mipmapped array on the device.
@@ -10055,6 +10320,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Frees a mipmapped array on the device.
@@ -10067,6 +10333,7 @@ extern "C" {
 */
     pub fn hipFreeMipmappedArray(mipmappedArray: hipMipmappedArray_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a mipmap level of a HIP mipmapped array.
@@ -10085,6 +10352,7 @@ extern "C" {
         level: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create a mipmapped array.
@@ -10102,6 +10370,7 @@ extern "C" {
         numMipmapLevels: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroy a mipmapped array.
@@ -10114,6 +10383,7 @@ extern "C" {
 */
     pub fn hipMipmappedArrayDestroy(hMipmappedArray: hipMipmappedArray_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get a mipmapped array on a mipmapped level.
@@ -10132,6 +10402,7 @@ extern "C" {
         level: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief  Binds a mipmapped array to a texture [Deprecated]
@@ -10148,6 +10419,7 @@ extern "C" {
         desc: *const hipChannelFormatDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the texture reference related with the symbol [Deprecated]
@@ -10163,6 +10435,7 @@ extern "C" {
         symbol: *const ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the border color used by a texture reference [Deprecated]
@@ -10178,6 +10451,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the array bound to a texture reference [Deprecated]
@@ -10194,6 +10468,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets address mode for a texture reference [Deprecated]
@@ -10211,6 +10486,7 @@ extern "C" {
         am: hipTextureAddressMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Binds an array as a texture reference [Deprecated]
@@ -10229,6 +10505,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set filter mode for a texture reference [Deprecated]
@@ -10245,6 +10522,7 @@ extern "C" {
         fm: hipTextureFilterMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set flags for a texture reference [Deprecated]
@@ -10261,6 +10539,7 @@ extern "C" {
         Flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set format for a texture reference [Deprecated]
@@ -10279,6 +10558,7 @@ extern "C" {
         NumPackedComponents: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Binds a memory area to a texture [Deprecated]
@@ -10301,6 +10581,7 @@ extern "C" {
         size: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Binds a 2D memory area to a texture [Deprecated]
@@ -10327,6 +10608,7 @@ extern "C" {
         pitch: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Binds a memory area to a texture [Deprecated]
@@ -10345,6 +10627,7 @@ extern "C" {
         desc: *const hipChannelFormatDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the offset of the alignment in a texture [Deprecated]
@@ -10361,6 +10644,7 @@ extern "C" {
         texref: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Unbinds a texture [Deprecated]
@@ -10373,6 +10657,7 @@ extern "C" {
 */
     pub fn hipUnbindTexture(tex: *const textureReference) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the address for a texture reference [Deprecated]
@@ -10389,6 +10674,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the address mode for a texture reference [Deprecated]
@@ -10407,6 +10693,7 @@ extern "C" {
         dim: ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets filter mode for a texture reference [Deprecated]
@@ -10423,6 +10710,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets flags for a texture reference [Deprecated]
@@ -10439,6 +10727,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets texture format for a texture reference [Deprecated]
@@ -10457,6 +10746,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the maximum anisotropy for a texture reference [Deprecated]
@@ -10473,6 +10763,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the mipmap filter mode for a texture reference [Deprecated]
@@ -10489,6 +10780,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the mipmap level bias for a texture reference [Deprecated]
@@ -10505,6 +10797,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the minimum and maximum mipmap level clamps for a texture reference [Deprecated]
@@ -10523,6 +10816,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets the mipmapped array bound to a texture reference [Deprecated]
@@ -10539,6 +10833,7 @@ extern "C" {
         texRef: *const textureReference,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets an bound address for a texture reference [Deprecated]
@@ -10559,6 +10854,7 @@ extern "C" {
         bytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set a bind an address as a 2D texture reference [Deprecated]
@@ -10579,6 +10875,7 @@ extern "C" {
         Pitch: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the maximum anisotropy for a texture reference [Deprecated]
@@ -10595,6 +10892,7 @@ extern "C" {
         maxAniso: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets border color for a texture reference [Deprecated]
@@ -10611,6 +10909,7 @@ extern "C" {
         pBorderColor: *mut f32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets mipmap filter mode for a texture reference [Deprecated]
@@ -10627,6 +10926,7 @@ extern "C" {
         fm: hipTextureFilterMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets mipmap level bias for a texture reference [Deprecated]
@@ -10643,6 +10943,7 @@ extern "C" {
         bias: f32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets mipmap level clamp for a texture reference [Deprecated]
@@ -10661,6 +10962,7 @@ extern "C" {
         maxMipMapLevelClamp: f32,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Binds mipmapped array to a texture reference [Deprecated]
@@ -10679,10 +10981,12 @@ extern "C" {
         Flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[doc = "  @defgroup Callback Callback Activity APIs\n  @{\n  This section describes the callback/Activity of HIP runtime API.\n/\n/**\n @brief Returns HIP API name by ID.\n\n @param [in] id ID of HIP API\n\n @returns #hipSuccess, #hipErrorInvalidValue\n"]
     pub fn hipApiName(id: u32) -> *const ::core::ffi::c_char;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Returns kernel name reference by function name.
 
@@ -10692,6 +10996,7 @@ extern "C" {
 */
     pub fn hipKernelNameRef(f: hipFunction_t) -> *const ::core::ffi::c_char;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Retrives kernel for a given host pointer, unless stated otherwise.
 
@@ -10705,6 +11010,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> *const ::core::ffi::c_char;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     /** @brief Returns device ID on the stream.
 
@@ -10714,6 +11020,7 @@ extern "C" {
 */
     pub fn hipGetStreamDeviceId(stream: hipStream_t) -> ::core::ffi::c_int;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Begins graph capture on a stream.
@@ -10732,6 +11039,7 @@ extern "C" {
         mode: hipStreamCaptureMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Begins graph capture on a stream to an existing graph.
@@ -10759,6 +11067,7 @@ open to changes and may have outstanding issues.*/
         mode: hipStreamCaptureMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Ends capture on a stream, returning the captured graph.
@@ -10776,6 +11085,7 @@ extern "C" {
         pGraph: *mut hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get capture status of a stream.
@@ -10795,6 +11105,7 @@ extern "C" {
         pId: *mut ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get stream's capture state
@@ -10820,6 +11131,7 @@ extern "C" {
         numDependencies_out: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get stream's capture state
@@ -10837,6 +11149,7 @@ extern "C" {
         pCaptureStatus: *mut hipStreamCaptureStatus,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Update the set of dependencies in a capturing stream
@@ -10858,6 +11171,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Swaps the stream capture mode of a thread.
@@ -10872,6 +11186,7 @@ extern "C" {
         mode: *mut hipStreamCaptureMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a graph
@@ -10889,6 +11204,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys a graph
@@ -10902,6 +11218,7 @@ extern "C" {
 */
     pub fn hipGraphDestroy(graph: hipGraph_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Adds dependency edges to a graph.
@@ -10922,6 +11239,7 @@ extern "C" {
         numDependencies: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Removes dependency edges from a graph.
@@ -10942,6 +11260,7 @@ extern "C" {
         numDependencies: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a graph's dependency edges.
@@ -10966,6 +11285,7 @@ extern "C" {
         numEdges: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a graph's nodes.
@@ -10988,6 +11308,7 @@ extern "C" {
         numNodes: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a graph's root nodes.
@@ -11010,6 +11331,7 @@ extern "C" {
         pNumRootNodes: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a node's dependencies.
@@ -11032,6 +11354,7 @@ extern "C" {
         pNumDependencies: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a node's dependent nodes.
@@ -11055,6 +11378,7 @@ extern "C" {
         pNumDependentNodes: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a node's type.
@@ -11071,6 +11395,7 @@ extern "C" {
         pType: *mut hipGraphNodeType,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Remove a node from the graph.
@@ -11083,6 +11408,7 @@ extern "C" {
 */
     pub fn hipGraphDestroyNode(node: hipGraphNode_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Clones a graph.
@@ -11099,6 +11425,7 @@ extern "C" {
         originalGraph: hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Finds a cloned version of a node.
@@ -11117,6 +11444,7 @@ extern "C" {
         clonedGraph: hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an executable graph from a graph
@@ -11141,6 +11469,7 @@ extern "C" {
         bufferSize: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an executable graph from a graph.
@@ -11159,6 +11488,7 @@ extern "C" {
         flags: ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an executable graph from a graph.
@@ -11176,6 +11506,7 @@ extern "C" {
         instantiateParams: *mut hipGraphInstantiateParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Launches an executable graph in the specified stream.
@@ -11188,6 +11519,7 @@ extern "C" {
           change and might have outstanding issues.*/
     pub fn hipGraphLaunch(graphExec: hipGraphExec_t, stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Uploads an executable graph to a stream
@@ -11200,6 +11532,7 @@ extern "C" {
           change and might have outstanding issues.*/
     pub fn hipGraphUpload(graphExec: hipGraphExec_t, stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a kernel execution node and adds it to a graph.
@@ -11220,6 +11553,7 @@ extern "C" {
         nodeParams: *mut hipGraphNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Return the flags of an executable graph.
@@ -11234,6 +11568,7 @@ extern "C" {
         flags: *mut ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates parameters of a graph's node.
@@ -11248,6 +11583,7 @@ extern "C" {
         nodeParams: *mut hipGraphNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates parameters of an executable graph's node.
@@ -11264,6 +11600,7 @@ extern "C" {
         nodeParams: *mut hipGraphNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroys an executable graph
@@ -11276,6 +11613,7 @@ extern "C" {
           change and might have outstanding issues.*/
     pub fn hipGraphExecDestroy(graphExec: hipGraphExec_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Check whether an executable graph can be updated with a graph and perform the update if  *
@@ -11296,6 +11634,7 @@ extern "C" {
         updateResult_out: *mut hipGraphExecUpdateResult,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a kernel execution node and adds it to a graph.
@@ -11316,6 +11655,7 @@ extern "C" {
         pNodeParams: *const hipKernelNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets kernel node's parameters.
@@ -11330,6 +11670,7 @@ extern "C" {
         pNodeParams: *mut hipKernelNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a kernel node's parameters.
@@ -11344,6 +11685,7 @@ extern "C" {
         pNodeParams: *const hipKernelNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a kernel node in the given graphExec.
@@ -11360,6 +11702,7 @@ extern "C" {
         pNodeParams: *const hipKernelNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memcpy node and adds it to a graph.
@@ -11382,6 +11725,7 @@ extern "C" {
         ctx: hipCtx_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memcpy node and adds it to a graph.
@@ -11402,6 +11746,7 @@ extern "C" {
         pCopyParams: *const hipMemcpy3DParms,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a memcpy node's parameters.
@@ -11416,6 +11761,7 @@ extern "C" {
         pNodeParams: *mut hipMemcpy3DParms,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memcpy node's parameters.
@@ -11430,6 +11776,7 @@ extern "C" {
         pNodeParams: *const hipMemcpy3DParms,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a node's attribute.
@@ -11446,6 +11793,7 @@ extern "C" {
         value: *const hipLaunchAttributeValue,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a node's attribute.
@@ -11462,6 +11810,7 @@ extern "C" {
         value: *mut hipLaunchAttributeValue,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters of a memcpy node in the given graphExec.
@@ -11478,6 +11827,7 @@ extern "C" {
         pNodeParams: *mut hipMemcpy3DParms,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a 1D memcpy node and adds it to a graph.
@@ -11504,6 +11854,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memcpy node's parameters to perform a 1-dimensional copy.
@@ -11524,6 +11875,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a memcpy node in the given graphExec to perform a 1-dimensional
@@ -11547,6 +11899,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memcpy node to copy from a symbol on the device and adds it to a graph.
@@ -11575,6 +11928,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memcpy node's parameters to copy from a symbol on the device.
@@ -11597,6 +11951,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a memcpy node in the given graphExec to copy from a symbol on the
@@ -11622,6 +11977,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memcpy node to copy to a symbol on the device and adds it to a graph.
@@ -11650,6 +12006,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memcpy node's parameters to copy to a symbol on the device.
@@ -11672,6 +12029,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a memcpy node in the given graphExec to copy to a symbol on the
@@ -11696,6 +12054,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memset node and adds it to a graph.
@@ -11716,6 +12075,7 @@ extern "C" {
         pMemsetParams: *const hipMemsetParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a memset node's parameters.
@@ -11730,6 +12090,7 @@ extern "C" {
         pNodeParams: *mut hipMemsetParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memset node's parameters.
@@ -11744,6 +12105,7 @@ extern "C" {
         pNodeParams: *const hipMemsetParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a memset node in the given graphExec.
@@ -11760,6 +12122,7 @@ extern "C" {
         pNodeParams: *const hipMemsetParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a host execution node and adds it to a graph.
@@ -11780,6 +12143,7 @@ extern "C" {
         pNodeParams: *const hipHostNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns a host node's parameters.
@@ -11794,6 +12158,7 @@ extern "C" {
         pNodeParams: *mut hipHostNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a host node's parameters.
@@ -11808,6 +12173,7 @@ extern "C" {
         pNodeParams: *const hipHostNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a host node in the given graphExec.
@@ -11824,6 +12190,7 @@ extern "C" {
         pNodeParams: *const hipHostNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a child graph node and adds it to a graph.
@@ -11844,6 +12211,7 @@ extern "C" {
         childGraph: hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a handle to the embedded graph of a child graph node.
@@ -11858,6 +12226,7 @@ extern "C" {
         pGraph: *mut hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates node parameters in the child graph node in the given graphExec.
@@ -11874,6 +12243,7 @@ extern "C" {
         childGraph: hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an empty node and adds it to a graph.
@@ -11892,6 +12262,7 @@ extern "C" {
         numDependencies: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an event record node and adds it to a graph.
@@ -11912,6 +12283,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the event associated with an event record node.
@@ -11926,6 +12298,7 @@ extern "C" {
         event_out: *mut hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets an event record node's event.
@@ -11940,6 +12313,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the event for an event record node in the given graphExec.
@@ -11956,6 +12330,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates an event wait node and adds it to a graph.
@@ -11976,6 +12351,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the event associated with an event wait node.
@@ -11990,6 +12366,7 @@ extern "C" {
         event_out: *mut hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets an event wait node's event.
@@ -12004,6 +12381,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the event for an event record node in the given graphExec.
@@ -12020,6 +12398,7 @@ extern "C" {
         event: hipEvent_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memory allocation node and adds it to a graph
@@ -12040,6 +12419,7 @@ extern "C" {
         pNodeParams: *mut hipMemAllocNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns parameters for memory allocation node
@@ -12054,6 +12434,7 @@ extern "C" {
         pNodeParams: *mut hipMemAllocNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memory free node and adds it to a graph
@@ -12074,6 +12455,7 @@ extern "C" {
         dev_ptr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns parameters for memory free node
@@ -12088,6 +12470,7 @@ extern "C" {
         dev_ptr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the mem attribute for graphs.
@@ -12104,6 +12487,7 @@ extern "C" {
         value: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set the mem attribute for graphs.
@@ -12120,6 +12504,7 @@ extern "C" {
         value: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Free unused memory reserved for graphs on a specific device and return it back to the OS.
@@ -12131,6 +12516,7 @@ extern "C" {
           change and might have outstanding issues.*/
     pub fn hipDeviceGraphMemTrim(device: ::core::ffi::c_int) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create an instance of userObject to manage lifetime of a resource.
@@ -12151,6 +12537,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Release number of references to resource.
@@ -12165,6 +12552,7 @@ extern "C" {
         count: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Retain number of references to resource.
@@ -12179,6 +12567,7 @@ extern "C" {
         count: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Retain user object for graphs.
@@ -12197,6 +12586,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Release user object from graphs.
@@ -12213,6 +12603,7 @@ extern "C" {
         count: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Write a DOT file describing graph structure.
@@ -12229,6 +12620,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Copies attributes from source node to destination node.
@@ -12248,6 +12640,7 @@ extern "C" {
         hDst: hipGraphNode_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Enables or disables the specified node in the given graphExec
@@ -12276,6 +12669,7 @@ extern "C" {
         isEnabled: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Query whether a node in the given graphExec is enabled
@@ -12302,6 +12696,7 @@ extern "C" {
         isEnabled: *mut ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a external semaphor wait node and adds it to a graph.
@@ -12322,6 +12717,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreWaitNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a external semaphor signal node and adds it to a graph.
@@ -12342,6 +12738,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreSignalNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates node parameters in the external semaphore signal node.
@@ -12356,6 +12753,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreSignalNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates node parameters in the external semaphore wait node.
@@ -12370,6 +12768,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreWaitNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns external semaphore signal node params.
@@ -12384,6 +12783,7 @@ extern "C" {
         params_out: *mut hipExternalSemaphoreSignalNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns external semaphore wait node params.
@@ -12398,6 +12798,7 @@ extern "C" {
         params_out: *mut hipExternalSemaphoreWaitNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates node parameters in the external semaphore signal node in the given graphExec.
@@ -12414,6 +12815,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreSignalNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Updates node parameters in the external semaphore wait node in the given graphExec.
@@ -12430,6 +12832,7 @@ extern "C" {
         nodeParams: *const hipExternalSemaphoreWaitNodeParams,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets a memcpy node's parameters.
@@ -12444,6 +12847,7 @@ extern "C" {
         nodeParams: *mut HIP_MEMCPY3D,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets a memcpy node's parameters.
@@ -12458,6 +12862,7 @@ extern "C" {
         nodeParams: *const HIP_MEMCPY3D,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memory free node and adds it to a graph
@@ -12478,6 +12883,7 @@ extern "C" {
         dptr: hipDeviceptr_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Sets the parameters for a memcpy node in the given graphExec.
@@ -12496,6 +12902,7 @@ extern "C" {
         ctx: hipCtx_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Frees an address range reservation made via hipMemAddressReserve
@@ -12512,6 +12919,7 @@ extern "C" {
         size: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Reserves an address range
@@ -12534,6 +12942,7 @@ extern "C" {
         flags: ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Creates a memory allocation described by the properties and size
@@ -12554,6 +12963,7 @@ extern "C" {
         flags: ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Exports an allocation to a requested shareable handle type.
@@ -12574,6 +12984,7 @@ extern "C" {
         flags: ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get the access flags set for the given location and ptr.
@@ -12592,6 +13003,7 @@ extern "C" {
         ptr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Calculates either the minimal or recommended granularity.
@@ -12611,6 +13023,7 @@ extern "C" {
         option: hipMemAllocationGranularity_flags,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Retrieve the property structure of the given handle.
@@ -12627,6 +13040,7 @@ extern "C" {
         handle: hipMemGenericAllocationHandle_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Imports an allocation from a requested shareable handle type.
@@ -12645,6 +13059,7 @@ extern "C" {
         shHandleType: hipMemAllocationHandleType,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Maps an allocation handle to a reserved virtual address range.
@@ -12667,6 +13082,7 @@ extern "C" {
         flags: ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Maps or unmaps subregions of sparse HIP arrays and sparse HIP mipmapped arrays.
@@ -12683,6 +13099,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Release a memory handle representing a memory allocation which was previously allocated through hipMemCreate.
@@ -12695,6 +13112,7 @@ extern "C" {
  @note  This API is implemented on Linux and is under development on Microsoft Windows.*/
     pub fn hipMemRelease(handle: hipMemGenericAllocationHandle_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Returns the allocation handle of the backing memory allocation given the address.
@@ -12711,6 +13129,7 @@ extern "C" {
         addr: *mut ::core::ffi::c_void,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Set the access flags for each location specified in desc for the given virtual address range.
@@ -12731,6 +13150,7 @@ extern "C" {
         count: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Unmap memory allocation of a given address range.
@@ -12744,6 +13164,7 @@ extern "C" {
  @note  This API is implemented on Linux and is under development on Microsoft Windows.*/
     pub fn hipMemUnmap(ptr: *mut ::core::ffi::c_void, size: usize) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Maps a graphics resource for access.
@@ -12760,6 +13181,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Get an array through which to access a subresource of a mapped graphics resource.
@@ -12780,6 +13202,7 @@ extern "C" {
         mipLevel: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Gets device accessible address of a graphics resource.
@@ -12796,6 +13219,7 @@ extern "C" {
         resource: hipGraphicsResource_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Unmaps graphics resources.
@@ -12812,6 +13236,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Unregisters a graphics resource.
@@ -12822,6 +13247,7 @@ extern "C" {
 */
     pub fn hipGraphicsUnregisterResource(resource: hipGraphicsResource_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Create a surface object.
@@ -12836,6 +13262,7 @@ extern "C" {
         pResDesc: *const hipResourceDesc,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     /** @brief Destroy a surface object.
@@ -12845,6 +13272,7 @@ extern "C" {
  @returns #hipSuccess, #hipErrorInvalidValue*/
     pub fn hipDestroySurfaceObject(surfaceObject: hipSurfaceObject_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy_spt(
@@ -12854,6 +13282,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyToSymbol_spt(
@@ -12864,6 +13293,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyFromSymbol_spt(
@@ -12874,6 +13304,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2D_spt(
@@ -12886,6 +13317,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2DFromArray_spt(
@@ -12899,10 +13331,12 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy3D_spt(p: *const hipMemcpy3DParms) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemset_spt(
@@ -12911,6 +13345,7 @@ extern "C" {
         sizeBytes: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemsetAsync_spt(
@@ -12920,6 +13355,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemset2D_spt(
@@ -12930,6 +13366,7 @@ extern "C" {
         height: usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemset2DAsync_spt(
@@ -12941,6 +13378,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemset3DAsync_spt(
@@ -12950,6 +13388,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemset3D_spt(
@@ -12958,6 +13397,7 @@ extern "C" {
         extent: hipExtent,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyAsync_spt(
@@ -12968,6 +13408,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy3DAsync_spt(
@@ -12975,6 +13416,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2DAsync_spt(
@@ -12988,6 +13430,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyFromSymbolAsync_spt(
@@ -12999,6 +13442,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyToSymbolAsync_spt(
@@ -13010,6 +13454,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpyFromArray_spt(
@@ -13021,6 +13466,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2DToArray_spt(
@@ -13034,6 +13480,7 @@ extern "C" {
         kind: hipMemcpyKind,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2DFromArrayAsync_spt(
@@ -13048,6 +13495,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipMemcpy2DToArrayAsync_spt(
@@ -13062,14 +13510,17 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamQuery_spt(stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamSynchronize_spt(stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamGetPriority_spt(
@@ -13077,6 +13528,7 @@ extern "C" {
         priority: *mut ::core::ffi::c_int,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamWaitEvent_spt(
@@ -13085,6 +13537,7 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamGetFlags_spt(
@@ -13092,6 +13545,7 @@ extern "C" {
         flags: *mut ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamAddCallback_spt(
@@ -13101,10 +13555,12 @@ extern "C" {
         flags: ::core::ffi::c_uint,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipEventRecord_spt(event: hipEvent_t, stream: hipStream_t) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipLaunchCooperativeKernel_spt(
@@ -13116,6 +13572,7 @@ extern "C" {
         hStream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipLaunchKernel_spt(
@@ -13127,6 +13584,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipGraphLaunch_spt(
@@ -13134,6 +13592,7 @@ extern "C" {
         stream: hipStream_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamBeginCapture_spt(
@@ -13141,6 +13600,7 @@ extern "C" {
         mode: hipStreamCaptureMode,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamEndCapture_spt(
@@ -13148,6 +13608,7 @@ extern "C" {
         pGraph: *mut hipGraph_t,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamIsCapturing_spt(
@@ -13155,6 +13616,7 @@ extern "C" {
         pCaptureStatus: *mut hipStreamCaptureStatus,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamGetCaptureInfo_spt(
@@ -13163,6 +13625,7 @@ extern "C" {
         pId: *mut ::core::ffi::c_ulonglong,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipStreamGetCaptureInfo_v2_spt(
@@ -13174,6 +13637,7 @@ extern "C" {
         numDependencies_out: *mut usize,
     ) -> hipError_t;
 }
+#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]
 extern "C" {
     #[must_use]
     pub fn hipLaunchHostFunc_spt(
