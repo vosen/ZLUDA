@@ -1,5 +1,5 @@
 use cuda_types::cublas::*;
-use hip_runtime_sys::*;
+use hip_runtime_sys::hipStream_t;
 use rocblas_sys::*;
 use std::mem;
 use zluda_common::{from_cuda_object, ZludaObject};

@@ -1,7 +1,7 @@
 #![cfg(windows)]
 use std::{
     ffi::{c_void, CStr, CString, OsString},
-    iter,
+    iter, mem,
     ops::ControlFlow,
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::PathBuf,
@@ -10,7 +10,7 @@ use trie_hard::TrieHard;
 use uuid::uuid;
 use widestring::{u16str, U16Str};
 use windows::{
-    core::PCWSTR,
+    core::{w, PCWSTR},
     Win32::{
         Foundation::HMODULE,
         System::LibraryLoader::{
@@ -289,7 +289,7 @@ pub struct DelayLoadInfo {
 #[repr(C)]
 pub enum DliNotify {
     _NoteStartProcessing,
-    _NotePreLoadLibrary,
+    NotePreLoadLibrary,
     _NotePreGetProcAddress,
     FailLoadLib,
     _FailGetProc,
@@ -299,20 +299,52 @@ pub enum DliNotify {
 pub type PfnDliHook =
     unsafe extern "system" fn(dli_notify: u32, pdli: *const DelayLoadInfo) -> *mut std::ffi::c_void;
 
+pub unsafe extern "system" fn open_already_loaded_amdhip(
+    dli_notify: u32,
+    pdli: *const DelayLoadInfo,
+) -> *mut std::ffi::c_void {
+    unsafe fn redirect_amdhip_impl(dli_notify: u32, pdli: *const DelayLoadInfo) -> Option<HMODULE> {
+        delay_load_check(
+            ("amdhip64_7.dll", DliNotify::NotePreLoadLibrary),
+            dli_notify,
+            pdli,
+        )?;
+        let mut module = mem::zeroed();
+        GetModuleHandleExW(0, w!("amdhip64_7.dll"), &mut module)
+            .ok()
+            .or_else(|| GetModuleHandleExW(0, w!("amdhip64_6.dll"), &mut module).ok())?;
+        Some(module)
+    }
+    match redirect_amdhip_impl(dli_notify, pdli) {
+        Some(lib) => lib.0,
+        None => std::ptr::null_mut(),
+    }
+}
+
 pub unsafe fn delay_load_failure_hook(
     redirect_name: &'static str,
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
-    if dli_notify != DliNotify::FailLoadLib as u32 {
+    delay_load_check((redirect_name, DliNotify::FailLoadLib), dli_notify, pdli)?;
+    try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+}
+
+pub unsafe fn delay_load_check(
+    (redirect_name, dli_notify_expected): (&'static str, DliNotify),
+    dli_notify: u32,
+    pdli: *const DelayLoadInfo,
+) -> Option<()> {
+    if dli_notify != dli_notify_expected as u32 {
         return None;
     }
     let pdli = pdli.as_ref()?;
     let name = CStr::from_ptr(pdli.sz_dll);
-    if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
-        return None;
-    }
-    try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+    Some(
+        if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
+            return None;
+        },
+    )
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
