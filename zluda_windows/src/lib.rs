@@ -309,6 +309,13 @@ pub unsafe extern "system" fn open_already_loaded_amdhip(
             dli_notify,
             pdli,
         )?;
+        // This is extremally dumb, but there's not much better we can do.
+        // We do this because we want to avoid this ordering of events:
+        // * First we load ROCm 7 runtime
+        // * Later on a performance library (rocBLAS) loads ROCm 6 runtime
+        // * Things explode
+        delay_load_failure_hook_impl("hipblaslt.dll")
+            .or_else(|| delay_load_failure_hook_impl("miopen.dll"));
         let mut module = mem::zeroed();
         GetModuleHandleExW(0, w!("amdhip64_7.dll"), &mut module)
             .ok()
@@ -327,6 +334,10 @@ pub unsafe fn delay_load_failure_hook(
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
     delay_load_check((redirect_name, DliNotify::FailLoadLib), dli_notify, pdli)?;
+    delay_load_failure_hook_impl(redirect_name)
+}
+
+unsafe fn delay_load_failure_hook_impl(redirect_name: &'static str) -> Option<HMODULE> {
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
 }
 
