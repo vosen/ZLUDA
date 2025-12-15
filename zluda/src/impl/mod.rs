@@ -14,6 +14,7 @@ pub(super) mod memory;
 pub(super) mod module;
 pub(super) mod pointer;
 pub(super) mod stream;
+pub(super) mod texture;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> CUerror {
