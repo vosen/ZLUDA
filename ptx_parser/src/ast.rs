@@ -1580,7 +1580,7 @@ impl Display for LdStQualifier {
             LdStQualifier::Volatile => write!(f, ".volatile")?,
             LdStQualifier::Relaxed(scope) => write!(f, ".relaxed{scope}")?,
             LdStQualifier::Acquire(scope) => write!(f, ".acquire{scope}")?,
-            LdStQualifier::Release(_) => unreachable!(),
+            LdStQualifier::Release(scope) => write!(f, ".release{scope}")?,
         }
         Ok(())
     }
