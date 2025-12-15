@@ -1193,6 +1193,10 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
         .allowlist_type("^hip.*")
         .allowlist_function("^hip.*")
         .allowlist_var("^hip.*")
+        // Those two functions differ between ROCm 6 (uses HIP_MEMSET_NODE_PARAMS)
+        // and ROCm 7 (uses hipMemsetParams)
+        .blocklist_function("^hipDrvGraphAddMemsetNode$")
+        .blocklist_function("^hipDrvGraphExecMemsetNodeSetParams$")
         .must_use_type("hipError_t")
         .constified_enum("hipError_t")
         .new_type_alias("^hipDeviceptr_t$")
@@ -1212,7 +1216,18 @@ fn generate_hip_runtime(output: &PathBuf, path: &[&str]) {
         success: ("hipSuccess", "Success"),
         hip_types: vec![],
     });
-    module.items = converter.convert(module.items).collect::<Vec<Item>>();
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(
+                    parse_quote!(#[cfg_attr(windows, link(name = "amdhip64_7", kind = "raw-dylib"))]),
+                );
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect::<Vec<Item>>();
     converter.flush(&mut module.items);
     add_send_sync(
         &mut module.items,

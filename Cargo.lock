@@ -3968,6 +3968,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "vergen-gix",
+ "windows",
  "zluda_cache",
  "zluda_common",
  "zluda_windows",
