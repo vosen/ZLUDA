@@ -299,11 +299,30 @@ pub enum DliNotify {
 pub type PfnDliHook =
     unsafe extern "system" fn(dli_notify: u32, pdli: *const DelayLoadInfo) -> *mut std::ffi::c_void;
 
+pub unsafe extern "system" fn open_already_loaded_amdhip_probe_perflibs(
+    dli_notify: u32,
+    pdli: *const DelayLoadInfo,
+) -> *mut std::ffi::c_void {
+    open_already_loaded_amdhip_impl(true, dli_notify, pdli)
+}
+
 pub unsafe extern "system" fn open_already_loaded_amdhip(
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> *mut std::ffi::c_void {
-    unsafe fn redirect_amdhip_impl(dli_notify: u32, pdli: *const DelayLoadInfo) -> Option<HMODULE> {
+    open_already_loaded_amdhip_impl(false, dli_notify, pdli)
+}
+
+unsafe extern "system" fn open_already_loaded_amdhip_impl(
+    probe_perflibs: bool,
+    dli_notify: u32,
+    pdli: *const DelayLoadInfo,
+) -> *mut std::ffi::c_void {
+    unsafe fn redirect_amdhip_impl(
+        probe_perflibs: bool,
+        dli_notify: u32,
+        pdli: *const DelayLoadInfo,
+    ) -> Option<HMODULE> {
         delay_load_check(
             ("amdhip64_7.dll", DliNotify::NotePreLoadLibrary),
             dli_notify,
@@ -314,15 +333,18 @@ pub unsafe extern "system" fn open_already_loaded_amdhip(
         // * First we load ROCm 7 runtime
         // * Later on a performance library (rocBLAS) loads ROCm 6 runtime
         // * Things explode
-        delay_load_failure_hook_impl("hipblaslt.dll")
-            .or_else(|| delay_load_failure_hook_impl("miopen.dll"));
+        if probe_perflibs {
+            delay_load_failure_hook_impl("hipblaslt.dll")
+                .or_else(|| delay_load_failure_hook_impl("rocblas.dll"))
+                .or_else(|| delay_load_failure_hook_impl("miopen.dll"));
+        }
         let mut module = mem::zeroed();
         GetModuleHandleExW(0, w!("amdhip64_7.dll"), &mut module)
             .ok()
             .or_else(|| GetModuleHandleExW(0, w!("amdhip64_6.dll"), &mut module).ok())?;
         Some(module)
     }
-    match redirect_amdhip_impl(dli_notify, pdli) {
+    match redirect_amdhip_impl(probe_perflibs, dli_notify, pdli) {
         Some(lib) => lib.0,
         None => std::ptr::null_mut(),
     }
