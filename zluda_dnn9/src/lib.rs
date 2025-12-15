@@ -16,6 +16,11 @@ cuda_macros::cudnn9_function_declarations! {
 #[cfg(windows)]
 mod windows {
     use zluda_windows;
+
+    #[no_mangle]
+    static __pfnDliNotifyHook2: zluda_windows::PfnDliHook =
+        zluda_windows::open_already_loaded_amdhip;
+
     #[no_mangle]
     static __pfnDliFailureHook2: zluda_windows::PfnDliHook = delaylink_hook;
 
