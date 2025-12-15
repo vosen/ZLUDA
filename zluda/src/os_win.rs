@@ -30,7 +30,8 @@ unsafe fn load_from_self_dir(
 }
 
 #[no_mangle]
-static __pfnDliNotifyHook2: zluda_windows::PfnDliHook = zluda_windows::open_already_loaded_amdhip_probe_perflibs;
+static __pfnDliNotifyHook2: zluda_windows::PfnDliHook =
+    zluda_windows::open_already_loaded_amdhip_probe_perflibs;
 
 #[no_mangle]
 static __pfnDliFailureHook2: zluda_windows::PfnDliHook = delay_load_downgrade_amdhip;
