@@ -16,7 +16,7 @@
     .reg .b64 %4
 )
 {
-    .v2.b32.reg %5 = ld.b64 %4;
+    .reg.v2.b32 %5 = ld.b64 %4;
     zluda.repack_vector.extract.relaxed.b32 %2, %3, %5;
     ret;
 }

@@ -16,9 +16,9 @@
     .reg .b64 %4
 )
 {
-    .b64 %7 = zluda.convert_implicit.bit_to_ptr.b64.reg.b64 %4;
-    .b64.reg %6 = ld.b64 %7;
-    .v2.b32.reg %5 = zluda.convert_implicit.default.reg.v2.b32.reg.b64 %6;
+    .generic.b64 %7 = zluda.convert_implicit.bit_to_ptr.b64.reg.b64 %4;
+    .reg.b64 %6 = ld.b64 %7;
+    .reg.v2.b32 %5 = zluda.convert_implicit.default.reg.v2.b32.reg.b64 %6;
     zluda.repack_vector.extract.relaxed.b32 %2, %3, %5;
     ret;
 }

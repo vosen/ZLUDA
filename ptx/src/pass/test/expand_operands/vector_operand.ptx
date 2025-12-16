@@ -16,8 +16,8 @@
     .reg .b16 %3
 )
 {
-    .b16.reg %4 = zluda.constant.b16 22136;
-    .v2.b16.reg %5 = zluda.repack_vector.composite.b16 %4, %3;
+    .reg.b16 %4 = zluda.constant.b16 22136;
+    .reg.v2.b16 %5 = zluda.repack_vector.composite.b16 %4, %3;
     mov.v2.b16 %2, %5;
     ret;
 }
