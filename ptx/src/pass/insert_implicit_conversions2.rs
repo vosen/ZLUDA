@@ -118,20 +118,27 @@ fn insert_implicit_conversions_impl<'input>(
     Ok(())
 }
 
-pub(crate) fn default_implicit_conversion(
+fn valid_vector_scalar_bitcast(operand_type: &ast::Type, instruction_type: &ast::Type) -> bool {
+    if let (ast::Type::Vector(vec_len, vec_underlying_type), ast::Type::Scalar(scalar)) =
+        (operand_type, instruction_type)
+    {
+        if scalar.kind() == ast::ScalarKind::Bit
+            && scalar.size_of() == (vec_underlying_type.size_of() * vec_len)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn default_implicit_conversion(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if instruction_space == ast::StateSpace::Reg {
         if operand_space == ast::StateSpace::Reg {
-            if let (ast::Type::Vector(vec_len, vec_underlying_type), ast::Type::Scalar(scalar)) =
-                (operand_type, instruction_type)
-            {
-                if scalar.kind() == ast::ScalarKind::Bit
-                    && scalar.size_of() == (vec_underlying_type.size_of() * vec_len)
-                {
-                    return Ok(Some(ConversionKind::Default));
-                }
+            if valid_vector_scalar_bitcast(operand_type, instruction_type) {
+                return Ok(Some(ConversionKind::Default));
             }
         } else if is_addressable(operand_space) {
             return Ok(Some(ConversionKind::AddressOf));
@@ -333,6 +340,7 @@ fn should_convert_relaxed_dst(
                 &ast::Type::Scalar(*instr_type),
             )
         }
+        _ if valid_vector_scalar_bitcast(dst_type, instr_type) => Some(ConversionKind::Default),
         _ => None,
     }
 }

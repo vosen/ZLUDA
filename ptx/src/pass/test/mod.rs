@@ -162,13 +162,22 @@ impl<'a> ast::VisitorMap<SpirvWord, SpirvWord, ()> for StatementFormatter<'a> {
     fn visit(
         &mut self,
         arg: SpirvWord,
-        type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
+        _type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         is_dst: bool,
         _relaxed_type_check: bool,
     ) -> Result<SpirvWord, ()> {
         if is_dst {
-            if let Some(IdentEntry { name: None, .. }) = self.resolver.ident_map.get(&arg) {
+            if let Some(IdentEntry {
+                name: None,
+                type_space,
+            }) = self.resolver.ident_map.get(&arg)
+            {
                 let type_string = if let Some((type_, state_space)) = type_space {
+                    // We use the type_space from the resolver rather than from the operand, to avoid hiding implicit conversions
+                    let state_space = match state_space {
+                        ast::StateSpace::Generic => ".generic".to_string(),
+                        _ => format!("{}", state_space),
+                    };
                     format!("{}{} ", type_, state_space)
                 } else {
                     "".to_string()
