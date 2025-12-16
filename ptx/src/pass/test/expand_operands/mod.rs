@@ -20,3 +20,4 @@ fn run_expand_operands(ptx: ptx_parser::Module) -> String {
 
 test_expand_operands!(vector_operand);
 test_expand_operands!(vector_operand_convert);
+test_expand_operands!(vector_extract);
