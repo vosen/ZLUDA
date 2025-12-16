@@ -1116,6 +1116,9 @@ fn compare_llvm(name: &str, actual_ll: &str, expected_ll: &str) {
             let output_file = output_dir.join(format!("{}.ll", name));
             let mut output_file = File::create(output_file).unwrap();
             output_file.write_all(actual_ll.as_bytes()).unwrap();
+            if !actual_ll.ends_with("\n") {
+                output_file.write_all(b"\n").unwrap();
+            }
         }
         let comparison = pretty_assertions::StrComparison::new(&expected_ll, &actual_ll);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
