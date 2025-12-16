@@ -16,7 +16,7 @@
     .reg .f16x2 %3
 )
 {
-    .b32.reg %4 = zluda.convert_implicit.default.reg.b32.reg.f16x2 %3;
+    .reg.b32 %4 = zluda.convert_implicit.default.reg.b32.reg.f16x2 %3;
     mov.b32 %2, %4;
     ret;
 }
