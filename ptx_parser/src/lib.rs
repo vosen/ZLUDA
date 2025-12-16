@@ -515,6 +515,13 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
         .parse_next(stream)
 }
 
+/// Parses a directive from the input stream.
+///
+/// The return type is a double-Option:
+/// - The outer `Option` indicates parse success: `None` means a parse error occurred, `Some` means parsing succeeded.
+/// - The inner `Option` indicates whether the directive should be included in the AST:
+///     - `None` means the directive should be ignored (e.g., directives like `.file` or `.section`).
+///     - `Some` contains the actual directive to include in the AST.
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>>> {
