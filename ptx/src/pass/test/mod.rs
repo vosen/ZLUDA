@@ -174,6 +174,10 @@ impl<'a> ast::VisitorMap<SpirvWord, SpirvWord, ()> for StatementFormatter<'a> {
             {
                 let type_string = if let Some((type_, state_space)) = type_space {
                     // We use the type_space from the resolver rather than from the operand, to avoid hiding implicit conversions
+                    let state_space = match state_space {
+                        ast::StateSpace::Generic => ".generic".to_string(),
+                        _ => format!("{}", state_space),
+                    };
                     format!("{}{} ", type_, state_space)
                 } else {
                     "".to_string()
