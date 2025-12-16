@@ -70,7 +70,7 @@ pub fn to_llvm_module<'input>(
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
     let directives = normalize_predicates::run(&mut flat_resolver, directives)?;
-    on_pass_end("normalize_predicates2");
+    on_pass_end("normalize_predicates");
     let directives = resolve_function_pointers::run(directives)?;
     on_pass_end("resolve_function_pointers");
     let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;
