@@ -474,7 +474,7 @@ fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module
             .map(
                 |(version, _, _, (directives, invalid_directives), _)| ast::Module {
                     ptx_version: version,
-                    directives,
+                    directives: directives.into_iter().flatten().collect(),
                     invalid_directives,
                 },
             ),
@@ -515,9 +515,16 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
         .parse_next(stream)
 }
 
+/// Parses a directive from the input stream.
+///
+/// The return type is a double-Option:
+/// - The outer `Option` indicates parse success: `None` means a parse error occurred, `Some` means parsing succeeded.
+/// - The inner `Option` indicates whether the directive should be included in the AST:
+///     - `None` means the directive should be ignored (e.g., directives like `.file` or `.section`).
+///     - `Some` contains the actual directive to include in the AST.
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-) -> PResult<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>> {
+) -> PResult<Option<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>>> {
     let errors = stream.state.errors.len();
     let directive = trace(
         "directive",
@@ -546,8 +553,7 @@ fn directive<'a, 'input>(
             )
                 .map(|(_, x)| x),
             |text| PtxError::UnrecognizedDirective(text.unwrap_or("")),
-        )
-        .map(Option::flatten),
+        ),
     )
     .parse_next(stream)?;
     if errors != stream.state.errors.len() {
@@ -4379,6 +4385,33 @@ mod tests {
         let module = module.parse(stream).unwrap();
         assert_eq!(module.directives.len(), 1);
         assert_eq!(module.invalid_directives, 2);
+    }
+
+    #[test]
+    fn dont_report_ignored_directives() {
+        let text = "
+            .version 6.5
+            .target sm_30
+            .address_size 64
+
+            .file 1 \"example.cu\"
+
+            .visible .entry func1()
+            {
+                ret;
+            }";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let module = module.parse(stream).unwrap();
+        assert_eq!(module.directives.len(), 1);
+        assert_eq!(module.invalid_directives, 0);
     }
 
     #[test]
