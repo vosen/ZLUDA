@@ -685,6 +685,16 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     relaxed_type_check: true,
                 }
+            },
+            display: {
+                write!(
+                    f,
+                    "st{}{}{}{}",
+                    data.qualifier,
+                    data.state_space,
+                    data.caching,
+                    data.typ,
+                )?
             }
         },
         Sub {
@@ -1499,6 +1509,18 @@ pub enum StCacheOperator {
     L2Only,
     Streaming,
     Writethrough,
+}
+
+impl Display for StCacheOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StCacheOperator::Writeback => {}
+            StCacheOperator::L2Only => write!(f, ".cg")?,
+            StCacheOperator::Streaming => write!(f, ".cs")?,
+            StCacheOperator::Writethrough => write!(f, ".wt")?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
