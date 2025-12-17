@@ -183,6 +183,13 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         let id = self
             .resolver
             .register_unnamed(Some((ast::Type::Scalar(scalar_t), state_space)));
+
+        let value = if scalar_t.kind() == ast::ScalarKind::Bit {
+            ast::ImmediateValue::U64(value.get_bits())
+        } else {
+            value
+        };
+
         self.result.push(Statement::Constant(ConstantDefinition {
             dst: id,
             typ: scalar_t,
