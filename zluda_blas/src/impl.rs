@@ -2,32 +2,16 @@ use cuda_types::cublas::*;
 use hip_runtime_sys::hipStream_t;
 use rocblas_sys::*;
 use std::mem;
-use zluda_common::{from_cuda_object, ZludaObject};
+use zluda_common::{handle::BlasHandle, ZludaObject};
 
-pub struct Handle {
-    handle: rocblas_handle,
+fn rocblas_unwrap(handle: &BlasHandle) -> Result<rocblas_handle, rocblas_error> {
+    handle
+        .0
+        .rocblas
+        .get()
+        .map(|h| *h)
+        .ok_or(rocblas_error::invalid_handle)
 }
-
-impl Handle {
-    fn new() -> Self {
-        Self {
-            handle: unsafe { mem::zeroed() },
-        }
-    }
-}
-
-impl ZludaObject for Handle {
-    const COOKIE: usize = 0x57c3fdb0fd72b08e;
-
-    type Error = cublasError_t;
-    type CudaHandle = cublasHandle_t;
-
-    fn drop_checked(&mut self) -> cublasStatus_t {
-        Ok(())
-    }
-}
-
-from_cuda_object!(Handle);
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
@@ -40,9 +24,18 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 }
 
 pub(crate) fn create_v2(handle: &mut cublasHandle_t) -> cublasStatus_t {
-    let mut zluda_blas_handle = Handle::new();
-    unsafe { rocblas_create_handle(&mut zluda_blas_handle.handle) }?;
-    *handle = Handle::wrap(zluda_blas_handle);
+    let zluda_handle = BlasHandle::new();
+
+    let mut rocblas = unsafe { std::mem::zeroed() };
+    unsafe { rocblas_create_handle(&mut rocblas) }?;
+
+    zluda_handle
+        .0
+        .rocblas
+        .set(rocblas)
+        .map_err(|_| cublasError_t::INVALID_VALUE)?;
+
+    *handle = BlasHandle::wrap(zluda_handle);
     Ok(())
 }
 
@@ -75,13 +68,14 @@ pub(crate) fn get_cudart_version() -> usize {
     todo!()
 }
 
-pub(crate) fn set_math_mode(handle: &Handle, mode: rocblas_math_mode) -> cublasStatus_t {
-    unsafe { rocblas_set_math_mode(handle.handle, mode) }?;
+pub(crate) fn set_math_mode(handle: &BlasHandle, mode: rocblas_math_mode) -> cublasStatus_t {
+    let rocblas = rocblas_unwrap(handle)?;
+    unsafe { rocblas_set_math_mode(rocblas, mode) }?;
     Ok(())
 }
 
 pub(crate) fn sgemm_strided_batched(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -100,9 +94,10 @@ pub(crate) fn sgemm_strided_batched(
     stride_c: ::core::ffi::c_longlong,
     batch_count: ::core::ffi::c_int,
 ) -> cublasStatus_t {
+    let rocblas = rocblas_unwrap(handle)?;
     unsafe {
         rocblas_sgemm_strided_batched(
-            handle.handle,
+            rocblas,
             transa,
             transb,
             m,
@@ -126,7 +121,7 @@ pub(crate) fn sgemm_strided_batched(
 }
 
 pub(crate) fn sgemm_v2(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -141,59 +136,51 @@ pub(crate) fn sgemm_v2(
     c: *mut f32,
     ldc: ::core::ffi::c_int,
 ) -> cublasStatus_t {
+    let rocblas = rocblas_unwrap(handle)?;
     unsafe {
         rocblas_sgemm(
-            handle.handle,
-            transa,
-            transb,
-            m,
-            n,
-            k,
-            alpha,
-            a,
-            lda,
-            b,
-            ldb,
-            beta,
-            c,
-            ldc,
+            rocblas, transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
         )
     }?;
     Ok(())
 }
 
 pub(crate) fn destroy_v2(handle: cublasHandle_t) -> cublasStatus_t {
-    zluda_common::drop_checked::<Handle>(handle)
+    zluda_common::drop_checked::<BlasHandle>(handle)
 }
 
 pub(crate) unsafe fn set_pointer_mode_v2(
-    handle: &Handle,
+    handle: &BlasHandle,
     mode: rocblas_pointer_mode,
 ) -> rocblas_status {
-    rocblas_set_pointer_mode(handle.handle, mode)
+    let rocblas = rocblas_unwrap(handle)?;
+    rocblas_set_pointer_mode(rocblas, mode)
 }
 
-pub(crate) unsafe fn set_stream_v2(handle: &Handle, stream: hipStream_t) -> rocblas_status {
-    rocblas_set_stream(handle.handle, stream)
+pub(crate) unsafe fn set_stream_v2(handle: &BlasHandle, stream: hipStream_t) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
+    rocblas_set_stream(rocblas, stream)
 }
 
 pub(crate) unsafe fn set_workspace_v2(
-    handle: &Handle,
+    handle: &BlasHandle,
     workspace: *mut ::core::ffi::c_void,
     size: usize,
 ) -> rocblas_status {
-    rocblas_set_workspace(handle.handle, workspace, size)
+    let rocblas = rocblas_unwrap(handle)?;
+    rocblas_set_workspace(rocblas, workspace, size)
 }
 
-pub(crate) unsafe fn get_math_mode(handle: &Handle, mode: &mut cublasMath_t) -> rocblas_status {
+pub(crate) unsafe fn get_math_mode(handle: &BlasHandle, mode: &mut cublasMath_t) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
     let mut roc_mode = mem::zeroed();
-    rocblas_get_math_mode(handle.handle, &mut roc_mode)?;
+    rocblas_get_math_mode(rocblas, &mut roc_mode)?;
     *mode = zluda_common::FromCuda::from_cuda(&roc_mode)?;
     Ok(())
 }
 
 pub(crate) unsafe fn gemm_ex(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -213,8 +200,9 @@ pub(crate) unsafe fn gemm_ex(
     compute_type: rocblas_datatype,
     algo: rocblas_gemm_algo,
 ) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
     rocblas_gemm_ex(
-        handle.handle,
+        rocblas,
         transa,
         transb,
         m,
@@ -242,7 +230,7 @@ pub(crate) unsafe fn gemm_ex(
 }
 
 pub(crate) unsafe fn hgemm(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -257,8 +245,9 @@ pub(crate) unsafe fn hgemm(
     c: *mut cuda_types::cublas::__half,
     ldc: ::core::ffi::c_int,
 ) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
     rocblas_hgemm(
-        handle.handle,
+        rocblas,
         transa,
         transb,
         m,
@@ -276,7 +265,7 @@ pub(crate) unsafe fn hgemm(
 }
 
 pub(crate) unsafe fn gemm_batched_ex(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -297,8 +286,9 @@ pub(crate) unsafe fn gemm_batched_ex(
     compute_type: rocblas_datatype,
     algo: rocblas_gemm_algo,
 ) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
     rocblas_gemm_batched_ex(
-        handle.handle,
+        rocblas,
         transa,
         transb,
         m,
@@ -327,7 +317,7 @@ pub(crate) unsafe fn gemm_batched_ex(
 }
 
 pub(crate) unsafe fn gemm_strided_batched_ex(
-    handle: &Handle,
+    handle: &BlasHandle,
     transa: rocblas_operation,
     transb: rocblas_operation,
     m: ::core::ffi::c_int,
@@ -351,8 +341,9 @@ pub(crate) unsafe fn gemm_strided_batched_ex(
     compute_type: rocblas_datatype,
     algo: rocblas_gemm_algo,
 ) -> rocblas_status {
+    let rocblas = rocblas_unwrap(handle)?;
     rocblas_gemm_strided_batched_ex(
-        handle.handle,
+        rocblas,
         transa,
         transb,
         m,
