@@ -264,6 +264,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 get_state_space(var.info.state_space)?,
             )
         };
+        self.emit_linkage(global, var.info.state_space)?;
         self.resolver.register(var.name, global);
         if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(global, align) };
@@ -366,6 +367,34 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             }
         );
         self.emit_fn_attribute(fn_, "target-features", &*value)
+    }
+
+    fn emit_linkage(
+        &self,
+        global: LLVMValueRef,
+        space: ast::StateSpace,
+    ) -> Result<(), TranslateError> {
+        let (linkage, visibility) = match space {
+            ast::StateSpace::Const | ast::StateSpace::Global => (
+                LLVMLinkage::LLVMExternalLinkage,
+                LLVMVisibility::LLVMDefaultVisibility,
+            ),
+            ast::StateSpace::Shared
+            | ast::StateSpace::SharedCluster
+            | ast::StateSpace::SharedCta => (
+                LLVMLinkage::LLVMPrivateLinkage,
+                LLVMVisibility::LLVMHiddenVisibility,
+            ),
+            _ => return Err(error_unreachable()),
+        };
+        unsafe {
+            LLVMSetLinkage(global, linkage);
+            LLVMSetVisibility(global, visibility);
+            if linkage == LLVMLinkage::LLVMExternalLinkage {
+                LLVMSetExternallyInitialized(global, 1);
+            }
+        }
+        Ok(())
     }
 }
 

@@ -1367,8 +1367,8 @@ pub struct ShfDetails {
     pub direction: ShiftDirection,
     pub mode: FunnelShiftMode,
 }
-
-#[derive(Clone, Copy, Display)]
+#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[derive(Clone, Copy, Display, Debug)]
 pub enum RegOrImmediate<Ident> {
     Reg(Ident),
     Imm(ImmediateValue),
@@ -1440,7 +1440,8 @@ pub trait Operand: Sized {
     fn from_ident(ident: Self::Ident) -> Self;
 }
 
-#[derive(Copy, Clone)]
+#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[derive(Copy, Clone, Debug)]
 pub enum ImmediateValue {
     U64(u64),
     S64(i64),
