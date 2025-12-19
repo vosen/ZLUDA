@@ -330,6 +330,7 @@ mod os {
         fs::{self, File},
         io::Write,
         path::PathBuf,
+        process::Command,
     };
 
     pub fn make_symlinks(
@@ -353,6 +354,7 @@ mod os {
     }
 
     pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
+        fix_amdhip_soname(&target_dir, &profile);
         let mut tar_gz =
             File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
         let enc = GzEncoder::new(&mut tar_gz, Compression::default());
@@ -373,6 +375,27 @@ mod os {
             }
         }
         tar.into_inner().unwrap().finish().unwrap().flush().unwrap();
+    }
+
+    // Unfortunately when linking against amdhip64.so, it encodes SONAME with versioned
+    // filename, e.g. libamdhip64.so.7. We instead want to link against unversioned
+    // libamdhip64.so to allow compatiblity with both ROCm 6 and ROCm 7
+    pub fn fix_amdhip_soname(target_dir: &PathBuf, profile: &str) {
+        let current_dir = target_dir.join(profile);
+        let status = Command::new("patchelf")
+            .current_dir(current_dir)
+            .args(&[
+                "--replace-needed",
+                "libamdhip64.so.6",
+                "libamdhip64.so",
+                "--replace-needed",
+                "libamdhip64.so.7",
+                "libamdhip64.so",
+                "libcuda.so",
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success())
     }
 }
 
