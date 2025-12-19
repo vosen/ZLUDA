@@ -3,8 +3,9 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape,
-    Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
+    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
+    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
+    VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -157,6 +158,15 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::Scalar(ScalarType::U32)
                 },
+            }
+        },
+        Bmsk {
+            type: Type::Scalar(ScalarType::B32),
+            data: BmskMode,
+            arguments<T>: {
+                dst: T,
+                src_a: T,
+                src_b: T,
             }
         },
         Bra {
