@@ -382,20 +382,25 @@ mod os {
     // libamdhip64.so to allow compatiblity with both ROCm 6 and ROCm 7
     pub fn fix_amdhip_soname(target_dir: &PathBuf, profile: &str) {
         let current_dir = target_dir.join(profile);
-        let status = Command::new("patchelf")
-            .current_dir(current_dir)
-            .args(&[
-                "--replace-needed",
-                "libamdhip64.so.6",
-                "libamdhip64.so",
-                "--replace-needed",
-                "libamdhip64.so.7",
-                "libamdhip64.so",
-                "libcuda.so",
-            ])
-            .status()
-            .unwrap();
-        assert!(status.success())
+        let patch_single_lib = |lib| {
+            let status = Command::new("patchelf")
+                .current_dir(&current_dir)
+                .args(&[
+                    "--replace-needed",
+                    "libamdhip64.so.6",
+                    "libamdhip64.so",
+                    "--replace-needed",
+                    "libamdhip64.so.7",
+                    "libamdhip64.so",
+                    lib,
+                ])
+                .status()
+                .unwrap();
+            assert!(status.success());
+        };
+        patch_single_lib("libcuda.so");
+        patch_single_lib("libcudnn.so.8");
+        patch_single_lib("libcudnn.so.9");
     }
 }
 
