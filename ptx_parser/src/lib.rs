@@ -1000,19 +1000,19 @@ fn multi_variable<'a, 'input: 'a>(
                     count,
                 });
             }
-            let mut array_dimensions = if state_space != StateSpace::Reg {
+            let array_dimensions = if state_space != StateSpace::Reg {
                 opt(array_dimensions).parse_next(stream)?
             } else {
                 None
             };
             let initializer = match state_space {
                 StateSpace::Global | StateSpace::Const => match array_dimensions {
-                    Some(ref mut dimensions) => {
-                        opt(array_initializer(type_, vector, dimensions)).parse_next(stream)?
+                    Some(ref dimensions) => {
+                        array_initializer(type_, vector, dimensions).parse_next(stream)?
                     }
-                    None => opt(value_initializer(vector)).parse_next(stream)?,
+                    None => value_initializer(type_, vector).parse_next(stream)?,
                 },
-                _ => None,
+                _ => Vec::new(),
             };
             if let Some(ref dims) = array_dimensions {
                 if !extern_ && dims[0] == 0 {
@@ -1024,7 +1024,7 @@ fn multi_variable<'a, 'input: 'a>(
                     align,
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
-                    array_init: initializer.unwrap_or(Vec::new()),
+                    array_init: initializer,
                 },
                 names,
             })
@@ -1035,11 +1035,20 @@ fn multi_variable<'a, 'input: 'a>(
 fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     type_: ScalarType,
     vector: Option<NonZeroU8>,
-    array_dimensions: &'b mut Vec<u32>,
+    array_dimensions: &'b Vec<u32>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
+    let pad_with_zeros = move |result: Option<Vec<RegOrImmediate<&'input str>>>| {
+        let mut result = result.unwrap_or(Vec::new());
+        let result_size = array_dimensions[0] as usize;
+        let default = default_immediate_from_type(type_);
+        result.extend(
+            iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
+        );
+        result
+    };
     trace(
         "array_initializer",
-        move |stream: &mut PtxParser<'a, 'input>| {
+        opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
             // TODO: vector constants and multi dim arrays
@@ -1056,29 +1065,27 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
                 Token::RBrace,
             )
             .parse_next(stream)?;
-            // pad with zeros
-            let result_size = array_dimensions[0] as usize;
-            let default = match type_.kind() {
-                ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => {
-                    ast::ImmediateValue::U64(0)
-                }
-                ScalarKind::Signed => ast::ImmediateValue::S64(0),
-                ScalarKind::Float => ast::ImmediateValue::F64(0.0),
-            };
-            result.extend(
-                iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
-            );
             Ok(result)
-        },
+        })
+        .map(pad_with_zeros),
     )
 }
 
+fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
+    match type_.kind() {
+        ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => ast::ImmediateValue::U64(0),
+        ScalarKind::Signed => ast::ImmediateValue::S64(0),
+        ScalarKind::Float => ast::ImmediateValue::F64(0.0),
+    }
+}
+
 fn value_initializer<'a, 'input: 'a>(
+    type_: ScalarType,
     vector: Option<NonZeroU8>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> {
     trace(
         "value_initializer",
-        move |stream: &mut PtxParser<'a, 'input>| {
+        opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
             // TODO: vector constants
@@ -1087,7 +1094,12 @@ fn value_initializer<'a, 'input: 'a>(
             }
             single_value_append(&mut result).parse_next(stream)?;
             Ok(result)
-        },
+        })
+        .map(move |maybe_vec| {
+            maybe_vec.unwrap_or_else(|| {
+                vec![ast::RegOrImmediate::Imm(default_immediate_from_type(type_))]
+            })
+        }),
     )
 }
 
@@ -4055,6 +4067,7 @@ derive_parser!(
 mod tests {
     use crate::first_optional;
     use crate::module;
+    use crate::multi_variable;
     use crate::parse_module_checked;
     use crate::section;
     use crate::PtxError;
@@ -4434,5 +4447,55 @@ mod tests {
         let result = module.parse(stream);
         assert!(result.is_ok(), "Failed to parse extern func with .noreturn");
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn const_zero_pad() {
+        let text = ".align 4 .b8 constData[8]";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = multi_variable(false, crate::StateSpace::Const)
+            .parse(stream)
+            .unwrap();
+        let result = match result {
+            crate::ast::MultiVariable::Names { info, .. } => info,
+            _ => panic!(),
+        };
+        assert_eq!(
+            result.array_init,
+            vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0)); 8]
+        );
+    }
+
+    #[test]
+    fn global_zero_init() {
+        let text = ".align 4 .b8 constData";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = multi_variable(false, crate::StateSpace::Global)
+            .parse(stream)
+            .unwrap();
+        let result = match result {
+            crate::ast::MultiVariable::Names { info, .. } => info,
+            _ => panic!(),
+        };
+        assert_eq!(
+            result.array_init,
+            vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0))]
+        );
     }
 }
