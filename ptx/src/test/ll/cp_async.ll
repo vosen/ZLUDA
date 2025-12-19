@@ -1,4 +1,4 @@
-@from = addrspace(1) global [4 x i32] [i32 1, i32 2, i32 3, i32 4]
+@from = addrspace(1) externally_initialized global [4 x i32] [i32 1, i32 2, i32 3, i32 4]
 @to = external addrspace(3) global [4 x i32]
 
 define amdgpu_kernel void @cp_async(ptr addrspace(4) byref(i64) %"54", ptr addrspace(4) byref(i64) %"55") #0 {
