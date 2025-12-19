@@ -339,7 +339,22 @@ ptx_parser_macros::generate_instruction_type!(
                     space: { data.state_space },
                 }
             },
-            display: write!(f, "<TODO:finish ld>")?
+            display: {
+                let non_coherent = if data.non_coherent {
+                    ".nc"
+                } else {
+                    ""
+                };
+                write!(
+                    f,
+                    "ld{}{}{}{}{}",
+                    data.qualifier,
+                    data.state_space,
+                    non_coherent,
+                    data.caching,
+                    data.typ,
+                )?
+            }
         },
         Lg2 {
             type: Type::Scalar(ScalarType::F32),
@@ -1181,6 +1196,7 @@ impl ScalarType {
             1 => ScalarType::B8,
             2 => ScalarType::B16,
             4 => ScalarType::B32,
+            8 => ScalarType::B64,
             16 => ScalarType::B128,
             _ => return None,
         })
@@ -1495,6 +1511,19 @@ pub enum LdCacheOperator {
     Uncached,
 }
 
+impl Display for LdCacheOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LdCacheOperator::Cached => {}
+            LdCacheOperator::L2Only => write!(f, ".cg")?,
+            LdCacheOperator::Streaming => write!(f, ".cs")?,
+            LdCacheOperator::LastUse => write!(f, ".lu")?,
+            LdCacheOperator::Uncached => write!(f, ".cv")?,
+        }
+        Ok(())
+    }
+}
+
 pub enum CpAsyncCacheOperator {
     Cached,
     L2Only,
@@ -1543,6 +1572,19 @@ pub enum LdStQualifier {
     Relaxed(MemScope),
     Acquire(MemScope),
     Release(MemScope),
+}
+
+impl Display for LdStQualifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LdStQualifier::Weak => {}
+            LdStQualifier::Volatile => write!(f, ".volatile")?,
+            LdStQualifier::Relaxed(scope) => write!(f, ".relaxed{scope}")?,
+            LdStQualifier::Acquire(scope) => write!(f, ".acquire{scope}")?,
+            LdStQualifier::Release(scope) => write!(f, ".release{scope}")?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]

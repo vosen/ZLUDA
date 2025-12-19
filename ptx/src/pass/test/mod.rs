@@ -1,6 +1,7 @@
 use ptx_parser as ast;
 use std::{
     env, error,
+    ffi::OsStr,
     fs::{self, File},
     io::Write,
     path::Path,
@@ -22,7 +23,11 @@ macro_rules! test_pass {
                 let ptx_in = parts.next().unwrap_or("").trim();
                 let ptx_out = parts.next().unwrap_or("").trim();
                 assert!(parts.next().is_none());
-                crate::pass::test::test_pass_assert(stringify!($test_name), $pass, ptx_in, ptx_out)
+                let out_dir_suffix = std::path::Path::new(file!())
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .unwrap();
+                crate::pass::test::test_pass_assert(stringify!($test_name), out_dir_suffix, $pass, ptx_in, ptx_out)
             }
         }
     };
@@ -162,14 +167,23 @@ impl<'a> ast::VisitorMap<SpirvWord, SpirvWord, ()> for StatementFormatter<'a> {
     fn visit(
         &mut self,
         arg: SpirvWord,
-        type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
+        _type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         is_dst: bool,
         _relaxed_type_check: bool,
     ) -> Result<SpirvWord, ()> {
         if is_dst {
-            if let Some(IdentEntry { name: None, .. }) = self.resolver.ident_map.get(&arg) {
+            if let Some(IdentEntry {
+                name: None,
+                type_space,
+            }) = self.resolver.ident_map.get(&arg)
+            {
                 let type_string = if let Some((type_, state_space)) = type_space {
-                    format!("{}{} ", type_, state_space)
+                    // We use the type_space from the resolver rather than from the operand, to avoid hiding implicit conversions
+                    let state_space = match state_space {
+                        ast::StateSpace::Generic => ".generic".to_string(),
+                        _ => format!("{}", state_space),
+                    };
+                    format!("{}{} ", state_space, type_)
                 } else {
                     "".to_string()
                 };
@@ -220,6 +234,7 @@ fn statement_to_string(
 
 fn test_pass_assert<F, D>(
     name: &str,
+    pass_name: &OsStr,
     run_pass: F,
     ptx_in: &str,
     expected_ptx_out: &str,
@@ -237,31 +252,46 @@ where
     for err in errs {
         eprintln!("{}", err);
     }
-    compare_ptx(name, ptx_in, actual_ptx_out.trim(), expected_ptx_out);
+    compare_ptx(
+        name,
+        pass_name,
+        ptx_in,
+        actual_ptx_out.trim(),
+        expected_ptx_out,
+    );
     Ok(())
 }
 
-fn compare_ptx(name: &str, ptx_in: &str, actual_ptx_out: &str, expected_ptx_out: &str) {
+fn compare_ptx(
+    name: &str,
+    pass_name: &OsStr,
+    ptx_in: &str,
+    actual_ptx_out: &str,
+    expected_ptx_out: &str,
+) {
     if actual_ptx_out != expected_ptx_out {
-        maybe_save_output(name, ptx_in, actual_ptx_out);
+        maybe_save_output(name, pass_name, ptx_in, actual_ptx_out);
         let comparison = pretty_assertions::StrComparison::new(expected_ptx_out, actual_ptx_out);
         panic!("assertion failed: `(left == right)`\n\n{}", comparison);
     }
     if actual_ptx_out == "" {
-        maybe_save_output(name, ptx_in, actual_ptx_out);
+        maybe_save_output(name, pass_name, ptx_in, actual_ptx_out);
         panic!("missing expected output");
     }
 }
 
-fn maybe_save_output(name: &str, ptx_in: &str, actual_ptx_out: &str) {
+fn maybe_save_output(name: &str, pass_name: &OsStr, ptx_in: &str, actual_ptx_out: &str) {
     let output_dir = env::var("TEST_PTX_PASS_FAIL_DIR");
     if let Ok(output_dir) = output_dir {
-        let output_dir = Path::new(&output_dir);
+        let output_dir = Path::new(&output_dir).join(pass_name);
         fs::create_dir_all(&output_dir).unwrap();
         let output_file = output_dir.join(format!("{}.ptx", name));
         let mut output_file = File::create(output_file).unwrap();
         output_file.write_all(ptx_in.as_bytes()).unwrap();
         output_file.write_all(b"\n\n// %%% output %%%\n\n").unwrap();
         output_file.write_all(actual_ptx_out.as_bytes()).unwrap();
+        if !actual_ptx_out.ends_with("\n") {
+            output_file.write_all(b"\n").unwrap();
+        }
     }
 }

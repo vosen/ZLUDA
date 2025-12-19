@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func (.reg .b32 output1, .reg .b32 output2) extract(
+    .reg .b64 input
+)
+{
+    ld.b64   { output1, output2 }, [input];
+    ret;
+}
+
+// %%% output %%%
+
+.func (.reg .b32 %2, .reg .b32 %3) %1 (
+    .reg .b64 %4
+)
+{
+    .reg.v2.b32 %5 = ld.b64 %4;
+    zluda.repack_vector.extract.relaxed.b32 %2, %3, %5;
+    ret;
+}
