@@ -71,6 +71,8 @@ jobs:
   build_windows:
     name: Build (Windows)
     runs-on: windows-2022
+    env:
+      SCCACHE_IDLE_TIMEOUT: 0
     steps:
     - uses: actions/checkout@v4
       with:
