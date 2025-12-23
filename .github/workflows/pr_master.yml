@@ -78,6 +78,7 @@ jobs:
         submodules: true
     - name: Build
       run: |
+        unset RUSTC_WRAPPER
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
         Expand-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda
     - name: Set revision hash
