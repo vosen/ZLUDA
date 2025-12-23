@@ -7,7 +7,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_PROFILE: release
   SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: "sccache"
   ROCM_VERSION: "6.3.4"
   AMDGPU_VERSION: "6.4.4"
 
@@ -78,7 +77,6 @@ jobs:
         submodules: true
     - name: Build
       run: |
-        set RUSTC_WRAPPER=
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
         Expand-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda
     - name: Set revision hash
