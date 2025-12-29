@@ -75,6 +75,8 @@ jobs:
       with:
         lfs: true
         submodules: true
+    - name: Run sccache-cache
+      uses: mozilla-actions/sccache-action@v0.0.9
     - name: Build
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
