@@ -8,6 +8,7 @@ env:
   CARGO_PROFILE: release
   SCCACHE_GHA_ENABLED: "true"
   SCCACHE_LOG: "debug"
+  SCCACHE_ERROR_LOG: "${{ runner.temp }}/sccache.log"
   RUSTC_WRAPPER: "sccache"
   ROCM_VERSION: "6.3.4"
   AMDGPU_VERSION: "6.4.4"
@@ -83,6 +84,14 @@ jobs:
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
         Expand-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda
+    - name: Show sccache logs
+      if: always()
+      run: |
+        $logPath = "${{ runner.temp }}\sccache.log"
+        if (Test-Path $logPath) {
+          Write-Host "=== sccache logs ==="
+          Get-Content $logPath
+        }
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
