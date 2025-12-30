@@ -8,7 +8,7 @@ env:
   CARGO_PROFILE: release
   SCCACHE_GHA_ENABLED: "true"
   SCCACHE_LOG: "debug"
-  SCCACHE_ERROR_LOG: "${{ runner.temp }}/sccache.log"
+  SCCACHE_ERROR_LOG: "$RUNNER_TEMP/sccache.log"
   RUSTC_WRAPPER: "sccache"
   ROCM_VERSION: "6.3.4"
   AMDGPU_VERSION: "6.4.4"
