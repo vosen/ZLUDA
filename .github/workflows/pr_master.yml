@@ -91,6 +91,9 @@ jobs:
         if (Test-Path $logPath) {
           Write-Host "=== sccache logs ==="
           Get-Content $logPath
+        } else {
+          Write-Host "!!! could not find logs in path ${{ runner.temp }}"
+          Get-ChildItem "${{ runner.temp }}"
         }
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
