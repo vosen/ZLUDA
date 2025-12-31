@@ -109,6 +109,20 @@ pub(crate) unsafe fn host_alloc(
     Ok(())
 }
 
+pub(crate) unsafe fn host_get_device_pointer_v2(
+    pdptr: &mut hipDeviceptr_t,
+    p: *mut ::core::ffi::c_void,
+    flags: ::std::os::raw::c_uint,
+) -> CUresult {
+    if p.is_null() {
+        return CUresult::ERROR_INVALID_VALUE;
+    }
+
+    // HIP equivalent of cuMemHostGetDevicePointer_v2
+    hipHostGetDevicePointer((&mut pdptr.0 as *mut *mut ::core::ffi::c_void).cast(), p, flags)?;
+    Ok(())
+}
+
 fn add_allocation(
     dptr: *mut ::core::ffi::c_void,
     bytesize: usize,
