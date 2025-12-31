@@ -79,6 +79,7 @@ fn run_instruction<'input>(
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::Bfe { .. }
         | ast::Instruction::Bfi { .. }
+        | ast::Instruction::Bmsk { .. }
         | ast::Instruction::Bra { .. }
         | ast::Instruction::Brev { .. }
         | ast::Instruction::Call { .. }
