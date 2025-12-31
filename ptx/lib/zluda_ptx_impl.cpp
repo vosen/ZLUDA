@@ -220,6 +220,11 @@ extern "C"
         return (~mask & base) | (mask & (insert << pos));
     }
 
+    uint32_t FUNC(bmsk_clamp_b32)(uint32_t position, uint32_t width)
+    {
+        return __ockl_bfm_u32(width, position);
+    }
+
     void FUNC(bar_sync)(uint32_t)
     {
         __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "workgroup");

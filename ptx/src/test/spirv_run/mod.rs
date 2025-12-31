@@ -249,6 +249,7 @@ test_ptx!(
     [0b11000001u32]
 );
 test_ptx!(bfi, [0b10u32, 0b101u32, 0u32, 2u32], [0b110u32]);
+test_ptx!(bmsk_clamp_b32, [24u32, 12u32], [0xFF000000u32]);
 test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
 test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
