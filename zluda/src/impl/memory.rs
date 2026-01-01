@@ -119,7 +119,7 @@ pub(crate) unsafe fn host_get_device_pointer_v2(
     }
 
     // HIP equivalent of cuMemHostGetDevicePointer_v2
-    hipHostGetDevicePointer((&mut pdptr.0 as *mut *mut ::core::ffi::c_void).cast(), p, flags)?;
+    hipHostGetDevicePointer(std::ptr::from_mut(pdptr).cast(), p, flags)?;
     Ok(())
 }
 
