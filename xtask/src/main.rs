@@ -354,7 +354,7 @@ mod os {
     }
 
     pub(crate) fn zip(target_dir: PathBuf, profile: String, projects: Vec<crate::Project>) {
-        fix_amdhip_soname(&target_dir, &profile);
+        strip_rocm_versions_from_dt_needed(&target_dir, &profile);
         let mut tar_gz =
             File::create(format!("{}/{profile}/zluda.tar.gz", target_dir.display())).unwrap();
         let enc = GzEncoder::new(&mut tar_gz, Compression::default());
@@ -380,27 +380,72 @@ mod os {
     // Unfortunately when linking against amdhip64.so, it encodes SONAME with versioned
     // filename, e.g. libamdhip64.so.7. We instead want to link against unversioned
     // libamdhip64.so to allow compatiblity with both ROCm 6 and ROCm 7
-    pub fn fix_amdhip_soname(target_dir: &PathBuf, profile: &str) {
+    // We use `patchelf`. I've tried arwen library: https://nichmor.github.io/arwen/,
+    // it supports replacing DT_NEEDED entries, but it seems to produce broken binaries
+    pub fn strip_rocm_versions_from_dt_needed(target_dir: &PathBuf, profile: &str) {
         let current_dir = target_dir.join(profile);
-        let patch_single_lib = |lib| {
-            let status = Command::new("patchelf")
-                .current_dir(&current_dir)
-                .args(&[
-                    "--replace-needed",
-                    "libamdhip64.so.6",
-                    "libamdhip64.so",
-                    "--replace-needed",
-                    "libamdhip64.so.7",
-                    "libamdhip64.so",
-                    lib,
-                ])
-                .status()
-                .unwrap();
-            assert!(status.success());
-        };
-        patch_single_lib("libcuda.so");
-        patch_single_lib("libcudnn.so.8");
-        patch_single_lib("libcudnn.so.9");
+        patch_single_lib(
+            &current_dir,
+            "libcuda.so",
+            &[
+                ("libamdhip64.so.6", "libamdhip64.so"),
+                ("libamdhip64.so.7", "libamdhip64.so"),
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
+            "libcudnn.so.8",
+            &[
+                ("libamdhip64.so.6", "libamdhip64.so"),
+                ("libamdhip64.so.7", "libamdhip64.so"),
+                // We also link to MIOpen, but it's `libMIOpen.so.1` on both ROCm 6 and 7
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
+            "libcudnn.so.9",
+            &[
+                ("libamdhip64.so.6", "libamdhip64.so"),
+                ("libamdhip64.so.7", "libamdhip64.so"),
+                // We also link to MIOpen, but it's `libMIOpen.so.1` on both ROCm 6 and 7
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
+            "libcublas.so",
+            &[
+                ("librocblas.so.4", "librocblas.so"),
+                ("librocblas.so.5", "librocblas.so"),
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
+            "libcublaslt.so",
+            &[
+                ("libhipblaslt.so.0", "libhipblaslt.so"),
+                ("libhipblaslt.so.1", "libhipblaslt.so"),
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
+            "libnvml.so",
+            &[
+                ("librocm_smi64.so.7", "librocm_smi64.so"),
+                // Not a typo, ROCm 7 ships with librocm_smi64.so.1
+                ("librocm_smi64.so.1", "librocm_smi64.so"),
+            ],
+        );
+    }
+
+    fn patch_single_lib(current_dir: &PathBuf, lib: &str, from_to: &[(&str, &str)]) {
+        let mut cmd = Command::new("patchelf");
+        cmd.current_dir(&current_dir);
+        for (from, to) in from_to {
+            cmd.args(&["--replace-needed", from, to]);
+        }
+        cmd.arg(lib);
+        let status = cmd.status().unwrap();
+        assert!(status.success());
     }
 }
 
