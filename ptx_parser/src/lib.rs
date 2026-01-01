@@ -3728,6 +3728,15 @@ derive_parser!(
     }
     .type: ScalarType = { .b32, .b64 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bmsk
+    bmsk.mode.b32  d, a, b => {
+        ast::Instruction::Bmsk {
+            data: mode,
+            arguments: BmskArgs { dst: d, src_a: a, src_b: b },
+        }
+    }
+    .mode: BmskMode = { .clamp };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
     // prmt.b32{.mode}  d, a, b, c;
     // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
