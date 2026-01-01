@@ -136,6 +136,7 @@ cuda_macros::cuda_function_declarations!(
             cuMemGetAllocationGranularity,
             cuMemGetInfo_v2,
             cuMemHostAlloc,
+            cuMemHostGetDevicePointer_v2,
             cuMemRetainAllocationHandle,
             cuMemcpyAsync,
             cuMemcpyDtoDAsync_v2,
