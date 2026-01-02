@@ -246,7 +246,7 @@ fn statement_to_string(
     stmt: Statement<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> String {
     let (op, visit_args) = match &stmt {
-        Statement::Variable(var) => (format!("{}", var), true),
+        Statement::Variable(var) => (format!("{};", var), false),
         Statement::Instruction(instr) => (format!("{}", instr), true),
         Statement::Conversion(conv) => (format!("{}", conv), true),
         Statement::Constant(constant) => (format!("{}", constant), true),
