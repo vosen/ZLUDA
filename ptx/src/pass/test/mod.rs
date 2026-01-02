@@ -122,7 +122,7 @@ fn function_to_string(
         }
     }
 
-    let pragma = if pragmas.len() > 0 {
+    let pragma = if !pragmas.is_empty() {
         format!(" .pragma \"zluda {}\" ", pragmas.join(", "))
     } else {
         "".to_string()
