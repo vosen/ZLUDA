@@ -36,8 +36,7 @@ fn run_method<'a, 'input>(
     mut visitor: InsertMemSSAVisitor<'a, 'input>,
     mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
-    let is_kernel = method.is_kernel;
-    if is_kernel {
+    if method.is_kernel() {
         for arg in method.input_arguments.iter_mut() {
             let old_name = arg.name;
             let old_space = arg.info.state_space;

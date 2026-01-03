@@ -138,35 +138,35 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         }
         self.emit_target_features(fn_);
         self.emit_tuning(fn_, &method.tuning);
-        if !method.is_kernel {
-            self.resolver.register(method.name, fn_);
-            self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
-            self.emit_fn_attribute(fn_, "denormal-fp-math", "dynamic");
-        } else {
+        if let Some(kernel_attrs) = &method.kernel_attributes {
             self.emit_fn_attribute(
                 fn_,
                 "denormal-fp-math-f32",
-                llvm_ftz(method.flush_to_zero_f32),
+                llvm_ftz(kernel_attrs.flush_to_zero_f32),
             );
             self.emit_fn_attribute(
                 fn_,
                 "denormal-fp-math",
-                llvm_ftz(method.flush_to_zero_f16f64),
+                llvm_ftz(kernel_attrs.flush_to_zero_f16f64),
             );
+        } else {
+            self.resolver.register(method.name, fn_);
+            self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
+            self.emit_fn_attribute(fn_, "denormal-fp-math", "dynamic");
         }
         self.emit_fn_attribute(fn_, "amdgpu-ieee", "false");
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
             // LLVM complains if alignment is set on function parameters for non-kernels
-            if method.is_kernel {
+            if method.is_kernel() {
                 if let Some(align) = param.info.align {
                     unsafe { LLVMSetParamAlignment(value, align) };
                 }
             }
             unsafe { LLVMSetValueName2(value, name.as_ptr().cast(), name.len()) };
             self.resolver.register(param.name, value);
-            if method.is_kernel {
+            if method.is_kernel() {
                 let attr_kind = unsafe {
                     LLVMGetEnumAttributeKindForName(b"byref".as_ptr().cast(), b"byref".len())
                 };
@@ -180,12 +180,12 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
             }
         }
-        if !method.is_kernel {
+        if !method.is_kernel() {
             unsafe {
                 LLVMSetVisibility(fn_, llvm_zluda::LLVMVisibility::LLVMHiddenVisibility);
             }
         }
-        let call_conv = if method.is_kernel {
+        let call_conv = if method.is_kernel() {
             Self::kernel_call_convention()
         } else {
             Self::func_call_convention()
@@ -224,11 +224,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             } else {
                 return Err(error_unreachable());
             }
-            method_emitter.emit_kernel_rounding_prelude(
-                method.is_kernel,
-                method.rounding_mode_f32,
-                method.rounding_mode_f16f64,
-            )?;
+            method_emitter.emit_kernel_rounding_prelude(method.kernel_attributes)?;
             for statement in statements {
                 method_emitter.emit_statement(statement)?;
             }
@@ -458,11 +454,14 @@ impl<'a> MethodEmitContext<'a> {
     // instruction in the body of a kernel
     fn emit_kernel_rounding_prelude(
         &mut self,
-        is_kernel: bool,
-        rounding_mode_f32: ast::RoundingMode,
-        rounding_mode_f16f64: ast::RoundingMode,
+        kernel_attrs: Option<KernelAttributes>,
     ) -> Result<(), TranslateError> {
-        if is_kernel {
+        if let Some(KernelAttributes {
+            rounding_mode_f32,
+            rounding_mode_f16f64,
+            ..
+        }) = kernel_attrs
+        {
             if rounding_mode_f32 != ast::RoundingMode::NearestEven
                 || rounding_mode_f16f64 != ast::RoundingMode::NearestEven
             {
@@ -1627,7 +1626,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(unsafe { LLVMBuildFCmp(self.builder, op, src1, src2, LLVM_UNNAMED.as_ptr()) })
     }
 
-    fn emit_conditional(&mut self, cond: BrachCondition) -> Result<(), TranslateError> {
+    fn emit_conditional(&mut self, cond: BranchCondition) -> Result<(), TranslateError> {
         let predicate = self.resolver.value(cond.predicate)?;
         let if_true = self.resolver.value(cond.if_true)?;
         let if_false = self.resolver.value(cond.if_false)?;
