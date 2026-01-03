@@ -1486,10 +1486,20 @@ impl ImmediateValue {
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
     }
+
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             ImmediateValue::F64(n) => Some(n),
             _ => None,
+        }
+    }
+
+    pub fn get_bits(&self) -> u64 {
+        match self {
+            ImmediateValue::U64(n) => *n,
+            ImmediateValue::S64(n) => *n as u64,
+            ImmediateValue::F32(n) => n.to_bits() as u64,
+            ImmediateValue::F64(n) => n.to_bits(),
         }
     }
 }
@@ -1497,10 +1507,10 @@ impl ImmediateValue {
 impl std::fmt::Display for ImmediateValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ImmediateValue::U64(n) => write!(f, "{}", n)?,
+            ImmediateValue::U64(n) => write!(f, "{}U", n)?,
             ImmediateValue::S64(n) => write!(f, "{}", n)?,
-            ImmediateValue::F32(n) => write!(f, "{}", n)?,
-            ImmediateValue::F64(n) => write!(f, "{}", n)?,
+            ImmediateValue::F32(n) => write!(f, "0f{:x}", n.to_bits())?,
+            ImmediateValue::F64(n) => write!(f, "0d{:x}", n.to_bits())?,
         }
         Ok(())
     }

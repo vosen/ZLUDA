@@ -18,6 +18,8 @@ fn run_expand_operands(ptx: ptx_parser::Module) -> String {
     directive2_vec_to_string(&flat_resolver, directives)
 }
 
+test_expand_operands!(immediates);
+test_expand_operands!(immediate_conversion);
 test_expand_operands!(vector_operand);
 test_expand_operands!(vector_operand_convert);
 test_expand_operands!(vector_extract);
