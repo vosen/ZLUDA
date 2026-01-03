@@ -9,6 +9,7 @@ use std::{
 
 mod expand_operands;
 mod insert_implicit_conversions;
+mod instruction_mode_to_global_mode;
 mod normalize_basic_blocks;
 
 #[macro_export]
@@ -70,13 +71,7 @@ fn function_to_string(
     resolver: &GlobalStringIdentResolver2,
     function: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> String {
-    if function.import_as.is_some()
-        || function.tuning.len() > 0
-        || function.flush_to_zero_f32
-        || function.flush_to_zero_f16f64
-        || function.rounding_mode_f32 != ast::RoundingMode::NearestEven
-        || function.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
-    {
+    if function.import_as.is_some() || function.tuning.len() > 0 {
         todo!("Figure out some way of representing these in text");
     }
 
@@ -86,7 +81,7 @@ fn function_to_string(
         "".to_string()
     };
 
-    let entry = if !function.is_kernel {
+    let entry = if !function.is_kernel() {
         format!(".func ")
     } else {
         format!(".entry ")
@@ -105,6 +100,34 @@ fn function_to_string(
         "".to_string()
     };
 
+    let mut pragmas = vec![];
+    if let Some(kernel_attrs) = &function.kernel_attributes {
+        if kernel_attrs.flush_to_zero_f32 {
+            pragmas.push("set_mode.denormal.f32 on".to_string());
+        }
+        if kernel_attrs.flush_to_zero_f16f64 {
+            pragmas.push("set_mode.denormal.f16f64 on".to_string());
+        }
+        if kernel_attrs.rounding_mode_f32 != ast::RoundingMode::NearestEven {
+            pragmas.push(format!(
+                "set_mode.rounding.f32 {}",
+                kernel_attrs.rounding_mode_f32
+            ));
+        }
+        if kernel_attrs.rounding_mode_f16f64 != ast::RoundingMode::NearestEven {
+            pragmas.push(format!(
+                "set_mode.rounding.f16f64 {}",
+                kernel_attrs.rounding_mode_f16f64
+            ));
+        }
+    }
+
+    let pragma = if !pragmas.is_empty() {
+        format!(" .pragma \"zluda {}\" ", pragmas.join(", "))
+    } else {
+        "".to_string()
+    };
+
     let input_arguments = function
         .input_arguments
         .iter()
@@ -115,7 +138,15 @@ fn function_to_string(
     let body = if let Some(stmts) = function.body {
         let stmt_strings = stmts
             .into_iter()
-            .map(|stmt| format!("    {}\n", statement_to_string(resolver, stmt)))
+            .map(|stmt| {
+                let is_label = matches!(stmt, Statement::Label(_));
+                let stmt_string = statement_to_string(resolver, stmt);
+                if is_label {
+                    format!("{}\n", stmt_string)
+                } else {
+                    format!("    {}\n", stmt_string)
+                }
+            })
             .collect::<Vec<_>>()
             .join("");
         format!("\n{{\n{}}}", stmt_strings)
@@ -124,8 +155,8 @@ fn function_to_string(
     };
 
     format!(
-        "{}{}{}{} ({}\n){}",
-        linkage, entry, return_arguments, function.name, input_arguments, body
+        "{}{}{}{}{} ({}\n){}",
+        linkage, entry, return_arguments, function.name, pragma, input_arguments, body
     )
 }
 
@@ -215,12 +246,14 @@ fn statement_to_string(
     stmt: Statement<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> String {
     let (op, visit_args) = match &stmt {
-        Statement::Variable(var) => (format!("{}", var), true),
+        Statement::Variable(var) => (format!("{};", var), false),
         Statement::Instruction(instr) => (format!("{}", instr), true),
         Statement::Conversion(conv) => (format!("{}", conv), true),
         Statement::Constant(constant) => (format!("{}", constant), true),
         Statement::RepackVector(repack) => (format!("{}", repack), true),
         Statement::Label(label) => (format!("{}:", label), false),
+        Statement::SetMode(mode) => (format!("{}", mode), true),
+        Statement::Conditional(cond) => (format!("{}", cond), true),
         _ => todo!(),
     };
     if visit_args {

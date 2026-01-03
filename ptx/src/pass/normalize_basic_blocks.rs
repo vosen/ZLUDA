@@ -23,9 +23,9 @@ pub(crate) fn run(
         let (body_ref, is_kernel) = match directive {
             Directive2::Method(Function2 {
                 body: Some(body),
-                is_kernel,
+                kernel_attributes,
                 ..
-            }) => (body, *is_kernel),
+            }) => (body, kernel_attributes.is_some()),
             _ => continue,
         };
         let body = std::mem::replace(body_ref, Vec::new());

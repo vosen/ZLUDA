@@ -27,7 +27,7 @@ fn run_method<'input>(
     let is_declaration = method.body.is_none();
     let mut body = Vec::new();
     let mut remap_returns = Vec::new();
-    if !method.is_kernel {
+    if !method.is_kernel() {
         for arg in method.return_arguments.iter_mut() {
             match arg.info.state_space {
                 ptx_parser::StateSpace::Param => {

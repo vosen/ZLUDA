@@ -187,8 +187,9 @@ static FOLD_DENORMAL_PTX: &'static str = include_str!("fold_denormal.ptx");
 #[test]
 fn fold_denormal() {
     let method = compile_methods(FOLD_DENORMAL_PTX).pop().unwrap();
-    assert_eq!(true, method.flush_to_zero_f32);
-    assert_eq!(true, method.flush_to_zero_f16f64);
+    let kernel_attrs = method.kernel_attributes.expect("method should be a kernel");
+    assert_eq!(true, kernel_attrs.flush_to_zero_f32);
+    assert_eq!(true, kernel_attrs.flush_to_zero_f16f64);
     let method_body = method.body.unwrap();
     assert!(matches!(
         &*method_body,
@@ -409,7 +410,7 @@ fn conditionals<const N: usize>(
 ) -> [(SpirvWord, SpirvWord); N] {
     fn_.iter()
         .filter_map(|s| match s {
-            Statement::Conditional(BrachCondition {
+            Statement::Conditional(BranchCondition {
                 if_true, if_false, ..
             }) => Some((*if_true, *if_false)),
             _ => None,

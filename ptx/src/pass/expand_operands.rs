@@ -48,11 +48,7 @@ fn run_method<'input>(
         import_as: method.import_as,
         tuning: method.tuning,
         linkage: method.linkage,
-        is_kernel: method.is_kernel,
-        flush_to_zero_f32: method.flush_to_zero_f32,
-        flush_to_zero_f16f64: method.flush_to_zero_f16f64,
-        rounding_mode_f32: method.rounding_mode_f32,
-        rounding_mode_f16f64: method.rounding_mode_f16f64,
+        kernel_attributes: method.kernel_attributes,
     })
 }
 

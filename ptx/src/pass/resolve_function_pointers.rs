@@ -19,7 +19,7 @@ fn run_directive<'input>(
     Ok(match directive {
         var @ Directive2::Variable(..) => var,
         Directive2::Method(method) => {
-            if !method.is_kernel {
+            if !method.is_kernel() {
                 functions.insert(method.name);
             }
             Directive2::Method(run_method(functions, method)?)

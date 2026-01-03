@@ -259,7 +259,7 @@ enum Statement<I, P: ast::Operand> {
     Variable(ast::Variable<P::Ident>),
     Instruction(I),
     // SPIR-V compatible replacement for PTX predicates
-    Conditional(BrachCondition),
+    Conditional(BranchCondition),
     Conversion(ImplicitConversion),
     Constant(ConstantDefinition),
     RetValue(ast::RetData, Vec<(SpirvWord, ast::Type)>),
@@ -296,6 +296,22 @@ enum ModeRegister {
         f32: ast::RoundingMode,
         f16f64: ast::RoundingMode,
     },
+}
+
+impl std::fmt::Display for ModeRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModeRegister::Denormal { f32, f16f64 } => write!(
+                f,
+                "zluda.set_mode.denormal.f32::{}.f16f64::{}",
+                if *f32 { "on" } else { "off" },
+                if *f16f64 { "on" } else { "off" },
+            ),
+            ModeRegister::Rounding { f32, f16f64 } => {
+                write!(f, "zluda.set_mode.rounding.f32{}.f16f64{}", f32, f16f64)
+            }
+        }
+    }
 }
 
 impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
@@ -336,7 +352,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 let if_true = visitor.visit_ident(conditional.if_true, None, false, false)?;
                 let if_false = visitor.visit_ident(conditional.if_false, None, false, false)?;
-                Statement::Conditional(BrachCondition {
+                Statement::Conditional(BranchCondition {
                     predicate,
                     if_true,
                     if_false,
@@ -593,10 +609,16 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
     }
 }
 
-struct BrachCondition {
+struct BranchCondition {
     predicate: SpirvWord,
     if_true: SpirvWord,
     if_false: SpirvWord,
+}
+
+impl std::fmt::Display for BranchCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "zluda.branch")
+    }
 }
 
 #[derive(Clone)]
@@ -723,19 +745,28 @@ enum Directive2<Instruction, Operand: ast::Operand> {
     Method(Function2<Instruction, Operand>),
 }
 
+struct KernelAttributes {
+    flush_to_zero_f32: bool,
+    flush_to_zero_f16f64: bool,
+    rounding_mode_f32: ast::RoundingMode,
+    rounding_mode_f16f64: ast::RoundingMode,
+}
+
 struct Function2<Instruction, Operand: ast::Operand> {
     pub return_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub name: Operand::Ident,
     pub input_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub body: Option<Vec<Statement<Instruction, Operand>>>,
-    is_kernel: bool,
+    kernel_attributes: Option<KernelAttributes>,
     import_as: Option<String>,
     tuning: Vec<ast::TuningDirective>,
     linkage: ast::LinkingDirective,
-    flush_to_zero_f32: bool,
-    flush_to_zero_f16f64: bool,
-    rounding_mode_f32: ast::RoundingMode,
-    rounding_mode_f16f64: ast::RoundingMode,
+}
+
+impl<I, O: ast::Operand> Function2<I, O> {
+    fn is_kernel(&self) -> bool {
+        self.kernel_attributes.is_some()
+    }
 }
 
 type NormalizedDirective2 = Directive2<

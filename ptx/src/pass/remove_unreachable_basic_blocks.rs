@@ -74,8 +74,10 @@ pub(crate) fn run(
         .filter(|directive| match directive {
             Directive2::Variable(..) => true,
             Directive2::Method(Function2 {
-                name, is_kernel, ..
-            }) => *is_kernel || reachable_funcs.contains(name),
+                name,
+                kernel_attributes,
+                ..
+            }) => kernel_attributes.is_some() || reachable_funcs.contains(name),
         })
         .collect::<Vec<_>>())
 }
