@@ -405,6 +405,7 @@ fn should_convert_relaxed_src(
                 &ast::Type::Scalar(*instr_type),
             )
         }
+        _ if valid_vector_scalar_bitcast(src_type, instr_type) => Some(ConversionKind::Default),
         _ => None,
     }
 }
