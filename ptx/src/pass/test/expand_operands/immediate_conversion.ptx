@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func () immediate_conversion ()
+{
+    .reg.b64 tmp64;
+    .reg.b32 tmp32;
+
+    mov.b64 tmp64, 1234567890U;
+    mov.b64 tmp64, -123456789;
+    mov.b32 tmp32, 0f44400000;
+    mov.b64 tmp64, 123.456789012345;
+    ret;
+}
+
+// %%% output %%%
+
+.func %1 (
+)
+{
+    .reg .b64 %2 %2;
+    .reg .b32 %3 %3;
+    .reg.b64 %4 = zluda.constant.b64 1234567890U;
+    mov.b64 %2, %4;
+    .reg.b64 %5 = zluda.constant.b64 18446744073586094827U;
+    mov.b64 %2, %5;
+    .reg.b32 %6 = zluda.constant.b32 1145044992U;
+    mov.b32 %3, %6;
+    .reg.b64 %7 = zluda.constant.b64 4638387916139875433U;
+    mov.b64 %2, %7;
+    ret;
+}
