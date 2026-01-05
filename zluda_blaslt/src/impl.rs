@@ -4,17 +4,6 @@ use hipblaslt_sys::*;
 use std::mem;
 use zluda_common::{handle::BlasLtHandle, FromCuda, ZludaObject};
 
-// Lazy initialization for hipblasLt. cublasHandle_t is a valid cublasLtHandle_t. To implement
-// this, for every cublasLt call taking a handle we initialize it if not already done.
-fn hipblas_lt_init(handle: &BlasLtHandle) -> Result<hipblasLtHandle_t, cublasError_t> {
-    // TODO: switch to get_or_try_init when that is stabilized
-    *handle.0.hipblas_lt.get_or_init(|| {
-        let mut hipblas_lt = unsafe { std::mem::zeroed() };
-        unsafe { hipblasLtCreate(&mut hipblas_lt) }?;
-        Ok(hipblas_lt)
-    })
-}
-
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
     unimplemented!()
@@ -46,16 +35,10 @@ pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> :
 }
 
 pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
-    let zluda_handle = BlasLtHandle::new();
-
     let mut hipblas_lt = unsafe { std::mem::zeroed() };
     unsafe { hipblasLtCreate(&mut hipblas_lt) }?;
 
-    zluda_handle
-        .0
-        .hipblas_lt
-        .set(Ok(hipblas_lt))
-        .map_err(|_| cublasError_t::INVALID_VALUE)?;
+    let zluda_handle = BlasLtHandle::new(hipblas_lt);
 
     *handle = BlasLtHandle::wrap(zluda_handle);
     Ok(())
@@ -92,10 +75,9 @@ pub(crate) fn matmul(
     workspace_size_in_bytes: usize,
     stream: hipStream_t,
 ) -> cublasStatus_t {
-    let hipblas_lt = hipblas_lt_init(light_handle)?;
     unsafe {
         hipblasLtMatmul(
-            hipblas_lt,
+            light_handle.hipblas_lt,
             compute_desc,
             alpha,
             a,
@@ -128,11 +110,10 @@ pub(crate) fn matmul_algo_get_heuristic(
     heuristic_results_array: &mut cublasLtMatmulHeuristicResult_t,
     return_algo_count: &mut ::core::ffi::c_int,
 ) -> cublasStatus_t {
-    let hipblas_lt = hipblas_lt_init(light_handle)?;
     let mut hip_algos = vec![unsafe { mem::zeroed() }; requested_algo_count as usize];
     unsafe {
         hipblasLtMatmulAlgoGetHeuristic(
-            hipblas_lt,
+            light_handle.hipblas_lt,
             operation_desc,
             a_desc,
             b_desc,
