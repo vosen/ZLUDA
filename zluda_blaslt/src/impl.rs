@@ -2,7 +2,10 @@ use cuda_types::{cublas::*, cublaslt::*};
 use hip_runtime_sys::hipStream_t;
 use hipblaslt_sys::*;
 use std::mem;
-use zluda_common::{handle::BlasLtHandle, FromCuda, ZludaObject};
+use zluda_common::{
+    handle::{BlasHandle, BlasLtHandle, BlasLtHandleGuard},
+    FromCuda, ZludaObject,
+};
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
@@ -45,7 +48,27 @@ pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
 }
 
 pub(crate) fn destroy(handle: cublasLtHandle_t) -> cublasStatus_t {
-    zluda_common::drop_checked::<BlasLtHandle>(handle)
+    // Try interpreting as a direct BlasLtHandle
+    let result = zluda_common::drop_checked::<BlasLtHandle>(handle);
+    if result != cublasStatus_t::ERROR_INVALID_VALUE {
+        return result;
+    }
+
+    // Fallback: handle may be a BlasHandle with an embedded BlasLtHandle
+    let handle = unsafe { std::mem::transmute(handle) };
+    let blas_handle = zluda_common::as_ref::<BlasHandle>(&handle)
+        .ok_or(cublasError_t::INVALID_VALUE)?
+        .as_result()?;
+    if let Some(mut blas_lt) = blas_handle
+        .blas_lt
+        .write()
+        .map_err(|_| cublasError_t::INTERNAL_ERROR)?
+        .take()
+    {
+        blas_lt.drop_checked()?;
+    }
+
+    Ok(())
 }
 
 fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
@@ -58,7 +81,7 @@ fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
 }
 
 pub(crate) fn matmul(
-    light_handle: &BlasLtHandle,
+    light_handle: BlasLtHandleGuard,
     compute_desc: hipblasLtMatmulDesc_t,
     alpha: *const ::core::ffi::c_void,
     a: *const ::core::ffi::c_void,
@@ -99,7 +122,7 @@ pub(crate) fn matmul(
 }
 
 pub(crate) fn matmul_algo_get_heuristic(
-    light_handle: &BlasLtHandle,
+    light_handle: BlasLtHandleGuard,
     operation_desc: hipblasLtMatmulDesc_t,
     a_desc: hipblasLtMatrixLayout_t,
     b_desc: hipblasLtMatrixLayout_t,
