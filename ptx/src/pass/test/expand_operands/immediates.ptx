@@ -1,0 +1,37 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.func () immediates ()
+{
+    .reg.u64 tmp1;
+    .reg.s64 tmp2;
+    .reg.f32 tmp3;
+    .reg.f64 tmp4;
+
+    mov.u64 tmp1, 1234567890U;
+    mov.s64 tmp2, -123456789;
+    mov.f32 tmp3, 0f44400000;
+    mov.f64 tmp4, 123.456789012345;
+    ret;
+}
+
+// %%% output %%%
+
+.func %1 (
+)
+{
+    .reg .u64 %2 %2;
+    .reg .s64 %3 %3;
+    .reg .f32 %4 %4;
+    .reg .f64 %5 %5;
+    .reg.u64 %6 = zluda.constant.u64 1234567890U;
+    mov.u64 %2, %6;
+    .reg.s64 %7 = zluda.constant.s64 -123456789;
+    mov.s64 %3, %7;
+    .reg.f32 %8 = zluda.constant.f32 0f44400000;
+    mov.f32 %4, %8;
+    .reg.f64 %9 = zluda.constant.f64 0d405edd3c07fb4c69;
+    mov.f64 %5, %9;
+    ret;
+}

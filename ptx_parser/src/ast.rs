@@ -56,7 +56,8 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
-            }
+            },
+            display: write!(f, "add{}", data)?
         },
         And {
             data: ScalarType,
@@ -173,7 +174,8 @@ ptx_parser_macros::generate_instruction_type!(
             type: !,
             arguments<T::Ident>: {
                 src: T
-            }
+            },
+            display: write!(f, "bra")?
         },
         Brev {
             type: Type::Scalar(data.clone()),
@@ -430,7 +432,8 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src1: T,
                 src2: T,
-            }
+            },
+            display: write!(f, "mul{}", data)?
         },
         Mul24 {
             type: { Type::from(data.type_) },
@@ -695,6 +698,16 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     relaxed_type_check: true,
                 }
+            },
+            display: {
+                write!(
+                    f,
+                    "st{}{}{}{}",
+                    data.qualifier,
+                    data.state_space,
+                    data.caching,
+                    data.typ,
+                )?
             }
         },
         Sub {
@@ -1484,10 +1497,20 @@ impl ImmediateValue {
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
     }
+
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             ImmediateValue::F64(n) => Some(n),
             _ => None,
+        }
+    }
+
+    pub fn get_bits(&self) -> u64 {
+        match self {
+            ImmediateValue::U64(n) => *n,
+            ImmediateValue::S64(n) => *n as u64,
+            ImmediateValue::F32(n) => n.to_bits() as u64,
+            ImmediateValue::F64(n) => n.to_bits(),
         }
     }
 }
@@ -1495,10 +1518,10 @@ impl ImmediateValue {
 impl std::fmt::Display for ImmediateValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ImmediateValue::U64(n) => write!(f, "{}", n)?,
+            ImmediateValue::U64(n) => write!(f, "{}U", n)?,
             ImmediateValue::S64(n) => write!(f, "{}", n)?,
-            ImmediateValue::F32(n) => write!(f, "{}", n)?,
-            ImmediateValue::F64(n) => write!(f, "{}", n)?,
+            ImmediateValue::F32(n) => write!(f, "0f{:x}", n.to_bits())?,
+            ImmediateValue::F64(n) => write!(f, "0d{:x}", n.to_bits())?,
         }
         Ok(())
     }
@@ -1510,6 +1533,18 @@ pub enum StCacheOperator {
     L2Only,
     Streaming,
     Writethrough,
+}
+
+impl Display for StCacheOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StCacheOperator::Writeback => {}
+            StCacheOperator::L2Only => write!(f, ".cg")?,
+            StCacheOperator::Streaming => write!(f, ".cs")?,
+            StCacheOperator::Writethrough => write!(f, ".wt")?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1554,10 +1589,34 @@ impl ArithDetails {
     }
 }
 
+impl std::fmt::Display for ArithDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArithDetails::Integer(int) => {
+                write!(f, "{}", int)?;
+            }
+            ArithDetails::Float(float) => {
+                write!(f, "{}", float)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct ArithInteger {
     pub type_: ScalarType,
     pub saturate: bool,
+}
+
+impl std::fmt::Display for ArithInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -1573,6 +1632,20 @@ pub struct ArithFloat {
     // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
     // instructions on the target device.
     pub is_fusable: bool,
+}
+
+impl std::fmt::Display for ArithFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.rounding)?;
+        if let Some(true) = self.flush_to_zero {
+            write!(f, ".ftz")?;
+        }
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1603,6 +1676,18 @@ pub enum RoundingMode {
     Zero,
     NegativeInf,
     PositiveInf,
+}
+
+impl std::fmt::Display for RoundingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RoundingMode::NearestEven => write!(f, ".rn")?,
+            RoundingMode::Zero => write!(f, ".rz")?,
+            RoundingMode::NegativeInf => write!(f, ".rm")?,
+            RoundingMode::PositiveInf => write!(f, ".rp")?,
+        }
+        Ok(())
+    }
 }
 
 pub struct LdDetails {
@@ -1802,11 +1887,34 @@ impl MulDetails {
     }
 }
 
+impl std::fmt::Display for MulDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulDetails::Integer { type_, control } => {
+                write!(f, "{}{}", type_, control)
+            }
+            MulDetails::Float(arith) => {
+                write!(f, "{}", arith)
+            }
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MulIntControl {
     Low,
     High,
     Wide,
+}
+
+impl std::fmt::Display for MulIntControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulIntControl::Low => write!(f, ".lo"),
+            MulIntControl::High => write!(f, ".hi"),
+            MulIntControl::Wide => write!(f, ".wide"),
+        }
+    }
 }
 
 #[derive(Copy, Clone)]

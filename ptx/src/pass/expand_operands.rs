@@ -48,11 +48,7 @@ fn run_method<'input>(
         import_as: method.import_as,
         tuning: method.tuning,
         linkage: method.linkage,
-        is_kernel: method.is_kernel,
-        flush_to_zero_f32: method.flush_to_zero_f32,
-        flush_to_zero_f16f64: method.flush_to_zero_f16f64,
-        rounding_mode_f32: method.rounding_mode_f32,
-        rounding_mode_f16f64: method.rounding_mode_f16f64,
+        kernel_attributes: method.kernel_attributes,
     })
 }
 
@@ -183,6 +179,13 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         let id = self
             .resolver
             .register_unnamed(Some((ast::Type::Scalar(scalar_t), state_space)));
+
+        let value = if scalar_t.kind() == ast::ScalarKind::Bit {
+            ast::ImmediateValue::U64(value.get_bits())
+        } else {
+            value
+        };
+
         self.result.push(Statement::Constant(ConstantDefinition {
             dst: id,
             typ: scalar_t,
