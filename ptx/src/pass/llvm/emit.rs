@@ -34,7 +34,9 @@ use llvm_zluda::utils::Context;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
 use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
-use ptx_parser::{CpAsyncArgs, CpAsyncDetails, FunnelShiftMode, Mul24Control, ShfArgs};
+use ptx_parser::{
+    CpAsyncArgs, CpAsyncDetails, FunnelShiftMode, Mul24Control, ShfArgs, VariableInfo,
+};
 
 struct Builder(LLVMBuilderRef);
 
@@ -260,6 +262,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 get_state_space(var.info.state_space)?,
             )
         };
+        self.emit_linkage(global, &var.info)?;
         self.resolver.register(var.name, global);
         if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(global, align) };
@@ -362,6 +365,47 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             }
         );
         self.emit_fn_attribute(fn_, "target-features", &*value)
+    }
+
+    fn emit_linkage(
+        &self,
+        global: LLVMValueRef,
+        var_info: &VariableInfo<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let (linkage, visibility, extern_init) = match var_info.state_space {
+            ast::StateSpace::Const | ast::StateSpace::Global => (
+                LLVMLinkage::LLVMExternalLinkage,
+                LLVMVisibility::LLVMDefaultVisibility,
+                true,
+            ),
+            ast::StateSpace::Shared
+            | ast::StateSpace::SharedCluster
+            | ast::StateSpace::SharedCta
+                if var_info.array_init.is_empty() =>
+            {
+                (
+                    LLVMLinkage::LLVMExternalLinkage,
+                    LLVMVisibility::LLVMDefaultVisibility,
+                    false,
+                )
+            }
+            ast::StateSpace::Shared
+            | ast::StateSpace::SharedCluster
+            | ast::StateSpace::SharedCta => (
+                LLVMLinkage::LLVMPrivateLinkage,
+                LLVMVisibility::LLVMHiddenVisibility,
+                false,
+            ),
+            _ => return Err(error_unreachable()),
+        };
+        unsafe {
+            LLVMSetLinkage(global, linkage);
+            LLVMSetVisibility(global, visibility);
+            if extern_init {
+                LLVMSetExternallyInitialized(global, 1);
+            }
+        }
+        Ok(())
     }
 }
 
