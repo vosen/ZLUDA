@@ -153,6 +153,26 @@ pub(crate) fn synchronize() -> hipError_t {
     unsafe { hipDeviceSynchronize() }
 }
 
+pub(crate) fn synchronize_v2(ctx: &Context) -> hipError_t {
+    let mut current_device = 0;
+    unsafe { hipGetDevice(&mut current_device)? };
+    let _dev_drop = if current_device != ctx.device {
+        unsafe { hipSetDevice(ctx.device) }?;
+        Some(SetDeviceOnDrop(current_device))
+    } else {
+        None
+    };
+    unsafe { hipDeviceSynchronize() }
+}
+
+struct SetDeviceOnDrop(i32);
+
+impl Drop for SetDeviceOnDrop {
+    fn drop(&mut self) {
+        unsafe { hipSetDevice(self.0) }.ok();
+    }
+}
+
 pub(crate) fn set_current(raw_ctx: CUcontext) -> CUresult {
     let new_device = if raw_ctx.0 == ptr::null_mut() {
         STACK.with(|stack| {

@@ -83,6 +83,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxSetFlags,
             cuCtxSetLimit,
             cuCtxSynchronize,
+            cuCtxSynchronize_v2,
             cuDeviceComputeCapability,
             cuDeviceGet,
             cuDeviceGetAttribute,

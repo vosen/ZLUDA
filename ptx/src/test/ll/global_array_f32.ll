@@ -1,4 +1,4 @@
-@foobar = addrspace(1) global [4 x float] [float 1.000000e+00, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00]
+@foobar = addrspace(1) externally_initialized global [4 x float] [float 1.000000e+00, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00]
 
 define amdgpu_kernel void @global_array_f32(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #0 {
   %"41" = alloca i64, align 8, addrspace(5)

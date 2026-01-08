@@ -1,4 +1,4 @@
-@constparams = addrspace(4) global [4 x i16] [i16 10, i16 20, i16 30, i16 40], align 8
+@constparams = addrspace(4) externally_initialized global [4 x i16] [i16 10, i16 20, i16 30, i16 40], align 8
 
 define amdgpu_kernel void @const(ptr addrspace(4) byref(i64) %"52", ptr addrspace(4) byref(i64) %"53") #0 {
   %"54" = alloca i64, align 8, addrspace(5)
