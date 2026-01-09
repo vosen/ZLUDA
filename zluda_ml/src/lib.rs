@@ -8,6 +8,7 @@ macro_rules! unimplemented_fn {
         $(
             #[no_mangle]
             #[allow(improper_ctypes_definitions)]
+            #[allow(unused_variables)]
             pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 impl_common::unimplemented()
             }

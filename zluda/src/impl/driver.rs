@@ -399,6 +399,10 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         }
         CUresult::SUCCESS
     }
+
+    unsafe extern "system" fn load_compilers() -> cuda_types::cuda::CUresult {
+        CUresult::SUCCESS
+    }
 }
 
 static HYBRID_RUNTIME_HANDLE: Mutex<Option<Library>> = Mutex::new(None);

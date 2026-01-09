@@ -42,6 +42,7 @@ struct Cargo {
 }
 
 struct Project {
+    #[cfg_attr(unix, allow(unused))]
     manifest_path: PathBuf,
     name: String,
     target_name: String,
@@ -133,7 +134,7 @@ impl Project {
         )
     }
 
-    #[cfg_attr(unix, allow(unused))]
+    #[cfg(windows)]
     fn additional_windows_paths<'a>(
         &'a self,
         target_dir: &'a PathBuf,
@@ -210,6 +211,7 @@ impl Project {
     }
 }
 
+#[cfg(windows)]
 struct WindowsPaths {
     // relative path inside zip file, excluding "zluda" prefix
     zip_path: PathBuf,
@@ -243,8 +245,10 @@ struct ZludaMetadata {
     #[serde(default)]
     linux_symlinks: Vec<String>,
     #[serde(default)]
+    #[cfg_attr(unix, allow(unused))]
     windows_paths: Vec<String>,
     #[serde(default)]
+    #[cfg_attr(unix, allow(unused))]
     windows_extra_files: HashMap<String, String>,
 }
 
