@@ -366,7 +366,8 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiTrace {
                 pctx: *mut cuda_types::cuda::CUcontext,
                 dev: cuda_types::cuda::CUdevice
             ) -> cuda_types::cuda::CUresult,
-            [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult
+            [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
+            [12] = load_compilers() -> cuda_types::cuda::CUresult
         }
     }
 
@@ -563,7 +564,7 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApiTrace {
     }
 
     dark_api_fn_redirect_log! {
-        UNKNOWN_CHECKS {
+        CONTEXT_CHECKS {
             [2] = context_check(
                 ctx_in: cuda_types::cuda::CUcontext,
                 result1: *mut u32,

@@ -222,7 +222,7 @@ impl<'a> DarkApiTable<'a> {
 
 dark_api! {
     cuda;
-    "{6BD5FB6C-5BF4-E74A-8987-D93912FD9DF9}" => CUDART_INTERFACE[10] {
+    "{6BD5FB6C-5BF4-E74A-8987-D93912FD9DF9}" => CUDART_INTERFACE[13] {
         [0] = SIZE_OF,
         [1] = get_module_from_cubin(
             module: *mut cuda_types::cuda::CUmodule,
@@ -246,7 +246,9 @@ dark_api! {
             arg3: *mut std::ffi::c_void,
             arg4: *mut std::ffi::c_void,
             arg5: u32
-        ) -> cuda_types::cuda::CUresult
+        ) -> cuda_types::cuda::CUresult,
+        // In original CUDA it loads PTX compiler, libnvvm, tileir
+        [12] = load_compilers() -> cuda_types::cuda::CUresult
     },
     "{42D85A81-23F6-CB47-8298-F6E78A3AECDC}" => TOOLS_TLS[4] {
         [0] = SIZE_OF
@@ -321,7 +323,7 @@ dark_api! {
         ) -> cuda_types::cuda::CUresult
     },
     // This functions check for some bits that are never observably set
-    "{263E8860-7CD2-6143-92F6-BBD5006DFA7E}" => UNKNOWN_CHECKS[4] {
+    "{263E8860-7CD2-6143-92F6-BBD5006DFA7E}" => CONTEXT_CHECKS[4] {
         [0] = SIZE_OF,
         [2] = context_check(
             ctx_in: cuda_types::cuda::CUcontext,
