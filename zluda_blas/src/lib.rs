@@ -87,3 +87,6 @@ mod windows {
             .unwrap_or(std::ptr::null_mut())
     }
 }
+
+#[cfg(test)]
+mod tests;

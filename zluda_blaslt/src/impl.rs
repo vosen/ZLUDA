@@ -2,32 +2,7 @@ use cuda_types::{cublas::*, cublaslt::*};
 use hip_runtime_sys::hipStream_t;
 use hipblaslt_sys::*;
 use std::mem;
-use zluda_common::{from_cuda_object, FromCuda, ZludaObject};
-
-pub struct Handle {
-    handle: hipblasLtHandle_t,
-}
-
-impl Handle {
-    fn new() -> Self {
-        Self {
-            handle: unsafe { mem::zeroed() },
-        }
-    }
-}
-
-impl ZludaObject for Handle {
-    const COOKIE: usize = 0x49dec801578301ee;
-
-    type Error = cublasError_t;
-    type CudaHandle = cublasLtHandle_t;
-
-    fn drop_checked(&mut self) -> cublasStatus_t {
-        Ok(())
-    }
-}
-
-from_cuda_object!(Handle);
+use zluda_common::{handle::BlasLtHandle, FromCuda, ZludaObject};
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cublasStatus_t {
@@ -60,14 +35,17 @@ pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> :
 }
 
 pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
-    let mut zluda_blaslt_handle = Handle::new();
-    unsafe { hipblasLtCreate(&mut zluda_blaslt_handle.handle) }?;
-    *handle = Handle::wrap(zluda_blaslt_handle);
+    let mut hipblas_lt = unsafe { std::mem::zeroed() };
+    unsafe { hipblasLtCreate(&mut hipblas_lt) }?;
+
+    let zluda_handle = BlasLtHandle::new(hipblas_lt);
+
+    *handle = BlasLtHandle::wrap(zluda_handle);
     Ok(())
 }
 
 pub(crate) fn destroy(handle: cublasLtHandle_t) -> cublasStatus_t {
-    zluda_common::drop_checked::<Handle>(handle)
+    zluda_common::drop_checked::<BlasLtHandle>(handle)
 }
 
 fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
@@ -80,7 +58,7 @@ fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
 }
 
 pub(crate) fn matmul(
-    light_handle: &Handle,
+    light_handle: &BlasLtHandle,
     compute_desc: hipblasLtMatmulDesc_t,
     alpha: *const ::core::ffi::c_void,
     a: *const ::core::ffi::c_void,
@@ -99,7 +77,7 @@ pub(crate) fn matmul(
 ) -> cublasStatus_t {
     unsafe {
         hipblasLtMatmul(
-            light_handle.handle,
+            light_handle.hipblas_lt,
             compute_desc,
             alpha,
             a,
@@ -121,7 +99,7 @@ pub(crate) fn matmul(
 }
 
 pub(crate) fn matmul_algo_get_heuristic(
-    light_handle: &Handle,
+    light_handle: &BlasLtHandle,
     operation_desc: hipblasLtMatmulDesc_t,
     a_desc: hipblasLtMatrixLayout_t,
     b_desc: hipblasLtMatrixLayout_t,
@@ -135,7 +113,7 @@ pub(crate) fn matmul_algo_get_heuristic(
     let mut hip_algos = vec![unsafe { mem::zeroed() }; requested_algo_count as usize];
     unsafe {
         hipblasLtMatmulAlgoGetHeuristic(
-            light_handle.handle,
+            light_handle.hipblas_lt,
             operation_desc,
             a_desc,
             b_desc,
