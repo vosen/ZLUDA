@@ -398,6 +398,7 @@ test_ptx!(
     ],
     [4294967295u32, 65535]
 );
+test_ptx!(uint_to_fp_bf16, [1u32, 3u32], [0x3F80u32]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported
