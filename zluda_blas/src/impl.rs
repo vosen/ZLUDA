@@ -404,8 +404,8 @@ mod tests {
 
     #[test_cuda]
     fn can_pass_into_blaslt(api: impl CublasApi) {
-        use cuda_types::cuda::cudaDataType_t;
         use cuda_types::cublas::cublasComputeType_t;
+        use cuda_types::cuda::cudaDataType_t;
 
         let mut handle = unsafe { std::mem::zeroed() };
         api.cublasCreate_v2(&mut handle);
