@@ -1,4 +1,4 @@
-# Precompiling:
+# Precompiling
 
 Consider precompiling the GPU code with `zluda_precompile` if you are trying to run a large application.
 `zluda_precompile` scans the location, extracts all the GPU code, compiles it, and saves it to the cache.
