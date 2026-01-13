@@ -156,6 +156,43 @@ fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str>
         "ident",
         any.verify_map(|(t, _)| {
             if let Token::Ident(text) = t {
+                if matches!(
+                    text,
+                    "%envreg1"
+                        | "%envreg2"
+                        | "%envreg3"
+                        | "%envreg4"
+                        | "%envreg5"
+                        | "%envreg6"
+                        | "%envreg7"
+                        | "%envreg8"
+                        | "%envreg9"
+                        | "%envreg10"
+                        | "%envreg11"
+                        | "%envreg12"
+                        | "%envreg13"
+                        | "%envreg14"
+                        | "%envreg15"
+                        | "%envreg16"
+                        | "%envreg17"
+                        | "%envreg18"
+                        | "%envreg19"
+                        | "%envreg20"
+                        | "%envreg21"
+                        | "%envreg22"
+                        | "%envreg23"
+                        | "%envreg24"
+                        | "%envreg25"
+                        | "%envreg26"
+                        | "%envreg27"
+                        | "%envreg28"
+                        | "%envreg29"
+                        | "%envreg30"
+                        | "%envreg31"
+                        | "%envreg32"
+                ) {
+                    stream.state.errors.push(PtxError::UnsupportedSreg(text));
+                }
                 Some(text)
             } else if let Some(text) = t.opcode_text() {
                 Some(text)
@@ -164,7 +201,7 @@ fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str>
             }
         }),
     )
-    .parse_next(stream)
+    .parse_next(&mut stream.input)
 }
 
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
@@ -1456,6 +1493,8 @@ pub enum PtxError<'input> {
     UnrecognizedStatement(&'input str),
     #[error("Unrecognized directive {0:?}")]
     UnrecognizedDirective(&'input str),
+    #[error("Unsupported special register {0:?}")]
+    UnsupportedSreg(&'input str),
 }
 
 #[derive(Debug)]

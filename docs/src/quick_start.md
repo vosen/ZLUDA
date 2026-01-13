@@ -8,10 +8,11 @@
 ZLUDA evolves quickly, we recommend downloading the [most recent pre-release version](https://github.com/vosen/ZLUDA/releases).
 Periodically, we mark a pre-release version as stable, you can download it from the "Releases" section on our [Github page](https://github.com/vosen/ZLUDA).
 
+
 ## Usage
 
 ### Windows
-You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") installed.\
+You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") and HIP SDK (https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html) installed.\
 To run your application either:
 * (_Recommended_) Use ZLUDA launcher:
     ```
