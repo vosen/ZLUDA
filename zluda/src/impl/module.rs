@@ -50,7 +50,11 @@ fn get_best_ptx_and_compile(
         .try_fold(
             None,
             |acc: Option<(&Cow<'_, str>, ptx_parser::Module<'_>)>, src| {
-                let maybe_ast = ptx_parser::parse_module_checked(src);
+                let maybe_ast = if cfg!(debug_assertions) {
+                    ptx_parser::parse_module_checked(src)
+                } else {
+                    Ok(ptx_parser::parse_module_unchecked(src))
+                };
                 match maybe_ast {
                     Err(_) => ControlFlow::Continue(acc),
                     Ok(ast) => {
