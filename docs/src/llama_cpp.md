@@ -1,6 +1,6 @@
 # llama.cpp
 
-llama.cpp works at native speeds if compiled for CUDA architecture 86 and with cuBLAS enabled, like so:
+llama.cpp runs at native speed when compiled for CUDA architecture 86 and with cuBLAS enabled:
 ```
 cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86" -DGGML_CUDA_FORCE_CUBLAS=true
 ```
