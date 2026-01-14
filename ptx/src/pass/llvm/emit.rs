@@ -3181,12 +3181,15 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        let src3 = self.resolver.value(arguments.src3)?;
         let less_than =
             unsafe { LLVMBuildICmp(self.builder, cmp_op, src1, src2, LLVM_UNNAMED.as_ptr()) };
         let sub1 = unsafe { LLVMBuildSub(self.builder, src1, src2, LLVM_UNNAMED.as_ptr()) };
         let sub2 = unsafe { LLVMBuildSub(self.builder, src2, src1, LLVM_UNNAMED.as_ptr()) };
+        let subtraction =
+            unsafe { LLVMBuildSelect(self.builder, less_than, sub2, sub1, LLVM_UNNAMED.as_ptr()) };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildSelect(self.builder, less_than, sub2, sub1, dst)
+            LLVMBuildAdd(self.builder, subtraction, src3, dst)
         });
         Ok(())
     }
