@@ -18,11 +18,8 @@ use std::{
     str::Utf8Error,
 };
 
-pub mod handle;
-
-pub const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
-pub const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
-pub const COMPUTE_CAPABILITY_MINOR: i32 = 8;
+pub mod constants;
+use constants::*;
 
 pub fn append_suffix(name: *mut ::core::ffi::c_char, len: usize) {
     let buffer = unsafe { std::slice::from_raw_parts(name, len) };

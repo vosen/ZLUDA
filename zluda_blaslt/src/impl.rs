@@ -2,9 +2,69 @@ use cuda_types::{cublas::*, cublaslt::*};
 use hip_runtime_sys::hipStream_t;
 use hipblaslt_sys::*;
 use std::mem;
-use zluda_common::{
-    handle::{BlasHandle, BlasLtHandle, BlasLtHandleGuard},
-    FromCuda, ZludaObject,
+use zluda_common::{constants, FromCuda, ZludaObject};
+
+pub struct Handle {
+    handle: hipblasLtHandle_t,
+}
+
+impl Handle {
+    pub fn new(handle: hipblasLtHandle_t) -> Self {
+        Self { handle }
+    }
+}
+
+impl ZludaObject for Handle {
+    const COOKIE: usize = 0xd1d9cb43416c9620;
+    type Error = cublasError_t;
+    type CudaHandle = cublasLtHandle_t;
+    fn drop_checked(&mut self) -> cublasStatus_t {
+        unsafe { hipblaslt_sys::hipblasLtDestroy(self.handle) }?;
+        Ok(())
+    }
+}
+
+struct WrappedCublasLtHandle(cublasLtHandle_t);
+
+unsafe impl Send for WrappedCublasLtHandle {}
+unsafe impl Sync for WrappedCublasLtHandle {}
+
+// This is repr(c) because it needs to be compatible with Handle in zluda_blas.
+#[repr(C)]
+struct BlasHandle {
+    blas_lt: WrappedCublasLtHandle,
+}
+
+impl ZludaObject for BlasHandle {
+    const COOKIE: usize = constants::BLAS_HANDLE_COOKIE;
+    type Error = cublasError_t;
+    type CudaHandle = cublasLtHandle_t;
+    fn drop_checked(&mut self) -> cublasStatus_t {
+        // This is managed by zluda_blas
+        Ok(())
+    }
+}
+
+#[allow(unused_imports)]
+impl<'a> FromCuda<'a, cublasLtHandle_t, cublasError_t> for &'a Handle {
+    fn from_cuda(handle: &'a cublasLtHandle_t) -> Result<&'a Handle, cublasError_t> {
+        // Try interpreting as a direct BlasLtHandle
+        let live_check = zluda_common::as_ref(handle).ok_or(cublasError_t::INVALID_VALUE)?;
+        if let Ok(blas_lt) = live_check.as_result() {
+            return Ok(blas_lt);
+        }
+
+        // Fallback: handle may be a BlasHandle with an embedded BlasLtHandle
+        let live_check =
+            zluda_common::as_ref::<BlasHandle>(handle).ok_or(cublasError_t::INVALID_VALUE)?;
+        let blas_handle = live_check.as_result()?;
+        Ok(zluda_common::as_ref::<Handle>(&blas_handle.blas_lt.0)
+            .ok_or(cublasError_t::INVALID_VALUE)?
+            .as_result()?)
+    }
+}
+const _: fn() = || {
+    let _ = std::mem::transmute::<<Handle as zluda_common::ZludaObject>::CudaHandle, usize>;
 };
 
 #[cfg(debug_assertions)]
@@ -41,34 +101,26 @@ pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
     let mut hipblas_lt = unsafe { std::mem::zeroed() };
     unsafe { hipblasLtCreate(&mut hipblas_lt) }?;
 
-    let zluda_handle = BlasLtHandle::new(hipblas_lt);
+    let zluda_handle = Handle::new(hipblas_lt);
 
-    *handle = BlasLtHandle::wrap(zluda_handle);
+    *handle = Handle::wrap(zluda_handle);
     Ok(())
 }
 
 pub(crate) fn destroy(handle: cublasLtHandle_t) -> cublasStatus_t {
     // Try interpreting as a direct BlasLtHandle
-    let result = zluda_common::drop_checked::<BlasLtHandle>(handle);
+    println!("destroying cublasLtHandle_t {:p}", handle);
+    let result = zluda_common::drop_checked::<Handle>(handle);
     if result != cublasStatus_t::ERROR_INVALID_VALUE {
         return result;
     }
 
-    // Fallback: handle may be a BlasHandle with an embedded BlasLtHandle
-    let handle = unsafe { std::mem::transmute(handle) };
+    // Fallback: handle may be a BlasHandle with an embedded blas_lt
+    println!("trying as BlasHandle");
     let blas_handle = zluda_common::as_ref::<BlasHandle>(&handle)
         .ok_or(cublasError_t::INVALID_VALUE)?
         .as_result()?;
-    if let Some(mut blas_lt) = blas_handle
-        .blas_lt
-        .write()
-        .map_err(|_| cublasError_t::INTERNAL_ERROR)?
-        .take()
-    {
-        blas_lt.drop_checked()?;
-    }
-
-    Ok(())
+    zluda_common::drop_checked::<Handle>(blas_handle.blas_lt.0)
 }
 
 fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
@@ -81,7 +133,7 @@ fn cuda_algo_from_hip(hip: hipblasLtMatmulAlgo_t) -> cublasLtMatmulAlgo_t {
 }
 
 pub(crate) fn matmul(
-    light_handle: BlasLtHandleGuard,
+    light_handle: &Handle,
     compute_desc: hipblasLtMatmulDesc_t,
     alpha: *const ::core::ffi::c_void,
     a: *const ::core::ffi::c_void,
@@ -100,7 +152,7 @@ pub(crate) fn matmul(
 ) -> cublasStatus_t {
     unsafe {
         hipblasLtMatmul(
-            light_handle.hipblas_lt,
+            light_handle.handle,
             compute_desc,
             alpha,
             a,
@@ -122,7 +174,7 @@ pub(crate) fn matmul(
 }
 
 pub(crate) fn matmul_algo_get_heuristic(
-    light_handle: BlasLtHandleGuard,
+    light_handle: &Handle,
     operation_desc: hipblasLtMatmulDesc_t,
     a_desc: hipblasLtMatrixLayout_t,
     b_desc: hipblasLtMatrixLayout_t,
@@ -136,7 +188,7 @@ pub(crate) fn matmul_algo_get_heuristic(
     let mut hip_algos = vec![unsafe { mem::zeroed() }; requested_algo_count as usize];
     unsafe {
         hipblasLtMatmulAlgoGetHeuristic(
-            light_handle.hipblas_lt,
+            light_handle.handle,
             operation_desc,
             a_desc,
             b_desc,
