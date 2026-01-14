@@ -9,7 +9,7 @@ pub struct Handle {
 }
 
 impl Handle {
-    pub fn new(handle: hipblasLtHandle_t) -> Self {
+    fn new(handle: hipblasLtHandle_t) -> Self {
         Self { handle }
     }
 }

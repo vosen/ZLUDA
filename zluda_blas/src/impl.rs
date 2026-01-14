@@ -7,12 +7,12 @@ use zluda_common::{constants, from_cuda_object, ZludaObject};
 // This is repr(c) because it needs to be compatible with BlasHandle in zluda_blaslt.
 #[repr(C)]
 pub struct Handle {
-    pub blas_lt: usize,
-    pub handle: rocblas_handle,
+    blas_lt: usize,
+    handle: rocblas_handle,
 }
 
 impl Handle {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             blas_lt: 0,
             handle: unsafe { mem::zeroed() },

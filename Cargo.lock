@@ -3995,7 +3995,6 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "hip_runtime-sys",
- "hipblaslt-sys",
  "libloading",
  "paste",
  "rocblas-sys",
