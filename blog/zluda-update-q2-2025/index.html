@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Courtesy of https://github.com/LeoColomb/perfectmotherfuckingwebsite -->
+  <style>
+    body {
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 0 10px;
+      font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      color: #444;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+    }
+
+    h1 small, h2 small {
+      font-size:16px;
+      font-weight:normal;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        color: #c9d1d9;
+        background: #0d1117;
+      }
+
+      a:link {
+        color: #58a6ff;
+      }
+
+      a:visited {
+        color: #8e96f0;
+      }
+    }
+    
+    
+    /* Recommended code block styling (https://www.getzola.org/documentation/content/syntax-highlighting/#styling-codeblocks) */
+    pre {
+      padding: 1rem;
+      overflow: auto;
+    }
+    /* The line numbers already provide some kind of left/right padding */
+    pre[data-linenos] {
+      padding: 1rem 0;
+    }
+    pre table td {
+      padding: 0;
+    }
+    /* The line number cells */
+    pre table td:nth-of-type(1) {
+      text-align: center;
+      vertical-align: top;
+      user-select: none;
+    }
+    pre mark {
+      /* If you want your highlights to take the full width */
+      display: block;
+      /* The default background colour of a mark is bright yellow */
+      background-color: rgba(254, 252, 232, 0.9);
+    }
+    pre table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZLUDA - ZLUDA update Q2 2025 - bigger team, more groundwork, less bugs</title>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+    <h1>
+      <div>
+        <a style="color: #0d1117 !important; text-decoration:none;" href="https://vosen.github.io/ZLUDA">ZLUDA</a>
+        <div style="float: right;">
+          <a href="https://github.com/vosen/ZLUDA"><img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white"/></a> <a href="https://discord.gg/sg6BNzXuc7"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white"/></a>
+        </div>
+      </div>
+      <small>
+        <p style="margin-top: 0.25em">ZLUDA allows to run unmodified CUDA applications on non-NVIDIA GPUs</p>
+      </small>
+    </h1>
+      
+<h2 class="title">
+  ZLUDA update Q2 2025 - bigger team, more groundwork, less bugs
+  <small><div>2025-07-02</div></small>
+</h2>
+<p>Welcome to the newest ZLUDA update. This quarter we doubled the size of our development team (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#zluda-team-doubles-in-size">ZLUDA team doubles in size</a>), resolved a critical regression in the AMD driver (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#comgr-abi-break">comgr ABI break</a>), improved correctness of the code emitted by the compiler (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#road-to-bit-accurate-execution">Road to bit-accurate execution</a>), set up automated builds (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#automated-builds-on-github">Automated builds on GitHub</a>), implemented actually useful logging (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#improved-logging">Improved logging</a>), made tiny progress on PhysX (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#32-bit-physx-update">32 bit PhysX update</a>) and made a much bigger progress on llm.c (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#llm-c-0-to-552">llm.c: 0 to 552</a>).</p>
+<h3 id="zluda-team-doubles-in-size">ZLUDA team doubles in size</h3>
+<p>I am pleased to announce that ZLUDA has doubled the size of its full-time development team and now has two developers working on the project.</p>
+<p>Welcome Violet. They joined the project less than a month ago and already made significant contributions. For more details, feel free to check out the <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/#llm-c-0-to-552">llm.c: 0 to 552</a> section.</p>
+<h3 id="comgr-abi-break">comgr ABI break</h3>
+<p>GPU runtimes (CUDA, ROCm/HIP, ZLUDA, OpenCL, etc.) must be able to compile GPU code during run time of an application. This is necessary to ensure forward compatibility: GPU code developed in the past should be able to compile on new GPU architectures.</p>
+<p>ROCm/HIP run time compilation library is comgr (ROCm-CompilerSupport). It's a small, focused library with a verbose, but well-designed interface. It ships on both Linux and Windows and has been unproblematic. Until now.</p>
+<p>ROCm/HIP 6.4 shipped with a subtle ABI break in comgr. comgr's interface is fairly generic, it consists of a handful of functions, with the most important being amd_comgr_do_action. This function takes kind  parameter: the kind LLVM of action you want to do: compilation, linking, disassembly.</p>
+<p>The problem is that in ROCm/HIP 6.4, comgr ships with a new ABI (v3) which reordered the integer values assigned to each of the action. This meant that on the new ABI ZLUDA suddenly started requesting comgr to e.g. do linking instead of compilation and this led to silent, unexplainable failures.</p>
+<p>On Windows the problem is even worse: AMD somehow shipped a mixture of v2 and v3. The library advertises itself as version v2.9, but actually uses ABI v3.</p>
+<p>This was fixed in <a href="https://github.com/vosen/ZLUDA/pull/364">#364</a> and <a href="https://github.com/vosen/ZLUDA/pull/366">#366</a>. If you are using some other project which uses ROCm/HIP and which suddenly started failing on Linux with ROCm 6.4 and on Windows with Adrenalin 25.5.1 that's why.</p>
+<h3 id="road-to-bit-accurate-execution">Road to bit-accurate execution</h3>
+<p>The stated goal of ZLUDA is to execute unmodified CUDA binaries on non-NVIDIA GPUs. A consequence of that is that we must execute every on-GPU instruction bit-exactly or, if bit-exact execution is not possible, within error bounds of the NVIDIA cards.</p>
+<p>Old, pre-rollback ZLUDA code would cut a lot of corners here and ignore certain instruction modifiers or did not execute them with full precision.</p>
+<p>New ZLUDA is doing a lot better on that front. We verify correctness with PTX &quot;sweep&quot; tests: for every relevant instruction with every possible instruction modifier we check that for every possible input ZLUDA produces correct output. The project lives <a href="https://github.com/vosen/ptx_tests">here</a>, outside of the main repo.</p>
+<p>This test suite was verified against original NVIDIA's CUDA but was never actually used with ZLUDA. We have now ran ZLUDA under this test suite and uncovered some bugs in the compiler, fixed here: <a href="https://github.com/vosen/ZLUDA/pull/379">#379</a>. Not every instruction went through this process yet, but already some of the trickiest cases (like cvt instruction) are bit-accurate.</p>
+<p>Special thanks to our friends at <a href="https://scale-lang.com/">SCALE lang</a>, who contributed a major refactor to the test suite <a href="https://github.com/vosen/ptx_tests/pull/1">here</a>.</p>
+<h3 id="automated-builds-on-github">Automated builds on GitHub</h3>
+<p>As of <a href="https://github.com/vosen/ZLUDA/pull/358">#358</a>, we now post automatic builds to GitHub. You don't have to build from source anymore if you want to try the freshest code. This is not completely finished yet, as we want to post those builds into &quot;prerelease&quot; section on GitHub page for better discoverability.</p>
+<h3 id="improved-logging">Improved logging</h3>
+<p>The first step to enabling any CUDA application on ZLUDA (no matter if it's a game, 3D suite, ML library) is to precisely log all the ways an application interact with CUDA, including calls to Dark API and calls to performance libraries.</p>
+<p>As of the (giant) PR <a href="https://github.com/vosen/ZLUDA/pull/372">#372</a> we now have a much better logging implementation that logs interactions that were not collected previously. It can even handle intermediate interactions (e.g. can show us when and how cuBLAS uses cuBLASLt or when and how cuDNN uses Driver API).</p>
+<h3 id="32-bit-physx-update">32 bit PhysX update</h3>
+<p>Minor update on the 32 bit PhysX. @Groowy from ZLUDA Discord started poking at the first step of 32 bit PhysX support: collecting CUDA logs. This quickly uncovered bugs in ZLUDA, tracked in #374. Because some of them might affect 64 bit CUDA this step was pulled into official roadmap. Only this step though, full 32 bit PhysX support will still require open source contributions.</p>
+<h3 id="llm-c-0-to-552">llm.c: 0 to 552</h3>
+<p>The extensive effort outlined in the previous paragraphs may appear random at first glance; however, they serve as stepping stones toward our first milestone: llm.c. Just the groundwork is not enough, someone must work on the workload directly.</p>
+<p>We are focusing on llm.c test project: test_gpt2fp32cu. It's fairly small, but for ZLUDA it's the first project using CUDA Runtime and the first project using CUDA performance libraries (cuBLAS). It does 8186 CUDA calls to 44 different functions</p>
+<p>Violet landed a flurry of commits (<a href="https://github.com/vosen/ZLUDA/pull/377">#377</a>, <a href="https://github.com/vosen/ZLUDA/pull/380">#380</a>, <a href="https://github.com/vosen/ZLUDA/pull/381">#381</a>, <a href="https://github.com/vosen/ZLUDA/pull/382">#382</a>, <a href="https://github.com/vosen/ZLUDA/pull/383">#383</a>, <a href="https://github.com/vosen/ZLUDA/pull/386">#386</a>, <a href="https://github.com/vosen/ZLUDA/pull/387">#387</a>, <a href="https://github.com/vosen/ZLUDA/pull/388">#388</a>, <a href="https://github.com/vosen/ZLUDA/pull/389">#389</a>, <a href="https://github.com/vosen/ZLUDA/pull/390">#390</a>, <a href="https://github.com/vosen/ZLUDA/pull/391">#391</a>, <a href="https://github.com/vosen/ZLUDA/pull/394">#394</a>) for llm.c. Before, ZLUDA failed at the very first CUDA call and now it fails at the 552nd. With 16 of 44 functions implemented we hope to have llm.c running soon. All that work of course will apply to other, more complex projects, like PyTorch.</p>
+<p>We would love to hear your thoughts in the comments below. Until next time!</p>
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="vosen/zluda_website"
+        data-repo-id="R_kgDOM5Co2g"
+        data-category="Announcements"
+        data-category-id="DIC_kwDOM5Co2s4Ci6Tj"
+        data-mapping="pathname"
+        data-strict="0"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="top"
+        data-theme="light"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+    </div>
+  </section>
+</body>
+
+</html>

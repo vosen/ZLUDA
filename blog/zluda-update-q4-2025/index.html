@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Courtesy of https://github.com/LeoColomb/perfectmotherfuckingwebsite -->
+  <style>
+    body {
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 0 10px;
+      font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      color: #444;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+    }
+
+    h1 small, h2 small {
+      font-size:16px;
+      font-weight:normal;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        color: #c9d1d9;
+        background: #0d1117;
+      }
+
+      a:link {
+        color: #58a6ff;
+      }
+
+      a:visited {
+        color: #8e96f0;
+      }
+    }
+    
+    
+    /* Recommended code block styling (https://www.getzola.org/documentation/content/syntax-highlighting/#styling-codeblocks) */
+    pre {
+      padding: 1rem;
+      overflow: auto;
+    }
+    /* The line numbers already provide some kind of left/right padding */
+    pre[data-linenos] {
+      padding: 1rem 0;
+    }
+    pre table td {
+      padding: 0;
+    }
+    /* The line number cells */
+    pre table td:nth-of-type(1) {
+      text-align: center;
+      vertical-align: top;
+      user-select: none;
+    }
+    pre mark {
+      /* If you want your highlights to take the full width */
+      display: block;
+      /* The default background colour of a mark is bright yellow */
+      background-color: rgba(254, 252, 232, 0.9);
+    }
+    pre table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZLUDA - ZLUDA update Q4 2025 - ROCm7, Windows, full llama.cpp and more</title>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+    <h1>
+      <div>
+        <a style="color: #0d1117 !important; text-decoration:none;" href="https://vosen.github.io/ZLUDA">ZLUDA</a>
+        <div style="float: right;">
+          <a href="https://github.com/vosen/ZLUDA"><img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white"/></a> <a href="https://discord.gg/sg6BNzXuc7"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white"/></a>
+        </div>
+      </div>
+      <small>
+        <p style="margin-top: 0.25em">ZLUDA allows to run unmodified CUDA applications on non-NVIDIA GPUs</p>
+      </small>
+    </h1>
+      
+<h2 class="title">
+  ZLUDA update Q4 2025 - ROCm7, Windows, full llama.cpp and more
+  <small><div>2026-01-13</div></small>
+</h2>
+<p>Hi, and welcome to a new ZLUDA update! It's been a  busy quarter and while we didn't quite reach our goal of providing robust PyTorch support by the end of the year. We now have complete llama.cpp support (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#full-llama-cpp-support">Full llama.cpp support</a>) and significantly improved Windows support (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#better-windows-support">Better Windows support</a>). We've also made several other improvements in preparation for PyTorch (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#zluda-now-ships-with-a-bundled-llvm">ZLUDA now ships with a bundled LLVM</a>, <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#compiler-performance-improvements">Compiler performance improvements</a>, <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#rocm-7-works-now">ROCm 7 works now</a>, <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/#pytorch-support-underway">PyTorch support underway</a>).</p>
+<h1 id="zluda-now-ships-with-a-bundled-llvm">ZLUDA now ships with a bundled LLVM.</h1>
+<p>Historically, ZLUDA has used the AMD-provided comgr library (&quot;Code Object Manager API&quot;), which is installed on your system as part of ROCm. This library is a wrapper around LLVM. It works well for the most part, but there are two caveats:</p>
+<ul>
+<li>AMD LLVM is often buggy and AMD does not backport LLVM fixes. If a user has an older, &quot;stable&quot; version of LLVM bundled with ROCm, we cannot fix bugs in it. This is especially important for PyTorch because there are patterns in PyTorch GPU code that cause crashes in AMD GPU LLVM purely because due to bugs in the AMDGPU target.</li>
+<li>We can't perform all the optimizations we want. Although we strive to emit the best possible LLVM bitcode, the ZLUDA compiler simply is not an optimizing, SSA-based compiler. There are certain optimizations relevant to machine learning workloads that are beyond our reach without custom LLVM optimization passes.</li>
+</ul>
+<p>We have wanted to ship a ZLUDA-patched LLVM for a long time. As part of the work on llama.cpp and PyTorch we finally did so and started shipping LLVM with ZLUDA. The ZLUDA side was merged in <a href="https://github.com/vosen/ZLUDA/pull/555">#555</a> with required LLVM work done <a href="https://github.com/vosen/llvm-project/commit/f83cd44622f6792d9f1672ce700ab10ee1c23f92">here</a> and <a href="https://github.com/vosen/llvm-project/pull/1">here</a>.</p>
+<p>There's one downside to our new approach: LLVM is a massive project, so building it is time-consuming. Our automatic builds are mostly unaffected because we use sccache. However if you are compiling ZLUDA yourself, expect much longer build times. We recommend that users who want to try work-in-progress builds download prerelease binaries from GitHub. We build binaries for every merged pull request.</p>
+<h1 id="rocm-7-works-now">ROCm 7 works now</h1>
+<p>ROCm 7 has been out for several months already, but we did not start working on it right away. This is partially because we've been busy addressing the issues described in this update and partially because ROCm version updates can introduce hard breaks that take a long time to resolve. Our goal is for ZLUDA to work equally well with both ROCm 6 and ROCm 7, so that we don't have to maintain two separate builds. Upgrading from ROCm 5 to ROCm 6 was a difficult and involved many breaking changes. Granted, most of the changes were necessary and made sense, but it was still a lot of extra work. Thankfully, ROCm 7 is mostly backward compatible. Only two functions broke the ABI, but ZLUDA did not use them. They were also clearly marked as experimental.</p>
+<p>This time, the problem stems from some unfortunate packaging choices and interactions on Windows. The AMD graphics driver ships with <em>all</em> ROCm 5, ROCm 6 and ROCm 7 runtimes simultaneously (respectively <code>amdhip64.dll</code>, <code>amdhip64_6.dll</code> and <code>amdhip64_7.dll</code>). Which is fine; backwards compatibility is good. The problem is with the performance libraries. For some reason, the latest official version of the performance libraries on Windows is 6.4. This version is slightly outdated and relies on amdhip64_6.dll. This can lead to some unfortunate interactions. ZLUDA works with either <code>amdhip64_6.dll</code> or <code>amdhip64_7.dll</code> and prefers to load <code>amdhip64_7.dll</code>. It's possible for ZLUDA to launch, load <code>amdhip64_7.dll</code> , but then load a performance library that loads <code>amdhip64_6.dll</code>. Having both ROCm 7 and ROCm 6 runtimes loaded in a process at the same time and trying to interoperate between them simply does not work and leads to mysterious crashes.</p>
+<p>Since we can't time-travel, we settled on the next best solution: preloading performance libraries into the process and then scanning it for the presence of either <code>amdhip64_6.dll</code> or <code>amdhip64_7.dll</code>. See the details in <a href="https://github.com/vosen/ZLUDA/pull/579">#579</a>. This makes ZLUDA startup slightly slower, but should be fine.
+In the future, we might consider shipping the ROCm performance libraries with ZLUDA. What do you think?</p>
+<h1 id="too-slow-for-katago">Too slow for katago</h1>
+<p>As mentioned in the last update, we now have a mechanism for collecting execution traces that doesn't require you to be a developer. Happily, some of you provided traces of your favorite application. One of those apps was Katago, an ML-based library for playing Go. The trace revealed two things. First, the majority of the required CUDA support for Katago is already in place. Second, the missing component, cuDNN support, is on our priority list.</p>
+<p>Katago uses CUDA in a fairly straightforward manner. However, it utilizes some cuDNN features for which there is no direct ROCm support. After adding missing functionality and various workarounds, Katago finally ran! However, it ran extremely slowly, thousands of times slower than on NVIDIA GPUs. A quick investigation revealed the source of the problem: certain Katago operations have a slow, naive implementation in MIOpen and an optimized implementation in cuDNN. Unfortunately, there's nothing we can do about it. Hopefully, AMD will one day optimize those convolutions and make AMD GPUs a viable target for Katago.</p>
+<p>You can see the whole story here <a href="https://github.com/vosen/ZLUDA/pull/541">#541</a>. Please keep sending us traces. While we might not be able to work on each of them right away, they are important for prioritization and debugging.</p>
+<h1 id="better-windows-support">Better Windows support</h1>
+<p>For most of modern ZLUDA's history, Windows support was an afterthought. Although we ensured that every change compiled on Windows, the loader that injects ZLUDA into an executable was in poor condition. In the last update, we asked you to share traces from your favorite CUDA application, and most of the traces you sent us were from Windows. Or, at least, you attempted to do so given how poorly the ZLUDA loader functioned. This forced us to face reality: we must fix the loader, or we will receive no traces.</p>
+<p>This led to a major (19100 lines added, 2377 lines removed) PR <a href="https://github.com/vosen/ZLUDA/pull/550">#550</a> which brought <code>zluda.exe</code> on Windows to a more acceptable quality and allows ZLUDA to work as well as on Linux.</p>
+<h1 id="full-llama-cpp-support">Full llama.cpp support</h1>
+<p>In the previous update, we announced the initial release of Llama.cpp support. Since then, we have started benchmarking ZLUDA's Llama.cpp support against the top models from Hugging Face. This process revealed several issues, but we are pleased to announce that we currently have full llama.cpp support. Our performance is nearly identical to that of the native ROCm backend. See the documentation <a href="https://zluda.readthedocs.io/latest/llama_cpp.html">here</a> for details on how to build Llama.cpp with the CUDA backend so that it works at full performance with ZLUDA.</p>
+<h1 id="compiler-performance-improvements">Compiler performance improvements</h1>
+<p>One way PyTorch differs from other CUDA projects is that it ships with large PTX modules, which can be several megabytes in size. This poses a challenge for the ZLUDA compiler, which is tuned to produce high-quality code but not to run quickly. In particular, there was one compiler pass: <code>instruction_mode_to_global_mode</code>, which, on large PTX modules, could account for 60% of the total compilation time. After pull request <a href="https://github.com/vosen/ZLUDA/pull/552">#552</a> was merged, this time decreased to less than 1%, with the majority of the time now being spent in LLVM.</p>
+<p>We have also added an experimental precompilation tool that can scan a directory, detect all CUDA binaries, and precompile all PTX modules. This tool uses all the cores on your machine, making it much faster than the CUDA runtime's one-by-one compilation. The effect varies by application: some applications will try to load (and compile) every possible GPU kernel, even if it's not actually being used. There are also applications that compile only the subset of kernels strictly required by a given workload. In our experience, the former category is much larger than the latter.</p>
+<h1 id="pytorch-support-underway">PyTorch support underway</h1>
+<p>We are working hard on PyTorch. It's impossible to support every PyTorch configuration and project, so we are focusing on someting specific. Our primary objective is vLLM, and to that end, we have been landing multiple PRs that make ZLUDA run more and more of vLLM. See recent PRs: <a href="https://github.com/vosen/ZLUDA/pull/580">#580</a>, <a href="https://github.com/vosen/ZLUDA/pull/583">#583</a>, <a href="https://github.com/vosen/ZLUDA/pull/585">#585</a>, <a href="https://github.com/vosen/ZLUDA/pull/590">#590</a>, <a href="https://github.com/vosen/ZLUDA/pull/596">#596</a> and more.</p>
+<p>We don't have much PyTorch support to show yet, and we've made many significant changes, such as bundling LLVM and adding ROCm 7 support. Therefore, there is no new major release. However, we encourage you to try out the prerelease builds and report any problems you encounter.</p>
+<p>Until next time</p>
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="vosen/zluda_website"
+        data-repo-id="R_kgDOM5Co2g"
+        data-category="Announcements"
+        data-category-id="DIC_kwDOM5Co2s4Ci6Tj"
+        data-mapping="pathname"
+        data-strict="0"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="top"
+        data-theme="light"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+    </div>
+  </section>
+</body>
+
+</html>

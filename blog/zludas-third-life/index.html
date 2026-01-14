@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Courtesy of https://github.com/LeoColomb/perfectmotherfuckingwebsite -->
+  <style>
+    body {
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 0 10px;
+      font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      color: #444;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+    }
+
+    h1 small, h2 small {
+      font-size:16px;
+      font-weight:normal;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        color: #c9d1d9;
+        background: #0d1117;
+      }
+
+      a:link {
+        color: #58a6ff;
+      }
+
+      a:visited {
+        color: #8e96f0;
+      }
+    }
+    
+    
+    /* Recommended code block styling (https://www.getzola.org/documentation/content/syntax-highlighting/#styling-codeblocks) */
+    pre {
+      padding: 1rem;
+      overflow: auto;
+    }
+    /* The line numbers already provide some kind of left/right padding */
+    pre[data-linenos] {
+      padding: 1rem 0;
+    }
+    pre table td {
+      padding: 0;
+    }
+    /* The line number cells */
+    pre table td:nth-of-type(1) {
+      text-align: center;
+      vertical-align: top;
+      user-select: none;
+    }
+    pre mark {
+      /* If you want your highlights to take the full width */
+      display: block;
+      /* The default background colour of a mark is bright yellow */
+      background-color: rgba(254, 252, 232, 0.9);
+    }
+    pre table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZLUDA - ZLUDA&#x27;s third life</title>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+    <h1>
+      <div>
+        <a style="color: #0d1117 !important; text-decoration:none;" href="https://vosen.github.io/ZLUDA">ZLUDA</a>
+        <div style="float: right;">
+          <a href="https://github.com/vosen/ZLUDA"><img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white"/></a> <a href="https://discord.gg/sg6BNzXuc7"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white"/></a>
+        </div>
+      </div>
+      <small>
+        <p style="margin-top: 0.25em">ZLUDA allows to run unmodified CUDA applications on non-NVIDIA GPUs</p>
+      </small>
+    </h1>
+      
+<h2 class="title">
+  ZLUDA&#x27;s third life
+  <small><div>2024-10-04</div></small>
+</h2>
+<p>ZLUDA is back. For the last few months, I've been trying to find a commercial organization that would guarantee the continued development of the project. I am happy to announce that I have found one that is not only willing to fund further development, but also has an excellent vision for the future of ZLUDA.
+I share their long-term vision and I can't wait to talk more about it. We don’t want to disclose everything just yet, but for now, we know that we want to make ZLUDA better. If you think ZLUDA is a cool project, we have even cooler projects in the works. Development has begun, and as soon as we have something to share, we will.
+What I can talk about now is the current state and the direction of ZLUDA itself.</p>
+<h3 id="where-we-are-now">Where we are now:</h3>
+<p>The code has been rolled back to the pre-AMD state and I've been working furiously on improving the codebase. I’ve been writing the improved PTX parser I always wanted and laid the groundwork for the rebuild. Currently, some very simple synthetic GPU test programs can be run on an AMD GPU, but we are not yet at the point where ZLUDA can support a full application.</p>
+<h3 id="where-we-are-going">Where we are going:</h3>
+<ul>
+<li><h5 id="the-year-of-rebuild">The year of rebuild</h5>
+<p>The ultimate goal is to bring &quot;new&quot; ZLUDA to a similar state as before the rollback in one year (Q3 2025). &quot;Similar state&quot; is very subjective here. I don't have precise criteria, but an application of similar complexity should work just as well. Not every pre-rollback application will be supported again due to new priorities (more below).</p>
+</li>
+<li><h5 id="focus-on-machine-learning">Focus on machine learning</h5>
+<p>In the past, ZLUDA focused mainly on professional creator workloads. This meant focusing on applications like Arnold Render, Blender, 3DF Zephyr, etc. We even had a working prototype of GameWorks. While all of these workloads are important extremely satisfying to have running, machine learning workloads are in much higher demand. We are targeting for llm.c, llama.cpp, PyTorch, TensorFlow and others.<br />
+Additionally, HIP support for anything image-related is disappointing. The time saved by skipping layers of workarounds can be spent more productively writing more tests and enabling more applications.</p>
+</li>
+<li><h5 id="raytracing-is-gone">Raytracing is gone</h5>
+<p>This is related to the previous point. Not many people realized it, but ZLUDA had an OptiX implementation. While ZLUDA-OptiX only supported just a handful of OptiX demos and simple Arnold scenes, it required a lot of code and broke all the time. Considering how underpowered it was and how much maintenance it required, it is a feature that is unlikely to ever come back.</p>
+</li>
+<li><h5 id="gpu-support">GPU support</h5>
+<p>The new ZLUDA will be built to support multiple GPU architectures. The mainline development will happen on AMD GPUs as that's what most of our users have. Still, I do realize there is lot of interest in other GPUs (e.g. Intel) and hopefully this will lead to more code contributions and new backends.<br />
+Pre-rollback ZLUDA stayed on ROCm 5 mainly because I did not want to re-test all the version-specific workarounds. Since we are starting with a clean slate, AMD backend will target ROCm 6.1+.</p>
+</li>
+<li><h5 id="more-modest-set-of-supported-amd-gpus">More modest set of supported AMD GPUs</h5>
+<p>We will only support RDNA1 and newer non-server AMD GPUs. Supporting pre-RDNA1 and server GPU architectures was an additional support burden and never worked as well as RDNA1+ GPUs due to the wavefront 64 configuration they use.<br />
+Note that this applies to the <em>current</em> architectures. AMD recently announced the merging of RDNA and CDNA into a single architecture (UDNA). I have high hopes for this new architecture and expect it to simplify porting CUDA → HIP and to bring ZLUDA to server GPUs.</p>
+</li>
+<li><h5 id="downgraded-windows-support">Downgraded Windows support</h5>
+<p>Windows will still work and be supported, it will just be less user-friendly. <code>zluda.exe</code> will be gone. Windows developers have invented several imaginative ways to load CUDA into a process. <code>zluda.exe</code> has tried to support all of them, and even succeeded. Most of the time.<br />
+As a user, you have to fashion some other way to load ZLUDA into the target process. Usually copying the ZLUDA binaries to the application is sufficient. We will provide ready-to-download Windows binaries.</p>
+</li>
+<li><h5 id="code-improvements">Code improvements</h5>
+<p>The current ZLUDA code is not the worst, but there is clearly room for improvement. During its second life, ZLUDA was written as a proof-of-concept solution for closed-source graphics applications (Arnold, 3DF Zephyr, etc.). This had two important consequences. First, since we were only concerned with one-time proof, it was enough to enable an application once and move on to the next without worrying about regressions. Second, some floating-point operations were handled with too little (or too much) precision - if you are rendering a scene, you can probably live with some pixels being imperceptibly different shades of red.<br />
+Now that the concept has been thoroughly proven, ZLUDA will maintain application-level testing and more rigorously test for floating-point correctness (and document differences where strict compatibility is not possible).</p>
+</li>
+<li><h5 id="let-s-talk">Let’s talk</h5>
+<p>If you think there's not enough ZLUDA in your life, there's now a ZLUDA Discord channel <a href="https://discord.gg/sg6BNzXuc7">here</a>. Feel free to drop by and say hello.
+I will also try to post development updates from time to time. I hope that learning about all the creative ways developers are abusing CUDA APIs will be as exciting as it is for me to implement them.</p>
+</li>
+</ul>
+<p>Of course, ZLUDA will remain open source. This means that any features that are not part of the plan are fair game if someone steps up and submits a pull request. Personally, I think there is no better way to express your undying love for your Radeon VII than to add support for it in ZLUDA.</p>
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="vosen/zluda_website"
+        data-repo-id="R_kgDOM5Co2g"
+        data-category="Announcements"
+        data-category-id="DIC_kwDOM5Co2s4Ci6Tj"
+        data-mapping="pathname"
+        data-strict="0"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="top"
+        data-theme="light"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+    </div>
+  </section>
+</body>
+
+</html>
