@@ -88,6 +88,12 @@ test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
 test_ptx!(
+    add_extended,
+    [0xFFFFFFFFu32, 0xFFFFFFFFu32, 0xFFFFFFFFu32, 0x00000000u32,
+     0x00000001u32, 0x00000000u32, 0x00000000u32, 0x00000000u32],
+    [0x00000000u32, 0x00000000u32, 0x00000000u32, 0x00000001u32]
+);
+test_ptx!(
     mul24_lo_u32,
     [0b01110101_01010101_01010101u32],
     [0b00011100_00100011_10001110_00111001u32]

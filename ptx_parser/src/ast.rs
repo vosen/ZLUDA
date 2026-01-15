@@ -59,6 +59,15 @@ ptx_parser_macros::generate_instruction_type!(
             },
             display: write!(f, "add{}", data)?
         },
+        AddExtended {
+            data: CarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
         And {
             data: ScalarType,
             type: { Type::Scalar(data.clone()) },
@@ -1608,6 +1617,17 @@ impl Display for LdCacheOperator {
 pub enum CpAsyncCacheOperator {
     Cached,
     L2Only,
+}
+
+pub enum CarryKind {
+    CarryIn,
+    CarryOut,
+    CarryInCarryOut,
+}
+
+pub struct CarryDetails {
+    pub kind: CarryKind,
+    pub type_: ScalarType,
 }
 
 #[derive(Copy, Clone)]

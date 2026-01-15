@@ -452,6 +452,7 @@ struct MethodEmitContext<'a> {
     builder: LLVMBuilderRef,
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
+    carry_flag: Option<LLVMValueRef>,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -467,6 +468,7 @@ impl<'a> MethodEmitContext<'a> {
             variables_builder,
             resolver: &mut parent.resolver,
             method,
+            carry_flag: None,
         }
     }
 
@@ -568,6 +570,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Mov { data: _, arguments } => self.emit_mov(arguments),
             ast::Instruction::Ld { data, arguments } => self.emit_ld(data, arguments),
             ast::Instruction::Add { data, arguments } => self.emit_add(data, arguments),
+            ast::Instruction::AddExtended { data, arguments } => {
+                self.emit_add_extended(data, arguments)
+            }
             ast::Instruction::Dp4a { data, arguments } => self.emit_dp4a(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
@@ -867,6 +872,128 @@ impl<'a> MethodEmitContext<'a> {
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             fn_(builder, src1, src2, dst)
         });
+        Ok(())
+    }
+
+    fn add_with_overflow(
+        &mut self,
+        op: &str,
+        type_: ptx_parser::ScalarType,
+        lhs: LLVMValueRef,
+        rhs: LLVMValueRef,
+    ) -> Result<(LLVMValueRef, LLVMValueRef), TranslateError> {
+        let builder = self.builder;
+        let llvm_type = get_scalar_type(self.context, type_);
+        let intrinsic = format!("llvm.{}.with.overflow.{}\0", op, LLVMTypeDisplay(type_));
+        let combined = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+            None,
+            vec![&type_.into(), &ast::ScalarType::Pred.into()],
+            vec![(lhs, llvm_type), (rhs, llvm_type)],
+        )?;
+
+        Ok((
+            unsafe { LLVMBuildExtractValue(builder, combined, 0, LLVM_UNNAMED.as_ptr()) },
+            unsafe { LLVMBuildExtractValue(builder, combined, 1, LLVM_UNNAMED.as_ptr()) },
+        ))
+    }
+
+    fn get_carry_flag_alloca(&mut self) -> Result<LLVMValueRef, TranslateError> {
+        if let Some(carry_flag) = self.carry_flag {
+            return Ok(carry_flag);
+        }
+
+        let carry_flag = unsafe {
+            LLVMZludaBuildAlloca(
+                self.variables_builder.get(),
+                LLVMIntTypeInContext(self.context, 1),
+                get_state_space(ast::StateSpace::Reg)?,
+                c"__ZLUDA_REG_CC_CF".as_ptr(),
+            )
+        };
+        self.carry_flag = Some(carry_flag);
+        Ok(carry_flag)
+    }
+
+    fn read_carry_flag(&mut self, type_: ast::ScalarType) -> Result<LLVMValueRef, TranslateError> {
+        let carry_flag = self.get_carry_flag_alloca()?;
+        let builder = self.builder;
+        let load = unsafe {
+            LLVMBuildLoad2(
+                builder,
+                LLVMIntTypeInContext(self.context, 1),
+                carry_flag,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let zext = unsafe {
+            LLVMBuildZExt(
+                builder,
+                load,
+                get_scalar_type(self.context, type_),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        Ok(zext)
+    }
+
+    fn set_carry_flag(&mut self, value: LLVMValueRef) -> Result<(), TranslateError> {
+        let carry_flag = self.get_carry_flag_alloca()?;
+        unsafe {
+            LLVMBuildStore(self.builder, value, carry_flag);
+        };
+        Ok(())
+    }
+
+    fn emit_add_extended(
+        &mut self,
+        data: ast::CarryDetails,
+        arguments: ast::AddExtendedArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+
+        let op = if data.type_.kind() == ast::ScalarKind::Signed {
+            "sadd"
+        } else {
+            "uadd"
+        };
+
+        let sum = match data.kind {
+            ast::CarryKind::CarryIn => {
+                // sum = src1 + src2 + carry
+                let sum = unsafe { LLVMBuildAdd(self.builder, src1, src2, LLVM_UNNAMED.as_ptr()) };
+                unsafe {
+                    LLVMBuildAdd(
+                        self.builder,
+                        sum,
+                        self.read_carry_flag(data.type_)?,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                }
+            }
+            ast::CarryKind::CarryOut => {
+                // { sum, overflow } = src1 + src2
+                let (sum, overflow) = self.add_with_overflow(op, data.type_, src1, src2)?;
+                self.set_carry_flag(overflow)?;
+                sum
+            }
+            ast::CarryKind::CarryInCarryOut => {
+                // { final_sum, final_overflow } = src1 + src2 + carry
+                let carry_in = self.read_carry_flag(data.type_)?;
+
+                let (sum, overflow1) = self.add_with_overflow(op, data.type_, src1, src2)?;
+                let (final_sum, overflow2) =
+                    self.add_with_overflow(op, data.type_, sum, carry_in)?;
+                let final_overflow = unsafe {
+                    LLVMBuildOr(self.builder, overflow1, overflow2, LLVM_UNNAMED.as_ptr())
+                };
+                self.set_carry_flag(final_overflow)?;
+                final_sum
+            }
+        };
+
+        self.resolver.register(arguments.dst, sum);
         Ok(())
     }
 
@@ -1527,7 +1654,7 @@ impl<'a> MethodEmitContext<'a> {
         return_types: Vec<&ast::Type>,
         arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
     ) -> Result<LLVMValueRef, TranslateError> {
-        let fn_type = get_function_type(
+        let fn_type = get_intrinsic_type(
             self.context,
             return_types.iter().copied(),
             arguments.iter().map(|(_, type_)| Ok(*type_)),
@@ -3430,17 +3557,38 @@ fn create_struct_type(
     llvm_type
 }
 
-fn get_function_type<'a>(
+fn get_anonymous_struct_type<'a>(
+    context: LLVMContextRef,
+    elem_types: impl Iterator<Item = &'a ast::Type>,
+) -> Result<LLVMTypeRef, TranslateError> {
+    let mut elem_types = elem_types
+        .map(|t| get_type(context, t))
+        .collect::<Result<Vec<LLVMTypeRef>, _>>()?;
+    Ok(unsafe {
+        LLVMStructTypeInContext(context, elem_types.as_mut_ptr(), elem_types.len() as u32, 0)
+    })
+}
+
+enum StructKind {
+    Named,
+    Anonymous,
+}
+
+fn get_function_type_impl<'a>(
     context: LLVMContextRef,
     mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
     input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    struct_kind: StructKind,
 ) -> Result<LLVMTypeRef, TranslateError> {
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
     let return_type = match return_args.len() {
         0 => unsafe { LLVMVoidTypeInContext(context) },
         1 => get_type(context, &return_args.next().unwrap())?,
-        _ => get_or_create_struct_type(context, return_args)?,
+        _ => match struct_kind {
+            StructKind::Named => get_or_create_struct_type(context, return_args)?,
+            StructKind::Anonymous => get_anonymous_struct_type(context, return_args)?,
+        },
     };
 
     Ok(unsafe {
@@ -3451,6 +3599,24 @@ fn get_function_type<'a>(
             0,
         )
     })
+}
+
+fn get_function_type<'a>(
+    context: LLVMContextRef,
+    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+        + ExactSizeIterator<Item = &'a ast::Type>,
+    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+) -> Result<LLVMTypeRef, TranslateError> {
+    get_function_type_impl(context, return_args, input_args, StructKind::Named)
+}
+
+fn get_intrinsic_type<'a>(
+    context: LLVMContextRef,
+    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+        + ExactSizeIterator<Item = &'a ast::Type>,
+    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+) -> Result<LLVMTypeRef, TranslateError> {
+    get_function_type_impl(context, return_args, input_args, StructKind::Anonymous)
 }
 
 struct ResolveIdent {
