@@ -371,6 +371,11 @@ test_ptx!(
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [613065134u32]
 );
+test_ptx!(
+    dp2a,
+    [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
+    [614127545u32]
+);
 test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 // TODO: re-enable when we have a patched LLVM
 //test_ptx!(
@@ -399,6 +404,7 @@ test_ptx!(
     [4294967295u32, 65535]
 );
 test_ptx!(uint_to_fp_bf16, [1u32, 3u32], [0x3F80u32]);
+test_ptx!(sad_s64, [12i64, -38, 915], [965i64, 965]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported

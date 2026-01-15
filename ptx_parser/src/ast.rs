@@ -823,7 +823,43 @@ ptx_parser_macros::generate_instruction_type!(
                     relaxed_type_check: true
                 }
             }
-        }
+        },
+        Sad {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Dp2a {
+            type: !,
+            data: Dp2aData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(data.ctype()) },
+
+                },
+                src1:  {
+                    repr: T,
+                    type: { Type::Scalar(data.atype) },
+
+                },
+                src2:  {
+                    repr: T,
+                    type: { Type::Scalar(data.btype) },
+
+                },
+                src3:  {
+                    repr: T,
+                    type: { Type::Scalar(data.ctype()) },
+
+                }
+            }
+        },
     }
 );
 
@@ -2687,4 +2723,26 @@ impl MmaDetails {
 pub struct PrefetchData {
     pub space: StateSpace,
     pub level: CacheLevel,
+}
+
+#[derive(Clone, Copy)]
+pub struct Dp2aData {
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub control: Dp2aControl,
+}
+
+impl Dp2aData {
+    pub fn ctype(&self) -> ScalarType {
+        match (self.atype, self.btype) {
+            (ScalarType::U32, ScalarType::U32) => ScalarType::U32,
+            _ => ScalarType::S32,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Dp2aControl {
+    Low,
+    High,
 }

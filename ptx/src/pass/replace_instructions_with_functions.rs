@@ -350,6 +350,18 @@ fn run_instruction<'input>(
             let name = "sqrt_rn_ftz_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Dp2a { data, .. } => {
+            let mode = match data.control {
+                ast::Dp2aControl::Low => "lo",
+                ast::Dp2aControl::High => "hi",
+            };
+            let name = format!(
+                "dp2a_{mode}_{}_{}",
+                scalar_to_ptx_name(data.atype),
+                scalar_to_ptx_name(data.btype),
+            );
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Mma {
             data:
                 ast::MmaDetails {
