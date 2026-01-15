@@ -621,7 +621,6 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_createpolicy_fractional(data, arguments)
             }
             ast::Instruction::Sad { data, arguments } => self.emit_sad(data, arguments),
-            ast::Instruction::Dp2a { data, arguments } => self.emit_dp2a(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -640,7 +639,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
             | ast::Instruction::Prmt { .. }
-            | ast::Instruction::Mma { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Mma { .. }
+            | ast::Instruction::Dp2a { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -3192,14 +3192,6 @@ impl<'a> MethodEmitContext<'a> {
             LLVMBuildAdd(self.builder, subtraction, src3, dst)
         });
         Ok(())
-    }
-
-    fn emit_dp2a(
-        &mut self,
-        data: ast::Dp2aData,
-        arguments: ast::Dp2aArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
-        todo!()
     }
 
     /*

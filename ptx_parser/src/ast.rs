@@ -2725,6 +2725,7 @@ pub struct PrefetchData {
     pub level: CacheLevel,
 }
 
+#[derive(Clone, Copy)]
 pub struct Dp2aData {
     pub atype: ScalarType,
     pub btype: ScalarType,
@@ -2740,6 +2741,7 @@ impl Dp2aData {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Dp2aControl {
     Low,
     High,

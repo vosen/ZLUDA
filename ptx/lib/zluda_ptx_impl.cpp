@@ -923,17 +923,17 @@ extern "C"
     // passes from optimizing away the intrinsic call
     static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        __device__ uint4::Native_vec_  __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k16.f32.bf16.bf16.f32");
+        __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k16.f32.bf16.bf16.f32");
         return std::bit_cast<float4::Native_vec_>(__llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(a_reg, b_reg, std::bit_cast<uint4::Native_vec_>(c_reg)));
     }
 
-    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32) (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_bf16_bf16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
         if (__oclc_ISA_version >= 11000 && __oclc_ISA_version < 12000)
         {
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone(a_reg, b_reg, c_reg);
         }
-        else 
+        else
         {
             return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
         }
@@ -943,7 +943,7 @@ extern "C"
     // passes from optimizing away the intrinsic call
     static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
-        __device__ uint4::Native_vec_  __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)  __asm("llvm.zluda.mma.m16n8k32.s32.s8.s8.s32");
+        __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k32.s32.s8.s8.s32");
         return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(a_reg, b_reg, c_reg);
     }
 
@@ -954,5 +954,66 @@ extern "C"
             [[clang::always_inline]] return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone(a_reg, b_reg, c_reg);
         }
         return std::bit_cast<uint4::Native_vec_>(fallback_mma_sync_aligned<int32_t, s8x4>(a_reg, b_reg, std::bit_cast<HIP_vector_base<int32_t, 4>>(c_reg)));
+    }
+}
+
+template <typename T, typename A, typename B, int BOffset, typename OcklFunc>
+__device__ T dp2a_impl(T a, T b, T c, OcklFunc ockl_func)
+{
+    B b_typed = std::bit_cast<B>(b);
+    return ockl_func(std::bit_cast<A>(a), {b_typed[BOffset], b_typed[BOffset + 1]}, c, false);
+}
+
+extern "C"
+{
+    uint32_t FUNC(dp2a_lo_u32_u32)(uint32_t a, uint32_t b, uint32_t c)
+    {
+        return dp2a_impl<uint32_t, ushort2::Native_vec_, uchar4::Native_vec_, 0>(a, b, c, __ockl_udot2);
+    }
+
+    uint32_t FUNC(dp2a_hi_u32_u32)(uint32_t a, uint32_t b, uint32_t c)
+    {
+        return dp2a_impl<uint32_t, ushort2::Native_vec_, uchar4::Native_vec_, 2>(a, b, c, __ockl_udot2);
+    }
+
+    int32_t FUNC(dp2a_lo_s32_s32)(int32_t a, int32_t b, int32_t c)
+    {
+        return dp2a_impl<int32_t, short2::Native_vec_, char4::Native_vec_, 0>(a, b, c, __ockl_sdot2);
+    }
+
+    int32_t FUNC(dp2a_hi_s32_s32)(int32_t a, int32_t b, int32_t c)
+    {
+        return dp2a_impl<int32_t, short2::Native_vec_, char4::Native_vec_, 2>(a, b, c, __ockl_sdot2);
+    }
+
+    // When mixing signed and unsigned a and b the arguments are slightly incorrect,
+    // but keeping them all signed avoids Clang warnings and LLVM has no concept of
+    // signedness in integer types, so it's fine
+    int32_t FUNC(dp2a_lo_s32_u32)(int32_t a, int32_t b, int32_t c)
+    {
+        return dp2a_impl<int32_t, short2::Native_vec_, uchar4::Native_vec_, 0>(a, b, c, __ockl_sdot2);
+    }
+
+    int32_t FUNC(dp2a_hi_s32_u32)(int32_t a, int32_t b, int32_t c)
+    {
+        return dp2a_impl<int32_t, short2::Native_vec_, uchar4::Native_vec_, 2>(a, b, c, __ockl_sdot2);
+    }
+
+    int32_t FUNC(dp2a_lo_u32_s32)(uint32_t a, int32_t b, int32_t c)
+    {
+        auto a_typed = std::bit_cast<ushort2::Native_vec_>(a);
+        auto b_typed = std::bit_cast<char4::Native_vec_>(b);
+        return int32_t(a_typed[0]) * int32_t(b_typed[0]) +
+               int32_t(a_typed[1]) * int32_t(b_typed[1]) +
+               c;
+    }
+
+    int32_t FUNC(dp2a_hi_u32_s32)(uint32_t a, int32_t b, int32_t c)
+    {
+        auto a_typed = std::bit_cast<ushort2::Native_vec_>(a);
+        auto b_typed = std::bit_cast<char4::Native_vec_>(b);
+        return int32_t(a_typed[0]) * int32_t(b_typed[2]) +
+               int32_t(a_typed[1]) * int32_t(b_typed[3]) +
+               c;
     }
 }
