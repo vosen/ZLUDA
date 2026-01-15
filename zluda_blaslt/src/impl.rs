@@ -24,6 +24,7 @@ impl ZludaObject for Handle {
     }
 }
 
+#[repr(transparent)]
 struct WrappedCublasLtHandle(cublasLtHandle_t);
 
 unsafe impl Send for WrappedCublasLtHandle {}
