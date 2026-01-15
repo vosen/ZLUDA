@@ -14,6 +14,14 @@ pub(crate) unsafe fn elapsed_time(
     hipEventElapsedTime(milliseconds, start, end)
 }
 
+pub(crate) unsafe fn elapsed_time_v2(
+    milliseconds: *mut ::core::ffi::c_float,
+    start: hipEvent_t,
+    end: hipEvent_t,
+) -> hipError_t {
+    elapsed_time(milliseconds, start, end)
+}
+
 pub(crate) unsafe fn query(event: hipEvent_t) -> hipError_t {
     hipEventQuery(event)
 }
@@ -23,6 +31,22 @@ pub(crate) unsafe fn destroy_v2(event: hipEvent_t) -> hipError_t {
 }
 
 pub(crate) unsafe fn record(event: hipEvent_t, stream: hipStream_t) -> hipError_t {
+    hipEventRecord(event, stream)
+}
+
+pub(crate) unsafe fn record_with_flags(
+    event: hipEvent_t,
+    stream: hipStream_t,
+    flags: ::core::ffi::c_uint,
+) -> hipError_t {
+    // Flag values are compatible between CUDA and HIP for 0,1
+
+    // The ROCm 6.4.0 headers have a declaration for hipEventRecordWithFlags, but the library has
+    // no implementation. The implementation was added in ROCm 6.4.2. We only support the default flag for now.
+    if flags != hipEventRecordDefault {
+        return hipError_t::ErrorInvalidValue;
+    }
+
     hipEventRecord(event, stream)
 }
 

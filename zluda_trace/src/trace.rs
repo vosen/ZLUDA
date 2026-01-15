@@ -61,6 +61,8 @@ impl StateTracker {
         let mut module_file = fs::File::open(file_name)?;
         let mut read_buff = Vec::new();
         module_file.read_to_end(&mut read_buff)?;
+        // Null-terminate the image, in case it's text
+        read_buff.push(0);
         self.record_new_library(module, read_buff.as_ptr() as *const _, fn_logger);
         Ok(())
     }
