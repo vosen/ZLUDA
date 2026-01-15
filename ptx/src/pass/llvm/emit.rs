@@ -620,6 +620,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CreatePolicyFractional { data, arguments } => {
                 self.emit_createpolicy_fractional(data, arguments)
             }
+            ast::Instruction::Sad { data, arguments } => self.emit_sad(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -638,7 +639,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
             | ast::Instruction::Prmt { .. }
-            | ast::Instruction::Mma { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Mma { .. }
+            | ast::Instruction::Dp2a { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -3163,6 +3165,31 @@ impl<'a> MethodEmitContext<'a> {
         // Implement this as a nop for now.
         self.resolver.register(arguments.dst_policy, unsafe {
             LLVMConstInt(get_scalar_type(self.context, ast::ScalarType::B64), 0, 0)
+        });
+        Ok(())
+    }
+
+    fn emit_sad(
+        &mut self,
+        data: ast::ScalarType,
+        arguments: ast::SadArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let cmp_op = if data.kind() == ast::ScalarKind::Signed {
+            LLVMIntPredicate::LLVMIntSLT
+        } else {
+            LLVMIntPredicate::LLVMIntULT
+        };
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
+        let src3 = self.resolver.value(arguments.src3)?;
+        let less_than =
+            unsafe { LLVMBuildICmp(self.builder, cmp_op, src1, src2, LLVM_UNNAMED.as_ptr()) };
+        let sub1 = unsafe { LLVMBuildSub(self.builder, src1, src2, LLVM_UNNAMED.as_ptr()) };
+        let sub2 = unsafe { LLVMBuildSub(self.builder, src2, src1, LLVM_UNNAMED.as_ptr()) };
+        let subtraction =
+            unsafe { LLVMBuildSelect(self.builder, less_than, sub2, sub1, LLVM_UNNAMED.as_ptr()) };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildAdd(self.builder, subtraction, src3, dst)
         });
         Ok(())
     }

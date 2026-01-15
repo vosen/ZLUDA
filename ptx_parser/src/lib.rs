@@ -4109,6 +4109,33 @@ derive_parser!(
     .level::primary_priority: EvictionPriority =   { .L2::evict_last, .L2::evict_normal,
                                 .L2::evict_first, .L2::evict_unchanged };
     // .level::secondary_priority: EvictionPriority = { .L2::evict_first, .L2::evict_unchanged };
+
+    sad.type  d, a, b, c => {
+        Instruction::Sad {
+            data: type_,
+            arguments: SadArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
+
+    dp2a.mode.atype.btype  d, a, b, c => {
+        Instruction::Dp2a {
+            data: Dp2aData {
+                atype: atype,
+                btype: btype,
+                control: match mode {
+                    RawDp2aControl::Lo => Dp2aControl::Low,
+                    RawDp2aControl::Hi => Dp2aControl::High
+                },
+            },
+            arguments: Dp2aArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .atype: ScalarType = { .u32, .s32 };
+    .btype: ScalarType = { .u32, .s32 };
+    .mode: RawDp2aControl = { .lo, .hi };
 );
 
 #[cfg(test)]
