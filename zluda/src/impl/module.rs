@@ -2,7 +2,7 @@ use super::driver;
 use crate::r#impl::driver::GlobalState;
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use hip_runtime_sys::*;
-use std::{borrow::Cow, ffi::CStr, mem, ops::ControlFlow};
+use std::{borrow::Cow, ffi::CStr, fs, mem, ops::ControlFlow};
 use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 
 pub(crate) struct Module {
@@ -206,6 +206,18 @@ fn compile_and_cache(
         cache.insert_module(key, &elf_module);
     }
     Ok(elf_module)
+}
+
+pub(crate) fn load(module: &mut CUmodule, fname: &CStr) -> CUresult {
+    let mut image = fs::read(fname.to_str().map_err(|_| CUerror::INVALID_VALUE)?)
+        .map_err(|_| CUerror::INVALID_VALUE)?;
+    // Null-terminate the image, in case it's text
+    image.push(0);
+    let library = unsafe { CodeLibraryRef::try_load(image.as_ptr() as *const std::ffi::c_void) }
+        .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let hip_module = load_hip_module(library)?;
+    *module = Module { base: hip_module }.wrap();
+    Ok(())
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {

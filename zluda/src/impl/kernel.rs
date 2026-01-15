@@ -16,3 +16,12 @@ pub(crate) unsafe fn set_attribute(
 ) -> hipError_t {
     function::set_attribute(kernel, attrib, val)
 }
+
+pub(crate) unsafe fn get_attribute(
+    pi: &mut ::core::ffi::c_int,
+    attrib: CUfunction_attribute,
+    kernel: hipFunction_t,
+    _dev: hipDevice_t,
+) -> hipError_t {
+    function::get_attribute(pi, attrib, kernel)
+}
