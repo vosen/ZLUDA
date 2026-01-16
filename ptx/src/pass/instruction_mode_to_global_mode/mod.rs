@@ -2174,6 +2174,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             data: ast::ArithDetails::Integer(_),
             ..
         }
+        | ast::Instruction::AddExtended { .. }
         | ast::Instruction::Sub {
             data: ast::ArithDetails::Integer(..),
             ..
