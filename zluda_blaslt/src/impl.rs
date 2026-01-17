@@ -110,14 +110,12 @@ pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
 
 pub(crate) fn destroy(handle: cublasLtHandle_t) -> cublasStatus_t {
     // Try interpreting as a direct BlasLtHandle
-    println!("destroying cublasLtHandle_t {:p}", handle);
     let result = zluda_common::drop_checked::<Handle>(handle);
     if result != cublasStatus_t::ERROR_INVALID_VALUE {
         return result;
     }
 
     // Fallback: handle may be a BlasHandle with an embedded blas_lt
-    println!("trying as BlasHandle");
     let blas_handle = zluda_common::as_ref::<BlasHandle>(&handle)
         .ok_or(cublasError_t::INVALID_VALUE)?
         .as_result()?;

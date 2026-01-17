@@ -4,9 +4,9 @@ pub(crate) struct CudaBlasLt(libloading::Library);
 
 impl CudaBlasLt {
     #[cfg(not(windows))]
-    const CUBLASLT_PATH: &'static str = "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11";
+    pub const CUBLASLT_PATH: &'static str = "/usr/local/cuda/lib64/libcublasLt.so.13";
     #[cfg(windows)]
-    const CUBLASLT_PATH: &'static str = "C:\\Windows\\System32\\cublasLt64_12.dll";
+    pub const CUBLASLT_PATH: &'static str = "C:\\Windows\\System32\\cublasLt64_13.dll";
 
     fn load() -> Self {
         unsafe { Self(libloading::Library::new(Self::CUBLASLT_PATH).unwrap()) }
@@ -67,7 +67,11 @@ cuda_macros::cublaslt_function_declarations!(
 
 pub(crate) struct Zluda;
 
-pub(crate) struct Cuda(libloading::Library);
+pub(crate) struct Cuda {
+    _cuda: libloading::Library,
+    _cublas_lt: libloading::Library,
+    cublas: libloading::Library,
+}
 
 impl Cuda {
     #[cfg(not(windows))]
@@ -76,18 +80,24 @@ impl Cuda {
     const CUDA_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 
     #[cfg(not(windows))]
-    const CUBLAS_PATH: &'static str = "/usr/lib/x86_64-linux-gnu/libcublas.so.11";
+    const CUBLAS_PATH: &'static str = "/usr/local/cuda/lib64/libcublas.so.13";
     #[cfg(windows)]
-    const CUBLAS_PATH: &'static str = "C:\\Windows\\System32\\cublas_12.dll";
+    const CUBLAS_PATH: &'static str = "C:\\Windows\\System32\\cublas_13.dll";
 
     fn load() -> Self {
-        // cublas will try to load cuda, so we load it first to ensure the correct version is used
-        unsafe {
+        // cublas will try to load cuda and cublasLt, so we load it first
+        // to ensure the correct version is used
+        let _cuda = unsafe {
             libloading::Library::new(Self::CUDA_PATH)
                 .expect("CUDA should have been loaded successfully")
         };
-
-        unsafe { Self(libloading::Library::new(Self::CUBLAS_PATH).unwrap()) }
+        let _cublas_lt = unsafe { libloading::Library::new(CudaBlasLt::CUBLASLT_PATH).unwrap() };
+        let cublas = unsafe { libloading::Library::new(Self::CUBLAS_PATH).unwrap() };
+        Self {
+            _cuda,
+            _cublas_lt,
+            cublas,
+        }
     }
 }
 
@@ -114,7 +124,7 @@ macro_rules! implemented_test {
             }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
-                    let func = unsafe { self.0.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
+                    let func = unsafe { self.cublas.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
                     unsafe { (func)( $( $arg_id ),* ) }
                 }}
             )*
