@@ -2,7 +2,7 @@ use super::{context, driver};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::mem;
-use zluda_common::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
+use zluda_common::constants::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
 
 pub(crate) fn compute_capability(major: &mut i32, minor: &mut i32, _dev: hipDevice_t) -> CUresult {
     *major = COMPUTE_CAPABILITY_MAJOR;

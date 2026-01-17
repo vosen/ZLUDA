@@ -3995,7 +3995,10 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "hip_runtime-sys",
+ "libloading",
+ "paste",
  "rocblas-sys",
+ "zluda_blaslt",
  "zluda_common",
  "zluda_windows",
 ]
@@ -4008,6 +4011,8 @@ dependencies = [
  "cuda_types",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "libloading",
+ "paste",
  "zluda_common",
  "zluda_windows",
 ]

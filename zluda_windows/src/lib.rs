@@ -381,14 +381,7 @@ pub unsafe fn delay_load_check(
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
-    let mut hm = HMODULE::default();
-    GetModuleHandleExW(
-        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        PCWSTR(try_load_from_self_dir as _),
-        &mut hm,
-    )
-    .ok()?;
-    let path = get_module_path_utf16(hm);
+    let path = get_module_path_for_function(try_load_from_self_dir as usize)?;
     let mut path_buf = PathBuf::from(path);
     path_buf.pop();
     path_buf.push(libname);
@@ -437,11 +430,20 @@ pub fn get_module_path(instance_handle: *mut c_void) -> CString {
     unsafe { CString::from_vec_with_nul_unchecked(buffer) }
 }
 
-fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
+pub fn get_module_path_for_function(fn_: usize) -> Option<OsString> {
+    let mut hm = HMODULE::default();
+    unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            PCWSTR(fn_ as _),
+            &mut hm,
+        )
+    }
+    .ok()?;
     let mut buffer = vec![0u16; windows::Win32::Foundation::MAX_PATH as usize];
     let mut copied;
     loop {
-        copied = unsafe { GetModuleFileNameW(Some(instance_handle), &mut buffer) };
+        copied = unsafe { GetModuleFileNameW(Some(hm), &mut buffer) };
         if (copied as usize) < buffer.len() {
             break;
         } else {
@@ -449,7 +451,7 @@ fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
         }
     }
     buffer.truncate(copied as usize);
-    OsString::from_wide(&buffer)
+    Some(OsString::from_wide(&buffer))
 }
 
 #[cfg(test)]

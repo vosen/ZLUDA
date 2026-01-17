@@ -4,7 +4,8 @@ version = "0.0.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+# we include rlib so that this can be used from zluda_blas tests
+crate-type = ["cdylib", "rlib"]
 name = "cublaslt"
 
 [dependencies]
@@ -13,6 +14,10 @@ cuda_types = { path = "../cuda_types" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 zluda_common = { path = "../zluda_common" }
+
+[dev-dependencies]
+libloading = "0.8"
+paste = "1.0"
 
 [package.metadata.zluda]
 linux_symlinks = ["libcublasLt.so", "libcublasLt.so.12", "libcublasLt.so.13"]
