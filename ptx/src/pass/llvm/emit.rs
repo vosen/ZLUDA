@@ -573,6 +573,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::AddExtended { data, arguments } => {
                 self.emit_add_extended(data, arguments)
             }
+            ast::Instruction::SubExtended { data, arguments } => {
+                self.emit_sub_extended(data, arguments)
+            }
             ast::Instruction::Dp4a { data, arguments } => self.emit_dp4a(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
@@ -875,7 +878,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_add_with_overflow(
+    fn emit_binop_with_overflow(
         &mut self,
         op: &str,
         type_: ptx_parser::ScalarType,
@@ -948,27 +951,32 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_add_extended(
+    fn emit_extended_arithmetic(
         &mut self,
+        op: LLVMOpcode,
+        op_name: &str,
         data: ast::CarryDetails,
-        arguments: ast::AddExtendedArgs<SpirvWord>,
+        dst: SpirvWord,
+        lhs: SpirvWord,
+        rhs: SpirvWord,
     ) -> Result<(), TranslateError> {
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
-
-        let op = if data.type_.kind() == ast::ScalarKind::Signed {
-            "sadd"
+        let lhs = self.resolver.value(lhs)?;
+        let rhs = self.resolver.value(rhs)?;
+        let op_name = if data.type_.kind() == ast::ScalarKind::Signed {
+            format!("s{}", op_name)
         } else {
-            "uadd"
+            format!("u{}", op_name)
         };
 
         let sum = match data.kind {
             ast::CarryKind::CarryIn => {
-                // sum = src1 + src2 + carry
-                let sum = unsafe { LLVMBuildAdd(self.builder, src1, src2, LLVM_UNNAMED.as_ptr()) };
+                // sum = lhs + rhs + carry
+                let sum =
+                    unsafe { LLVMBuildBinOp(self.builder, op, lhs, rhs, LLVM_UNNAMED.as_ptr()) };
                 unsafe {
-                    LLVMBuildAdd(
+                    LLVMBuildBinOp(
                         self.builder,
+                        op,
                         sum,
                         self.emit_load_carry_flag(data.type_)?,
                         LLVM_UNNAMED.as_ptr(),
@@ -976,18 +984,20 @@ impl<'a> MethodEmitContext<'a> {
                 }
             }
             ast::CarryKind::CarryOut => {
-                // { sum, overflow } = src1 + src2
-                let (sum, overflow) = self.emit_add_with_overflow(op, data.type_, src1, src2)?;
+                // { sum, overflow } = lhs + rhs
+                let (sum, overflow) =
+                    self.emit_binop_with_overflow(&op_name, data.type_, lhs, rhs)?;
                 self.emit_store_carry_flag(overflow)?;
                 sum
             }
             ast::CarryKind::CarryInCarryOut => {
-                // { final_sum, final_overflow } = src1 + src2 + carry
+                // { final_sum, final_overflow } = lhs + rhs + carry
                 let carry_in = self.emit_load_carry_flag(data.type_)?;
 
-                let (sum, overflow1) = self.emit_add_with_overflow(op, data.type_, src1, src2)?;
+                let (sum, overflow1) =
+                    self.emit_binop_with_overflow(&op_name, data.type_, lhs, rhs)?;
                 let (final_sum, overflow2) =
-                    self.emit_add_with_overflow(op, data.type_, sum, carry_in)?;
+                    self.emit_binop_with_overflow(&op_name, data.type_, sum, carry_in)?;
                 let final_overflow = unsafe {
                     LLVMBuildOr(self.builder, overflow1, overflow2, LLVM_UNNAMED.as_ptr())
                 };
@@ -996,8 +1006,38 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
 
-        self.resolver.register(arguments.dst, sum);
+        self.resolver.register(dst, sum);
         Ok(())
+    }
+
+    fn emit_add_extended(
+        &mut self,
+        data: ast::CarryDetails,
+        arguments: ast::AddExtendedArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        self.emit_extended_arithmetic(
+            LLVMOpcode::LLVMAdd,
+            "add",
+            data,
+            arguments.dst,
+            arguments.src1,
+            arguments.src2,
+        )
+    }
+
+    fn emit_sub_extended(
+        &mut self,
+        data: ast::CarryDetails,
+        arguments: ast::SubExtendedArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        self.emit_extended_arithmetic(
+            LLVMOpcode::LLVMSub,
+            "sub",
+            data,
+            arguments.dst,
+            arguments.src1,
+            arguments.src2,
+        )
     }
 
     fn emit_st(

@@ -68,6 +68,15 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        SubExtended {
+            data: CarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
         And {
             data: ScalarType,
             type: { Type::Scalar(data.clone()) },
