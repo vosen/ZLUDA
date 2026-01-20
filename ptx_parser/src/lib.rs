@@ -4136,6 +4136,34 @@ derive_parser!(
     .atype: ScalarType = { .u32, .s32 };
     .btype: ScalarType = { .u32, .s32 };
     .mode: RawDp2aControl = { .lo, .hi };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-add-cc
+    add.cc.type  d, a, b => {
+        Instruction::AddExtended {
+            data: CarryDetails { kind: CarryKind::CarryOut, type_: type_ },
+            arguments: AddExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-addc
+    addc{.cc}.type  d, a, b => {
+        Instruction::AddExtended {
+            data: CarryDetails { kind: if cc { CarryKind::CarryInCarryOut } else { CarryKind::CarryIn }, type_: type_ },
+            arguments: AddExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
 );
 
 #[cfg(test)]

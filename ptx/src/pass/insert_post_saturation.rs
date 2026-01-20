@@ -71,6 +71,7 @@ fn run_instruction<'input>(
             data: ast::ArithDetails::Integer(..),
             ..
         }
+        | ast::Instruction::AddExtended { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::AtomCas { .. }
