@@ -915,7 +915,10 @@ impl<'a> MethodEmitContext<'a> {
         Ok(carry_flag)
     }
 
-    fn emit_load_carry_flag(&mut self, type_: ast::ScalarType) -> Result<LLVMValueRef, TranslateError> {
+    fn emit_load_carry_flag(
+        &mut self,
+        type_: ast::ScalarType,
+    ) -> Result<LLVMValueRef, TranslateError> {
         let carry_flag = self.get_or_emit_carry_flag()?;
         let builder = self.builder;
         let load = unsafe {
