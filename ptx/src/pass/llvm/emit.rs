@@ -875,7 +875,7 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn add_with_overflow(
+    fn emit_add_with_overflow(
         &mut self,
         op: &str,
         type_: ptx_parser::ScalarType,
@@ -898,7 +898,7 @@ impl<'a> MethodEmitContext<'a> {
         ))
     }
 
-    fn get_carry_flag_alloca(&mut self) -> Result<LLVMValueRef, TranslateError> {
+    fn get_or_emit_carry_flag(&mut self) -> Result<LLVMValueRef, TranslateError> {
         if let Some(carry_flag) = self.carry_flag {
             return Ok(carry_flag);
         }
@@ -915,8 +915,8 @@ impl<'a> MethodEmitContext<'a> {
         Ok(carry_flag)
     }
 
-    fn read_carry_flag(&mut self, type_: ast::ScalarType) -> Result<LLVMValueRef, TranslateError> {
-        let carry_flag = self.get_carry_flag_alloca()?;
+    fn emit_load_carry_flag(&mut self, type_: ast::ScalarType) -> Result<LLVMValueRef, TranslateError> {
+        let carry_flag = self.get_or_emit_carry_flag()?;
         let builder = self.builder;
         let load = unsafe {
             LLVMBuildLoad2(
@@ -937,8 +937,8 @@ impl<'a> MethodEmitContext<'a> {
         Ok(zext)
     }
 
-    fn set_carry_flag(&mut self, value: LLVMValueRef) -> Result<(), TranslateError> {
-        let carry_flag = self.get_carry_flag_alloca()?;
+    fn emit_store_carry_flag(&mut self, value: LLVMValueRef) -> Result<(), TranslateError> {
+        let carry_flag = self.get_or_emit_carry_flag()?;
         unsafe {
             LLVMBuildStore(self.builder, value, carry_flag);
         };
@@ -967,28 +967,28 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildAdd(
                         self.builder,
                         sum,
-                        self.read_carry_flag(data.type_)?,
+                        self.emit_load_carry_flag(data.type_)?,
                         LLVM_UNNAMED.as_ptr(),
                     )
                 }
             }
             ast::CarryKind::CarryOut => {
                 // { sum, overflow } = src1 + src2
-                let (sum, overflow) = self.add_with_overflow(op, data.type_, src1, src2)?;
-                self.set_carry_flag(overflow)?;
+                let (sum, overflow) = self.emit_add_with_overflow(op, data.type_, src1, src2)?;
+                self.emit_store_carry_flag(overflow)?;
                 sum
             }
             ast::CarryKind::CarryInCarryOut => {
                 // { final_sum, final_overflow } = src1 + src2 + carry
-                let carry_in = self.read_carry_flag(data.type_)?;
+                let carry_in = self.emit_load_carry_flag(data.type_)?;
 
-                let (sum, overflow1) = self.add_with_overflow(op, data.type_, src1, src2)?;
+                let (sum, overflow1) = self.emit_add_with_overflow(op, data.type_, src1, src2)?;
                 let (final_sum, overflow2) =
-                    self.add_with_overflow(op, data.type_, sum, carry_in)?;
+                    self.emit_add_with_overflow(op, data.type_, sum, carry_in)?;
                 let final_overflow = unsafe {
                     LLVMBuildOr(self.builder, overflow1, overflow2, LLVM_UNNAMED.as_ptr())
                 };
-                self.set_carry_flag(final_overflow)?;
+                self.emit_store_carry_flag(final_overflow)?;
                 final_sum
             }
         };
