@@ -4,8 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [lib]
-# we include rlib so that this can be used from zluda_blas tests
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 name = "cublaslt"
 
 [dependencies]

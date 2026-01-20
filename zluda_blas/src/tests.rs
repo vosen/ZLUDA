@@ -1,4 +1,10 @@
-pub(crate) struct ZludaBlasLt;
+pub(crate) struct ZludaBlasLt(libloading::Library);
+
+impl ZludaBlasLt {
+    fn load() -> Self {
+        Self(unsafe { libloading::Library::new(crate::r#impl::CUBLASLT_FILE_NAME).unwrap() })
+    }
+}
 
 pub(crate) struct CudaBlasLt(libloading::Library);
 
@@ -39,10 +45,11 @@ macro_rules! implemented_test {
         }
 
         impl CublasLtApi for ZludaBlasLt {
-            fn new() -> Self { Self }
+            fn new() -> Self { Self::load() }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
-                    unsafe { zluda_blaslt::$fn_name( $( $arg_id ),* ) }
+                    let func = unsafe { self.0.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
+                    unsafe { (func)( $( $arg_id ),* ) }
                 }}
             )*
         }

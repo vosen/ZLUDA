@@ -43,10 +43,15 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
     cublasStatus_t::ERROR_NOT_SUPPORTED
 }
 
+#[cfg(windows)]
+pub const CUBLASLT_FILE_NAME: &'static str = "cublaslt.dll\0";
+#[cfg(unix)]
+pub const CUBLASLT_FILE_NAME: &'static str = "libcublaslt.so\0";
+
 pub(crate) fn create_v2(handle: &mut cublasHandle_t) -> cublasStatus_t {
     let mut self_path = os::self_path().ok_or(cublasError_t::INTERNAL_ERROR)?;
     self_path.pop();
-    self_path.push("libcublaslt.so\0");
+    self_path.push(CUBLASLT_FILE_NAME);
     let blas_lt_library = unsafe { libloading::Library::new(self_path) }
         .map_err(|_| cublasError_t::INTERNAL_ERROR)?;
     let mut blas_lt: usize = 0;
