@@ -576,6 +576,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::SubExtended { data, arguments } => {
                 self.emit_sub_extended(data, arguments)
             }
+            ast::Instruction::MadExtended { data, arguments } => {
+                self.emit_mad_extended(data, arguments)
+            }
             ast::Instruction::Dp4a { data, arguments } => self.emit_dp4a(data, arguments),
             ast::Instruction::St { data, arguments } => self.emit_st(data, arguments),
             ast::Instruction::Mul { data, arguments } => self.emit_mul(data, arguments),
@@ -957,11 +960,9 @@ impl<'a> MethodEmitContext<'a> {
         op_name: &str,
         data: ast::CarryDetails,
         dst: SpirvWord,
-        lhs: SpirvWord,
-        rhs: SpirvWord,
+        lhs: LLVMValueRef,
+        rhs: LLVMValueRef,
     ) -> Result<(), TranslateError> {
-        let lhs = self.resolver.value(lhs)?;
-        let rhs = self.resolver.value(rhs)?;
         let op_name = if data.type_.kind() == ast::ScalarKind::Signed {
             format!("s{}", op_name)
         } else {
@@ -1020,8 +1021,8 @@ impl<'a> MethodEmitContext<'a> {
             "add",
             data,
             arguments.dst,
-            arguments.src1,
-            arguments.src2,
+            self.resolver.value(arguments.src1)?,
+            self.resolver.value(arguments.src2)?,
         )
     }
 
@@ -1035,8 +1036,34 @@ impl<'a> MethodEmitContext<'a> {
             "sub",
             data,
             arguments.dst,
-            arguments.src1,
-            arguments.src2,
+            self.resolver.value(arguments.src1)?,
+            self.resolver.value(arguments.src2)?,
+        )
+    }
+
+    fn emit_mad_extended(
+        &mut self,
+        data: ast::MadCarryDetails,
+        arguments: ast::MadExtendedArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mul_control = ast::MulDetails::Integer {
+            control: data.control,
+            type_: data.type_,
+        };
+        let mul_result = self.emit_mul_impl(mul_control, None, arguments.src1, arguments.src2)?;
+
+        let src3 = self.resolver.value(arguments.src3)?;
+
+        self.emit_extended_arithmetic(
+            LLVMOpcode::LLVMAdd,
+            "add",
+            ast::CarryDetails {
+                kind: data.kind,
+                type_: data.type_,
+            },
+            arguments.dst,
+            mul_result,
+            src3,
         )
     }
 

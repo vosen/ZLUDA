@@ -4192,6 +4192,32 @@ derive_parser!(
     }
 
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-mad-cc
+    mad.mode.cc.type  d, a, b, c => {
+        Instruction::MadExtended {
+            data: MadCarryDetails { kind: CarryKind::CarryOut, control: mode.into(), type_: type_ },
+            arguments: MadExtendedArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .mode: RawMulIntControl = { .lo, .hi };
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-madc
+    madc.mode{.cc}.type  d, a, b, c => {
+        Instruction::MadExtended {
+            data: MadCarryDetails {
+                kind: if cc { CarryKind::CarryInCarryOut } else { CarryKind::CarryIn },
+                control: mode.into(),
+                type_: type_
+            },
+            arguments: MadExtendedArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .mode: RawMulIntControl = { .lo, .hi };
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
 );
 
 #[cfg(test)]

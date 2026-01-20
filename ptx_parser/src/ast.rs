@@ -77,6 +77,16 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        MadExtended {
+            data: MadCarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
         And {
             data: ScalarType,
             type: { Type::Scalar(data.clone()) },
@@ -1636,6 +1646,12 @@ pub enum CarryKind {
 
 pub struct CarryDetails {
     pub kind: CarryKind,
+    pub type_: ScalarType,
+}
+
+pub struct MadCarryDetails {
+    pub kind: CarryKind,
+    pub control: MulIntControl,
     pub type_: ScalarType,
 }
 

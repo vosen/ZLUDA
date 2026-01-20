@@ -116,6 +116,24 @@ test_ptx!(
     [0xFFFFFFFFu32, 0xFFFFFFFFu32, 0xFFFFFFFFu32, 0x00000000u32]
 );
 test_ptx!(
+    mad_extended,
+    [
+        0xFFFFFFFFu32,  // a0 = 2^32 - 1
+        0x00000002u32,  // b0 = 2
+        // a0 * b0 = 0x1_FFFF_FFFE (low 32 bits = 0xFFFFFFFE)
+        0x00000001u32,  // c0: 0xFFFFFFFE + 1 = 0xFFFFFFFF, no carry
+        0x00000001u32,  // c1: 0xFFFFFFFE + 1 + 0 (carry) = 0xFFFFFFFF, no carry
+        0x00000002u32,  // c2: 0xFFFFFFFE + 2 + 0 (carry) = 0x1_00000000, carry out
+        0x00000000u32   // c3: 0xFFFFFFFE + 0 + 1 (carry) = 0xFFFFFFFF
+    ],
+    [
+        0xFFFFFFFFu32,  // r0
+        0xFFFFFFFFu32,  // r1
+        0x00000000u32,  // r2 (overflow to 0)
+        0xFFFFFFFFu32   // r3 (carry in from r2)
+    ]
+);
+test_ptx!(
     mul24_lo_u32,
     [0b01110101_01010101_01010101u32],
     [0b00011100_00100011_10001110_00111001u32]
