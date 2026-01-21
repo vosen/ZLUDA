@@ -1,6 +1,9 @@
-mod r#impl;
-
 use cuda_types::cublas::cublasError_t;
+
+mod r#impl;
+#[cfg_attr(windows, path = "os_win.rs")]
+#[cfg_attr(not(windows), path = "os_unix.rs")]
+mod os;
 
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -87,3 +90,6 @@ mod windows {
             .unwrap_or(std::ptr::null_mut())
     }
 }
+
+#[cfg(test)]
+mod tests;
