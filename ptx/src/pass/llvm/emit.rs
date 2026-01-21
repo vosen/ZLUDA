@@ -1265,28 +1265,14 @@ impl<'a> MethodEmitContext<'a> {
         };
         let type_ = get_scalar_type(self.context, data.into());
         let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
-        let fn_type = get_function_type(
-            self.context,
-            iter::once(&ast::ScalarType::U32.into()),
-            [Ok(type_), Ok(pred)].into_iter(),
-        )?;
-        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
-        if fn_ == ptr::null_mut() {
-            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
-        }
         let src = self.resolver.value(arguments.src)?;
         let false_ = unsafe { LLVMConstInt(pred, 0, 0) };
-        let mut args = [src, false_];
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildCall2(
-                self.builder,
-                fn_type,
-                fn_,
-                args.as_mut_ptr(),
-                args.len() as u32,
-                dst,
-            )
-        });
+        self.emit_intrinsic(
+            llvm_fn,
+            Some(arguments.dst),
+            vec![&data.into()],
+            vec![(src, type_), (false_, pred)],
+        )?;
         Ok(())
     }
 
