@@ -72,6 +72,8 @@ fn run_instruction<'input>(
             ..
         }
         | ast::Instruction::AddExtended { .. }
+        | ast::Instruction::SubExtended { .. }
+        | ast::Instruction::MadExtended { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::AtomCas { .. }
