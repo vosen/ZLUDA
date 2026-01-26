@@ -87,7 +87,7 @@ pub const BLAS12: LibraryInfo = LibraryInfo {
 };
 
 pub const BLAS_LT13: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt",
+    short_name: "cublaslt13",
     is_alias: false,
     ascii_name: "cublaslt64_13.dll",
     utf16_name: u16str!("cublaslt64_13.dll"),
@@ -97,7 +97,7 @@ pub const BLAS_LT13: LibraryInfo = LibraryInfo {
 };
 
 pub const BLAS_LT12: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt",
+    short_name: "cublaslt12",
     is_alias: true,
     ascii_name: "cublaslt64_12.dll",
     utf16_name: u16str!("cublaslt64_12.dll"),
@@ -107,7 +107,7 @@ pub const BLAS_LT12: LibraryInfo = LibraryInfo {
 };
 
 pub const SPARSE12: LibraryInfo = LibraryInfo {
-    short_name: "cusparse",
+    short_name: "cusparse12",
     is_alias: false,
     ascii_name: "cusparse64_12.dll",
     utf16_name: u16str!("cusparse64_12.dll"),
@@ -117,7 +117,7 @@ pub const SPARSE12: LibraryInfo = LibraryInfo {
 };
 
 pub const SPARSE11: LibraryInfo = LibraryInfo {
-    short_name: "cusparse",
+    short_name: "cusparse11",
     is_alias: true,
     ascii_name: "cusparse64_11.dll",
     utf16_name: u16str!("cusparse64_11.dll"),
@@ -127,7 +127,7 @@ pub const SPARSE11: LibraryInfo = LibraryInfo {
 };
 
 pub const FFT12: LibraryInfo = LibraryInfo {
-    short_name: "cufft",
+    short_name: "cufft12",
     is_alias: false,
     ascii_name: "cufft64_12.dll",
     utf16_name: u16str!("cufft64_12.dll"),
@@ -137,7 +137,7 @@ pub const FFT12: LibraryInfo = LibraryInfo {
 };
 
 pub const FFT11: LibraryInfo = LibraryInfo {
-    short_name: "cufft",
+    short_name: "cufft11",
     is_alias: true,
     ascii_name: "cufft64_11.dll",
     utf16_name: u16str!("cufft64_11.dll"),
@@ -373,11 +373,11 @@ pub unsafe fn delay_load_check(
     }
     let pdli = pdli.as_ref()?;
     let name = CStr::from_ptr(pdli.sz_dll);
-    Some(
-        if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
-            return None;
-        },
-    )
+    if name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
+        Some(())
+    } else {
+        None
+    }
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
