@@ -79,8 +79,14 @@ mod windows {
         dli_notify: u32,
         pdli: *const zluda_windows::DelayLoadInfo,
     ) -> *mut std::ffi::c_void {
-        zluda_windows::delay_load_failure_hook("hipblaslt.dll", dli_notify, pdli)
-            .map(|hm| hm.0 as *mut std::ffi::c_void)
-            .unwrap_or(std::ptr::null_mut())
+        // Official HIP SDK 6.4 uses hipblaslt.dll, nightlies from therock use libhipblaslt.dll
+        zluda_windows::delay_load_failure_hook(
+            "hipblaslt.dll",
+            Some("libhipblaslt.dll"),
+            dli_notify,
+            pdli,
+        )
+        .map(|hm| hm.0 as *mut std::ffi::c_void)
+        .unwrap_or(std::ptr::null_mut())
     }
 }

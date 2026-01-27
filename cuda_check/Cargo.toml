@@ -1,0 +1,20 @@
+[package]
+name = "cuda_check"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "cuda_check"
+path = "src/main.rs"
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+zluda_windows = { path = "../zluda_windows" }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
+owo-colors = { version = "4", features = ["supports-colors"] }
+rand = "0.9.2"
+libloading = "0.8"
+
+[package.metadata.zluda]
+windows_only = true
