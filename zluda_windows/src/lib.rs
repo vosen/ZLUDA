@@ -335,6 +335,7 @@ unsafe extern "system" fn open_already_loaded_amdhip_impl(
         // * Things explode
         if probe_perflibs {
             delay_load_failure_hook_impl("hipblaslt.dll")
+                .or_else(|| delay_load_failure_hook_impl("libhipblaslt.dll"))
                 .or_else(|| delay_load_failure_hook_impl("rocblas.dll"))
                 .or_else(|| delay_load_failure_hook_impl("miopen.dll"));
         }
@@ -352,11 +353,16 @@ unsafe extern "system" fn open_already_loaded_amdhip_impl(
 
 pub unsafe fn delay_load_failure_hook(
     redirect_name: &'static str,
+    alt_name: Option<&'static str>,
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
     delay_load_check((redirect_name, DliNotify::FailLoadLib), dli_notify, pdli)?;
-    delay_load_failure_hook_impl(redirect_name)
+    [redirect_name]
+        .iter()
+        .copied()
+        .chain(alt_name)
+        .find_map(|name| unsafe { delay_load_failure_hook_impl(name) })
 }
 
 unsafe fn delay_load_failure_hook_impl(redirect_name: &'static str) -> Option<HMODULE> {
@@ -373,7 +379,8 @@ pub unsafe fn delay_load_check(
     }
     let pdli = pdli.as_ref()?;
     let name = CStr::from_ptr(pdli.sz_dll);
-    if name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
+    let dll_name = name.to_str().ok()?;
+    if dll_name.eq_ignore_ascii_case(redirect_name) {
         Some(())
     } else {
         None
