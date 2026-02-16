@@ -69,18 +69,85 @@ cuda_macros::cublaslt_function_declarations!(
         ]
 );
 
-#[cfg(windows)]
-mod windows {
-    use zluda_windows;
-    #[no_mangle]
-    static __pfnDliFailureHook2: zluda_windows::PfnDliHook = delaylink_hook;
-
-    unsafe extern "system" fn delaylink_hook(
-        dli_notify: u32,
-        pdli: *const zluda_windows::DelayLoadInfo,
-    ) -> *mut std::ffi::c_void {
-        zluda_windows::delay_load_failure_hook("hipblaslt.dll", dli_notify, pdli)
-            .map(|hm| hm.0 as *mut std::ffi::c_void)
-            .unwrap_or(std::ptr::null_mut())
-    }
+macro_rules! noop {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
 }
+
+#[cfg(windows)]
+mod os {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use hipblaslt_sys::*;
+            struct HipblasltVtable {
+                _lib: libloading::os::windows::Library,
+                $($fn_name: unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type,)*
+            }
+
+            impl HipblasltVtable {
+                pub unsafe fn new() -> Result<Self, hipblasLtError> {
+                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["hipblaslt.dll", "libhipblaslt.dll"]).ok_or(hipblasLtError::INTERNAL_ERROR)?;
+                    let lib = libloading::os::windows::Library::from_raw(hmodule.0 as _);
+                    $(
+                        let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| hipblasLtError::INTERNAL_ERROR)?;
+                    )*
+                    Ok(Self {
+                        _lib: lib,
+                        $($fn_name,)*
+                    })
+                }
+
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (self.$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+#[cfg(not(windows))]
+mod os {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use hipblaslt_sys::*;
+
+            struct HipblasltVtable {}
+
+            impl HipblasltVtable {
+                pub unsafe fn new() -> Result<Self, hipblasLtError> {
+                    Ok(Self {})
+                }
+            }
+
+            impl HipblasltVtable {
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (hipblaslt_sys::$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+cuda_macros::hipblaslt_function_declarations!(
+    noop,
+    os::vtable_impl
+        <= [
+            hipblasLtCreate,
+            hipblasLtMatmul,
+            hipblasLtMatmulAlgoGetHeuristic,
+            hipblasLtMatmulDescCreate,
+            hipblasLtMatmulDescDestroy,
+            hipblasLtMatmulDescSetAttribute,
+            hipblasLtMatmulPreferenceCreate,
+            hipblasLtMatmulPreferenceDestroy,
+            hipblasLtMatmulPreferenceSetAttribute,
+            hipblasLtMatrixLayoutCreate,
+            hipblasLtMatrixLayoutDestroy,
+            hipblasLtMatrixLayoutSetAttribute,
+        ]
+);

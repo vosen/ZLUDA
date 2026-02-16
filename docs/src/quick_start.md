@@ -12,7 +12,7 @@ Periodically, we mark a pre-release version as stable, you can download it from 
 ## Usage
 
 ### Windows
-You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") and HIP SDK (https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html) installed.\
+You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") and [HIP SDK](hip_sdk.html) installed.\
 To run your application either:
 * (_Recommended_) Use ZLUDA launcher:
     ```

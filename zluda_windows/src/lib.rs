@@ -5,18 +5,27 @@ use std::{
     ops::ControlFlow,
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::PathBuf,
+    ptr,
 };
 use trie_hard::TrieHard;
 use uuid::uuid;
-use widestring::{u16str, U16Str};
+use widestring::{u16str, U16Str, U16String};
 use windows::{
-    core::{w, PCWSTR},
+    core::{w, HRESULT, PCWSTR},
     Win32::{
-        Foundation::HMODULE,
+        Foundation::{HINSTANCE, HMODULE, HWND, LPARAM, S_OK, WPARAM},
         System::LibraryLoader::{
             GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+        },
+        UI::{
+            Controls::{
+                TaskDialogIndirect, TASKDIALOGCONFIG, TASKDIALOGCONFIG_0, TASKDIALOGCONFIG_1,
+                TASKDIALOG_NOTIFICATIONS, TDCBF_CLOSE_BUTTON, TDF_ENABLE_HYPERLINKS,
+                TDN_HYPERLINK_CLICKED, TD_ERROR_ICON,
+            },
+            WindowsAndMessaging::IDCLOSE,
         },
     },
 };
@@ -87,7 +96,7 @@ pub const BLAS12: LibraryInfo = LibraryInfo {
 };
 
 pub const BLAS_LT13: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt",
+    short_name: "cublaslt13",
     is_alias: false,
     ascii_name: "cublaslt64_13.dll",
     utf16_name: u16str!("cublaslt64_13.dll"),
@@ -97,7 +106,7 @@ pub const BLAS_LT13: LibraryInfo = LibraryInfo {
 };
 
 pub const BLAS_LT12: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt",
+    short_name: "cublaslt12",
     is_alias: true,
     ascii_name: "cublaslt64_12.dll",
     utf16_name: u16str!("cublaslt64_12.dll"),
@@ -107,7 +116,7 @@ pub const BLAS_LT12: LibraryInfo = LibraryInfo {
 };
 
 pub const SPARSE12: LibraryInfo = LibraryInfo {
-    short_name: "cusparse",
+    short_name: "cusparse12",
     is_alias: false,
     ascii_name: "cusparse64_12.dll",
     utf16_name: u16str!("cusparse64_12.dll"),
@@ -117,7 +126,7 @@ pub const SPARSE12: LibraryInfo = LibraryInfo {
 };
 
 pub const SPARSE11: LibraryInfo = LibraryInfo {
-    short_name: "cusparse",
+    short_name: "cusparse11",
     is_alias: true,
     ascii_name: "cusparse64_11.dll",
     utf16_name: u16str!("cusparse64_11.dll"),
@@ -127,7 +136,7 @@ pub const SPARSE11: LibraryInfo = LibraryInfo {
 };
 
 pub const FFT12: LibraryInfo = LibraryInfo {
-    short_name: "cufft",
+    short_name: "cufft12",
     is_alias: false,
     ascii_name: "cufft64_12.dll",
     utf16_name: u16str!("cufft64_12.dll"),
@@ -137,7 +146,7 @@ pub const FFT12: LibraryInfo = LibraryInfo {
 };
 
 pub const FFT11: LibraryInfo = LibraryInfo {
-    short_name: "cufft",
+    short_name: "cufft11",
     is_alias: true,
     ascii_name: "cufft64_11.dll",
     utf16_name: u16str!("cufft64_11.dll"),
@@ -334,9 +343,10 @@ unsafe extern "system" fn open_already_loaded_amdhip_impl(
         // * Later on a performance library (rocBLAS) loads ROCm 6 runtime
         // * Things explode
         if probe_perflibs {
-            delay_load_failure_hook_impl("hipblaslt.dll")
-                .or_else(|| delay_load_failure_hook_impl("rocblas.dll"))
-                .or_else(|| delay_load_failure_hook_impl("miopen.dll"));
+            try_load_from_self_or_hip("hipblaslt.dll")
+                .or_else(|| try_load_from_self_or_hip("libhipblaslt.dll"))
+                .or_else(|| try_load_from_self_or_hip("rocblas.dll"))
+                .or_else(|| try_load_from_self_or_hip("miopen.dll"));
         }
         let mut module = mem::zeroed();
         GetModuleHandleExW(0, w!("amdhip64_7.dll"), &mut module)
@@ -352,15 +362,88 @@ unsafe extern "system" fn open_already_loaded_amdhip_impl(
 
 pub unsafe fn delay_load_failure_hook(
     redirect_name: &'static str,
+    alt_name: Option<&'static str>,
     dli_notify: u32,
     pdli: *const DelayLoadInfo,
 ) -> Option<HMODULE> {
     delay_load_check((redirect_name, DliNotify::FailLoadLib), dli_notify, pdli)?;
-    delay_load_failure_hook_impl(redirect_name)
+    [redirect_name]
+        .iter()
+        .copied()
+        .chain(alt_name)
+        .find_map(|name| unsafe { try_load_from_self_or_hip(name) })
 }
 
-unsafe fn delay_load_failure_hook_impl(redirect_name: &'static str) -> Option<HMODULE> {
+pub unsafe fn try_load_from_self_or_hip(redirect_name: &'static str) -> Option<HMODULE> {
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+}
+
+pub unsafe fn try_load_from_self_or_hip_with_message(
+    redirect_names: &[&'static str],
+) -> Option<HMODULE> {
+    let result = redirect_names.iter().copied().find_map(|redirect_name| {
+        try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+    });
+    if result.is_none() {
+        let mut title = U16String::from_str("ZLUDA failed to load ");
+        title.push_str(redirect_names[0]);
+        redirect_names.iter().copied().skip(1).for_each(|name| {
+            title.push_str(" or ");
+            title.push_str(name);
+        });
+        title.push_char(0 as char);
+        let config = TASKDIALOGCONFIG {
+            cbSize: mem::size_of::<TASKDIALOGCONFIG>() as u32,
+            hwndParent: HWND(ptr::null_mut()),
+            hInstance: HINSTANCE(ptr::null_mut()),
+            dwFlags: TDF_ENABLE_HYPERLINKS,
+            dwCommonButtons: TDCBF_CLOSE_BUTTON,
+            pszWindowTitle: w!("ZLUDA error"),
+            Anonymous1: TASKDIALOGCONFIG_0 {
+                pszMainIcon: TD_ERROR_ICON,
+            },
+            pszMainInstruction: PCWSTR(title.as_ptr()),
+            pszContent: w!("<A HREF=\"https://zluda.readthedocs.io/latest/hip_sdk.html\">Click here to learn how to set up the HIP SDK</A>"),
+            cButtons: 0,
+            pButtons: ptr::null_mut(),
+            nDefaultButton: IDCLOSE.0,
+            cRadioButtons: 0,
+            pRadioButtons: ptr::null_mut(),
+            nDefaultRadioButton: 0,
+            pszVerificationText: PCWSTR::null(),
+            pszExpandedInformation: PCWSTR::null(),
+            pszExpandedControlText: PCWSTR::null(),
+            pszCollapsedControlText: PCWSTR::null(),
+            Anonymous2: TASKDIALOGCONFIG_1::default(),
+            pszFooter: PCWSTR::null(),
+            pfCallback: Some(task_dialog_callback),
+            lpCallbackData: 0,
+            cxWidth: 0,
+        };
+        TaskDialogIndirect(&config, None, None, None).ok();
+    }
+    result
+}
+
+unsafe extern "system" fn task_dialog_callback(
+    _hwnd: HWND,
+    msg: TASKDIALOG_NOTIFICATIONS,
+    _wparam: WPARAM,
+    lparam: LPARAM,
+    _lprefdata: isize,
+) -> HRESULT {
+    if msg != TDN_HYPERLINK_CLICKED {
+        return S_OK;
+    }
+    windows::Win32::UI::Shell::ShellExecuteW(
+        None,
+        w!("open"),
+        PCWSTR::from_raw(lparam.0 as *const u16),
+        None,
+        None,
+        windows::Win32::UI::WindowsAndMessaging::SW_SHOW,
+    );
+    S_OK
 }
 
 pub unsafe fn delay_load_check(
@@ -373,11 +456,12 @@ pub unsafe fn delay_load_check(
     }
     let pdli = pdli.as_ref()?;
     let name = CStr::from_ptr(pdli.sz_dll);
-    Some(
-        if !name.to_str().ok()?.eq_ignore_ascii_case(redirect_name) {
-            return None;
-        },
-    )
+    let dll_name = name.to_str().ok()?;
+    if dll_name.eq_ignore_ascii_case(redirect_name) {
+        Some(())
+    } else {
+        None
+    }
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
@@ -437,7 +521,7 @@ pub fn get_module_path(instance_handle: *mut c_void) -> CString {
     unsafe { CString::from_vec_with_nul_unchecked(buffer) }
 }
 
-fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
+pub fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
     let mut buffer = vec![0u16; windows::Win32::Foundation::MAX_PATH as usize];
     let mut copied;
     loop {

@@ -2,6 +2,7 @@
 
 # General
 - [Quick start](./quick_start.md)
+- [Installing HIP SDK](./hip_sdk.md)
 - [FAQ](./faq.md)
 
 # Troubleshooting

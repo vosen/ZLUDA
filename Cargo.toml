@@ -3,6 +3,7 @@
 resolver = "2"
 
 members = [
+    "cuda_check",
     "cuda_macros",
     "cuda_types",
     "dark_api",

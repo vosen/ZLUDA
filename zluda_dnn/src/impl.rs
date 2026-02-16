@@ -2,8 +2,19 @@ use cuda_types::cudnn9::*;
 use hip_runtime_sys::*;
 use miopen_sys::*;
 use rustc_hash::FxHashMap;
-use std::{collections::VecDeque, mem, ptr, sync::Mutex};
+use std::{
+    collections::VecDeque,
+    mem, ptr,
+    sync::{Mutex, OnceLock},
+};
 use zluda_common::{from_cuda_object, ZludaObject};
+
+fn miopen() -> Result<&'static super::MIOpenVtable, miopenError_t> {
+    static LOCK: OnceLock<Result<super::MIOpenVtable, miopenError_t>> = OnceLock::new();
+    let unwrapped: &Result<super::MIOpenVtable, miopenError_t> =
+        LOCK.get_or_init(|| unsafe { super::MIOpenVtable::new() });
+    unwrapped.as_ref().map_err(|x| *x)
+}
 
 pub(crate) struct Context {
     base: miopenHandle_t,
@@ -31,7 +42,7 @@ impl ZludaObject for Context {
     type CudaHandle = cudnnHandle_t;
 
     fn drop_checked(&mut self) -> Result<(), cudnnError_t> {
-        let result1 = unsafe { miopenDestroy(self.base) }.map_err(Into::into);
+        let result1 = unsafe { miopen()?.miopenDestroy(self.base) }.map_err(Into::into);
         let result2 = if let Ok(search_workspace) = self.search_workspace.get_mut() {
             search_workspace
                 .drop_checked()
@@ -213,7 +224,7 @@ pub(crate) fn get_last_error_string(_message: *mut ::core::ffi::c_char, _max_siz
 
 pub(crate) unsafe fn create(handle: &mut cudnnHandle_t) -> miopenStatus_t {
     let mut miopen_handle = mem::zeroed();
-    miopenCreate(&mut miopen_handle)?;
+    miopen()?.miopenCreate(&mut miopen_handle)?;
     *handle = Context::new(miopen_handle).wrap();
     Ok(())
 }
@@ -226,13 +237,13 @@ pub(crate) fn destroy(handle: cudnnHandle_t) -> cudnnStatus_t {
 pub(crate) fn create_tensor_descriptor(
     tensor_desc: &mut miopenTensorDescriptor_t,
 ) -> miopenStatus_t {
-    unsafe { miopenCreateTensorDescriptor(tensor_desc) }
+    unsafe { miopen()?.miopenCreateTensorDescriptor(tensor_desc) }
 }
 
 pub(crate) fn create_filter_descriptor(
     filter_desc: &mut miopenTensorDescriptor_t,
 ) -> miopenStatus_t {
-    unsafe { miopenCreateTensorDescriptor(filter_desc) }
+    unsafe { miopen()?.miopenCreateTensorDescriptor(filter_desc) }
 }
 
 pub(crate) unsafe fn set_tensor4d_descriptor(
@@ -246,7 +257,7 @@ pub(crate) unsafe fn set_tensor4d_descriptor(
 ) -> miopenStatus_t {
     // Even if the layout is NHWC, miopenSetNdTensorDescriptorWithLayout still expects NCHW order
     let lens = [n, c, h, w];
-    miopenSetNdTensorDescriptorWithLayout(
+    miopen()?.miopenSetNdTensorDescriptorWithLayout(
         tensor_desc,
         data_type,
         format,
@@ -270,7 +281,7 @@ pub(crate) unsafe fn set_filter4d_descriptor(
 pub(crate) fn create_convolution_descriptor(
     conv_desc: &mut miopenConvolutionDescriptor_t,
 ) -> miopenStatus_t {
-    unsafe { miopenCreateConvolutionDescriptor(conv_desc) }
+    unsafe { miopen()?.miopenCreateConvolutionDescriptor(conv_desc) }
 }
 
 pub(crate) unsafe fn set_convolution2d_descriptor(
@@ -284,7 +295,9 @@ pub(crate) unsafe fn set_convolution2d_descriptor(
     mode: miopenConvolutionMode_t,
     _compute_type: miopenDataType_t,
 ) -> miopenStatus_t {
-    miopenInitConvolutionDescriptor(conv_desc, mode, pad_h, pad_w, u, v, dilation_h, dilation_w)
+    miopen()?.miopenInitConvolutionDescriptor(
+        conv_desc, mode, pad_h, pad_w, u, v, dilation_h, dilation_w,
+    )
 }
 
 pub(crate) unsafe fn set_convolution_math_type(
@@ -368,11 +381,11 @@ unsafe fn search_convolution_forward_algorithm(
 ) -> Result<Option<miopenConvAlgoPerf_t>, miopenError_t> {
     fn get_tensor_size(desc: miopenTensorDescriptor_t) -> Result<usize, miopenError_t> {
         let mut size_in_bytes = 0;
-        unsafe { miopenGetTensorNumBytes(desc, &mut size_in_bytes)? };
+        unsafe { miopen()?.miopenGetTensorNumBytes(desc, &mut size_in_bytes)? };
         Ok(size_in_bytes)
     }
     let mut required_search_workspace_size = 0;
-    miopenConvolutionForwardGetWorkSpaceSize(
+    miopen()?.miopenConvolutionForwardGetWorkSpaceSize(
         handle,
         w_desc,
         x_desc,
@@ -392,7 +405,7 @@ unsafe fn search_convolution_forward_algorithm(
         .map_err(|_| miopenError_t::AllocFailed)?;
     let mut algo_count = 0;
     let mut perf_result = mem::zeroed();
-    miopenFindConvolutionForwardAlgorithm(
+    miopen()?.miopenFindConvolutionForwardAlgorithm(
         handle,
         x_desc,
         fake_tensor.data,
@@ -452,7 +465,7 @@ impl TensorCacheKey {
         let mut dimensions = [0; 5];
         let mut strides = [0; 5];
         unsafe {
-            miopenGetTensorDescriptor(
+            miopen()?.miopenGetTensorDescriptor(
                 desc,
                 &mut data_type,
                 dimensions.as_mut_ptr(),
@@ -488,7 +501,7 @@ impl ConvolutionDescriptorCacheKey {
         let mut dilation_h = 0;
         let mut dilation_w = 0;
         unsafe {
-            miopenGetConvolutionDescriptor(
+            miopen()?.miopenGetConvolutionDescriptor(
                 desc,
                 &mut mode,
                 &mut pad_h,
@@ -577,7 +590,7 @@ pub(crate) unsafe fn convolution_forward(
 ) -> miopenStatus_t {
     let do_convolution = |algo, pre_op_buffer| {
         let zero = 0u64;
-        miopenConvolutionForward(
+        miopen()?.miopenConvolutionForward(
             handle.base,
             alpha,
             x_desc,
@@ -594,7 +607,7 @@ pub(crate) unsafe fn convolution_forward(
         )?;
         if let Some(pre_op_buffer) = pre_op_buffer {
             let one = 1.0f32;
-            miopenOpTensor(
+            miopen()?.miopenOpTensor(
                 handle.base,
                 miopenTensorOp_t::miopenTensorOpAdd,
                 beta,
@@ -620,7 +633,7 @@ pub(crate) unsafe fn convolution_forward(
         return miopenStatus_t::ErrorInvalidValue;
     }
     let mut type_ = mem::zeroed();
-    miopenGetTensorDescriptor(y_desc, &mut type_, ptr::null_mut(), ptr::null_mut())?;
+    miopen()?.miopenGetTensorDescriptor(y_desc, &mut type_, ptr::null_mut(), ptr::null_mut())?;
     let beta_value = if type_ == miopenDataType_t::miopenDouble {
         *beta.cast::<f64>()
     } else {
@@ -628,7 +641,7 @@ pub(crate) unsafe fn convolution_forward(
     };
     if beta_value != 0.0 {
         let mut y_size = 0;
-        miopenGetTensorNumBytes(y_desc, &mut y_size)?;
+        miopen()?.miopenGetTensorNumBytes(y_desc, &mut y_size)?;
         let mut mutable = handle
             .search_workspace
             .lock()
@@ -655,15 +668,15 @@ pub(crate) unsafe fn convolution_forward(
 pub(crate) unsafe fn destroy_convolution_descriptor(
     conv_desc: miopenConvolutionDescriptor_t,
 ) -> miopenStatus_t {
-    miopenDestroyConvolutionDescriptor(conv_desc)
+    miopen()?.miopenDestroyConvolutionDescriptor(conv_desc)
 }
 
 pub(crate) unsafe fn destroy_filter_descriptor(desc: miopenTensorDescriptor_t) -> miopenStatus_t {
-    miopenDestroyTensorDescriptor(desc)
+    miopen()?.miopenDestroyTensorDescriptor(desc)
 }
 
 pub(crate) unsafe fn destroy_tensor_descriptor(desc: miopenTensorDescriptor_t) -> miopenStatus_t {
-    miopenDestroyTensorDescriptor(desc)
+    miopen()?.miopenDestroyTensorDescriptor(desc)
 }
 
 pub mod dnn8 {

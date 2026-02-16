@@ -1,8 +1,15 @@
 use cuda_types::{cublas::*, cublaslt::*};
 use hip_runtime_sys::hipStream_t;
 use hipblaslt_sys::*;
-use std::mem;
+use std::{mem, sync::OnceLock};
 use zluda_common::{from_cuda_object, FromCuda, ZludaObject};
+
+fn hipblaslt() -> Result<&'static super::HipblasltVtable, hipblasLtError> {
+    static LOCK: OnceLock<Result<super::HipblasltVtable, hipblasLtError>> = OnceLock::new();
+    let unwrapped: &Result<super::HipblasltVtable, hipblasLtError> =
+        LOCK.get_or_init(|| unsafe { super::HipblasltVtable::new() });
+    unwrapped.as_ref().map_err(|x| *x)
+}
 
 pub struct Handle {
     handle: hipblasLtHandle_t,
@@ -61,7 +68,7 @@ pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> :
 
 pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
     let mut zluda_blaslt_handle = Handle::new();
-    unsafe { hipblasLtCreate(&mut zluda_blaslt_handle.handle) }?;
+    unsafe { hipblaslt()?.hipblasLtCreate(&mut zluda_blaslt_handle.handle) }?;
     *handle = Handle::wrap(zluda_blaslt_handle);
     Ok(())
 }
@@ -98,7 +105,7 @@ pub(crate) fn matmul(
     stream: hipStream_t,
 ) -> cublasStatus_t {
     unsafe {
-        hipblasLtMatmul(
+        hipblaslt()?.hipblasLtMatmul(
             light_handle.handle,
             compute_desc,
             alpha,
@@ -134,7 +141,7 @@ pub(crate) fn matmul_algo_get_heuristic(
 ) -> cublasStatus_t {
     let mut hip_algos = vec![unsafe { mem::zeroed() }; requested_algo_count as usize];
     unsafe {
-        hipblasLtMatmulAlgoGetHeuristic(
+        hipblaslt()?.hipblasLtMatmulAlgoGetHeuristic(
             light_handle.handle,
             operation_desc,
             a_desc,
@@ -170,12 +177,12 @@ pub(crate) fn matmul_desc_create(
     compute_type: hipblasComputeType_t,
     scale_type: hipDataType,
 ) -> cublasStatus_t {
-    unsafe { hipblasLtMatmulDescCreate(matmul_desc, compute_type, scale_type) }?;
+    unsafe { hipblaslt()?.hipblasLtMatmulDescCreate(matmul_desc, compute_type, scale_type) }?;
     Ok(())
 }
 
 pub(crate) fn matmul_desc_destroy(matmul_desc: hipblasLtMatmulDesc_t) -> cublasStatus_t {
-    unsafe { hipblasLtMatmulDescDestroy(matmul_desc) }?;
+    unsafe { hipblaslt()?.hipblasLtMatmulDescDestroy(matmul_desc) }?;
     Ok(())
 }
 
@@ -221,9 +228,9 @@ pub(crate) fn matmul_desc_set_attribute(
         hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_DATA_TYPE => {
             convert_and_set_attribute::<cudaDataType, hipDataType>(matmul_desc, buf, hip_attr)?
         }
-        hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_POINTER => {
-            unsafe { hipblasLtMatmulDescSetAttribute(matmul_desc, hip_attr, buf, size_in_bytes) }?
-        }
+        hipblasLtMatmulDescAttributes_t::HIPBLASLT_MATMUL_DESC_BIAS_POINTER => unsafe {
+            hipblaslt()?.hipblasLtMatmulDescSetAttribute(matmul_desc, hip_attr, buf, size_in_bytes)
+        }?,
         _ => return cublasStatus_t::ERROR_NOT_SUPPORTED,
     }
     Ok(())
@@ -242,7 +249,7 @@ where
     let hip_operation: HipType = FromCuda::<_, cublasError_t>::from_cuda(cublas_operation)?;
     let hip_buf: *const HipType = &hip_operation;
     unsafe {
-        hipblasLtMatmulDescSetAttribute(
+        hipblaslt()?.hipblasLtMatmulDescSetAttribute(
             matmul_desc,
             hip_attr,
             hip_buf.cast(),
@@ -253,12 +260,12 @@ where
 }
 
 pub(crate) fn matmul_preference_create(pref: &mut hipblasLtMatmulPreference_t) -> cublasStatus_t {
-    unsafe { hipblasLtMatmulPreferenceCreate(pref) }?;
+    unsafe { hipblaslt()?.hipblasLtMatmulPreferenceCreate(pref) }?;
     Ok(())
 }
 
 pub(crate) fn matmul_preference_destroy(pref: hipblasLtMatmulPreference_t) -> cublasStatus_t {
-    unsafe { hipblasLtMatmulPreferenceDestroy(pref) }?;
+    unsafe { hipblaslt()?.hipblasLtMatmulPreferenceDestroy(pref) }?;
     Ok(())
 }
 
@@ -268,7 +275,7 @@ pub(crate) fn matmul_preference_set_attribute(
     buf: *const ::core::ffi::c_void,
     size_in_bytes: usize,
 ) -> cublasStatus_t {
-    unsafe { hipblasLtMatmulPreferenceSetAttribute(pref, attr, buf, size_in_bytes) }?;
+    unsafe { hipblaslt()?.hipblasLtMatmulPreferenceSetAttribute(pref, attr, buf, size_in_bytes) }?;
     Ok(())
 }
 
@@ -279,12 +286,12 @@ pub(crate) fn matrix_layout_create(
     cols: u64,
     ld: i64,
 ) -> cublasStatus_t {
-    unsafe { hipblasLtMatrixLayoutCreate(mat_layout, type_, rows, cols, ld) }?;
+    unsafe { hipblaslt()?.hipblasLtMatrixLayoutCreate(mat_layout, type_, rows, cols, ld) }?;
     Ok(())
 }
 
 pub(crate) fn matrix_layout_destroy(mat_layout: hipblasLtMatrixLayout_t) -> cublasStatus_t {
-    unsafe { hipblasLtMatrixLayoutDestroy(mat_layout) }?;
+    unsafe { hipblaslt()?.hipblasLtMatrixLayoutDestroy(mat_layout) }?;
     Ok(())
 }
 
@@ -294,6 +301,8 @@ pub(crate) fn matrix_layout_set_attribute(
     buf: *const ::core::ffi::c_void,
     size_in_bytes: usize,
 ) -> cublasStatus_t {
-    unsafe { hipblasLtMatrixLayoutSetAttribute(mat_layout, attr, buf, size_in_bytes) }?;
+    unsafe {
+        hipblaslt()?.hipblasLtMatrixLayoutSetAttribute(mat_layout, attr, buf, size_in_bytes)
+    }?;
     Ok(())
 }

@@ -18,4 +18,4 @@ zluda_precompile <PATH>
 ```
 
 
-where <PATH> is the path to the directory or file.
+where `<PATH>` is the path to the directory or file.

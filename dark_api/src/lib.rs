@@ -239,7 +239,7 @@ dark_api! {
             arg4: *mut std::ffi::c_void,
             arg5: u32
         ) -> cuda_types::cuda::CUresult,
-        [7] = cudart_interface_fn7(arg1: usize) -> cuda_types::cuda::CUresult,
+        [7] = cudart_interface_fn7(arg1: usize) -> (),
         [8] = get_module_from_cubin_ext2(
             fatbin_header: *const cuda_types::dark_api::FatbinHeader,
             result: *mut cuda_types::cuda::CUmodule,

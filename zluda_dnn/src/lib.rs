@@ -106,3 +106,92 @@ dual_function_declarations! {
         cudnnSetTensor4dDescriptor
     ]
 }
+
+macro_rules! noop {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
+}
+
+#[cfg(windows)]
+mod os {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use miopen_sys::*;
+            struct MIOpenVtable {
+                _lib: libloading::os::windows::Library,
+                $($fn_name: unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type,)*
+            }
+
+            impl MIOpenVtable {
+                pub unsafe fn new() -> Result<Self, miopenError_t> {
+                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["MIOpen.dll"]).ok_or(miopenError_t::InternalError)?;
+                    let lib = libloading::os::windows::Library::from_raw(hmodule.0 as _);
+                    $(
+                        let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| miopenError_t::InternalError)?;
+                    )*
+                    Ok(Self {
+                        _lib: lib,
+                        $($fn_name,)*
+                    })
+                }
+
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (self.$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+#[cfg(not(windows))]
+mod os {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use miopen_sys::*;
+
+            struct MIOpenVtable {}
+
+            impl MIOpenVtable {
+                pub unsafe fn new() -> Result<Self, miopenError_t> {
+                    Ok(Self {})
+                }
+            }
+
+            impl MIOpenVtable {
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (miopen_sys::$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+cuda_macros::miopen_function_declarations!(
+    noop,
+    os::vtable_impl
+        <= [
+            miopenConvolutionForward,
+            miopenConvolutionForwardGetWorkSpaceSize,
+            miopenCreate,
+            miopenCreateConvolutionDescriptor,
+            miopenCreateTensorDescriptor,
+            miopenCreateTensorDescriptor,
+            miopenDestroy,
+            miopenDestroyConvolutionDescriptor,
+            miopenDestroyTensorDescriptor,
+            miopenFindConvolutionForwardAlgorithm,
+            miopenGetConvolutionDescriptor,
+            miopenGetTensorDescriptor,
+            miopenGetTensorDescriptor,
+            miopenGetTensorNumBytes,
+            miopenGetTensorNumBytes,
+            miopenInitConvolutionDescriptor,
+            miopenOpTensor,
+            miopenSetNdTensorDescriptorWithLayout,
+        ]
+);
