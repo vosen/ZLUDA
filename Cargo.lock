@@ -4179,9 +4179,11 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "hip_runtime-sys",
+ "libloading",
  "miopen-sys",
  "rustc-hash 2.1.1",
  "zluda_common",
+ "zluda_windows",
 ]
 
 [[package]]
@@ -4190,6 +4192,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
  "zluda_dnn",
  "zluda_windows",
 ]
@@ -4200,6 +4203,7 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
  "zluda_dnn",
  "zluda_windows",
 ]

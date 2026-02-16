@@ -20,3 +20,6 @@ linux_symlinks = [
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3.0"
