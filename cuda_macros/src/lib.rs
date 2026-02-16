@@ -117,7 +117,7 @@ fn function_declarations(tokens: TokenStream, module: &str, relaxed: bool) -> To
                 ..
             }) = item
             {
-                if  relaxed {
+                if relaxed {
                     if variadic.is_some() {
                         continue;
                     }
