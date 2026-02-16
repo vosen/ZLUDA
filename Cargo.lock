@@ -470,6 +470,7 @@ dependencies = [
  "libloading",
  "owo-colors",
  "rand",
+ "windows",
  "zluda_windows",
 ]
 

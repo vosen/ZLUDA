@@ -381,12 +381,12 @@ pub unsafe fn try_load_from_self_or_hip(redirect_name: &'static str) -> Option<H
 pub unsafe fn try_load_from_self_or_hip_with_message(
     redirect_name: &'static str,
 ) -> Option<HMODULE> {
-    let mut title = U16String::from_str("ZLUDA failed to load ");
-    title.push_str(redirect_name);
-    title.push_char(0 as char);
     let result =
         try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name));
     if result.is_none() {
+        let mut title = U16String::from_str("ZLUDA failed to load ");
+        title.push_str(redirect_name);
+        title.push_char(0 as char);
         let config = TASKDIALOGCONFIG {
             cbSize: mem::size_of::<TASKDIALOGCONFIG>() as u32,
             hwndParent: HWND(ptr::null_mut()),
@@ -516,7 +516,7 @@ pub fn get_module_path(instance_handle: *mut c_void) -> CString {
     unsafe { CString::from_vec_with_nul_unchecked(buffer) }
 }
 
-fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
+pub fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
     let mut buffer = vec![0u16; windows::Win32::Foundation::MAX_PATH as usize];
     let mut copied;
     loop {
