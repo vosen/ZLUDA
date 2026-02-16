@@ -379,13 +379,18 @@ pub unsafe fn try_load_from_self_or_hip(redirect_name: &'static str) -> Option<H
 }
 
 pub unsafe fn try_load_from_self_or_hip_with_message(
-    redirect_name: &'static str,
+    redirect_names: &[&'static str],
 ) -> Option<HMODULE> {
-    let result =
-        try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name));
+    let result = redirect_names.iter().copied().find_map(|redirect_name| {
+        try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
+    });
     if result.is_none() {
         let mut title = U16String::from_str("ZLUDA failed to load ");
-        title.push_str(redirect_name);
+        title.push_str(redirect_names[0]);
+        redirect_names.iter().copied().skip(1).for_each(|name| {
+            title.push_str(" or ");
+            title.push_str(name);
+        });
         title.push_char(0 as char);
         let config = TASKDIALOGCONFIG {
             cbSize: mem::size_of::<TASKDIALOGCONFIG>() as u32,

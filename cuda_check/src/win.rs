@@ -226,7 +226,7 @@ unsafe fn check_nvml(library: libloading::Library) -> Result<Option<OsString>, E
         library.get::<extern "system" fn() -> cuda_types::nvml::nvmlReturn_t>(b"nvmlInit_v2\0")?;
     match nvml_init() {
         Ok(()) | cuda_types::nvml::nvmlReturn_t::ERROR_NOT_SUPPORTED => {
-            Ok(path_for_loaded_lib("nvmll.dll"))
+            Ok(path_for_loaded_lib("rocm_smi64.dll"))
         }
         Err(err) => Err(Error::Initialization(
             "nvmlInit_v2".to_string(),

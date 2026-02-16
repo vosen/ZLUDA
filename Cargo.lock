@@ -4141,8 +4141,10 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "libloading",
  "zluda_common",
  "zluda_windows",
 ]
