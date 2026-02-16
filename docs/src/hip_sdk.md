@@ -57,21 +57,24 @@ zluda.exe -- cuda_check.exe
 The output should look like this:
 
 ```
-cufft11   : OK
-cublas12  : OK
-cublas13  : OK
-nvcuda    : OK
+nvcuda    : OK (C:\hip_sdk\bin\amdhip64_7.dll)
 nvml      : OK
-cudnn8    : OK
-cudnn9    : OK
-cublaslt13: OK
-cusparse11: OK
+cufft11   : OK
+cudnn9    : OK (C:\hip_sdk\bin\MIOpen.dll)
+cudnn8    : OK (C:\hip_sdk\bin\MIOpen.dll)
+cublaslt13: OK (C:\hip_sdk\bin\libhipblaslt.dll)
 cusparse12: OK
-cublaslt12: OK
 cufft12   : OK
+cublas13  : OK (C:\hip_sdk\bin\rocblas.dll)
+cublaslt12: OK (C:\hip_sdk\bin\libhipblaslt.dll)
+cublas12  : OK (C:\hip_sdk\bin\rocblas.dll)
+cusparse11: OK
 ```
 
-**Known Issues:**
+The path in parentheses is the path to the underlying HIP SDK library.
+
+**Caveats and Known Issues:**
+- The path shown in parentheses indicates the underlying HIP SDK library, but is not guaranteed to be used. If an application loads the library from a different path before loading ZLUDA, ZLUDA will use the already-loaded library instead
 - `cuda_check.exe` may sometimes hang and not close due to a bug in MIOpen
 - When using the official HIP SDK, `cuda_check.exe` will fail to load `cudnn8` and `cudnn9` because the official SDK does not include MIOpen
 
