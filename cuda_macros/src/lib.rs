@@ -23,6 +23,7 @@ const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
 const CUDNN8_RS: &'static str = include_str! {"cudnn8.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
 const ROCBLAS_RS: &'static str = include_str! {"../../ext/rocblas-sys/src/lib.rs"};
+const HIPBLASLT_RS: &'static str = include_str! {"../../ext/hipblaslt-sys/src/lib.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -81,6 +82,11 @@ pub fn cudnn9_function_declarations(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn rocblas_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, ROCBLAS_RS, true)
+}
+
+#[proc_macro]
+pub fn hipblaslt_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, HIPBLASLT_RS, true)
 }
 
 fn function_declarations(tokens: TokenStream, module: &str, relaxed: bool) -> TokenStream {
