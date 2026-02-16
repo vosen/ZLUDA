@@ -119,8 +119,8 @@ mod os {
             struct RocblasVtable {}
 
             impl RocblasVtable {
-                pub unsafe fn new() -> Result<Self, libloading::Error> {
-                    Ok(())
+                pub unsafe fn new() -> Result<Self, rocblas_error> {
+                    Ok(Self {})
                 }
             }
 

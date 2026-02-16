@@ -154,8 +154,8 @@ mod os {
             struct MIOpenVtable {}
 
             impl MIOpenVtable {
-                pub unsafe fn new() -> Result<Self, libloading::Error> {
-                    Ok(())
+                pub unsafe fn new() -> Result<Self, miopenError_t> {
+                    Ok(Self {})
                 }
             }
 

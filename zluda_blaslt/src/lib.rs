@@ -111,20 +111,20 @@ mod os {
 mod os {
     macro_rules! vtable_impl {
         ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
-            use rocblas_sys::*;
+            use hipblaslt_sys::*;
 
             struct HipblasltVtable {}
 
             impl HipblasltVtable {
-                pub unsafe fn new() -> Result<Self, libloading::Error> {
-                    Ok(())
+                pub unsafe fn new() -> Result<Self, hipblasLtError> {
+                    Ok(Self {})
                 }
             }
 
             impl HipblasltVtable {
                 $(
                     pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
-                        (rocblas_sys::$fn_name)($($arg_id),*)
+                        (hipblaslt_sys::$fn_name)($($arg_id),*)
                     }
                 )*
             }
