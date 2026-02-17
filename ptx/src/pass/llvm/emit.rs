@@ -963,12 +963,6 @@ impl<'a> MethodEmitContext<'a> {
         lhs: LLVMValueRef,
         rhs: LLVMValueRef,
     ) -> Result<(), TranslateError> {
-        let op_name = if data.type_.kind() == ast::ScalarKind::Signed {
-            format!("s{}", op_name)
-        } else {
-            format!("u{}", op_name)
-        };
-
         let sum = match data.kind {
             ast::CarryKind::CarryIn => {
                 // sum = lhs + rhs + carry
@@ -1018,7 +1012,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         self.emit_extended_arithmetic(
             LLVMOpcode::LLVMAdd,
-            "add",
+            "uadd",
             data,
             arguments.dst,
             self.resolver.value(arguments.src1)?,
@@ -1033,7 +1027,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         self.emit_extended_arithmetic(
             LLVMOpcode::LLVMSub,
-            "sub",
+            "usub",
             data,
             arguments.dst,
             self.resolver.value(arguments.src1)?,
@@ -1056,7 +1050,7 @@ impl<'a> MethodEmitContext<'a> {
 
         self.emit_extended_arithmetic(
             LLVMOpcode::LLVMAdd,
-            "add",
+            "uadd",
             ast::CarryDetails {
                 kind: data.kind,
                 type_: data.type_,
