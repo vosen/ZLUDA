@@ -1,0 +1,39 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry mad_extended(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64   in_addr, out_addr;
+    .reg .u32   a0, b0, c0, c1, c2, c3;
+    .reg .u32   r0, r1, r2, r3;
+
+    ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    // Load inputs
+    ld.u32          a0, [in_addr];
+    ld.u32          b0, [in_addr+4];
+    ld.u32          c0, [in_addr+8];
+    ld.u32          c1, [in_addr+12];
+    ld.u32          c2, [in_addr+16];
+    ld.u32          c3, [in_addr+20];
+
+    // Test all three variants:
+    // mad.cc  - carry out only
+    // madc    - carry in only
+    // madc.cc - carry in and carry out
+    mad.lo.cc.u32   r0, a0, b0, c0;   // mad with carry out
+    madc.lo.cc.u32  r1, a0, b0, c1;   // madc with carry in + carry out
+    madc.lo.cc.u32  r2, a0, b0, c2;   // madc with carry in + carry out (chained)
+    madc.lo.u32     r3, a0, b0, c3;   // madc with carry in only (final)
+
+    st.u32          [out_addr], r0;
+    st.u32          [out_addr+4], r1;
+    st.u32          [out_addr+8], r2;
+    st.u32          [out_addr+12], r3;
+    ret;
+}
