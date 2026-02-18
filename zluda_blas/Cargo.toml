@@ -13,6 +13,11 @@ cuda_types = { path = "../cuda_types" }
 zluda_common = { path = "../zluda_common" }
 rocblas-sys = { path = "../ext/rocblas-sys" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+zluda_blaslt = { path = "../zluda_blaslt" }
+libloading = "0.8"
+
+[dev-dependencies]
+paste = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }

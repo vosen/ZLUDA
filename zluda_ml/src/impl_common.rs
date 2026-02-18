@@ -1,6 +1,6 @@
 use cuda_types::nvml::*;
 use std::{ffi::CStr, ptr};
-use zluda_common::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
+use zluda_common::constants::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
 
 const VERSION: &'static CStr = c"550.77";
 

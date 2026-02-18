@@ -4130,7 +4130,9 @@ dependencies = [
  "embed-resource",
  "hip_runtime-sys",
  "libloading",
+ "paste",
  "rocblas-sys",
+ "zluda_blaslt",
  "zluda_common",
  "zluda_windows",
 ]
@@ -4145,6 +4147,7 @@ dependencies = [
  "hip_runtime-sys",
  "hipblaslt-sys",
  "libloading",
+ "paste",
  "zluda_common",
  "zluda_windows",
 ]
