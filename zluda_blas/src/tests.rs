@@ -10,12 +10,17 @@ pub(crate) struct CudaBlasLt(libloading::Library);
 
 impl CudaBlasLt {
     #[cfg(not(windows))]
-    pub const CUBLASLT_PATH: &'static str = "/usr/local/cuda/lib64/libcublasLt.so.13";
+    fn cublaslt_path() -> String {
+        "/usr/local/cuda/lib64/libcublasLt.so.13".to_string()
+    }
     #[cfg(windows)]
-    pub const CUBLASLT_PATH: &'static str = "C:\\Windows\\System32\\cublasLt64_13.dll";
-
+    fn cublaslt_path() -> String {
+        std::env::var("CUDA_PATH")
+            .map(|p| format!("{}\\bin\\x64\\cublasLt64_13.dll", p))
+            .unwrap()
+    }
     fn load() -> Self {
-        unsafe { Self(libloading::Library::new(Self::CUBLASLT_PATH).unwrap()) }
+        unsafe { Self(libloading::Library::new(Self::cublaslt_path()).unwrap()) }
     }
 }
 
@@ -87,9 +92,15 @@ impl Cuda {
     const CUDA_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
 
     #[cfg(not(windows))]
-    const CUBLAS_PATH: &'static str = "/usr/local/cuda/lib64/libcublas.so.13";
+    fn cublas_path() -> String {
+        "/usr/local/cuda/lib64/libcublas.so.13".to_string()
+    }
     #[cfg(windows)]
-    const CUBLAS_PATH: &'static str = "C:\\Windows\\System32\\cublas_13.dll";
+    fn cublas_path() -> String {
+        std::env::var("CUDA_PATH")
+            .map(|p| format!("{}\\bin\\x64\\cublas64_13.dll", p))
+            .unwrap()
+    }
 
     fn load() -> Self {
         // cublas will try to load cuda and cublasLt, so we load it first
@@ -98,8 +109,8 @@ impl Cuda {
             libloading::Library::new(Self::CUDA_PATH)
                 .expect("CUDA should have been loaded successfully")
         };
-        let _cublas_lt = unsafe { libloading::Library::new(CudaBlasLt::CUBLASLT_PATH).unwrap() };
-        let cublas = unsafe { libloading::Library::new(Self::CUBLAS_PATH).unwrap() };
+        let _cublas_lt = unsafe { libloading::Library::new(CudaBlasLt::cublaslt_path()).unwrap() };
+        let cublas = unsafe { libloading::Library::new(Self::cublas_path()).unwrap() };
         Self {
             _cuda,
             _cublas_lt,

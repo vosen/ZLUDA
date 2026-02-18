@@ -514,7 +514,20 @@ pub fn get_module_path(instance_handle: *mut c_void) -> CString {
     unsafe { CString::from_vec_with_nul_unchecked(buffer) }
 }
 
-pub fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
+pub fn get_module_path_for_function(fn_: usize) -> Option<OsString> {
+    let mut hm = HMODULE::default();
+    unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            PCWSTR(fn_ as _),
+            &mut hm,
+        )
+    }
+    .ok()?;
+    Some(get_module_path_utf16(hm))
+}
+
+pub fn get_module_path_utf16(hm: HMODULE) -> OsString {
     let mut buffer = vec![0u16; windows::Win32::Foundation::MAX_PATH as usize];
     let mut copied;
     loop {
@@ -526,7 +539,7 @@ pub fn get_module_path_utf16(instance_handle: HMODULE) -> OsString {
         }
     }
     buffer.truncate(copied as usize);
-    Some(OsString::from_wide(&buffer))
+    OsString::from_wide(&buffer)
 }
 
 #[cfg(test)]

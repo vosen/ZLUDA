@@ -80,7 +80,7 @@ macro_rules! noop {
 }
 
 #[cfg(windows)]
-mod os {
+mod os_macro {
     macro_rules! vtable_impl {
         ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
             use rocblas_sys::*;
@@ -114,7 +114,7 @@ mod os {
 }
 
 #[cfg(not(windows))]
-mod os {
+mod os_macro {
     macro_rules! vtable_impl {
         ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
             use rocblas_sys::*;
@@ -141,7 +141,7 @@ mod os {
 
 cuda_macros::rocblas_function_declarations!(
     noop,
-    os::vtable_impl
+    os_macro::vtable_impl
         <= [
             rocblas_create_handle,
             rocblas_destroy_handle,
@@ -160,3 +160,6 @@ cuda_macros::rocblas_function_declarations!(
             rocblas_sgemm,
         ]
 );
+
+#[cfg(test)]
+mod tests;

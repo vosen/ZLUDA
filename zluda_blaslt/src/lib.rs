@@ -138,6 +138,7 @@ cuda_macros::hipblaslt_function_declarations!(
     os::vtable_impl
         <= [
             hipblasLtCreate,
+            hipblasLtDestroy,
             hipblasLtMatmul,
             hipblasLtMatmulAlgoGetHeuristic,
             hipblasLtMatmulDescCreate,

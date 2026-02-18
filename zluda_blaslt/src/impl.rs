@@ -26,7 +26,7 @@ impl ZludaObject for Handle {
     type Error = cublasError_t;
     type CudaHandle = cublasLtHandle_t;
     fn drop_checked(&mut self) -> cublasStatus_t {
-        unsafe { hipblaslt_sys::hipblasLtDestroy(self.handle) }?;
+        unsafe { hipblaslt()?.hipblasLtDestroy(self.handle) }?;
         Ok(())
     }
 }
@@ -107,7 +107,7 @@ pub(crate) fn disable_cpu_instructions_set_mask(_mask: ::core::ffi::c_uint) -> :
 
 pub(crate) fn create(handle: &mut cublasLtHandle_t) -> cublasStatus_t {
     let mut hipblas_lt = unsafe { std::mem::zeroed() };
-    unsafe { hipblasLtCreate(&mut hipblas_lt) }?;
+    unsafe { hipblaslt()?.hipblasLtCreate(&mut hipblas_lt) }?;
 
     let zluda_handle = Handle::new(hipblas_lt);
 

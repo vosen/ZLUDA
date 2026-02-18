@@ -3,8 +3,15 @@ use cuda_types::cublas::*;
 use hip_runtime_sys::hipStream_t;
 use libloading::Library;
 use rocblas_sys::*;
-use std::{mem, sync::OnceLock};
-use zluda_common::{from_cuda_object, ZludaObject};
+use std::{mem, ptr, sync::OnceLock};
+use zluda_common::{constants, from_cuda_object, ZludaObject};
+
+fn rocblas() -> Result<&'static super::RocblasVtable, rocblas_error> {
+    static LOCK: OnceLock<Result<super::RocblasVtable, rocblas_error>> = OnceLock::new();
+    let unwrapped: &Result<super::RocblasVtable, rocblas_error> =
+        LOCK.get_or_init(|| unsafe { super::RocblasVtable::new() });
+    unwrapped.as_ref().map_err(|x| *x)
+}
 
 // This is repr(c) because it needs to be compatible with BlasHandle in zluda_blaslt.
 #[repr(C)]
@@ -12,14 +19,6 @@ pub struct Handle {
     blas_lt: usize,
     blas_lt_library: Library,
     rocm_handle: rocblas_handle,
-}
-
-impl Handle {
-    unsafe fn new() -> Result<Self, cublasError_t> {
-        let mut handle = mem::zeroed();
-        rocblas()?.rocblas_create_handle(&mut handle)?;
-        Ok(Handle { handle })
-    }
 }
 
 impl ZludaObject for Handle {
@@ -34,7 +33,7 @@ impl ZludaObject for Handle {
         // Ignore any errors from destroying embedded blas_lt handle. It may have already been destroyed.
         .map(|cublaslt_destroy| unsafe { cublaslt_destroy(self.blas_lt) })
         .ok();
-        unsafe { rocblas_sys::rocblas_destroy_handle(self.rocm_handle) }?;
+        unsafe { rocblas()?.rocblas_destroy_handle(self.rocm_handle) }?;
         Ok(())
     }
 }
@@ -70,7 +69,7 @@ pub(crate) fn create_v2(handle: &mut cublasHandle_t) -> cublasStatus_t {
     .map_err(|_| cublasError_t::INTERNAL_ERROR)?;
     unsafe { (cublaslt_create)(&mut blas_lt) }?;
     let mut rocm_handle = rocblas_handle(ptr::null_mut());
-    unsafe { rocblas_create_handle(&mut rocm_handle) }?;
+    unsafe { rocblas()?.rocblas_create_handle(&mut rocm_handle) }?;
     *handle = Handle::wrap(Handle {
         blas_lt: blas_lt as usize,
         blas_lt_library,
@@ -109,7 +108,7 @@ pub(crate) fn get_cudart_version() -> usize {
 }
 
 pub(crate) fn set_math_mode(handle: &Handle, mode: rocblas_math_mode) -> cublasStatus_t {
-    unsafe { rocblas()?.rocblas_set_math_mode(handle.handle, mode) }?;
+    unsafe { rocblas()?.rocblas_set_math_mode(handle.rocm_handle, mode) }?;
     Ok(())
 }
 
@@ -203,11 +202,11 @@ pub(crate) unsafe fn set_pointer_mode_v2(
     handle: &Handle,
     mode: rocblas_pointer_mode,
 ) -> rocblas_status {
-    rocblas()?.rocblas_set_pointer_mode(handle.handle, mode)
+    rocblas()?.rocblas_set_pointer_mode(handle.rocm_handle, mode)
 }
 
 pub(crate) unsafe fn set_stream_v2(handle: &Handle, stream: hipStream_t) -> rocblas_status {
-    rocblas()?.rocblas_set_stream(handle.handle, stream)
+    rocblas()?.rocblas_set_stream(handle.rocm_handle, stream)
 }
 
 pub(crate) unsafe fn set_workspace_v2(
@@ -215,12 +214,12 @@ pub(crate) unsafe fn set_workspace_v2(
     workspace: *mut ::core::ffi::c_void,
     size: usize,
 ) -> rocblas_status {
-    rocblas()?.rocblas_set_workspace(handle.handle, workspace, size)
+    rocblas()?.rocblas_set_workspace(handle.rocm_handle, workspace, size)
 }
 
 pub(crate) unsafe fn get_math_mode(handle: &Handle, mode: &mut cublasMath_t) -> rocblas_status {
     let mut roc_mode = mem::zeroed();
-    rocblas()?.rocblas_get_math_mode(handle.handle, &mut roc_mode)?;
+    rocblas()?.rocblas_get_math_mode(handle.rocm_handle, &mut roc_mode)?;
     *mode = zluda_common::FromCuda::from_cuda(&roc_mode)?;
     Ok(())
 }
@@ -539,12 +538,10 @@ mod tests {
     fn lt_destroy_blas_handle(api: impl CublasApi) {
         let mut handle = unsafe { std::mem::zeroed() };
         api.cublasCreate_v2(&mut handle);
-        println!("Created handle: {:?}", handle);
         api.blaslt()
             .cublasLtDestroy(unsafe { std::mem::transmute(handle) });
         let mut math_mode = unsafe { std::mem::zeroed() };
         api.cublasGetMathMode(handle, &mut math_mode);
-        println!("Math mode after blaslt destroy: {:?}", math_mode);
         api.cublasDestroy_v2(handle);
     }
 }
