@@ -1,0 +1,33 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry addc_cc_s32(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    a;
+    .reg .b32 	    b;
+    .reg .b64 	    result;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b32          a, [in_addr];
+    ld.b32          b, [in_addr+4];
+
+    // set CC.CF
+    .reg  .b32      cc_cf;
+    add.cc.u32      cc_cf, 0xffffffffffffffffU, 1;
+
+	addc.cc.s32		a, a, b;
+
+    // read CC.CF and concatenate
+    addc.u32        b, 0, 0;
+    mov.b64         result, {a, b};
+    st.b64          [out_addr], result;
+	ret;
+}

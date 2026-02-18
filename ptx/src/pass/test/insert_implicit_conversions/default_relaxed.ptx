@@ -10,15 +10,37 @@
     ret;
 }
 
+.func default_relaxed_st(
+    .reg .b64 output,
+    .reg .b32 input1,
+    .reg .b32 input2
+)
+{
+    st.b64   [output], { input1, input2 };
+    ret;
+}
+
 // %%% output %%%
 
 .func (.reg .b32 %2, .reg .b32 %3) %1 (
     .reg .b64 %4
 )
 {
-    .generic.b64 %7 = zluda.convert_implicit.bit_to_ptr.b64.reg.b64 %4;
-    .reg.b64 %6 = ld.b64 %7;
-    .reg.v2.b32 %5 = zluda.convert_implicit.default.reg.v2.b32.reg.b64 %6;
-    zluda.repack_vector.extract.relaxed.b32 %2, %3, %5;
+    .generic.b64 %12 = zluda.convert_implicit.bit_to_ptr.b64.reg.b64 %4;
+    .reg.b64 %11 = ld.b64 %12;
+    .reg.v2.b32 %9 = zluda.convert_implicit.default.reg.v2.b32.reg.b64 %11;
+    zluda.repack_vector.extract.relaxed.b32 %2, %3, %9;
+    ret;
+}
+.func %5 (
+    .reg .b64 %6,
+    .reg .b32 %7,
+    .reg .b32 %8
+)
+{
+    .reg.v2.b32 %10 = zluda.repack_vector.composite.relaxed.b32 %7, %8;
+    .generic.b64 %13 = zluda.convert_implicit.bit_to_ptr.b64.reg.b64 %6;
+    .reg.b64 %14 = zluda.convert_implicit.default.reg.b64.reg.v2.b32 %10;
+    st.b64 %13, %14;
     ret;
 }

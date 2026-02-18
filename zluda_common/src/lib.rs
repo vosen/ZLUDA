@@ -220,6 +220,7 @@ from_cuda_nop!(
     CUresult,
     CUfunction_attribute,
     CUgraphExecUpdateResultInfo,
+    *mut *const cuda_types::cuda::CUgraphEdgeData,
     *mut cudnn9::cudnnHandle_t,
     cudnn9::cudnnHandle_t,
     cudnn9::cudnnMathType_t,

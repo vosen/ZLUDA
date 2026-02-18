@@ -23,11 +23,7 @@ pub(super) fn run<'input>(
                 import_as: None,
                 tuning: Vec::new(),
                 linkage: ast::LinkingDirective::EXTERN,
-                is_kernel: false,
-                flush_to_zero_f32: false,
-                flush_to_zero_f16f64: false,
-                rounding_mode_f32: ptx_parser::RoundingMode::NearestEven,
-                rounding_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
+                kernel_attributes: None,
             })
         })
         .collect::<Vec<_>>();
@@ -354,6 +350,18 @@ fn run_instruction<'input>(
             let name = "sqrt_rn_ftz_f32";
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Dp2a { data, .. } => {
+            let mode = match data.control {
+                ast::Dp2aControl::Low => "lo",
+                ast::Dp2aControl::High => "hi",
+            };
+            let name = format!(
+                "dp2a_{mode}_{}_{}",
+                scalar_to_ptx_name(data.atype),
+                scalar_to_ptx_name(data.btype),
+            );
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Mma {
             data:
                 ast::MmaDetails {
@@ -399,6 +407,9 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::Bfi { data, .. } => {
             let name = ["bfi_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Bmsk { .. } => {
+            to_call(resolver, fn_declarations, "bmsk_clamp_b32".into(), i)?
         }
         i @ ptx_parser::Instruction::Bar { .. } => {
             to_call(resolver, fn_declarations, "bar_sync".into(), i)?

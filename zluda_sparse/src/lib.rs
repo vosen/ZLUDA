@@ -6,6 +6,7 @@ macro_rules! unimplemented {
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
+            #[allow(unused_variables)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 crate::r#impl::unimplemented()
             }

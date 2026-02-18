@@ -22,6 +22,9 @@ const CUFFT_RS: &'static str = include_str! {"cufft.rs"};
 const CUSPARSE_RS: &'static str = include_str! {"cusparse.rs"};
 const CUDNN8_RS: &'static str = include_str! {"cudnn8.rs"};
 const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
+const ROCBLAS_RS: &'static str = include_str! {"../../ext/rocblas-sys/src/lib.rs"};
+const HIPBLASLT_RS: &'static str = include_str! {"../../ext/hipblaslt-sys/src/lib.rs"};
+const MIOPEN_RS: &'static str = include_str! {"../../ext/miopen-sys/src/lib.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -39,45 +42,60 @@ const CUDNN9_RS: &'static str = include_str! {"cudnn9.rs"};
 // Additionally, it does a fixup of CUDA types so they get prefixed with `type_path`
 #[proc_macro]
 pub fn cuda_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUDA_RS)
+    function_declarations(tokens, CUDA_RS, false)
 }
 
 #[proc_macro]
 pub fn cublas_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUBLAS_RS)
+    function_declarations(tokens, CUBLAS_RS, false)
 }
 
 #[proc_macro]
 pub fn cublaslt_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUBLASLT_RS)
+    function_declarations(tokens, CUBLASLT_RS, false)
 }
 
 #[proc_macro]
 pub fn cublaslt_internal_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUBLASLT_INTERNAL_RS)
+    function_declarations(tokens, CUBLASLT_INTERNAL_RS, false)
 }
 
 #[proc_macro]
 pub fn cufft_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUFFT_RS)
+    function_declarations(tokens, CUFFT_RS, false)
 }
 
 #[proc_macro]
 pub fn cusparse_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUSPARSE_RS)
+    function_declarations(tokens, CUSPARSE_RS, false)
 }
 
 #[proc_macro]
 pub fn cudnn8_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUDNN8_RS)
+    function_declarations(tokens, CUDNN8_RS, false)
 }
 
 #[proc_macro]
 pub fn cudnn9_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, CUDNN9_RS)
+    function_declarations(tokens, CUDNN9_RS, false)
 }
 
-fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
+#[proc_macro]
+pub fn rocblas_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, ROCBLAS_RS, true)
+}
+
+#[proc_macro]
+pub fn hipblaslt_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, HIPBLASLT_RS, true)
+}
+
+#[proc_macro]
+pub fn miopen_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, MIOPEN_RS, true)
+}
+
+fn function_declarations(tokens: TokenStream, module: &str, relaxed: bool) -> TokenStream {
     let input = parse_macro_input!(tokens as FnDeclInput);
     let mut cuda_module = syn::parse_str::<File>(module).unwrap();
     let mut choose_macro = ChooseMacro::new(input);
@@ -85,17 +103,32 @@ fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
     for item in cuda_module.items {
         let extern_ = if let Item::ForeignMod(extern_) = item {
             extern_
+        } else if relaxed {
+            continue;
         } else {
             unreachable!()
         };
         let abi = extern_.abi.name;
         for mut item in extern_.items {
             if let ForeignItem::Fn(ForeignItemFn {
-                sig: Signature { ref ident, .. },
+                sig: Signature { ref ident, ref mut output, ref variadic, .. },
                 ref mut attrs,
+                ref mut vis,
                 ..
             }) = item
             {
+                if relaxed {
+                    if variadic.is_some() {
+                        continue;
+                    }
+                    *vis = syn::Visibility::Inherited;
+                    if output == &syn::ReturnType::Default {
+                        *output = syn::ReturnType::Type(
+                            Token![->](Span::call_site()),
+                            Box::new(syn::parse_quote! { () }),
+                        );
+                    }
+                }
                 *attrs = Vec::new();
                 choose_macro.add(ident, quote! { #abi #item });
             } else {
@@ -120,7 +153,7 @@ fn function_declarations(tokens: TokenStream, module: &str) -> TokenStream {
 
 #[proc_macro]
 pub fn nvml_function_declarations(tokens: TokenStream) -> TokenStream {
-    function_declarations(tokens, NVML_RS)
+    function_declarations(tokens, NVML_RS, false)
 }
 struct FnDeclInput {
     normal_macro: Path,

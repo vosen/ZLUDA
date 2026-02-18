@@ -1,0 +1,26 @@
+.version 6.5
+.target sm_70
+.address_size 64
+
+.visible .entry dp2a(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    src1;
+    .reg .b32 	    src2;
+    .reg .b32 	    src3;
+    .reg .b32 	    dst;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b32          src1, [in_addr];
+    ld.b32          src2, [in_addr+4];
+    ld.b32          src3, [in_addr+8];
+    dp2a.hi.s32.s32    dst, src1, src2, src3;
+    st.b32          [out_addr], dst;
+	ret;
+}

@@ -22,6 +22,7 @@ macro_rules! unimplemented {
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
+            #[allow(unused_variables)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
                 Err(r#impl::unimplemented())
             }
@@ -83,6 +84,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxSetFlags,
             cuCtxSetLimit,
             cuCtxSynchronize,
+            cuCtxSynchronize_v2,
             cuDeviceComputeCapability,
             cuDeviceGet,
             cuDeviceGetAttribute,
@@ -104,8 +106,10 @@ cuda_macros::cuda_function_declarations!(
             cuEventCreate,
             cuEventDestroy_v2,
             cuEventElapsedTime,
+            cuEventElapsedTime_v2,
             cuEventQuery,
             cuEventRecord,
+            cuEventRecordWithFlags,
             cuEventSynchronize,
             cuFuncGetAttribute,
             cuFuncSetAttribute,
@@ -122,6 +126,7 @@ cuda_macros::cuda_function_declarations!(
             cuInit,
             cuKernelGetFunction,
             cuKernelSetAttribute,
+            cuKernelGetAttribute,
             cuLaunchKernel,
             cuLaunchKernelEx,
             cuLibraryGetGlobal,
@@ -136,6 +141,7 @@ cuda_macros::cuda_function_declarations!(
             cuMemGetAllocationGranularity,
             cuMemGetInfo_v2,
             cuMemHostAlloc,
+            cuMemHostGetDevicePointer_v2,
             cuMemRetainAllocationHandle,
             cuMemcpyAsync,
             cuMemcpyDtoDAsync_v2,
@@ -151,6 +157,7 @@ cuda_macros::cuda_function_declarations!(
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuModuleGetLoadingMode,
+            cuModuleLoad,
             cuModuleLoadData,
             cuModuleLoadDataEx,
             cuModuleLoadFatBinary,
@@ -167,6 +174,7 @@ cuda_macros::cuda_function_declarations!(
             cuStreamDestroy_v2,
             cuStreamEndCapture,
             cuStreamGetCaptureInfo_v2,
+            cuStreamGetCaptureInfo_v3,
             cuStreamIsCapturing,
             cuStreamSynchronize,
             cuStreamWaitEvent,

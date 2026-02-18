@@ -1,0 +1,38 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry sub_extended(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .u64   in_addr;
+    .reg .u64   out_addr;
+    .reg .u32   a<4>;
+    .reg .u32   b<4>;
+    .reg .u32   r<4>;
+
+    ld.param.u64    in_addr, [input];
+    ld.param.u64    out_addr, [output];
+
+    ld.u32          a0, [in_addr];
+    ld.u32          a1, [in_addr+4];
+    ld.u32          a2, [in_addr+8];
+    ld.u32          a3, [in_addr+12];
+    ld.u32          b0, [in_addr+16];
+    ld.u32          b1, [in_addr+20];
+    ld.u32          b2, [in_addr+24];
+    ld.u32          b3, [in_addr+28];
+
+    sub.cc.u32      r0, a0, b0;
+    subc.cc.u32     r1, a1, b1;
+    subc.cc.u32     r2, a2, b2;
+    subc.u32        r3, a3, b3;
+
+    st.u32          [out_addr], r0;
+    st.u32          [out_addr+4], r1;
+    st.u32          [out_addr+8], r2;
+    st.u32          [out_addr+12], r3;
+    ret;
+}

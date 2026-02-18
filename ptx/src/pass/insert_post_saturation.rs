@@ -71,6 +71,9 @@ fn run_instruction<'input>(
             data: ast::ArithDetails::Integer(..),
             ..
         }
+        | ast::Instruction::AddExtended { .. }
+        | ast::Instruction::SubExtended { .. }
+        | ast::Instruction::MadExtended { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::AtomCas { .. }
@@ -79,6 +82,7 @@ fn run_instruction<'input>(
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::Bfe { .. }
         | ast::Instruction::Bfi { .. }
+        | ast::Instruction::Bmsk { .. }
         | ast::Instruction::Bra { .. }
         | ast::Instruction::Brev { .. }
         | ast::Instruction::Call { .. }
@@ -202,6 +206,8 @@ fn run_instruction<'input>(
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
         | ast::Instruction::Prefetch { .. }
+        | ast::Instruction::Sad { .. }
+        | ast::Instruction::Dp2a { .. }
         | ast::Instruction::Mma { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:

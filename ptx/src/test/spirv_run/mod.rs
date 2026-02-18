@@ -88,6 +88,58 @@ test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx!(add, [1u64], [2u64]);
 test_ptx!(
+    add_extended,
+    [
+        0xFFFFFFFFu32,
+        0xFFFFFFFFu32,
+        0xFFFFFFFFu32,
+        0x00000000u32,
+        0x00000001u32,
+        0x00000000u32,
+        0x00000000u32,
+        0x00000000u32
+    ],
+    [0x00000000u32, 0x00000000u32, 0x00000000u32, 0x00000001u32]
+);
+test_ptx!(
+    sub_extended,
+    [
+        0x00000000u32,
+        0x00000000u32,
+        0x00000000u32,
+        0x00000001u32,
+        0x00000001u32,
+        0x00000000u32,
+        0x00000000u32,
+        0x00000000u32
+    ],
+    [0xFFFFFFFFu32, 0xFFFFFFFFu32, 0xFFFFFFFFu32, 0x00000000u32]
+);
+test_ptx!(
+    mad_extended,
+    [
+        0xFFFFFFFFu32, // a0 = 2^32 - 1
+        0x00000002u32, // b0 = 2
+        // a0 * b0 = 0x1_FFFF_FFFE (low 32 bits = 0xFFFFFFFE)
+        0x00000001u32, // c0: 0xFFFFFFFE + 1 = 0xFFFFFFFF, no carry
+        0x00000001u32, // c1: 0xFFFFFFFE + 1 + 0 (carry) = 0xFFFFFFFF, no carry
+        0x00000002u32, // c2: 0xFFFFFFFE + 2 + 0 (carry) = 0x1_00000000, carry out
+        0x00000000u32  // c3: 0xFFFFFFFE + 0 + 1 (carry) = 0xFFFFFFFF
+    ],
+    [
+        0xFFFFFFFFu32, // r0
+        0xFFFFFFFFu32, // r1
+        0x00000000u32, // r2 (overflow to 0)
+        0xFFFFFFFFu32  // r3 (carry in from r2)
+    ]
+);
+test_ptx!(
+    addc_cc_s32,
+    [0x62D0B1FDu32, 0xB632D4DFu32],
+    [0x1190386DDu64]
+);
+test_ptx!(subc_cc_s32, [0x627ADF75u32, 0x864CCEF5u32], [3694006400u64]);
+test_ptx!(
     mul24_lo_u32,
     [0b01110101_01010101_01010101u32],
     [0b00011100_00100011_10001110_00111001u32]
@@ -249,6 +301,7 @@ test_ptx!(
     [0b11000001u32]
 );
 test_ptx!(bfi, [0b10u32, 0b101u32, 0u32, 2u32], [0b110u32]);
+test_ptx!(bmsk_clamp_b32, [24u32, 12u32], [0xFF000000u32]);
 test_ptx!(stateful_ld_st_simple, [121u64], [121u64]);
 test_ptx!(stateful_ld_st_ntid, [123u64], [123u64]);
 test_ptx!(stateful_ld_st_ntid_chain, [12651u64], [12651u64]);
@@ -370,6 +423,11 @@ test_ptx!(
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [613065134u32]
 );
+test_ptx!(
+    dp2a,
+    [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
+    [614127545u32]
+);
 test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 // TODO: re-enable when we have a patched LLVM
 //test_ptx!(
@@ -397,6 +455,8 @@ test_ptx!(
     ],
     [4294967295u32, 65535]
 );
+test_ptx!(uint_to_fp_bf16, [1u32, 3u32], [0x3F80u32]);
+test_ptx!(sad_s64, [12i64, -38, 915], [965i64, 965]);
 
 test_ptx!(assertfail);
 // TODO: not yet supported

@@ -55,6 +55,30 @@ pub(crate) fn get_capture_info_v2(
     }
 }
 
+pub(crate) fn get_capture_info_v3(
+    stream: hipStream_t,
+    capture_status_out: *mut hipStreamCaptureStatus,
+    id_out: *mut ::core::ffi::c_ulonglong,
+    graph_out: *mut hipGraph_t,
+    dependencies_out: *mut *const hipGraphNode_t,
+    edge_data_out: *mut *const cuda_types::cuda::CUgraphEdgeData,
+    num_dependencies_out: *mut usize,
+) -> hipError_t {
+    if !edge_data_out.is_null() {
+        return hipError_t::ErrorNotSupported;
+    }
+    unsafe {
+        hipStreamGetCaptureInfo_v2(
+            stream,
+            capture_status_out,
+            id_out,
+            graph_out,
+            dependencies_out,
+            num_dependencies_out,
+        )
+    }
+}
+
 pub(crate) fn wait_event(
     stream: hipStream_t,
     event: hipEvent_t,

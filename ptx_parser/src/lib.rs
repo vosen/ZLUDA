@@ -156,6 +156,43 @@ fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str>
         "ident",
         any.verify_map(|(t, _)| {
             if let Token::Ident(text) = t {
+                if matches!(
+                    text,
+                    "%envreg1"
+                        | "%envreg2"
+                        | "%envreg3"
+                        | "%envreg4"
+                        | "%envreg5"
+                        | "%envreg6"
+                        | "%envreg7"
+                        | "%envreg8"
+                        | "%envreg9"
+                        | "%envreg10"
+                        | "%envreg11"
+                        | "%envreg12"
+                        | "%envreg13"
+                        | "%envreg14"
+                        | "%envreg15"
+                        | "%envreg16"
+                        | "%envreg17"
+                        | "%envreg18"
+                        | "%envreg19"
+                        | "%envreg20"
+                        | "%envreg21"
+                        | "%envreg22"
+                        | "%envreg23"
+                        | "%envreg24"
+                        | "%envreg25"
+                        | "%envreg26"
+                        | "%envreg27"
+                        | "%envreg28"
+                        | "%envreg29"
+                        | "%envreg30"
+                        | "%envreg31"
+                        | "%envreg32"
+                ) {
+                    stream.state.errors.push(PtxError::UnsupportedSreg(text));
+                }
                 Some(text)
             } else if let Some(text) = t.opcode_text() {
                 Some(text)
@@ -164,7 +201,7 @@ fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str>
             }
         }),
     )
-    .parse_next(stream)
+    .parse_next(&mut stream.input)
 }
 
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
@@ -1000,19 +1037,19 @@ fn multi_variable<'a, 'input: 'a>(
                     count,
                 });
             }
-            let mut array_dimensions = if state_space != StateSpace::Reg {
+            let array_dimensions = if state_space != StateSpace::Reg {
                 opt(array_dimensions).parse_next(stream)?
             } else {
                 None
             };
             let initializer = match state_space {
                 StateSpace::Global | StateSpace::Const => match array_dimensions {
-                    Some(ref mut dimensions) => {
-                        opt(array_initializer(type_, vector, dimensions)).parse_next(stream)?
+                    Some(ref dimensions) => {
+                        array_initializer(type_, vector, dimensions).parse_next(stream)?
                     }
-                    None => opt(value_initializer(vector)).parse_next(stream)?,
+                    None => value_initializer(type_, vector).parse_next(stream)?,
                 },
-                _ => None,
+                _ => Vec::new(),
             };
             if let Some(ref dims) = array_dimensions {
                 if !extern_ && dims[0] == 0 {
@@ -1024,7 +1061,7 @@ fn multi_variable<'a, 'input: 'a>(
                     align,
                     v_type: Type::maybe_array(vector, type_, array_dimensions),
                     state_space,
-                    array_init: initializer.unwrap_or(Vec::new()),
+                    array_init: initializer,
                 },
                 names,
             })
@@ -1035,11 +1072,20 @@ fn multi_variable<'a, 'input: 'a>(
 fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     type_: ScalarType,
     vector: Option<NonZeroU8>,
-    array_dimensions: &'b mut Vec<u32>,
+    array_dimensions: &'b Vec<u32>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
+    let pad_with_zeros = move |result: Option<Vec<RegOrImmediate<&'input str>>>| {
+        let mut result = result.unwrap_or(Vec::new());
+        let result_size = array_dimensions[0] as usize;
+        let default = default_immediate_from_type(type_);
+        result.extend(
+            iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
+        );
+        result
+    };
     trace(
         "array_initializer",
-        move |stream: &mut PtxParser<'a, 'input>| {
+        opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
             // TODO: vector constants and multi dim arrays
@@ -1056,29 +1102,27 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
                 Token::RBrace,
             )
             .parse_next(stream)?;
-            // pad with zeros
-            let result_size = array_dimensions[0] as usize;
-            let default = match type_.kind() {
-                ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => {
-                    ast::ImmediateValue::U64(0)
-                }
-                ScalarKind::Signed => ast::ImmediateValue::S64(0),
-                ScalarKind::Float => ast::ImmediateValue::F64(0.0),
-            };
-            result.extend(
-                iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
-            );
             Ok(result)
-        },
+        })
+        .map(pad_with_zeros),
     )
 }
 
+fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
+    match type_.kind() {
+        ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => ast::ImmediateValue::U64(0),
+        ScalarKind::Signed => ast::ImmediateValue::S64(0),
+        ScalarKind::Float => ast::ImmediateValue::F64(0.0),
+    }
+}
+
 fn value_initializer<'a, 'input: 'a>(
+    type_: ScalarType,
     vector: Option<NonZeroU8>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> {
     trace(
         "value_initializer",
-        move |stream: &mut PtxParser<'a, 'input>| {
+        opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
             // TODO: vector constants
@@ -1087,7 +1131,12 @@ fn value_initializer<'a, 'input: 'a>(
             }
             single_value_append(&mut result).parse_next(stream)?;
             Ok(result)
-        },
+        })
+        .map(move |maybe_vec| {
+            maybe_vec.unwrap_or_else(|| {
+                vec![ast::RegOrImmediate::Imm(default_immediate_from_type(type_))]
+            })
+        }),
     )
 }
 
@@ -1444,6 +1493,8 @@ pub enum PtxError<'input> {
     UnrecognizedStatement(&'input str),
     #[error("Unrecognized directive {0:?}")]
     UnrecognizedDirective(&'input str),
+    #[error("Unsupported special register {0:?}")]
+    UnsupportedSreg(&'input str),
 }
 
 #[derive(Debug)]
@@ -3716,6 +3767,15 @@ derive_parser!(
     }
     .type: ScalarType = { .b32, .b64 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bmsk
+    bmsk.mode.b32  d, a, b => {
+        ast::Instruction::Bmsk {
+            data: mode,
+            arguments: BmskArgs { dst: d, src_a: a, src_b: b },
+        }
+    }
+    .mode: BmskMode = { .clamp };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
     // prmt.b32{.mode}  d, a, b, c;
     // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
@@ -4049,12 +4109,122 @@ derive_parser!(
     .level::primary_priority: EvictionPriority =   { .L2::evict_last, .L2::evict_normal,
                                 .L2::evict_first, .L2::evict_unchanged };
     // .level::secondary_priority: EvictionPriority = { .L2::evict_first, .L2::evict_unchanged };
+
+    sad.type  d, a, b, c => {
+        Instruction::Sad {
+            data: type_,
+            arguments: SadArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
+
+    dp2a.mode.atype.btype  d, a, b, c => {
+        Instruction::Dp2a {
+            data: Dp2aData {
+                atype: atype,
+                btype: btype,
+                control: match mode {
+                    RawDp2aControl::Lo => Dp2aControl::Low,
+                    RawDp2aControl::Hi => Dp2aControl::High
+                },
+            },
+            arguments: Dp2aArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .atype: ScalarType = { .u32, .s32 };
+    .btype: ScalarType = { .u32, .s32 };
+    .mode: RawDp2aControl = { .lo, .hi };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-add-cc
+    add.cc.type  d, a, b => {
+        Instruction::AddExtended {
+            data: CarryDetails { kind: CarryKind::CarryOut, type_: type_ },
+            arguments: AddExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-addc
+    addc{.cc}.type  d, a, b => {
+        Instruction::AddExtended {
+            data: CarryDetails { kind: if cc { CarryKind::CarryInCarryOut } else { CarryKind::CarryIn }, type_: type_ },
+            arguments: AddExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-sub-cc
+    sub.cc.type  d, a, b => {
+        Instruction::SubExtended {
+            data: CarryDetails { kind: CarryKind::CarryOut, type_: type_ },
+            arguments: SubExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-subc
+    subc{.cc}.type  d, a, b => {
+        Instruction::SubExtended {
+            data: CarryDetails { kind: if cc { CarryKind::CarryInCarryOut } else { CarryKind::CarryIn }, type_: type_ },
+            arguments: SubExtendedArgs {
+                dst: d,
+                src1: a,
+                src2: b,
+            }
+        }
+    }
+
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-mad-cc
+    mad.mode.cc.type  d, a, b, c => {
+        Instruction::MadExtended {
+            data: MadCarryDetails { kind: CarryKind::CarryOut, control: mode.into(), type_: type_ },
+            arguments: MadExtendedArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .mode: RawMulIntControl = { .lo, .hi };
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#extended-precision-arithmetic-instructions-madc
+    madc.mode{.cc}.type  d, a, b, c => {
+        Instruction::MadExtended {
+            data: MadCarryDetails {
+                kind: if cc { CarryKind::CarryInCarryOut } else { CarryKind::CarryIn },
+                control: mode.into(),
+                type_: type_
+            },
+            arguments: MadExtendedArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+
+    .mode: RawMulIntControl = { .lo, .hi };
+    .type: ScalarType = { .u32, .s32, .u64, .s64 };
 );
 
 #[cfg(test)]
 mod tests {
     use crate::first_optional;
     use crate::module;
+    use crate::multi_variable;
     use crate::parse_module_checked;
     use crate::section;
     use crate::PtxError;
@@ -4434,5 +4604,55 @@ mod tests {
         let result = module.parse(stream);
         assert!(result.is_ok(), "Failed to parse extern func with .noreturn");
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn const_zero_pad() {
+        let text = ".align 4 .b8 constData[8]";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = multi_variable(false, crate::StateSpace::Const)
+            .parse(stream)
+            .unwrap();
+        let result = match result {
+            crate::ast::MultiVariable::Names { info, .. } => info,
+            _ => panic!(),
+        };
+        assert_eq!(
+            result.array_init,
+            vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0)); 8]
+        );
+    }
+
+    #[test]
+    fn global_zero_init() {
+        let text = ".align 4 .b8 constData";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let result = multi_variable(false, crate::StateSpace::Global)
+            .parse(stream)
+            .unwrap();
+        let result = match result {
+            crate::ast::MultiVariable::Names { info, .. } => info,
+            _ => panic!(),
+        };
+        assert_eq!(
+            result.array_init,
+            vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0))]
+        );
     }
 }

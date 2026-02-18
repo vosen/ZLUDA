@@ -3,8 +3,9 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber, MatrixShape,
-    Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode, VoteMode,
+    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
+    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
+    VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -55,6 +56,35 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+            },
+            display: write!(f, "add{}", data)?
+        },
+        AddExtended {
+            data: CarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        SubExtended {
+            data: CarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+            }
+        },
+        MadExtended {
+            data: MadCarryDetails,
+            type: { Type::Scalar(data.type_) },
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
             }
         },
         And {
@@ -159,11 +189,21 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Bmsk {
+            type: Type::Scalar(ScalarType::B32),
+            data: BmskMode,
+            arguments<T>: {
+                dst: T,
+                src_a: T,
+                src_b: T,
+            }
+        },
         Bra {
             type: !,
             arguments<T::Ident>: {
                 src: T
-            }
+            },
+            display: write!(f, "bra")?
         },
         Brev {
             type: Type::Scalar(data.clone()),
@@ -420,7 +460,8 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src1: T,
                 src2: T,
-            }
+            },
+            display: write!(f, "mul{}", data)?
         },
         Mul24 {
             type: { Type::from(data.type_) },
@@ -685,6 +726,16 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     relaxed_type_check: true,
                 }
+            },
+            display: {
+                write!(
+                    f,
+                    "st{}{}{}{}",
+                    data.qualifier,
+                    data.state_space,
+                    data.caching,
+                    data.typ,
+                )?
             }
         },
         Sub {
@@ -800,7 +851,43 @@ ptx_parser_macros::generate_instruction_type!(
                     relaxed_type_check: true
                 }
             }
-        }
+        },
+        Sad {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Dp2a {
+            type: !,
+            data: Dp2aData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(data.ctype()) },
+
+                },
+                src1:  {
+                    repr: T,
+                    type: { Type::Scalar(data.atype) },
+
+                },
+                src2:  {
+                    repr: T,
+                    type: { Type::Scalar(data.btype) },
+
+                },
+                src3:  {
+                    repr: T,
+                    type: { Type::Scalar(data.ctype()) },
+
+                }
+            }
+        },
     }
 );
 
@@ -1383,8 +1470,8 @@ pub struct ShfDetails {
     pub direction: ShiftDirection,
     pub mode: FunnelShiftMode,
 }
-
-#[derive(Clone, Copy, Display)]
+#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[derive(Clone, Copy, Display, Debug)]
 pub enum RegOrImmediate<Ident> {
     Reg(Ident),
     Imm(ImmediateValue),
@@ -1456,7 +1543,8 @@ pub trait Operand: Sized {
     fn from_ident(ident: Self::Ident) -> Self;
 }
 
-#[derive(Copy, Clone)]
+#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[derive(Copy, Clone, Debug)]
 pub enum ImmediateValue {
     U64(u64),
     S64(i64),
@@ -1473,10 +1561,20 @@ impl ImmediateValue {
             ImmediateValue::F32(_) | ImmediateValue::F64(_) => None,
         }
     }
+
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             ImmediateValue::F64(n) => Some(n),
             _ => None,
+        }
+    }
+
+    pub fn get_bits(&self) -> u64 {
+        match self {
+            ImmediateValue::U64(n) => *n,
+            ImmediateValue::S64(n) => *n as u64,
+            ImmediateValue::F32(n) => n.to_bits() as u64,
+            ImmediateValue::F64(n) => n.to_bits(),
         }
     }
 }
@@ -1484,10 +1582,10 @@ impl ImmediateValue {
 impl std::fmt::Display for ImmediateValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ImmediateValue::U64(n) => write!(f, "{}", n)?,
+            ImmediateValue::U64(n) => write!(f, "{}U", n)?,
             ImmediateValue::S64(n) => write!(f, "{}", n)?,
-            ImmediateValue::F32(n) => write!(f, "{}", n)?,
-            ImmediateValue::F64(n) => write!(f, "{}", n)?,
+            ImmediateValue::F32(n) => write!(f, "0f{:x}", n.to_bits())?,
+            ImmediateValue::F64(n) => write!(f, "0d{:x}", n.to_bits())?,
         }
         Ok(())
     }
@@ -1499,6 +1597,18 @@ pub enum StCacheOperator {
     L2Only,
     Streaming,
     Writethrough,
+}
+
+impl Display for StCacheOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StCacheOperator::Writeback => {}
+            StCacheOperator::L2Only => write!(f, ".cg")?,
+            StCacheOperator::Streaming => write!(f, ".cs")?,
+            StCacheOperator::Writethrough => write!(f, ".wt")?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1528,6 +1638,23 @@ pub enum CpAsyncCacheOperator {
     L2Only,
 }
 
+pub enum CarryKind {
+    CarryIn,
+    CarryOut,
+    CarryInCarryOut,
+}
+
+pub struct CarryDetails {
+    pub kind: CarryKind,
+    pub type_: ScalarType,
+}
+
+pub struct MadCarryDetails {
+    pub kind: CarryKind,
+    pub control: MulIntControl,
+    pub type_: ScalarType,
+}
+
 #[derive(Copy, Clone)]
 pub enum ArithDetails {
     Integer(ArithInteger),
@@ -1543,10 +1670,34 @@ impl ArithDetails {
     }
 }
 
+impl std::fmt::Display for ArithDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArithDetails::Integer(int) => {
+                write!(f, "{}", int)?;
+            }
+            ArithDetails::Float(float) => {
+                write!(f, "{}", float)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct ArithInteger {
     pub type_: ScalarType,
     pub saturate: bool,
+}
+
+impl std::fmt::Display for ArithInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -1562,6 +1713,20 @@ pub struct ArithFloat {
     // mul/add sequences with no rounding modifiers may be optimized to use fused-multiply-add
     // instructions on the target device.
     pub is_fusable: bool,
+}
+
+impl std::fmt::Display for ArithFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.rounding)?;
+        if let Some(true) = self.flush_to_zero {
+            write!(f, ".ftz")?;
+        }
+        if self.saturate {
+            write!(f, ".sat")?;
+        }
+        write!(f, "{}", self.type_)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1592,6 +1757,18 @@ pub enum RoundingMode {
     Zero,
     NegativeInf,
     PositiveInf,
+}
+
+impl std::fmt::Display for RoundingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RoundingMode::NearestEven => write!(f, ".rn")?,
+            RoundingMode::Zero => write!(f, ".rz")?,
+            RoundingMode::NegativeInf => write!(f, ".rm")?,
+            RoundingMode::PositiveInf => write!(f, ".rp")?,
+        }
+        Ok(())
+    }
 }
 
 pub struct LdDetails {
@@ -1791,11 +1968,34 @@ impl MulDetails {
     }
 }
 
+impl std::fmt::Display for MulDetails {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulDetails::Integer { type_, control } => {
+                write!(f, "{}{}", type_, control)
+            }
+            MulDetails::Float(arith) => {
+                write!(f, "{}", arith)
+            }
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MulIntControl {
     Low,
     High,
     Wide,
+}
+
+impl std::fmt::Display for MulIntControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MulIntControl::Low => write!(f, ".lo"),
+            MulIntControl::High => write!(f, ".hi"),
+            MulIntControl::Wide => write!(f, ".wide"),
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -2568,4 +2768,26 @@ impl MmaDetails {
 pub struct PrefetchData {
     pub space: StateSpace,
     pub level: CacheLevel,
+}
+
+#[derive(Clone, Copy)]
+pub struct Dp2aData {
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub control: Dp2aControl,
+}
+
+impl Dp2aData {
+    pub fn ctype(&self) -> ScalarType {
+        match (self.atype, self.btype) {
+            (ScalarType::U32, ScalarType::U32) => ScalarType::U32,
+            _ => ScalarType::S32,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Dp2aControl {
+    Low,
+    High,
 }
