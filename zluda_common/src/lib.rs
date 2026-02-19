@@ -174,6 +174,7 @@ macro_rules! from_cuda_object {
 from_cuda_nop!(
     *mut i8,
     *mut i32,
+    *const i32,
     *mut u64,
     *mut usize,
     *const f32,
@@ -226,7 +227,9 @@ from_cuda_nop!(
     cudnn9::cudnnMathType_t,
     cudnn9::cudnnConvolutionFwdAlgoPerfStruct,
     *mut cuda_types::cublas::__half,
-    *const cuda_types::cublas::__half
+    *const cuda_types::cublas::__half,
+    cudnn9::cudnnDataType_t,
+    cudnn9::cudnnTensorFormat_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

@@ -5,7 +5,10 @@ use rustc_hash::FxHashMap;
 use std::{
     collections::VecDeque,
     mem, ptr,
-    sync::{Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicPtr, Ordering},
+        Mutex, OnceLock,
+    },
 };
 use zluda_common::{from_cuda_object, ZludaObject};
 
@@ -18,6 +21,7 @@ fn miopen() -> Result<&'static super::MIOpenVtable, miopenError_t> {
 
 pub(crate) struct Context {
     base: miopenHandle_t,
+    stream: AtomicPtr<ihipStream_t>,
     search_workspace: Mutex<ContextCache>,
 }
 
@@ -27,6 +31,7 @@ impl Context {
     fn new(base: miopenHandle_t) -> Self {
         Self {
             base,
+            stream: AtomicPtr::new(ptr::null_mut()),
             search_workspace: Mutex::new(ContextCache {
                 beta_buffer_cache: TemporaryBufferAllocator::new(),
                 algo_cache: FxHashMap::default(),
@@ -209,9 +214,6 @@ pub(crate) fn unimplemented() -> cudnnStatus_t {
     cudnnStatus_t::ERROR_NOT_SUPPORTED
 }
 
-pub(crate) fn get_version() -> usize {
-    todo!()
-}
 pub(crate) fn get_max_device_version() -> usize {
     todo!()
 }
@@ -297,6 +299,176 @@ pub(crate) unsafe fn set_convolution2d_descriptor(
 ) -> miopenStatus_t {
     miopen()?.miopenInitConvolutionDescriptor(
         conv_desc, mode, pad_h, pad_w, u, v, dilation_h, dilation_w,
+    )
+}
+
+pub(crate) unsafe fn set_convolution_group_count(
+    conv_desc: miopenConvolutionDescriptor_t,
+    group_count: ::core::ffi::c_int,
+) -> miopenStatus_t {
+    miopen()?.miopenSetConvolutionGroupCount(conv_desc, group_count)
+}
+
+pub(crate) unsafe fn set_convolution_nd_descriptor(
+    conv_desc: miopenConvolutionDescriptor_t,
+    array_length: ::core::ffi::c_int,
+    pad_a: *const ::core::ffi::c_int,
+    filter_stride_a: *const ::core::ffi::c_int,
+    dilation_a: *const ::core::ffi::c_int,
+    mode: miopenConvolutionMode_t,
+    _compute_type: miopenDataType_t,
+) -> miopenStatus_t {
+    if array_length != 2 {
+        return miopenStatus_t::ErrorNotImplemented;
+    }
+    let pad = std::slice::from_raw_parts(pad_a, array_length as usize);
+    let filter_stride = std::slice::from_raw_parts(filter_stride_a, array_length as usize);
+    let dilation = std::slice::from_raw_parts(dilation_a, array_length as usize);
+    miopen()?.miopenInitConvolutionDescriptor(
+        conv_desc,
+        mode,
+        pad[0],
+        pad[1],
+        filter_stride[0],
+        filter_stride[1],
+        dilation[0],
+        dilation[1],
+    )
+}
+
+pub(crate) unsafe fn set_filter_nd_descriptor(
+    filter_desc: miopenTensorDescriptor_t,
+    data_type: miopenDataType_t,
+    format: miopenTensorLayout_t,
+    nb_dims: ::core::ffi::c_int,
+    filter_dim_a: *const ::core::ffi::c_int,
+) -> miopenStatus_t {
+    if format != miopenTensorLayout_t::miopenTensorNCHW {
+        return miopenStatus_t::ErrorNotImplemented;
+    }
+    miopen()?.miopenSetNdTensorDescriptorWithLayout(
+        filter_desc,
+        data_type,
+        format,
+        filter_dim_a,
+        nb_dims,
+    )
+}
+
+pub(crate) unsafe fn get_filter_nd_descriptor(
+    filter_desc: miopenTensorDescriptor_t,
+    nb_dims_requested: ::core::ffi::c_int,
+    data_type: &mut cudnnDataType_t,
+    format: &mut cudnnTensorFormat_t,
+    nb_dims: &mut ::core::ffi::c_int,
+    filter_dim_a: *mut ::core::ffi::c_int,
+) -> miopenStatus_t {
+    get_tensor_nd_descriptor_impl(
+        filter_desc,
+        nb_dims_requested,
+        data_type,
+        format,
+        nb_dims,
+        filter_dim_a,
+        ptr::null_mut(),
+    )
+}
+
+pub(crate) unsafe fn get_tensor_nd_descriptor_impl(
+    filter_desc: miopenTensorDescriptor_t,
+    nb_dims_requested: ::core::ffi::c_int,
+    data_type: &mut cudnnDataType_t,
+    format: &mut cudnnTensorFormat_t,
+    nb_dims: &mut ::core::ffi::c_int,
+    filter_dim_a: *mut i32,
+    strides_dim_a: *mut i32,
+) -> miopenStatus_t {
+    fn to_cuda_data_type(data_type: miopenDataType_t) -> Result<cudnnDataType_t, miopenError_t> {
+        Ok(match data_type {
+            miopenDataType_t::miopenHalf => cudnnDataType_t::CUDNN_DATA_HALF,
+            miopenDataType_t::miopenFloat => cudnnDataType_t::CUDNN_DATA_FLOAT,
+            miopenDataType_t::miopenInt32 => cudnnDataType_t::CUDNN_DATA_INT32,
+            miopenDataType_t::miopenInt8 => cudnnDataType_t::CUDNN_DATA_INT8,
+            miopenDataType_t::miopenBFloat16 => cudnnDataType_t::CUDNN_DATA_BFLOAT16,
+            miopenDataType_t::miopenDouble => cudnnDataType_t::CUDNN_DATA_DOUBLE,
+            miopenDataType_t::miopenFloat8 => cudnnDataType_t::CUDNN_DATA_FP8_E4M3,
+            miopenDataType_t::miopenBFloat8 => cudnnDataType_t::CUDNN_DATA_FP8_E5M2,
+            miopenDataType_t::miopenInt64 => cudnnDataType_t::CUDNN_DATA_INT64,
+            _ => return Err(miopenError_t::NotImplemented),
+        })
+    }
+    let miopen = miopen()?;
+    miopen.miopenGetTensorDescriptorSize(filter_desc, nb_dims)?;
+    *format = cudnnTensorFormat_t::CUDNN_TENSOR_NCHW;
+    let mut miopen_data_type = mem::zeroed();
+    if *nb_dims > nb_dims_requested {
+        let miopen_size = *nb_dims as usize;
+        let mut dimensions = if filter_dim_a.is_null() {
+            None
+        } else {
+            Some(vec![0; miopen_size])
+        };
+        let mut strides = if strides_dim_a.is_null() {
+            None
+        } else {
+            Some(vec![0; miopen_size])
+        };
+        miopen.miopenGetTensorDescriptor(
+            filter_desc,
+            &mut miopen_data_type,
+            dimensions.as_mut().map_or(ptr::null_mut(), Vec::as_mut_ptr),
+            strides.as_mut().map_or(ptr::null_mut(), Vec::as_mut_ptr),
+        )?;
+
+        if let Some(dimensions) = dimensions {
+            ptr::copy_nonoverlapping(
+                dimensions.as_ptr(),
+                filter_dim_a,
+                nb_dims_requested as usize,
+            );
+        }
+        if let Some(strides) = strides {
+            ptr::copy_nonoverlapping(strides.as_ptr(), strides_dim_a, nb_dims_requested as usize);
+        }
+    } else {
+        miopen.miopenGetTensorDescriptor(
+            filter_desc,
+            &mut miopen_data_type,
+            filter_dim_a,
+            strides_dim_a,
+        )?;
+    }
+    *data_type = to_cuda_data_type(miopen_data_type)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn set_tensor_nd_descriptor(
+    tensor_desc: miopenTensorDescriptor_t,
+    data_type: miopenDataType_t,
+    nb_dims: ::core::ffi::c_int,
+    dim_a: *const ::core::ffi::c_int,
+    stride_a: *const ::core::ffi::c_int,
+) -> miopenStatus_t {
+    miopen()?.miopenSetTensorDescriptor(tensor_desc, data_type, nb_dims, dim_a, stride_a)
+}
+
+pub(crate) unsafe fn get_tensor_nd_descriptor(
+    tensor_desc: miopenTensorDescriptor_t,
+    nb_dims_requested: ::core::ffi::c_int,
+    data_type: &mut cudnnDataType_t,
+    nb_dims: &mut ::core::ffi::c_int,
+    dim_a: *mut ::core::ffi::c_int,
+    stride_a: *mut ::core::ffi::c_int,
+) -> miopenStatus_t {
+    let mut format = mem::zeroed();
+    get_tensor_nd_descriptor_impl(
+        tensor_desc,
+        nb_dims_requested,
+        data_type,
+        &mut format,
+        nb_dims,
+        dim_a,
+        stride_a,
     )
 }
 
@@ -679,9 +851,24 @@ pub(crate) unsafe fn destroy_tensor_descriptor(desc: miopenTensorDescriptor_t) -
     miopen()?.miopenDestroyTensorDescriptor(desc)
 }
 
+pub(crate) unsafe fn set_stream(handle: &Context, stream: hipStream_t) -> miopenStatus_t {
+    miopen()?.miopenSetStream(handle.base, stream)?;
+    handle.stream.store(stream.0, Ordering::Release);
+    Ok(())
+}
+
+pub(crate) unsafe fn get_stream(handle: &Context, stream: &mut hipStream_t) -> miopenStatus_t {
+    stream.0 = handle.stream.load(Ordering::Acquire);
+    Ok(())
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use std::mem;
+
+    pub(crate) fn get_version() -> usize {
+        return cuda_types::cudnn8::CUDNN_VERSION as usize;
+    }
 
     pub(crate) fn get_error_string(
         status: cuda_types::cudnn8::cudnnStatus_t,
@@ -835,6 +1022,10 @@ pub mod dnn8 {
 pub mod dnn9 {
     use cuda_types::cudnn9::*;
     use zluda_common::FromCuda;
+
+    pub(crate) fn get_version() -> usize {
+        return cuda_types::cudnn9::CUDNN_VERSION as usize;
+    }
 
     pub(crate) fn get_error_string(_status: cudnnStatus_t) -> *const ::core::ffi::c_char {
         todo!()
