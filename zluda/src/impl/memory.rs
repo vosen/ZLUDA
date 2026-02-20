@@ -212,3 +212,25 @@ pub(crate) fn get_allocation_granularity(
 ) -> CUresult {
     CUresult::ERROR_NOT_SUPPORTED
 }
+
+pub(crate) unsafe fn alloc_pitch_v2(
+    dptr: *mut hipDeviceptr_t,
+    p_pitch: *mut usize,
+    width_in_bytes: usize,
+    height: usize,
+    element_size_bytes: ::core::ffi::c_uint,
+) -> CUresult {
+    hipMemAllocPitch(
+        dptr.cast(),
+        p_pitch,
+        width_in_bytes,
+        height,
+        element_size_bytes,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn copy_2d_v2(memcpy: hip_Memcpy2D) -> CUresult {
+    hipMemcpyParam2D(&memcpy)?;
+    Ok(())
+}

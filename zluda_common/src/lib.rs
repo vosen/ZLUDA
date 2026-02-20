@@ -753,6 +753,44 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionFwdAlgo_t, E>
     }
 }
 
+impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY2D_v2, E>
+    for hip_runtime_sys::hip_Memcpy2D
+{
+    fn from_cuda(format: &'a *const CUDA_MEMCPY2D_v2) -> Result<Self, E> {
+        let format = unsafe { format.as_ref() }.ok_or(E::INVALID_VALUE)?;
+        Ok(hip_Memcpy2D {
+            srcXInBytes: format.srcXInBytes,
+            srcY: format.srcY,
+            srcMemoryType: match format.srcMemoryType {
+                CUmemorytype::CU_MEMORYTYPE_HOST => hipMemoryType::hipMemoryTypeHost,
+                CUmemorytype::CU_MEMORYTYPE_DEVICE => hipMemoryType::hipMemoryTypeDevice,
+                CUmemorytype::CU_MEMORYTYPE_ARRAY => hipMemoryType::hipMemoryTypeArray,
+                CUmemorytype::CU_MEMORYTYPE_UNIFIED => hipMemoryType::hipMemoryTypeUnified,
+                _ => return Err(E::NOT_SUPPORTED),
+            },
+            srcHost: format.srcHost,
+            srcDevice: hipDeviceptr_t(format.srcDevice.0),
+            srcArray: format.srcArray.cast(),
+            srcPitch: format.srcPitch,
+            dstXInBytes: format.dstXInBytes,
+            dstY: format.dstY,
+            dstMemoryType: match format.dstMemoryType {
+                CUmemorytype::CU_MEMORYTYPE_HOST => hipMemoryType::hipMemoryTypeHost,
+                CUmemorytype::CU_MEMORYTYPE_DEVICE => hipMemoryType::hipMemoryTypeDevice,
+                CUmemorytype::CU_MEMORYTYPE_ARRAY => hipMemoryType::hipMemoryTypeArray,
+                CUmemorytype::CU_MEMORYTYPE_UNIFIED => hipMemoryType::hipMemoryTypeUnified,
+                _ => return Err(E::NOT_SUPPORTED),
+            },
+            dstHost: format.dstHost,
+            dstDevice: hipDeviceptr_t(format.dstDevice.0),
+            dstArray: format.dstArray.cast(),
+            dstPitch: format.dstPitch,
+            WidthInBytes: format.WidthInBytes,
+            Height: format.Height,
+        })
+    }
+}
+
 /// Represents an object that can be sent across the API boundary.
 ///
 /// Some CUDA calls operate on an opaque handle. For example, `cuModuleLoadData` will load a
