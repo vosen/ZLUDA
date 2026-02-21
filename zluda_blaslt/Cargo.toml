@@ -19,8 +19,8 @@ libloading = "0.8"
 paste = "1.0"
 
 [package.metadata.zluda]
-linux_symlinks = ["libcublasLt.so", "libcublasLt.so.12", "libcublasLt.so.13"]
-windows_paths = ["cublasLt64_12.dll", "cublasLt64_13.dll"]
+linux_symlinks = ["libcublasLt.so", "libcublasLt.so.11", "libcublasLt.so.12", "libcublasLt.so.13"]
+windows_paths = ["cublasLt64_11.dll", "cublasLt64_12.dll", "cublasLt64_13.dll"]
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }

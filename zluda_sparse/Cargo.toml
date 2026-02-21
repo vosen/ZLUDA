@@ -12,5 +12,5 @@ cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 
 [package.metadata.zluda]
-linux_symlinks = ["libcusparse.so.11", "libcusparse.so.12"]
-windows_paths = ["cusparse64_11.dll", "cusparse64_12.dll"]
+linux_symlinks = ["libcusparse.so.10", "libcusparse.so.11", "libcusparse.so.12"]
+windows_paths = ["cusparse64_10.dll", "cusparse64_11.dll", "cusparse64_12.dll"]

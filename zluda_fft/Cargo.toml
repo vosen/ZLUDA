@@ -13,7 +13,8 @@ cuda_types = { path = "../cuda_types" }
 
 [package.metadata.zluda]
 linux_symlinks = [
+    "libcufft.so.10",
     "libcufft.so.11",
     "libcufft.so.12",
 ]
-windows_paths = ["cufft64_11.dll", "cufft64_12.dll"]
+windows_paths = ["cufft64_10.dll", "cufft64_11.dll", "cufft64_12.dll"]
