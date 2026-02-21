@@ -262,6 +262,11 @@ pub(crate) unsafe fn copy_2d_v2(memcpy: hip_Memcpy2D) -> CUresult {
     Ok(())
 }
 
+pub(crate) unsafe fn copy_2d_unaligned_v2(memcpy: hip_Memcpy2D) -> CUresult {
+    hipDrvMemcpy2DUnaligned(&memcpy)?;
+    Ok(())
+}
+
 pub(crate) unsafe fn set_d_2d32_v2(
     dst_device: hipDeviceptr_t,
     dst_pitch: usize,

@@ -137,6 +137,7 @@ cuda_macros::cuda_function_declarations!(
             cuMemAlloc_v2,
             cuMemAllocPitch_v2,
             cuMemcpy2D_v2,
+            cuMemcpy2DUnaligned_v2,
             cuMemcpyAsync,
             cuMemcpyDtoDAsync_v2,
             cuMemcpyDtoH_v2_ptds,
