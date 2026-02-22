@@ -14,3 +14,13 @@ cufftResult CUFFTAPI cufftXtMakePlanGuru64(
     undefined4 param_8,
     longlong param_9,
     uint param_10);
+cufftResult CUFFTAPI cufftMakePlanGuru64(
+    undefined4 param_1,
+    int param_2,
+    longlong param_3,
+    int param_4,
+    longlong param_5,
+    undefined4 param_6,
+    longlong param_7);
+cufftResult CUFFTAPI cufftEnterCS(void);
+cufftResult CUFFTAPI cufftLeaveCS(void);

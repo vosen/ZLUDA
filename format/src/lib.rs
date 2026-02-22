@@ -1164,34 +1164,6 @@ pub fn write_cuGLGetDevices_v2(
 }
 
 #[allow(non_snake_case)]
-pub fn write_cufftLeaveCS(
-    _writer: &mut (impl std::io::Write + ?Sized),
-) -> std::io::Result<()> {
-    todo!()
-}
-
-#[allow(non_snake_case)]
-pub fn write_cufftEnterCS(
-    _writer: &mut (impl std::io::Write + ?Sized),
-) -> std::io::Result<()> {
-    todo!()
-}
-
-#[allow(non_snake_case)]
-pub fn write_cufftMakePlanGuru64(
-    _writer: &mut (impl std::io::Write + ?Sized),
-        _param_1: ::core::ffi::c_uint,
-        _param_2: ::core::ffi::c_int,
-        _param_3: ::core::ffi::c_ulonglong,
-        _param_4: ::core::ffi::c_int,
-        _param_5: ::core::ffi::c_ulonglong,
-        _param_6: ::core::ffi::c_int,
-        _param_7: ::core::ffi::c_ulonglong,
-) -> std::io::Result<()> {
-    todo!()
-}
-
-#[allow(non_snake_case)]
 pub fn write_cuModuleLoadDataEx(
     writer: &mut (impl std::io::Write + ?Sized),
     module: *mut cuda_types::cuda::CUmodule,
