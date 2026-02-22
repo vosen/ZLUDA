@@ -387,5 +387,13 @@ extern "system" {
     ) -> cuda_types::cufft::cufftResult;
     fn cufftLeaveCS() -> cuda_types::cufft::cufftResult;
     fn cufftEnterCS() -> cuda_types::cufft::cufftResult;
-    fn cufftMakePlanGuru64() -> cuda_types::cufft::cufftResult;
+    fn cufftMakePlanGuru64(
+        param_1: ::core::ffi::c_uint,
+        param_2: ::core::ffi::c_int,
+        param_3: ::core::ffi::c_ulonglong,
+        param_4: ::core::ffi::c_int,
+        param_5: ::core::ffi::c_ulonglong,
+        param_6: ::core::ffi::c_int,
+        param_7: ::core::ffi::c_ulonglong,
+    ) -> cuda_types::cufft::cufftResult;
 }
