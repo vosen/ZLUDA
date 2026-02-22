@@ -3,7 +3,6 @@ use cuda_types::cublas::*;
 use hip_runtime_sys::hipStream_t;
 use libloading::Library;
 use rocblas_sys::*;
-#[cfg(windows)]
 use std::ffi::OsStr;
 use std::{mem, ptr, sync::OnceLock};
 use zluda_common::{constants, from_cuda_object, ZludaObject};
