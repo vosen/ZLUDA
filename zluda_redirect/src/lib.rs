@@ -6,9 +6,13 @@ use detours_sys::{
     DetourUpdateProcessWithDll, DetourUpdateThread, LPCWSTR,
 };
 use std::ffi::{CStr, CString};
+use std::iter::Peekable;
+use std::path;
 use std::{ffi::c_void, mem, ptr, slice, usize};
 use widestring::{U16CStr, U16CString};
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, NTSTATUS, STATUS_INVALID_PARAMETER_3, UNICODE_STRING,
+};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
@@ -103,6 +107,23 @@ impl DetourPaths {
             .unwrap_or(path)
     }
 }
+
+#[link(name = "ntdll.dll", kind = "raw-dylib")]
+unsafe extern "system" {
+    fn LdrLoadDll(
+        dll_path: LPCWSTR,
+        dll_characteristics: *mut u32,
+        dll_name: *const UNICODE_STRING,
+        dll_handle: *mut detours_sys::PVOID,
+    ) -> NTSTATUS;
+}
+
+static mut LDR_LOAD_DLL: unsafe extern "system" fn(
+    LPCWSTR,
+    *mut u32,
+    *const UNICODE_STRING,
+    *mut detours_sys::PVOID,
+) -> NTSTATUS = LdrLoadDll;
 
 static mut LOAD_LIBRARY_A: unsafe extern "system" fn(lp_lib_file_name: PCSTR) -> HMODULE =
     LoadLibraryA;
@@ -290,6 +311,132 @@ unsafe extern "system" fn ZludaCreateProcessA(
             )
         },
     )
+}
+
+#[allow(non_snake_case)]
+unsafe extern "system" fn ZludaLdrLoadDll(
+    dll_path_arg: LPCWSTR,
+    dll_characteristics: *mut u32,
+    dll_name: *const UNICODE_STRING,
+    dll_handle: *mut detours_sys::PVOID,
+) -> NTSTATUS {
+    let is_nvrtc = is_nvrtc(dll_name).unwrap_or(false);
+    let result = (LDR_LOAD_DLL)(dll_path_arg, dll_characteristics, dll_name, dll_handle);
+    if is_nvrtc && result.is_ok() {
+        detour_nvrtc(*dll_handle);
+    }
+    result
+}
+
+unsafe fn detour_nvrtc(handle: *mut c_void) -> Option<()> {
+    let get_cubin = GetProcAddress(handle, c"nvrtcGetCUBIN".as_ptr().cast())?;
+    let get_cubin_size = GetProcAddress(handle, c"nvrtcGetCUBINSize".as_ptr().cast())?;
+    let get_ptx = GetProcAddress(handle, c"nvrtcGetPTX".as_ptr().cast())?;
+    let get_ptx_size = GetProcAddress(handle, c"nvrtcGetPTXSize".as_ptr().cast())?;
+    if !apply_detours(get_cubin, get_cubin_size, get_ptx, get_ptx_size) {
+        DetourTransactionAbort();
+    }
+    Some(())
+}
+
+unsafe fn apply_detours(
+    mut get_cubin: unsafe extern "system" fn() -> isize,
+    mut get_cubin_size: unsafe extern "system" fn() -> isize,
+    get_ptx: unsafe extern "system" fn() -> isize,
+    get_ptx_size: unsafe extern "system" fn() -> isize,
+) -> bool {
+    if DetourTransactionBegin() != NO_ERROR as i32 {
+        return false;
+    }
+    if DetourUpdateThread(GetCurrentThread().0) != NO_ERROR as i32 {
+        return false;
+    }
+    if DetourAttach(std::ptr::from_mut(&mut get_cubin).cast(), get_ptx as _) != NO_ERROR as i32 {
+        return false;
+    }
+    if DetourAttach(
+        std::ptr::from_mut(&mut get_cubin_size).cast(),
+        get_ptx_size as _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourTransactionCommit() != NO_ERROR as i32 {
+        return false;
+    }
+    true
+}
+
+unsafe fn is_nvrtc(dll_name_arg: *const UNICODE_STRING) -> Result<bool, NTSTATUS> {
+    fn version_segment(iter: &mut Peekable<impl Iterator<Item = u16>>) -> bool {
+        fn is_digit(c: u16) -> bool {
+            char::from_u32(c as u32)
+                .unwrap_or(char::MIN)
+                .is_ascii_digit()
+        }
+        fn parse_digits(iter: &mut Peekable<impl Iterator<Item = u16>>) -> bool {
+            match iter.next() {
+                Some(c) if is_digit(c) => (),
+                _ => return false,
+            }
+            // Remaining digits
+            loop {
+                match iter.peek() {
+                    Some(c) if is_digit(*c) => {
+                        iter.next();
+                    }
+                    _ => break,
+                }
+            }
+            true
+        }
+        if !parse_digits(iter) {
+            return false;
+        }
+        match iter.peek() {
+            Some(c) if *c == '_' as u16 => {
+                iter.next();
+            }
+            _ => return true,
+        }
+        parse_digits(iter)
+    }
+    fn next_str(iter: &mut impl Iterator<Item = u16>, expected: &str) -> bool {
+        for e in expected.chars() {
+            match iter.next() {
+                Some(c) => {
+                    let c = char::from_u32(c as u32).unwrap_or(char::MIN);
+                    if !c.eq_ignore_ascii_case(&e) {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+        true
+    }
+    let dll_name = dll_name_arg.as_ref().ok_or(STATUS_INVALID_PARAMETER_3)?;
+    let dll_name = slice::from_raw_parts(dll_name.Buffer.0, (dll_name.Length as usize) / 2);
+    let file_name_length = dll_name
+        .into_iter()
+        .copied()
+        .rev()
+        .position(|c| path::is_separator(char::from_u32(c as u32).unwrap_or(char::MIN)));
+    let dll_name = match file_name_length {
+        Some(file_name_length) => dll_name.split_at(dll_name.len() - file_name_length).1,
+        None => dll_name,
+    };
+    let mut dll_name = dll_name.into_iter().copied().peekable();
+    if !next_str(&mut dll_name, "nvrtc64_") {
+        return Ok(false);
+    }
+    if !version_segment(&mut dll_name) {
+        return Ok(false);
+    }
+    if !next_str(&mut dll_name, ".dll") {
+        return Ok(false);
+    }
+    Ok(dll_name.next() == None)
 }
 
 fn create_process(
@@ -596,6 +743,7 @@ impl DetourDetachGuard {
                 &raw mut CREATE_PROCESS_WITH_TOKEN_W as *mut _ as _,
                 ZludaCreateProcessWithTokenW as _,
             ),
+            (&raw mut LDR_LOAD_DLL as *mut _ as _, ZludaLdrLoadDll as _),
         ]);
         for (original_fn, new_fn) in result.overriden_non_cuda_fns.iter().copied() {
             if DetourAttach(original_fn, new_fn) != NO_ERROR as i32 {
@@ -742,5 +890,47 @@ fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u8]> {
         Some(unsafe { slice::from_raw_parts(payload_ptr as *const _, size as usize) })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_nvrtc;
+    use widestring::{u16cstr, U16CStr};
+    use windows::{core::PWSTR, Win32::Foundation::UNICODE_STRING};
+
+    fn assert_is_nvrtc(text: &U16CStr) {
+        assert!(unsafe {
+            is_nvrtc(&UNICODE_STRING {
+                Buffer: PWSTR(text.as_ptr().cast_mut()),
+                Length: (text.len() * 2) as u16,
+                MaximumLength: 0,
+            })
+            .unwrap()
+        });
+    }
+
+    #[test]
+    fn is_nvrtc1() {
+        assert_is_nvrtc(u16cstr!("nvrtc64_112_0.dll"));
+    }
+
+    #[test]
+    fn is_nvrtc2() {
+        assert_is_nvrtc(u16cstr!("nvrtc64_130.dll"));
+    }
+
+    #[test]
+    fn is_nvrtc3() {
+        assert_is_nvrtc(u16cstr!(
+            r#"C:\Users\vosen\.conda\envs\pytorch\lib\site-packages\torch\lib\nvrtc64_112_0.dll"#
+        ));
+    }
+
+    #[test]
+    fn is_nvrtc4() {
+        assert_is_nvrtc(u16cstr!(
+            r#"C:\Users\vosen\.conda\envs\pytorch\lib\site-packages\torch\lib\nvrtc64_120.DLL"#
+        ));
     }
 }
