@@ -52,7 +52,7 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 }
 
 #[cfg(windows)]
-fn get_cublaslt_file_name(file: &OsStr) -> Option<String> {
+pub(crate) fn get_cublaslt_file_name(file: &OsStr) -> Option<String> {
     let file = file.to_string_lossy().to_lowercase();
     if file.starts_with("cublas") {
         Some("cublasLt".to_owned() + &file["cublas".len()..])
@@ -62,7 +62,7 @@ fn get_cublaslt_file_name(file: &OsStr) -> Option<String> {
 }
 
 #[cfg(unix)]
-fn get_cublaslt_file_name(_file: &OsStr) -> Option<&'static str> {
+pub(crate) fn get_cublaslt_file_name(_file: &OsStr) -> Option<&'static str> {
     Some("libcublaslt.so\0")
 }
 
