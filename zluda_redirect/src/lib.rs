@@ -5,9 +5,12 @@ use detours_sys::{
     DetourTransactionAbort, DetourTransactionBegin, DetourTransactionCommit,
     DetourUpdateProcessWithDll, DetourUpdateThread, LPCWSTR,
 };
+use rustc_hash::FxHashMap;
+use std::collections::hash_map;
 use std::ffi::{CStr, CString};
 use std::iter::Peekable;
 use std::path;
+use std::sync::{Mutex, OnceLock};
 use std::{ffi::c_void, mem, ptr, slice, usize};
 use widestring::{U16CStr, U16CString};
 use windows::Win32::Foundation::{
@@ -328,22 +331,83 @@ unsafe extern "system" fn ZludaLdrLoadDll(
     result
 }
 
+#[allow(non_snake_case)]
+unsafe extern "system" fn Zluda_nvrtcCompileProgram(
+    prog: *const c_void,
+    num_options: std::ffi::c_int,
+    options: *const *const std::ffi::c_char,
+) -> u32 {
+    // TODO:
+    // Right now we pick any one of the detoured nvrtcCompileProgram
+    // functions, but if there are multiple nvrtc instances loaded this will be
+    // incorrect. We should create a thunk for each library, but I don't have
+    // the time right now.
+    let original_fn = {
+        nvrtc_detours()
+            .lock()
+            .ok()
+            .and_then(|nvrtc_detours| nvrtc_detours.values().next().copied())
+    };
+    let nvrtcCompileProgram = match original_fn {
+        Some(original_fn) => original_fn,
+        None => return 11, // NVRTC_ERROR_INTERNAL_ERROR
+    };
+    let old_options = std::slice::from_raw_parts(options, num_options as usize);
+    let mut options = vec![c"-arch=compute_86".as_ptr()];
+    for &option in old_options {
+        if nvrtc::is_arch_option(CStr::from_ptr(option)) {
+            continue;
+        }
+        options.push(option);
+    }
+    (mem::transmute::<
+        _,
+        unsafe extern "system" fn(
+            *const c_void,
+            std::ffi::c_int,
+            *const *const std::ffi::c_char,
+        ) -> u32,
+    >(nvrtcCompileProgram))(prog, options.len() as _, options.as_ptr())
+}
+
+// There might be multiple nvrtc instances loaded,
+// so we need to keep track of which ones we've detoured
+fn nvrtc_detours() -> &'static Mutex<FxHashMap<usize, usize>> {
+    static NVRTC_DETOURS: OnceLock<Mutex<FxHashMap<usize, usize>>> = OnceLock::new();
+    NVRTC_DETOURS.get_or_init(|| Mutex::new(FxHashMap::default()))
+}
+
 unsafe fn detour_nvrtc(handle: *mut c_void) -> Option<()> {
+    let mut nvrtc_detours = nvrtc_detours().lock().ok()?;
+    let nvrtc_entry = match nvrtc_detours.entry(handle as usize) {
+        hash_map::Entry::Occupied(_) => return Some(()),
+        hash_map::Entry::Vacant(entry) => entry,
+    };
     let get_cubin = GetProcAddress(handle, c"nvrtcGetCUBIN".as_ptr().cast())?;
     let get_cubin_size = GetProcAddress(handle, c"nvrtcGetCUBINSize".as_ptr().cast())?;
     let get_ptx = GetProcAddress(handle, c"nvrtcGetPTX".as_ptr().cast())?;
     let get_ptx_size = GetProcAddress(handle, c"nvrtcGetPTXSize".as_ptr().cast())?;
-    if !apply_detours(get_cubin, get_cubin_size, get_ptx, get_ptx_size) {
+    let nvrtc_compile_program = GetProcAddress(handle, c"nvrtcCompileProgram".as_ptr().cast())?;
+    if !apply_detours(
+        nvrtc_entry,
+        get_cubin,
+        get_cubin_size,
+        get_ptx,
+        get_ptx_size,
+        nvrtc_compile_program,
+    ) {
         DetourTransactionAbort();
     }
     Some(())
 }
 
 unsafe fn apply_detours(
+    nvrtc_entry: hash_map::VacantEntry<usize, usize>,
     mut get_cubin: unsafe extern "system" fn() -> isize,
     mut get_cubin_size: unsafe extern "system" fn() -> isize,
     get_ptx: unsafe extern "system" fn() -> isize,
     get_ptx_size: unsafe extern "system" fn() -> isize,
+    mut nvrtc_compile_program: unsafe extern "system" fn() -> isize,
 ) -> bool {
     if DetourTransactionBegin() != NO_ERROR as i32 {
         return false;
@@ -361,9 +425,24 @@ unsafe fn apply_detours(
     {
         return false;
     }
+    if DetourAttach(
+        std::ptr::from_mut(&mut get_cubin_size).cast(),
+        get_ptx_size as _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
+    if DetourAttach(
+        std::ptr::from_mut(&mut nvrtc_compile_program).cast(),
+        Zluda_nvrtcCompileProgram as _,
+    ) != NO_ERROR as i32
+    {
+        return false;
+    }
     if DetourTransactionCommit() != NO_ERROR as i32 {
         return false;
     }
+    nvrtc_entry.insert(nvrtc_compile_program as usize);
     true
 }
 
@@ -835,6 +914,14 @@ impl Drop for DetourDetachGuard {
                 for (original_fn, new_fn) in self.overriden_non_cuda_fns.iter().copied() {
                     DetourDetach(original_fn, new_fn);
                 }
+                if let Ok(mut nvrtc_detours) = nvrtc_detours().lock() {
+                    for (_, mut detoured) in nvrtc_detours.drain() {
+                        DetourDetach(
+                            std::ptr::from_mut(&mut detoured).cast(),
+                            Zluda_nvrtcCompileProgram as _,
+                        );
+                    }
+                }
                 DetourTransactionCommit();
             },
         }
@@ -890,6 +977,39 @@ fn get_payload(guid: &detours_sys::GUID) -> Option<&'static [u8]> {
         Some(unsafe { slice::from_raw_parts(payload_ptr as *const _, size as usize) })
     } else {
         None
+    }
+}
+
+mod nvrtc {
+    use std::ffi::CStr;
+
+    use winnow::ascii::alphanumeric1;
+    use winnow::ascii::multispace0;
+    use winnow::combinator::alt;
+    use winnow::prelude::*;
+    use winnow::PResult;
+
+    fn continuation(input: &mut &str) -> PResult<()> {
+        (
+            multispace0,
+            '=',
+            multispace0,
+            alphanumeric1,
+            '_',
+            alphanumeric1,
+        )
+            .void()
+            .parse_next(input)
+    }
+
+    pub(crate) fn is_arch_option(s: &CStr) -> bool {
+        let mut text = match s.to_str() {
+            Ok(text) => text,
+            Err(_) => return false,
+        };
+        (alt(("--gpu-architecture", "-arch")), continuation)
+            .parse_next(&mut text)
+            .is_ok()
     }
 }
 

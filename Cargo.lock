@@ -4271,10 +4271,12 @@ name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [
  "detours-sys",
+ "rustc-hash 2.1.1",
  "unwrap_or",
  "widestring",
  "windows",
  "windows-sys 0.61.2",
+ "winnow 0.6.20",
  "zluda_windows",
 ]
 
