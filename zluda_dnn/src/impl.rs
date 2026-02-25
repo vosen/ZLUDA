@@ -589,10 +589,20 @@ pub(crate) unsafe fn set_filter_nd_descriptor(
     data_type: miopenDataType_t,
     format: miopenTensorLayout_t,
     nb_dims: ::core::ffi::c_int,
-    filter_dim_a: *const ::core::ffi::c_int,
+    mut filter_dim_a: *const ::core::ffi::c_int,
 ) -> miopenStatus_t {
-    if format != miopenTensorLayout_t::miopenTensorNCHW {
-        return miopenStatus_t::ErrorNotImplemented;
+    let mut _temp = [0, 0, 0, 0];
+    match format {
+        miopenTensorLayout_t::miopenTensorNCHW => {}
+        miopenTensorLayout_t::miopenTensorNHWC => {
+            if nb_dims != 4 || filter_dim_a.is_null() {
+                return miopenStatus_t::ErrorInvalidValue;
+            }
+            let [n, h, w, c] = *(filter_dim_a as *const [i32; 4]);
+            _temp = [n, c, h, w];
+            filter_dim_a = _temp.as_ptr();
+        }
+        _ => return miopenStatus_t::ErrorNotImplemented,
     }
     miopen()?.miopenSetNdTensorDescriptorWithLayout(
         filter_desc,
@@ -1345,8 +1355,105 @@ pub mod dnn9 {
         return cuda_types::cudnn9::CUDNN_VERSION as usize;
     }
 
-    pub(crate) fn get_error_string(_status: cudnnStatus_t) -> *const ::core::ffi::c_char {
-        todo!()
+    pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {
+        match status {
+            Ok(()) => c"CUDNN_STATUS_SUCCESS",
+            Err(err) => match err {
+                cudnnError_t::NOT_INITIALIZED => c"CUDNN_STATUS_NOT_INITIALIZED",
+                cudnnError_t::SUBLIBRARY_VERSION_MISMATCH => {
+                    c"CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH"
+                }
+                cudnnError_t::SERIALIZATION_VERSION_MISMATCH => {
+                    c"CUDNN_STATUS_SERIALIZATION_VERSION_MISMATCH"
+                }
+                cudnnError_t::DEPRECATED => c"CUDNN_STATUS_DEPRECATED",
+                cudnnError_t::LICENSE_ERROR => c"CUDNN_STATUS_LICENSE_ERROR",
+                cudnnError_t::RUNTIME_IN_PROGRESS => c"CUDNN_STATUS_RUNTIME_IN_PROGRESS",
+                cudnnError_t::RUNTIME_FP_OVERFLOW => c"CUDNN_STATUS_RUNTIME_FP_OVERFLOW",
+                cudnnError_t::SUBLIBRARY_LOADING_FAILED => {
+                    c"CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED"
+                }
+                cudnnError_t::BAD_PARAM => c"CUDNN_STATUS_BAD_PARAM",
+                cudnnError_t::BAD_PARAM_NULL_POINTER => c"CUDNN_STATUS_BAD_PARAM_NULL_POINTER",
+                cudnnError_t::BAD_PARAM_MISALIGNED_POINTER => {
+                    c"CUDNN_STATUS_BAD_PARAM_MISALIGNED_POINTER"
+                }
+                cudnnError_t::BAD_PARAM_NOT_FINALIZED => c"CUDNN_STATUS_BAD_PARAM_NOT_FINALIZED",
+                cudnnError_t::BAD_PARAM_OUT_OF_BOUND => c"CUDNN_STATUS_BAD_PARAM_OUT_OF_BOUND",
+                cudnnError_t::BAD_PARAM_SIZE_INSUFFICIENT => {
+                    c"CUDNN_STATUS_BAD_PARAM_SIZE_INSUFFICIENT"
+                }
+                cudnnError_t::BAD_PARAM_STREAM_MISMATCH => {
+                    c"CUDNN_STATUS_BAD_PARAM_STREAM_MISMATCH"
+                }
+                cudnnError_t::BAD_PARAM_SHAPE_MISMATCH => c"CUDNN_STATUS_BAD_PARAM_SHAPE_MISMATCH",
+                cudnnError_t::BAD_PARAM_DUPLICATED_ENTRIES => {
+                    c"CUDNN_STATUS_BAD_PARAM_DUPLICATED_ENTRIES"
+                }
+                cudnnError_t::BAD_PARAM_ATTRIBUTE_TYPE => c"CUDNN_STATUS_BAD_PARAM_ATTRIBUTE_TYPE",
+                cudnnError_t::BAD_PARAM_CUDA_GRAPH_MISMATCH => {
+                    c"CUDNN_STATUS_BAD_PARAM_CUDA_GRAPH_MISMATCH"
+                }
+                cudnnError_t::BAD_PARAM_DESCRIPTOR_TYPE => {
+                    c"CUDNN_STATUS_BAD_PARAM_DESCRIPTOR_TYPE"
+                }
+                cudnnError_t::INVALID_VALUE => c"CUDNN_STATUS_INVALID_VALUE",
+                cudnnError_t::NOT_SUPPORTED => c"CUDNN_STATUS_NOT_SUPPORTED",
+                cudnnError_t::NOT_SUPPORTED_GRAPH_PATTERN => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_GRAPH_PATTERN"
+                }
+                cudnnError_t::NOT_SUPPORTED_SHAPE => c"CUDNN_STATUS_NOT_SUPPORTED_SHAPE",
+                cudnnError_t::NOT_SUPPORTED_DATA_TYPE => c"CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE",
+                cudnnError_t::NOT_SUPPORTED_LAYOUT => c"CUDNN_STATUS_NOT_SUPPORTED_LAYOUT",
+                cudnnError_t::NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDA_DRIVER"
+                }
+                cudnnError_t::NOT_SUPPORTED_INCOMPATIBLE_CUDART => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_INCOMPATIBLE_CUDART"
+                }
+                cudnnError_t::NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_SUBLIBRARY_UNAVAILABLE"
+                }
+                cudnnError_t::NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_SHARED_MEMORY_INSUFFICIENT"
+                }
+                cudnnError_t::NOT_SUPPORTED_PADDING => c"CUDNN_STATUS_NOT_SUPPORTED_PADDING",
+                cudnnError_t::NOT_SUPPORTED_BAD_LAUNCH_PARAM => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_BAD_LAUNCH_PARAM"
+                }
+                cudnnError_t::NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API => {
+                    c"CUDNN_STATUS_NOT_SUPPORTED_CUDA_GRAPH_NATIVE_API"
+                }
+                cudnnError_t::INTERNAL_ERROR => c"CUDNN_STATUS_INTERNAL_ERROR",
+                cudnnError_t::INTERNAL_ERROR_COMPILATION_FAILED => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_COMPILATION_FAILED"
+                }
+                cudnnError_t::INTERNAL_ERROR_UNEXPECTED_VALUE => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_UNEXPECTED_VALUE"
+                }
+                cudnnError_t::INTERNAL_ERROR_HOST_ALLOCATION_FAILED => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_HOST_ALLOCATION_FAILED"
+                }
+                cudnnError_t::INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_DEVICE_ALLOCATION_FAILED"
+                }
+                cudnnError_t::INTERNAL_ERROR_BAD_LAUNCH_PARAM => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_BAD_LAUNCH_PARAM"
+                }
+                cudnnError_t::INTERNAL_ERROR_TEXTURE_CREATION_FAILED => {
+                    c"CUDNN_STATUS_INTERNAL_ERROR_TEXTURE_CREATION_FAILED"
+                }
+                cudnnError_t::EXECUTION_FAILED => c"CUDNN_STATUS_EXECUTION_FAILED",
+                cudnnError_t::EXECUTION_FAILED_CUDA_DRIVER => {
+                    c"CUDNN_STATUS_EXECUTION_FAILED_CUDA_DRIVER"
+                }
+                cudnnError_t::EXECUTION_FAILED_CUBLAS => c"CUDNN_STATUS_EXECUTION_FAILED_CUBLAS",
+                cudnnError_t::EXECUTION_FAILED_CUDART => c"CUDNN_STATUS_EXECUTION_FAILED_CUDART",
+                cudnnError_t::EXECUTION_FAILED_CURAND => c"CUDNN_STATUS_EXECUTION_FAILED_CURAND",
+                _ => c"CUDNN_STATUS_UNKNOWN",
+            },
+        }
+        .as_ptr()
     }
 
     pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
