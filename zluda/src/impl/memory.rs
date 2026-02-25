@@ -81,13 +81,49 @@ pub(crate) fn get_address_range_v2(
     unsafe { hipMemGetAddressRange(pbase, psize, dptr) }
 }
 
-pub(crate) fn set_d32_v2(dst: hipDeviceptr_t, ui: ::core::ffi::c_uint, n: usize) -> hipError_t {
-    unsafe { hipMemsetD32(dst, ui as std::ffi::c_int, n) }
-}
-
 pub(crate) fn set_d8_v2(dst: hipDeviceptr_t, value: ::core::ffi::c_uchar, n: usize) -> hipError_t {
     unsafe { hipMemsetD8(dst, value, n) }
 }
+
+pub(crate) fn set_d8_async(
+    dst: hipDeviceptr_t,
+    value: ::core::ffi::c_uchar,
+    n: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    unsafe { hipMemsetD8Async(dst, value, n, stream) }
+}
+
+pub(crate) fn set_d16_v2(
+    dst: hipDeviceptr_t,
+    value: ::core::ffi::c_ushort,
+    n: usize,
+) -> hipError_t {
+    unsafe { hipMemsetD16(dst, value, n) }
+}
+
+pub(crate) fn set_d16_async(
+    dst: hipDeviceptr_t,
+    value: ::core::ffi::c_ushort,
+    n: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    unsafe { hipMemsetD16Async(dst, value, n, stream) }
+}
+
+pub(crate) fn set_d32_v2(dst: hipDeviceptr_t, value: ::core::ffi::c_uint, n: usize) -> hipError_t {
+    unsafe { hipMemsetD32(dst, value as _, n) }
+}
+
+pub(crate) fn set_d32_async(
+    dst: hipDeviceptr_t,
+    value: ::core::ffi::c_uint,
+    n: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    unsafe { hipMemsetD32Async(dst, value as _, n, stream) }
+}
+
 pub(crate) fn get_info_v2(free: *mut usize, total: *mut usize) -> hipError_t {
     unsafe { hipMemGetInfo(free, total) }
 }
@@ -196,19 +232,57 @@ pub(crate) unsafe fn copy_async(
     )
 }
 
-pub(crate) unsafe fn set_d8_async(
-    dst_device: hipDeviceptr_t,
-    uc: ::core::ffi::c_uchar,
-    n: usize,
-    stream: hipStream_t,
-) -> hipError_t {
-    hipMemsetD8Async(dst_device, uc, n, stream)
-}
-
 pub(crate) fn get_allocation_granularity(
     _granularity: &mut usize,
     _property: &cuda_types::cuda::CUmemAllocationProp,
     _option: cuda_types::cuda::CUmemAllocationGranularity_flags,
 ) -> CUresult {
     CUresult::ERROR_NOT_SUPPORTED
+}
+
+pub(crate) unsafe fn alloc_pitch_v2(
+    dptr: *mut hipDeviceptr_t,
+    p_pitch: *mut usize,
+    width_in_bytes: usize,
+    height: usize,
+    element_size_bytes: ::core::ffi::c_uint,
+) -> CUresult {
+    hipMemAllocPitch(
+        dptr.cast(),
+        p_pitch,
+        width_in_bytes,
+        height,
+        element_size_bytes,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn copy_2d_v2(memcpy: hip_Memcpy2D) -> CUresult {
+    hipMemcpyParam2D(&memcpy)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn copy_2d_unaligned_v2(memcpy: hip_Memcpy2D) -> CUresult {
+    hipDrvMemcpy2DUnaligned(&memcpy)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn set_d_2d32_v2(
+    dst_device: hipDeviceptr_t,
+    dst_pitch: usize,
+    value: ::core::ffi::c_uint,
+    width: usize,
+    height: usize,
+) -> hipError_t {
+    hipMemset2D(dst_device.0, dst_pitch, value as _, width, height)
+}
+pub(crate) unsafe fn set_d_2d32_async(
+    dst_device: hipDeviceptr_t,
+    dst_pitch: usize,
+    value: ::core::ffi::c_uint,
+    width: usize,
+    height: usize,
+    stream: hipStream_t,
+) -> hipError_t {
+    hipMemset2DAsync(dst_device.0, dst_pitch, value as _, width, height, stream)
 }

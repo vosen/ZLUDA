@@ -297,7 +297,14 @@ pub fn nvml_normalize_fn(tokens: TokenStream) -> TokenStream {
 
 fn split(fn_: &str) -> Vec<String> {
     let mut result = Vec::new();
-    for c in fn_.chars() {
+    let mut chars: iter::Peekable<_> = fn_.chars().peekable();
+    while let Some(c) = chars.next() {
+        // Special handling of 2D/3D etc.
+        if c.is_ascii_digit() && chars.peek() == Some(&'D') {
+            chars.next();
+            result.push(format!("{c}d"));
+            continue;
+        }
         if c.is_ascii_uppercase() {
             result.push(c.to_ascii_lowercase().to_string());
         } else {
