@@ -229,7 +229,8 @@ from_cuda_nop!(
     *mut cuda_types::cublas::__half,
     *const cuda_types::cublas::__half,
     cudnn9::cudnnDataType_t,
-    cudnn9::cudnnTensorFormat_t
+    cudnn9::cudnnTensorFormat_t,
+    cudnn9::cudnnConvolutionBwdDataAlgoPerf_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -750,6 +751,36 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionFwdAlgo_t, E>
             cudnn9::cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED => {
                 // No direct MIOpen equivalent; map to Winograd variant
                 miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoWinograd
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionBwdDataAlgo_t, E>
+    for miopenConvBwdDataAlgorithm_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionBwdDataAlgo_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_0 => {
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_1 => {
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoDirect
+            }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT => {
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoFFT
+            }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING => {
+                // No direct MIOpen equivalent; map to FFT variant
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoFFT
+            }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD => {
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoWinograd
+            }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED => {
+                // No direct MIOpen equivalent; map to Winograd variant
+                miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoWinograd
             }
             _ => return Err(E::NOT_SUPPORTED),
         })
