@@ -1,10 +1,10 @@
-use crate::os;
 use cuda_types::cublas::*;
 use hip_runtime_sys::hipStream_t;
 use libloading::Library;
 use rocblas_sys::*;
 use std::ffi::OsStr;
 use std::{mem, ptr, sync::OnceLock};
+use zluda_common::os;
 use zluda_common::{constants, from_cuda_object, ZludaObject};
 
 fn rocblas() -> Result<&'static super::RocblasVtable, rocblas_error> {
@@ -453,10 +453,9 @@ pub(crate) unsafe fn get_vector(
 
 #[cfg(test)]
 mod tests {
-    use cuda_macros::test_cuda;
-
     use crate::tests::CublasApi;
     use crate::tests::CublasLtApi;
+    use cuda_macros::test_cuda;
 
     #[test_cuda]
     fn create_destroy(api: impl CublasApi) {

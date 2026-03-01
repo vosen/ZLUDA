@@ -4173,6 +4173,7 @@ dependencies = [
  "hipblaslt-sys",
  "miopen-sys",
  "rocblas-sys",
+ "zluda_windows",
 ]
 
 [[package]]
@@ -4207,6 +4208,10 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "embed-resource",
+ "libloading",
+ "paste",
+ "windows",
+ "zluda_common",
  "zluda_dnn",
  "zluda_windows",
 ]

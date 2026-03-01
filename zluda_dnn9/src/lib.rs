@@ -21,3 +21,19 @@ mod windows {
     static __pfnDliNotifyHook2: zluda_windows::PfnDliHook =
         zluda_windows::open_already_loaded_amdhip;
 }
+
+#[cfg(test)]
+mod tests_impl {
+    use crate::tests::CudnnApi;
+    use cuda_macros::test_cuda;
+
+    #[test_cuda]
+    fn create_destroy(api: impl CudnnApi) {
+        let mut handle = unsafe { std::mem::zeroed() };
+        api.cudnnCreate(&mut handle);
+        api.cudnnDestroy(handle);
+    }
+}
+
+#[cfg(test)]
+mod tests;
