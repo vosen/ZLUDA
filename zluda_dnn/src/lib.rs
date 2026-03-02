@@ -80,16 +80,20 @@ macro_rules! dual_function_declarations {
 dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
+        cudnnGetConvolutionBackwardDataAlgorithm_v7,
+        cudnnGetConvolutionBackwardFilterAlgorithm_v7,
+        cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
-        cudnnGetConvolutionForwardAlgorithm_v7
+        cudnnGetVersion
     ],
     implemented_no_conversion <= [
-        cudnnGetVersion,
         cudnnGetMaxDeviceVersion,
         cudnnGetCudartVersion,
         cudnnGetLastErrorString
     ],
     implemented <= [
+        cudnnConvolutionBackwardData,
+        cudnnConvolutionBackwardFilter,
         cudnnConvolutionForward,
         cudnnCreate,
         cudnnCreateConvolutionDescriptor,
@@ -99,11 +103,21 @@ dual_function_declarations! {
         cudnnDestroyConvolutionDescriptor,
         cudnnDestroyFilterDescriptor,
         cudnnDestroyTensorDescriptor,
+        cudnnGetConvolutionBackwardDataWorkspaceSize,
+        cudnnGetConvolutionBackwardFilterWorkspaceSize,
         cudnnGetConvolutionForwardWorkspaceSize,
+        cudnnGetFilterNdDescriptor,
+        cudnnGetStream,
+        cudnnGetTensorNdDescriptor,
         cudnnSetConvolution2dDescriptor,
+        cudnnSetConvolutionGroupCount,
         cudnnSetConvolutionMathType,
+        cudnnSetConvolutionNdDescriptor,
         cudnnSetFilter4dDescriptor,
-        cudnnSetTensor4dDescriptor
+        cudnnSetFilterNdDescriptor,
+        cudnnSetStream,
+        cudnnSetTensor4dDescriptor,
+        cudnnSetTensorNdDescriptor
     ]
 }
 
@@ -175,23 +189,30 @@ cuda_macros::miopen_function_declarations!(
     noop,
     os::vtable_impl
         <= [
+            miopenConvolutionBackwardData,
+            miopenConvolutionBackwardDataGetWorkSpaceSize,
+            miopenConvolutionBackwardWeights,
+            miopenConvolutionBackwardWeightsGetWorkSpaceSize,
             miopenConvolutionForward,
             miopenConvolutionForwardGetWorkSpaceSize,
             miopenCreate,
             miopenCreateConvolutionDescriptor,
             miopenCreateTensorDescriptor,
-            miopenCreateTensorDescriptor,
             miopenDestroy,
             miopenDestroyConvolutionDescriptor,
             miopenDestroyTensorDescriptor,
+            miopenFindConvolutionBackwardDataAlgorithm,
+            miopenFindConvolutionBackwardWeightsAlgorithm,
             miopenFindConvolutionForwardAlgorithm,
             miopenGetConvolutionDescriptor,
             miopenGetTensorDescriptor,
-            miopenGetTensorDescriptor,
-            miopenGetTensorNumBytes,
+            miopenGetTensorDescriptorSize,
             miopenGetTensorNumBytes,
             miopenInitConvolutionDescriptor,
             miopenOpTensor,
+            miopenSetConvolutionGroupCount,
             miopenSetNdTensorDescriptorWithLayout,
+            miopenSetStream,
+            miopenSetTensorDescriptor,
         ]
 );

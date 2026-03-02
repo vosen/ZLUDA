@@ -2383,6 +2383,7 @@ impl<'a> MethodEmitContext<'a> {
         let type_ = get_scalar_type(self.context, data.type_);
         let intrinsic = match (data.type_, data.kind) {
             (ast::ScalarType::F32, ast::RcpKind::Approx) => c"llvm.amdgcn.rcp.f32",
+            (ast::ScalarType::F64, ast::RcpKind::Approx) => c"llvm.amdgcn.rcp.f64",
             (_, ast::RcpKind::Compliant(rnd)) => {
                 return self.emit_rcp_compliant(data, arguments, rnd)
             }

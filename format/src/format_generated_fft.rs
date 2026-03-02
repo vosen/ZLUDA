@@ -2274,6 +2274,56 @@ pub fn write_cufftXtMakePlanGuru64(
     crate::CudaDisplay::write(&param_10, "cufftXtMakePlanGuru64", arg_idx, writer)?;
     writer.write_all(b")")
 }
+pub fn write_cufftMakePlanGuru64(
+    writer: &mut (impl std::io::Write + ?Sized),
+    param_1: ::core::ffi::c_uint,
+    param_2: ::core::ffi::c_int,
+    param_3: ::core::ffi::c_ulonglong,
+    param_4: ::core::ffi::c_int,
+    param_5: ::core::ffi::c_ulonglong,
+    param_6: ::core::ffi::c_uint,
+    param_7: ::core::ffi::c_ulonglong,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(param_1), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_1, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_2), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_2, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_3), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_3, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_4), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_4, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_5), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_5, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_6), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_6, "cufftMakePlanGuru64", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(param_7), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&param_7, "cufftMakePlanGuru64", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cufftEnterCS(
+    writer: &mut (impl std::io::Write + ?Sized),
+) -> std::io::Result<()> {
+    writer.write_all(b"()")
+}
+pub fn write_cufftLeaveCS(
+    writer: &mut (impl std::io::Write + ?Sized),
+) -> std::io::Result<()> {
+    writer.write_all(b"()")
+}
 impl crate::CudaDisplay for cuda_types::cufft::cufftResult {
     fn write(
         &self,

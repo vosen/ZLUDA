@@ -24,8 +24,8 @@ zluda_windows = { path = "../zluda_windows" }
 libloading = "0.8"
 
 [package.metadata.zluda]
-linux_symlinks = ["libcublas.so.12", "libcublas.so.13"]
-windows_paths = ["cublas64_12.dll", "cublas64_13.dll"]
+linux_symlinks = ["libcublas.so.11", "libcublas.so.12", "libcublas.so.13"]
+windows_paths = ["cublas64_11.dll", "cublas64_12.dll", "cublas64_13.dll"]
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3.0"

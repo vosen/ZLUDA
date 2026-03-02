@@ -109,6 +109,12 @@ extern "C"
         return __lane_id();
     }
 
+    uint32_t FUNC(sreg_lanemask_le)()
+    {
+        uint32_t lane_idx = FUNC_CALL(sreg_laneid)();
+        return (2U << lane_idx) - 1U;
+    }
+
     uint32_t FUNC(sreg_lanemask_lt)()
     {
         uint32_t lane_idx = FUNC_CALL(sreg_laneid)();

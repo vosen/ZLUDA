@@ -1,12 +1,12 @@
-define amdgpu_kernel void @createpolicy(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
-  %"36" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @createpolicy(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
+  %"39" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"33"
+  br label %"36"
 
-"33":                                             ; preds = %1
-  store i64 0, ptr addrspace(5) %"36", align 8
+"36":                                             ; preds = %1
+  store i64 0, ptr addrspace(5) %"39", align 8
   ret void
 }
 

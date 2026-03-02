@@ -1,9 +1,10 @@
-use crate::os;
 use cuda_types::cublas::*;
 use hip_runtime_sys::hipStream_t;
 use libloading::Library;
 use rocblas_sys::*;
+use std::ffi::OsStr;
 use std::{mem, ptr, sync::OnceLock};
+use zluda_common::os;
 use zluda_common::{constants, from_cuda_object, ZludaObject};
 
 fn rocblas() -> Result<&'static super::RocblasVtable, rocblas_error> {
@@ -51,14 +52,26 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
 }
 
 #[cfg(windows)]
-pub const CUBLASLT_FILE_NAME: &'static str = "cublaslt.dll\0";
+pub(crate) fn get_cublaslt_file_name(file: &OsStr) -> Option<String> {
+    let file = file.to_string_lossy().to_lowercase();
+    if file.starts_with("cublas") {
+        Some("cublasLt".to_owned() + &file["cublas".len()..])
+    } else {
+        None
+    }
+}
+
 #[cfg(unix)]
-pub const CUBLASLT_FILE_NAME: &'static str = "libcublaslt.so\0";
+pub(crate) fn get_cublaslt_file_name(_file: &OsStr) -> Option<&'static str> {
+    Some("libcublaslt.so\0")
+}
 
 pub(crate) fn create_v2(handle: &mut cublasHandle_t) -> cublasStatus_t {
     let mut self_path = os::self_path().ok_or(cublasError_t::INTERNAL_ERROR)?;
+    let file = self_path.file_name().ok_or(cublasError_t::INTERNAL_ERROR)?;
+    let cublaslt_file_name = get_cublaslt_file_name(file).ok_or(cublasError_t::INTERNAL_ERROR)?;
     self_path.pop();
-    self_path.push(CUBLASLT_FILE_NAME);
+    self_path.push(cublaslt_file_name);
     let blas_lt_library = unsafe { libloading::Library::new(self_path) }
         .map_err(|_| cublasError_t::INTERNAL_ERROR)?;
     let mut blas_lt: usize = 0;
@@ -440,10 +453,9 @@ pub(crate) unsafe fn get_vector(
 
 #[cfg(test)]
 mod tests {
-    use cuda_macros::test_cuda;
-
     use crate::tests::CublasApi;
     use crate::tests::CublasLtApi;
+    use cuda_macros::test_cuda;
 
     #[test_cuda]
     fn create_destroy(api: impl CublasApi) {

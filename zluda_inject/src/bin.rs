@@ -323,6 +323,9 @@ impl InjectionConfig {
             write!(&mut result, "{}={}\0", var.display(), value.display())?;
             known_vars.insert(value);
         }
+        if !known_vars.contains(OsStr::new("TORCH_CUDNN_V8_API_DISABLED")) {
+            write!(&mut result, "TORCH_CUDNN_V8_API_DISABLED=1\0")?;
+        }
         for (key, value) in self.env_vars.iter() {
             let x: &OsStr = key.as_ref();
             if known_vars.contains(x) {

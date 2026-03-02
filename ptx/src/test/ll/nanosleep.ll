@@ -1,12 +1,12 @@
 declare hidden void @__zluda_ptx_impl_nanosleep_u32(i32) #0
 
-define amdgpu_kernel void @nanosleep(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #1 {
+define amdgpu_kernel void @nanosleep(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #1 {
   br label %1
 
 1:                                                ; preds = %0
-  br label %"33"
+  br label %"36"
 
-"33":                                             ; preds = %1
+"36":                                             ; preds = %1
   call void @__zluda_ptx_impl_nanosleep_u32(i32 1)
   ret void
 }

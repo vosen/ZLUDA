@@ -71,7 +71,7 @@ impl miopenF8RoundingMode_t {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenF8RoundingMode_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     /** @brief Get character string for an error code.
 
@@ -107,7 +107,7 @@ pub type miopenDeallocatorFunction = ::core::option::Option<
         memory: *mut ::core::ffi::c_void,
     ),
 >;
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Method to return version of MIOpen
@@ -128,7 +128,7 @@ extern "C" {
         patch: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Method to create the MIOpen handle object.
@@ -140,7 +140,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenCreate(handle: *mut miopenHandle_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Create a MIOpen handle with an accelerator stream.
@@ -158,7 +158,7 @@ extern "C" {
         stream: miopenAcceleratorQueue_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the MIOpen handle.
@@ -168,7 +168,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenDestroy(handle: miopenHandle_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set accelerator command queue previously created
@@ -182,7 +182,7 @@ extern "C" {
         streamID: miopenAcceleratorQueue_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the previously created accelerator command queue
@@ -196,7 +196,7 @@ extern "C" {
         streamID: *mut miopenAcceleratorQueue_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set allocator for previously created miopenHandle
@@ -221,7 +221,7 @@ extern "C" {
         allocatorContext: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get time for last kernel launched
@@ -236,7 +236,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenGetKernelTime(handle: miopenHandle_t, time: *mut f32) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Enable profiling to retrieve kernel time
@@ -864,7 +864,7 @@ impl miopenConvolutionFindMode_t {
  miopenFindConvolutionBackwardWeightsAlgorithm().*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenConvolutionFindMode_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Create a Tensor Descriptor
@@ -876,7 +876,7 @@ extern "C" {
         tensorDesc: *mut miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape of 4D tensor
@@ -899,7 +899,7 @@ extern "C" {
         w: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape of ND tensor with specific layout
@@ -919,7 +919,7 @@ extern "C" {
         num_lens: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape and stride of 4D tensor
@@ -953,7 +953,7 @@ extern "C" {
         wStride: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the details of the tensor descriptor
@@ -984,7 +984,7 @@ extern "C" {
         wStride: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape of N-dimensional tensor
@@ -1004,7 +1004,7 @@ extern "C" {
         stridesA: *const ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /// @copydoc miopenSetTensorDescriptor()
@@ -1016,7 +1016,7 @@ extern "C" {
         stridesA: *const usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the tensor cast type
@@ -1032,7 +1032,7 @@ extern "C" {
         cast_type: miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape of N-dimensional tensor
@@ -1047,7 +1047,7 @@ extern "C" {
         size: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the details of the N-dimensional tensor descriptor.
@@ -1064,7 +1064,7 @@ extern "C" {
         stridesA: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the tensor descriptor
@@ -1075,7 +1075,7 @@ extern "C" {
         tensorDesc: miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Create a Tensor Descriptor for sequence data
@@ -1087,7 +1087,7 @@ extern "C" {
         tensorDesc: *mut miopenSeqTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the sequence data tensor descriptor
@@ -1098,7 +1098,7 @@ extern "C" {
         tensorDesc: miopenSeqTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute element-wise tensor operations
@@ -1133,7 +1133,7 @@ extern "C" {
         C: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Fills a tensor with a single value.
@@ -1152,7 +1152,7 @@ extern "C" {
         alpha: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Scales all elements in a tensor by a single value.
@@ -1171,7 +1171,7 @@ extern "C" {
         alpha: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Returns number of bytes associated with tensor descriptor
@@ -1184,7 +1184,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Copies one tensor to another tensor with a different layout/scale.
@@ -1213,7 +1213,7 @@ extern "C" {
         y: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a convolution layer descriptor
@@ -1224,7 +1224,7 @@ extern "C" {
         convDesc: *mut miopenConvolutionDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a 2-D convolution layer descriptor
@@ -1252,7 +1252,7 @@ extern "C" {
         dilation_w: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a N-dimensional convolution layer descriptor
@@ -1273,7 +1273,7 @@ extern "C" {
         c_mode: miopenConvolutionMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves the spatial dimension of a convolution layer descriptor
@@ -1286,7 +1286,7 @@ extern "C" {
         spatialDim: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves a 2-D convolution layer descriptor's details
@@ -1314,7 +1314,7 @@ extern "C" {
         dilation_w: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves a N-dimensional convolution layer descriptor's details
@@ -1337,7 +1337,7 @@ extern "C" {
         c_mode: *mut miopenConvolutionMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the number of groups to be used in Group/Depthwise convolution
@@ -1350,7 +1350,7 @@ extern "C" {
         groupCount: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the number of groups to be used in Group/Depthwise convolution
@@ -1370,7 +1370,7 @@ extern "C" {
         groupCount: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the output padding to be used in 2-D Transpose convolution
@@ -1390,7 +1390,7 @@ extern "C" {
         adj_w: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the output padding to be used in N-dimensional Transpose convolution
@@ -1410,7 +1410,7 @@ extern "C" {
         adjA: *const ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the shape of a resulting 4-D tensor from a 2-D convolution
@@ -1439,7 +1439,7 @@ extern "C" {
         w: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the shape of a resulting N-dimensional tensor from a (N-2)-dimensional convolution
@@ -1462,7 +1462,7 @@ extern "C" {
         outputTensorDimA: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the tensor descriptor object
@@ -1473,7 +1473,7 @@ extern "C" {
         convDesc: miopenConvolutionDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the attribute of the convolution descriptor
@@ -1487,7 +1487,7 @@ extern "C" {
         value: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the attribute of the convolution descriptor
@@ -1501,7 +1501,7 @@ extern "C" {
         value: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the Find Mode attribute in the convolution descriptor.
@@ -1521,7 +1521,7 @@ extern "C" {
         findMode: miopenConvolutionFindMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Reads the Find Mode attribute from the convolution descriptor.
@@ -1719,7 +1719,7 @@ union*/
     ///< The algorithm used to compute the solution
     pub algorithm: miopenConvAlgorithm_t,
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the maximum number of solutions applicable for the given input/output and weights
@@ -1745,7 +1745,7 @@ extern "C" {
         solutionCount: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the applicable solutions for a convolution configuration described by
@@ -1781,7 +1781,7 @@ extern "C" {
         solutions: *mut miopenConvSolution_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Returns the workspace size required for a particular solution id.
@@ -1810,7 +1810,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Compiles the solution provided by the user, this solution may be acquired by the
@@ -1838,7 +1838,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Executes the Forward convolution operation based on the provided solution ID.
@@ -1871,7 +1871,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the maximum number of solutions applicable for the given input/output and weights
@@ -1899,7 +1899,7 @@ extern "C" {
         solutionCount: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the applicable solutions for a backward convolution w-r-t data as described by
@@ -1936,7 +1936,7 @@ extern "C" {
         solutions: *mut miopenConvSolution_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Returns the workspace size required for a particular solution id.
@@ -1965,7 +1965,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Compiles the solution provided by the user, this solution may be acquired by the
@@ -1994,7 +1994,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Executes the Backward convolution w-r-t data  operation based on the provided solution
@@ -2027,7 +2027,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the maximum number of solutions applicable for the given input/output and weights
@@ -2055,7 +2055,7 @@ extern "C" {
         solutionCount: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the applicable solutions for a backward convolution w-r-t weights as described by
@@ -2091,7 +2091,7 @@ extern "C" {
         solutions: *mut miopenConvSolution_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Returns the workspace size required for a particular solution id.
@@ -2120,7 +2120,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Compiles the solution provided by the user, this solution may be acquired by the
@@ -2148,7 +2148,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Executes the Backward convolution w-r-t weights  operation based on the provided solution
@@ -2182,7 +2182,7 @@ extern "C" {
         solution_id: u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the workspace size required for a forward convolution algorithm.
@@ -2219,7 +2219,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Search and run the forward convolutional algorithms and return a list of kernel times.
@@ -2281,7 +2281,7 @@ extern "C" {
         exhaustiveSearch: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a forward convolution layer
@@ -2333,7 +2333,7 @@ extern "C" {
         workSpaceSize: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Calculate element-wise scale and shift of a tensor via a bias tensor
@@ -2360,7 +2360,7 @@ extern "C" {
         y: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the workspace size required for a backward data convolution algorithm.
@@ -2398,7 +2398,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Search and run the backwards data convolution algorithms and return a list of kernel
@@ -2460,7 +2460,7 @@ extern "C" {
         exhaustiveSearch: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a backward data convolution layer
@@ -2511,7 +2511,7 @@ extern "C" {
         workSpaceSize: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the GPU memory required for the backward weights convolution algorithm.
@@ -2549,7 +2549,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Search and run the backwards weights convolutional algorithms and return a list of kernel
@@ -2611,7 +2611,7 @@ extern "C" {
         exhaustiveSearch: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a backward weights convolution layer
@@ -2662,7 +2662,7 @@ extern "C" {
         workSpaceSize: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Calculates the gradient with respect to the bias.
@@ -2689,7 +2689,7 @@ extern "C" {
         db: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a pooling layer descriptor
@@ -2700,7 +2700,7 @@ extern "C" {
         poolDesc: *mut miopenPoolingDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set index data type for pooling layer. The default indexing type is uint8_t.
@@ -2715,7 +2715,7 @@ extern "C" {
         index_type: miopenIndexType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the index data type for pooling layer. The index type to any of the
@@ -2729,7 +2729,7 @@ extern "C" {
         index_type: *mut miopenIndexType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set workspace index mode for pooling layer. The default mode is
@@ -2743,7 +2743,7 @@ extern "C" {
         workspace_index: miopenPoolingWorkspaceIndexMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get workspace index mode for pooling layer.
@@ -2756,7 +2756,7 @@ extern "C" {
         workspace_index: *mut miopenPoolingWorkspaceIndexMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a 2-D pooling layer descriptor details.
@@ -2783,7 +2783,7 @@ extern "C" {
         stride_w: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets a 2-D pooling layer descriptor details
@@ -2810,7 +2810,7 @@ extern "C" {
         stride_w: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the shape of the output tensor for 2-D pooling
@@ -2835,7 +2835,7 @@ extern "C" {
         w: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set details of a N-D pooling layer descriptor
@@ -2861,7 +2861,7 @@ extern "C" {
         stridesA: *const ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get details of a N-D pooling layer descriptor
@@ -2889,7 +2889,7 @@ extern "C" {
         stridesA: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the shape of the output tensor for N-D pooling
@@ -2910,7 +2910,7 @@ extern "C" {
         tensorDimArr: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the amount of GPU memory required for pooling
@@ -2929,7 +2929,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the amount of GPU memory required for pooling
@@ -2949,7 +2949,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a forward pooling layer
@@ -2985,7 +2985,7 @@ extern "C" {
         workSpaceSize: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a backward pooling layer
@@ -3023,7 +3023,7 @@ extern "C" {
         workSpace: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the pooling descriptor object
@@ -3034,7 +3034,7 @@ extern "C" {
         poolDesc: miopenPoolingDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup LRN\n\n  @{\n/\n/*! @brief Creates a local response normalization (LRN) layer descriptor\n\n @param lrnDesc    Pointer to a local response normalization layer descriptor type\n @return           miopenStatus_t"]
@@ -3042,7 +3042,7 @@ extern "C" {
         lrnDesc: *mut miopenLRNDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a LRN layer descriptor details
@@ -3066,7 +3066,7 @@ extern "C" {
         lrnK: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets a LRN layer descriptor details
@@ -3089,7 +3089,7 @@ extern "C" {
         lrnK: *mut f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Determine the workspace requirements.
@@ -3105,7 +3105,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a LRN forward layer
@@ -3138,7 +3138,7 @@ extern "C" {
         workSpace: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a LRN backward layer
@@ -3173,7 +3173,7 @@ extern "C" {
         workSpace: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the LRN descriptor object
@@ -3182,7 +3182,7 @@ extern "C" {
  @return          miopenStatus_t*/
     pub fn miopenDestroyLRNDescriptor(lrnDesc: miopenLRNDescriptor_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param normalized_dim Nomalized dimensions in the input array (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
@@ -3205,7 +3205,7 @@ extern "C" {
         rstd: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup cat\n\n  @{\n/\n/*! @brief Execute a cat forward layer\n\n @param handle         MIOpen handle (input)\n @param xCount         Number of input tensor x (input)\n @param xDescs         Tensor descriptor of input tensor x (input)\n @param xs             Source data tensor x (input)\n @param yDesc          Tensor descriptor of output tensor y (input)\n @param y              Data tensor y (output)\n @param dim            Concatenation dimension (input)\n @return               miopenStatus_t"]
@@ -3219,7 +3219,7 @@ extern "C" {
         dim: i32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Derive tensor for gamma and beta from input tensor descriptor
@@ -3243,7 +3243,7 @@ extern "C" {
         bn_mode: miopenBatchNormMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward training layer for batch normalization
@@ -3303,7 +3303,7 @@ extern "C" {
         resultSaveInvVariance: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward training layer for batch normalization
@@ -3368,7 +3368,7 @@ extern "C" {
         resultSaveInvVariance: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward inference layer for batch normalization
@@ -3416,7 +3416,7 @@ extern "C" {
         epsilon: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward inference layer for batch normalization
@@ -3469,7 +3469,7 @@ extern "C" {
         epsilon: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backwards propagation layer for batch normalization
@@ -3527,7 +3527,7 @@ extern "C" {
         savedInvVariance: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backwards propagation layer for batch normalization
@@ -3592,7 +3592,7 @@ extern "C" {
         savedInvVariance: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup activation\n\n  @{\n/\n/*! @brief Creates the Activation descriptor object\n\n @param activDesc Pointer to an activation tensor descriptor type\n @return          miopenStatus_t"]
@@ -3600,7 +3600,7 @@ extern "C" {
         activDesc: *mut miopenActivationDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the activation layer descriptor details
@@ -3621,7 +3621,7 @@ extern "C" {
         activGamma: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the activation layer descriptor details
@@ -3642,7 +3642,7 @@ extern "C" {
         activGamma: *mut f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute an activation forward layer
@@ -3667,7 +3667,7 @@ extern "C" {
         y: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a activation backwards layer
@@ -3700,7 +3700,7 @@ extern "C" {
         dx: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the activation descriptor object
@@ -3711,7 +3711,7 @@ extern "C" {
         activDesc: miopenActivationDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a GLU forward layer
@@ -3732,7 +3732,7 @@ extern "C" {
         dim: u32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a GLU backward layer
@@ -3757,7 +3757,7 @@ extern "C" {
         dim: u32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup softmax\n\n  @{\n/\n/*! @brief Execute a softmax forward layer\n\n This API only implements the SOFTMAX_MODE_CHANNEL in SOFTMAX_ACCURATE path.\n\n @param handle         MIOpen handle (input)\n @param alpha          Floating point scaling factor, allocated on the host (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param beta           Floating point shift factor, allocated on the host (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @return               miopenStatus_t"]
@@ -3771,7 +3771,7 @@ extern "C" {
         y: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a softmax backwards layer
@@ -3800,7 +3800,7 @@ extern "C" {
         dx: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a softmax forward layer with expanded modes and algorithms
@@ -3827,7 +3827,7 @@ extern "C" {
         mode: miopenSoftmaxMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a softmax backwards layer with expanded modes and algorithms
@@ -3897,7 +3897,7 @@ impl miopenFusionDirection_t {
  @brief Kernel fusion direction in the network*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenFusionDirection_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates the kenrel fusion plan descriptor object
@@ -3912,7 +3912,7 @@ extern "C" {
         inputDesc: miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroy the fusion plan descriptor object
@@ -3923,7 +3923,7 @@ extern "C" {
         fusePlanDesc: miopenFusionPlanDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Compiles the fusion plan
@@ -3936,7 +3936,7 @@ extern "C" {
         fusePlanDesc: miopenFusionPlanDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Allows access to the operators in a fusion plan
@@ -3953,7 +3953,7 @@ extern "C" {
         op: *mut miopenFusionOpDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the workspace size required for the fusion plan
@@ -3969,7 +3969,7 @@ extern "C" {
         algo: miopenConvFwdAlgorithm_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Returns the supported algorithms for the convolution operator in the Fusion Plan
@@ -3994,7 +3994,7 @@ extern "C" {
         returnedAlgos: *mut miopenConvFwdAlgorithm_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Requests the fusion runtime to choose a particular algorithm for the added convolution
@@ -4010,7 +4010,7 @@ extern "C" {
         algo: miopenConvFwdAlgorithm_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates forward convolution operator.
@@ -4027,7 +4027,7 @@ extern "C" {
         wDesc: miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a forward activation operator.
@@ -4042,7 +4042,7 @@ extern "C" {
         mode: miopenActivationMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a backward activation operator.
@@ -4057,7 +4057,7 @@ extern "C" {
         mode: miopenActivationMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a forward bias operator.
@@ -4072,7 +4072,7 @@ extern "C" {
         bDesc: miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a forward inference batch normalization operator.
@@ -4089,7 +4089,7 @@ extern "C" {
         bnScaleBiasMeanVarDesc: miopenTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a forward training batch normalization operator.
@@ -4107,7 +4107,7 @@ extern "C" {
         runningMeanVariance: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a back propagation batch normalization operator.
@@ -4122,7 +4122,7 @@ extern "C" {
         bn_mode: miopenBatchNormMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates an operator argument object
@@ -4131,7 +4131,7 @@ extern "C" {
  @return            miopenStatus_t*/
     pub fn miopenCreateOperatorArgs(args: *mut miopenOperatorArgs_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys an operator argument object
@@ -4140,7 +4140,7 @@ extern "C" {
  @return            miopenStatus_t*/
     pub fn miopenDestroyOperatorArgs(args: miopenOperatorArgs_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for forward convolution op
@@ -4159,7 +4159,7 @@ extern "C" {
         w: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for forward activation op
@@ -4182,7 +4182,7 @@ extern "C" {
         activGamma: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for backward activation op
@@ -4209,7 +4209,7 @@ extern "C" {
         activGamma: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for inference batch normalization op
@@ -4236,7 +4236,7 @@ extern "C" {
         epsilon: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for forward batch normalization op
@@ -4269,7 +4269,7 @@ extern "C" {
         epsilon: f64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for backward batch normalization op
@@ -4300,7 +4300,7 @@ extern "C" {
         savedInvVariance: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the arguments for forward bias op
@@ -4319,7 +4319,7 @@ extern "C" {
         bias: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Executes the fusion plan
@@ -4343,7 +4343,7 @@ extern "C" {
         args: miopenOperatorArgs_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Prepares and executes the Convlution+Bias+Activation Fusion.
@@ -4531,7 +4531,7 @@ impl miopenRNNBaseLayout_t {
  Data layouts for RNN operations*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenRNNBaseLayout_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Create a RNN layer Descriptor
@@ -4543,7 +4543,7 @@ extern "C" {
         rnnDesc: *mut miopenRNNDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves a RNN layer descriptor's details
@@ -4568,7 +4568,7 @@ extern "C" {
         layer: *mut ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves a RNN layer descriptor's details version 2. This version enables retrieving
@@ -4599,7 +4599,7 @@ extern "C" {
         dataType: *mut miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the tensor descriptor object
@@ -4608,7 +4608,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenDestroyRNNDescriptor(rnnDesc: miopenRNNDescriptor_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the details of the RNN descriptor
@@ -4637,7 +4637,7 @@ extern "C" {
         dataType: miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the details of the RNN descriptor version 2. This version enables the use of dropout
@@ -4670,7 +4670,7 @@ extern "C" {
         dataType: miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set shape of RNN seqData tensor
@@ -4697,7 +4697,7 @@ extern "C" {
         paddingMarker: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get shape of RNN seqData tensor
@@ -4728,7 +4728,7 @@ extern "C" {
         paddingMarker: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of memory required to execute the RNN layer
@@ -4754,7 +4754,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of memory required for RNN training
@@ -4780,7 +4780,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of additional memory required for this RNN layer execution.
@@ -4807,7 +4807,7 @@ extern "C" {
         reserveSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of parameter memory required for RNN training
@@ -4829,7 +4829,7 @@ extern "C" {
         dtype: miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Obtain a weight tensor descriptor for RNNs
@@ -4851,7 +4851,7 @@ extern "C" {
         dtype: miopenDataType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Obtain a the size in bytes of the RNN input tensor
@@ -4878,7 +4878,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Obtain a the size in bytes of the RNN hidden tensor
@@ -4900,7 +4900,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the number of bytes of a parameter matrix
@@ -4951,7 +4951,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the number of bytes of a bias
@@ -4998,7 +4998,7 @@ extern "C" {
         numBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets a weight matrix for a specific layer in an RNN stack
@@ -5070,7 +5070,7 @@ extern "C" {
         layerParam: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets a bias for a specific layer in an RNN stack
@@ -5141,7 +5141,7 @@ extern "C" {
         layerBias: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets an index offset for a specific weight matrix for a layer in the
@@ -5206,7 +5206,7 @@ extern "C" {
         layerParamOffset: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets a bias index offset for a specific layer in an RNN stack
@@ -5267,7 +5267,7 @@ extern "C" {
         layerBiasOffset: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a weight matrix for a specific layer in an RNN stack
@@ -5333,7 +5333,7 @@ extern "C" {
         layerParam: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a bias for a specific layer in an RNN stack
@@ -5397,7 +5397,7 @@ extern "C" {
         layerBias: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a bias for a specific layer in an RNN stack
@@ -5415,7 +5415,7 @@ extern "C" {
         paddingMode: miopenRNNPaddingMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief This function retrieves the RNN padding mode from the RNN descriptor.
@@ -5428,7 +5428,7 @@ extern "C" {
         paddingMode: *mut miopenRNNPaddingMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward training for recurrent layer.
@@ -5502,7 +5502,7 @@ extern "C" {
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backward data for recurrent layer
@@ -5577,7 +5577,7 @@ function.(input)
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backward weights for recurrent layer
@@ -5629,7 +5629,7 @@ function.(input)
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward training for recurrent layer
@@ -5712,7 +5712,7 @@ extern "C" {
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backward data for recurrent layer
@@ -5816,7 +5816,7 @@ extern "C" {
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backward weights for recurrent layer
@@ -5872,7 +5872,7 @@ extern "C" {
         reserveSpaceNumBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward inference for RNN layer
@@ -5962,7 +5962,7 @@ impl miopenCTCLossAlgo_t {
  Algorithms available to execute the CTC loss operation*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenCTCLossAlgo_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Create a CTC loss function Descriptor
@@ -5974,7 +5974,7 @@ extern "C" {
         ctcLossDesc: *mut miopenCTCLossDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves a CTC loss function descriptor's details
@@ -5992,7 +5992,7 @@ extern "C" {
         apply_softmax_layer: *mut bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys a CTC loss function descriptor object
@@ -6003,7 +6003,7 @@ extern "C" {
         ctcLossDesc: miopenCTCLossDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Set the details of a CTC loss function descriptor
@@ -6021,7 +6021,7 @@ extern "C" {
         apply_softmax_layer: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of memory required to execute miopenCTCLoss
@@ -6051,7 +6051,7 @@ extern "C" {
         workSpaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward inference for CTCLoss layer
@@ -6097,7 +6097,7 @@ impl miopenRNGType_t {
  random number generator type*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenRNGType_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates the dropout descriptor object
@@ -6108,7 +6108,7 @@ extern "C" {
         dropoutDesc: *mut miopenDropoutDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys the dropout descriptor object
@@ -6119,7 +6119,7 @@ extern "C" {
         dropoutDesc: miopenDropoutDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of memory required to run dropout
@@ -6134,7 +6134,7 @@ extern "C" {
         reserveSpaceSizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query the amount of memory required to store the states of the random number generators
@@ -6149,7 +6149,7 @@ extern "C" {
         stateSizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Get the details of the dropout descriptor
@@ -6178,7 +6178,7 @@ extern "C" {
         rng_mode: *mut miopenRNGType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Restore the dropout descriptor to a saved state
@@ -6214,7 +6214,7 @@ extern "C" {
         rng_mode: miopenRNGType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initialize the dropout descriptor
@@ -6247,7 +6247,7 @@ extern "C" {
         rng_mode: miopenRNGType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute forward dropout operation
@@ -6278,7 +6278,7 @@ extern "C" {
         reserveSpaceSizeInBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute backward dropout operation
@@ -6309,7 +6309,7 @@ extern "C" {
         reserveSpaceSizeInBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates the ReduceTensor descriptor object
@@ -6320,7 +6320,7 @@ extern "C" {
         reduceTensorDesc: *mut miopenReduceTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroy the ReduceTensor descriptor object
@@ -6331,7 +6331,7 @@ extern "C" {
         reduceTensorDesc: miopenReduceTensorDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initialize a ReduceTensor descriptor object
@@ -6354,7 +6354,7 @@ extern "C" {
         reduceTensorIndicesType: miopenIndicesType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Query a ReduceTensor descriptor object
@@ -6380,7 +6380,7 @@ extern "C" {
         reduceTensorIndicesType: *mut miopenIndicesType_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum index space size required by the ReduceTensor call
@@ -6399,7 +6399,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the ReduceTensor call
@@ -6418,7 +6418,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief TensorReduce function doing reduction on tensor A by implementing C = alpha * reduceOp(A)
@@ -6817,7 +6817,7 @@ impl miopenFindResultsOrder_t {
  Different ways to sort results of the find call.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenFindResultsOrder_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes a problem object describing a convolution operation.
@@ -6843,7 +6843,7 @@ impl miopenMhaMask_t {
  Different masks for Mha.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenMhaMask_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     pub fn miopenCreateMhaProblem(
@@ -6852,7 +6852,7 @@ extern "C" {
         direction: miopenProblemDirection_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates the mha descriptor object
@@ -6863,7 +6863,7 @@ extern "C" {
         mhaDesc: *mut miopenMhaDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the Mha descriptor details
@@ -6878,7 +6878,7 @@ extern "C" {
         scale: f32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the Mha descriptor details
@@ -6893,7 +6893,7 @@ extern "C" {
         scale: *mut f32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates the Softmax descriptor object
@@ -6904,7 +6904,7 @@ extern "C" {
         softmaxDesc: *mut miopenSoftmaxDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the softmax descriptor details
@@ -6925,7 +6925,7 @@ extern "C" {
         mode: miopenSoftmaxMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the softmax layer descriptor details
@@ -6946,7 +6946,7 @@ extern "C" {
         mode: *mut miopenSoftmaxMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys a problem object.
@@ -6955,7 +6955,7 @@ extern "C" {
  @return        miopenStatus_t*/
     pub fn miopenDestroyProblem(problem: miopenProblem_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets a tensor descriptor for the specified argument.
@@ -6978,7 +6978,7 @@ pub struct miopenFindOptions {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenFindOptions_t(pub *mut miopenFindOptions);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes miopenFindOptions object.
@@ -6987,7 +6987,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenCreateFindOptions(options: *mut miopenFindOptions_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys miopenFindOptions object.
@@ -6996,7 +6996,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenDestroyFindOptions(options: miopenFindOptions_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the tuning find option. Default value is zero.
@@ -7009,7 +7009,7 @@ extern "C" {
         value: ::core::ffi::c_int,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the results order find option. Default value is miopenFindResultsOrderByTime.
@@ -7022,7 +7022,7 @@ extern "C" {
         value: miopenFindResultsOrder_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets the workspace limit find option. Default value is maximum of size_t
@@ -7036,7 +7036,7 @@ extern "C" {
         value: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Attaches the preallocated workspace to find options. Allocated by the library by default.
@@ -7051,7 +7051,7 @@ extern "C" {
         size: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Attaches a preallocated tensor to find options. If not used, buffers are allocated by
@@ -7067,7 +7067,7 @@ extern "C" {
         buffer: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Forces library to attach kernel binaries to solutions for later saving. This allows zero
@@ -7089,7 +7089,7 @@ pub struct miopenSolution {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenSolution_t(pub *mut miopenSolution);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Finds solutions to a problem by running different applicable solutions. Memory is
@@ -7119,7 +7119,7 @@ pub struct miopenTensorArgument_t {
     pub descriptor: *mut miopenTensorDescriptor_t,
     pub buffer: *mut ::core::ffi::c_void,
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Runs the solution using the passed in buffers.
@@ -7141,7 +7141,7 @@ extern "C" {
         workspaceSize: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys solution object.
@@ -7150,7 +7150,7 @@ extern "C" {
  @return           miopenStatus_t*/
     pub fn miopenDestroySolution(solution: miopenSolution_t) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Loads solution object from binary data.
@@ -7165,7 +7165,7 @@ extern "C" {
         size: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Saves a solution object as binary data.
@@ -7178,7 +7178,7 @@ extern "C" {
         data: *mut ::core::ffi::c_char,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Reads the expected size of a solution.
@@ -7191,7 +7191,7 @@ extern "C" {
         size: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Reads the amount of workspace required to exectute the solution.
@@ -7204,7 +7204,7 @@ extern "C" {
         workspaceSize: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Reads the time spent to execute the solution the last it was run.
@@ -7217,7 +7217,7 @@ extern "C" {
         time: *mut f32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Reads id of the solver referred by the solution.
@@ -7230,7 +7230,7 @@ extern "C" {
         solverId: *mut u64,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Gets the convolution algorithm implemented by a solver.
@@ -7243,7 +7243,7 @@ extern "C" {
         result: *mut miopenConvAlgorithm_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes a problem object describing an activation operation.
@@ -7259,7 +7259,7 @@ extern "C" {
         direction: miopenProblemDirection_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes a problem object describing an activation operation.
@@ -7276,7 +7276,7 @@ extern "C" {
         direction: miopenProblemDirection_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Fuse two problems into a single one. Problems can be either regular, or fused. No
@@ -7302,7 +7302,7 @@ extern "C" {
         problem2: miopenProblem_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes a problem object describing an bias operation.
@@ -7316,7 +7316,7 @@ extern "C" {
         direction: miopenProblemDirection_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Initializes a problem object describing a softmax operation.
@@ -7363,7 +7363,7 @@ impl miopenReduceCalculationOp_t {
  Reduction Calculation operation types*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenReduceCalculationOp_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the ReduceTensor call
@@ -7383,7 +7383,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a reducecalculation forward layer
@@ -7437,7 +7437,7 @@ impl miopenReduceExtremeOp_t {
  Reduction Extreme operation types*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenReduceExtremeOp_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Find the the extreme (minimum, maximum) value and index of a tensor across Dimension.
@@ -7465,7 +7465,7 @@ extern "C" {
         indice: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup groupnorm\n\n  @{\n/\n/*! @brief Execute a groupnorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           GroupNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param num_groups     nNmber of groups to separate the channels into (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
@@ -7488,7 +7488,7 @@ extern "C" {
         rstd: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a add and layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param x2Desc         Tensor descriptor for data input tensor x2 (input)\n @param x2             Data tensor x2 (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param biasDesc       Tensor descriptor for data input tensor bias (input)\n @param bias           Data tensor bias (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param normalized_dim Nomalized dimensions in the input array (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param meanDesc       Tensor descriptor for output data tensor mean (input)\n @param mean           Data tensor mean (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
@@ -7513,7 +7513,7 @@ extern "C" {
         rstd: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup layernorm\n\n  @{\n/\n/*! @brief Execute a T5layernorm forward layer\n\n @param handle         MIOpen handle (input)\n @param mode           LayerNorm mode (input)\n @param xDesc          Tensor descriptor for data input tensor x (input)\n @param x              Data tensor x (input)\n @param weightDesc     Tensor descriptor for data input tensor weight (input)\n @param weight         Data tensor weight (input)\n @param epsilon        Value to stablize inverse variance calculation (input)\n @param yDesc          Tensor descriptor for output data tensor y (input)\n @param y              Data tensor y (output)\n @param rstdDesc       Tensor descriptor for output data tensor rstd (input)\n @param rstd           Data tensor rstd (output)\n @return               miopenStatus_t"]
@@ -7531,7 +7531,7 @@ extern "C" {
         rstd: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the T5layernorm backward
@@ -7559,7 +7559,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a T5layernorm backward layer
@@ -9368,7 +9368,7 @@ pub struct miopenBackendDescriptor {
     pub _address: u8,
 }
 pub type miopenBackendDescriptor_t = *mut miopenBackendDescriptor;
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Creates a backend descriptor
@@ -9388,7 +9388,7 @@ extern "C" {
         descriptor: *mut miopenBackendDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Sets an attribute of a descriptor
@@ -9427,7 +9427,7 @@ extern "C" {
         arrayOfElements: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Finalizes a backend descriptor
@@ -9449,7 +9449,7 @@ extern "C" {
         descriptor: miopenBackendDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Retrieves backend descriptor's attribute
@@ -9494,7 +9494,7 @@ extern "C" {
         arrayOfElements: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Executes a graph
@@ -9521,7 +9521,7 @@ extern "C" {
         variantPack: miopenBackendDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Destroys an instance of miopenBackendDescriptor_t
@@ -9543,7 +9543,7 @@ extern "C" {
         descriptor: miopenBackendDescriptor_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Repurposes an instance of miopenBackendDescriptor_t
@@ -9568,7 +9568,7 @@ extern "C" {
         sizeInBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup SGD\n\n  @{\n/\n/*! @brief Perform Fused Adam optimization for a single tensor (Adaptive Moment Estimation).\n\n This function implements the Fused Adam optimization algorithm. Adam, short for Adaptive Moment\n Estimation, extends the RMSProp optimizer. It combines the advantages of AdaGrad and RMSProp by\n adaptively adjusting learning rates for each parameter using the first and second moments of\n gradients. Fused Adam optimization efficiently combines multiple operations into a single kernel,\n reducing memory access overhead and improving performance.\n\n Additionally, Fused Adam can be utilized in both adam w and Automatic Mixed Precision (AMP),\n enabling accelerated model training and reduced memory consumption. AMP supports FP16\n computation, optimizing model calculations using a mixture of FP32 and FP16 precision to enhance\n training speed. When utilizing AMP, FoundInf, ScaleGrad, and step tensors should be employed. In\n AMP mode, the execution of Adam is determined based on the FoundInf value. State Step accepts\n both int values and int tensors. If a Step tensor is employed, the step received as an int is\n disregarded, and if Adam is executed, the step tensor is incremented by 1.\n\n @code\n // Execute Adam\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 NULL,     // Unused stateStep Tensor because use step integer argument\n                 NULL,\n                 step,\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 false,    // adamw\n                 NULL,     // Unused gradScale Tensor because not amp\n                 NULL,\n                 NULL,     // Unused foundInf Tensor because not amp\n                 NULL);\n\n // Execute AdamW\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 NULL,     // Unused stateStep Tensor because use step integer argument\n                 NULL,\n                 step,\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 true,     // adamw\n                 NULL,     // Unused gradScale Tensor because not amp\n                 NULL,\n                 NULL,     // Unused foundInf Tensor because not amp\n                 NULL);\n\n // Execute AMP Adam\n miopenFusedAdam(handle,\n                 paramDesc,\n                 param,\n                 gradDesc,\n                 grad,\n                 expAvgDesc,\n                 expAvg,\n                 expAvgSqDesc,\n                 expAvgSq,\n                 NULL,     // Unused maxExpAvgSqDesc because amsgrad is false\n                 NULL,\n                 stateStepDesc,\n                 stateStep,\n                 -1,       // Ignore step value because stateStep Tensor is used\n                 lr,\n                 beta1,\n                 beta2,\n                 weight_decay,\n                 eps,\n                 false,    // amsgrad\n                 false,    // maximize\n                 false,    // adamw\n                 gradScaleDesc,\n                 gradScale,\n                 foundInfDesc,\n                 foundInf);\n @endcode\n\n @param handle              MIOpen handle (input)\n @param paramDesc           Tensor descriptor for the input parameter tensor (input)\n @param param               Input parameter tensor (input)\n @param gradDesc            Tensor descriptor for the input gradient tensor (input)\n @param grad                Input gradient tensor (input)\n @param expAvgDesc          Tensor descriptor for the input exponential moving average tensor\n                            (input)\n @param expAvg              Input exponential moving average tensor (input)\n @param expAvgSqDesc        Tensor descriptor for the input exponential moving average squared\n                            tensor (input)\n @param expAvgSq            Input exponential moving average squared tensor (input)\n @param maxExpAvgSqDesc     Tensor descriptor for the input maximum exponential moving average\n                            squared tensor. Used when amsgrad is true (input, optional)\n @param maxExpAvgSq         Input maximum exponential moving average squared tensor. Used when\n                            amsgrad is true (input, optional)\n @param stateStepDesc       Tensor descriptor for the input state step tensor (input)\n @param stateStep           Input state step tensor (input)\n @param state_step          Input state step. used when the step tensor is null (input)\n @param lr                  Learning rate (input)\n @param beta1               Coefficient used for computing the first moment running average of\n                            gradient (input)\n @param beta2               Coefficient used for computing the second moment running average of\n                            gradient (input)\n @param weight_decay        Weight decay (input)\n @param eps                 Term added to the denominator to improve numerical stability (input)\n @param amsgrad             Flag indicating whether to use the AMSGrad variant of Adam (input)\n @param maximize            Flag indicating whether to maximize the objective with respect to the\n                            parameters (input)\n @param adamw               If true, the operation becomes AdamW (input)\n @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)\n @param gradScale           Input grad scale tensor (input, optional)\n @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)\n @param foundInf            Tensor indicating the presence of inf or NaN in gradients. If true,\n                            skips operation and step update (input, optional)\n @return                    miopenStatus_t"]
@@ -9601,7 +9601,7 @@ extern "C" {
         foundInf: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute single tensor Adam optimization and receive the result in a separate output
@@ -9784,7 +9784,7 @@ extern "C" {
         foundInf: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup SGD\n\n  @{\n/\n/*! @brief Implements Adam algorithm with weight decay fix as introduced in\n <a href=\"https://arxiv.org/abs/1711.05101\">Decoupled Weight Decay Regularization</a>.\n This is the fused kernel version of AdamW included in the Hugging Face Transformers module.\n\n @see miopenFusedAdam\n\n @code\n // Execute Adam\n miopenTransformersAdamW(handle,\n                         paramDesc,\n                         param,\n                         gradDesc,\n                         grad,\n                         expAvgDesc,\n                         expAvg,\n                         expAvgSqDesc,\n                         expAvgSq,\n                         NULL,     // Unused stateStep Tensor because use step integer argument\n                         NULL,\n                         step,\n                         lr,\n                         beta1,\n                         beta2,\n                         weight_decay,\n                         eps,\n                         true,     // correct_bias\n                         NULL,     // Unused gradScale Tensor because not amp\n                         NULL,\n                         NULL,     // Unused foundInf Tensor because not amp\n                         NULL);\n\n // Execute AMP Adam\n miopenTransformersAdamW(handle,\n                         paramDesc,\n                         param,\n                         gradDesc,\n                         grad,\n                         expAvgDesc,\n                         expAvg,\n                         expAvgSqDesc,\n                         expAvgSq,\n                         stateStepDesc,\n                         stateStep,\n                         -1,       // Ignore step value because stateStep Tensor is used\n                         lr,\n                         beta1,\n                         beta2,\n                         weight_decay,\n                         eps,\n                         true,     // correct_bias\n                         gradScaleDesc,\n                         gradScale,\n                         foundInfDesc,\n                         foundInf);\n @endcode\n\n @param handle              MIOpen handle (input)\n @param paramDesc           Tensor descriptor for the input parameter tensor (input)\n @param param               Input parameter tensor (input)\n @param gradDesc            Tensor descriptor for the input gradient tensor (input)\n @param grad                Input gradient tensor (input)\n @param expAvgDesc          Tensor descriptor for the input exponential moving average tensor\n                            (input)\n @param expAvg              Input exponential moving average tensor (input)\n @param expAvgSqDesc        Tensor descriptor for the input exponential moving average squared\n                            tensor (input)\n @param expAvgSq            Input exponential moving average squared tensor (input)\n @param stateStepDesc       Tensor descriptor for the input state step tensor (input)\n @param stateStep           Input state step tensor (input)\n @param state_step          Input state step. used when the step tensor is null (input)\n @param lr                  Learning rate (input)\n @param beta1               Coefficient used for computing the first moment running average of\n                            gradient (input)\n @param beta2               Coefficient used for computing the second moment running average of\n                            gradient (input)\n @param weight_decay        Weight decay (input)\n @param eps                 Term added to the denominator to improve numerical stability (input)\n @param correct_bias        Whether or not to correct bias in Adam (for instance, in Bert TF\n                            repository they use False).\n @param gradScaleDesc       Tensor descriptor for the input grad scale tensor (input, optional)\n @param gradScale           Input grad scale tensor (input, optional)\n @param foundInfDesc        Tensor descriptor for the input found inf tensor (input, optional)\n @param foundInf            Tensor indicating the presence of inf or NaN in gradients. If true,\n                            skips operation and step update (input, optional)\n @return                    miopenStatus_t"]
@@ -9813,7 +9813,7 @@ extern "C" {
         foundInf: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute single tensor Adam optimization and receive the result in a separate output
@@ -9977,7 +9977,7 @@ extern "C" {
         foundInf: *const ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup getitem\n\n  @{\n/\n/*! @brief Helper function to query the minimum workspace size required by the getitem call\n\n @param [in]   handle                  MIOpen Handle\n @param [in]   indexCount              Number of input tensor indexs\n @param [in]   indexDescs              Tensor descriptor of input tensor indexs\n @param [out]  sizeInBytes             Pointer to data to return the minimum workspace size\n @return                        miopenStatus_t"]
@@ -9988,7 +9988,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a getitem backward layer
@@ -10034,7 +10034,7 @@ extern "C" {
         offset: u32,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     #[doc = " @addtogroup RotaryPositionalEmbeddings\n\n  @{\n/\n/*! @brief Execute a rope forward layer\n\n @param [in]   handle         MIOpen handle\n @param [in]   xDesc          Tensor descriptor for data input tensor x\n @param [in]   x              Data tensor x\n @param [in]   cosDesc        Tensor descriptor for data input tensor cos\n @param [in]   cos            Data tensor cos\n @param [in]   sinDesc        Tensor descriptor for data input tensor sin\n @param [in]   sin            Data tensor sin\n @param [in]   yDesc          Tensor descriptor for output data tensor y\n @param [out]  y              Data tensor y\n @return                      miopenStatus_t"]
@@ -10050,7 +10050,7 @@ extern "C" {
         y: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a rope backward layer
@@ -10077,7 +10077,7 @@ extern "C" {
         dx: *mut ::core::ffi::c_void,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a Kthvalue forward layer
@@ -10107,7 +10107,7 @@ extern "C" {
         keepDim: bool,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the PReLU backward call
@@ -10124,7 +10124,7 @@ extern "C" {
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a PReLU backward layer
@@ -10183,7 +10183,7 @@ number of elements to get mean value*/
  Reduction mode for loss function*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct miopenLossReductionMode_t(pub ::core::ffi::c_uint);
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the
@@ -10206,7 +10206,7 @@ use this function
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a SoftMarginLoss forward layer
@@ -10237,7 +10237,7 @@ extern "C" {
         workspaceSizeInBytes: usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a SoftMarginLoss backward layer
@@ -10266,7 +10266,7 @@ extern "C" {
         reduction: miopenLossReductionMode_t,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Helper function to query the minimum workspace size required by the
@@ -10298,7 +10298,7 @@ then it must have shape (N). Otherwise, it is a scalar
         sizeInBytes: *mut usize,
     ) -> miopenStatus_t;
 }
-#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** @brief Execute a MultiMarginLoss forward layer

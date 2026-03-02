@@ -1,8 +1,14 @@
+use zluda_common::os;
+
 pub(crate) struct ZludaBlasLt(libloading::Library);
 
 impl ZludaBlasLt {
     fn load() -> Self {
-        Self(unsafe { libloading::Library::new(crate::r#impl::CUBLASLT_FILE_NAME).unwrap() })
+        let self_path = os::self_path().unwrap();
+        let file = self_path.file_name().unwrap();
+        Self(unsafe {
+            libloading::Library::new(crate::r#impl::get_cublaslt_file_name(file).unwrap()).unwrap()
+        })
     }
 }
 

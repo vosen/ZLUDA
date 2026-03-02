@@ -1,16 +1,16 @@
-define amdgpu_kernel void @warp_sz(ptr addrspace(4) byref(i64) %"35", ptr addrspace(4) byref(i64) %"36") #0 {
-  %"37" = alloca i64, align 8, addrspace(5)
+define amdgpu_kernel void @warp_sz(ptr addrspace(4) byref(i64) %"38", ptr addrspace(4) byref(i64) %"39") #0 {
+  %"40" = alloca i64, align 8, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
-  br label %"34"
+  br label %"37"
 
-"34":                                             ; preds = %1
-  %2 = load i64, ptr addrspace(4) %"36", align 8
-  store i64 %2, ptr addrspace(5) %"37", align 8
-  %3 = load i64, ptr addrspace(5) %"37", align 8
-  %"40" = inttoptr i64 %3 to ptr
-  store i8 32, ptr %"40", align 1
+"37":                                             ; preds = %1
+  %2 = load i64, ptr addrspace(4) %"39", align 8
+  store i64 %2, ptr addrspace(5) %"40", align 8
+  %3 = load i64, ptr addrspace(5) %"40", align 8
+  %"43" = inttoptr i64 %3 to ptr
+  store i8 32, ptr %"43", align 1
   ret void
 }
 

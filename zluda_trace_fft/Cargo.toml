@@ -22,10 +22,12 @@ cglue = "0.3.5"
 [package.metadata.zluda]
 linux_symlinks = [
     "trace/libcufft.so",
+    "trace/libcufft.so.10",
     "trace/libcufft.so.11",
     "trace/libcufft.so.12"
 ]
 windows_paths = [
+    "trace/cufft64_10.dll",
     "trace/cufft64_11.dll",
     "trace/cufft64_12.dll"
 ]

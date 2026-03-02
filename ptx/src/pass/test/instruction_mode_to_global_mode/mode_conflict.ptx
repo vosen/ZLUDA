@@ -41,7 +41,7 @@
     .reg .f32 %6;
     .reg .f32 %7;
     .reg .f32 %8;
-    .reg.f32 %9 = zluda.constant.f32 1;
+    .reg.f32 %9 = zluda.constant.f32 0f3f800000;
     mov.f32 %5, %9;
     mul.rn.ftz.f32 %6, %5, %5;
     <Call> %7, %1, %6;
