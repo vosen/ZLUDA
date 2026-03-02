@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use zluda_common::os;
 
 pub(crate) struct Zluda {
     hip: libloading::Library,
