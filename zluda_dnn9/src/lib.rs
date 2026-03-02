@@ -194,6 +194,161 @@ mod tests_impl {
     }
 
     #[test_cuda]
+    fn pytorch_conv_backward_filter(api: impl CudnnApi) {
+        let mut handle = unsafe { std::mem::zeroed() };
+        api.cudnnCreate(&mut handle);
+        api.cudnnSetStream(handle, CUstream(ptr::null_mut()));
+        // x (input) descriptor: [1, 256, 1, 7824]
+        let mut x_desc = unsafe { std::mem::zeroed() };
+        api.cudnnCreateTensorDescriptor(&mut x_desc);
+        api.cudnnSetTensorNdDescriptor(
+            x_desc,
+            cudnnDataType_t::CUDNN_DATA_HALF,
+            4,
+            [1, 256, 1, 7824].as_ptr(),
+            [2002944, 7824, 7824, 1].as_ptr(),
+        );
+        // filter (dw) descriptor: [256, 256, 1, 7]
+        let mut filter_desc = unsafe { std::mem::zeroed() };
+        api.cudnnCreateFilterDescriptor(&mut filter_desc);
+        api.cudnnSetFilterNdDescriptor(
+            filter_desc,
+            cudnnDataType_t::CUDNN_DATA_HALF,
+            cudnnTensorFormat_t::CUDNN_TENSOR_NCHW,
+            4,
+            [256, 256, 1, 7].as_ptr(),
+        );
+        // dy (output gradient) descriptor: [1, 256, 1, 7824]
+        let mut dy_desc = unsafe { std::mem::zeroed() };
+        api.cudnnCreateTensorDescriptor(&mut dy_desc);
+        api.cudnnSetTensorNdDescriptor(
+            dy_desc,
+            cudnnDataType_t::CUDNN_DATA_HALF,
+            4,
+            [1, 256, 1, 7824].as_ptr(),
+            [2002944, 7824, 7824, 1].as_ptr(),
+        );
+        let mut conv_desc = unsafe { std::mem::zeroed() };
+        api.cudnnCreateConvolutionDescriptor(&mut conv_desc);
+        api.cudnnSetConvolutionNdDescriptor(
+            conv_desc,
+            2,
+            [0, 3].as_ptr(),
+            [1, 1].as_ptr(),
+            [1, 1].as_ptr(),
+            cudnnConvolutionMode_t::CUDNN_CROSS_CORRELATION,
+            cudnnDataType_t::CUDNN_DATA_FLOAT,
+        );
+        api.cudnnSetConvolutionGroupCount(conv_desc, 1);
+        let mut algo_count = 0;
+        let mut perf_results: cudnnConvolutionBwdFilterAlgoPerf_t = unsafe { mem::zeroed() };
+        api.cudnnGetConvolutionBackwardFilterAlgorithm_v7(
+            handle,
+            x_desc,
+            dy_desc,
+            conv_desc,
+            filter_desc,
+            8,
+            &mut algo_count,
+            &mut perf_results,
+        );
+        let mut rng = ChaCha8Rng::from_seed([
+            0xca, 0xb9, 0x3c, 0xf4, 0xa7, 0xc7, 0xa8, 0xa5, 0x47, 0x6c, 0x86, 0xa0, 0x62, 0x6e,
+            0x4c, 0xb7, 0x95, 0x5f, 0x39, 0x19, 0x2f, 0xb8, 0x69, 0xd1, 0xce, 0xc4, 0xfc, 0xc7,
+            0xe3, 0x2c, 0xe4, 0x1d,
+        ]);
+        let x_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
+        let x_mem_host = fill_buffer::<f16>(&api, &mut rng, x_mem_dev, 1 * 256 * 1 * 7824);
+        let dy_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
+        let dy_mem_host = fill_buffer::<f16>(&api, &mut rng, dy_mem_dev, 1 * 256 * 1 * 7824);
+        let dw_mem_dev = api.alloc(256 * 256 * 1 * 7 * mem::size_of::<f16>());
+        let workspace_mem = if perf_results.memory > 0 {
+            api.alloc(perf_results.memory)
+        } else {
+            ptr::null_mut()
+        };
+        api.cudnnConvolutionBackwardFilter(
+            handle,
+            std::ptr::from_ref(&1.0f32).cast(),
+            x_desc,
+            x_mem_dev,
+            dy_desc,
+            dy_mem_dev,
+            conv_desc,
+            perf_results.algo,
+            workspace_mem,
+            perf_results.memory,
+            std::ptr::from_ref(&0.0f32).cast(),
+            filter_desc,
+            dw_mem_dev,
+        );
+        // Copy result (dw) back from device
+        let dw_count = 256 * 256 * 1 * 7;
+        let mut dw_result = vec![f16::ZERO; dw_count];
+        api.copy_to_host(
+            dw_result.as_mut_ptr().cast(),
+            dw_mem_dev as *const _,
+            dw_count * mem::size_of::<f16>(),
+        );
+        // Compute reference on CPU
+        // cudnnConvolutionBackwardFilter with cross-correlation computes:
+        //   dw[k, c, 0, r] = sum_n sum_p dy[n, k, 0, p] * x[n, c, 0, p + r - pad]
+        // With N=1, H=1, pad_w=3, stride=1, dilation=1.
+        let c_out = 256usize;
+        let c_in = 256usize;
+        let kw = 7usize;
+        let w = 7824usize;
+        let pad = 3usize;
+        let x_f32: Vec<f32> = x_mem_host.iter().map(|v| v.to_f32()).collect();
+        let dy_f32: Vec<f32> = dy_mem_host.iter().map(|v| v.to_f32()).collect();
+        let mut dw_ref = vec![0.0f32; c_out * c_in * kw];
+        for k in 0..c_out {
+            for c in 0..c_in {
+                for r in 0..kw {
+                    let mut sum = 0.0f32;
+                    for p in 0..w {
+                        let x_idx = p + r;
+                        if x_idx >= pad && x_idx < w + pad {
+                            let x_val = x_f32[c * w + (x_idx - pad)];
+                            let dy_val = dy_f32[k * w + p];
+                            sum += x_val * dy_val;
+                        }
+                    }
+                    dw_ref[k * (c_in * kw) + c * kw + r] = sum;
+                }
+            }
+        }
+        // Compare GPU result against CPU reference
+        assert_eq!(
+            dw_result.len(),
+            dw_ref.len(),
+            "output size mismatch: GPU={} vs CPU={}",
+            dw_result.len(),
+            dw_ref.len()
+        );
+        let mut max_abs_err: f32 = 0.0;
+        let mut max_rel_err: f32 = 0.0;
+        for i in 0..dw_result.len() {
+            let gpu = dw_result[i].to_f32();
+            let cpu = dw_ref[i];
+            let abs_err = (gpu - cpu).abs();
+            let rel_err = if cpu.abs() > 1e-6 {
+                abs_err / cpu.abs()
+            } else {
+                abs_err
+            };
+            max_abs_err = max_abs_err.max(abs_err);
+            max_rel_err = max_rel_err.max(rel_err);
+        }
+        // The backward filter accumulates over W=7824 spatial positions per (k,c,r),
+        // with f16 inputs. This is a large reduction so expect notable numerical error.
+        assert!(
+            max_rel_err < 0.05,
+            "relative error too large: max_abs_err={max_abs_err}, max_rel_err={max_rel_err}"
+        );
+    }
+
+    #[test_cuda]
     fn pytorch_conv_forward(api: impl CudnnApi) {
         let mut handle = unsafe { std::mem::zeroed() };
         api.cudnnCreate(&mut handle);
@@ -310,8 +465,8 @@ mod tests_impl {
         // padding=3, stride=1, dilation=1, groups=1
         let y_ref = x_t
             .conv1d(
-                &filter_t, /*padding=*/ 3, /*stride=*/ 1,
-                /*dilation=*/ 1, /*groups=*/ 1,
+                &filter_t, /*padding=*/ 3, /*stride=*/ 1, /*dilation=*/ 1,
+                /*groups=*/ 1,
             )
             .unwrap();
         let y_ref_f32 = y_ref.flatten_all().unwrap().to_vec1::<f32>().unwrap();
