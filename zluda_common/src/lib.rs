@@ -234,7 +234,8 @@ from_cuda_nop!(
     *const cuda_types::cublas::__half,
     cudnn9::cudnnDataType_t,
     cudnn9::cudnnTensorFormat_t,
-    cudnn9::cudnnConvolutionBwdDataAlgoPerf_t
+    cudnn9::cudnnConvolutionBwdDataAlgoPerf_t,
+    cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -785,6 +786,37 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionBwdDataAlgo_t, E
             cudnn9::cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED => {
                 // No direct MIOpen equivalent; map to Winograd variant
                 miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoWinograd
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionBwdFilterAlgo_t, E>
+    for miopenConvBwdWeightsAlgorithm_t
+{
+    fn from_cuda(format: &'a cudnn9::cudnnConvolutionBwdFilterAlgo_t) -> Result<Self, E> {
+        Ok(match *format {
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0 => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1 => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoDirect
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT_TILING => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoGEMM
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3 => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoImplicitGEMM
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoWinograd
+            }
+            cudnn9::cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD_NONFUSED => {
+                miopenConvBwdWeightsAlgorithm_t::miopenConvolutionBwdWeightsAlgoWinograd
             }
             _ => return Err(E::NOT_SUPPORTED),
         })

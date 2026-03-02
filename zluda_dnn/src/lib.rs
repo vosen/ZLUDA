@@ -81,6 +81,7 @@ dual_function_declarations! {
     unimplemented,
     (implemented_dnn8|implemented_dnn9) <= [
         cudnnGetConvolutionBackwardDataAlgorithm_v7,
+        cudnnGetConvolutionBackwardFilterAlgorithm_v7,
         cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
         cudnnGetVersion
@@ -92,6 +93,7 @@ dual_function_declarations! {
     ],
     implemented <= [
         cudnnConvolutionBackwardData,
+        cudnnConvolutionBackwardFilter,
         cudnnConvolutionForward,
         cudnnCreate,
         cudnnCreateConvolutionDescriptor,
@@ -102,6 +104,7 @@ dual_function_declarations! {
         cudnnDestroyFilterDescriptor,
         cudnnDestroyTensorDescriptor,
         cudnnGetConvolutionBackwardDataWorkspaceSize,
+        cudnnGetConvolutionBackwardFilterWorkspaceSize,
         cudnnGetConvolutionForwardWorkspaceSize,
         cudnnGetFilterNdDescriptor,
         cudnnGetStream,
@@ -188,6 +191,8 @@ cuda_macros::miopen_function_declarations!(
         <= [
             miopenConvolutionBackwardData,
             miopenConvolutionBackwardDataGetWorkSpaceSize,
+            miopenConvolutionBackwardWeights,
+            miopenConvolutionBackwardWeightsGetWorkSpaceSize,
             miopenConvolutionForward,
             miopenConvolutionForwardGetWorkSpaceSize,
             miopenCreate,
@@ -197,6 +202,7 @@ cuda_macros::miopen_function_declarations!(
             miopenDestroyConvolutionDescriptor,
             miopenDestroyTensorDescriptor,
             miopenFindConvolutionBackwardDataAlgorithm,
+            miopenFindConvolutionBackwardWeightsAlgorithm,
             miopenFindConvolutionForwardAlgorithm,
             miopenGetConvolutionDescriptor,
             miopenGetTensorDescriptor,
