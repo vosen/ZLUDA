@@ -680,7 +680,7 @@ pub struct _hipblasLtMatmulHeuristicResult_t {
   @param workspaceSize Actual size of workspace memory required
   @param state Result status. Other fields are valid only if, after call to hipblasLtMatmulAlgoGetHeuristic(), this member is set to HIPBLAS_STATUS_SUCCESS*/
 pub type hipblasLtMatmulHeuristicResult_t = _hipblasLtMatmulHeuristicResult_t;
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     pub fn hipblasLtGetVersion(
@@ -688,7 +688,7 @@ extern "C" {
         version: *mut ::core::ffi::c_int,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     pub fn hipblasLtGetGitRevision(
@@ -696,14 +696,14 @@ extern "C" {
         rev: *mut ::core::ffi::c_char,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     pub fn hipblasLtGetArchName(
         archName: *mut *mut ::core::ffi::c_char,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -725,7 +725,7 @@ extern "C" {
   \retval HIPBLAS_STATUS_INVALID_VALUE \p handle == NULL.*/
     pub fn hipblasLtCreate(handle: *mut hipblasLtHandle_t) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -747,7 +747,7 @@ extern "C" {
  not initialized. \retval HIPBLAS_STATUS_INVALID_VALUE \p handle == NULL.*/
     pub fn hipblasLtDestroy(handle: hipblasLtHandle_t) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -782,7 +782,7 @@ extern "C" {
         ld: i64,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -800,7 +800,7 @@ extern "C" {
         matLayout: hipblasLtMatrixLayout_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -831,7 +831,7 @@ extern "C" {
         sizeInBytes: usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -871,7 +871,7 @@ extern "C" {
         sizeWritten: *mut usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -899,7 +899,7 @@ extern "C" {
         scaleType: hipDataType,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -918,7 +918,7 @@ extern "C" {
         matmulDesc: hipblasLtMatmulDesc_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -949,7 +949,7 @@ extern "C" {
         sizeInBytes: usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -989,7 +989,7 @@ extern "C" {
         sizeWritten: *mut usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1010,7 +1010,7 @@ extern "C" {
         pref: *mut hipblasLtMatmulPreference_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1030,7 +1030,7 @@ extern "C" {
         pref: hipblasLtMatmulPreference_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1062,7 +1062,7 @@ extern "C" {
         sizeInBytes: usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1103,7 +1103,7 @@ extern "C" {
         sizeWritten: *mut usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1157,7 +1157,7 @@ extern "C" {
         returnAlgoCount: *mut ::core::ffi::c_int,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1238,7 +1238,7 @@ extern "C" {
         stream: hip_runtime_sys::hipStream_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** Create new matrix transform operation descriptor.
@@ -1250,7 +1250,7 @@ extern "C" {
         scaleType: hipDataType,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** Destroy matrix transform operation descriptor.
@@ -1260,7 +1260,7 @@ extern "C" {
         transformDesc: hipblasLtMatrixTransformDesc_t,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** Set matrix transform operation descriptor attribute.
@@ -1280,7 +1280,7 @@ extern "C" {
         sizeInBytes: usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module
@@ -1306,7 +1306,7 @@ extern "C" {
         sizeWritten: *mut usize,
     ) -> hipblasStatus_t;
 }
-#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]
+#[cfg(not(windows))]
 extern "C" {
     #[must_use]
     /** \ingroup library_module

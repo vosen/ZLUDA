@@ -287,3 +287,159 @@ pub fn write_cudnnBackendSetAttribute(
     cudnn9_print_elements(writer, attributeType, elementCount, arrayOfElements)?;
     writer.write_all(b")")
 }
+
+#[allow(non_snake_case)]
+pub fn write_cudnnSetTensorNdDescriptor(
+    writer: &mut (impl std::io::Write + ?Sized),
+    tensorDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
+    dataType: cuda_types::cudnn8::cudnnDataType_t,
+    nbDims: ::core::ffi::c_int,
+    dimA: *const ::core::ffi::c_int,
+    strideA: *const ::core::ffi::c_int,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(tensorDesc), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &tensorDesc,
+        "cudnnSetTensorNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(dataType), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&dataType, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(nbDims), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&nbDims, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(dimA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(unsafe { std::slice::from_raw_parts(dimA, nbDims as usize) }, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(strideA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(unsafe { std::slice::from_raw_parts(strideA, nbDims as usize) }, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+
+#[allow(non_snake_case)]
+pub fn write_cudnnSetFilterNdDescriptor(
+    writer: &mut (impl std::io::Write + ?Sized),
+    filterDesc: cuda_types::cudnn9::cudnnFilterDescriptor_t,
+    dataType: cuda_types::cudnn9::cudnnDataType_t,
+    format: cuda_types::cudnn9::cudnnTensorFormat_t,
+    nbDims: ::core::ffi::c_int,
+    filterDimA: *const ::core::ffi::c_int,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(filterDesc), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &filterDesc,
+        "cudnnSetFilterNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(dataType), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&dataType, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(format), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&format, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(nbDims), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&nbDims, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(filterDimA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        unsafe { std::slice::from_raw_parts(filterDimA, nbDims as usize) },
+        "cudnnSetFilterNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+
+#[allow(non_snake_case)]
+pub fn write_cudnnSetConvolutionNdDescriptor(
+    writer: &mut (impl std::io::Write + ?Sized),
+    convDesc: cuda_types::cudnn9::cudnnConvolutionDescriptor_t,
+    arrayLength: ::core::ffi::c_int,
+    padA: *const ::core::ffi::c_int,
+    filterStrideA: *const ::core::ffi::c_int,
+    dilationA: *const ::core::ffi::c_int,
+    mode: cuda_types::cudnn9::cudnnConvolutionMode_t,
+    computeType: cuda_types::cudnn9::cudnnDataType_t,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(convDesc), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &convDesc,
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(arrayLength), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &arrayLength,
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(padA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        unsafe { std::slice::from_raw_parts(padA, arrayLength as usize) },
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(filterStrideA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        unsafe { std::slice::from_raw_parts(filterStrideA, arrayLength as usize) },
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(dilationA), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        unsafe { std::slice::from_raw_parts(dilationA, arrayLength as usize) },
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &mode,
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(computeType), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &computeType,
+        "cudnnSetConvolutionNdDescriptor",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}

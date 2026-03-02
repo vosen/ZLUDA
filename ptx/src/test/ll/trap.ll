@@ -1,10 +1,10 @@
-define amdgpu_kernel void @trap(ptr addrspace(4) byref(i64) %"34", ptr addrspace(4) byref(i64) %"35") #0 {
+define amdgpu_kernel void @trap(ptr addrspace(4) byref(i64) %"37", ptr addrspace(4) byref(i64) %"38") #0 {
   br label %1
 
 1:                                                ; preds = %0
-  br label %"32"
+  br label %"35"
 
-"32":                                             ; preds = %1
+"35":                                             ; preds = %1
   call void @llvm.trap()
   unreachable
 }

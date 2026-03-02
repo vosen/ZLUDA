@@ -2,9 +2,9 @@ define amdgpu_kernel void @noreturn() #0 {
   br label %1
 
 1:                                                ; preds = %0
-  br label %"30"
+  br label %"33"
 
-"30":                                             ; preds = %1
+"33":                                             ; preds = %1
   call void @llvm.trap()
   unreachable
 }

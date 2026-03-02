@@ -30,9 +30,9 @@ use windows::{
     },
 };
 
-pub static LIBRARIES: [LibraryInfo; 12] = [
-    NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS_LT13, BLAS_LT12, SPARSE12, SPARSE11, FFT12,
-    FFT11,
+pub static LIBRARIES: [LibraryInfo; 16] = [
+    NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS11, BLAS_LT13, BLAS_LT12, BLAS_LT11, SPARSE12,
+    SPARSE11, SPARSE10, FFT12, FFT11, FFT10,
 ];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
@@ -95,6 +95,16 @@ pub const BLAS12: LibraryInfo = LibraryInfo {
     in_system32: false,
 };
 
+pub const BLAS11: LibraryInfo = LibraryInfo {
+    short_name: "cublas11",
+    is_alias: true,
+    ascii_name: "cublas64_11.dll",
+    utf16_name: u16str!("cublas64_11.dll"),
+    guid: uuid!("3ca5e756-ed7e-4235-a7f4-952e5140f8f6"),
+    trace_env_var: "ZLUDA_BLAS_LIB",
+    in_system32: false,
+};
+
 pub const BLAS_LT13: LibraryInfo = LibraryInfo {
     short_name: "cublaslt13",
     is_alias: false,
@@ -111,6 +121,16 @@ pub const BLAS_LT12: LibraryInfo = LibraryInfo {
     ascii_name: "cublaslt64_12.dll",
     utf16_name: u16str!("cublaslt64_12.dll"),
     guid: uuid!("14aeb961-4ef2-480b-9813-df4a6dde454f"),
+    trace_env_var: "ZLUDA_BLASLT_LIB",
+    in_system32: false,
+};
+
+pub const BLAS_LT11: LibraryInfo = LibraryInfo {
+    short_name: "cublaslt11",
+    is_alias: true,
+    ascii_name: "cublaslt64_11.dll",
+    utf16_name: u16str!("cublaslt64_11.dll"),
+    guid: uuid!("59413153-dbcd-45e1-aa78-b4df4197b447"),
     trace_env_var: "ZLUDA_BLASLT_LIB",
     in_system32: false,
 };
@@ -135,6 +155,16 @@ pub const SPARSE11: LibraryInfo = LibraryInfo {
     in_system32: false,
 };
 
+pub const SPARSE10: LibraryInfo = LibraryInfo {
+    short_name: "cusparse10",
+    is_alias: true,
+    ascii_name: "cusparse64_10.dll",
+    utf16_name: u16str!("cusparse64_10.dll"),
+    guid: uuid!("b2502d2a-7aa5-4fa6-9ee7-b8acf9e66679"),
+    trace_env_var: "ZLUDA_SPARSE_LIB",
+    in_system32: false,
+};
+
 pub const FFT12: LibraryInfo = LibraryInfo {
     short_name: "cufft12",
     is_alias: false,
@@ -151,6 +181,16 @@ pub const FFT11: LibraryInfo = LibraryInfo {
     ascii_name: "cufft64_11.dll",
     utf16_name: u16str!("cufft64_11.dll"),
     guid: uuid!("34d2be7e-e992-4aee-8502-b5fc14a02db3"),
+    trace_env_var: "ZLUDA_FFT_LIB",
+    in_system32: false,
+};
+
+pub const FFT10: LibraryInfo = LibraryInfo {
+    short_name: "cufft10",
+    is_alias: true,
+    ascii_name: "cufft64_10.dll",
+    utf16_name: u16str!("cufft64_10.dll"),
+    guid: uuid!("5f199520-4f7c-4fcb-b2b0-0e8b99f15e81"),
     trace_env_var: "ZLUDA_FFT_LIB",
     in_system32: false,
 };

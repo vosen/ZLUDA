@@ -99,9 +99,7 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
         .convert(module.items)
         .map(|item| match item {
             Item::ForeignMod(mut extern_) => {
-                extern_.attrs.push(
-                    parse_quote!(#[cfg_attr(windows, link(name = "MIOpen", kind = "raw-dylib"))]),
-                );
+                extern_.attrs.push(parse_quote!(#[cfg(not(windows))]));
                 Item::ForeignMod(extern_)
             }
             item => item,
@@ -1274,9 +1272,7 @@ fn generate_rocblas(output: &PathBuf, path: &[&str]) {
         .convert(module.items)
         .map(|item| match item {
             Item::ForeignMod(mut extern_) => {
-                extern_.attrs.push(
-                    parse_quote!(#[cfg_attr(windows, link(name = "rocblas", kind = "raw-dylib"))]),
-                );
+                extern_.attrs.push(parse_quote!(#[cfg(not(windows))]));
                 Item::ForeignMod(extern_)
             }
             item => item,
@@ -1325,9 +1321,7 @@ fn generate_hiplaslt(output: &PathBuf, path: &[&str]) {
         .convert(module.items)
         .map(|item| match item {
             Item::ForeignMod(mut extern_) => {
-                extern_.attrs.push(
-                    parse_quote!(#[cfg_attr(windows, link(name = "hipblaslt", kind = "raw-dylib"))]),
-                );
+                extern_.attrs.push(parse_quote!(#[cfg(not(windows))]));
                 Item::ForeignMod(extern_)
             }
             item => item,

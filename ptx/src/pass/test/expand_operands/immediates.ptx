@@ -21,10 +21,10 @@
 .func %1 (
 )
 {
-    .reg .u64 %2 %2;
-    .reg .s64 %3 %3;
-    .reg .f32 %4 %4;
-    .reg .f64 %5 %5;
+    .reg .u64 %2;
+    .reg .s64 %3;
+    .reg .f32 %4;
+    .reg .f64 %5;
     .reg.u64 %6 = zluda.constant.u64 1234567890U;
     mov.u64 %2, %6;
     .reg.s64 %7 = zluda.constant.s64 -123456789;

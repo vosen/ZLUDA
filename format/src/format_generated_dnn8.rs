@@ -321,41 +321,6 @@ pub fn write_cudnnGetTensor4dDescriptor(
     crate::CudaDisplay::write(&wStride, "cudnnGetTensor4dDescriptor", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cudnnSetTensorNdDescriptor(
-    writer: &mut (impl std::io::Write + ?Sized),
-    tensorDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,
-    dataType: cuda_types::cudnn8::cudnnDataType_t,
-    nbDims: ::core::ffi::c_int,
-    dimA: *const ::core::ffi::c_int,
-    strideA: *const ::core::ffi::c_int,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(tensorDesc), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &tensorDesc,
-        "cudnnSetTensorNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(dataType), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&dataType, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(nbDims), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&nbDims, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(dimA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&dimA, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(strideA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&strideA, "cudnnSetTensorNdDescriptor", arg_idx, writer)?;
-    writer.write_all(b")")
-}
 pub fn write_cudnnSetTensorNdDescriptorEx(
     writer: &mut (impl std::io::Write + ?Sized),
     tensorDesc: cuda_types::cudnn8::cudnnTensorDescriptor_t,

@@ -4906,46 +4906,6 @@ pub fn write_cudnnGetFilter4dDescriptor(
     crate::CudaDisplay::write(&w, "cudnnGetFilter4dDescriptor", arg_idx, writer)?;
     writer.write_all(b")")
 }
-pub fn write_cudnnSetFilterNdDescriptor(
-    writer: &mut (impl std::io::Write + ?Sized),
-    filterDesc: cuda_types::cudnn9::cudnnFilterDescriptor_t,
-    dataType: cuda_types::cudnn9::cudnnDataType_t,
-    format: cuda_types::cudnn9::cudnnTensorFormat_t,
-    nbDims: ::core::ffi::c_int,
-    filterDimA: *const ::core::ffi::c_int,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(filterDesc), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &filterDesc,
-        "cudnnSetFilterNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(dataType), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&dataType, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(format), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&format, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(nbDims), ": ").as_bytes())?;
-    crate::CudaDisplay::write(&nbDims, "cudnnSetFilterNdDescriptor", arg_idx, writer)?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(filterDimA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &filterDimA,
-        "cudnnSetFilterNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    writer.write_all(b")")
-}
 pub fn write_cudnnGetFilterNdDescriptor(
     writer: &mut (impl std::io::Write + ?Sized),
     filterDesc: cuda_types::cudnn9::cudnnFilterDescriptor_t,
@@ -13566,81 +13526,6 @@ pub fn write_cudnnGetConvolution2dDescriptor(
     crate::CudaDisplay::write(
         &computeType,
         "cudnnGetConvolution2dDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    writer.write_all(b")")
-}
-pub fn write_cudnnSetConvolutionNdDescriptor(
-    writer: &mut (impl std::io::Write + ?Sized),
-    convDesc: cuda_types::cudnn9::cudnnConvolutionDescriptor_t,
-    arrayLength: ::core::ffi::c_int,
-    padA: *const ::core::ffi::c_int,
-    filterStrideA: *const ::core::ffi::c_int,
-    dilationA: *const ::core::ffi::c_int,
-    mode: cuda_types::cudnn9::cudnnConvolutionMode_t,
-    computeType: cuda_types::cudnn9::cudnnDataType_t,
-) -> std::io::Result<()> {
-    let mut arg_idx = 0usize;
-    writer.write_all(b"(")?;
-    writer.write_all(concat!(stringify!(convDesc), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &convDesc,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(arrayLength), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &arrayLength,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(padA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &padA,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(filterStrideA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &filterStrideA,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(dilationA), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &dilationA,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(mode), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &mode,
-        "cudnnSetConvolutionNdDescriptor",
-        arg_idx,
-        writer,
-    )?;
-    arg_idx += 1;
-    writer.write_all(b", ")?;
-    writer.write_all(concat!(stringify!(computeType), ": ").as_bytes())?;
-    crate::CudaDisplay::write(
-        &computeType,
-        "cudnnSetConvolutionNdDescriptor",
         arg_idx,
         writer,
     )?;

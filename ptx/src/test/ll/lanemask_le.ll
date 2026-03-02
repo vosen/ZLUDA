@@ -1,4 +1,4 @@
-declare hidden i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0
+declare hidden i32 @__zluda_ptx_impl_sreg_lanemask_le() #0
 
 define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #1 {
   %"46" = alloca i64, align 8, addrspace(5)
@@ -23,7 +23,7 @@ define amdgpu_kernel void @lanemask_lt(ptr addrspace(4) byref(i64) %"44", ptr ad
   %6 = load i32, ptr addrspace(5) %"48", align 4
   %"65" = add i32 %6, 1
   store i32 %"65", ptr addrspace(5) %"49", align 4
-  %"40" = call i32 @__zluda_ptx_impl_sreg_lanemask_lt()
+  %"40" = call i32 @__zluda_ptx_impl_sreg_lanemask_le()
   store i32 %"40", ptr addrspace(5) %"50", align 4
   %7 = load i32, ptr addrspace(5) %"49", align 4
   %8 = load i32, ptr addrspace(5) %"50", align 4
