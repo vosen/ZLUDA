@@ -1,7 +1,52 @@
 use std::path::PathBuf;
 use zluda_common::os;
 
-pub(crate) struct Zluda;
+pub(crate) struct Zluda {
+    hip: libloading::Library,
+}
+
+impl Zluda {
+    fn load() -> Self {
+        let hip = unsafe {
+            libloading::Library::new("amdhip64_7.dll")
+                .expect("HIP should have been loaded successfully")
+        };
+        Self { hip }
+    }
+
+    fn alloc(&self, size: usize) -> *mut std::ffi::c_void {
+        let mut ptr = std::ptr::null_mut();
+        unsafe {
+            let func = self
+                .hip
+                .get::<unsafe extern "C" fn(*mut *mut std::ffi::c_void, usize) -> i32>(
+                    b"hipMalloc\0",
+                )
+                .unwrap();
+            assert_eq!(0, func(&mut ptr, size));
+        }
+        ptr
+    }
+
+    fn copy_to_device(
+        &self,
+        dst: *mut std::ffi::c_void,
+        src: *const std::ffi::c_void,
+        size: usize,
+    ) {
+        unsafe {
+            let func =
+                self.hip
+                    .get::<unsafe extern "C" fn(
+                        *mut std::ffi::c_void,
+                        *const std::ffi::c_void,
+                        usize,
+                    ) -> i32>(b"hipMemcpyHtoD\0")
+                    .unwrap();
+            assert_eq!(0, func(dst, src, size));
+        }
+    }
+}
 
 pub(crate) struct Cuda {
     cuda: libloading::Library,
@@ -64,12 +109,52 @@ impl Cuda {
         let cudnn = unsafe { libloading::Library::new(Self::cudnn_path()).unwrap() };
         Self { cuda, cudnn }
     }
+
+    fn alloc(&self, size: usize) -> *mut std::ffi::c_void {
+        let mut ptr = std::ptr::null_mut();
+        unsafe {
+            let func = self
+                .cuda
+                .get::<unsafe extern "C" fn(*mut *mut std::ffi::c_void, usize) -> i32>(
+                    b"cuMemAlloc_v2\0",
+                )
+                .unwrap();
+            assert_eq!(0, func(&mut ptr, size));
+        }
+        ptr
+    }
+
+    fn copy_to_device(
+        &self,
+        dst: *mut std::ffi::c_void,
+        src: *const std::ffi::c_void,
+        size: usize,
+    ) {
+        unsafe {
+            let func =
+                self.cuda
+                    .get::<unsafe extern "C" fn(
+                        *mut std::ffi::c_void,
+                        *const std::ffi::c_void,
+                        usize,
+                    ) -> i32>(b"cuMemcpyHtoD_v2\0")
+                    .unwrap();
+            assert_eq!(0, func(dst, src, size));
+        }
+    }
 }
 
 macro_rules! implemented_test {
     ($($abi:literal fn $fn_name:ident( $( $arg_id:ident : $arg_type:ty ),* ) -> $ret_type:ty;)* ) => {
         pub(crate) trait CudnnApi {
             fn new() -> Self;
+            fn alloc(&self, size: usize) -> *mut std::ffi::c_void;
+            fn copy_to_device(
+                &self,
+                dst: *mut std::ffi::c_void,
+                src: *const std::ffi::c_void,
+                size: usize,
+            );
             $(
                 #[allow(non_snake_case, dead_code)]
                 fn $fn_name(&self, $( $arg_id : $arg_type ),* ) {
@@ -79,10 +164,17 @@ macro_rules! implemented_test {
             )*
         }
 
-
-
         impl CudnnApi for Cuda {
             fn new() -> Self { Self::load() }
+            fn alloc(&self, size: usize) -> *mut std::ffi::c_void { self.alloc(size) }
+            fn copy_to_device(
+                &self,
+                dst: *mut std::ffi::c_void,
+                src: *const std::ffi::c_void,
+                size: usize,
+            ) {
+                self.copy_to_device(dst, src, size);
+            }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
                     let func = unsafe { self.cudnn.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
@@ -92,7 +184,16 @@ macro_rules! implemented_test {
         }
 
         impl CudnnApi for Zluda {
-            fn new() -> Self { Self }
+            fn new() -> Self { Self::load() }
+            fn alloc(&self, size: usize) -> *mut std::ffi::c_void { self.alloc(size) }
+            fn copy_to_device(
+                &self,
+                dst: *mut std::ffi::c_void,
+                src: *const std::ffi::c_void,
+                size: usize,
+            ) {
+                self.copy_to_device(dst, src, size);
+            }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
                     unsafe { super::$fn_name( $( $arg_id ),* ) }
