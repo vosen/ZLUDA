@@ -46,6 +46,20 @@ impl Zluda {
             assert_eq!(0, func(dst, src, size));
         }
     }
+
+    fn copy_to_host(&self, dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, size: usize) {
+        unsafe {
+            let func =
+                self.hip
+                    .get::<unsafe extern "C" fn(
+                        *mut std::ffi::c_void,
+                        *const std::ffi::c_void,
+                        usize,
+                    ) -> i32>(b"hipMemcpyDtoH\0")
+                    .unwrap();
+            assert_eq!(0, func(dst, src, size));
+        }
+    }
 }
 
 pub(crate) struct Cuda {
@@ -142,6 +156,20 @@ impl Cuda {
             assert_eq!(0, func(dst, src, size));
         }
     }
+
+    fn copy_to_host(&self, dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, size: usize) {
+        unsafe {
+            let func =
+                self.cuda
+                    .get::<unsafe extern "C" fn(
+                        *mut std::ffi::c_void,
+                        *const std::ffi::c_void,
+                        usize,
+                    ) -> i32>(b"cuMemcpyDtoH_v2\0")
+                    .unwrap();
+            assert_eq!(0, func(dst, src, size));
+        }
+    }
 }
 
 macro_rules! implemented_test {
@@ -150,6 +178,12 @@ macro_rules! implemented_test {
             fn new() -> Self;
             fn alloc(&self, size: usize) -> *mut std::ffi::c_void;
             fn copy_to_device(
+                &self,
+                dst: *mut std::ffi::c_void,
+                src: *const std::ffi::c_void,
+                size: usize,
+            );
+            fn copy_to_host(
                 &self,
                 dst: *mut std::ffi::c_void,
                 src: *const std::ffi::c_void,
@@ -175,6 +209,9 @@ macro_rules! implemented_test {
             ) {
                 self.copy_to_device(dst, src, size);
             }
+            fn copy_to_host(&self, dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, size: usize) {
+                self.copy_to_host(dst, src, size);
+            }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
                     let func = unsafe { self.cudnn.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
@@ -193,6 +230,9 @@ macro_rules! implemented_test {
                 size: usize,
             ) {
                 self.copy_to_device(dst, src, size);
+            }
+            fn copy_to_host(&self, dst: *mut std::ffi::c_void, src: *const std::ffi::c_void, size: usize) {
+                self.copy_to_host(dst, src, size);
             }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {

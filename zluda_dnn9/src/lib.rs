@@ -105,8 +105,6 @@ mod tests_impl {
         let filter_mem_dev = api.alloc(256 * 256 * 1 * 7 * mem::size_of::<f16>());
         let filter_mem_host = fill_buffer::<f16>(&api, &mut rng, filter_mem_dev, 256 * 256 * 1 * 7);
         let tensor1_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
-        let tensor1_mem_host =
-            fill_buffer::<f16>(&api, &mut rng, tensor1_mem_dev, 1 * 256 * 1 * 7824);
         let tensor2_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
         let tensor2_mem_host =
             fill_buffer::<f16>(&api, &mut rng, tensor2_mem_dev, 1 * 256 * 1 * 7824);
@@ -130,7 +128,56 @@ mod tests_impl {
             tensor1,
             tensor1_mem_dev,
         );
-        
+        // Copy result (dx) back from device
+        let dx_count = 1 * 256 * 1 * 7824;
+        let mut dx_result = vec![f16::ZERO; dx_count];
+        api.copy_to_host(
+            dx_result.as_mut_ptr().cast(),
+            tensor1_mem_dev as *const _,
+            dx_count * mem::size_of::<f16>(),
+        );
+        // Compute reference with candle on CPU
+        // cudnnConvolutionBackwardData with cross-correlation computes a transposed convolution:
+        //   dx = conv_transpose(filter, dy)
+        // Since H=1 and pad_h=0, this is effectively a 1D transposed convolution.
+        // filter shape: [256, 256, 1, 7] -> reshape to [256, 256, 7] for conv_transpose1d
+        // dy (tensor2) shape: [1, 256, 1, 7824] -> reshape to [1, 256, 7824]
+        // dx (tensor1) shape: [1, 256, 1, 7824] -> reshape to [1, 256, 7824]
+        use candle_core::{Device, Tensor};
+        let dev = &Device::Cpu;
+        let filter_f32: Vec<f32> = filter_mem_host.iter().map(|v| v.to_f32()).collect();
+        let dy_f32: Vec<f32> = tensor2_mem_host.iter().map(|v| v.to_f32()).collect();
+        let filter_t =
+            Tensor::from_vec(filter_f32, &[256, 256, 1, 7], dev).unwrap()
+                .reshape(&[256, 256, 7]).unwrap();
+        let dy_t =
+            Tensor::from_vec(dy_f32, &[1, 256, 1, 7824], dev).unwrap()
+                .reshape(&[1, 256, 7824]).unwrap();
+        // padding=3, output_padding=0, stride=1, dilation=1, groups=1
+        let dx_ref = dy_t
+            .conv_transpose1d(&filter_t, /*padding=*/ 3, /*output_padding=*/ 0, /*stride=*/ 1, /*dilation=*/ 1, /*groups=*/ 1)
+            .unwrap();
+        let dx_ref_f32 = dx_ref.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        // Compare GPU result against CPU reference
+        assert_eq!(dx_result.len(), dx_ref_f32.len(),
+            "output size mismatch: GPU={} vs CPU={}",
+            dx_result.len(), dx_ref_f32.len());
+        let mut max_abs_err: f32 = 0.0;
+        let mut max_rel_err: f32 = 0.0;
+        for i in 0..dx_result.len() {
+            let gpu = dx_result[i].to_f32();
+            let cpu = dx_ref_f32[i];
+            let abs_err = (gpu - cpu).abs();
+            let rel_err = if cpu.abs() > 1e-6 { abs_err / cpu.abs() } else { abs_err };
+            max_abs_err = max_abs_err.max(abs_err);
+            max_rel_err = max_rel_err.max(rel_err);
+        }
+        // f16 has ~3 decimal digits of precision. With accumulated sums over 256*7=1792 terms,
+        // the absolute error can be significant, so use a generous tolerance.
+        assert!(
+            max_rel_err < 0.05,
+            "relative error too large: max_abs_err={max_abs_err}, max_rel_err={max_rel_err}"
+        );
     }
 
     fn fill_buffer<T>(
@@ -150,14 +197,6 @@ mod tests_impl {
         );
         filter_mem_host
     }
-
-    // fn allocate<T>(api: impl CudnnApi, size: usize) -> *mut std::ffi::c_void {
-    //     let mut ptr = std::ptr::null_mut();
-    //     unsafe {
-    //         api.cudnnAlloc(&mut ptr, 1024);
-    //     }
-    //     ptr
-    // }
 }
 
 #[cfg(test)]
