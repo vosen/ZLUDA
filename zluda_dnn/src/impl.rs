@@ -112,9 +112,11 @@ unsafe fn search_algorithm<O: Operation>(
     }
     let required_search_workspace_size =
         O::get_workspace_size(miopen, handle, descriptor, tensors)?;
-    let fake_buffer_size = tensors.into_iter().try_fold(0, |acc, tensor| {
-        Ok(acc.max(get_tensor_size(miopen, *tensor)?))
-    })?;
+    let fake_buffer_size = tensors
+        .into_iter()
+        .try_fold(required_search_workspace_size, |acc, tensor| {
+            Ok(acc.max(get_tensor_size(miopen, *tensor)?))
+        })?;
     let fake_tensor = scratchpad
         .get_or_allocate(fake_buffer_size)
         .map_err(|_| miopenError_t::AllocFailed)?;
@@ -965,6 +967,7 @@ pub(crate) unsafe fn convolution_forward(
     y_desc: miopenTensorDescriptor_t,
     y: *mut ::std::os::raw::c_void,
 ) -> miopenStatus_t {
+    let stream = handle.stream.load(Ordering::Acquire);
     let do_convolution = |algo, pre_op_buffer| {
         let zero = 0u64;
         miopen()?.miopenConvolutionForward(
@@ -1026,20 +1029,18 @@ pub(crate) unsafe fn convolution_forward(
             .search_workspace
             .lock()
             .map_err(|_| miopenError_t::UnknownError)?;
-        mutable.beta_buffer_cache.with_async_buffer(
-            y_size,
-            hipStream_t(ptr::null_mut()),
-            |temp_buffer| {
+        mutable
+            .beta_buffer_cache
+            .with_async_buffer(y_size, hipStream_t(stream), |temp_buffer| {
                 hipMemcpyDtoDAsync(
                     hipDeviceptr_t(temp_buffer),
                     hipDeviceptr_t(y),
                     y_size,
-                    hipStream_t(ptr::null_mut()),
+                    hipStream_t(stream),
                 )
                 .map_err(|_| miopenError_t::InternalError)?;
                 do_convolution(algo.__bindgen_anon_1.fwd_algo, Some(temp_buffer))
-            },
-        )
+            })
     } else {
         do_convolution(algo.__bindgen_anon_1.fwd_algo, None)
     }
