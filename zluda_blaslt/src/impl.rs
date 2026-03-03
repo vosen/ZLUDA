@@ -323,10 +323,20 @@ pub(crate) fn matmul_preference_destroy(pref: hipblasLtMatmulPreference_t) -> cu
 
 pub(crate) fn matmul_preference_set_attribute(
     pref: hipblasLtMatmulPreference_t,
-    attr: hipblasLtMatmulPreferenceAttributes_t,
+    attr: cublasLtMatmulPreferenceAttributes_t,
     buf: *const ::core::ffi::c_void,
     size_in_bytes: usize,
 ) -> cublasStatus_t {
+    match attr {
+        cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_A_BYTES
+        | cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_B_BYTES
+        | cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_C_BYTES
+        | cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_D_BYTES => {
+            return Ok(());
+        }
+        _ => {}
+    }
+    let attr = FromCuda::<_, cublasError_t>::from_cuda(&attr)?;
     unsafe { hipblaslt()?.hipblasLtMatmulPreferenceSetAttribute(pref, attr, buf, size_in_bytes) }?;
     Ok(())
 }

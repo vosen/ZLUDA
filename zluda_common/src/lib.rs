@@ -235,7 +235,8 @@ from_cuda_nop!(
     cudnn9::cudnnDataType_t,
     cudnn9::cudnnTensorFormat_t,
     cudnn9::cudnnConvolutionBwdDataAlgoPerf_t,
-    cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t
+    cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
+    cublasLtMatmulPreferenceAttributes_t
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
