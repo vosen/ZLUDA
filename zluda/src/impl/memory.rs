@@ -39,7 +39,7 @@ unsafe fn fill_with_zero_and_register(
         hipStreamSynchronize(context.alloc_stream)?;
     }
     add_allocation(dptr.0, bytesize, cu_context)?;
-    drop(drop_guard);
+    mem::forget(drop_guard);
     Ok(())
 }
 
