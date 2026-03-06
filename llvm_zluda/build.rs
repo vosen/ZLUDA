@@ -1,5 +1,7 @@
 use cmake::Config;
 use core::panic;
+use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
 use std::{env, io};
@@ -16,6 +18,13 @@ const COMPONENTS: &[&'static str] = &[
 ];
 
 fn main() {
+    let bc_path1 = "src/device-libs/ockl.bc";
+    println!("cargo:rerun-if-changed={}", bc_path1);
+    let bc_path2 = "src/device-libs/ocml.bc";
+    println!("cargo:rerun-if-changed={}", bc_path2);
+    check_lfs_file(bc_path1);
+    check_lfs_file(bc_path2);
+
     let mut cmake = Config::new(r"../ext/llvm-project/llvm");
     try_use_sccache(&mut cmake);
     try_use_ninja(&mut cmake);
@@ -63,6 +72,19 @@ fn main() {
     link_lld_components();
     link_llvm_components(lib_names);
     compile_cxx_lib(cxxflags, &llvm_build_path);
+}
+
+fn check_lfs_file(bc_path: &str) {
+    let mut magic = [0u8; 2];
+    File::open(bc_path)
+        .unwrap_or_else(|e| panic!("Failed to open {}: {}", bc_path, e))
+        .read_exact(&mut magic)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {}", bc_path, e));
+    assert!(
+        &magic == b"BC",
+        "{} is a git lfs stub and not the actual file. Run `git lfs pull` to fetch it",
+        bc_path
+    );
 }
 
 // https://github.com/mozilla/sccache/blob/main/README.md#usage

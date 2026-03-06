@@ -3231,19 +3231,19 @@ impl<'a> MethodEmitContext<'a> {
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
         let bool_result = self.emit_setp_impl(data.base, None, src1, src2)?;
-        let bool_result = if data.negate_src3 {
-            let constant =
-                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
-            unsafe { LLVMBuildXor(self.builder, bool_result, constant, LLVM_UNNAMED.as_ptr()) }
-        } else {
-            bool_result
-        };
         let post_op = match data.bool_op {
             ptx_parser::SetpBoolPostOp::Xor => LLVMBuildXor,
             ptx_parser::SetpBoolPostOp::And => LLVMBuildAnd,
             ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
         };
         let src3 = self.resolver.value(src3)?;
+        let src3 = if data.negate_src3 {
+            let constant =
+                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
+            unsafe { LLVMBuildXor(self.builder, src3, constant, LLVM_UNNAMED.as_ptr()) }
+        } else {
+            src3
+        };
         Ok(unsafe { post_op(self.builder, bool_result, src3, LLVM_UNNAMED.as_ptr()) })
     }
 
