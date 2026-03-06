@@ -353,7 +353,11 @@ test_ptx!(
     [0x70c507d6u32, 0x6fbd4b5cu32, 30212],
     [0x6fbdd65cu32]
 );
-test_ptx!(prmt_signext, [0x0100FE80u32, 0x00000000u32], [0x800080FFu32]);
+test_ptx!(
+    prmt_signext,
+    [0x0100FE80u32, 0x00000000u32],
+    [0x800080FFu32]
+);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
