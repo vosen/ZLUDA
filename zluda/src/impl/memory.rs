@@ -1,23 +1,45 @@
 use crate::r#impl::{
     context,
-    driver::{self, global_state},
+    driver::{self},
 };
 use cuda_types::cuda::{CUerror, CUresult, CUresultConsts};
 use hip_runtime_sys::*;
 use std::{mem, ptr};
+use zluda_common::FromCuda;
+
+struct DropGuard<F: FnMut()>(F);
+
+impl<F: FnMut()> Drop for DropGuard<F> {
+    fn drop(&mut self) {
+        (self.0)();
+    }
+}
 
 pub(crate) unsafe fn alloc_v2(dptr: &mut hipDeviceptr_t, bytesize: usize) -> CUresult {
-    let global = global_state()?;
-    let context = context::get_current_context()?;
+    let cu_context = context::get_current_context()?;
+    let context: &context::Context = FromCuda::<_, CUerror>::from_cuda(&cu_context)?;
     hipMalloc(ptr::from_mut(dptr).cast(), bytesize)?;
-    add_allocation(dptr.0, bytesize, context)?;
-    let mut status = mem::zeroed();
-    hipStreamIsCapturing(hipStream_t(ptr::null_mut()), &mut status)?;
-    if global.should_zero_allocations
-        && status == hipStreamCaptureStatus::hipStreamCaptureStatusNone
-    {
-        hipMemsetD8(*dptr, 0, bytesize)?;
+    fill_with_zero_and_register(cu_context, context, dptr, bytesize)?;
+    Ok(())
+}
+
+unsafe fn fill_with_zero_and_register(
+    cu_context: cuda_types::cuda::CUcontext,
+    context: &context::Context,
+    dptr: &mut hipDeviceptr_t,
+    bytesize: usize,
+) -> Result<(), CUerror> {
+    let drop_guard = DropGuard(|| {
+        unsafe { hipFree(dptr.0) }.ok();
+    });
+    let mut capturing_status = mem::zeroed();
+    hipStreamIsCapturing(hipStream_t(ptr::null_mut()), &mut capturing_status)?;
+    if capturing_status == hipStreamCaptureStatus::hipStreamCaptureStatusNone {
+        hipMemsetD8Async(*dptr, 0, bytesize, context.alloc_stream)?;
+        hipStreamSynchronize(context.alloc_stream)?;
     }
+    add_allocation(dptr.0, bytesize, cu_context)?;
+    drop(drop_guard);
     Ok(())
 }
 
