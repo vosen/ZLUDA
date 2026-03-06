@@ -162,6 +162,7 @@ test_ptx!(
 test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
+test_ptx!(setp_bool_and, [1u32, 2u32, 0u32], [1u32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
@@ -352,6 +353,7 @@ test_ptx!(
     [0x70c507d6u32, 0x6fbd4b5cu32, 30212],
     [0x6fbdd65cu32]
 );
+test_ptx!(prmt_signext, [0x0100FE80u32, 0x00000000u32], [0x800080FFu32]);
 test_ptx!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
