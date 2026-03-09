@@ -2,11 +2,12 @@ use super::{context, driver};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
 use std::mem;
-use zluda_common::constants::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
+use zluda_common::constants;
 
 pub(crate) fn compute_capability(major: &mut i32, minor: &mut i32, _dev: hipDevice_t) -> CUresult {
-    *major = COMPUTE_CAPABILITY_MAJOR;
-    *minor = COMPUTE_CAPABILITY_MINOR;
+    let (major_cap, minor_cap) = constants::compute_capability();
+    *major = major_cap;
+    *minor = minor_cap;
     Ok(())
 }
 
@@ -213,11 +214,13 @@ pub(crate) fn get_attribute(
             return get_device_prop(pi, dev_idx, |props| props.maxTexture2DMipmap[1])
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR => {
-            *pi = COMPUTE_CAPABILITY_MAJOR;
+            let (major_cap, _) = constants::compute_capability();
+            *pi = major_cap;
             return Ok(());
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR => {
-            *pi = COMPUTE_CAPABILITY_MINOR;
+            let (_, minor_cap) = constants::compute_capability();
+            *pi = minor_cap;
             return Ok(());
         }
         CUdevice_attribute::CU_DEVICE_ATTRIBUTE_MAXIMUM_TEXTURE1D_MIPMAPPED_WIDTH => {
