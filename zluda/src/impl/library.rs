@@ -1,22 +1,29 @@
-use crate::r#impl::{context, driver, module};
+use crate::r#impl::{
+    context, driver,
+    function::Function,
+    module::{self, Module},
+};
 use cuda_types::cuda::*;
 use hip_runtime_sys::*;
-use std::{ffi::c_void, sync::OnceLock};
+use std::{
+    ffi::{c_void, CStr},
+    sync::OnceLock,
+};
 use zluda_common::{CodeLibraryRef, ZludaObject};
 
 pub(crate) struct Library {
     data: LibraryData,
-    modules: Vec<OnceLock<Result<(hipModule_t, u32), CUerror>>>,
+    modules: Vec<OnceLock<Result<CUmodule, CUerror>>>,
 }
 
 impl Library {
-    pub(crate) fn get_module_for_device(
-        &self,
-        device: usize,
-    ) -> Result<(hipModule_t, u32), CUerror> {
+    pub(crate) fn get_module_for_device(&self, device: usize) -> Result<CUmodule, CUerror> {
         let module_lock = self.modules.get(device).ok_or(CUerror::INVALID_DEVICE)?;
         *module_lock.get_or_init(|| match self.data {
-            LibraryData::Lazy(lib) => module::load_hip_module(lib),
+            LibraryData::Lazy(lib) => {
+                let (module, sm_version) = module::load_hip_module(lib)?;
+                Ok(Module::new(module, sm_version).wrap())
+            }
             LibraryData::Eager(()) => Err(CUerror::NOT_SUPPORTED),
         })
     }
@@ -110,21 +117,22 @@ pub(crate) unsafe fn unload(library: CUlibrary) -> CUresult {
 
 pub(crate) unsafe fn get_module(out: &mut CUmodule, library: &Library) -> CUresult {
     let device = context::get_current_device()?;
-    // TODO: lifetime is very wrong here
-    let (base, ptx_version) = library.get_module_for_device(device as usize)?;
-    let library = module::Module { base, ptx_version };
-    *out = library.wrap();
+    let module = library.get_module_for_device(device as usize)?;
+    *out = module;
     Ok(())
 }
 
 pub(crate) unsafe fn get_kernel(
-    kernel: *mut hipFunction_t,
+    kernel: &mut &Function,
     library: &Library,
-    name: *const ::core::ffi::c_char,
+    name: &CStr,
 ) -> CUresult {
     let device = context::get_current_device()?;
-    let (module, _) = library.get_module_for_device(device as usize)?;
-    hipModuleGetFunction(kernel, module, name)?;
+    let module = library.get_module_for_device(device as usize)?;
+    let module: &Module = zluda_common::as_ref(&module)
+        .ok_or(CUerror::UNKNOWN)?
+        .as_result()?;
+    *kernel = module.get_function(name).map_err(|_| CUerror::NOT_FOUND)?;
     Ok(())
 }
 
@@ -135,8 +143,11 @@ pub(crate) unsafe fn get_global(
     name: *const ::core::ffi::c_char,
 ) -> CUresult {
     let device = context::get_current_device()?;
-    let (module, _) = library.get_module_for_device(device as usize)?;
-    hipModuleGetGlobal(dptr, bytes, module, name)?;
+    let module = library.get_module_for_device(device as usize)?;
+    let module: &Module = zluda_common::as_ref(&module)
+        .ok_or(CUerror::UNKNOWN)?
+        .as_result()?;
+    hipModuleGetGlobal(dptr, bytes, module.base, name)?;
     Ok(())
 }
 

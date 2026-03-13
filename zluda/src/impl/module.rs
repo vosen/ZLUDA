@@ -1,13 +1,49 @@
 use super::driver;
-use crate::r#impl::driver::GlobalState;
+use crate::r#impl::function;
+use crate::r#impl::{driver::GlobalState, function::Function};
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use hip_runtime_sys::*;
-use std::{borrow::Cow, ffi::CStr, fs, mem, ops::ControlFlow};
+use rustc_hash::FxHashMap;
+use std::collections::hash_map;
+use std::sync::Mutex;
+use std::{
+    borrow::Cow,
+    ffi::{CStr, CString},
+    fs, mem,
+    ops::ControlFlow,
+};
 use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 
 pub(crate) struct Module {
     pub(crate) base: hipModule_t,
-    pub(crate) ptx_version: u32,
+    pub(crate) sm_version: u32,
+    mutable: Mutex<ModuleMutable>,
+}
+
+struct ModuleMutable {
+    functions: FxHashMap<CString, Box<Function>>,
+}
+
+impl ModuleMutable {
+    pub(crate) fn get_function(
+        &mut self,
+        module: hipModule_t,
+        sm_version: u32,
+        name: CString,
+    ) -> Result<&Function, CUerror> {
+        Ok(match self.functions.entry(name) {
+            hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
+            hash_map::Entry::Vacant(entry) => {
+                let mut func_handle = unsafe { std::mem::zeroed() };
+                unsafe { hipModuleGetFunction(&mut func_handle, module, entry.key().as_ptr()) }?;
+                let func = Box::new(Function {
+                    base: func_handle,
+                    sm_version,
+                });
+                &*entry.insert(func)
+            }
+        })
+    }
 }
 
 impl ZludaObject for Module {
@@ -19,6 +55,25 @@ impl ZludaObject for Module {
     fn drop_checked(&mut self) -> CUresult {
         unsafe { hipModuleUnload(self.base) }?;
         Ok(())
+    }
+}
+
+impl Module {
+    pub(crate) fn new(base: hipModule_t, sm_version: u32) -> Self {
+        Self {
+            base,
+            sm_version,
+            mutable: Mutex::new(ModuleMutable {
+                functions: FxHashMap::default(),
+            }),
+        }
+    }
+
+    pub(crate) fn get_function<'a>(&'a self, name: &CStr) -> Result<&'static Function, CUerror> {
+        let mut mutable = self.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
+        mutable
+            .get_function(self.base, self.sm_version, name.to_owned())
+            .map(|f| unsafe { (f as *const Function).as_ref().unwrap() })
     }
 }
 
@@ -89,6 +144,7 @@ fn get_best_ptx_and_compile(
                 None,
                 ptx_parser::Module {
                     ptx_version: (1, 0),
+                    sm_version: 0,
                     directives: Vec::new(),
                     invalid_directives: usize::MAX,
                 },
@@ -111,12 +167,12 @@ fn get_best_ptx_and_compile(
         _ => None,
     };
     let cached_binary = load_cached_binary(&mut cache_with_key);
-    let (elf_module, ptx_version) = cached_binary
+    let (elf_module, sm_version) = cached_binary
         .ok_or(CUerror::UNKNOWN)
         .or_else(|_| compile_and_cache(gcn_arch, attributes, module, &mut cache_with_key))?;
     let mut hip_module = unsafe { mem::zeroed() };
     unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
-    Ok((hip_module, ptx_version))
+    Ok((hip_module, sm_version))
 }
 
 fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
@@ -176,8 +232,8 @@ fn load_cached_binary(
     let binary = cache_with_key
         .as_mut()
         .and_then(|(c, key)| c.get_module_binary(key))?;
-    let ptx_version = kernel_metadata::KernelMetadataV1::read_object(&binary)?.ptx_version;
-    Some((binary, ptx_version))
+    let sm_version = kernel_metadata::KernelMetadataV1::read_object(&binary)?.sm_version;
+    Some((binary, sm_version))
 }
 
 fn compile_and_cache(
@@ -195,7 +251,7 @@ fn compile_and_cache(
     )
     .map_err(|_| CUerror::UNKNOWN)?;
     let ptx_impl = llvm_module.linked_bitcode();
-    let ptx_version = llvm_module.metadata.ptx_version;
+    let sm_version = llvm_module.metadata.sm_version;
     let elf_module = llvm_zluda::compile(
         &llvm_module.context,
         gcn_arch,
@@ -210,7 +266,7 @@ fn compile_and_cache(
         key.last_access = zluda_cache::ModuleCache::time_now();
         cache.insert_module(key, &elf_module);
     }
-    Ok((elf_module, ptx_version))
+    Ok((elf_module, sm_version))
 }
 
 pub(crate) fn load(module: &mut CUmodule, fname: &CStr) -> CUresult {
@@ -220,24 +276,16 @@ pub(crate) fn load(module: &mut CUmodule, fname: &CStr) -> CUresult {
     image.push(0);
     let library = unsafe { CodeLibraryRef::try_load(image.as_ptr() as *const std::ffi::c_void) }
         .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let (hip_module, ptx_version) = load_hip_module(library)?;
-    *module = Module {
-        base: hip_module,
-        ptx_version,
-    }
-    .wrap();
+    let (hip_module, sm_version) = load_hip_module(library)?;
+    *module = Module::new(hip_module, sm_version).wrap();
     Ok(())
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
     let library =
         unsafe { CodeLibraryRef::try_load(image) }.map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let (hip_module, ptx_version) = load_hip_module(library)?;
-    *module = Module {
-        base: hip_module,
-        ptx_version,
-    }
-    .wrap();
+    let (hip_module, sm_version) = load_hip_module(library)?;
+    *module = Module::new(hip_module, sm_version).wrap();
     Ok(())
 }
 
@@ -256,11 +304,12 @@ pub(crate) fn unload(hmod: CUmodule) -> CUresult {
 }
 
 pub(crate) fn get_function(
-    hfunc: &mut hipFunction_t,
-    hmod: &Module,
-    name: *const ::core::ffi::c_char,
-) -> hipError_t {
-    unsafe { hipModuleGetFunction(hfunc, hmod.base, name) }
+    hfunc: &mut &function::Function,
+    module: &Module,
+    name: &CStr,
+) -> CUresult {
+    *hfunc = module.get_function(name)?;
+    Ok(())
 }
 
 pub(crate) fn get_global_v2(

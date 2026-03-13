@@ -7,15 +7,15 @@ use std::{io, mem};
 
 #[derive(Archive, Serialize, Deserialize, Debug, PartialEq)]
 pub struct KernelMetadataV1 {
-    pub ptx_version: u32,
+    pub sm_version: u32,
 }
 
 // If the alignment is larger than u64, then we need different padding
 assert_eq_align!(ArchivedKernelMetadataV1, u32);
 
 impl KernelMetadataV1 {
-    pub fn new(ptx_version: u32) -> Self {
-        Self { ptx_version }
+    pub fn new(sm_version: u32) -> Self {
+        Self { sm_version }
     }
 
     const SECTION: &'static str = "zluda";
