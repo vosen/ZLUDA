@@ -184,21 +184,19 @@ pub fn compile(
     }
 
     let object_path = NamedTempFile::with_prefix("zluda.o")
-        .map_err(|_| ("Failed to create temporary file").to_string())?
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?
         .into_temp_path();
     let mut section_path = NamedTempFile::with_prefix("zluda_section")
-        .map_err(|_| ("Failed to create temporary file").to_string())?;
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?;
     let executable_path = NamedTempFile::with_prefix("zluda.elf")
-        .map_err(|_| ("Failed to create temporary file").to_string())?
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?
         .into_temp_path();
 
     fs::write(&object_path, &object_file)
-        .map_err(|_| ("Failed to write object file").to_string())?;
+        .map_err(|e| format!("Failed to write object file: {}", e))?;
     metadata
-        .write_linker_section(section_path.as_file_mut())
-        .map_err(|_| ("Failed to write metadata section").to_string())?;
-    fs::write(&object_path, &object_file)
-        .map_err(|_| ("Failed to write object file").to_string())?;
+        .write_object(&object_file, section_path.as_file_mut())
+        .map_err(|e| format!("Failed to write metadata section: {}", e))?;
 
     let object_path_cstr = path_to_cstring(&object_path)?;
     let section_path_cstr = path_to_cstring(section_path.as_ref())?;
