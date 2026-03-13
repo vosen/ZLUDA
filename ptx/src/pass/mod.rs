@@ -62,6 +62,7 @@ pub fn to_llvm_module<'input>(
     attributes: Attributes,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
+    let ptx_version = ast.ptx_version.0 as u32 * 10 + ast.ptx_version.1 as u32;
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
@@ -107,6 +108,7 @@ pub fn to_llvm_module<'input>(
         attributes_ir,
         kernel_info: HashMap::new(),
         context,
+        metadata: kernel_metadata::KernelMetadataV1::new(ptx_version),
     })
 }
 
@@ -115,6 +117,7 @@ pub struct Module {
     pub attributes_ir: llvm_zluda::utils::Module,
     pub kernel_info: HashMap<String, KernelInfo>,
     pub context: llvm_zluda::utils::Context,
+    pub metadata: kernel_metadata::KernelMetadataV1,
 }
 
 impl Module {

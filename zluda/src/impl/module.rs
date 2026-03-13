@@ -198,6 +198,7 @@ fn compile_and_cache(
         llvm_module.llvm_ir,
         ptx_impl,
         llvm_module.attributes_ir,
+        llvm_module.metadata,
         None,
     )
     .map_err(|_| CUerror::UNKNOWN)?;

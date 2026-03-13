@@ -1354,6 +1354,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             module.llvm_ir,
             ptx_impl,
             module.attributes_ir,
+            module.metadata,
             None,
         )
         .unwrap();
