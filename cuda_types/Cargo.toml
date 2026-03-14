@@ -11,6 +11,7 @@ bitflags = "2.9.1"
 rocblas-sys = { path = "../ext/rocblas-sys" }
 hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 miopen-sys = { path = "../ext/miopen-sys" }
+rocsparse-sys = { path = "../ext/rocsparse-sys" }
 
 [target.'cfg(unix)'.dependencies]
 rocm_smi-sys = { path = "../ext/rocm_smi-sys" }

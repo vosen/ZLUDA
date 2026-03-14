@@ -50,8 +50,6 @@ fn main() {
     generate_cudnn(&crate_root);
 }
 
-
-
 fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
     let rocsparse_header = new_builder()
         .header("/opt/rocm/include/rocsparse/rocsparse.h")
@@ -389,13 +387,35 @@ fn generate_cusparse(crate_root: &PathBuf) {
         success: ("CUSPARSE_STATUS_SUCCESS", "SUCCESS"),
         hip_types: vec![],
     };
+    let suffix =
+"#impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
+    fn from(error: rocsparse_sys::rocsparse_error) -> Self {
+        match error {
+            rocsparse_sys::rocsparse_error::invalid_handle => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::not_implemented => cusparseError_t::NOT_SUPPORTED,
+            rocsparse_sys::rocsparse_error::invalid_pointer => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::invalid_size => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::memory_error => cusparseError_t::ALLOC_FAILED,
+            rocsparse_sys::rocsparse_error::internal_error => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::invalid_value => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::arch_mismatch => cusparseError_t::ARCH_MISMATCH,
+            rocsparse_sys::rocsparse_error::zero_pivot => cusparseError_t::ZERO_PIVOT,
+            rocsparse_sys::rocsparse_error::not_initialized => cusparseError_t::NOT_INITIALIZED,
+            rocsparse_sys::rocsparse_error::type_mismatch => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::requires_sorted_storage => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::thrown_exception => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::r#continue => cusparseError_t::INTERNAL_ERROR,
+            _ => cusparseError_t::INTERNAL_ERROR
+        }
+    }
+}";
     generate_types_library(
         Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
-        None,
+        Some(suffix),
     );
     generate_display_perflib(
         Some(&result_options),
