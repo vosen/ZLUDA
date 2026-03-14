@@ -386,6 +386,7 @@ unsafe extern "system" fn open_already_loaded_amdhip_impl(
             try_load_from_self_or_hip("hipblaslt.dll")
                 .or_else(|| try_load_from_self_or_hip("libhipblaslt.dll"))
                 .or_else(|| try_load_from_self_or_hip("rocblas.dll"))
+                .or_else(|| try_load_from_self_or_hip("rocsparse.dll"))
                 .or_else(|| try_load_from_self_or_hip("miopen.dll"));
         }
         let mut module = mem::zeroed();

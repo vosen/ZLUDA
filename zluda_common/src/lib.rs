@@ -3,6 +3,7 @@ use cuda_types::{
     cublaslt::*,
     cuda::*,
     cudnn9,
+    cusparse::*,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
 };
@@ -11,6 +12,7 @@ use hip_runtime_sys::*;
 use hipblaslt_sys::*;
 use miopen_sys::*;
 use rocblas_sys::*;
+use rocsparse_sys::*;
 use std::{
     ffi::{c_void, CStr},
     mem::{self, ManuallyDrop, MaybeUninit},
@@ -74,6 +76,16 @@ impl CudaErrorType for cudnn9::cudnnError_t {
 impl CudaErrorType for miopen_sys::miopenError_t {
     const INVALID_VALUE: Self = Self::InvalidValue;
     const NOT_SUPPORTED: Self = Self::NotImplemented;
+}
+
+impl CudaErrorType for cusparseError_t {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
+impl CudaErrorType for rocsparse_error {
+    const INVALID_VALUE: Self = Self::invalid_value;
+    const NOT_SUPPORTED: Self = Self::not_implemented;
 }
 
 /// Used to try to convert CUDA API values into our internal representation.
@@ -259,7 +271,8 @@ from_cuda_transmute!(
     cublasPointerMode_t => rocblas_pointer_mode,
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
-    cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t
+    cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t,
+    cusparseHandle_t => rocsparse_handle
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {

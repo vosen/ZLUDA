@@ -424,6 +424,14 @@ mod os {
         );
         patch_single_lib(
             &current_dir,
+            "libcusparse.so",
+            &[
+                ("librocsparse.so.1", "librocsparse.so"),
+                ("librocsparse.so.2", "librocsparse.so"),
+            ],
+        );
+        patch_single_lib(
+            &current_dir,
             "libcublaslt.so",
             &[
                 ("libhipblaslt.so.0", "libhipblaslt.so"),
