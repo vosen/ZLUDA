@@ -36,6 +36,10 @@ fn main() {
     );
     generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
     generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"]);
+    generate_rocsparse(
+        &crate_root,
+        &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
+    );
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -44,6 +48,53 @@ fn main() {
     generate_cufft(&crate_root);
     generate_cusparse(&crate_root);
     generate_cudnn(&crate_root);
+}
+
+fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
+    let rocsparse_header = new_builder()
+        .header("/opt/rocm/include/rocsparse/rocsparse.h")
+        .allowlist_type("^rocsparse.*")
+        .allowlist_function("^rocsparse.*")
+        .allowlist_var("^rocsparse.*")
+        .must_use_type("rocsparse_status")
+        .constified_enum("rocsparse_status_")
+        .new_type_alias("^rocsparse_handle$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-x", "c++"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&rocsparse_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    remove_type(&mut module, "hipEvent_t");
+    remove_type(&mut module, "ihipEvent_t");
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "rocsparse_status",
+        underlying_type: "rocsparse_status_",
+        new_error_type: "rocsparse_error",
+        error_prefix: ("rocsparse_status_", "error_"),
+        success: ("rocsparse_status_success", "success"),
+        hip_types: vec![],
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(parse_quote!(#[cfg(not(windows))]));
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["rocsparse_handle"]);
+    let mut output = output.clone();
+    output.extend(path);
+    let text = &prettyplease::unparse(&module)
+        .replace("hipStream_t", "hip_runtime_sys::hipStream_t")
+        .replace("hipEvent_t", "hip_runtime_sys::hipEvent_t");
+    write_rust_to_file(output, text)
 }
 
 fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
@@ -336,13 +387,35 @@ fn generate_cusparse(crate_root: &PathBuf) {
         success: ("CUSPARSE_STATUS_SUCCESS", "SUCCESS"),
         hip_types: vec![],
     };
+    let suffix =
+"#impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
+    fn from(error: rocsparse_sys::rocsparse_error) -> Self {
+        match error {
+            rocsparse_sys::rocsparse_error::invalid_handle => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::not_implemented => cusparseError_t::NOT_SUPPORTED,
+            rocsparse_sys::rocsparse_error::invalid_pointer => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::invalid_size => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::memory_error => cusparseError_t::ALLOC_FAILED,
+            rocsparse_sys::rocsparse_error::internal_error => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::invalid_value => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::arch_mismatch => cusparseError_t::ARCH_MISMATCH,
+            rocsparse_sys::rocsparse_error::zero_pivot => cusparseError_t::ZERO_PIVOT,
+            rocsparse_sys::rocsparse_error::not_initialized => cusparseError_t::NOT_INITIALIZED,
+            rocsparse_sys::rocsparse_error::type_mismatch => cusparseError_t::INVALID_VALUE,
+            rocsparse_sys::rocsparse_error::requires_sorted_storage => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::thrown_exception => cusparseError_t::INTERNAL_ERROR,
+            rocsparse_sys::rocsparse_error::r#continue => cusparseError_t::INTERNAL_ERROR,
+            _ => cusparseError_t::INTERNAL_ERROR
+        }
+    }
+}";
     generate_types_library(
         Some(&result_options),
         None,
         &crate_root,
         &["..", "cuda_types", "src", "cusparse.rs"],
         &module,
-        None,
+        Some(suffix),
     );
     generate_display_perflib(
         Some(&result_options),

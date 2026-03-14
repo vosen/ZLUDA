@@ -544,6 +544,7 @@ dependencies = [
  "miopen-sys",
  "rocblas-sys",
  "rocm_smi-sys",
+ "rocsparse-sys",
 ]
 
 [[package]]
@@ -3208,6 +3209,13 @@ name = "rocm_smi-sys"
 version = "0.0.0"
 
 [[package]]
+name = "rocsparse-sys"
+version = "0.0.0"
+dependencies = [
+ "hip_runtime-sys",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4558,6 +4566,7 @@ dependencies = [
  "hipblaslt-sys",
  "miopen-sys",
  "rocblas-sys",
+ "rocsparse-sys",
  "zluda_windows",
 ]
 
@@ -4680,6 +4689,11 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
+ "libloading",
+ "rocsparse-sys",
+ "zluda_common",
+ "zluda_windows",
 ]
 
 [[package]]
