@@ -668,21 +668,8 @@ pub(crate) unsafe fn set_filter_nd_descriptor(
     data_type: miopenDataType_t,
     format: miopenTensorLayout_t,
     nb_dims: ::core::ffi::c_int,
-    mut filter_dim_a: *const ::core::ffi::c_int,
+    filter_dim_a: *const ::core::ffi::c_int,
 ) -> miopenStatus_t {
-    let mut _temp = [0, 0, 0, 0];
-    match format {
-        miopenTensorLayout_t::miopenTensorNCHW => {}
-        miopenTensorLayout_t::miopenTensorNHWC => {
-            if nb_dims != 4 || filter_dim_a.is_null() {
-                return miopenStatus_t::ErrorInvalidValue;
-            }
-            let [n, h, w, c] = *(filter_dim_a as *const [i32; 4]);
-            _temp = [n, c, h, w];
-            filter_dim_a = _temp.as_ptr();
-        }
-        _ => return miopenStatus_t::ErrorNotImplemented,
-    }
     miopen()?.miopenSetNdTensorDescriptorWithLayout(
         filter_desc,
         data_type,
