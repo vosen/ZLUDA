@@ -4689,8 +4689,11 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
+ "libloading",
  "rocsparse-sys",
  "zluda_common",
+ "zluda_windows",
 ]
 
 [[package]]
