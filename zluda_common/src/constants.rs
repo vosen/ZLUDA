@@ -11,7 +11,7 @@ pub fn compute_capability() -> (i32, i32) {
         .and_then(|s| {
             let mut parts = s.split('.');
             let major = parts.next()?.parse::<i32>().ok()?;
-            let minor = parts.next()?.parse::<i32>().ok()?;
+            let minor = parts.next().unwrap_or("0").parse::<i32>().ok()?;
             Some((major, minor))
         })
         .unwrap_or((COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR))
