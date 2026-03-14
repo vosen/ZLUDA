@@ -648,7 +648,11 @@ mod tests_impl {
             let gpu = y_host[i];
             let cpu = y_ref_nhwc[i];
             let abs_err = (gpu - cpu).abs();
-            let rel_err = if cpu.abs() > 1e-6 { abs_err / cpu.abs() } else { abs_err };
+            let rel_err = if cpu.abs() > 1e-6 {
+                abs_err / cpu.abs()
+            } else {
+                abs_err
+            };
             max_abs_err = max_abs_err.max(abs_err);
             max_rel_err = max_rel_err.max(rel_err);
         }
