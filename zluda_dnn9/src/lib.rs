@@ -490,34 +490,25 @@ mod tests_impl {
             dw_mem_dev as *const _,
             dw_count * mem::size_of::<f16>(),
         );
-        // Compute reference on CPU
+        // Compute reference with candle on CPU
         // cudnnConvolutionBackwardFilter with cross-correlation computes:
         //   dw[k, c, 0, r] = sum_n sum_p dy[n, k, 0, p] * x[n, c, 0, p + r - pad]
         // With N=1, H=1, pad_w=3, stride=1, dilation=1.
-        let c_out = 256usize;
-        let c_in = 256usize;
-        let kw = 7usize;
-        let w = 7824usize;
-        let pad = 3usize;
+        use candle_core::{Device, Tensor};
+        let dev = &Device::Cpu;
         let x_f32: Vec<f32> = x_mem_host.iter().map(|v| v.to_f32()).collect();
         let dy_f32: Vec<f32> = dy_mem_host.iter().map(|v| v.to_f32()).collect();
-        let mut dw_ref = vec![0.0f32; c_out * c_in * kw];
-        for k in 0..c_out {
-            for c in 0..c_in {
-                for r in 0..kw {
-                    let mut sum = 0.0f32;
-                    for p in 0..w {
-                        let x_idx = p + r;
-                        if x_idx >= pad && x_idx < w + pad {
-                            let x_val = x_f32[c * w + (x_idx - pad)];
-                            let dy_val = dy_f32[k * w + p];
-                            sum += x_val * dy_val;
-                        }
-                    }
-                    dw_ref[k * (c_in * kw) + c * kw + r] = sum;
-                }
-            }
+        let x_t = Tensor::from_vec(x_f32, &[256, 7824], dev).unwrap();
+        let dy_t = Tensor::from_vec(dy_f32, &[256, 7824], dev).unwrap();
+        let x_padded = x_t.pad_with_zeros(1, 3, 3).unwrap();
+        let mut dw_slices = Vec::new();
+        for r in 0..7usize {
+            let x_slice = x_padded.narrow(1, r, 7824).unwrap();
+            let dw_r = dy_t.matmul(&x_slice.t().unwrap()).unwrap();
+            dw_slices.push(dw_r);
         }
+        let dw_ref_t = Tensor::stack(&dw_slices, 2).unwrap();
+        let dw_ref = dw_ref_t.flatten_all().unwrap().to_vec1::<f32>().unwrap();
         // Compare GPU result against CPU reference
         assert_eq!(
             dw_result.len(),
