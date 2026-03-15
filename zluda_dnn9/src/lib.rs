@@ -94,7 +94,7 @@ mod tests_impl {
             tensor2,
             conv_desc,
             tensor1,
-            8,
+            perf_results.len() as i32,
             &mut algo_count,
             perf_results.as_mut_ptr(),
         );
@@ -201,6 +201,160 @@ mod tests_impl {
         }
         // f16 has ~3 decimal digits of precision. With accumulated sums over 256*7=1792 terms,
         // the absolute error can be significant, so use a generous tolerance.
+        assert!(
+            max_rel_err < 0.05,
+            "relative error too large: max_abs_err={max_abs_err}, max_rel_err={max_rel_err}"
+        );
+    }
+
+    #[test_cuda]
+    fn pytorch_conv_backward_f32(api: impl CudnnApi) {
+        let mut handle = unsafe { std::mem::zeroed() };
+        api.cudnnCreate(&mut handle);
+        api.cudnnSetStream(handle, CUstream(ptr::null_mut()));
+        let mut tensor1 = unsafe { std::mem::zeroed() };
+        api.cudnnCreateTensorDescriptor(&mut tensor1);
+        api.cudnnSetTensorNdDescriptor(
+            tensor1,
+            cudnnDataType_t::CUDNN_DATA_FLOAT,
+            4,
+            [1, 256, 1, 320].as_ptr(),
+            [81920, 320, 320, 1].as_ptr(),
+        );
+        let mut filter = unsafe { std::mem::zeroed() };
+        api.cudnnCreateFilterDescriptor(&mut filter);
+        api.cudnnSetFilterNdDescriptor(
+            filter,
+            cudnnDataType_t::CUDNN_DATA_FLOAT,
+            cudnnTensorFormat_t::CUDNN_TENSOR_NCHW,
+            4,
+            [512, 256, 1, 16].as_ptr(),
+        );
+        let mut tensor2 = unsafe { std::mem::zeroed() };
+        api.cudnnCreateTensorDescriptor(&mut tensor2);
+        api.cudnnSetTensorNdDescriptor(
+            tensor2,
+            cudnnDataType_t::CUDNN_DATA_FLOAT,
+            4,
+            [1, 512, 1, 40].as_ptr(),
+            [20480, 40, 40, 1].as_ptr(),
+        );
+        let mut conv_desc = unsafe { std::mem::zeroed() };
+        api.cudnnCreateConvolutionDescriptor(&mut conv_desc);
+        api.cudnnSetConvolutionNdDescriptor(
+            conv_desc,
+            2,
+            [0, 4].as_ptr(),
+            [1, 8].as_ptr(),
+            [1, 1].as_ptr(),
+            cudnnConvolutionMode_t::CUDNN_CROSS_CORRELATION,
+            cudnnDataType_t::CUDNN_DATA_FLOAT,
+        );
+        api.cudnnSetConvolutionGroupCount(conv_desc, 1);
+        let mut algo_count = 0;
+        let mut perf_results =
+            unsafe { [mem::zeroed::<cudnnConvolutionBwdDataAlgoPerfStruct>(); 8] };
+        api.cudnnGetConvolutionBackwardDataAlgorithm_v7(
+            handle,
+            filter,
+            tensor2,
+            conv_desc,
+            tensor1,
+            perf_results.len() as i32,
+            &mut algo_count,
+            perf_results.as_mut_ptr(),
+        );
+        for i in 0..algo_count as usize {
+            let mut memory = 0;
+            api.cudnnGetConvolutionBackwardDataWorkspaceSize(
+                handle,
+                filter,
+                tensor2,
+                conv_desc,
+                tensor1,
+                perf_results[i].algo,
+                &mut memory,
+            );
+            assert_eq!(memory, perf_results[i].memory);
+        }
+        let mut rng = ChaCha8Rng::from_seed([
+            0xca, 0xb9, 0x3c, 0xf4, 0xa7, 0xc7, 0xa8, 0xa5, 0x47, 0x6c, 0x86, 0xa0, 0x62, 0x6e,
+            0x4c, 0xb7, 0x95, 0x5f, 0x39, 0x19, 0x2f, 0xb8, 0x69, 0xd1, 0xce, 0xc4, 0xfc, 0xc7,
+            0xe3, 0x2c, 0xe4, 0x1d,
+        ]);
+        let filter_mem_dev = api.alloc(512 * 256 * 1 * 16 * mem::size_of::<f32>());
+        let filter_mem_host =
+            fill_buffer::<f32>(&api, &mut rng, filter_mem_dev, 512 * 256 * 1 * 16);
+        let tensor1_mem_dev = api.alloc(1 * 256 * 1 * 320 * mem::size_of::<f32>());
+        let tensor2_mem_dev = api.alloc(1 * 512 * 1 * 40 * mem::size_of::<f32>());
+        let tensor2_mem_host =
+            fill_buffer::<f32>(&api, &mut rng, tensor2_mem_dev, 1 * 512 * 1 * 40);
+        let workspace_mem = if perf_results[0].memory > 0 {
+            api.alloc(perf_results[0].memory)
+        } else {
+            ptr::null_mut()
+        };
+        api.cudnnConvolutionBackwardData(
+            handle,
+            std::ptr::from_ref(&1.0f32).cast(),
+            filter,
+            filter_mem_dev,
+            tensor2,
+            tensor2_mem_dev,
+            conv_desc,
+            perf_results[0].algo,
+            workspace_mem,
+            perf_results[0].memory,
+            std::ptr::from_ref(&0.0f32).cast(),
+            tensor1,
+            tensor1_mem_dev,
+        );
+        // Copy result (dx) back from device
+        let dx_count = 1 * 256 * 1 * 320;
+        let mut dx_result = vec![0f32; dx_count];
+        api.copy_to_host(
+            dx_result.as_mut_ptr().cast(),
+            tensor1_mem_dev as *const _,
+            dx_count * mem::size_of::<f32>(),
+        );
+        // Compute reference with candle on CPU
+        // cudnnConvolutionBackwardData with cross-correlation computes a transposed convolution:
+        //   dx = conv_transpose(filter, dy)
+        // Since H=1 and pad_h=0, this is effectively a 1D transposed convolution.
+        // filter shape: [512, 256, 1, 16] -> reshape to [512, 256, 16] for conv_transpose1d
+        // dy (tensor2) shape: [1, 512, 1, 40] -> reshape to [1, 512, 40]
+        // dx (tensor1) shape: [1, 256, 1, 320] -> reshape to [1, 256, 320]
+        use candle_core::{Device, Tensor};
+        let dev = &Device::Cpu;
+        let filter_f32: Vec<f32> = filter_mem_host.iter().copied().collect();
+        let dy_f32: Vec<f32> = tensor2_mem_host.iter().copied().collect();
+        let filter_t = Tensor::from_vec(filter_f32, &[512, 256, 1, 16], dev)
+            .unwrap()
+            .reshape(&[512, 256, 16])
+            .unwrap();
+        let dy_t = Tensor::from_vec(dy_f32, &[1, 512, 1, 40], dev)
+            .unwrap()
+            .reshape(&[1, 512, 40])
+            .unwrap();
+        // padding=11 (kernel-1-pad=15-4), output_padding=0, stride=1, dilation=1, groups=1
+        let dx_ref = dy_t
+            .conv_transpose1d(
+                &filter_t, /*padding=*/ 11, /*output_padding=*/ 0, /*stride=*/ 1,
+                /*dilation=*/ 1, /*groups=*/ 1,
+            )
+            .unwrap();
+        let dx_ref_f32 = dx_ref.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        assert_eq!(dx_result.len(), dx_ref_f32.len(), "output size mismatch: GPU={} vs CPU={}", dx_result.len(), dx_ref_f32.len());
+        let mut max_abs_err: f32 = 0.0;
+        let mut max_rel_err: f32 = 0.0;
+        for i in 0..dx_result.len() {
+            let gpu = dx_result[i];
+            let cpu = dx_ref_f32[i];
+            let abs_err = (gpu - cpu).abs();
+            let rel_err = if cpu.abs() > 1e-6 { abs_err / cpu.abs() } else { abs_err };
+            max_abs_err = max_abs_err.max(abs_err);
+            max_rel_err = max_rel_err.max(rel_err);
+        }
         assert!(
             max_rel_err < 0.05,
             "relative error too large: max_abs_err={max_abs_err}, max_rel_err={max_rel_err}"
