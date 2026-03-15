@@ -255,17 +255,30 @@ mod tests_impl {
         );
         api.cudnnSetConvolutionGroupCount(conv_desc, 1);
         let mut algo_count = 0;
-        let mut perf_results: cudnnConvolutionBwdFilterAlgoPerf_t = unsafe { mem::zeroed() };
+        let mut perf_results = unsafe { [mem::zeroed(); 8] };
         api.cudnnGetConvolutionBackwardFilterAlgorithm_v7(
             handle,
             x_desc,
             dy_desc,
             conv_desc,
             filter_desc,
-            8,
+            perf_results.len() as i32,
             &mut algo_count,
-            &mut perf_results,
+            perf_results.as_mut_ptr(),
         );
+        for i in 0..algo_count as usize {
+            let mut memory = 0;
+            api.cudnnGetConvolutionBackwardFilterWorkspaceSize(
+                handle,
+                x_desc,
+                dy_desc,
+                conv_desc,
+                filter_desc,
+                perf_results[i].algo,
+                &mut memory,
+            );
+            assert_eq!(memory, perf_results[i].memory);
+        }
         let mut rng = ChaCha8Rng::from_seed([
             0xca, 0xb9, 0x3c, 0xf4, 0xa7, 0xc7, 0xa8, 0xa5, 0x47, 0x6c, 0x86, 0xa0, 0x62, 0x6e,
             0x4c, 0xb7, 0x95, 0x5f, 0x39, 0x19, 0x2f, 0xb8, 0x69, 0xd1, 0xce, 0xc4, 0xfc, 0xc7,
@@ -276,8 +289,8 @@ mod tests_impl {
         let dy_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
         let dy_mem_host = fill_buffer::<f16>(&api, &mut rng, dy_mem_dev, 1 * 256 * 1 * 7824);
         let dw_mem_dev = api.alloc(256 * 256 * 1 * 7 * mem::size_of::<f16>());
-        let workspace_mem = if perf_results.memory > 0 {
-            api.alloc(perf_results.memory)
+        let workspace_mem = if perf_results[0].memory > 0 {
+            api.alloc(perf_results[0].memory)
         } else {
             ptr::null_mut()
         };
@@ -289,9 +302,9 @@ mod tests_impl {
             dy_desc,
             dy_mem_dev,
             conv_desc,
-            perf_results.algo,
+            perf_results[0].algo,
             workspace_mem,
-            perf_results.memory,
+            perf_results[0].memory,
             std::ptr::from_ref(&0.0f32).cast(),
             filter_desc,
             dw_mem_dev,
