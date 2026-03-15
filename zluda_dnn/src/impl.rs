@@ -435,7 +435,6 @@ impl SearchCache2 {
         &'a mut self,
         miopen: &MIOpenVtable,
         handle: miopenHandle_t,
-        scratchpad: &mut TemporaryBufferAllocator,
         direction: miopenProblemDirection_t,
         desc: miopenConvolutionDescriptor_t,
         x: miopenTensorDescriptor_t,
@@ -508,8 +507,7 @@ impl SearchCache2 {
         }
         fastest_by_algo.sort_unstable_by(|x, y| {
             x.time
-                .partial_cmp(&y.time)
-                .unwrap_or(std::cmp::Ordering::Equal)
+                .total_cmp(&y.time)
                 .then_with(|| x.memory.cmp(&y.memory))
         });
         fastest_by_algo
@@ -1139,7 +1137,7 @@ unsafe fn algo_perf_to_cudnn_bwd_data(
     }
 }
 
-unsafe fn algo_perf_to_cudnn_bwd_data2(
+fn algo_perf_to_cudnn_bwd_data2(
     solution: SolutionWithProperties,
 ) -> cudnnConvolutionBwdDataAlgoPerf_t {
     cudnnConvolutionBwdDataAlgoPerf_t {
@@ -1363,39 +1361,81 @@ pub(crate) unsafe fn convolution_forward(
 pub(crate) unsafe fn convolution_backward_data(
     handle: &Context,
     alpha: *const ::core::ffi::c_void,
-    mut w_desc: miopenTensorDescriptor_t,
+    w_desc: miopenTensorDescriptor_t,
     w: *const ::core::ffi::c_void,
-    mut dy_desc: miopenTensorDescriptor_t,
+    dy_desc: miopenTensorDescriptor_t,
     dy: *const ::core::ffi::c_void,
     conv_desc: miopenConvolutionDescriptor_t,
     algo: miopenConvBwdDataAlgorithm_t,
     workspace: *mut ::core::ffi::c_void,
     workspace_size_in_bytes: usize,
     beta: *const ::core::ffi::c_void,
-    mut dx_desc: miopenTensorDescriptor_t,
+    dx_desc: miopenTensorDescriptor_t,
     dx: *mut ::core::ffi::c_void,
 ) -> miopenStatus_t {
-    let miopen = miopen()?;
-    check_alpha_beta(miopen, alpha, beta, dx_desc)?;
-    let search_workspace = &mut *handle
-        .search_workspace
-        .lock()
-        .map_err(|_| miopenError_t::UnknownError)?;
-    let solutions = search_workspace.search_cache2.get_or_insert(
-        miopen,
-        handle.base,
-        &mut search_workspace.beta_buffer_cache,
+    run_solution(
+        handle,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
-        conv_desc,
+        alpha,
+        beta,
         dx_desc,
+        dx,
         w_desc,
+        w,
         dy_desc,
-    )?;
-    let solution = solutions
-        .iter()
-        .find(|s| s.algo.0 == algo.0)
-        .unwrap_or(solutions.first().ok_or(miopenError_t::UnsupportedOp)?);
+        dy,
+        dx_desc,
+        conv_desc,
+        algo,
+        workspace,
+        workspace_size_in_bytes,
+    )
+}
+
+unsafe fn run_solution(
+    handle: &Context,
+    direction: miopenProblemDirection_t,
+    alpha: *const std::ffi::c_void,
+    beta: *const std::ffi::c_void,
+    mut dx_desc: miopenTensorDescriptor_t,
+    dx: *const std::ffi::c_void,
+    mut w_desc: miopenTensorDescriptor_t,
+    w: *const std::ffi::c_void,
+    mut dy_desc: miopenTensorDescriptor_t,
+    dy: *const std::ffi::c_void,
+    target_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    algo: miopenConvBwdDataAlgorithm_t,
+    workspace: *mut std::ffi::c_void,
+    workspace_size_in_bytes: usize,
+) -> Result<(), miopenError_t> {
+    let miopen = miopen()?;
+    check_alpha_beta(miopen, alpha, beta, target_desc)?;
+    let solution = {
+        let search_workspace = &mut *handle
+            .search_workspace
+            .lock()
+            .map_err(|_| miopenError_t::UnknownError)?;
+        let solutions = search_workspace.search_cache2.get_or_insert(
+            miopen,
+            handle.base,
+            direction,
+            conv_desc,
+            dx_desc,
+            w_desc,
+            dy_desc,
+        )?;
+        *solutions
+            .iter()
+            .find(|s| s.algo.0 == algo.0)
+            .unwrap_or(solutions.first().ok_or(miopenError_t::UnsupportedOp)?)
+    };
     let tensors = [
+        miopenTensorArgument_t {
+            id: miopenTensorArgumentId_t::miopenTensorConvolutionX,
+            descriptor: &mut dx_desc,
+            buffer: dx.cast_mut(),
+        },
         miopenTensorArgument_t {
             id: miopenTensorArgumentId_t::miopenTensorConvolutionW,
             descriptor: &mut w_desc,
@@ -1405,11 +1445,6 @@ pub(crate) unsafe fn convolution_backward_data(
             id: miopenTensorArgumentId_t::miopenTensorConvolutionY,
             descriptor: &mut dy_desc,
             buffer: dy.cast_mut(),
-        },
-        miopenTensorArgument_t {
-            id: miopenTensorArgumentId_t::miopenTensorConvolutionX,
-            descriptor: &mut dx_desc,
-            buffer: dx,
         },
     ];
     miopen.miopenRunSolution(
@@ -1456,26 +1491,49 @@ pub(crate) unsafe fn get_convolution_backward_data_workspace_size(
     algo: miopenConvBwdDataAlgorithm_t,
     workspace_size_in_bytes: &mut usize,
 ) -> miopenStatus_t {
-    let miopen = miopen()?;
-    let search_workspace = &mut *handle
-        .search_workspace
-        .lock()
-        .map_err(|_| miopenError_t::UnknownError)?;
-    let solutions = search_workspace.search_cache2.get_or_insert(
-        miopen,
-        handle.base,
-        &mut search_workspace.beta_buffer_cache,
+    get_workspace_size(
+        handle,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
-        conv_desc,
         dx_desc,
         w_desc,
         dy_desc,
-    )?;
-    let memory = solutions
-        .iter()
-        .find(|s| s.algo.0 == algo.0)
-        .map(|s| s.memory)
-        .ok_or(miopenError_t::UnsupportedOp)?;
+        conv_desc,
+        algo,
+        workspace_size_in_bytes,
+    )
+}
+
+fn get_workspace_size(
+    handle: &Context,
+    direction: miopenProblemDirection_t,
+    dx_desc: miopenTensorDescriptor_t,
+    w_desc: miopenTensorDescriptor_t,
+    dy_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    algo: miopenConvBwdDataAlgorithm_t,
+    workspace_size_in_bytes: &mut usize,
+) -> Result<(), miopenError_t> {
+    let miopen = miopen()?;
+    let memory = {
+        let search_workspace = &mut *handle
+            .search_workspace
+            .lock()
+            .map_err(|_| miopenError_t::UnknownError)?;
+        let solutions = search_workspace.search_cache2.get_or_insert(
+            miopen,
+            handle.base,
+            direction,
+            conv_desc,
+            dx_desc,
+            w_desc,
+            dy_desc,
+        )?;
+        solutions
+            .iter()
+            .find(|s| s.algo.0 == algo.0)
+            .map(|s| s.memory)
+            .ok_or(miopenError_t::UnsupportedOp)?
+    };
     *workspace_size_in_bytes = memory;
     Ok(())
 }
@@ -1515,6 +1573,32 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
     returned_algo_count: &mut ::core::ffi::c_int,
     perf_results: *mut cudnnConvolutionBwdDataAlgoPerf_t,
 ) -> Result<(), cudnnError_t> {
+    get_algorithm(
+        handle,
+        miopenProblemDirection_t::miopenProblemDirectionBackward,
+        filter_desc,
+        diff_desc,
+        conv_desc,
+        grad_desc,
+        requested_algo_count,
+        returned_algo_count,
+        perf_results,
+        algo_perf_to_cudnn_bwd_data2,
+    )
+}
+
+unsafe fn get_algorithm<T>(
+    handle: &Context,
+    direction: miopenProblemDirection_t,
+    filter_desc: miopenTensorDescriptor_t,
+    diff_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    grad_desc: miopenTensorDescriptor_t,
+    requested_algo_count: i32,
+    returned_algo_count: &mut i32,
+    perf_results: *mut T,
+    mut converter: impl FnMut(SolutionWithProperties) -> T,
+) -> Result<(), cudnnError_t> {
     if perf_results.is_null() || requested_algo_count <= 0 {
         return Err(cudnnError_t::BAD_PARAM);
     }
@@ -1526,8 +1610,7 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
     let solutions = search_workspace.search_cache2.get_or_insert(
         miopen,
         handle.base,
-        &mut search_workspace.beta_buffer_cache,
-        miopenProblemDirection_t::miopenProblemDirectionBackward,
+        direction,
         conv_desc,
         grad_desc,
         filter_desc,
@@ -1535,7 +1618,7 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
     )?;
     let algo_count = solutions.len().min(requested_algo_count as usize);
     for (i, solution) in solutions.iter().enumerate().take(algo_count) {
-        *perf_results.add(i) = algo_perf_to_cudnn_bwd_data2(*solution);
+        *perf_results.add(i) = converter(*solution);
     }
     *returned_algo_count = algo_count as ::core::ffi::c_int;
     Ok(())
