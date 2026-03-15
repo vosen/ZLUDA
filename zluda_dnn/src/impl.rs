@@ -474,66 +474,11 @@ impl SearchCache2 {
                 }?;
                 let mut solutions = [unsafe { mem::zeroed::<miopenSolution_t>() }; 16];
                 let mut solutions_count = 0;
-                let mut options = unsafe { mem::zeroed::<miopenFindOptions_t>() };
-                unsafe { miopen.miopenCreateFindOptions(&mut options) }?;
-                let mut wsearch_size = 0;
-                unsafe {
-                    miopen.miopenConvolutionBackwardDataGetWorkSpaceSize(
-                        handle,
-                        w,
-                        x,
-                        desc,
-                        y,
-                        &mut wsearch_size,
-                    )
-                }?;
-                let fake_tensor_size = get_tensor_size(miopen, x)?
-                    .max(get_tensor_size(miopen, w)?)
-                    .max(get_tensor_size(miopen, y)?)
-                    .max(wsearch_size);
-                let fake_tensor = scratchpad
-                    .get_or_allocate(fake_tensor_size)
-                    .map_err(|_| miopenError_t::AllocFailed)?;
-                eprintln!(
-                    "Fake tensor: {:p} (size: {})",
-                    fake_tensor.data, fake_tensor_size
-                );
-                unsafe {
-                    miopen.miopenSetFindOptionPreallocatedTensor(
-                        options,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionX,
-                        fake_tensor.data,
-                    )
-                }?;
-                unsafe {
-                    miopen.miopenSetFindOptionPreallocatedTensor(
-                        options,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionW,
-                        fake_tensor.data,
-                    )
-                }?;
-                unsafe {
-                    miopen.miopenSetFindOptionPreallocatedTensor(
-                        options,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionY,
-                        fake_tensor.data,
-                    )
-                }?;
-                unsafe {
-                    miopen.miopenSetFindOptionPreallocatedWorkspace(
-                        options,
-                        fake_tensor.data,
-                        fake_tensor.size,
-                    )
-                }?;
-                let _drop_fn1 = DropFn(|| {
-                    unsafe { miopen.miopenDestroyFindOptions(options) }.ok();
-                });
                 unsafe {
                     miopen.miopenFindSolutions(
                         handle,
                         problem,
-                        options,
+                        miopenFindOptions_t(ptr::null_mut()),
                         solutions.as_mut_ptr(),
                         &mut solutions_count,
                         solutions.len(),
@@ -1442,9 +1387,9 @@ pub(crate) unsafe fn convolution_backward_data(
         &mut search_workspace.beta_buffer_cache,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
         conv_desc,
+        dx_desc,
         w_desc,
         dy_desc,
-        dx_desc,
     )?;
     let solution = solutions
         .iter()
@@ -1522,9 +1467,9 @@ pub(crate) unsafe fn get_convolution_backward_data_workspace_size(
         &mut search_workspace.beta_buffer_cache,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
         conv_desc,
+        dx_desc,
         w_desc,
         dy_desc,
-        dx_desc,
     )?;
     let memory = solutions
         .iter()
@@ -1584,9 +1529,9 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
         &mut search_workspace.beta_buffer_cache,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
         conv_desc,
+        grad_desc,
         filter_desc,
         diff_desc,
-        grad_desc,
     )?;
     let algo_count = solutions.len().min(requested_algo_count as usize);
     for (i, solution) in solutions.iter().enumerate().take(algo_count) {
