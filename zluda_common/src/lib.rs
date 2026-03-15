@@ -252,7 +252,6 @@ from_cuda_nop!(
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
-    CUfunction => hipFunction_t,
     CUstream => hipStream_t,
     CUpointer_attribute => hipPointer_attribute,
     CUdeviceptr_v2 => hipDeviceptr_t,
@@ -264,7 +263,6 @@ from_cuda_transmute!(
     CUstreamCaptureMode => hipStreamCaptureMode,
     CUgraphNode => hipGraphNode_t,
     CUgraphExec => hipGraphExec_t,
-    CUkernel => hipFunction_t,
     cublasLtMatmulDesc_t => hipblasLtMatmulDesc_t,
     cublasLtMatmulPreference_t => hipblasLtMatmulPreference_t,
     cublasLtMatrixLayout_t => hipblasLtMatrixLayout_t,
@@ -801,6 +799,7 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionBwdDataAlgo_t, E
                 // No direct MIOpen equivalent; map to Winograd variant
                 miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoWinograd
             }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t(7) => miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoImplicitGEMM,
             _ => return Err(E::NOT_SUPPORTED),
         })
     }

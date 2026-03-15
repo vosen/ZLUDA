@@ -1,0 +1,13 @@
+[package]
+name = "kernel_metadata"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+rkyv = "0.8"
+static_assertions = "1.1.0"
+object = {version = "0.38", features = ["write"] }
+
+[dependencies.num]
+version = "0.4"
+default-features = false

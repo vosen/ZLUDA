@@ -110,7 +110,7 @@ macro_rules! override_fn_core {
                     ).ok();
                     formatted_args
                 };
-                let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| Some(());
+                let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| Some(((), ()));
                 let cuda_call = |_| {
                     paste!{ [<$fn_name _impl >] ( $($arg_id),* ) }
                 };
@@ -121,7 +121,7 @@ macro_rules! override_fn_core {
                     format_curesult,
                     extract_fn_ptr,
                     cuda_call,
-                    move |_, _, _, _| {}
+                    move |_, _, _, _, _| {}
                 )
             }
         )*
@@ -157,9 +157,9 @@ impl ::dark_api::zluda_trace::CudaDarkApi for InternalTableImpl {
             Some(|| args.call().to_vec()),
             internal_error,
             |status| format_status(status).to_vec(),
-            |_, _| Some(()),
+            |_, _| Some(((), ())),
             |_| fn_.call(),
-            move |_, _, _, _| {},
+            move |_, _, _, _, _| {},
         )
     }
 }
@@ -201,7 +201,7 @@ macro_rules! dark_api_fn_redirect_log {
                         ).ok();
                         formatted_args
                     };
-                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(()) };
+                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(((), ())) };
                     let cuda_call = |_: () | {
                        ReprUsize::to_usize(original_fn( $( $arg_id ),* ))
                     };
@@ -215,7 +215,7 @@ macro_rules! dark_api_fn_redirect_log {
                         |status| <$ret_type as ReprUsize>::format_status(status).to_vec(),
                         extract_fn_ptr,
                         cuda_call,
-                        move |_, _, _, _| {}
+                        move |_, _, _, _, _| {}
                     ))
                 }
             )+
@@ -256,7 +256,7 @@ macro_rules! dark_api_fn_redirect_log_post {
                         ).ok();
                         formatted_args
                     };
-                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(()) };
+                    let extract_fn_ptr = |_: &mut GlobalDelayedState, _: &mut FnCallLog| { Some(((), ())) };
                     let cuda_call = |_: () | {
                        ReprUsize::to_usize(original_fn( $( $arg_id ),* ))
                     };
@@ -270,7 +270,7 @@ macro_rules! dark_api_fn_redirect_log_post {
                         |status| <$ret_type as ReprUsize>::format_status(status).to_vec(),
                         extract_fn_ptr,
                         cuda_call,
-                        move |state, logger, _, cuda_result| paste! { Self:: [<$fn_ _post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, <$ret_type as ReprUsize>::from_usize(cuda_result))
+                        move |state, logger, _, _, cuda_result| paste! { Self:: [<$fn_ _post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, <$ret_type as ReprUsize>::from_usize(cuda_result))
                     ))
                 }
             )+
@@ -784,7 +784,7 @@ macro_rules! extern_redirect {
                 };
                 let extract_fn_ptr = |state: &mut GlobalDelayedState, _: &mut FnCallLog| {
                     paste::paste! {
-                        state.libcuda. [<get_ $fn_name>]()
+                        state.libcuda. [<get_ $fn_name>]().map(|x| ((), x) )
                     }
                 };
                 let cuda_call = |fn_ptr: extern $abi fn ( $($arg_type),* ) -> $ret_type | {
@@ -797,7 +797,7 @@ macro_rules! extern_redirect {
                     format_curesult,
                     extract_fn_ptr,
                     cuda_call,
-                    move |_, _, _, _| {}
+                    move |_, _, _, _, _| {}
                 )
             }
         )*
@@ -820,7 +820,7 @@ macro_rules! extern_redirect_with_post {
                 };
                 let extract_fn_ptr = |state: &mut GlobalDelayedState, _: &mut FnCallLog| {
                     paste::paste! {
-                        state.libcuda. [<get_ $fn_name>]()
+                        state.libcuda. [<get_ $fn_name>]().map(|x| ((), x) )
                     }
                 };
                 let cuda_call = |fn_ptr: extern $abi fn ( $($arg_type),* ) -> $ret_type | {
@@ -833,7 +833,43 @@ macro_rules! extern_redirect_with_post {
                     format_curesult,
                     extract_fn_ptr,
                     cuda_call,
-                    move |state, logger, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, cuda_result )
+                    move |state, logger, _, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , &mut state.cuda_state, logger, cuda_result )
+                )
+            }
+        )*
+    };
+}
+
+macro_rules! extern_redirect_with_pre_post {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[no_mangle]
+            #[allow(improper_ctypes_definitions)]
+            pub extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let format_args = || {
+                    let mut formatted_args = Vec::new();
+                    (paste! { format :: [<write_ $fn_name>] }) (
+                            &mut formatted_args
+                            $(,$arg_id)*
+                    ).ok();
+                    formatted_args
+                };
+                let extract_fn_ptr = |state: &mut GlobalDelayedState, logger: &mut FnCallLog| {
+                    paste::paste! {
+                        state.libcuda. [<get_ $fn_name>]().map(|x| (paste! { [<$fn_name _Pre>] } ( $( $arg_id ),* , &mut state.libcuda, &mut state.cuda_state, logger ), x ))
+                    }
+                };
+                let cuda_call = |fn_ptr: extern $abi fn ( $($arg_type),* ) -> $ret_type | {
+                    fn_ptr( $( $arg_id ),* )
+                };
+                GlobalState2::under_lock(
+                    CudaFunctionName::Normal(stringify!($fn_name)),
+                    Some(format_args),
+                    CUresult::INTERNAL_ERROR,
+                    format_curesult,
+                    extract_fn_ptr,
+                    cuda_call,
+                    move |state, logger, pre_state, _, cuda_result| paste! { [<$fn_name _Post>] } ( $( $arg_id ),* , pre_state, &mut state.libcuda, &mut state.cuda_state, logger, cuda_result )
                 )
             }
         )*
@@ -863,6 +899,7 @@ cuda_function_declarations!(
             cuModuleLoadFatBinary,
             cuLibraryLoadData
         ],
+    extern_redirect_with_pre_post <= [cuLaunchKernel],
     override_fn_core <= [cuGetProcAddress, cuGetProcAddress_v2],
     override_fn_full <= [cuGetExportTable],
 );
@@ -920,27 +957,33 @@ impl GlobalState2 {
     // * Post-call:
     //   We log the output of the CUDA function and any errors that may have occurred. This phase
     //   is also covered by a drop guard which will flush the log buffer in case of panic
-    fn under_lock<'a, FnPtr: Copy, InnerResult: Copy>(
+    fn under_lock<'a, PreState, FnPtr: Copy, InnerResult: Copy>(
         name: CudaFunctionName,
         args: Option<impl FnOnce() -> Vec<u8>>,
         internal_error: InnerResult,
         format_status: impl FnOnce(InnerResult) -> Vec<u8>,
-        pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
+        pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<(PreState, FnPtr)>,
         inner_call: impl FnOnce(FnPtr) -> InnerResult,
-        post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
+        post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, PreState, FnPtr, InnerResult),
     ) -> InnerResult {
-        fn under_lock_impl<'a, FnPtr: Copy, InnerResult: Copy>(
+        fn under_lock_impl<'a, PreState, FnPtr: Copy, InnerResult: Copy>(
             name: CudaFunctionName,
             args: Option<impl FnOnce() -> Vec<u8>>,
             internal_error: InnerResult,
             format_status: impl FnOnce(InnerResult) -> Vec<u8>,
-            pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<FnPtr>,
+            pre_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog) -> Option<(PreState, FnPtr)>,
             inner_call: impl FnOnce(FnPtr) -> InnerResult,
-            post_call: impl FnOnce(&mut GlobalDelayedState, &mut FnCallLog, FnPtr, InnerResult),
+            post_call: impl FnOnce(
+                &mut GlobalDelayedState,
+                &mut FnCallLog,
+                PreState,
+                FnPtr,
+                InnerResult,
+            ),
         ) -> InnerResult {
             let global_state = GLOBAL_STATE2.lock();
             let global_state_ref_cell = &*global_state;
-            let pre_value = {
+            let (pre_state, pre_ptr) = {
                 let mut global_state_ref_mut = global_state_ref_cell.borrow_mut();
                 let global_state = &mut *global_state_ref_mut;
                 let panic_guard = OuterCallGuard {
@@ -976,7 +1019,7 @@ impl GlobalState2 {
                 }
             };
             let panic_guard = InnerCallGuard(global_state_ref_cell);
-            let inner_result = inner_call(pre_value);
+            let inner_result = inner_call(pre_ptr);
             let global_state = &mut *global_state_ref_cell.borrow_mut();
             mem::forget(panic_guard);
             let _drop_guard = OuterCallGuard {
@@ -991,7 +1034,8 @@ impl GlobalState2 {
             post_call(
                 global_state.delayed_state.as_mut().unwrap(),
                 &mut logger,
-                pre_value,
+                pre_state,
+                pre_ptr,
                 inner_result,
             );
             inner_result
@@ -1418,4 +1462,44 @@ pub(crate) fn cuLibraryLoadData_Post(
     // TODO: this is not correct, but it's enough for now, we just want to
     // save the binary to disk
     state.record_new_library(unsafe { CUmodule((*library).0.cast()) }, code, fn_logger);
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLaunchKernel_Pre(
+    _f: CUfunction,
+    _gridDimX: ::std::os::raw::c_uint,
+    _gridDimY: ::std::os::raw::c_uint,
+    _gridDimZ: ::std::os::raw::c_uint,
+    _blockDimX: ::std::os::raw::c_uint,
+    _blockDimY: ::std::os::raw::c_uint,
+    _blockDimZ: ::std::os::raw::c_uint,
+    _sharedMemBytes: ::std::os::raw::c_uint,
+    _hStream: CUstream,
+    _kernelParams: *mut *mut ::std::os::raw::c_void,
+    _extra: *mut *mut ::std::os::raw::c_void,
+    _libcuda: &mut CudaDynamicFns,
+    _cuda_state: &mut trace::StateTracker,
+    _logger: &mut FnCallLog,
+) {
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn cuLaunchKernel_Post(
+    _f: CUfunction,
+    _gridDimX: ::std::os::raw::c_uint,
+    _gridDimY: ::std::os::raw::c_uint,
+    _gridDimZ: ::std::os::raw::c_uint,
+    _blockDimX: ::std::os::raw::c_uint,
+    _blockDimY: ::std::os::raw::c_uint,
+    _blockDimZ: ::std::os::raw::c_uint,
+    _sharedMemBytes: ::std::os::raw::c_uint,
+    _hStream: CUstream,
+    _kernelParams: *mut *mut ::std::os::raw::c_void,
+    _extra: *mut *mut ::std::os::raw::c_void,
+    _pre_state: (),
+    _libcuda: &mut CudaDynamicFns,
+    _cuda_state: &mut trace::StateTracker,
+    _logger: &mut FnCallLog,
+    _result: CUresult,
+) {
 }

@@ -94,6 +94,7 @@ pub fn compile(
     main: Module,
     ptx_impl: &[u8],
     attributes: Module,
+    metadata: kernel_metadata::KernelMetadataV1,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<Vec<u8>, String> {
     init_globals()?;
@@ -183,22 +184,31 @@ pub fn compile(
     }
 
     let object_path = NamedTempFile::with_prefix("zluda.o")
-        .map_err(|_| ("Failed to create temporary file").to_string())?
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?
         .into_temp_path();
+    let mut section_path = NamedTempFile::with_prefix("zluda_section")
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?;
     let executable_path = NamedTempFile::with_prefix("zluda.elf")
-        .map_err(|_| ("Failed to create temporary file").to_string())?
+        .map_err(|e| format!("Failed to create temporary file: {}", e))?
         .into_temp_path();
 
     fs::write(&object_path, &object_file)
-        .map_err(|_| ("Failed to write object file").to_string())?;
+        .map_err(|e| format!("Failed to write object file: {}", e))?;
+    metadata
+        .write_object(&object_file, section_path.as_file_mut())
+        .map_err(|e| format!("Failed to write metadata section: {}", e))?;
 
     let object_path_cstr = path_to_cstring(&object_path)?;
+    let section_path_cstr = path_to_cstring(section_path.as_ref())?;
     let executable_path_cstr = path_to_cstring(&executable_path)?;
+
+    let inputs = [object_path_cstr.as_ptr(), section_path_cstr.as_ptr()];
 
     let mut err = std::ptr::null_mut();
     let result = unsafe {
         LLVMZludaLinkWithLLD(
-            object_path_cstr.as_ptr(),
+            inputs.len() as u32,
+            inputs.as_ptr(),
             executable_path_cstr.as_ptr(),
             &mut err,
         )
