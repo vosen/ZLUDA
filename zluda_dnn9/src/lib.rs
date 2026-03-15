@@ -99,6 +99,9 @@ mod tests_impl {
             perf_results.as_mut_ptr(),
         );
         for i in 0..algo_count as usize {
+            if perf_results[i].status != Ok(()) {
+                continue;
+            }
             let mut memory = 0;
             api.cudnnGetConvolutionBackwardDataWorkspaceSize(
                 handle,
@@ -265,6 +268,9 @@ mod tests_impl {
             perf_results.as_mut_ptr(),
         );
         for i in 0..algo_count as usize {
+            if perf_results[i].status != Ok(()) {
+                continue;
+            }
             let mut memory = 0;
             api.cudnnGetConvolutionBackwardDataWorkspaceSize(
                 handle,
@@ -336,22 +342,32 @@ mod tests_impl {
             .unwrap()
             .reshape(&[1, 512, 40])
             .unwrap();
-        // padding=11 (kernel-1-pad=15-4), output_padding=0, stride=1, dilation=1, groups=1
+        // padding=4, output_padding=0, stride=8, dilation=1, groups=1
         let dx_ref = dy_t
             .conv_transpose1d(
-                &filter_t, /*padding=*/ 11, /*output_padding=*/ 0, /*stride=*/ 1,
+                &filter_t, /*padding=*/ 4, /*output_padding=*/ 0, /*stride=*/ 8,
                 /*dilation=*/ 1, /*groups=*/ 1,
             )
             .unwrap();
         let dx_ref_f32 = dx_ref.flatten_all().unwrap().to_vec1::<f32>().unwrap();
-        assert_eq!(dx_result.len(), dx_ref_f32.len(), "output size mismatch: GPU={} vs CPU={}", dx_result.len(), dx_ref_f32.len());
+        assert_eq!(
+            dx_result.len(),
+            dx_ref_f32.len(),
+            "output size mismatch: GPU={} vs CPU={}",
+            dx_result.len(),
+            dx_ref_f32.len()
+        );
         let mut max_abs_err: f32 = 0.0;
         let mut max_rel_err: f32 = 0.0;
         for i in 0..dx_result.len() {
             let gpu = dx_result[i];
             let cpu = dx_ref_f32[i];
             let abs_err = (gpu - cpu).abs();
-            let rel_err = if cpu.abs() > 1e-6 { abs_err / cpu.abs() } else { abs_err };
+            let rel_err = if cpu.abs() > 1e-6 {
+                abs_err / cpu.abs()
+            } else {
+                abs_err
+            };
             max_abs_err = max_abs_err.max(abs_err);
             max_rel_err = max_rel_err.max(rel_err);
         }
@@ -421,6 +437,9 @@ mod tests_impl {
             perf_results.as_mut_ptr(),
         );
         for i in 0..algo_count as usize {
+            if perf_results[i].status != Ok(()) {
+                continue;
+            }
             let mut memory = 0;
             api.cudnnGetConvolutionBackwardFilterWorkspaceSize(
                 handle,
@@ -574,17 +593,33 @@ mod tests_impl {
         );
         api.cudnnSetConvolutionGroupCount(conv_desc, 1);
         let mut algo_count = 0;
-        let mut perf_results = unsafe { mem::zeroed() };
+        let mut perf_results = unsafe { [mem::zeroed(); 8] };
         api.cudnnGetConvolutionForwardAlgorithm_v7(
             handle,
             tensor1,
             filter,
             conv_desc,
             tensor2,
-            8,
+            perf_results.len() as i32,
             &mut algo_count,
-            &mut perf_results,
+            perf_results.as_mut_ptr(),
         );
+        for i in 0..algo_count as usize {
+            if perf_results[i].status != Ok(()) {
+                continue;
+            }
+            let mut memory = 0;
+            api.cudnnGetConvolutionForwardWorkspaceSize(
+                handle,
+                tensor1,
+                filter,
+                conv_desc,
+                tensor2,
+                perf_results[i].algo,
+                &mut memory,
+            );
+            assert_eq!(memory, perf_results[i].memory);
+        }
         let mut rng = ChaCha8Rng::from_seed([
             0xca, 0xb9, 0x3c, 0xf4, 0xa7, 0xc7, 0xa8, 0xa5, 0x47, 0x6c, 0x86, 0xa0, 0x62, 0x6e,
             0x4c, 0xb7, 0x95, 0x5f, 0x39, 0x19, 0x2f, 0xb8, 0x69, 0xd1, 0xce, 0xc4, 0xfc, 0xc7,
@@ -596,8 +631,8 @@ mod tests_impl {
         let tensor1_mem_host =
             fill_buffer::<f16>(&api, &mut rng, tensor1_mem_dev, 1 * 256 * 1 * 7824);
         let tensor2_mem_dev = api.alloc(1 * 256 * 1 * 7824 * mem::size_of::<f16>());
-        let workspace_mem = if perf_results.memory > 0 {
-            api.alloc(perf_results.memory)
+        let workspace_mem = if perf_results[0].memory > 0 {
+            api.alloc(perf_results[0].memory)
         } else {
             ptr::null_mut()
         };
@@ -609,9 +644,9 @@ mod tests_impl {
             filter,
             filter_mem_dev,
             conv_desc,
-            perf_results.algo,
+            perf_results[0].algo,
             workspace_mem,
-            perf_results.memory,
+            perf_results[0].memory,
             std::ptr::from_ref(&0.0f32).cast(),
             tensor2,
             tensor2_mem_dev,
