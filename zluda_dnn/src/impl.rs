@@ -990,25 +990,19 @@ pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
     requested_algo_count: ::std::os::raw::c_int,
     returned_algo_count: &mut ::std::os::raw::c_int,
     perf_results: &mut cudnnConvolutionFwdAlgoPerf_t,
-) -> Result<(), miopenError_t> {
-    if requested_algo_count <= 0 {
-        return Err(miopenError_t::BadParm);
-    }
-    let miopen_result = get_or_search_algorithm::<ConvolutionForward>(
+) -> cudnnStatus_t {
+    get_algorithm(
         handle,
+        miopenProblemDirection_t::miopenProblemDirectionForward,
+        x_desc,
+        w_desc,
+        y_desc,
         conv_desc,
-        &[x_desc, w_desc, y_desc],
-    )?;
-    match miopen_result {
-        Some(miopen_result) => {
-            *returned_algo_count = 1;
-            *perf_results = algo_perf_to_cudnn(miopen_result);
-        }
-        None => {
-            *returned_algo_count = 0;
-        }
-    }
-    Ok(())
+        requested_algo_count,
+        returned_algo_count,
+        perf_results,
+        algo_perf_to_cudnn2,
+    )
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -1137,6 +1131,18 @@ unsafe fn algo_perf_to_cudnn_bwd_data(
     }
 }
 
+fn algo_perf_to_cudnn2(solution: SolutionWithProperties) -> cudnnConvolutionFwdAlgoPerf_t {
+    cudnnConvolutionFwdAlgoPerf_t {
+        algo: algo_to_cudnn2(solution.algo),
+        time: solution.time,
+        memory: solution.memory,
+        status: cudnnStatus_t::SUCCESS,
+        determinism: cudnnDeterminism_t::CUDNN_NON_DETERMINISTIC,
+        mathType: cudnnMathType_t::CUDNN_DEFAULT_MATH,
+        reserved: [0, 0, 0],
+    }
+}
+
 fn algo_perf_to_cudnn_bwd_data2(
     solution: SolutionWithProperties,
 ) -> cudnnConvolutionBwdDataAlgoPerf_t {
@@ -1194,6 +1200,27 @@ unsafe fn algo_to_cudnn(result: &miopenConvAlgoPerf_t) -> cudnnConvolutionFwdAlg
             cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD
         }
         miopenConvFwdAlgorithm_t::miopenConvolutionFwdAlgoImplicitGEMM => {
+            cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM
+        }
+        _ => cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM,
+    }
+}
+
+fn algo_to_cudnn2(result: miopenConvAlgorithm_t) -> cudnnConvolutionFwdAlgo_t {
+    match result {
+        miopenConvAlgorithm_t::miopenConvolutionAlgoGEMM => {
+            cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM
+        }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoDirect => {
+            cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_DIRECT
+        }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoFFT => {
+            cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_FFT
+        }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoWinograd => {
+            cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD
+        }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
             cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM
         }
         _ => cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM,
@@ -1286,17 +1313,19 @@ pub(crate) unsafe fn get_convolution_forward_workspace_size(
     w_desc: miopenTensorDescriptor_t,
     conv_desc: miopenConvolutionDescriptor_t,
     y_desc: miopenTensorDescriptor_t,
-    _algo: miopenConvFwdAlgorithm_t,
+    algo: miopenConvFwdAlgorithm_t,
     size_in_bytes: &mut usize,
 ) -> miopenStatus_t {
-    let algo = get_or_search_algorithm::<ConvolutionForward>(
+    get_workspace_size(
         handle,
+        miopenProblemDirection_t::miopenProblemDirectionForward,
+        x_desc,
+        w_desc,
+        y_desc,
         conv_desc,
-        &[x_desc, w_desc, y_desc],
-    )?
-    .ok_or(miopenError_t::UnsupportedOp)?;
-    *size_in_bytes = algo.memory;
-    Ok(())
+        algo.0,
+        size_in_bytes,
+    )
 }
 
 pub(crate) unsafe fn convolution_forward(
@@ -1307,90 +1336,30 @@ pub(crate) unsafe fn convolution_forward(
     w_desc: miopenTensorDescriptor_t,
     w: *const ::std::os::raw::c_void,
     conv_desc: miopenConvolutionDescriptor_t,
-    _algo: miopenConvFwdAlgorithm_t,
+    algo: miopenConvFwdAlgorithm_t,
     workspace: *mut ::std::os::raw::c_void,
     workspace_size_in_bytes: usize,
     beta: *const ::std::os::raw::c_void,
     y_desc: miopenTensorDescriptor_t,
     y: *mut ::std::os::raw::c_void,
 ) -> miopenStatus_t {
-    let stream = handle.stream.load(Ordering::Acquire);
-    let do_convolution = |algo, pre_op_buffer| {
-        let zero = 0u64;
-        miopen()?.miopenConvolutionForward(
-            handle.base,
-            alpha,
-            x_desc,
-            x,
-            w_desc,
-            w,
-            conv_desc,
-            algo,
-            std::ptr::from_ref(&zero).cast(),
-            y_desc,
-            y,
-            workspace,
-            workspace_size_in_bytes,
-        )?;
-        if let Some(pre_op_buffer) = pre_op_buffer {
-            let one = 1.0f32;
-            miopen()?.miopenOpTensor(
-                handle.base,
-                miopenTensorOp_t::miopenTensorOpAdd,
-                beta,
-                y_desc,
-                pre_op_buffer,
-                std::ptr::from_ref(&one).cast(),
-                y_desc,
-                y,
-                std::ptr::from_ref(&zero).cast(),
-                y_desc,
-                y,
-            )?;
-        }
-        Ok(())
-    };
-    // We don't allow users to select their own algorithm
-    // because they might select algorithm that is not supported by miopen for this configuration
-    // and there's no way to ask miopen to fall back to another algorithm
-    let algo = get_or_search_algorithm::<ConvolutionForward>(
+    run_solution(
         handle,
+        miopenProblemDirection_t::miopenProblemDirectionForward,
+        alpha,
+        beta,
+        x_desc,
+        x,
+        w_desc,
+        w,
+        y_desc,
+        y,
+        y_desc,
         conv_desc,
-        &[x_desc, w_desc, y_desc],
-    )?
-    .ok_or(miopenError_t::UnsupportedOp)?;
-    if algo.memory > workspace_size_in_bytes {
-        return miopenStatus_t::ErrorInvalidValue;
-    }
-    let mut type_ = mem::zeroed();
-    miopen()?.miopenGetTensorDescriptor(y_desc, &mut type_, ptr::null_mut(), ptr::null_mut())?;
-    let beta_value = if type_ == miopenDataType_t::miopenDouble {
-        *beta.cast::<f64>()
-    } else {
-        *beta.cast::<f32>() as f64
-    };
-    if beta_value != 0.0 {
-        let mut y_size = 0;
-        miopen()?.miopenGetTensorNumBytes(y_desc, &mut y_size)?;
-        let mut mutable = handle
-            .search_workspace
-            .lock()
-            .map_err(|_| miopenError_t::UnknownError)?;
-        mutable
-            .beta_buffer_cache
-            .with_async_buffer(y_size, hipStream_t(stream), |temp_buffer| {
-                hipMemcpyDtoDAsync(
-                    hipDeviceptr_t(temp_buffer),
-                    hipDeviceptr_t(y),
-                    y_size,
-                    hipStream_t(stream),
-                )
-                .map_err(|_| miopenError_t::InternalError)?;
-                do_convolution(algo.__bindgen_anon_1.fwd_algo, Some(temp_buffer))
-            })
-    } else {
-        do_convolution(algo.__bindgen_anon_1.fwd_algo, None)
-    }
+        algo.0,
+        workspace,
+        workspace_size_in_bytes,
+    )
 }
 
 pub(crate) unsafe fn convolution_backward_data(
