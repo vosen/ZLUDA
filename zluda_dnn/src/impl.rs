@@ -1432,12 +1432,12 @@ unsafe fn run_solution(
     direction: miopenProblemDirection_t,
     alpha: *const std::ffi::c_void,
     beta: *const std::ffi::c_void,
-    mut dx_desc: miopenTensorDescriptor_t,
-    dx: *const std::ffi::c_void,
+    mut x_desc: miopenTensorDescriptor_t,
+    x: *const std::ffi::c_void,
     mut w_desc: miopenTensorDescriptor_t,
     w: *const std::ffi::c_void,
-    mut dy_desc: miopenTensorDescriptor_t,
-    dy: *const std::ffi::c_void,
+    mut y_desc: miopenTensorDescriptor_t,
+    y: *const std::ffi::c_void,
     target_desc: miopenTensorDescriptor_t,
     conv_desc: miopenConvolutionDescriptor_t,
     algo: u32,
@@ -1456,9 +1456,9 @@ unsafe fn run_solution(
             handle.base,
             direction,
             conv_desc,
-            dx_desc,
+            x_desc,
             w_desc,
-            dy_desc,
+            y_desc,
         )?;
         *solutions
             .iter()
@@ -1468,8 +1468,8 @@ unsafe fn run_solution(
     let tensors = [
         miopenTensorArgument_t {
             id: miopenTensorArgumentId_t::miopenTensorConvolutionX,
-            descriptor: &mut dx_desc,
-            buffer: dx.cast_mut(),
+            descriptor: &mut x_desc,
+            buffer: x.cast_mut(),
         },
         miopenTensorArgument_t {
             id: miopenTensorArgumentId_t::miopenTensorConvolutionW,
@@ -1478,8 +1478,8 @@ unsafe fn run_solution(
         },
         miopenTensorArgument_t {
             id: miopenTensorArgumentId_t::miopenTensorConvolutionY,
-            descriptor: &mut dy_desc,
-            buffer: dy.cast_mut(),
+            descriptor: &mut y_desc,
+            buffer: y.cast_mut(),
         },
     ];
     miopen.miopenRunSolution(
@@ -1611,10 +1611,10 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
     get_algorithm(
         handle,
         miopenProblemDirection_t::miopenProblemDirectionBackward,
+        grad_desc,
         filter_desc,
         diff_desc,
         conv_desc,
-        grad_desc,
         requested_algo_count,
         returned_algo_count,
         perf_results,
@@ -1625,10 +1625,10 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
 unsafe fn get_algorithm<T>(
     handle: &Context,
     direction: miopenProblemDirection_t,
-    filter_desc: miopenTensorDescriptor_t,
-    diff_desc: miopenTensorDescriptor_t,
+    x_desc: miopenTensorDescriptor_t,
+    w_desc: miopenTensorDescriptor_t,
+    y_desc: miopenTensorDescriptor_t,
     conv_desc: miopenConvolutionDescriptor_t,
-    grad_desc: miopenTensorDescriptor_t,
     requested_algo_count: i32,
     returned_algo_count: &mut i32,
     perf_results: *mut T,
@@ -1647,9 +1647,9 @@ unsafe fn get_algorithm<T>(
         handle.base,
         direction,
         conv_desc,
-        grad_desc,
-        filter_desc,
-        diff_desc,
+        x_desc,
+        w_desc,
+        y_desc,
     )?;
     let algo_count = solutions.len().min(requested_algo_count as usize);
     for (i, solution) in solutions.iter().enumerate().take(algo_count) {
@@ -1673,9 +1673,9 @@ pub(crate) unsafe fn get_convolution_backward_filter_algorithm_v7(
         handle,
         miopenProblemDirection_t::miopenProblemDirectionBackwardWeights,
         src_desc,
+        grad_desc,
         diff_desc,
         conv_desc,
-        grad_desc,
         requested_algo_count,
         returned_algo_count,
         perf_results,
