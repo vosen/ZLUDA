@@ -786,6 +786,7 @@ impl<'a, E: CudaErrorType> FromCuda<'a, cudnn9::cudnnConvolutionBwdDataAlgo_t, E
                 // No direct MIOpen equivalent; map to Winograd variant
                 miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoWinograd
             }
+            cudnn9::cudnnConvolutionBwdDataAlgo_t(7) => miopenConvBwdDataAlgorithm_t::miopenConvolutionBwdDataAlgoImplicitGEMM,
             _ => return Err(E::NOT_SUPPORTED),
         })
     }

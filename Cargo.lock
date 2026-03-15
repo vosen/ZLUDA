@@ -4774,6 +4774,7 @@ dependencies = [
 name = "zluda_dnn"
 version = "0.0.0"
 dependencies = [
+ "arrayvec",
  "cuda_macros",
  "cuda_types",
  "hip_runtime-sys",
