@@ -5,6 +5,7 @@ use hip_runtime_sys::*;
 use miopen_sys::*;
 use rustc_hash::FxHashMap;
 use std::{
+    alloc::Layout,
     collections::{hash_map, VecDeque},
     mem, ptr,
     sync::{
@@ -477,7 +478,19 @@ impl SearchCache2 {
                 let _drop_fn2 = DropFn(move || {
                     unsafe { miopen.miopenDestroyFindOptions(options) }.ok();
                 });
-                Self::set_solution_options(miopen, beta_buffer_cache, x, w, y, options)?;
+                unsafe {
+                    Self::set_solution_options(
+                        miopen,
+                        handle,
+                        direction,
+                        beta_buffer_cache,
+                        x,
+                        w,
+                        y,
+                        desc,
+                        options,
+                    )
+                }?;
                 let mut solutions = [unsafe { mem::zeroed::<miopenSolution_t>() }; 16];
                 let mut solutions_count = 0;
                 unsafe {
@@ -503,37 +516,49 @@ impl SearchCache2 {
     // In theory MIOpen is capable of allocating the temporary buffers by itself
     // In practice, it sometimes fails when deallocating them, leading to
     // undebuggable crashes
-    fn set_solution_options(
+    unsafe fn set_solution_options(
         miopen: &MIOpenVtable,
+        handle: miopenHandle_t,
+        direction: miopenProblemDirection_t,
         beta_buffer_cache: &mut TemporaryBufferAllocator,
         x: miopenTensorDescriptor_t,
         w: miopenTensorDescriptor_t,
         y: miopenTensorDescriptor_t,
+        conv_desc: miopenConvolutionDescriptor_t,
         options: miopenFindOptions_t,
     ) -> Result<(), miopenError_t> {
         let fake_tensor_size = get_tensor_size(miopen, x)?
             .max(get_tensor_size(miopen, w)?)
             .max(get_tensor_size(miopen, y)?);
-        let buffer = beta_buffer_cache
-            .scavange_or_allocate_buffer(fake_tensor_size)
+        let workspace_required =
+            get_workspace_size2(miopen, handle, direction, x, w, y, conv_desc)?;
+        let (layout, workspace_offset) = Layout::from_size_align_unchecked(fake_tensor_size, 1)
+            .extend(Layout::from_size_align_unchecked(workspace_required, 128))
             .map_err(|_| miopenError_t::InternalError)?;
-        Ok(unsafe {
-            miopen.miopenSetFindOptionPreallocatedTensor(
-                options,
-                miopenTensorArgumentId_t::miopenTensorConvolutionX,
-                buffer.data,
-            )?;
-            miopen.miopenSetFindOptionPreallocatedTensor(
-                options,
-                miopenTensorArgumentId_t::miopenTensorConvolutionW,
-                buffer.data,
-            )?;
-            miopen.miopenSetFindOptionPreallocatedTensor(
-                options,
-                miopenTensorArgumentId_t::miopenTensorConvolutionY,
-                buffer.data,
-            )?;
-        })
+        let buffer = beta_buffer_cache
+            .scavange_or_allocate_buffer(layout.size())
+            .map_err(|_| miopenError_t::InternalError)?;
+        miopen.miopenSetFindOptionPreallocatedWorkspace(
+            options,
+            buffer.data.cast::<u8>().add(workspace_offset).cast(),
+            workspace_required,
+        )?;
+        miopen.miopenSetFindOptionPreallocatedTensor(
+            options,
+            miopenTensorArgumentId_t::miopenTensorConvolutionX,
+            buffer.data,
+        )?;
+        miopen.miopenSetFindOptionPreallocatedTensor(
+            options,
+            miopenTensorArgumentId_t::miopenTensorConvolutionW,
+            buffer.data,
+        )?;
+        miopen.miopenSetFindOptionPreallocatedTensor(
+            options,
+            miopenTensorArgumentId_t::miopenTensorConvolutionY,
+            buffer.data,
+        )?;
+        Ok(())
     }
 
     // It is possible to receive multiple solvers matching the same algorithm
@@ -567,6 +592,52 @@ fn get_tensor_size(
     let mut size_in_bytes = 0;
     unsafe { miopen.miopenGetTensorNumBytes(desc, &mut size_in_bytes)? };
     Ok(size_in_bytes)
+}
+
+fn get_workspace_size2(
+    miopen: &MIOpenVtable,
+    handle: miopenHandle_t,
+    direction: miopenProblemDirection_t,
+    x: miopenTensorDescriptor_t,
+    w: miopenTensorDescriptor_t,
+    y: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+) -> Result<usize, miopenError_t> {
+    let mut required_search_workspace_size = 0;
+    match direction {
+        miopenProblemDirection_t::miopenProblemDirectionForward => unsafe {
+            miopen.miopenConvolutionForwardGetWorkSpaceSize(
+                handle,
+                w,
+                x,
+                conv_desc,
+                y,
+                &mut required_search_workspace_size,
+            )
+        },
+        miopenProblemDirection_t::miopenProblemDirectionBackward => unsafe {
+            miopen.miopenConvolutionBackwardDataGetWorkSpaceSize(
+                handle,
+                y,
+                w,
+                conv_desc,
+                x,
+                &mut required_search_workspace_size,
+            )
+        },
+        miopenProblemDirection_t::miopenProblemDirectionBackwardWeights => unsafe {
+            miopen.miopenConvolutionBackwardWeightsGetWorkSpaceSize(
+                handle,
+                y,
+                x,
+                conv_desc,
+                w,
+                &mut required_search_workspace_size,
+            )
+        },
+        _ => return Err(miopenError_t::UnsupportedOp),
+    }?;
+    Ok(required_search_workspace_size)
 }
 
 struct DropFn<F: FnMut()>(F);
