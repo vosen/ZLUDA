@@ -436,6 +436,7 @@ impl SearchCache2 {
         miopen: &MIOpenVtable,
         handle: miopenHandle_t,
         direction: miopenProblemDirection_t,
+        beta_buffer_cache: &mut TemporaryBufferAllocator,
         desc: miopenConvolutionDescriptor_t,
         x: miopenTensorDescriptor_t,
         w: miopenTensorDescriptor_t,
@@ -447,7 +448,7 @@ impl SearchCache2 {
             hash_map::Entry::Vacant(entry) => {
                 let mut problem = unsafe { mem::zeroed() };
                 unsafe { miopen.miopenCreateConvProblem(&mut problem, desc, direction) }?;
-                let _drop_fn1 = DropFn(|| {
+                let _drop_fn1 = DropFn(move || {
                     unsafe { miopen.miopenDestroyProblem(problem) }.ok();
                 });
                 unsafe {
@@ -471,13 +472,19 @@ impl SearchCache2 {
                         y,
                     )
                 }?;
+                let mut options = unsafe { mem::zeroed() };
+                unsafe { miopen.miopenCreateFindOptions(&mut options) }?;
+                let _drop_fn2 = DropFn(move || {
+                    unsafe { miopen.miopenDestroyFindOptions(options) }.ok();
+                });
+                Self::set_solution_options(miopen, beta_buffer_cache, x, w, y, options)?;
                 let mut solutions = [unsafe { mem::zeroed::<miopenSolution_t>() }; 16];
                 let mut solutions_count = 0;
                 unsafe {
                     miopen.miopenFindSolutions(
                         handle,
                         problem,
-                        miopenFindOptions_t(ptr::null_mut()),
+                        options,
                         solutions.as_mut_ptr(),
                         &mut solutions_count,
                         solutions.len(),
@@ -490,6 +497,42 @@ impl SearchCache2 {
                     .collect::<Result<ArrayVec<_, 16>, _>>()?;
                 &*entry.insert(Self::remove_duplicates(solutions))
             }
+        })
+    }
+
+    // In theory MIOpen is capable of allocating the temporary buffers by itself
+    // In practice, it sometimes fails when deallocating them, leading to
+    // undebuggable crashes
+    fn set_solution_options(
+        miopen: &MIOpenVtable,
+        beta_buffer_cache: &mut TemporaryBufferAllocator,
+        x: miopenTensorDescriptor_t,
+        w: miopenTensorDescriptor_t,
+        y: miopenTensorDescriptor_t,
+        options: miopenFindOptions_t,
+    ) -> Result<(), miopenError_t> {
+        let fake_tensor_size = get_tensor_size(miopen, x)?
+            .max(get_tensor_size(miopen, w)?)
+            .max(get_tensor_size(miopen, y)?);
+        let buffer = beta_buffer_cache
+            .scavange_or_allocate_buffer(fake_tensor_size)
+            .map_err(|_| miopenError_t::InternalError)?;
+        Ok(unsafe {
+            miopen.miopenSetFindOptionPreallocatedTensor(
+                options,
+                miopenTensorArgumentId_t::miopenTensorConvolutionX,
+                buffer.data,
+            )?;
+            miopen.miopenSetFindOptionPreallocatedTensor(
+                options,
+                miopenTensorArgumentId_t::miopenTensorConvolutionW,
+                buffer.data,
+            )?;
+            miopen.miopenSetFindOptionPreallocatedTensor(
+                options,
+                miopenTensorArgumentId_t::miopenTensorConvolutionY,
+                buffer.data,
+            )?;
         })
     }
 
@@ -1424,6 +1467,7 @@ unsafe fn run_solution(
             miopen,
             handle.base,
             direction,
+            &mut search_workspace.beta_buffer_cache,
             conv_desc,
             x_desc,
             w_desc,
@@ -1527,6 +1571,7 @@ fn get_workspace_size(
             miopen,
             handle.base,
             direction,
+            &mut search_workspace.beta_buffer_cache,
             conv_desc,
             x_desc,
             w_desc,
@@ -1615,6 +1660,7 @@ unsafe fn get_algorithm<T>(
         miopen,
         handle.base,
         direction,
+        &mut search_workspace.beta_buffer_cache,
         conv_desc,
         x_desc,
         w_desc,
