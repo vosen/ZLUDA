@@ -1546,8 +1546,13 @@ unsafe fn run_solution(
         )?;
         *solutions
             .iter()
-            .find(|s| s.algo.0 == algo)
-            .unwrap_or(solutions.first().ok_or(miopenError_t::UnsupportedOp)?)
+            .find(|s| s.algo.0 == algo && s.memory <= workspace_size_in_bytes)
+            .or_else(|| {
+                solutions
+                    .iter()
+                    .find(|s| s.memory <= workspace_size_in_bytes)
+            })
+            .ok_or(miopenError_t::UnsupportedOp)?
     };
     let tensors = [
         miopenTensorArgument_t {
@@ -1826,7 +1831,7 @@ pub(crate) unsafe fn get_convolution_backward_filter_workspace_size(
 
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
-    use miopen_sys::miopenProblemDirection_t;
+    use static_assertions::assert_eq_size;
     use std::mem;
 
     pub(crate) fn get_version() -> usize {
@@ -1902,83 +1907,21 @@ pub mod dnn8 {
         returned_algo_count: *mut ::std::os::raw::c_int,
         perf_results: *mut cudnnConvolutionFwdAlgoPerf_t,
     ) -> Result<(), cudnnError_t> {
-        if requested_algo_count <= 0 {
-            return Err(cudnnError_t::BAD_PARAM);
-        }
-        let mut perf_results_dnn9 = mem::zeroed();
+        assert_eq_size!(
+            cuda_types::cudnn8::cudnnConvolutionFwdAlgoPerf_t,
+            cuda_types::cudnn9::cudnnConvolutionFwdAlgoPerf_t
+        );
         super::dnn9::get_convolution_forward_algorithm_v7(
             handle,
             x_desc,
             w_desc,
             conv_desc,
             y_desc,
-            1,
+            requested_algo_count,
             returned_algo_count,
-            &mut perf_results_dnn9,
+            perf_results.cast(),
         )?;
-        *perf_results = cudnnConvolutionFwdAlgoPerf_t {
-            algo: perf_results_dnn9.algo,
-            time: perf_results_dnn9.time,
-            memory: perf_results_dnn9.memory,
-            status: status9_to_8(perf_results_dnn9.status),
-            determinism: perf_results_dnn9.determinism,
-            mathType: perf_results_dnn9.mathType,
-            reserved: [0, 0, 0],
-        };
         Ok(())
-    }
-
-    fn status9_to_8(
-        status: cuda_types::cudnn9::cudnnStatus_t,
-    ) -> cuda_types::cudnn8::cudnnStatus_t {
-        match status {
-            Ok(()) => Ok(()),
-            Err(err) => Err(match err {
-                cuda_types::cudnn9::cudnnError_t::NOT_INITIALIZED => {
-                    cuda_types::cudnn8::cudnnError_t::NOT_INITIALIZED
-                }
-                cuda_types::cudnn9::cudnnError_t::ALLOC_FAILED => {
-                    cuda_types::cudnn8::cudnnError_t::ALLOC_FAILED
-                }
-                cuda_types::cudnn9::cudnnError_t::BAD_PARAM => {
-                    cuda_types::cudnn8::cudnnError_t::BAD_PARAM
-                }
-                cuda_types::cudnn9::cudnnError_t::INTERNAL_ERROR => {
-                    cuda_types::cudnn8::cudnnError_t::INTERNAL_ERROR
-                }
-                cuda_types::cudnn9::cudnnError_t::INVALID_VALUE => {
-                    cuda_types::cudnn8::cudnnError_t::INVALID_VALUE
-                }
-                cuda_types::cudnn9::cudnnError_t::ARCH_MISMATCH => {
-                    cuda_types::cudnn8::cudnnError_t::ARCH_MISMATCH
-                }
-                cuda_types::cudnn9::cudnnError_t::MAPPING_ERROR => {
-                    cuda_types::cudnn8::cudnnError_t::MAPPING_ERROR
-                }
-                cuda_types::cudnn9::cudnnError_t::EXECUTION_FAILED => {
-                    cuda_types::cudnn8::cudnnError_t::EXECUTION_FAILED
-                }
-                cuda_types::cudnn9::cudnnError_t::NOT_SUPPORTED => {
-                    cuda_types::cudnn8::cudnnError_t::NOT_SUPPORTED
-                }
-                cuda_types::cudnn9::cudnnError_t::LICENSE_ERROR => {
-                    cuda_types::cudnn8::cudnnError_t::LICENSE_ERROR
-                }
-                cuda_types::cudnn9::cudnnError_t::RUNTIME_PREREQUISITE_MISSING => {
-                    cuda_types::cudnn8::cudnnError_t::RUNTIME_PREREQUISITE_MISSING
-                }
-                cuda_types::cudnn9::cudnnError_t::RUNTIME_IN_PROGRESS => {
-                    cuda_types::cudnn8::cudnnError_t::RUNTIME_IN_PROGRESS
-                }
-                cuda_types::cudnn9::cudnnError_t::RUNTIME_FP_OVERFLOW => {
-                    cuda_types::cudnn8::cudnnError_t::RUNTIME_FP_OVERFLOW
-                }
-                cuda_types::cudnn9::cudnnError_t::VERSION_MISMATCH => {
-                    cuda_types::cudnn8::cudnnError_t::VERSION_MISMATCH
-                }
-                _ => cuda_types::cudnn8::cudnnError_t::INTERNAL_ERROR,
-            }),
-        }
     }
 
     pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
@@ -1991,10 +1934,10 @@ pub mod dnn8 {
         returned_algo_count: *mut ::core::ffi::c_int,
         perf_results: *mut cudnnConvolutionBwdDataAlgoPerf_t,
     ) -> Result<(), cudnnError_t> {
-        if requested_algo_count <= 0 {
-            return Err(cudnnError_t::BAD_PARAM);
-        }
-        let mut perf_results_dnn9 = mem::zeroed();
+        assert_eq_size!(
+            cuda_types::cudnn8::cudnnConvolutionBwdDataAlgoPerf_t,
+            cuda_types::cudnn9::cudnnConvolutionBwdDataAlgoPerf_t
+        );
         super::dnn9::get_convolution_backward_data_algorithm_v7(
             handle,
             filter_desc,
@@ -2003,17 +1946,8 @@ pub mod dnn8 {
             grad_desc,
             requested_algo_count,
             returned_algo_count,
-            &mut perf_results_dnn9,
+            perf_results.cast(),
         )?;
-        *perf_results = cudnnConvolutionBwdDataAlgoPerf_t {
-            algo: perf_results_dnn9.algo,
-            time: perf_results_dnn9.time,
-            memory: perf_results_dnn9.memory,
-            status: status9_to_8(perf_results_dnn9.status),
-            determinism: perf_results_dnn9.determinism,
-            mathType: perf_results_dnn9.mathType,
-            reserved: [0, 0, 0],
-        };
         Ok(())
     }
 
@@ -2027,10 +1961,10 @@ pub mod dnn8 {
         returned_algo_count: *mut ::core::ffi::c_int,
         perf_results: *mut cudnnConvolutionBwdFilterAlgoPerf_t,
     ) -> Result<(), cudnnError_t> {
-        if requested_algo_count <= 0 {
-            return Err(cudnnError_t::BAD_PARAM);
-        }
-        let mut perf_results_dnn9 = mem::zeroed();
+        assert_eq_size!(
+            cuda_types::cudnn8::cudnnConvolutionBwdFilterAlgoPerf_t,
+            cuda_types::cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t
+        );
         super::dnn9::get_convolution_backward_filter_algorithm_v7(
             handle,
             src_desc,
@@ -2039,17 +1973,8 @@ pub mod dnn8 {
             grad_desc,
             requested_algo_count,
             returned_algo_count,
-            &mut perf_results_dnn9,
+            perf_results.cast(),
         )?;
-        *perf_results = cudnnConvolutionBwdFilterAlgoPerf_t {
-            algo: perf_results_dnn9.algo,
-            time: perf_results_dnn9.time,
-            memory: perf_results_dnn9.memory,
-            status: status9_to_8(perf_results_dnn9.status),
-            determinism: perf_results_dnn9.determinism,
-            mathType: perf_results_dnn9.mathType,
-            reserved: [0, 0, 0],
-        };
         Ok(())
     }
 }
