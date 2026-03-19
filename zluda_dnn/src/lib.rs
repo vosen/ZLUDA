@@ -227,5 +227,14 @@ cuda_macros::miopen_function_declarations!(
             miopenDestroyFindOptions,
             miopenSetFindOptionPreallocatedTensor,
             miopenSetFindOptionPreallocatedWorkspace,
+            miopenConvolutionForwardGetSolutionCount,
+            miopenConvolutionForwardGetSolution,
+            miopenConvolutionBackwardDataGetSolutionCount,
+            miopenConvolutionBackwardDataGetSolution,
+            miopenConvolutionBackwardWeightsGetSolutionCount,
+            miopenConvolutionBackwardWeightsGetSolution,
+            miopenConvolutionForwardImmediate,
+            miopenConvolutionBackwardDataImmediate,
+            miopenConvolutionBackwardWeightsImmediate,
         ]
 );

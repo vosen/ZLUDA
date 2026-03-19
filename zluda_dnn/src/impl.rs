@@ -389,7 +389,7 @@ struct ContextCache {
     search_cache2: SearchCache2,
 }
 
-struct SearchCache2(FxHashMap<ConvolutionOpCacheKey2, ArrayVec<SolutionWithProperties, 6>>);
+struct SearchCache2(FxHashMap<ConvolutionOpCacheKey2, Vec<miopenConvSolution_t>>);
 
 #[derive(Clone, Copy)]
 struct SolutionWithProperties {
@@ -442,73 +442,38 @@ impl SearchCache2 {
         x: miopenTensorDescriptor_t,
         w: miopenTensorDescriptor_t,
         y: miopenTensorDescriptor_t,
-    ) -> Result<&'a ArrayVec<SolutionWithProperties, 6>, miopenError_t> {
+    ) -> Result<&'a Vec<miopenConvSolution_t>, miopenError_t> {
         let key = ConvolutionOpCacheKey2::new(miopen, direction, desc, x, w, y)?;
         Ok(match self.0.entry(key) {
             hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
             hash_map::Entry::Vacant(entry) => {
-                let mut problem = unsafe { mem::zeroed() };
-                unsafe { miopen.miopenCreateConvProblem(&mut problem, desc, direction) }?;
-                let _drop_fn1 = DropFn(move || {
-                    unsafe { miopen.miopenDestroyProblem(problem) }.ok();
-                });
-                unsafe {
-                    miopen.miopenSetProblemTensorDescriptor(
-                        problem,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionX,
-                        x,
-                    )
-                }?;
-                unsafe {
-                    miopen.miopenSetProblemTensorDescriptor(
-                        problem,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionW,
-                        w,
-                    )
-                }?;
-                unsafe {
-                    miopen.miopenSetProblemTensorDescriptor(
-                        problem,
-                        miopenTensorArgumentId_t::miopenTensorConvolutionY,
-                        y,
-                    )
-                }?;
-                let mut options = unsafe { mem::zeroed() };
-                unsafe { miopen.miopenCreateFindOptions(&mut options) }?;
-                let _drop_fn2 = DropFn(move || {
-                    unsafe { miopen.miopenDestroyFindOptions(options) }.ok();
-                });
-                unsafe {
-                    Self::set_solution_options(
-                        miopen,
-                        handle,
-                        direction,
-                        beta_buffer_cache,
-                        x,
-                        w,
-                        y,
-                        desc,
-                        options,
-                    )
-                }?;
-                let mut solutions = [unsafe { mem::zeroed::<miopenSolution_t>() }; 16];
-                let mut solutions_count = 0;
-                unsafe {
-                    miopen.miopenFindSolutions(
-                        handle,
-                        problem,
-                        options,
-                        solutions.as_mut_ptr(),
-                        &mut solutions_count,
-                        solutions.len(),
-                    )
-                }?;
-                let solutions = solutions[..solutions_count]
-                    .into_iter()
-                    .copied()
-                    .map(|solution| SolutionWithProperties::new(miopen, solution))
-                    .collect::<Result<ArrayVec<_, 16>, _>>()?;
-                &*entry.insert(Self::remove_duplicates(solutions))
+                let fake_tensor_size = get_tensor_size(miopen, x)?
+                    .max(get_tensor_size(miopen, w)?)
+                    .max(get_tensor_size(miopen, y)?);
+                let workspace_required =
+                    get_workspace_size2(miopen, handle, direction, x, w, y, desc)?;
+                let (layout, workspace_offset) =
+                    unsafe { Layout::from_size_align_unchecked(fake_tensor_size, 1) }
+                        .extend(unsafe {
+                            Layout::from_size_align_unchecked(workspace_required, 128)
+                        })
+                        .map_err(|_| miopenError_t::InternalError)?;
+                let buffer = beta_buffer_cache
+                    .scavange_or_allocate_buffer(layout.size())
+                    .map_err(|_| miopenError_t::InternalError)?;
+                let solutions = find_algorithm2(
+                    miopen,
+                    handle,
+                    direction,
+                    x,
+                    w,
+                    y,
+                    desc,
+                    buffer.data,
+                    workspace_offset,
+                    workspace_required,
+                )?;
+                &*entry.insert(solutions)
             }
         })
     }
@@ -638,6 +603,160 @@ fn get_workspace_size2(
         _ => return Err(miopenError_t::UnsupportedOp),
     }?;
     Ok(required_search_workspace_size)
+}
+
+fn find_algorithm2(
+    miopen: &MIOpenVtable,
+    handle: miopenHandle_t,
+    direction: miopenProblemDirection_t,
+    x: miopenTensorDescriptor_t,
+    w: miopenTensorDescriptor_t,
+    y: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    temporary_memory: *mut ::std::os::raw::c_void,
+    workspace_memory_offset: usize,
+    workspace_memory_size: usize,
+) -> Result<Vec<miopenConvSolution_t>, miopenError_t> {
+    let mut returned_algo_count = 0;
+    let mut perf_results = unsafe { mem::zeroed::<miopenConvAlgoPerf_t>() };
+    match direction {
+        miopenProblemDirection_t::miopenProblemDirectionForward => unsafe {
+            miopen.miopenFindConvolutionForwardAlgorithm(
+                handle,
+                x,
+                temporary_memory,
+                w,
+                temporary_memory,
+                conv_desc,
+                y,
+                temporary_memory,
+                1,
+                &mut returned_algo_count,
+                &mut perf_results,
+                temporary_memory
+                    .cast::<u8>()
+                    .add(workspace_memory_offset)
+                    .cast(),
+                workspace_memory_size,
+                false,
+            )?;
+            let mut solution_count = 0;
+            miopen.miopenConvolutionForwardGetSolutionCount(
+                handle,
+                w,
+                x,
+                conv_desc,
+                y,
+                &mut solution_count,
+            )?;
+            let mut solutions =
+                vec![mem::zeroed::<miopenConvSolution_t>(); solution_count as usize];
+            let mut returned_solution_count = 0;
+            miopen.miopenConvolutionForwardGetSolution(
+                handle,
+                w,
+                x,
+                conv_desc,
+                y,
+                solution_count,
+                &mut returned_solution_count,
+                solutions.as_mut_ptr(),
+            )?;
+            solutions.truncate(returned_solution_count as usize);
+            Ok(solutions)
+        },
+        miopenProblemDirection_t::miopenProblemDirectionBackward => unsafe {
+            miopen.miopenFindConvolutionBackwardDataAlgorithm(
+                handle,
+                y,
+                temporary_memory,
+                w,
+                temporary_memory,
+                conv_desc,
+                x,
+                temporary_memory,
+                1,
+                &mut returned_algo_count,
+                &mut perf_results,
+                temporary_memory
+                    .cast::<u8>()
+                    .add(workspace_memory_offset)
+                    .cast(),
+                workspace_memory_size,
+                false,
+            )?;
+            let mut solution_count = 0;
+            miopen.miopenConvolutionBackwardDataGetSolutionCount(
+                handle,
+                y,
+                w,
+                conv_desc,
+                x,
+                &mut solution_count,
+            )?;
+            let mut solutions =
+                vec![mem::zeroed::<miopenConvSolution_t>(); solution_count as usize];
+            let mut returned_solution_count = 0;
+            miopen.miopenConvolutionBackwardDataGetSolution(
+                handle,
+                y,
+                w,
+                conv_desc,
+                x,
+                solution_count,
+                &mut returned_solution_count,
+                solutions.as_mut_ptr(),
+            )?;
+            solutions.truncate(returned_solution_count as usize);
+            Ok(solutions)
+        },
+        miopenProblemDirection_t::miopenProblemDirectionBackwardWeights => unsafe {
+            miopen.miopenFindConvolutionBackwardWeightsAlgorithm(
+                handle,
+                y,
+                temporary_memory,
+                x,
+                temporary_memory,
+                conv_desc,
+                w,
+                temporary_memory,
+                1,
+                &mut returned_algo_count,
+                &mut perf_results,
+                temporary_memory
+                    .cast::<u8>()
+                    .add(workspace_memory_offset)
+                    .cast(),
+                workspace_memory_size,
+                true,
+            )?;
+            let mut solution_count = 0;
+            miopen.miopenConvolutionBackwardWeightsGetSolutionCount(
+                handle,
+                y,
+                w,
+                conv_desc,
+                x,
+                &mut solution_count,
+            )?;
+            let mut solutions =
+                vec![mem::zeroed::<miopenConvSolution_t>(); solution_count as usize];
+            let mut returned_solution_count = 0;
+            miopen.miopenConvolutionBackwardWeightsGetSolution(
+                handle,
+                y,
+                w,
+                conv_desc,
+                x,
+                solution_count,
+                &mut returned_solution_count,
+                solutions.as_mut_ptr(),
+            )?;
+            solutions.truncate(returned_solution_count as usize);
+            Ok(solutions)
+        },
+        _ => return Err(miopenError_t::UnsupportedOp),
+    }
 }
 
 struct DropFn<F: FnMut()>(F);
@@ -1245,11 +1364,11 @@ unsafe fn algo_perf_to_cudnn_bwd_data(
     }
 }
 
-fn algo_perf_to_cudnn2(solution: SolutionWithProperties) -> cudnnConvolutionFwdAlgoPerf_t {
+fn algo_perf_to_cudnn2(solution: &miopenConvSolution_t) -> cudnnConvolutionFwdAlgoPerf_t {
     cudnnConvolutionFwdAlgoPerf_t {
-        algo: algo_to_cudnn2(solution.algo),
+        algo: algo_to_cudnn2(solution.algorithm),
         time: solution.time,
-        memory: solution.memory,
+        memory: solution.workspace_size,
         status: cudnnStatus_t::SUCCESS,
         determinism: cudnnDeterminism_t::CUDNN_NON_DETERMINISTIC,
         mathType: cudnnMathType_t::CUDNN_DEFAULT_MATH,
@@ -1258,12 +1377,12 @@ fn algo_perf_to_cudnn2(solution: SolutionWithProperties) -> cudnnConvolutionFwdA
 }
 
 fn algo_perf_to_cudnn_bwd_data2(
-    solution: SolutionWithProperties,
+    solution: &miopenConvSolution_t,
 ) -> cudnnConvolutionBwdDataAlgoPerf_t {
     cudnnConvolutionBwdDataAlgoPerf_t {
-        algo: algo_to_cudnn_bwd_data2(solution.algo),
+        algo: algo_to_cudnn_bwd_data2(solution.algorithm),
         time: solution.time,
-        memory: solution.memory,
+        memory: solution.workspace_size,
         status: cudnnStatus_t::SUCCESS,
         determinism: cudnnDeterminism_t::CUDNN_NON_DETERMINISTIC,
         mathType: cudnnMathType_t::CUDNN_DEFAULT_MATH,
@@ -1286,12 +1405,12 @@ unsafe fn algo_perf_to_cudnn_bwd_filter(
 }
 
 fn algo_perf_to_cudnn_bwd_filter2(
-    solution: SolutionWithProperties,
+    solution: &miopenConvSolution_t,
 ) -> cudnnConvolutionBwdFilterAlgoPerf_t {
     cudnnConvolutionBwdFilterAlgoPerf_t {
-        algo: algo_to_cudnn_bwd_filter2(solution.algo),
+        algo: algo_to_cudnn_bwd_filter2(solution.algorithm),
         time: solution.time,
-        memory: solution.memory,
+        memory: solution.workspace_size,
         status: cudnnStatus_t::SUCCESS,
         determinism: cudnnDeterminism_t::CUDNN_NON_DETERMINISTIC,
         mathType: cudnnMathType_t::CUDNN_DEFAULT_MATH,
@@ -1367,14 +1486,14 @@ fn algo_to_cudnn_bwd_filter2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwd
         miopenConvAlgorithm_t::miopenConvolutionAlgoDirect => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1
         }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
+            cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3
+        }
         miopenConvAlgorithm_t::miopenConvolutionAlgoFFT => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT
         }
         miopenConvAlgorithm_t::miopenConvolutionAlgoWinograd => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD
-        }
-        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
-            cudnnConvolutionBwdFilterAlgo_t(7)
         }
         _ => cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
     }
@@ -1546,34 +1665,54 @@ unsafe fn run_solution(
         )?;
         *solutions
             .iter()
-            .find(|s| s.algo.0 == algo)
+            .find(|s| s.algorithm.0 == algo)
             .unwrap_or(solutions.first().ok_or(miopenError_t::UnsupportedOp)?)
     };
-    let tensors = [
-        miopenTensorArgument_t {
-            id: miopenTensorArgumentId_t::miopenTensorConvolutionX,
-            descriptor: &mut x_desc,
-            buffer: x.cast_mut(),
-        },
-        miopenTensorArgument_t {
-            id: miopenTensorArgumentId_t::miopenTensorConvolutionW,
-            descriptor: &mut w_desc,
-            buffer: w.cast_mut(),
-        },
-        miopenTensorArgument_t {
-            id: miopenTensorArgumentId_t::miopenTensorConvolutionY,
-            descriptor: &mut y_desc,
-            buffer: y.cast_mut(),
-        },
-    ];
-    miopen.miopenRunSolution(
-        handle.base,
-        solution.solution,
-        tensors.len(),
-        tensors.as_ptr(),
-        workspace,
-        workspace_size_in_bytes,
-    )
+    match direction {
+        miopenProblemDirection_t::miopenProblemDirectionForward => miopen
+            .miopenConvolutionForwardImmediate(
+                handle.base,
+                w_desc,
+                w,
+                x_desc,
+                x,
+                conv_desc,
+                y_desc,
+                y.cast_mut(),
+                workspace,
+                workspace_size_in_bytes,
+                solution.solution_id,
+            ),
+        miopenProblemDirection_t::miopenProblemDirectionBackward => miopen
+            .miopenConvolutionBackwardDataImmediate(
+                handle.base,
+                y_desc,
+                y,
+                w_desc,
+                w,
+                conv_desc,
+                x_desc,
+                x.cast_mut(),
+                workspace,
+                workspace_size_in_bytes,
+                solution.solution_id,
+            ),
+        miopenProblemDirection_t::miopenProblemDirectionBackwardWeights => miopen
+            .miopenConvolutionBackwardWeightsImmediate(
+                handle.base,
+                y_desc,
+                y,
+                x_desc,
+                x,
+                conv_desc,
+                w_desc,
+                w.cast_mut(),
+                workspace,
+                workspace_size_in_bytes,
+                solution.solution_id,
+            ),
+        _ => return Err(miopenError_t::UnsupportedOp),
+    }
 }
 
 unsafe fn check_alpha_beta(
@@ -1650,8 +1789,8 @@ fn get_workspace_size(
         )?;
         solutions
             .iter()
-            .find(|s| s.algo.0 == algo)
-            .map(|s| s.memory)
+            .find(|s| s.algorithm.0 == algo)
+            .map(|s| s.workspace_size)
             .ok_or(miopenError_t::UnsupportedOp)?
     };
     *workspace_size_in_bytes = memory;
@@ -1717,7 +1856,7 @@ unsafe fn get_algorithm<T>(
     requested_algo_count: i32,
     returned_algo_count: &mut i32,
     perf_results: *mut T,
-    mut converter: impl FnMut(SolutionWithProperties) -> T,
+    mut converter: impl FnMut(&miopenConvSolution_t) -> T,
 ) -> Result<(), cudnnError_t> {
     if perf_results.is_null() || requested_algo_count <= 0 {
         return Err(cudnnError_t::BAD_PARAM);
@@ -1737,10 +1876,21 @@ unsafe fn get_algorithm<T>(
         w_desc,
         y_desc,
     )?;
-    let algo_count = solutions.len().min(requested_algo_count as usize);
-    for (i, solution) in solutions.iter().enumerate().take(algo_count) {
-        *perf_results.add(i) = converter(*solution);
+    if direction == miopenProblemDirection_t::miopenProblemDirectionBackward {
+        for s in solutions {
+            println!(
+                "Found solution: algo={:?}, time={}ms, memory={} bytes, solution_id={}",
+                s.algorithm, s.time, s.workspace_size, s.solution_id
+            );
+        }
     }
+    println!("Total solutions found: {}", solutions.len());
+    let algo_count = solutions.len().min(requested_algo_count as usize);
+    println!("Returning top {} solutions", algo_count);
+    for (i, solution) in solutions.iter().enumerate().take(algo_count) {
+        *perf_results.add(i) = converter(solution);
+    }
+    println!("Returned {} solutions", algo_count);
     *returned_algo_count = algo_count as ::core::ffi::c_int;
     Ok(())
 }
