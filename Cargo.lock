@@ -4781,6 +4781,7 @@ dependencies = [
  "libloading",
  "miopen-sys",
  "rustc-hash 2.1.1",
+ "static_assertions",
  "zluda_common",
  "zluda_windows",
 ]
