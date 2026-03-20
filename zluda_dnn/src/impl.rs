@@ -195,61 +195,6 @@ impl SearchCache2 {
     }
 }
 
-fn get_tensor_size(
-    miopen: &MIOpenVtable,
-    desc: miopenTensorDescriptor_t,
-) -> Result<usize, miopenError_t> {
-    let mut size_in_bytes = 0;
-    unsafe { miopen.miopenGetTensorNumBytes(desc, &mut size_in_bytes)? };
-    Ok(size_in_bytes)
-}
-
-fn get_workspace_size2(
-    miopen: &MIOpenVtable,
-    handle: miopenHandle_t,
-    direction: miopenProblemDirection_t,
-    x: miopenTensorDescriptor_t,
-    w: miopenTensorDescriptor_t,
-    y: miopenTensorDescriptor_t,
-    conv_desc: miopenConvolutionDescriptor_t,
-) -> Result<usize, miopenError_t> {
-    let mut required_search_workspace_size = 0;
-    match direction {
-        miopenProblemDirection_t::miopenProblemDirectionForward => unsafe {
-            miopen.miopenConvolutionForwardGetWorkSpaceSize(
-                handle,
-                w,
-                x,
-                conv_desc,
-                y,
-                &mut required_search_workspace_size,
-            )
-        },
-        miopenProblemDirection_t::miopenProblemDirectionBackward => unsafe {
-            miopen.miopenConvolutionBackwardDataGetWorkSpaceSize(
-                handle,
-                y,
-                w,
-                conv_desc,
-                x,
-                &mut required_search_workspace_size,
-            )
-        },
-        miopenProblemDirection_t::miopenProblemDirectionBackwardWeights => unsafe {
-            miopen.miopenConvolutionBackwardWeightsGetWorkSpaceSize(
-                handle,
-                y,
-                x,
-                conv_desc,
-                w,
-                &mut required_search_workspace_size,
-            )
-        },
-        _ => return Err(miopenError_t::UnsupportedOp),
-    }?;
-    Ok(required_search_workspace_size)
-}
-
 struct DropFn<F: FnMut()>(F);
 
 impl<F: FnMut()> Drop for DropFn<F> {
@@ -312,15 +257,6 @@ impl TemporaryBufferAllocator {
         Self {
             buffers: VecDeque::new(),
         }
-    }
-
-    fn get_or_allocate(&mut self, size: usize) -> Result<&BetaBuffer, hipErrorCode_t> {
-        let mut buffer = self.scavange_or_allocate_buffer(size)?;
-        if let Some(event) = buffer.free.take() {
-            unsafe { hipEventDestroy(event) }.ok();
-        }
-        self.buffers.push_front(buffer);
-        Ok(&self.buffers.front().unwrap())
     }
 
     fn scavange_or_allocate_buffer(&mut self, size: usize) -> Result<BetaBuffer, hipErrorCode_t> {
@@ -1390,7 +1326,6 @@ pub(crate) unsafe fn get_convolution_backward_filter_workspace_size(
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use static_assertions::assert_eq_size;
-    use std::mem;
 
     pub(crate) fn get_version() -> usize {
         return cuda_types::cudnn8::CUDNN_VERSION as usize;
