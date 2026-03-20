@@ -1066,6 +1066,64 @@ mod tests_impl {
         );
         filter_mem_host
     }
+
+    #[test_cuda]
+    fn filter_get_descriptor(api: impl CudnnApi) {
+        let mut filter = unsafe { std::mem::zeroed() };
+        api.cudnnCreateFilterDescriptor(&mut filter);
+        api.cudnnSetFilterNdDescriptor(
+            filter,
+            cudnnDataType_t::CUDNN_DATA_HALF,
+            cudnnTensorFormat_t::CUDNN_TENSOR_NHWC,
+            4,
+            [256, 256, 1, 7].as_ptr(),
+        );
+        let mut data_type = cudnnDataType_t::CUDNN_DATA_FLOAT;
+        let mut format = cudnnTensorFormat_t::CUDNN_TENSOR_NCHW;
+        let mut nb_dims = 0;
+        let mut filters_dim = [0; 4];
+        api.cudnnGetFilterNdDescriptor(
+            filter,
+            4,
+            &mut data_type,
+            &mut format,
+            &mut nb_dims,
+            filters_dim.as_mut_ptr(),
+        );
+        assert_eq!(data_type, cudnnDataType_t::CUDNN_DATA_HALF);
+        assert_eq!(format, cudnnTensorFormat_t::CUDNN_TENSOR_NHWC);
+        assert_eq!(nb_dims, 4);
+        assert_eq!(filters_dim, [256, 256, 1, 7]);
+    }
+
+    #[test_cuda]
+    fn tensor_get_descriptor(api: impl CudnnApi) {
+        let mut tensor = unsafe { std::mem::zeroed() };
+        api.cudnnCreateTensorDescriptor(&mut tensor);
+        api.cudnnSetTensorNdDescriptor(
+            tensor,
+            cudnnDataType_t::CUDNN_DATA_HALF,
+            4,
+            [1, 256, 1, 7824].as_ptr(),
+            [2002944, 7824, 7824, 1].as_ptr(),
+        );
+        let mut data_type = cudnnDataType_t::CUDNN_DATA_FLOAT;
+        let mut nb_dims = 0;
+        let mut filters_dim = [0; 4];
+        let mut strides = [0; 4];
+        api.cudnnGetTensorNdDescriptor(
+            tensor,
+            4,
+            &mut data_type,
+            &mut nb_dims,
+            filters_dim.as_mut_ptr(),
+            strides.as_mut_ptr(),
+        );
+        assert_eq!(data_type, cudnnDataType_t::CUDNN_DATA_HALF);
+        assert_eq!(nb_dims, 4);
+        assert_eq!(filters_dim, [1, 256, 1, 7824]);
+        assert_eq!(strides, [2002944, 7824, 7824, 1]);
+    }
 }
 
 #[cfg(test)]
