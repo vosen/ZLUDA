@@ -36,7 +36,7 @@ impl Context {
             stream: AtomicPtr::new(ptr::null_mut()),
             search_workspace: Mutex::new(ContextCache {
                 beta_buffer_cache: TemporaryBufferAllocator::new(),
-                search_cache2: SearchCache2::new(),
+                search_cache: SearchCache::new(),
             }),
         }
     }
@@ -63,10 +63,10 @@ impl ZludaObject for Context {
 
 struct ContextCache {
     beta_buffer_cache: TemporaryBufferAllocator,
-    search_cache2: SearchCache2,
+    search_cache: SearchCache,
 }
 
-struct SearchCache2(FxHashMap<ConvolutionOpCacheKey2, ArrayVec<SolutionWithProperties, 6>>);
+struct SearchCache(FxHashMap<ConvolutionOpCacheKey, ArrayVec<SolutionWithProperties, 6>>);
 
 #[derive(Clone, Copy)]
 struct SolutionWithProperties {
@@ -104,7 +104,7 @@ impl SolutionWithProperties {
     }
 }
 
-impl SearchCache2 {
+impl SearchCache {
     fn new() -> Self {
         Self(FxHashMap::default())
     }
@@ -119,7 +119,7 @@ impl SearchCache2 {
         w: miopenTensorDescriptor_t,
         y: miopenTensorDescriptor_t,
     ) -> Result<&'a ArrayVec<SolutionWithProperties, 6>, miopenError_t> {
-        let key = ConvolutionOpCacheKey2::new(miopen, direction, desc, x, w, y)?;
+        let key = ConvolutionOpCacheKey::new(miopen, direction, desc, x, w, y)?;
         Ok(match self.0.entry(key) {
             hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
             hash_map::Entry::Vacant(entry) => {
@@ -204,7 +204,7 @@ impl<F: FnMut()> Drop for DropFn<F> {
 }
 
 #[derive(PartialEq, Eq, Hash)]
-struct ConvolutionOpCacheKey2 {
+struct ConvolutionOpCacheKey {
     direction: miopenProblemDirection_t,
     x: TensorCacheKey,
     w: TensorCacheKey,
@@ -212,7 +212,7 @@ struct ConvolutionOpCacheKey2 {
     y: TensorCacheKey,
 }
 
-impl ConvolutionOpCacheKey2 {
+impl ConvolutionOpCacheKey {
     fn new(
         miopen: &MIOpenVtable,
         direction: miopenProblemDirection_t,
@@ -657,7 +657,7 @@ pub(crate) unsafe fn get_convolution_forward_algorithm_v7(
         requested_algo_count,
         returned_algo_count,
         perf_results,
-        algo_perf_to_cudnn2,
+        algo_perf_to_cudnn,
     )
 }
 
@@ -736,9 +736,9 @@ impl ConvolutionDescriptorCacheKey {
     }
 }
 
-fn algo_perf_to_cudnn2(solution: SolutionWithProperties) -> cudnnConvolutionFwdAlgoPerf_t {
+fn algo_perf_to_cudnn(solution: SolutionWithProperties) -> cudnnConvolutionFwdAlgoPerf_t {
     cudnnConvolutionFwdAlgoPerf_t {
-        algo: algo_to_cudnn2(solution.algo),
+        algo: algo_to_cudnn(solution.algo),
         time: solution.time,
         memory: solution.memory,
         status: cudnnStatus_t::SUCCESS,
@@ -748,11 +748,11 @@ fn algo_perf_to_cudnn2(solution: SolutionWithProperties) -> cudnnConvolutionFwdA
     }
 }
 
-fn algo_perf_to_cudnn_bwd_data2(
+fn algo_perf_to_cudnn_bwd_data(
     solution: SolutionWithProperties,
 ) -> cudnnConvolutionBwdDataAlgoPerf_t {
     cudnnConvolutionBwdDataAlgoPerf_t {
-        algo: algo_to_cudnn_bwd_data2(solution.algo),
+        algo: algo_to_cudnn_bwd_data(solution.algo),
         time: solution.time,
         memory: solution.memory,
         status: cudnnStatus_t::SUCCESS,
@@ -762,11 +762,11 @@ fn algo_perf_to_cudnn_bwd_data2(
     }
 }
 
-fn algo_perf_to_cudnn_bwd_filter2(
+fn algo_perf_to_cudnn_bwd_filter(
     solution: SolutionWithProperties,
 ) -> cudnnConvolutionBwdFilterAlgoPerf_t {
     cudnnConvolutionBwdFilterAlgoPerf_t {
-        algo: algo_to_cudnn_bwd_filter2(solution.algo),
+        algo: algo_to_cudnn_bwd_filter(solution.algo),
         time: solution.time,
         memory: solution.memory,
         status: cudnnStatus_t::SUCCESS,
@@ -776,7 +776,7 @@ fn algo_perf_to_cudnn_bwd_filter2(
     }
 }
 
-fn algo_to_cudnn2(result: miopenConvAlgorithm_t) -> cudnnConvolutionFwdAlgo_t {
+fn algo_to_cudnn(result: miopenConvAlgorithm_t) -> cudnnConvolutionFwdAlgo_t {
     match result {
         miopenConvAlgorithm_t::miopenConvolutionAlgoGEMM => {
             cudnnConvolutionFwdAlgo_t::CUDNN_CONVOLUTION_FWD_ALGO_GEMM
@@ -797,7 +797,7 @@ fn algo_to_cudnn2(result: miopenConvAlgorithm_t) -> cudnnConvolutionFwdAlgo_t {
     }
 }
 
-fn algo_to_cudnn_bwd_filter2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwdFilterAlgo_t {
+fn algo_to_cudnn_bwd_filter(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwdFilterAlgo_t {
     match algo {
         miopenConvAlgorithm_t::miopenConvolutionAlgoGEMM => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0
@@ -818,7 +818,7 @@ fn algo_to_cudnn_bwd_filter2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwd
     }
 }
 
-fn algo_to_cudnn_bwd_data2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwdDataAlgo_t {
+fn algo_to_cudnn_bwd_data(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwdDataAlgo_t {
     match algo {
         miopenConvAlgorithm_t::miopenConvolutionAlgoGEMM => {
             cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_0
@@ -1004,7 +1004,7 @@ unsafe fn run_solution(
         .search_workspace
         .lock()
         .map_err(|_| miopenError_t::UnknownError)?;
-    let solutions = search_workspace.search_cache2.get_or_insert(
+    let solutions = search_workspace.search_cache.get_or_insert(
         miopen,
         handle.base,
         direction,
@@ -1138,7 +1138,7 @@ fn get_workspace_size(
             .search_workspace
             .lock()
             .map_err(|_| miopenError_t::UnknownError)?;
-        let solutions = search_workspace.search_cache2.get_or_insert(
+        let solutions = search_workspace.search_cache.get_or_insert(
             miopen,
             handle.base,
             direction,
@@ -1202,7 +1202,7 @@ pub(crate) unsafe fn get_convolution_backward_data_algorithm_v7(
         requested_algo_count,
         returned_algo_count,
         perf_results,
-        algo_perf_to_cudnn_bwd_data2,
+        algo_perf_to_cudnn_bwd_data,
     )
 }
 
@@ -1226,7 +1226,7 @@ unsafe fn get_algorithm<T>(
         .search_workspace
         .lock()
         .map_err(|_| miopenError_t::UnknownError)?;
-    let solutions = search_workspace.search_cache2.get_or_insert(
+    let solutions = search_workspace.search_cache.get_or_insert(
         miopen,
         handle.base,
         direction,
@@ -1263,7 +1263,7 @@ pub(crate) unsafe fn get_convolution_backward_filter_algorithm_v7(
         requested_algo_count,
         returned_algo_count,
         perf_results,
-        algo_perf_to_cudnn_bwd_filter2,
+        algo_perf_to_cudnn_bwd_filter,
     )
 }
 
