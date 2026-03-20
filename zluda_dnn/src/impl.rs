@@ -564,6 +564,9 @@ pub(crate) unsafe fn set_filter_nd_descriptor(
     nb_dims: ::core::ffi::c_int,
     filter_dim_a: *const ::core::ffi::c_int,
 ) -> miopenStatus_t {
+    if nb_dims > 5 {
+        return miopenStatus_t::ErrorNotImplemented;
+    }
     miopen()?.miopenSetNdTensorDescriptorWithLayout(
         filter_desc,
         data_type,
@@ -866,14 +869,14 @@ fn algo_to_cudnn_bwd_filter2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwd
         miopenConvAlgorithm_t::miopenConvolutionAlgoDirect => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1
         }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
+            cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3
+        }
         miopenConvAlgorithm_t::miopenConvolutionAlgoFFT => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT
         }
         miopenConvAlgorithm_t::miopenConvolutionAlgoWinograd => {
             cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD
-        }
-        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
-            cudnnConvolutionBwdFilterAlgo_t(7)
         }
         _ => cudnnConvolutionBwdFilterAlgo_t::CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
     }
@@ -893,9 +896,9 @@ fn algo_to_cudnn_bwd_data2(algo: miopenConvAlgorithm_t) -> cudnnConvolutionBwdDa
         miopenConvAlgorithm_t::miopenConvolutionAlgoWinograd => {
             cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD
         }
-        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => {
-            cudnnConvolutionBwdDataAlgo_t(7)
-        }
+        miopenConvAlgorithm_t::miopenConvolutionAlgoImplicitGEMM => cudnnConvolutionBwdDataAlgo_t(
+            cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT.0 + 1,
+        ),
         _ => cudnnConvolutionBwdDataAlgo_t::CUDNN_CONVOLUTION_BWD_DATA_ALGO_0,
     }
 }
@@ -1060,7 +1063,7 @@ unsafe fn run_solution(
         }
         Ok(())
     };
-    let needs_beta = needs_beta(miopen, alpha, beta, target_desc)?;
+    let needs_beta = needs_beta(miopen, alpha, beta, conv_desc, target_desc)?;
     let search_workspace = &mut *handle
         .search_workspace
         .lock()
@@ -1111,10 +1114,11 @@ unsafe fn needs_beta(
     miopen: &MIOpenVtable,
     alpha: *const ::core::ffi::c_void,
     beta: *const ::core::ffi::c_void,
-    conv_desc: miopenTensorDescriptor_t,
+    conv_desc: miopenConvolutionDescriptor_t,
+    target_desc: miopenTensorDescriptor_t,
 ) -> Result<NeedsBeta, miopenError_t> {
     let mut dims = 0;
-    miopen.miopenGetTensorDescriptorSize(conv_desc, &mut dims)?;
+    miopen.miopenGetConvolutionSpatialDim(conv_desc, &mut dims)?;
     if dims != 2 {
         return Ok(NeedsBeta::None);
     }
@@ -1124,7 +1128,7 @@ unsafe fn needs_beta(
     let mut type_ = unsafe { mem::zeroed() };
     let mut _unused = [0i32; 5];
     miopen.miopenGetTensorDescriptor(
-        conv_desc,
+        target_desc,
         &mut type_,
         _unused.as_mut_ptr(),
         _unused.as_mut_ptr(),
