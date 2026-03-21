@@ -9,7 +9,7 @@ use std::{
     sync::{Mutex, OnceLock},
     usize,
 };
-use zluda_common::{FromCuda, LiveCheck};
+use zluda_common::{constants, FromCuda, LiveCheck};
 
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
@@ -19,6 +19,7 @@ pub(crate) struct GlobalState {
     pub devices: Vec<Device>,
     pub cache_path: Option<String>,
     pub allocations: Mutex<Allocations>,
+    pub compute_capability: (i32, i32),
 }
 
 pub(crate) struct Allocations {
@@ -108,6 +109,7 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                     })
                     .collect::<Result<Vec<_>, _>>()?,
                 cache_path: zluda_cache::ModuleCache::create_cache_dir_and_get_path(),
+                compute_capability: constants::compute_capability(),
             })
         })
         .as_ref()
