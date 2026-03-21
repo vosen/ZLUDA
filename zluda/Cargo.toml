@@ -17,6 +17,7 @@ cuda_macros = { path = "../cuda_macros" }
 hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
 dark_api = { path = "../dark_api" }
 zluda_cache = { path = "../zluda_cache" }
+kernel_metadata = { path = "../kernel_metadata" }
 lazy_static = "1.4"
 num_enum = "0.4"
 lz4-sys = "1.9"

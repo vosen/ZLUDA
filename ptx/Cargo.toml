@@ -9,10 +9,11 @@ edition = "2021"
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
 llvm_zluda = { path = "../llvm_zluda" }
+kernel_metadata = { path = "../kernel_metadata" }
 quick-error = "1.2"
 thiserror = "1.0"
 bit-vec = "0.8"
-half ="1.6"
+half = "1.6"
 bitflags = "1.2"
 rustc-hash = "2.0.0"
 strum = "0.26"
