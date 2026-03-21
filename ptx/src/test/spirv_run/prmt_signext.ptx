@@ -1,0 +1,24 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry prmt_signext(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+	.reg .u64 	    out_addr;
+	.reg .u32 	    x_val;
+	.reg .u32 	    y_val;
+	.reg .u32 	    result;
+
+	ld.param.u64 	in_addr, [input];
+	ld.param.u64 	out_addr, [output];
+
+	ld.u32          x_val, [in_addr];
+	ld.u32          y_val, [in_addr+4];
+	prmt.b32        result, x_val, y_val, 0x0A08;
+	st.u32          [out_addr], result;
+	ret;
+}

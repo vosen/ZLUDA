@@ -754,7 +754,7 @@ extern "C"
             {
                 if (addr % 2 != 1)
                 {
-                    output.u8x4[i] = (output.u8x4[i] & 0x80) * 0xff;
+                    output.u8x4[i] = (output.u8x4[i] & 0x80) ? 0xFF : 0x00;
                     continue;
                 }
             }

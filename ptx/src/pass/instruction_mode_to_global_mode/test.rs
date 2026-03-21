@@ -98,7 +98,10 @@ fn transitive_change_twice() {
 
     let result =
         optimize_mode_insertions::<DenormalMode, { DenormalMode::COUNT }>(partial_result).unwrap();
-    assert_eq!(result.basic_blocks, iter::once(true_id).collect());
+    assert_eq!(
+        result.basic_blocks,
+        iter::once(true_id).collect::<FxHashSet<_>>()
+    );
     assert_eq!(result.kernels.len(), 1);
     assert_eq!(result.kernels[&entry_id], DenormalMode::FlushToZero);
 }

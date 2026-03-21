@@ -1,6 +1,6 @@
 use cuda_types::nvml::*;
 use std::{ffi::CStr, ptr};
-use zluda_common::constants::{COMPUTE_CAPABILITY_MAJOR, COMPUTE_CAPABILITY_MINOR};
+use zluda_common::constants;
 
 const VERSION: &'static CStr = c"550.77";
 
@@ -36,9 +36,9 @@ pub(crate) unsafe fn device_get_cuda_compute_capability(
     major: *mut ::core::ffi::c_int,
     minor: *mut ::core::ffi::c_int,
 ) -> nvmlReturn_t {
-    // ZLUDA emulates a specific device so ignore the device parameter.
-    *major = COMPUTE_CAPABILITY_MAJOR;
-    *minor = COMPUTE_CAPABILITY_MINOR;
+    let (major_cap, minor_cap) = constants::compute_capability();
+    *major = major_cap;
+    *minor = minor_cap;
     Ok(())
 }
 

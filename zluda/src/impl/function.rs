@@ -1,17 +1,55 @@
-use cuda_types::cuda::CUfunction_attribute;
+use cuda_types::cuda::{CUfunction, CUfunction_attribute, CUkernel};
 use hip_runtime_sys::*;
 use std::mem;
+
+pub(crate) struct Function {
+    pub(crate) base: hipFunction_t,
+    pub(crate) sm_version: u32,
+}
+
+impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, CUfunction, E>
+    for &'a Function
+{
+    fn from_cuda(cu_func: &'a CUfunction) -> Result<Self, E> {
+        Ok(unsafe { mem::transmute(*cu_func) })
+    }
+}
+
+impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, CUkernel, E> for &'a Function {
+    fn from_cuda(cu_func: &'a CUkernel) -> Result<Self, E> {
+        Ok(unsafe { mem::transmute(*cu_func) })
+    }
+}
+
+impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, *mut CUfunction, E>
+    for &'a mut &'a Function
+{
+    fn from_cuda(cu_func: &'a *mut CUfunction) -> Result<Self, E> {
+        let cu_func = unsafe { cu_func.as_mut() }.ok_or_else(|| E::INVALID_VALUE)?;
+        Ok(unsafe { mem::transmute(cu_func) })
+    }
+}
+
+impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, *mut CUkernel, E>
+    for &'a mut &'a Function
+{
+    fn from_cuda(cu_func: &'a *mut CUkernel) -> Result<Self, E> {
+        let cu_func = unsafe { cu_func.as_mut() }.ok_or_else(|| E::INVALID_VALUE)?;
+        Ok(unsafe { mem::transmute(cu_func) })
+    }
+}
 
 pub(crate) fn get_attribute(
     pi: &mut i32,
     cu_attrib: CUfunction_attribute,
-    func: hipFunction_t,
+    func: &Function,
 ) -> hipError_t {
-    // TODO: implement HIP_FUNC_ATTRIBUTE_PTX_VERSION
-    // TODO: implement HIP_FUNC_ATTRIBUTE_BINARY_VERSION
     match cu_attrib {
-        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION
-        | CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION => {
+            *pi = func.sm_version as i32;
+            return Ok(());
+        }
+        CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
             *pi = 120;
             return Ok(());
         }
@@ -26,7 +64,7 @@ pub(crate) fn get_attribute(
         }
         _ => {}
     }
-    unsafe { hipFuncGetAttribute(pi, mem::transmute(cu_attrib), func) }?;
+    unsafe { hipFuncGetAttribute(pi, mem::transmute(cu_attrib), func.base) }?;
     if cu_attrib == CUfunction_attribute::CU_FUNC_ATTRIBUTE_NUM_REGS {
         *pi = (*pi).max(1);
     }
@@ -34,7 +72,7 @@ pub(crate) fn get_attribute(
 }
 
 pub(crate) fn launch_kernel(
-    f: hipFunction_t,
+    f: &Function,
     grid_dim_x: ::core::ffi::c_uint,
     grid_dim_y: ::core::ffi::c_uint,
     grid_dim_z: ::core::ffi::c_uint,
@@ -47,9 +85,12 @@ pub(crate) fn launch_kernel(
     extra: *mut *mut ::core::ffi::c_void,
 ) -> hipError_t {
     // TODO: fix constants in extra
+    if !extra.is_null() {
+        return hipError_t::ErrorNotSupported;
+    }
     unsafe {
         hipModuleLaunchKernel(
-            f,
+            f.base,
             grid_dim_x,
             grid_dim_y,
             grid_dim_z,
@@ -65,7 +106,7 @@ pub(crate) fn launch_kernel(
 }
 
 pub(crate) unsafe fn set_attribute(
-    func: hipFunction_t,
+    func: &Function,
     attribute: CUfunction_attribute,
     value: i32,
 ) -> hipError_t {
@@ -76,5 +117,5 @@ pub(crate) unsafe fn set_attribute(
         }
         _ => {}
     }
-    hipFuncSetAttribute(func.0.cast(), hipFuncAttribute(attribute.0), value)
+    hipFuncSetAttribute(func.base.0.cast(), hipFuncAttribute(attribute.0), value)
 }
