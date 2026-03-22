@@ -270,8 +270,54 @@ from_cuda_transmute!(
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t,
-    cusparseHandle_t => rocsparse_handle
+    cusparseHandle_t => rocsparse_handle,
+    cusparseMatrixType_t => rocsparse_matrix_type,
+    cusparseConstSpMatDescr_t => rocsparse_const_spmat_descr,
+    cusparseDnMatDescr_t => rocsparse_dnmat_descr,
+    cusparseConstDnMatDescr_t => rocsparse_const_dnmat_descr,
+    cusparseIndexType_t => rocsparse_indextype,
+    cusparseIndexBase_t => rocsparse_index_base,
+    cusparseMatDescr_t => rocsparse_mat_descr
 );
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cusparseSpMMAlg_t, E> for rocsparse_spmm_alg {
+    fn from_cuda(alg: &'a cusparseSpMMAlg_t) -> Result<Self, E> {
+        Ok(match *alg {
+            cusparseSpMMAlg_t::CUSPARSE_SPMM_BLOCKED_ELL_ALG1 => {
+                rocsparse_spmm_alg::rocsparse_spmm_alg_default
+            }
+            cusparseSpMMAlg_t::CUSPARSE_SPMM_BSR_ALG1 => rocsparse_spmm_alg::rocsparse_spmm_alg_bsr,
+            _ => rocsparse_spmm_alg::rocsparse_spmm_alg_default,
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cusparseOperation_t, E> for rocsparse_operation {
+    fn from_cuda(operation: &'a cusparseOperation_t) -> Result<Self, E> {
+        Ok(match *operation {
+            cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE => {
+                rocsparse_operation::rocsparse_operation_none
+            }
+            cusparseOperation_t::CUSPARSE_OPERATION_TRANSPOSE => {
+                rocsparse_operation::rocsparse_operation_transpose
+            }
+            cusparseOperation_t::CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE => {
+                rocsparse_operation::rocsparse_operation_conjugate_transpose
+            }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cusparseOrder_t, E> for rocsparse_order {
+    fn from_cuda(order: &'a cusparseOrder_t) -> Result<Self, E> {
+        Ok(match *order {
+            cusparseOrder_t::CUSPARSE_ORDER_COL => rocsparse_order::rocsparse_order_column,
+            cusparseOrder_t::CUSPARSE_ORDER_ROW => rocsparse_order::rocsparse_order_row,
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
     fn from_cuda(option: &'a CUjit_option) -> Result<Self, E> {
@@ -319,6 +365,22 @@ impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
             CUjit_option::CU_JIT_OVERRIDE_DIRECTIVE_VALUES => {
                 hipJitOption::hipJitOptionOverrideDirectiveValues
             }
+            _ => return Err(E::NOT_SUPPORTED),
+        })
+    }
+}
+
+impl<'a, E: CudaErrorType> FromCuda<'a, cudaDataType, E> for rocsparse_datatype {
+    fn from_cuda(type_: &'a cudaDataType) -> Result<Self, E> {
+        Ok(match *type_ {
+            cudaDataType::CUDA_R_32F => rocsparse_datatype::rocsparse_datatype_f32_r,
+            cudaDataType::CUDA_R_64F => rocsparse_datatype::rocsparse_datatype_f64_r,
+            cudaDataType::CUDA_C_32F => rocsparse_datatype::rocsparse_datatype_f32_c,
+            cudaDataType::CUDA_C_64F => rocsparse_datatype::rocsparse_datatype_f64_c,
+            cudaDataType::CUDA_R_8I => rocsparse_datatype::rocsparse_datatype_i8_r,
+            cudaDataType::CUDA_R_8U => rocsparse_datatype::rocsparse_datatype_u8_r,
+            cudaDataType::CUDA_R_32I => rocsparse_datatype::rocsparse_datatype_i32_r,
+            cudaDataType::CUDA_R_32U => rocsparse_datatype::rocsparse_datatype_u32_r,
             _ => return Err(E::NOT_SUPPORTED),
         })
     }
