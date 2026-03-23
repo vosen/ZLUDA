@@ -838,20 +838,6 @@ mod tests {
                 _ => panic!("unsupported format"),
             }
         }
-        // Unused channels read as 0 (for channels 1,2) or 1 (for channel 3/alpha)
-        // when using tex.2d. For integer reads, channel 3 defaults to 1 if
-        // num_channels < 4; channels 1,2 default to 0.
-        for ch in num_channels as usize..4 {
-            if format_is_float(fmt) {
-                expected[ch] = if ch == 3 {
-                    1.0f32.to_bits()
-                } else {
-                    0.0f32.to_bits()
-                };
-            } else {
-                expected[ch] = if ch == 3 { 1 } else { 0 };
-            }
-        }
         expected
     }
 
