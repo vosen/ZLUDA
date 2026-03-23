@@ -46,6 +46,7 @@ dtor = "0.0.7"
 vergen-gix = "1.0.9"
 
 [dev-dependencies]
+half = "2.7"
 
 [package.metadata.zluda]
 linux_symlinks = [
