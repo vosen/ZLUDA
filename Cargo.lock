@@ -312,7 +312,7 @@ dependencies = [
  "byteorder",
  "float8",
  "gemm",
- "half 2.7.1",
+ "half",
  "libm",
  "memmap2 0.9.7",
  "num-traits",
@@ -1029,7 +1029,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719a903cc23e4a89e87962c2a80fdb45cdaad0983a89bd150bb57b4c8571a7d5"
 dependencies = [
- "half 2.7.1",
+ "half",
  "num-traits",
  "rand",
  "rand_distr",
@@ -1128,7 +1128,7 @@ checksum = "88027625910cc9b1085aaaa1c4bc46bb3a36aad323452b33c25b5e4e7c8e2a3e"
 dependencies = [
  "bytemuck",
  "dyn-stack",
- "half 2.7.1",
+ "half",
  "libm",
  "num-complex",
  "num-traits",
@@ -1150,7 +1150,7 @@ dependencies = [
  "dyn-stack",
  "gemm-common",
  "gemm-f32",
- "half 2.7.1",
+ "half",
  "num-complex",
  "num-traits",
  "paste",
@@ -2051,12 +2051,6 @@ dependencies = [
  "plain",
  "scroll",
 ]
-
-[[package]]
-name = "half"
-version = "1.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "half"
@@ -3095,7 +3089,7 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "fixedbitset",
- "half 1.8.3",
+ "half",
  "highs",
  "hip_runtime-sys",
  "int-enum",
@@ -4687,6 +4681,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "dtor",
+ "half",
  "hip_runtime-sys",
  "kernel_metadata",
  "lazy_static",
@@ -4814,7 +4809,7 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "embed-resource",
- "half 2.7.1",
+ "half",
  "libloading",
  "paste",
  "rand",

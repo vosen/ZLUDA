@@ -1,0 +1,18 @@
+.version 6.5
+.target sm_30
+.address_size 64
+.visible .entry tex_read_1d_int_texobj(
+    .param .u64 out_ptr,
+    .param .u64 texobj,
+    .param .f32 coord_x
+) {
+    .reg .u64 %rd1, %rd2;
+    .reg .f32 %fx;
+    .reg .s32 %r0, %r1, %r2, %r3;
+    ld.param.u64 %rd1, [out_ptr];
+    ld.param.u64 %rd2, [texobj];
+    ld.param.f32 %fx, [coord_x];
+    tex.1d.v4.s32.f32 {%r0, %r1, %r2, %r3}, [%rd2, {%fx}];
+    st.global.v4.s32 [%rd1], {%r0, %r1, %r2, %r3};
+    ret;
+}
