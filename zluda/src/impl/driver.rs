@@ -859,6 +859,7 @@ mod tests {
     /// kernel, read back and verify.
     unsafe fn texref_read_test(
         api: &impl CudaApi,
+        normalized: bool,
         dim: TexDim,
         fmt: CUarray_format,
         num_channels: u32,
@@ -997,81 +998,50 @@ mod tests {
         for d in 0..3 {
             api.cuTexRefSetAddressMode(texref, d, CUaddress_mode_enum::CU_TR_ADDRESS_MODE_CLAMP);
         }
-        if !is_float {
-            api.cuTexRefSetFlags(texref, CU_TRSF_READ_AS_INTEGER);
-        }
+        let flags = match (!is_float, normalized) {
+            (true, true) => CU_TRSF_READ_AS_INTEGER | CU_TRSF_NORMALIZED_COORDINATES,
+            (true, false) => CU_TRSF_READ_AS_INTEGER,
+            (false, true) => CU_TRSF_NORMALIZED_COORDINATES,
+            (false, false) => 0,
+        };
+        api.cuTexRefSetFlags(texref, flags);
 
         // Allocate output buffer on device (4 x f32 or 4 x s32 = 16 bytes)
         let mut d_output = std::mem::zeroed();
         api.cuMemAlloc_v2(&mut d_output, 16);
 
         // Texture coordinates for point sampling: pixel center = (p + 0.5)
-        let coord_x: f32 = px as f32 + 0.5;
-        let coord_y: f32 = py as f32 + 0.5;
-        let coord_z: f32 = pz as f32 + 0.5;
-
-        match dim {
-            TexDim::One => {
-                let mut params: [*mut c_void; 2] = [
-                    &d_output as *const _ as *mut c_void,
-                    &coord_x as *const f32 as *mut c_void,
-                ];
-                api.cuLaunchKernel(
-                    func,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    0,
-                    CUstream(std::ptr::null_mut()),
-                    params.as_mut_ptr(),
-                    std::ptr::null_mut(),
-                );
-            }
-            TexDim::Two => {
-                let mut params: [*mut c_void; 3] = [
-                    &d_output as *const _ as *mut c_void,
-                    &coord_x as *const f32 as *mut c_void,
-                    &coord_y as *const f32 as *mut c_void,
-                ];
-                api.cuLaunchKernel(
-                    func,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    0,
-                    CUstream(std::ptr::null_mut()),
-                    params.as_mut_ptr(),
-                    std::ptr::null_mut(),
-                );
-            }
-            TexDim::Three => {
-                let mut params: [*mut c_void; 4] = [
-                    &d_output as *const _ as *mut c_void,
-                    &coord_x as *const f32 as *mut c_void,
-                    &coord_y as *const f32 as *mut c_void,
-                    &coord_z as *const f32 as *mut c_void,
-                ];
-                api.cuLaunchKernel(
-                    func,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    1,
-                    0,
-                    CUstream(std::ptr::null_mut()),
-                    params.as_mut_ptr(),
-                    std::ptr::null_mut(),
-                );
-            }
+        let mut coord_x: f32 = px as f32 + 0.5;
+        if normalized {
+            coord_x /= width as f32;
         }
+        let mut coord_y: f32 = py as f32 + 0.5;
+        if normalized {
+            coord_y /= height as f32;
+        }
+        let mut coord_z: f32 = pz as f32 + 0.5;
+        if normalized {
+            coord_z /= depth as f32;
+        }
+        let mut params: [*mut c_void; 4] = [
+            &d_output as *const _ as *mut _,
+            &coord_x as *const _ as *mut _,
+            &coord_y as *const _ as *mut _,
+            &coord_z as *const _ as *mut _,
+        ];
+        api.cuLaunchKernel(
+            func,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            CUstream(std::ptr::null_mut()),
+            params.as_mut_ptr(),
+            std::ptr::null_mut(),
+        );
         api.cuStreamSynchronize(CUstream(std::ptr::null_mut()));
 
         // Read back result
@@ -1089,7 +1059,7 @@ mod tests {
             result[..num_channels as usize],
             expected[..num_channels as usize],
             "texref mismatch for dim={dim_name}, format={fmt_name}, channels={num_channels}, \
-             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz})"
+             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz}), normalized={normalized}"
         );
 
         // Cleanup
@@ -1121,7 +1091,9 @@ mod tests {
         for &fmt in &formats {
             for &num_ch in &channel_counts {
                 for &w in &widths_1d {
-                    texref_read_test(&api, TexDim::One, fmt, num_ch, w, 1, 1);
+                    for normalized in [false, true] {
+                        texref_read_test(&api, normalized, TexDim::One, fmt, num_ch, w, 1, 1);
+                    }
                 }
             }
         }
@@ -1131,7 +1103,9 @@ mod tests {
         for &fmt in &formats {
             for &num_ch in &channel_counts {
                 for &(w, h) in &dimensions_2d {
-                    texref_read_test(&api, TexDim::Two, fmt, num_ch, w, h, 1);
+                    for normalized in [false, true] {
+                        texref_read_test(&api, normalized, TexDim::Two, fmt, num_ch, w, h, 1);
+                    }
                 }
             }
         }
@@ -1142,7 +1116,9 @@ mod tests {
         for &fmt in &formats {
             for &num_ch in &channel_counts {
                 for &(w, h, d) in &dimensions_3d {
-                    texref_read_test(&api, TexDim::Three, fmt, num_ch, w, h, d);
+                    for normalized in [false, true] {
+                        texref_read_test(&api, normalized, TexDim::Three, fmt, num_ch, w, h, d);
+                    }
                 }
             }
         }
