@@ -186,6 +186,8 @@ cuda_macros::cuda_function_declarations!(
             cuStreamIsCapturing,
             cuStreamSynchronize,
             cuStreamWaitEvent,
+            cuTexObjectCreate,
+            cuTexObjectDestroy,
             cuThreadExchangeStreamCaptureMode,
         ],
     implemented_in_function <= [cuLaunchKernel,]

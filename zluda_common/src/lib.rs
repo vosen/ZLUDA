@@ -150,6 +150,12 @@ macro_rules! from_cuda_transmute {
                 }
             }
 
+            impl<'a, E: CudaErrorType> FromCuda<'a, *const $from, E> for * const $to {
+                fn from_cuda(x: &'a *const $from) -> Result<Self, E> {
+                    Ok(x.cast::<$to>())
+                }
+            }
+
             impl<'a, E: CudaErrorType> FromCuda<'a, *mut $from, E> for * mut $to {
                 fn from_cuda(x: &'a *mut $from) -> Result<Self, E> {
                     Ok(x.cast::<$to>())
@@ -270,7 +276,11 @@ from_cuda_transmute!(
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t,
-    cusparseHandle_t => rocsparse_handle
+    cusparseHandle_t => rocsparse_handle,
+    CUtexObject => hipTextureObject_t,
+    CUDA_RESOURCE_DESC => HIP_RESOURCE_DESC,
+    CUDA_TEXTURE_DESC => HIP_TEXTURE_DESC,
+    CUDA_RESOURCE_VIEW_DESC => HIP_RESOURCE_VIEW_DESC
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {
