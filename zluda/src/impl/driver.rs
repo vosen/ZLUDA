@@ -562,7 +562,13 @@ pub(crate) unsafe fn occupancy_max_active_blocks_per_multiprocessor_with_flags(
         dynamic_smem_size,
         flags,
     )?;
-    *num_blocks = (*num_blocks).max(1);
+    let mut max_block_size = 0;
+    hipFuncGetAttribute(
+        &mut max_block_size,
+        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
+        func.base,
+    )?;
+    *num_blocks = (*num_blocks).max(1).min(max_block_size);
     Ok(())
 }
 
@@ -581,6 +587,13 @@ pub(crate) unsafe fn occupancy_max_potential_block_size(
         dyn_shared_mem_per_blk,
         block_size_limit,
     )?;
+    let mut max_block_size = 0;
+    hipFuncGetAttribute(
+        &mut max_block_size,
+        hipFunction_attribute::HIP_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
+        f.base,
+    )?;
+    *block_size = (*block_size).min(max_block_size);
     Ok(())
 }
 
