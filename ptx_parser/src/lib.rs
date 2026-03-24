@@ -4219,6 +4219,40 @@ derive_parser!(
 
     .mode: RawMulIntControl = { .lo, .hi };
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#texture-instructions-tex
+    tex.1d.v4.f32.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                ctype,
+                dims: TexDimensions::D1,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+    tex.2d.v4.f32.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                ctype,
+                dims: TexDimensions::D2,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+    tex.3d.v4.f32.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                ctype,
+                dims: TexDimensions::D3,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+
+    .ctype: ScalarType = { .s32, .f32 };
 );
 
 #[cfg(test)]

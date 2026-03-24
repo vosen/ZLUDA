@@ -651,7 +651,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::LdMatrix { .. }
             | ast::Instruction::Prmt { .. }
             | ast::Instruction::Mma { .. }
-            | ast::Instruction::Dp2a { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Dp2a { .. }
+            | ast::Instruction::Tex { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -664,14 +665,24 @@ impl<'a> MethodEmitContext<'a> {
         let underlying_type = get_type(self.context, &data.typ)?;
         let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
         let op_type = if needs_cast {
-            unsafe { LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8) }
+            unsafe {
+                LLVMIntTypeInContext(
+                    self.context,
+                    data.typ.layout().ok_or_else(error_unreachable)?.size() as u32 * 8,
+                )
+            }
         } else {
             underlying_type
         };
         let src = self.resolver.value(arguments.src)?;
         let load = unsafe { LLVMBuildLoad2(builder, op_type, src, LLVM_UNNAMED.as_ptr()) };
         apply_qualifier(load, data.qualifier)?;
-        unsafe { LLVMSetAlignment(load, data.typ.layout().align() as u32) };
+        unsafe {
+            LLVMSetAlignment(
+                load,
+                data.typ.layout().ok_or_else(error_unreachable)?.align() as u32,
+            )
+        };
         if needs_cast {
             self.resolver.with_result(arguments.dst, |dst| unsafe {
                 LLVMBuildBitCast(builder, load, underlying_type, dst)
@@ -740,7 +751,7 @@ impl<'a> MethodEmitContext<'a> {
         match (from_type, to_type) {
             (ast::Type::Scalar(from_type), ast::Type::Scalar(to_type_scalar)) => {
                 let from_layout = from_type.layout();
-                let to_layout = to_type.layout();
+                let to_layout = to_type.layout().ok_or_else(error_unreachable)?;
                 if from_layout.size() == to_layout.size() {
                     let dst_type = get_type(self.context, &to_type)?;
                     if from_type.kind() != ast::ScalarKind::Float
@@ -1085,7 +1096,10 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuildBitCast(
                     self.builder,
                     value,
-                    LLVMIntTypeInContext(self.context, data.typ.layout().size() as u32 * 8),
+                    LLVMIntTypeInContext(
+                        self.context,
+                        data.typ.layout().ok_or_else(error_unreachable)?.size() as u32 * 8,
+                    ),
                     LLVM_UNNAMED.as_ptr(),
                 )
             };
@@ -1093,7 +1107,10 @@ impl<'a> MethodEmitContext<'a> {
         let store = unsafe { LLVMBuildStore(self.builder, value, ptr) };
         apply_qualifier(store, data.qualifier)?;
         unsafe {
-            LLVMSetAlignment(store, data.typ.layout().align() as u32);
+            LLVMSetAlignment(
+                store,
+                data.typ.layout().ok_or_else(error_unreachable)?.align() as u32,
+            );
         }
         Ok(())
     }
@@ -1295,7 +1312,10 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildLoad2(self.builder, lowered_type, value, LLVM_UNNAMED.as_ptr())
                 };
                 unsafe {
-                    LLVMSetAlignment(load, type_.layout().align() as u32);
+                    LLVMSetAlignment(
+                        load,
+                        type_.layout().ok_or_else(error_unreachable)?.align() as u32,
+                    );
                 }
                 Ok((load, type_))
             })
@@ -3574,6 +3594,9 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
                 .rfold(underlying_type, |result, dimension| unsafe {
                     LLVMArrayType2(result, *dimension as u64)
                 })
+        }
+        ast::Type::Texref => {
+            todo!()
         }
     })
 }

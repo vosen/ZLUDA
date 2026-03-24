@@ -113,6 +113,7 @@ cuda_macros::cuda_function_declarations!(
             cuEventSynchronize,
             cuFuncGetAttribute,
             cuFuncSetAttribute,
+            cuFuncSetCacheConfig,
             cuGetErrorString,
             cuGetExportTable,
             cuGetProcAddress_v2,

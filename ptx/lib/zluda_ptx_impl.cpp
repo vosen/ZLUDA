@@ -1037,14 +1037,14 @@ extern "C"
 
     v4f32 __ockl_image_sample_2D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v2f32 coord) __device__;
 #define tex_2d(COORD_TYPE)                                                                                             \
-    v4f32 FUNC(texobj_2d_v4_f32_v2##COORD_TYPE)(uint64_t texobj, v2##COORD_TYPE coord)                                 \
+    v4f32 FUNC(texobj_2d_v4_f32_##COORD_TYPE)(uint64_t texobj, v2##COORD_TYPE coord)                                 \
     {                                                                                                                  \
         auto [i, s] = get_image_and_sampler(texobj);                                                                   \
         return __ockl_image_sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                    \
     }                                                                                                                  \
-    v4f32 FUNC(texref_2d_v4_f32_v2##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord) \
+    v4f32 FUNC(texref_2d_v4_f32_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord) \
     {                                                                                                                  \
-        return FUNC_CALL(texobj_2d_v4_f32_v2##COORD_TYPE)(uint64_t(texref->textureObject), coord);                     \
+        return FUNC_CALL(texobj_2d_v4_f32_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                     \
     }
 
     tex_2d(f32);

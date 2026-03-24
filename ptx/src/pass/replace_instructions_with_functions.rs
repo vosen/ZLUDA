@@ -290,6 +290,25 @@ fn run_instruction<'input>(
     instruction: ptx_parser::Instruction<SpirvWord>,
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     Ok(match instruction {
+        i @ ptx_parser::Instruction::Tex {
+            data: ast::TexData { type_, ctype, dims },
+            ..
+        } => {
+            let prefix = match type_ {
+                ast::TexType::Texref => "texref",
+                ast::TexType::Texobj => "texobj",
+            };
+            let name = format!(
+                "{prefix}_{dims}_v4_f32_{coord}",
+                dims = match dims {
+                    ast::TexDimensions::D1 => "1d",
+                    ast::TexDimensions::D2 => "2d",
+                    ast::TexDimensions::D3 => "3d",
+                },
+                coord = scalar_to_ptx_name(ctype)
+            );
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Sqrt {
             data:
                 ast::RcpData {
