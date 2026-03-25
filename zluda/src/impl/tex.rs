@@ -12,3 +12,41 @@ pub(crate) unsafe fn object_create(
 pub(crate) unsafe fn object_destroy(tex_object: hipTextureObject_t) -> hipError_t {
     hipDestroyTextureObject(tex_object)
 }
+
+pub(crate) unsafe fn ref_set_array(
+    texref: *mut textureReference,
+    array: hipArray_t,
+    flags: ::core::ffi::c_uint,
+) -> hipError_t {
+    hipTexRefSetArray(texref, array, flags)
+}
+
+pub(crate) unsafe fn ref_set_flags(
+    texref: *mut textureReference,
+    flags: ::core::ffi::c_uint,
+) -> hipError_t {
+    hipTexRefSetFlags(texref, flags)
+}
+
+pub(crate) unsafe fn ref_set_filter_mode(
+    texref: *mut textureReference,
+    filter_mode: hipTextureFilterMode,
+) -> hipError_t {
+    hipTexRefSetFilterMode(texref, filter_mode)
+}
+
+pub(crate) unsafe fn ref_set_address_mode(
+    texref: *mut textureReference,
+    dim: i32,
+    address_mode: hipTextureAddressMode,
+) -> hipError_t {
+    hipTexRefSetAddressMode(texref, dim, address_mode)
+}
+
+pub(crate) unsafe fn ref_set_format(
+    texref: *mut textureReference,
+    format: hipArray_Format,
+    num_components: ::core::ffi::c_int,
+) -> hipError_t {
+    hipTexRefSetFormat(texref, format, num_components)
+}

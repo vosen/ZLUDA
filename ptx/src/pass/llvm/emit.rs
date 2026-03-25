@@ -254,14 +254,21 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             .transpose()
             .map_err(|_| error_unreachable())?
             .unwrap_or(Cow::Borrowed(LLVM_UNNAMED));
+        let llvm_type = get_type(self.context, &var.info.v_type)?;
         let global = unsafe {
             LLVMAddGlobalInAddressSpace(
                 self.module,
-                get_type(self.context, &var.info.v_type)?,
+                llvm_type,
                 name.as_ptr(),
                 get_state_space(var.info.state_space)?,
             )
         };
+        if matches!(var.info.v_type, ast::Type::Texref) {
+            unsafe { LLVMSetInitializer(global, LLVMGetUndef(llvm_type)) };
+            unsafe {
+                LLVMSetAlignment(global, 8);
+            }
+        }
         self.emit_linkage(global, &var.info)?;
         self.resolver.register(var.name, global);
         if let Some(align) = var.info.align {
@@ -441,6 +448,9 @@ fn get_input_argument_type(
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
         ast::StateSpace::Reg => get_type(context, v_type),
+        ast::StateSpace::Global | ast::StateSpace::Const if matches!(v_type, ast::Type::Texref) => {
+            Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
+        }
         _ => return Err(error_unreachable()),
     }
 }
@@ -3596,7 +3606,59 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
                 })
         }
         ast::Type::Texref => {
-            todo!()
+            // Definitions taken from ROCm LLVM output
+            let format_desc =
+                unsafe { LLVMStructCreateNamed(context, c"struct.hipChannelFormatDesc".as_ptr()) };
+            let llvm_i32 = get_scalar_type(context, ast::ScalarType::B32);
+            let mut format_desc_fields = [llvm_i32, llvm_i32, llvm_i32, llvm_i32, llvm_i32];
+            unsafe {
+                LLVMStructSetBody(
+                    format_desc,
+                    format_desc_fields.as_mut_ptr(),
+                    format_desc_fields.len() as u32,
+                    0,
+                )
+            };
+            let texture_reference =
+                unsafe { LLVMStructCreateNamed(context, c"struct.textureReference".as_ptr()) };
+            let llvm_a3i32 = unsafe { LLVMArrayType2(llvm_i32, 3) };
+            let llvm_float = get_scalar_type(context, ast::ScalarType::F32);
+            let llvm_ptr = get_pointer_type(context, ast::StateSpace::Generic)?;
+            let mut texture_reference_fields = [
+                llvm_i32,
+                llvm_i32,
+                llvm_i32,
+                llvm_a3i32,
+                format_desc,
+                llvm_i32,
+                llvm_i32,
+                llvm_i32,
+                llvm_float,
+                llvm_float,
+                llvm_float,
+                llvm_ptr,
+                llvm_i32,
+                llvm_i32,
+            ];
+            unsafe {
+                LLVMStructSetBody(
+                    texture_reference,
+                    texture_reference_fields.as_mut_ptr(),
+                    texture_reference_fields.len() as u32,
+                    0,
+                )
+            };
+            let texture = unsafe { LLVMStructCreateNamed(context, c"struct.texture".as_ptr()) };
+            let mut texture_fields = [texture_reference];
+            unsafe {
+                LLVMStructSetBody(
+                    texture,
+                    texture_fields.as_mut_ptr(),
+                    texture_fields.len() as u32,
+                    0,
+                )
+            };
+            texture
         }
     })
 }

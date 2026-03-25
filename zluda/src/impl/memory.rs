@@ -318,3 +318,7 @@ pub(crate) unsafe fn copy_hto_a_v2(
 ) -> hipError_t {
     hipMemcpyHtoA(dst_array, dst_offset, src_host, byte_count)
 }
+
+pub(crate) unsafe fn copy_3d_v2(memcpy: HIP_MEMCPY3D) -> hipError_t {
+    hipDrvMemcpy3D(&memcpy)
+}
