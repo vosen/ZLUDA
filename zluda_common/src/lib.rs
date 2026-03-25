@@ -281,7 +281,10 @@ from_cuda_transmute!(
     CUtexObject => hipTextureObject_t,
     CUDA_RESOURCE_DESC => HIP_RESOURCE_DESC,
     CUDA_TEXTURE_DESC => HIP_TEXTURE_DESC,
-    CUDA_RESOURCE_VIEW_DESC => HIP_RESOURCE_VIEW_DESC
+    CUDA_RESOURCE_VIEW_DESC => HIP_RESOURCE_VIEW_DESC,
+    CUarray => hipArray_t,
+    CUDA_ARRAY_DESCRIPTOR => HIP_ARRAY_DESCRIPTOR,
+    CUDA_ARRAY3D_DESCRIPTOR => HIP_ARRAY3D_DESCRIPTOR
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, CUjit_option, E> for hipJitOption {

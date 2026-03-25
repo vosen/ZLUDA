@@ -68,6 +68,9 @@ cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented
         <= [
+            cuArray3DCreate_v2,
+            cuArrayCreate_v2,
+            cuArrayDestroy,
             cuCtxCreate_v2,
             cuCtxDestroy_v2,
             cuCtxGetApiVersion,
@@ -144,6 +147,7 @@ cuda_macros::cuda_function_declarations!(
             cuMemcpyDtoH_v2_ptds,
             cuMemcpyDtoH_v2,
             cuMemcpyDtoHAsync_v2,
+            cuMemcpyHtoA_v2,
             cuMemcpyHtoD_v2_ptds,
             cuMemcpyHtoD_v2,
             cuMemcpyHtoDAsync_v2,

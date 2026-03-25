@@ -894,7 +894,7 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst: {
                     repr: T,
-                    type: { Type::Vector(4, ScalarType::F32) },
+                    type: { Type::Vector(4, data.dtype) },
 
                 },
                 src_ptr:  {
@@ -2842,6 +2842,7 @@ pub enum TexDimensions {
 
 pub struct TexData {
     pub type_: TexType,
+    pub dtype: ScalarType,
     pub ctype: ScalarType,
     pub dims: TexDimensions,
 }

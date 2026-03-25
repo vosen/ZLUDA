@@ -298,6 +298,7 @@ pub(crate) unsafe fn set_d_2d32_v2(
 ) -> hipError_t {
     hipMemset2D(dst_device.0, dst_pitch, value as _, width, height)
 }
+
 pub(crate) unsafe fn set_d_2d32_async(
     dst_device: hipDeviceptr_t,
     dst_pitch: usize,
@@ -307,4 +308,13 @@ pub(crate) unsafe fn set_d_2d32_async(
     stream: hipStream_t,
 ) -> hipError_t {
     hipMemset2DAsync(dst_device.0, dst_pitch, value as _, width, height, stream)
+}
+
+pub(crate) unsafe fn copy_hto_a_v2(
+    dst_array: hipArray_t,
+    dst_offset: usize,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+) -> hipError_t {
+    hipMemcpyHtoA(dst_array, dst_offset, src_host, byte_count)
 }

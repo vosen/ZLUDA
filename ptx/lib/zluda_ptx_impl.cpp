@@ -54,8 +54,11 @@ then cd to the directory with this file and run this simple command:
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
 typedef unsigned int v2u32 __attribute__((ext_vector_type(2)));
+typedef int s32;
 typedef int v2s32 __attribute__((ext_vector_type(2)));
+typedef int v4s32 __attribute__((ext_vector_type(4)));
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
+typedef float f32;
 typedef float v2f32 __attribute__((ext_vector_type(2)));
 typedef float v4f32 __attribute__((ext_vector_type(4)));
 typedef float float8 __attribute__((ext_vector_type(8)));
@@ -1036,17 +1039,38 @@ extern "C"
     }
 
     v4f32 __ockl_image_sample_2D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v2f32 coord) __device__;
-#define tex_2d(COORD_TYPE)                                                                                             \
-    v4f32 FUNC(texobj_2d_v4_f32_##COORD_TYPE)(uint64_t texobj, v2##COORD_TYPE coord)                                 \
-    {                                                                                                                  \
-        auto [i, s] = get_image_and_sampler(texobj);                                                                   \
-        return __ockl_image_sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                    \
-    }                                                                                                                  \
-    v4f32 FUNC(texref_2d_v4_f32_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord) \
-    {                                                                                                                  \
-        return FUNC_CALL(texobj_2d_v4_f32_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                     \
+#define tex_2d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
+    v4##RETURN_TYPE FUNC(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v2##COORD_TYPE coord)                                                                              \
+    {                                                                                                                                                                                   \
+        auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
+        auto result = __ockl_image_sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                                                                              \
+        return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
+    }                                                                                                                                                                                   \
+    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord)                                              \
+    {                                                                                                                                                                                   \
+        return FUNC_CALL(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
 
-    tex_2d(f32);
-    tex_2d(s32);
+    tex_2d(f32, f32);
+    tex_2d(s32, s32);
+    tex_2d(f32, s32);
+    tex_2d(s32, f32);
+
+    v4f32 __ockl_image_sample_3D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v4f32 coord) __device__;
+#define tex_3d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
+    v4##RETURN_TYPE FUNC(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v4##COORD_TYPE coord)                                                                              \
+    {                                                                                                                                                                                   \
+        auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
+        auto result = __ockl_image_sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                              \
+        return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
+    }                                                                                                                                                                                   \
+    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v4##COORD_TYPE coord)                                              \
+    {                                                                                                                                                                                   \
+        return FUNC_CALL(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
+    }
+
+    tex_3d(f32, f32);
+    tex_3d(s32, s32);
+    tex_3d(f32, s32);
+    tex_3d(s32, f32);
 }

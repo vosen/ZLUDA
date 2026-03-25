@@ -291,7 +291,13 @@ fn run_instruction<'input>(
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     Ok(match instruction {
         i @ ptx_parser::Instruction::Tex {
-            data: ast::TexData { type_, ctype, dims },
+            data:
+                ast::TexData {
+                    dtype,
+                    type_,
+                    ctype,
+                    dims,
+                },
             ..
         } => {
             let prefix = match type_ {
@@ -299,7 +305,8 @@ fn run_instruction<'input>(
                 ast::TexType::Texobj => "texobj",
             };
             let name = format!(
-                "{prefix}_{dims}_v4_f32_{coord}",
+                "{prefix}_{dims}_v4_{dtype}_{coord}",
+                dtype = scalar_to_ptx_name(dtype),
                 dims = match dims {
                     ast::TexDimensions::D1 => "1d",
                     ast::TexDimensions::D2 => "2d",

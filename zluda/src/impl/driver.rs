@@ -1352,7 +1352,7 @@ mod tests {
             result[..num_channels as usize],
             expected[..num_channels as usize],
             "texobj mismatch for dim={dim_name}, format={fmt_name}, channels={num_channels}, \
-             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz}), normalized={normalized}"
+             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz}), normalized={normalized}, is_float={is_float}"
         );
 
         // Cleanup
