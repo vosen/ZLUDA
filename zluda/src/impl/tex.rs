@@ -1,3 +1,4 @@
+use crate::r#impl::hipfix;
 use hip_runtime_sys::*;
 
 pub(crate) unsafe fn object_create(
@@ -22,31 +23,74 @@ pub(crate) unsafe fn ref_set_array(
 }
 
 pub(crate) unsafe fn ref_set_flags(
-    texref: *mut textureReference,
+    raw_texref: *mut textureReference,
     flags: ::core::ffi::c_uint,
 ) -> hipError_t {
-    hipTexRefSetFlags(texref, flags)
+    fn get_flags(texref: &textureReference) -> (u32, i32, i32) {
+        (texref.readMode.0, texref.normalized, texref.sRGB)
+    }
+    let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
+    let pre_flags = get_flags(texref);
+    hipTexRefSetFlags(raw_texref, flags)?;
+    let post_flags = get_flags(texref);
+    if pre_flags != post_flags {
+        hipfix::refresh_texref(raw_texref)?;
+    }
+    Ok(())
 }
 
 pub(crate) unsafe fn ref_set_filter_mode(
-    texref: *mut textureReference,
+    raw_texref: *mut textureReference,
     filter_mode: hipTextureFilterMode,
 ) -> hipError_t {
-    hipTexRefSetFilterMode(texref, filter_mode)
+    fn get_flags(texref: &textureReference) -> u32 {
+        texref.filterMode.0
+    }
+    let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
+    let pre_flags = get_flags(texref);
+    hipTexRefSetFilterMode(raw_texref, filter_mode)?;
+    let post_flags = get_flags(texref);
+    if pre_flags != post_flags {
+        hipfix::refresh_texref(raw_texref)?;
+    }
+    Ok(())
 }
 
 pub(crate) unsafe fn ref_set_address_mode(
-    texref: *mut textureReference,
+    raw_texref: *mut textureReference,
     dim: i32,
     address_mode: hipTextureAddressMode,
 ) -> hipError_t {
-    hipTexRefSetAddressMode(texref, dim, address_mode)
+    fn get_flags(texref: &textureReference, dim: i32) -> u32 {
+        texref.addressMode[dim as usize].0
+    }
+    if dim < 0 || dim > 2 {
+        return Err(hipErrorCode_t::InvalidValue);
+    }
+    let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
+    let pre_flags = get_flags(texref, dim);
+    hipTexRefSetAddressMode(raw_texref, dim, address_mode)?;
+    let post_flags = get_flags(texref, dim);
+    if pre_flags != post_flags {
+        hipfix::refresh_texref(raw_texref)?;
+    }
+    Ok(())
 }
 
 pub(crate) unsafe fn ref_set_format(
-    texref: *mut textureReference,
+    raw_texref: *mut textureReference,
     format: hipArray_Format,
     num_components: ::core::ffi::c_int,
 ) -> hipError_t {
-    hipTexRefSetFormat(texref, format, num_components)
+    fn get_flags(texref: &textureReference) -> (u32, u32) {
+        (texref.format.0, texref.numChannels as u32)
+    }
+    let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
+    let pre_flags = get_flags(texref);
+    hipTexRefSetFormat(raw_texref, format, num_components)?;
+    let post_flags = get_flags(texref);
+    if pre_flags != post_flags {
+        hipfix::refresh_texref(raw_texref)?;
+    }
+    Ok(())
 }
