@@ -13,18 +13,22 @@ pub(crate) fn get_attributes(
     }
 }
 
+const HIP_TRSA_OVERRIDE_FORMAT: u32 = 1;
+
 pub(crate) unsafe fn refresh_texref(raw_texref: *mut textureReference) -> hipError_t {
     let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
     let mut res_desc = std::mem::zeroed();
     hipTexObjectGetResourceDesc(&mut res_desc, texref.textureObject)?;
     match res_desc.resType {
-        HIPresourcetype::HIP_RESOURCE_TYPE_ARRAY => {
-            hipTexRefSetArray(raw_texref, res_desc.res.array.hArray, res_desc.flags)
-        }
+        HIPresourcetype::HIP_RESOURCE_TYPE_ARRAY => hipTexRefSetArray(
+            raw_texref,
+            res_desc.res.array.hArray,
+            HIP_TRSA_OVERRIDE_FORMAT,
+        ),
         HIPresourcetype::HIP_RESOURCE_TYPE_MIPMAPPED_ARRAY => hipTexRefSetMipmappedArray(
             raw_texref,
             res_desc.res.mipmap.hMipmappedArray,
-            res_desc.flags,
+            HIP_TRSA_OVERRIDE_FORMAT,
         ),
         HIPresourcetype::HIP_RESOURCE_TYPE_LINEAR => hipTexRefSetAddress(
             &mut 0,
