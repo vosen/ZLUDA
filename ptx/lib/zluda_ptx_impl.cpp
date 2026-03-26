@@ -1041,22 +1041,34 @@ extern "C"
     }
 
     v4f32 __ockl_image_sample_1D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, f32 coord) __device__;
-#define tex_1d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
-    v4##RETURN_TYPE FUNC(texobj_1d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v1##COORD_TYPE coord)                                                                              \
+    v4f32 __ockl_image_load_1Db(CONSTANT_SPACE void *image, s32 coord) __device__;
+#define tex_1d(RETURN_TYPE)                                                                                                                                                             \
+    v4##RETURN_TYPE FUNC(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t texobj, v1f32 coord)                                                                                                \
     {                                                                                                                                                                                   \
         auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
-        auto result = __ockl_image_sample_1D(i, s, float(coord.x));                                                                                                                              \
+        auto result = __ockl_image_sample_1D(i, s, coord.x);                                                                                                                            \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v1##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference CONSTANT_SPACE * texref, v1f32 coord)                                                                \
     {                                                                                                                                                                                   \
-        return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
+        return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t(texref->textureObject), coord);                                                                                     \
+    }
+#define tex_1db(RETURN_TYPE)                                                                                                                                                            \
+    v4##RETURN_TYPE FUNC(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t texobj, v1s32 coord)                                                                                                \
+    {                                                                                                                                                                                   \
+        auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
+        auto result = __ockl_image_load_1Db(i, coord.x);                                                                                                                                \
+        return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
+    }                                                                                                                                                                                   \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference CONSTANT_SPACE * texref, v1s32 coord)                                                                \
+    {                                                                                                                                                                                   \
+        return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
 
-    tex_1d(f32, f32);
-    tex_1d(s32, s32);
-    tex_1d(f32, s32);
-    tex_1d(s32, f32);
+    tex_1d(f32);
+    tex_1d(s32);
+    tex_1db(s32);
+    tex_1db(f32);
 
     v4f32 __ockl_image_sample_2D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v2f32 coord) __device__;
 #define tex_2d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \

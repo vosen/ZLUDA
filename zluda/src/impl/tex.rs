@@ -95,12 +95,37 @@ pub(crate) unsafe fn ref_set_format(
     Ok(())
 }
 
+pub(crate) unsafe fn ref_set_address_v2(
+    byte_offset: *mut usize,
+    texref: *mut textureReference,
+    dev_ptr: hipDeviceptr_t,
+    bytes: usize,
+) -> hipError_t {
+    hipTexRefSetAddress(byte_offset, texref, dev_ptr, bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::CudaApi;
     use cuda_macros::test_cuda;
     use cuda_types::cuda::*;
     use std::ffi::c_void;
+
+/*
+ *   █████╗ ██╗   ██╗████████╗ ██████╗  ██████╗ ███████╗███╗   ██╗███████╗██████╗  █████╗ ████████╗███████╗██████╗                               
+ *  ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔════╝ ██╔════╝████╗  ██║██╔════╝██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██╔══██╗                              
+ *  ███████║██║   ██║   ██║   ██║   ██║██║  ███╗█████╗  ██╔██╗ ██║█████╗  ██████╔╝███████║   ██║   █████╗  ██║  ██║                              
+ *  ██╔══██║██║   ██║   ██║   ██║   ██║██║   ██║██╔══╝  ██║╚██╗██║██╔══╝  ██╔══██╗██╔══██║   ██║   ██╔══╝  ██║  ██║                              
+ *  ██║  ██║╚██████╔╝   ██║   ╚██████╔╝╚██████╔╝███████╗██║ ╚████║███████╗██║  ██║██║  ██║   ██║   ███████╗██████╔╝                              
+ *  ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═════╝                               
+ *                                                                                                                                               
+ *   █████╗ ██╗    ███████╗██╗      ██████╗ ██████╗     ████████╗███████╗███████╗████████╗███████╗    ██████╗ ███████╗██╗      ██████╗ ██╗    ██╗
+ *  ██╔══██╗██║    ██╔════╝██║     ██╔═══██╗██╔══██╗    ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝██╔════╝    ██╔══██╗██╔════╝██║     ██╔═══██╗██║    ██║
+ *  ███████║██║    ███████╗██║     ██║   ██║██████╔╝       ██║   █████╗  ███████╗   ██║   ███████╗    ██████╔╝█████╗  ██║     ██║   ██║██║ █╗ ██║
+ *  ██╔══██║██║    ╚════██║██║     ██║   ██║██╔═══╝        ██║   ██╔══╝  ╚════██║   ██║   ╚════██║    ██╔══██╗██╔══╝  ██║     ██║   ██║██║███╗██║
+ *  ██║  ██║██║    ███████║███████╗╚██████╔╝██║            ██║   ███████╗███████║   ██║   ███████║    ██████╔╝███████╗███████╗╚██████╔╝╚███╔███╔╝
+ *  ╚═╝  ╚═╝╚═╝    ╚══════╝╚══════╝ ╚═════╝ ╚═╝            ╚═╝   ╚══════╝╚══════╝   ╚═╝   ╚══════╝    ╚═════╝ ╚══════╝╚══════╝ ╚═════╝  ╚══╝╚══╝ 
+ */
 
     const TEX_READ_1D_INT_PTX: &str = concat!(include_str!("test_ptx/tex_read_1d_int.ptx"), "\0");
     const TEX_READ_1D_FLOAT_PTX: &str =
@@ -113,16 +138,22 @@ mod tests {
         concat!(include_str!("test_ptx/tex_read_3d_float.ptx"), "\0");
     const TEX_READ_1D_INT_S32COORD_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_1d_int_s32coord.ptx"), "\0");
-    const TEX_READ_1D_FLOAT_S32COORD_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_1d_float_s32coord.ptx"), "\0");
+    const TEX_READ_1D_FLOAT_S32COORD_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_1d_float_s32coord.ptx"),
+        "\0"
+    );
     const TEX_READ_2D_INT_S32COORD_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_2d_int_s32coord.ptx"), "\0");
-    const TEX_READ_2D_FLOAT_S32COORD_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_2d_float_s32coord.ptx"), "\0");
+    const TEX_READ_2D_FLOAT_S32COORD_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_2d_float_s32coord.ptx"),
+        "\0"
+    );
     const TEX_READ_3D_INT_S32COORD_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_3d_int_s32coord.ptx"), "\0");
-    const TEX_READ_3D_FLOAT_S32COORD_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_3d_float_s32coord.ptx"), "\0");
+    const TEX_READ_3D_FLOAT_S32COORD_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_3d_float_s32coord.ptx"),
+        "\0"
+    );
 
     const TEX_READ_1D_INT_TEXOBJ_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_1d_int_texobj.ptx"), "\0");
@@ -136,20 +167,32 @@ mod tests {
         concat!(include_str!("test_ptx/tex_read_3d_int_texobj.ptx"), "\0");
     const TEX_READ_3D_FLOAT_TEXOBJ_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_3d_float_texobj.ptx"), "\0");
-    const TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_1d_int_s32coord_texobj.ptx"), "\0");
-    const TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_1d_float_s32coord_texobj.ptx"), "\0");
-    const TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_2d_int_s32coord_texobj.ptx"), "\0");
-    const TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_2d_float_s32coord_texobj.ptx"), "\0");
-    const TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_3d_int_s32coord_texobj.ptx"), "\0");
-    const TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
-        concat!(include_str!("test_ptx/tex_read_3d_float_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_1d_int_s32coord_texobj.ptx"),
+        "\0"
+    );
+    const TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_1d_float_s32coord_texobj.ptx"),
+        "\0"
+    );
+    const TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_2d_int_s32coord_texobj.ptx"),
+        "\0"
+    );
+    const TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_2d_float_s32coord_texobj.ptx"),
+        "\0"
+    );
+    const TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_3d_int_s32coord_texobj.ptx"),
+        "\0"
+    );
+    const TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX: &str = concat!(
+        include_str!("test_ptx/tex_read_3d_float_s32coord_texobj.ptx"),
+        "\0"
+    );
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     enum TexDim {
         One,
         Two,
@@ -546,16 +589,11 @@ mod tests {
 
         // Create CUDA array and upload data
         let mut array: CUarray = std::mem::zeroed();
+        let mut dev_ptr: CUdeviceptr_v2 = std::mem::zeroed();
         match dim {
             TexDim::One => {
-                let desc = CUDA_ARRAY_DESCRIPTOR {
-                    Width: width,
-                    Height: 0,
-                    Format: fmt,
-                    NumChannels: num_channels,
-                };
-                api.cuArrayCreate_v2(&mut array, &desc);
-                api.cuMemcpyHtoA_v2(array, 0, host_buf.as_ptr() as *const c_void, total_bytes);
+                api.cuMemAlloc_v2(&mut dev_ptr, total_bytes);
+                api.cuMemcpyHtoD_v2(dev_ptr, host_buf.as_ptr() as *const c_void, total_bytes);
             }
             TexDim::Two => {
                 let desc = CUDA_ARRAY_DESCRIPTOR {
@@ -630,11 +668,20 @@ mod tests {
         let is_float = format_is_float(fmt);
         let (ptx, kernel_name): (&str, &std::ffi::CStr) = match (dim, is_float) {
             (TexDim::One, false) => (TEX_READ_1D_INT_S32COORD_PTX, c"tex_read_1d_int_s32coord"),
-            (TexDim::One, true) => (TEX_READ_1D_FLOAT_S32COORD_PTX, c"tex_read_1d_float_s32coord"),
+            (TexDim::One, true) => (
+                TEX_READ_1D_FLOAT_S32COORD_PTX,
+                c"tex_read_1d_float_s32coord",
+            ),
             (TexDim::Two, false) => (TEX_READ_2D_INT_S32COORD_PTX, c"tex_read_2d_int_s32coord"),
-            (TexDim::Two, true) => (TEX_READ_2D_FLOAT_S32COORD_PTX, c"tex_read_2d_float_s32coord"),
+            (TexDim::Two, true) => (
+                TEX_READ_2D_FLOAT_S32COORD_PTX,
+                c"tex_read_2d_float_s32coord",
+            ),
             (TexDim::Three, false) => (TEX_READ_3D_INT_S32COORD_PTX, c"tex_read_3d_int_s32coord"),
-            (TexDim::Three, true) => (TEX_READ_3D_FLOAT_S32COORD_PTX, c"tex_read_3d_float_s32coord"),
+            (TexDim::Three, true) => (
+                TEX_READ_3D_FLOAT_S32COORD_PTX,
+                c"tex_read_3d_float_s32coord",
+            ),
         };
 
         let mut module = std::mem::zeroed();
@@ -647,13 +694,21 @@ mod tests {
         api.cuModuleGetTexRef(&mut texref, module, c"tex".as_ptr());
 
         // Bind array to texref
-        api.cuTexRefSetArray(texref, array, CU_TRSA_OVERRIDE_FORMAT);
+        if dim == TexDim::One {
+            api.cuTexRefSetAddress_v2(&mut 0, texref, dev_ptr, total_bytes);
+        } else {
+            api.cuTexRefSetArray(texref, array, CU_TRSA_OVERRIDE_FORMAT);
+        }
         api.cuTexRefSetFormat(texref, fmt, num_channels as i32);
         api.cuTexRefSetFilterMode(texref, CUfilter_mode_enum::CU_TR_FILTER_MODE_POINT);
         for d in 0..3 {
             api.cuTexRefSetAddressMode(texref, d, CUaddress_mode_enum::CU_TR_ADDRESS_MODE_CLAMP);
         }
-        let flags = if !is_float { CU_TRSF_READ_AS_INTEGER } else { 0 };
+        let flags = if !is_float {
+            CU_TRSF_READ_AS_INTEGER
+        } else {
+            0
+        };
         api.cuTexRefSetFlags(texref, flags);
 
         // Allocate output buffer on device (4 x f32 or 4 x s32 = 16 bytes)
@@ -706,7 +761,12 @@ mod tests {
         // Cleanup
         api.cuMemFree_v2(d_output);
         api.cuModuleUnload(module);
-        api.cuArrayDestroy(array);
+        if !array.is_null() {
+            api.cuArrayDestroy(array);
+        }
+        if !dev_ptr.0.is_null() {
+            api.cuMemFree_v2(dev_ptr);
+        }
     }
 
     #[test_cuda]
@@ -1077,16 +1137,11 @@ mod tests {
 
         // Create CUDA array and upload data
         let mut array: CUarray = std::mem::zeroed();
+        let mut dev_ptr: CUdeviceptr_v2 = std::mem::zeroed();
         match dim {
             TexDim::One => {
-                let desc = CUDA_ARRAY_DESCRIPTOR {
-                    Width: width,
-                    Height: 0,
-                    Format: fmt,
-                    NumChannels: num_channels,
-                };
-                api.cuArrayCreate_v2(&mut array, &desc);
-                api.cuMemcpyHtoA_v2(array, 0, host_buf.as_ptr() as *const c_void, total_bytes);
+                api.cuMemAlloc_v2(&mut dev_ptr, total_bytes);
+                api.cuMemcpyHtoD_v2(dev_ptr, host_buf.as_ptr() as *const c_void, total_bytes);
             }
             TexDim::Two => {
                 let desc = CUDA_ARRAY_DESCRIPTOR {
@@ -1158,15 +1213,34 @@ mod tests {
         }
 
         // Create texture object
-        let res_desc = CUDA_RESOURCE_DESC {
-            resType: CUresourcetype_enum::CU_RESOURCE_TYPE_ARRAY,
-            res: CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
-                array: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 { hArray: array },
-            },
-            flags: 0,
+        let res_desc = if dim == TexDim::One {
+            CUDA_RESOURCE_DESC {
+                resType: CUresourcetype_enum::CU_RESOURCE_TYPE_LINEAR,
+                res: CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
+                    linear: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_3 {
+                        devPtr: dev_ptr,
+                        format: fmt,
+                        numChannels: num_channels,
+                        sizeInBytes: total_bytes,
+                    },
+                },
+                flags: 0,
+            }
+        } else {
+            CUDA_RESOURCE_DESC {
+                resType: CUresourcetype_enum::CU_RESOURCE_TYPE_ARRAY,
+                res: CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
+                    array: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 { hArray: array },
+                },
+                flags: 0,
+            }
         };
         let is_float = format_is_float(fmt);
-        let flags = if !is_float { CU_TRSF_READ_AS_INTEGER } else { 0 };
+        let flags = if !is_float {
+            CU_TRSF_READ_AS_INTEGER
+        } else {
+            0
+        };
         let tex_desc = CUDA_TEXTURE_DESC {
             addressMode: [CUaddress_mode_enum::CU_TR_ADDRESS_MODE_CLAMP; 3],
             filterMode: CUfilter_mode_enum::CU_TR_FILTER_MODE_POINT,
@@ -1184,12 +1258,30 @@ mod tests {
 
         // Load PTX module and get kernel function
         let (ptx, kernel_name): (&str, &std::ffi::CStr) = match (dim, is_float) {
-            (TexDim::One, false) => (TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_1d_int_s32coord_texobj"),
-            (TexDim::One, true) => (TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_1d_float_s32coord_texobj"),
-            (TexDim::Two, false) => (TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_2d_int_s32coord_texobj"),
-            (TexDim::Two, true) => (TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_2d_float_s32coord_texobj"),
-            (TexDim::Three, false) => (TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_3d_int_s32coord_texobj"),
-            (TexDim::Three, true) => (TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_3d_float_s32coord_texobj"),
+            (TexDim::One, false) => (
+                TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_1d_int_s32coord_texobj",
+            ),
+            (TexDim::One, true) => (
+                TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_1d_float_s32coord_texobj",
+            ),
+            (TexDim::Two, false) => (
+                TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_2d_int_s32coord_texobj",
+            ),
+            (TexDim::Two, true) => (
+                TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_2d_float_s32coord_texobj",
+            ),
+            (TexDim::Three, false) => (
+                TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_3d_int_s32coord_texobj",
+            ),
+            (TexDim::Three, true) => (
+                TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX,
+                c"tex_read_3d_float_s32coord_texobj",
+            ),
         };
 
         let mut module = std::mem::zeroed();
@@ -1250,7 +1342,12 @@ mod tests {
         api.cuMemFree_v2(d_output);
         api.cuTexObjectDestroy(texobj);
         api.cuModuleUnload(module);
-        api.cuArrayDestroy(array);
+        if !array.is_null() {
+            api.cuArrayDestroy(array);
+        }
+        if !dev_ptr.0.is_null() {
+            api.cuMemFree_v2(dev_ptr);
+        }
     }
 
     #[test_cuda]

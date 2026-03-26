@@ -196,6 +196,7 @@ cuda_macros::cuda_function_declarations!(
             cuStreamWaitEvent,
             cuTexObjectCreate,
             cuTexObjectDestroy,
+            cuTexRefSetAddress_v2,
             cuTexRefSetAddressMode,
             cuTexRefSetArray,
             cuTexRefSetFilterMode,
