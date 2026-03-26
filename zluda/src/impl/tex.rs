@@ -111,6 +111,18 @@ mod tests {
     const TEX_READ_3D_INT_PTX: &str = concat!(include_str!("test_ptx/tex_read_3d_int.ptx"), "\0");
     const TEX_READ_3D_FLOAT_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_3d_float.ptx"), "\0");
+    const TEX_READ_1D_INT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_1d_int_s32coord.ptx"), "\0");
+    const TEX_READ_1D_FLOAT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_1d_float_s32coord.ptx"), "\0");
+    const TEX_READ_2D_INT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_2d_int_s32coord.ptx"), "\0");
+    const TEX_READ_2D_FLOAT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_2d_float_s32coord.ptx"), "\0");
+    const TEX_READ_3D_INT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_3d_int_s32coord.ptx"), "\0");
+    const TEX_READ_3D_FLOAT_S32COORD_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_3d_float_s32coord.ptx"), "\0");
 
     const TEX_READ_1D_INT_TEXOBJ_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_1d_int_texobj.ptx"), "\0");
@@ -124,6 +136,18 @@ mod tests {
         concat!(include_str!("test_ptx/tex_read_3d_int_texobj.ptx"), "\0");
     const TEX_READ_3D_FLOAT_TEXOBJ_PTX: &str =
         concat!(include_str!("test_ptx/tex_read_3d_float_texobj.ptx"), "\0");
+    const TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_1d_int_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_1d_float_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_2d_int_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_2d_float_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_3d_int_s32coord_texobj.ptx"), "\0");
+    const TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX: &str =
+        concat!(include_str!("test_ptx/tex_read_3d_float_s32coord_texobj.ptx"), "\0");
 
     #[derive(Debug, Clone, Copy)]
     enum TexDim {
@@ -489,6 +513,254 @@ mod tests {
         api.cuCtxDestroy_v2(ctx);
     }
 
+    /// Core test logic for s32 coordinates: create array, upload data, bind to
+    /// texref, launch kernel with integer coordinates, read back and verify.
+    unsafe fn texref_read_s32coord_test(
+        api: &impl CudaApi,
+        dim: TexDim,
+        fmt: CUarray_format,
+        num_channels: u32,
+        width: usize,
+        height: usize,
+        depth: usize,
+    ) {
+        let elem_size = format_byte_size(fmt);
+        let pixel_size = elem_size * num_channels as usize;
+        let row_bytes = width * pixel_size;
+
+        let (effective_height, effective_depth) = match dim {
+            TexDim::One => (1, 1),
+            TexDim::Two => (height, 1),
+            TexDim::Three => (height, depth),
+        };
+        let total_bytes = row_bytes * effective_height * effective_depth;
+
+        let px = (width / 2).min(width - 1);
+        let py = (effective_height / 2).min(effective_height - 1);
+        let pz = (effective_depth / 2).min(effective_depth - 1);
+
+        let pixel_offset = pz * (row_bytes * effective_height) + py * row_bytes + px * pixel_size;
+
+        let mut host_buf = vec![0u8; total_bytes];
+        let expected = write_test_pixel(&mut host_buf, pixel_offset, fmt, num_channels);
+
+        // Create CUDA array and upload data
+        let mut array: CUarray = std::mem::zeroed();
+        match dim {
+            TexDim::One => {
+                let desc = CUDA_ARRAY_DESCRIPTOR {
+                    Width: width,
+                    Height: 0,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                };
+                api.cuArrayCreate_v2(&mut array, &desc);
+                api.cuMemcpyHtoA_v2(array, 0, host_buf.as_ptr() as *const c_void, total_bytes);
+            }
+            TexDim::Two => {
+                let desc = CUDA_ARRAY_DESCRIPTOR {
+                    Width: width,
+                    Height: effective_height,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                };
+                api.cuArrayCreate_v2(&mut array, &desc);
+                let copy_params = CUDA_MEMCPY2D {
+                    srcXInBytes: 0,
+                    srcY: 0,
+                    srcMemoryType: CUmemorytype::CU_MEMORYTYPE_HOST,
+                    srcHost: host_buf.as_ptr() as *const c_void,
+                    srcDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    srcArray: std::ptr::null_mut(),
+                    srcPitch: row_bytes,
+                    dstXInBytes: 0,
+                    dstY: 0,
+                    dstMemoryType: CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstHost: std::ptr::null_mut(),
+                    dstDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    dstArray: array,
+                    dstPitch: 0,
+                    WidthInBytes: row_bytes,
+                    Height: effective_height,
+                };
+                api.cuMemcpy2D_v2(&copy_params);
+            }
+            TexDim::Three => {
+                let desc = CUDA_ARRAY3D_DESCRIPTOR {
+                    Width: width,
+                    Height: effective_height,
+                    Depth: effective_depth,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                    Flags: 0,
+                };
+                api.cuArray3DCreate_v2(&mut array, &desc);
+                let copy_params = CUDA_MEMCPY3D {
+                    srcXInBytes: 0,
+                    srcY: 0,
+                    srcZ: 0,
+                    srcLOD: 0,
+                    srcMemoryType: CUmemorytype::CU_MEMORYTYPE_HOST,
+                    srcHost: host_buf.as_ptr() as *const c_void,
+                    srcDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    srcArray: std::ptr::null_mut(),
+                    reserved0: std::ptr::null_mut(),
+                    srcPitch: row_bytes,
+                    srcHeight: effective_height,
+                    dstXInBytes: 0,
+                    dstY: 0,
+                    dstZ: 0,
+                    dstLOD: 0,
+                    dstMemoryType: CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstHost: std::ptr::null_mut(),
+                    dstDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    dstArray: array,
+                    reserved1: std::ptr::null_mut(),
+                    dstPitch: 0,
+                    dstHeight: 0,
+                    WidthInBytes: row_bytes,
+                    Height: effective_height,
+                    Depth: effective_depth,
+                };
+                api.cuMemcpy3D_v2(&copy_params);
+            }
+        }
+
+        // Load PTX module and get texref + kernel function
+        let is_float = format_is_float(fmt);
+        let (ptx, kernel_name): (&str, &std::ffi::CStr) = match (dim, is_float) {
+            (TexDim::One, false) => (TEX_READ_1D_INT_S32COORD_PTX, c"tex_read_1d_int_s32coord"),
+            (TexDim::One, true) => (TEX_READ_1D_FLOAT_S32COORD_PTX, c"tex_read_1d_float_s32coord"),
+            (TexDim::Two, false) => (TEX_READ_2D_INT_S32COORD_PTX, c"tex_read_2d_int_s32coord"),
+            (TexDim::Two, true) => (TEX_READ_2D_FLOAT_S32COORD_PTX, c"tex_read_2d_float_s32coord"),
+            (TexDim::Three, false) => (TEX_READ_3D_INT_S32COORD_PTX, c"tex_read_3d_int_s32coord"),
+            (TexDim::Three, true) => (TEX_READ_3D_FLOAT_S32COORD_PTX, c"tex_read_3d_float_s32coord"),
+        };
+
+        let mut module = std::mem::zeroed();
+        api.cuModuleLoadData(&mut module, ptx.as_ptr() as *const c_void);
+
+        let mut func = std::mem::zeroed();
+        api.cuModuleGetFunction(&mut func, module, kernel_name.as_ptr());
+
+        let mut texref = std::mem::zeroed();
+        api.cuModuleGetTexRef(&mut texref, module, c"tex".as_ptr());
+
+        // Bind array to texref
+        api.cuTexRefSetArray(texref, array, CU_TRSA_OVERRIDE_FORMAT);
+        api.cuTexRefSetFormat(texref, fmt, num_channels as i32);
+        api.cuTexRefSetFilterMode(texref, CUfilter_mode_enum::CU_TR_FILTER_MODE_POINT);
+        for d in 0..3 {
+            api.cuTexRefSetAddressMode(texref, d, CUaddress_mode_enum::CU_TR_ADDRESS_MODE_CLAMP);
+        }
+        let flags = if !is_float { CU_TRSF_READ_AS_INTEGER } else { 0 };
+        api.cuTexRefSetFlags(texref, flags);
+
+        // Allocate output buffer on device (4 x f32 or 4 x s32 = 16 bytes)
+        let mut d_output = std::mem::zeroed();
+        api.cuMemAlloc_v2(&mut d_output, 16);
+
+        // Integer coordinates: direct pixel index
+        let coord_x: i32 = px as i32;
+        let coord_y: i32 = py as i32;
+        let coord_z: i32 = pz as i32;
+        let mut params: [*mut c_void; 4] = [
+            &d_output as *const _ as *mut _,
+            &coord_x as *const _ as *mut _,
+            &coord_y as *const _ as *mut _,
+            &coord_z as *const _ as *mut _,
+        ];
+        api.cuLaunchKernel(
+            func,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            CUstream(std::ptr::null_mut()),
+            params.as_mut_ptr(),
+            std::ptr::null_mut(),
+        );
+        api.cuStreamSynchronize(CUstream(std::ptr::null_mut()));
+
+        // Read back result
+        let mut result = [0u32; 4];
+        api.cuMemcpyDtoH_v2(result.as_mut_ptr() as *mut c_void, d_output, 16);
+
+        // Verify
+        let fmt_name = format!("{:?}", fmt);
+        let dim_name = match dim {
+            TexDim::One => "1d",
+            TexDim::Two => "2d",
+            TexDim::Three => "3d",
+        };
+        assert_eq!(
+            result[..num_channels as usize],
+            expected[..num_channels as usize],
+            "texref s32coord mismatch for dim={dim_name}, format={fmt_name}, channels={num_channels}, \
+             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz}), is_float={is_float}"
+        );
+
+        // Cleanup
+        api.cuMemFree_v2(d_output);
+        api.cuModuleUnload(module);
+        api.cuArrayDestroy(array);
+    }
+
+    #[test_cuda]
+    unsafe fn texref_s32coord_formats_channels_dimensions(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut ctx = std::mem::zeroed();
+        api.cuCtxCreate_v2(&mut ctx, 0, 0);
+
+        let formats = [
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT8,
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT16,
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT32,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT8,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT16,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT32,
+            CUarray_format_enum::CU_AD_FORMAT_HALF,
+            CUarray_format_enum::CU_AD_FORMAT_FLOAT,
+        ];
+        let channel_counts: [u32; 3] = [1, 2, 4];
+
+        // 1D tests
+        let widths_1d: [usize; 4] = [1, 4, 16, 64];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &w in &widths_1d {
+                    texref_read_s32coord_test(&api, TexDim::One, fmt, num_ch, w, 1, 1);
+                }
+            }
+        }
+
+        // 2D tests
+        let dimensions_2d: [(usize, usize); 4] = [(1, 1), (4, 4), (16, 16), (64, 37)];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &(w, h) in &dimensions_2d {
+                    texref_read_s32coord_test(&api, TexDim::Two, fmt, num_ch, w, h, 1);
+                }
+            }
+        }
+
+        // 3D tests
+        let dimensions_3d: [(usize, usize, usize); 4] =
+            [(1, 1, 1), (4, 4, 4), (8, 8, 8), (16, 13, 7)];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &(w, h, d) in &dimensions_3d {
+                    texref_read_s32coord_test(&api, TexDim::Three, fmt, num_ch, w, h, d);
+                }
+            }
+        }
+
+        api.cuCtxDestroy_v2(ctx);
+    }
+
     /// Core test logic: create array, upload data, create texobj, launch
     /// kernel, read back and verify.
     unsafe fn texobj_read_test(
@@ -764,6 +1036,268 @@ mod tests {
                     for normalized in [false, true] {
                         texobj_read_test(&api, normalized, TexDim::Three, fmt, num_ch, w, h, d);
                     }
+                }
+            }
+        }
+
+        api.cuCtxDestroy_v2(ctx);
+    }
+
+    /// Core test logic for s32 coordinates with texobj: create array, upload
+    /// data, create texobj, launch kernel with integer coordinates, read back
+    /// and verify.
+    unsafe fn texobj_read_s32coord_test(
+        api: &impl CudaApi,
+        dim: TexDim,
+        fmt: CUarray_format,
+        num_channels: u32,
+        width: usize,
+        height: usize,
+        depth: usize,
+    ) {
+        let elem_size = format_byte_size(fmt);
+        let pixel_size = elem_size * num_channels as usize;
+        let row_bytes = width * pixel_size;
+
+        let (effective_height, effective_depth) = match dim {
+            TexDim::One => (1, 1),
+            TexDim::Two => (height, 1),
+            TexDim::Three => (height, depth),
+        };
+        let total_bytes = row_bytes * effective_height * effective_depth;
+
+        let px = (width / 2).min(width - 1);
+        let py = (effective_height / 2).min(effective_height - 1);
+        let pz = (effective_depth / 2).min(effective_depth - 1);
+
+        let pixel_offset = pz * (row_bytes * effective_height) + py * row_bytes + px * pixel_size;
+
+        let mut host_buf = vec![0u8; total_bytes];
+        let expected = write_test_pixel(&mut host_buf, pixel_offset, fmt, num_channels);
+
+        // Create CUDA array and upload data
+        let mut array: CUarray = std::mem::zeroed();
+        match dim {
+            TexDim::One => {
+                let desc = CUDA_ARRAY_DESCRIPTOR {
+                    Width: width,
+                    Height: 0,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                };
+                api.cuArrayCreate_v2(&mut array, &desc);
+                api.cuMemcpyHtoA_v2(array, 0, host_buf.as_ptr() as *const c_void, total_bytes);
+            }
+            TexDim::Two => {
+                let desc = CUDA_ARRAY_DESCRIPTOR {
+                    Width: width,
+                    Height: effective_height,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                };
+                api.cuArrayCreate_v2(&mut array, &desc);
+                let copy_params = CUDA_MEMCPY2D {
+                    srcXInBytes: 0,
+                    srcY: 0,
+                    srcMemoryType: CUmemorytype::CU_MEMORYTYPE_HOST,
+                    srcHost: host_buf.as_ptr() as *const c_void,
+                    srcDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    srcArray: std::ptr::null_mut(),
+                    srcPitch: row_bytes,
+                    dstXInBytes: 0,
+                    dstY: 0,
+                    dstMemoryType: CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstHost: std::ptr::null_mut(),
+                    dstDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    dstArray: array,
+                    dstPitch: 0,
+                    WidthInBytes: row_bytes,
+                    Height: effective_height,
+                };
+                api.cuMemcpy2D_v2(&copy_params);
+            }
+            TexDim::Three => {
+                let desc = CUDA_ARRAY3D_DESCRIPTOR {
+                    Width: width,
+                    Height: effective_height,
+                    Depth: effective_depth,
+                    Format: fmt,
+                    NumChannels: num_channels,
+                    Flags: 0,
+                };
+                api.cuArray3DCreate_v2(&mut array, &desc);
+                let copy_params = CUDA_MEMCPY3D {
+                    srcXInBytes: 0,
+                    srcY: 0,
+                    srcZ: 0,
+                    srcLOD: 0,
+                    srcMemoryType: CUmemorytype::CU_MEMORYTYPE_HOST,
+                    srcHost: host_buf.as_ptr() as *const c_void,
+                    srcDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    srcArray: std::ptr::null_mut(),
+                    reserved0: std::ptr::null_mut(),
+                    srcPitch: row_bytes,
+                    srcHeight: effective_height,
+                    dstXInBytes: 0,
+                    dstY: 0,
+                    dstZ: 0,
+                    dstLOD: 0,
+                    dstMemoryType: CUmemorytype::CU_MEMORYTYPE_ARRAY,
+                    dstHost: std::ptr::null_mut(),
+                    dstDevice: CUdeviceptr_v2(std::ptr::null_mut()),
+                    dstArray: array,
+                    reserved1: std::ptr::null_mut(),
+                    dstPitch: 0,
+                    dstHeight: 0,
+                    WidthInBytes: row_bytes,
+                    Height: effective_height,
+                    Depth: effective_depth,
+                };
+                api.cuMemcpy3D_v2(&copy_params);
+            }
+        }
+
+        // Create texture object
+        let res_desc = CUDA_RESOURCE_DESC {
+            resType: CUresourcetype_enum::CU_RESOURCE_TYPE_ARRAY,
+            res: CUDA_RESOURCE_DESC_st__bindgen_ty_1 {
+                array: CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_1 { hArray: array },
+            },
+            flags: 0,
+        };
+        let is_float = format_is_float(fmt);
+        let flags = if !is_float { CU_TRSF_READ_AS_INTEGER } else { 0 };
+        let tex_desc = CUDA_TEXTURE_DESC {
+            addressMode: [CUaddress_mode_enum::CU_TR_ADDRESS_MODE_CLAMP; 3],
+            filterMode: CUfilter_mode_enum::CU_TR_FILTER_MODE_POINT,
+            flags,
+            maxAnisotropy: 0,
+            mipmapFilterMode: CUfilter_mode_enum::CU_TR_FILTER_MODE_POINT,
+            mipmapLevelBias: 0.0,
+            minMipmapLevelClamp: 0.0,
+            maxMipmapLevelClamp: 0.0,
+            borderColor: [0.0; 4],
+            reserved: [0; 12],
+        };
+        let mut texobj: CUtexObject = std::mem::zeroed();
+        api.cuTexObjectCreate(&mut texobj, &res_desc, &tex_desc, std::ptr::null());
+
+        // Load PTX module and get kernel function
+        let (ptx, kernel_name): (&str, &std::ffi::CStr) = match (dim, is_float) {
+            (TexDim::One, false) => (TEX_READ_1D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_1d_int_s32coord_texobj"),
+            (TexDim::One, true) => (TEX_READ_1D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_1d_float_s32coord_texobj"),
+            (TexDim::Two, false) => (TEX_READ_2D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_2d_int_s32coord_texobj"),
+            (TexDim::Two, true) => (TEX_READ_2D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_2d_float_s32coord_texobj"),
+            (TexDim::Three, false) => (TEX_READ_3D_INT_S32COORD_TEXOBJ_PTX, c"tex_read_3d_int_s32coord_texobj"),
+            (TexDim::Three, true) => (TEX_READ_3D_FLOAT_S32COORD_TEXOBJ_PTX, c"tex_read_3d_float_s32coord_texobj"),
+        };
+
+        let mut module = std::mem::zeroed();
+        api.cuModuleLoadData(&mut module, ptx.as_ptr() as *const c_void);
+
+        let mut func = std::mem::zeroed();
+        api.cuModuleGetFunction(&mut func, module, kernel_name.as_ptr());
+
+        // Allocate output buffer on device (4 x f32 or 4 x s32 = 16 bytes)
+        let mut d_output = std::mem::zeroed();
+        api.cuMemAlloc_v2(&mut d_output, 16);
+
+        // Integer coordinates: direct pixel index
+        let coord_x: i32 = px as i32;
+        let coord_y: i32 = py as i32;
+        let coord_z: i32 = pz as i32;
+        let mut params: [*mut c_void; 5] = [
+            &d_output as *const _ as *mut _,
+            &texobj as *const _ as *mut _,
+            &coord_x as *const _ as *mut _,
+            &coord_y as *const _ as *mut _,
+            &coord_z as *const _ as *mut _,
+        ];
+        api.cuLaunchKernel(
+            func,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            CUstream(std::ptr::null_mut()),
+            params.as_mut_ptr(),
+            std::ptr::null_mut(),
+        );
+        api.cuStreamSynchronize(CUstream(std::ptr::null_mut()));
+
+        // Read back result
+        let mut result = [0u32; 4];
+        api.cuMemcpyDtoH_v2(result.as_mut_ptr() as *mut c_void, d_output, 16);
+
+        // Verify
+        let fmt_name = format!("{:?}", fmt);
+        let dim_name = match dim {
+            TexDim::One => "1d",
+            TexDim::Two => "2d",
+            TexDim::Three => "3d",
+        };
+        assert_eq!(
+            result[..num_channels as usize],
+            expected[..num_channels as usize],
+            "texobj s32coord mismatch for dim={dim_name}, format={fmt_name}, channels={num_channels}, \
+             size={width}x{effective_height}x{effective_depth}, pixel=({px},{py},{pz}), is_float={is_float}"
+        );
+
+        // Cleanup
+        api.cuMemFree_v2(d_output);
+        api.cuTexObjectDestroy(texobj);
+        api.cuModuleUnload(module);
+        api.cuArrayDestroy(array);
+    }
+
+    #[test_cuda]
+    unsafe fn texobj_s32coord_formats_channels_dimensions(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut ctx = std::mem::zeroed();
+        api.cuCtxCreate_v2(&mut ctx, 0, 0);
+
+        let formats = [
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT8,
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT16,
+            CUarray_format_enum::CU_AD_FORMAT_UNSIGNED_INT32,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT8,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT16,
+            CUarray_format_enum::CU_AD_FORMAT_SIGNED_INT32,
+            CUarray_format_enum::CU_AD_FORMAT_HALF,
+            CUarray_format_enum::CU_AD_FORMAT_FLOAT,
+        ];
+        let channel_counts: [u32; 3] = [1, 2, 4];
+
+        // 1D tests
+        let widths_1d: [usize; 4] = [1, 4, 16, 64];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &w in &widths_1d {
+                    texobj_read_s32coord_test(&api, TexDim::One, fmt, num_ch, w, 1, 1);
+                }
+            }
+        }
+
+        // 2D tests
+        let dimensions_2d: [(usize, usize); 4] = [(1, 1), (4, 4), (16, 16), (64, 37)];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &(w, h) in &dimensions_2d {
+                    texobj_read_s32coord_test(&api, TexDim::Two, fmt, num_ch, w, h, 1);
+                }
+            }
+        }
+
+        // 3D tests
+        let dimensions_3d: [(usize, usize, usize); 4] =
+            [(1, 1, 1), (4, 4, 4), (8, 8, 8), (16, 13, 7)];
+        for &fmt in &formats {
+            for &num_ch in &channel_counts {
+                for &(w, h, d) in &dimensions_3d {
+                    texobj_read_s32coord_test(&api, TexDim::Three, fmt, num_ch, w, h, d);
                 }
             }
         }
