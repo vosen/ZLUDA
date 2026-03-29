@@ -21,15 +21,36 @@ pub(crate) fn unimplemented() -> cusparseStatus_t {
 }
 
 pub(crate) unsafe fn get_error_name(
-    _status: cuda_types::cusparse::cusparseStatus_t,
+    status: cuda_types::cusparse::cusparseStatus_t,
 ) -> *const ::core::ffi::c_char {
-    todo!()
+    match status {
+        Ok(()) => c"CUSPARSE_STATUS_SUCCESS".as_ptr(),
+        Err(cusparseError_t::NOT_INITIALIZED) => c"CUSPARSE_STATUS_NOT_INITIALIZED".as_ptr(),
+        Err(cusparseError_t::ALLOC_FAILED) => c"CUSPARSE_STATUS_ALLOC_FAILED".as_ptr(),
+        Err(cusparseError_t::INVALID_VALUE) => c"CUSPARSE_STATUS_INVALID_VALUE".as_ptr(),
+        Err(cusparseError_t::ARCH_MISMATCH) => c"CUSPARSE_STATUS_ARCH_MISMATCH".as_ptr(),
+        Err(cusparseError_t::MAPPING_ERROR) => c"CUSPARSE_STATUS_MAPPING_ERROR".as_ptr(),
+        Err(cusparseError_t::EXECUTION_FAILED) => c"CUSPARSE_STATUS_EXECUTION_FAILED".as_ptr(),
+        Err(cusparseError_t::INTERNAL_ERROR) => c"CUSPARSE_STATUS_INTERNAL_ERROR".as_ptr(),
+        Err(cusparseError_t::MATRIX_TYPE_NOT_SUPPORTED) => {
+            c"CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED".as_ptr()
+        }
+        Err(cusparseError_t::ZERO_PIVOT) => c"CUSPARSE_STATUS_ZERO_PIVOT".as_ptr(),
+        Err(cusparseError_t::NOT_SUPPORTED) => c"CUSPARSE_STATUS_NOT_SUPPORTED".as_ptr(),
+        Err(cusparseError_t::INSUFFICIENT_RESOURCES) => {
+            c"CUSPARSE_STATUS_INSUFFICIENT_RESOURCES".as_ptr()
+        }
+        Err(_) => c"CUSPARSE_STATUS_INTERNAL_ERROR".as_ptr(),
+    }
 }
 
 pub(crate) unsafe fn get_error_string(
-    _status: cuda_types::cusparse::cusparseStatus_t,
+    status: cuda_types::cusparse::cusparseStatus_t,
 ) -> *const ::core::ffi::c_char {
-    todo!()
+    if cfg!(windows) && status.is_err() && status.err() == rocsparse().err().map(Into::into) {
+        return c"rocsparse.dll could not be found. Please install HIP SDK: https://zluda.readthedocs.io/latest/hip_sdk.html".as_ptr();
+    }
+    get_error_name(status)
 }
 
 pub(crate) unsafe fn get_mat_index_base(descr_a: rocsparse_mat_descr) -> rocsparse_index_base {

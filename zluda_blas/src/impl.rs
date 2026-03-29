@@ -91,25 +91,27 @@ pub(crate) fn create_v2(handle: &mut cublasHandle_t) -> cublasStatus_t {
     Ok(())
 }
 
-pub(crate) fn get_status_name(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+pub(crate) fn get_status_name(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    match status {
+        cublasStatus_t::SUCCESS => c"CUBLAS_STATUS_SUCCESS".as_ptr(),
+        cublasStatus_t::ERROR_NOT_INITIALIZED => c"CUBLAS_STATUS_NOT_INITIALIZED".as_ptr(),
+        cublasStatus_t::ERROR_ALLOC_FAILED => c"CUBLAS_STATUS_ALLOC_FAILED".as_ptr(),
+        cublasStatus_t::ERROR_INVALID_VALUE => c"CUBLAS_STATUS_INVALID_VALUE".as_ptr(),
+        cublasStatus_t::ERROR_ARCH_MISMATCH => c"CUBLAS_STATUS_ARCH_MISMATCH".as_ptr(),
+        cublasStatus_t::ERROR_MAPPING_ERROR => c"CUBLAS_STATUS_MAPPING_ERROR".as_ptr(),
+        cublasStatus_t::ERROR_EXECUTION_FAILED => c"CUBLAS_STATUS_EXECUTION_FAILED".as_ptr(),
+        cublasStatus_t::ERROR_INTERNAL_ERROR => c"CUBLAS_STATUS_INTERNAL_ERROR".as_ptr(),
+        cublasStatus_t::ERROR_NOT_SUPPORTED => c"CUBLAS_STATUS_NOT_SUPPORTED".as_ptr(),
+        cublasStatus_t::ERROR_LICENSE_ERROR => c"CUBLAS_STATUS_LICENSE_ERROR".as_ptr(),
+        _ => c"CUBLAS_STATUS_UNKNOWN".as_ptr(),
+    }
 }
 
 pub(crate) fn get_status_string(status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    match status {
-        cublasStatus_t::SUCCESS => "CUBLAS_STATUS_SUCCESS\0",
-        cublasStatus_t::ERROR_NOT_INITIALIZED => "CUBLAS_STATUS_NOT_INITIALIZED\0",
-        cublasStatus_t::ERROR_ALLOC_FAILED => "CUBLAS_STATUS_ALLOC_FAILED\0",
-        cublasStatus_t::ERROR_INVALID_VALUE => "CUBLAS_STATUS_INVALID_VALUE\0",
-        cublasStatus_t::ERROR_ARCH_MISMATCH => "CUBLAS_STATUS_ARCH_MISMATCH\0",
-        cublasStatus_t::ERROR_MAPPING_ERROR => "CUBLAS_STATUS_MAPPING_ERROR\0",
-        cublasStatus_t::ERROR_EXECUTION_FAILED => "CUBLAS_STATUS_EXECUTION_FAILED\0",
-        cublasStatus_t::ERROR_INTERNAL_ERROR => "CUBLAS_STATUS_INTERNAL_ERROR\0",
-        cublasStatus_t::ERROR_NOT_SUPPORTED => "CUBLAS_STATUS_NOT_SUPPORTED\0",
-        cublasStatus_t::ERROR_LICENSE_ERROR => "CUBLAS_STATUS_LICENSE_ERROR\0",
-        _ => "CUBLAS_STATUS_UNKNOWN\0",
+    if cfg!(windows) && status.is_err() && status.err() == rocblas().err().map(Into::into) {
+        return c"rocblas.dll could not be found. Please install HIP SDK: https://zluda.readthedocs.io/latest/hip_sdk.html".as_ptr();
     }
-    .as_ptr() as *const ::core::ffi::c_char
+    get_status_name(status)
 }
 
 pub(crate) fn xerbla(_sr_name: *const ::core::ffi::c_char, _info: ::core::ffi::c_int) -> () {
