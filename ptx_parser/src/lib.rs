@@ -382,6 +382,7 @@ fn reg_or_immediate<'a, 'input>(
         alt((
             immediate_value.map(|imm| ast::RegOrImmediate::Imm(imm)),
             ident.map(|id| ast::RegOrImmediate::Reg(id)),
+            Token::Discard.value(ast::RegOrImmediate::Discard),
         )),
     )
     .parse_next(stream)
@@ -1892,7 +1893,9 @@ derive_parser!(
         #[token(".ptr")]
         DotPtr,
         #[token(".noreturn")]
-        DotNoreturn
+        DotNoreturn,
+        #[token("_")]
+        Discard
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]

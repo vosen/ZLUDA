@@ -531,13 +531,16 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 let (packed, unpacked) = if is_extract {
                     let unpacked = unpacked
                         .into_iter()
-                        .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                true,
-                                relaxed_type_check,
-                            )
+                        .map(|ident| match ident {
+                            Some(ident) => visitor
+                                .visit_ident(
+                                    ident,
+                                    Some((&typ.into(), ast::StateSpace::Reg)),
+                                    true,
+                                    relaxed_type_check,
+                                )
+                                .map(Some),
+                            None => Ok(None),
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     let packed = visitor.visit_ident(
@@ -562,13 +565,16 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     )?;
                     let unpacked = unpacked
                         .into_iter()
-                        .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                false,
-                                relaxed_type_check,
-                            )
+                        .map(|ident| match ident {
+                            Some(ident) => visitor
+                                .visit_ident(
+                                    ident,
+                                    Some((&typ.into(), ast::StateSpace::Reg)),
+                                    false,
+                                    relaxed_type_check,
+                                )
+                                .map(Some),
+                            None => Ok(None),
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     (packed, unpacked)
@@ -685,7 +691,7 @@ struct RepackVectorDetails {
     is_extract: bool,
     typ: ast::ScalarType,
     packed: SpirvWord,
-    unpacked: Vec<SpirvWord>,
+    unpacked: Vec<Option<SpirvWord>>,
     relaxed_type_check: bool,
 }
 

@@ -297,6 +297,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                         ast::RegOrImmediate::Imm(imm) => {
                             Ok(get_immediate_value(self.context, scalar, imm))
                         }
+                        ast::RegOrImmediate::Discard => Err(error_unreachable()),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
@@ -1510,6 +1511,7 @@ impl<'a> MethodEmitContext<'a> {
         if repack.is_extract {
             let src = self.resolver.value(repack.packed)?;
             for (index, dst) in repack.unpacked.iter().enumerate() {
+                let dst = unwrap_or::unwrap_some_or!(dst, continue);
                 let index: *mut LLVMValue = unsafe { LLVMConstInt(i8_type, index as _, 0) };
                 self.resolver.with_result(*dst, |dst| unsafe {
                     LLVMBuildExtractElement(self.builder, src, index, dst)
@@ -1522,6 +1524,7 @@ impl<'a> MethodEmitContext<'a> {
             )?;
             let mut temp_vec = unsafe { LLVMGetUndef(vector_type) };
             for (index, src_id) in repack.unpacked.iter().enumerate() {
+                let src_id = unwrap_or::unwrap_some_or!(src_id, return Err(error_unreachable()));
                 let dst = if index == repack.unpacked.len() - 1 {
                     Some(repack.packed)
                 } else {

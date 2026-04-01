@@ -203,6 +203,7 @@ pub fn map_operand<T: Copy, Err>(
                         Ok(ast::RegOrImmediate::Reg(fn_(ident, None)?.unwrap_or(ident)))
                     }
                     ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(imm)),
+                    ast::RegOrImmediate::Discard => Ok(ast::RegOrImmediate::Discard),
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         ),

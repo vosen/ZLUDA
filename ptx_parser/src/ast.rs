@@ -1009,6 +1009,7 @@ where
                                 relaxed_type_check,
                             )?),
                             RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
+                            RegOrImmediate::Discard => RegOrImmediate::Discard,
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?,
@@ -1475,6 +1476,7 @@ pub struct ShfDetails {
 pub enum RegOrImmediate<Ident> {
     Reg(Ident),
     Imm(ImmediateValue),
+    Discard,
 }
 
 #[derive(Clone)]

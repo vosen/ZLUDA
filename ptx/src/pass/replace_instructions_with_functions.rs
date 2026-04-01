@@ -176,7 +176,7 @@ fn run_statements<'input>(
                             is_extract: true,
                             typ: ast::ScalarType::U32,
                             packed: packed_var,
-                            unpacked: vec![dst, dst_pred_wide],
+                            unpacked: vec![Some(dst), Some(dst_pred_wide)],
                             relaxed_type_check: false,
                         }),
                         Statement::Instruction(ast::Instruction::Cvt {

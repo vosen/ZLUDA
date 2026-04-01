@@ -202,6 +202,7 @@ fn run_array_init<'input, 'b>(
         .map(|elem| match elem {
             ast::RegOrImmediate::Reg(name) => Ok(ast::RegOrImmediate::Reg(resolver.get(name)?)),
             ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(*imm)),
+            ast::RegOrImmediate::Discard => Ok(ast::RegOrImmediate::Discard),
         })
         .collect::<Result<Vec<_>, _>>()?)
 }

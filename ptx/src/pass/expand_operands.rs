@@ -253,11 +253,20 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         let vector_elements = vector_elements
             .into_iter()
             .map(|element| match element {
-                ast::RegOrImmediate::Reg(name) => self.reg(name),
-                ast::RegOrImmediate::Imm(immediate_value) => self.immediate(
-                    immediate_value,
-                    Some((&ast::Type::Scalar(scalar_t), state_space)),
-                ),
+                ast::RegOrImmediate::Reg(name) => self.reg(name).map(Some),
+                ast::RegOrImmediate::Imm(immediate_value) => self
+                    .immediate(
+                        immediate_value,
+                        Some((&ast::Type::Scalar(scalar_t), state_space)),
+                    )
+                    .map(Some),
+                ast::RegOrImmediate::Discard => {
+                    if is_dst {
+                        Ok(None)
+                    } else {
+                        Err(error_mismatched_type())
+                    }
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         let temporary_vector = self

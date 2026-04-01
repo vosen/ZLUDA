@@ -400,6 +400,7 @@ test_ptx!(
     [0x16A2028Du32, 0x5E89F6AE],
     [0x26u32, 900636404u32]
 );
+test_ptx!(vector_discard, [0x3c46f477u32, 0xa92c3d07u32], [0x3c46f477u32]);
 
 test_ptx!(nanosleep, [0u64], [0u64]);
 test_ptx!(shf_l, [0x12345678u32, 0x9abcdef0u32, 12], [0xcdef0123u32]);
