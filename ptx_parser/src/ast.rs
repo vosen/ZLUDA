@@ -4,8 +4,8 @@ use super::{
 };
 use crate::{
     BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
-    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
-    VoteMode,
+    MatrixShape, Mul24Control, PtxError, PtxParserState, RawPrefetchSize, Reduction,
+    ShiftDirection, ShuffleMode, VoteMode,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -1465,12 +1465,31 @@ pub struct CpAsyncDetails {
     pub space: StateSpace,
     pub cp_size: CpAsyncCpSize,
     pub src_size: Option<u64>,
+    pub prefetch: Option<CpAsyncPrefetch>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum CpAsyncPrefetch {
+    B64,
+    B128,
+    B256,
+}
+
+impl From<RawPrefetchSize> for CpAsyncPrefetch {
+    fn from(value: RawPrefetchSize) -> Self {
+        match value {
+            RawPrefetchSize::L264B => CpAsyncPrefetch::B64,
+            RawPrefetchSize::L2128B => CpAsyncPrefetch::B128,
+            RawPrefetchSize::L2256B => CpAsyncPrefetch::B256,
+        }
+    }
 }
 
 pub struct ShfDetails {
     pub direction: ShiftDirection,
     pub mode: FunnelShiftMode,
 }
+
 #[cfg_attr(debug_assertions, derive(PartialEq))]
 #[derive(Clone, Copy, Display, Debug)]
 pub enum RegOrImmediate<Ident> {

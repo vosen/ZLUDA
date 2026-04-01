@@ -1844,7 +1844,7 @@ derive_parser!(
         F64Hex(&'input str),
         #[regex(r"0[xX][0-9a-zA-Z]+U?", |lex| lex.slice())]
         Hex(&'input str),
-        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice())]
+        #[regex(r"[0-9]+\.|[0-9]+\.[0-9]+(?:[eE][-+]?[0-9]+)?|\.[0-9]+(?:[eE][-+]?[0-9]+)?", |lex| lex.slice())]
         F64(&'input str),
         #[regex(r"[0-9]+U?", |lex| lex.slice())]
         Decimal(&'input str),
@@ -2127,7 +2127,7 @@ derive_parser!(
     .level::eviction_priority: EvictionPriority =
                                             { .L1::evict_normal, .L1::evict_unchanged, .L1::evict_first, .L1::evict_last, .L1::no_allocate };
     .level::cache_hint =                    { .L2::cache_hint };
-    .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
+    .level::prefetch_size: RawPrefetchSize ={ .L2::64B, .L2::128B, .L2::256B };
     .scope: MemScope =                      { .cta, .cluster, .gpu, .sys };
     .vec: VectorPrefix =                    { .v2, .v4, .v8 };
     .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
@@ -2163,7 +2163,7 @@ derive_parser!(
                                             { .L1::evict_normal, .L1::evict_unchanged,
                                               .L1::evict_first, .L1::evict_last, .L1::no_allocate};
     .level::cache_hint =                    { .L2::cache_hint };
-    .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
+    .level::prefetch_size: RawPrefetchSize ={ .L2::64B, .L2::128B, .L2::256B };
     .vec: VectorPrefix  =                   { .v2, .v4 };
     .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
                                               .u8, .u16, .u32, .u64,
@@ -3866,10 +3866,10 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
                              [dst], [src], cp-size{, src-size}{, cache-policy} => {
-        if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo("cp.async instruction with cache policy/cache hints/prefetch size".to_string()));
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("cp.async instruction with cache policy/cache hints".to_string()));
         }
-
+        let prefetch = level_prefetch_size.map(Into::into);
         let cp_size = cp_size
             .as_immediate()
             .and_then(|imm| imm.as_u64())
@@ -3889,6 +3889,7 @@ derive_parser!(
                 space,
                 cp_size,
                 src_size,
+                prefetch,
             },
             arguments: CpAsyncArgs {
                 src_to: dst,
@@ -3902,7 +3903,7 @@ derive_parser!(
     //                          [dst], [src], 16{, ignore-src}{, cache-policy} ;
 
     .level::cache_hint = { .L2::cache_hint };
-    .level::prefetch_size: PrefetchSize =  { .L2::64B, .L2::128B, .L2::256B };
+    .level::prefetch_size: RawPrefetchSize =  { .L2::64B, .L2::128B, .L2::256B };
     // TODO: how to handle this?
     // cp-size =                { 4, 8, 16 }
     .space: StateSpace = { .shared{::cta} };
