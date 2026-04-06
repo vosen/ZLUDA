@@ -52,6 +52,28 @@ fn run_statement<'input>(
         Statement::Variable(var) => {
             run_on_param_variable(resolver, var)?;
         }
+        Statement::Instruction(ast::Instruction::Call { data, .. }) => {
+            for argument in data
+                .input_arguments
+                .iter_mut()
+                .chain(data.return_arguments.iter_mut())
+            {
+                if let (ast::Type::Array(None, ast::ScalarType::B8, dims), ast::StateSpace::Param) =
+                    argument
+                {
+                    let dims = match &dims[..] {
+                        [dim] => {
+                            vec![dim.div_ceil(mem::size_of::<u32>() as u32)]
+                        }
+                        _ => {
+                            continue;
+                        }
+                    };
+                    let new_type = ast::Type::Array(None, ast::ScalarType::B32, dims);
+                    argument.0 = new_type;
+                }
+            }
+        }
         _ => {}
     })
 }
