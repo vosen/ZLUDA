@@ -29,12 +29,14 @@ fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     method: &mut UnconditionalFunction,
 ) -> Result<(), TranslateError> {
-    for argument in method
-        .input_arguments
-        .iter_mut()
-        .chain(method.return_arguments.iter_mut())
-    {
-        run_on_param_variable(resolver, argument)?;
+    if !method.is_kernel() {
+        for argument in method
+            .input_arguments
+            .iter_mut()
+            .chain(method.return_arguments.iter_mut())
+        {
+            run_on_param_variable(resolver, argument)?;
+        }
     }
     for statement in method.body.iter_mut().flatten() {
         run_statement(resolver, statement)?;
