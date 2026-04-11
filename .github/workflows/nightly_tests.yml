@@ -5,7 +5,7 @@ on:
 
 env:
   ROCM_VERSION: "6.3.4"
-  AMDGPU_VERSION: "7.0.3"
+  AMDGPU_VERSION: "31.20"
   TEST_THREADS: 24
 
 jobs:
