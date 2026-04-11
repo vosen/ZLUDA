@@ -1,6 +1,7 @@
 use cuda_types::cuda::*;
 use zluda_common::from_cuda_object;
 
+pub(super) mod array;
 pub(super) mod context;
 pub(super) mod device;
 pub(super) mod driver;
@@ -14,6 +15,7 @@ pub(super) mod memory;
 pub(super) mod module;
 pub(super) mod pointer;
 pub(super) mod stream;
+pub(super) mod tex;
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> CUerror {

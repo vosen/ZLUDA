@@ -243,6 +243,7 @@ fn init_globals() -> Result<(), String> {
                 // c"-amdgpu-early-inline-all=true",
                 c"-amdgpu-internalize-symbols",
                 c"-amdhsa-code-object-version=5",
+                //c"--pass-remarks-missed=.*inlin.*",
             ]
             .into_iter();
             let opt_options = if cfg!(debug_assertions) {

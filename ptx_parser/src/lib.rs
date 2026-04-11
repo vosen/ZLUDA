@@ -967,7 +967,8 @@ fn method_parameter<'a, 'input: 'a>(
         move |stream: &mut PtxParser<'a, 'input>| {
             if kernel_decl_rules {}
             let ((align, vector, type_), name) =
-                alt(((variable_info, ident), nvptx_kernel_declaration)).parse_next(stream)?;
+                alt(((variable_info_non_texref, ident), nvptx_kernel_declaration))
+                    .parse_next(stream)?;
             let array_dimensions = if state_space != StateSpace::Reg {
                 opt(array_dimensions).parse_next(stream)?
             } else {
@@ -992,12 +993,62 @@ fn method_parameter<'a, 'input: 'a>(
     )
 }
 
+enum ParsedType {
+    Texref,
+    Type {
+        align: Option<u32>,
+        vector: Option<NonZeroU8>,
+        scalar: ScalarType,
+    },
+}
+
+fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
+    trace("texref", (Token::DotTexref).map(|_| ParsedType::Texref)).parse_next(stream)
+}
+
+fn parse_if<Input, Output, Error, ParseNext>(
+    cond: bool,
+    mut parser: ParseNext,
+) -> impl Parser<Input, Output, Error>
+where
+    Input: Stream,
+    ParseNext: Parser<Input, Output, Error>,
+    Error: ParserError<Input>,
+{
+    trace("cond_fail", move |input: &mut Input| {
+        if cond {
+            parser.parse_next(input)
+        } else {
+            fail(input)
+        }
+    })
+}
+
+fn variable_info<'a, 'input: 'a>(
+    state_space: StateSpace,
+) -> impl Parser<PtxParser<'a, 'input>, ParsedType, ContextError> {
+    trace(
+        "variable_info",
+        move |stream: &mut PtxParser<'a, 'input>| {
+            alt((
+                parse_if(state_space == StateSpace::Global, texref),
+                variable_info_non_texref.map(|(align, vector, scalar)| ParsedType::Type {
+                    align,
+                    vector,
+                    scalar,
+                }),
+            ))
+            .parse_next(stream)
+        },
+    )
+}
+
 // TODO: split to a separate type
-fn variable_info<'a, 'input>(
+fn variable_info_non_texref<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(Option<u32>, Option<NonZeroU8>, ScalarType)> {
     trace(
-        "variable_info",
+        "variable_info_non_texref",
         (
             opt(align.verify(|x| x.count_ones() == 1)),
             vector_prefix,
@@ -1014,13 +1065,34 @@ fn multi_variable<'a, 'input: 'a>(
     trace(
         "multi_variable",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let ((align, vector, type_), names, count): (_, Vec<_>, _) = (
-                variable_info,
+            let (parsed_type, names, count): (_, Vec<_>, _) = (
+                variable_info(state_space),
                 separated(1.., ident, Token::Comma),
                 // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
                 opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
             )
                 .parse_next(stream)?;
+            let (align, vector, type_) = match parsed_type {
+                ParsedType::Texref => {
+                    if count.is_some() {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    }
+                    return Ok(MultiVariable::Names {
+                        info: VariableInfo {
+                            align: None,
+                            v_type: Type::Texref,
+                            state_space,
+                            array_init: Vec::new(),
+                        },
+                        names,
+                    });
+                }
+                ParsedType::Type {
+                    align,
+                    vector,
+                    scalar,
+                } => (align, vector, scalar),
+            };
             if let Some(count) = count {
                 if names.len() > 1 {
                     // nvcc does not support parameterized variable names in comma-separated lists of names.
@@ -1892,7 +1964,9 @@ derive_parser!(
         #[token(".ptr")]
         DotPtr,
         #[token(".noreturn")]
-        DotNoreturn
+        DotNoreturn,
+        #[token(".texref")]
+        DotTexref
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -4219,6 +4293,44 @@ derive_parser!(
 
     .mode: RawMulIntControl = { .lo, .hi };
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#texture-instructions-tex
+    tex.1d.v4.dtype.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                dtype,
+                ctype,
+                dims: TexDimensions::D1,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+    tex.2d.v4.dtype.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                dtype,
+                ctype,
+                dims: TexDimensions::D2,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+    tex.3d.v4.dtype.ctype  d, [a, c] => {
+        Instruction::Tex {
+            data: TexData {
+                dtype,
+                ctype,
+                dims: TexDimensions::D3,
+                type_: TexType::Texref
+            },
+            arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
+        }
+    }
+
+    .dtype: ScalarType = { .s32, .f32 };
+    .ctype: ScalarType = { .s32, .f32 };
 );
 
 #[cfg(test)]

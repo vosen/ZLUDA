@@ -1,0 +1,21 @@
+.version 6.5
+.target sm_30
+.address_size 64
+.global .texref tex;
+.visible .entry tex_read_3d_int(
+    .param .u64 out_ptr,
+    .param .f32 coord_x,
+    .param .f32 coord_y,
+    .param .f32 coord_z
+) {
+    .reg .u64 %rd1;
+    .reg .f32 %fx, %fy, %fz;
+    .reg .s32 %r0, %r1, %r2, %r3;
+    ld.param.u64 %rd1, [out_ptr];
+    ld.param.f32 %fx, [coord_x];
+    ld.param.f32 %fy, [coord_y];
+    ld.param.f32 %fz, [coord_z];
+    tex.3d.v4.s32.f32 {%r0, %r1, %r2, %r3}, [tex, {%fx, %fy, %fz, %fz}];
+    st.global.v4.s32 [%rd1], {%r0, %r1, %r2, %r3};
+    ret;
+}

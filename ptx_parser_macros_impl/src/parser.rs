@@ -337,6 +337,10 @@ impl DotModifier {
                 IdentLike::Ident(_) | IdentLike::Integer(_) => {}
             }
         }
+        match result.chars().next().unwrap() {
+            '0'..='9' => result.insert(0, 'x'),
+            _ => {}
+        }
         Ident::new(&result.to_ascii_lowercase(), self.span())
     }
 
@@ -935,5 +939,18 @@ mod tests {
         let (ref opcode2, _) = args.0 .0[1];
         assert_eq!(opcode2.0.name.to_string(), "foo");
         assert_eq!(args.1.len(), 1);
+    }
+
+    #[test]
+    fn digit() {
+        let input = quote! {
+            tex.1d.v4.f32  d, [a, c]
+        };
+        let opcode = syn::parse2::<super::OpcodeDecl>(input).unwrap();
+        assert_eq!("tex", opcode.0.name.to_string());
+        assert_eq!(". 1d", opcode.0.modifiers[0].modifier.tokens().to_string());
+        assert_eq!("r#1d", opcode.0.modifiers[0].modifier.ident().to_string());
+        assert_eq!(". v4", opcode.0.modifiers[1].modifier.tokens().to_string());
+        assert_eq!(". f32", opcode.0.modifiers[2].modifier.tokens().to_string());
     }
 }

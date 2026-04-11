@@ -888,6 +888,40 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        Tex {
+            type: !,
+            data: TexData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Vector(4, data.dtype) },
+
+                },
+                src_ptr:  {
+                    repr: T,
+                    type: {
+                        if data.type_ == TexType::Texref {
+                            Type::Texref
+                        } else {
+                            Type::Scalar(ScalarType::U64)
+                        }
+                    },
+                    space: {
+                        if data.type_ == TexType::Texref {
+                            StateSpace::Global
+                        } else {
+                            StateSpace::Reg
+                        }
+                    },
+
+                },
+                src_coord:  {
+                    repr: T,
+                    type: { data.coord_type() },
+
+                },
+            }
+        },
     }
 );
 
@@ -1180,6 +1214,9 @@ impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
             Type::Array(vector_size, scalar_type, array_dims) => {
                 (vector_size.map(|s| s.get()), *scalar_type, array_dims)
             }
+            Type::Texref => {
+                return write!(f, " .texref");
+            }
         };
 
         if let Some(size) = vector_size {
@@ -1213,6 +1250,7 @@ pub enum Type {
     Vector(u8, ScalarType),
     // .param.b32 foo[4];
     Array(Option<NonZeroU8>, ScalarType, Vec<u32>),
+    Texref,
 }
 
 impl std::fmt::Display for Type {
@@ -1251,8 +1289,8 @@ impl Type {
         }
     }
 
-    pub fn layout(&self) -> Layout {
-        match self {
+    pub fn layout(&self) -> Option<Layout> {
+        Some(match self {
             Type::Scalar(type_) => type_.layout(),
             Type::Vector(elements, scalar_type) => {
                 let scalar_layout = scalar_type.layout();
@@ -1264,7 +1302,7 @@ impl Type {
                 }
             }
             Type::Array(non_zero, scalar, vec) => {
-                let element_layout = Type::maybe_vector_parsed(*non_zero, *scalar).layout();
+                let element_layout = Type::maybe_vector_parsed(*non_zero, *scalar).layout()?;
                 let len = vec.iter().copied().reduce(std::ops::Mul::mul).unwrap_or(0);
                 unsafe {
                     Layout::from_size_align_unchecked(
@@ -1273,7 +1311,8 @@ impl Type {
                     )
                 }
             }
-        }
+            Type::Texref => return None,
+        })
     }
 }
 
@@ -2792,4 +2831,35 @@ impl Dp2aData {
 pub enum Dp2aControl {
     Low,
     High,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum TexDimensions {
+    D1,
+    D2,
+    D3,
+}
+
+pub struct TexData {
+    pub type_: TexType,
+    pub dtype: ScalarType,
+    pub ctype: ScalarType,
+    pub dims: TexDimensions,
+}
+
+impl TexData {
+    pub fn coord_type(&self) -> Type {
+        let dims = match self.dims {
+            TexDimensions::D1 => 1,
+            TexDimensions::D2 => 2,
+            TexDimensions::D3 => 4,
+        };
+        Type::Vector(dims, self.ctype)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum TexType {
+    Texref,
+    Texobj,
 }
