@@ -119,3 +119,10 @@ pub(crate) unsafe fn set_attribute(
     }
     hipFuncSetAttribute(func.base.0.cast(), hipFuncAttribute(attribute.0), value)
 }
+
+pub(crate) unsafe fn set_cache_config(
+    _func: &Function,
+    _config: cuda_types::cuda::CUfunc_cache,
+) -> hipError_t {
+    Ok(())
+}

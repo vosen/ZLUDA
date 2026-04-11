@@ -23,6 +23,7 @@ pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers;
 mod normalize_predicates;
+mod optimize_function_arguments;
 mod remove_unreachable_basic_blocks;
 mod replace_instructions_with_functions;
 mod replace_instructions_with_functions_fp_required;
@@ -72,6 +73,8 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_known_functions");
     let directives = normalize_predicates::run(&mut flat_resolver, directives)?;
     on_pass_end("normalize_predicates");
+    let directives = optimize_function_arguments::run(&mut flat_resolver, directives)?;
+    on_pass_end("optimize_function_arguments");
     let directives = resolve_function_pointers::run(directives)?;
     on_pass_end("resolve_function_pointers");
     let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;

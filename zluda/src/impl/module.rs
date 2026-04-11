@@ -329,3 +329,11 @@ pub(crate) fn get_loading_mode(mode: &mut cuda_types::cuda::CUmoduleLoadingMode)
 pub(crate) fn load_fat_binary(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
     load_data(module, image)
 }
+
+pub(crate) unsafe fn get_tex_ref(
+    texref: *mut *mut textureReference,
+    hmod: &Module,
+    name: *const ::core::ffi::c_char,
+) -> hipError_t {
+    hipModuleGetTexRef(texref, hmod.base, name)
+}

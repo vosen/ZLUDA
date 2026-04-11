@@ -13,7 +13,7 @@ kernel_metadata = { path = "../kernel_metadata" }
 quick-error = "1.2"
 thiserror = "1.0"
 bit-vec = "0.8"
-half = "1.6"
+half = "2.7"
 bitflags = "1.2"
 rustc-hash = "2.0.0"
 strum = "0.26"
