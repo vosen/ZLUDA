@@ -315,7 +315,6 @@ impl SingleOpcodeDefinition {
                 }
                 Some(DotModifierRef::Indirect { value, .. }) => {
                     let type_ = value.type_.to_token_stream().to_string();
-                    //panic!("{} {}", type_, POSTFIX_TYPES.contains(&&*type_));
                     POSTFIX_TYPES.contains(&&*type_)
                 }
                 None => break,
@@ -326,6 +325,13 @@ impl SingleOpcodeDefinition {
                 break;
             }
         }
+        // Observably, if there's a single type specifier it can be passed
+        // out of order. E.g. nonsense like "lg2.f32.ftz.approx" is fine
+        if result.len() == 1 {
+            unordered_modifiers.push(result.pop().unwrap());
+        }
+        // If all modifiers are ordered, move single unordered modifier to
+        // the ordered list for better performance
         if unordered_modifiers.len() == 1 {
             result.push(unordered_modifiers.pop().unwrap());
         }
