@@ -84,9 +84,8 @@ cuda_function_declarations! {
 }
 
 pub fn cu_init(flags: u32) -> Result<(), CUerror> {
-    use compio::fs::named_pipe::*;
-    
-    todo!()
+    let server = ipc::Server::get()?;
+    server.cu_init(flags)
 }
 
 pub fn cu_ctx_create_v2(
