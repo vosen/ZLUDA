@@ -1,0 +1,17 @@
+.version 6.5
+.target sm_30
+.address_size 64
+.global .texref tex;
+.visible .entry tex_read_1d_int_s32coord(
+    .param .u64 out_ptr,
+    .param .s32 coord_x
+) {
+    .reg .u64 %rd1;
+    .reg .s32 %ix;
+    .reg .s32 %r0, %r1, %r2, %r3;
+    ld.param.u64 %rd1, [out_ptr];
+    ld.param.s32 %ix, [coord_x];
+    tex.1d.v4.s32.s32 {%r0, %r1, %r2, %r3}, [tex, {%ix}];
+    st.global.v4.s32 [%rd1], {%r0, %r1, %r2, %r3};
+    ret;
+}

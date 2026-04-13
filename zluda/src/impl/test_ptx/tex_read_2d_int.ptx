@@ -1,0 +1,19 @@
+.version 6.5
+.target sm_30
+.address_size 64
+.global .texref tex;
+.visible .entry tex_read_2d_int(
+    .param .u64 out_ptr,
+    .param .f32 coord_x,
+    .param .f32 coord_y
+) {
+    .reg .u64 %rd1;
+    .reg .f32 %fx, %fy;
+    .reg .s32 %r0, %r1, %r2, %r3;
+    ld.param.u64 %rd1, [out_ptr];
+    ld.param.f32 %fx, [coord_x];
+    ld.param.f32 %fy, [coord_y];
+    tex.2d.v4.s32.f32 {%r0, %r1, %r2, %r3}, [tex, {%fx, %fy}];
+    st.global.v4.s32 [%rd1], {%r0, %r1, %r2, %r3};
+    ret;
+}

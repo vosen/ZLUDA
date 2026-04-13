@@ -208,6 +208,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Prefetch { .. }
         | ast::Instruction::Sad { .. }
         | ast::Instruction::Dp2a { .. }
+        | ast::Instruction::Tex { .. }
         | ast::Instruction::Mma { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:

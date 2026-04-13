@@ -150,6 +150,12 @@ macro_rules! from_cuda_transmute {
                 }
             }
 
+            impl<'a, E: CudaErrorType> FromCuda<'a, *const $from, E> for * const $to {
+                fn from_cuda(x: &'a *const $from) -> Result<Self, E> {
+                    Ok(x.cast::<$to>())
+                }
+            }
+
             impl<'a, E: CudaErrorType> FromCuda<'a, *mut $from, E> for * mut $to {
                 fn from_cuda(x: &'a *mut $from) -> Result<Self, E> {
                     Ok(x.cast::<$to>())
@@ -248,7 +254,8 @@ from_cuda_nop!(
     cudnn9::cudnnTensorFormat_t,
     cudnn9::cudnnConvolutionBwdDataAlgoPerf_t,
     cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
-    cublasLtMatmulPreferenceAttributes_t
+    cublasLtMatmulPreferenceAttributes_t,
+    CUfunc_cache
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -277,8 +284,60 @@ from_cuda_transmute!(
     cusparseConstDnMatDescr_t => rocsparse_const_dnmat_descr,
     cusparseIndexType_t => rocsparse_indextype,
     cusparseIndexBase_t => rocsparse_index_base,
-    cusparseMatDescr_t => rocsparse_mat_descr
+    cusparseMatDescr_t => rocsparse_mat_descr,
+    CUtexObject => hipTextureObject_t,
+    CUDA_RESOURCE_DESC => HIP_RESOURCE_DESC,
+    CUDA_TEXTURE_DESC => HIP_TEXTURE_DESC,
+    CUDA_RESOURCE_VIEW_DESC => HIP_RESOURCE_VIEW_DESC,
+    CUarray => hipArray_t,
+    CUDA_ARRAY_DESCRIPTOR => HIP_ARRAY_DESCRIPTOR,
+    CUDA_ARRAY3D_DESCRIPTOR => HIP_ARRAY3D_DESCRIPTOR,
+    CUtexref => *mut textureReference,
+    CUarray_format => hipArray_Format,
+    CUaddress_mode => hipTextureAddressMode,
+    CUfilter_mode => hipTextureFilterMode
 );
+
+impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY3D, E> for HIP_MEMCPY3D {
+    fn from_cuda(memcpy: &'a *const CUDA_MEMCPY3D) -> Result<Self, E> {
+        let memcpy = unsafe { memcpy.as_ref() }.ok_or(E::INVALID_VALUE)?;
+        Ok(HIP_MEMCPY3D {
+            srcXInBytes: memcpy.srcXInBytes,
+            srcY: memcpy.srcY,
+            srcZ: memcpy.srcZ,
+            srcLOD: memcpy.srcLOD,
+            srcMemoryType: from_memory_type(memcpy.srcMemoryType)?,
+            srcHost: memcpy.srcHost,
+            srcDevice: hipDeviceptr_t(memcpy.srcDevice.0),
+            srcArray: memcpy.srcArray as hipArray_t,
+            srcPitch: memcpy.srcPitch,
+            srcHeight: memcpy.srcHeight,
+            dstXInBytes: memcpy.dstXInBytes,
+            dstY: memcpy.dstY,
+            dstZ: memcpy.dstZ,
+            dstLOD: memcpy.dstLOD,
+            dstMemoryType: from_memory_type(memcpy.dstMemoryType)?,
+            dstHost: memcpy.dstHost,
+            dstDevice: hipDeviceptr_t(memcpy.dstDevice.0),
+            dstArray: memcpy.dstArray as hipArray_t,
+            dstPitch: memcpy.dstPitch,
+            dstHeight: memcpy.dstHeight,
+            WidthInBytes: memcpy.WidthInBytes,
+            Height: memcpy.Height,
+            Depth: memcpy.Depth,
+        })
+    }
+}
+
+fn from_memory_type<E: CudaErrorType>(cuda: CUmemorytype) -> Result<hipMemoryType, E> {
+    Ok(match cuda {
+        CUmemorytype::CU_MEMORYTYPE_HOST => hipMemoryType::hipMemoryTypeHost,
+        CUmemorytype::CU_MEMORYTYPE_DEVICE => hipMemoryType::hipMemoryTypeDevice,
+        CUmemorytype::CU_MEMORYTYPE_ARRAY => hipMemoryType::hipMemoryTypeArray,
+        CUmemorytype::CU_MEMORYTYPE_UNIFIED => hipMemoryType::hipMemoryTypeUnified,
+        _ => return Err(E::NOT_SUPPORTED),
+    })
+}
 
 impl<'a, E: CudaErrorType> FromCuda<'a, cusparseSpMMAlg_t, E> for rocsparse_spmm_alg {
     fn from_cuda(alg: &'a cusparseSpMMAlg_t) -> Result<Self, E> {
@@ -911,26 +970,14 @@ impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY2D_v2, E>
         Ok(hip_Memcpy2D {
             srcXInBytes: format.srcXInBytes,
             srcY: format.srcY,
-            srcMemoryType: match format.srcMemoryType {
-                CUmemorytype::CU_MEMORYTYPE_HOST => hipMemoryType::hipMemoryTypeHost,
-                CUmemorytype::CU_MEMORYTYPE_DEVICE => hipMemoryType::hipMemoryTypeDevice,
-                CUmemorytype::CU_MEMORYTYPE_ARRAY => hipMemoryType::hipMemoryTypeArray,
-                CUmemorytype::CU_MEMORYTYPE_UNIFIED => hipMemoryType::hipMemoryTypeUnified,
-                _ => return Err(E::NOT_SUPPORTED),
-            },
+            srcMemoryType: from_memory_type(format.srcMemoryType)?,
             srcHost: format.srcHost,
             srcDevice: hipDeviceptr_t(format.srcDevice.0),
             srcArray: format.srcArray.cast(),
             srcPitch: format.srcPitch,
             dstXInBytes: format.dstXInBytes,
             dstY: format.dstY,
-            dstMemoryType: match format.dstMemoryType {
-                CUmemorytype::CU_MEMORYTYPE_HOST => hipMemoryType::hipMemoryTypeHost,
-                CUmemorytype::CU_MEMORYTYPE_DEVICE => hipMemoryType::hipMemoryTypeDevice,
-                CUmemorytype::CU_MEMORYTYPE_ARRAY => hipMemoryType::hipMemoryTypeArray,
-                CUmemorytype::CU_MEMORYTYPE_UNIFIED => hipMemoryType::hipMemoryTypeUnified,
-                _ => return Err(E::NOT_SUPPORTED),
-            },
+            dstMemoryType: from_memory_type(format.dstMemoryType)?,
             dstHost: format.dstHost,
             dstDevice: hipDeviceptr_t(format.dstDevice.0),
             dstArray: format.dstArray.cast(),

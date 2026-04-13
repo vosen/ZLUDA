@@ -244,8 +244,8 @@ impl VisitMut for FixFnSignatures {
 }
 
 const MODULES: &[&str] = &[
-    "context", "device", "driver", "event", "function", "graph", "kernel",
-    "library", "link", "memory", "module", "pointer", "stream"
+    "array", "context", "device", "driver", "event", "function", "graph", "kernel",
+    "library", "link", "memory", "module", "pointer", "stream", "tex"
 ];
 
 fn normalize_fn_impl(
@@ -334,6 +334,13 @@ fn join(
             _ => return None,
         })
     }
+    fn safe_ident(segment: &str) -> Ident {
+        if segment.chars().next().unwrap().is_ascii_digit() {
+            Ident::new(&format!("_{segment}"), Span::call_site())
+        } else {
+            Ident::new(segment, Span::call_site())
+        }
+    }
     let mut normalized: Vec<&str> = Vec::new();
     for segment in fn_.iter() {
         match full_form(segment) {
@@ -343,20 +350,20 @@ fn join(
     }
     if let Some(default_module) = default_module {
         if !MODULES.contains(&normalized[0]) {
-        let mut globalized = vec![default_module];
-        globalized.extend(normalized);
-        normalized = globalized;
-    }
-    let (module, path) = normalized.split_first().unwrap();
-    let path = path.join("_");
-    [module, &&*path]
-        .into_iter()
-        .map(|s| Ident::new(s, Span::call_site()))
-        .collect()
-    } else {
-        return [Ident::new(&normalized.join("_"), Span::call_site())]
+            let mut globalized = vec![default_module];
+            globalized.extend(normalized);
+            normalized = globalized;
+        }
+        let (module, path) = normalized.split_first().unwrap();
+        let path = path.join("_");
+        [module, &&*path]
             .into_iter()
-            .collect();
+            .map(|s| safe_ident(s))
+            .collect()
+    } else {
+        [safe_ident(&normalized.join("_"))]
+            .into_iter()
+            .collect()
     }
 
 }
