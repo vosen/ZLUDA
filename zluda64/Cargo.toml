@@ -5,7 +5,7 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [[bin]]
-name = "zluda64"
+name = "zluda64_server"
 path = "src/main.rs"
 
 [dependencies]
@@ -14,3 +14,4 @@ compio = { version = "0.18.0", features = ["macros", "fs"] }
 slab = "0.4.12"
 
 [package.metadata.zluda]
+windows_only = true

@@ -6,6 +6,14 @@ use windows::core::{Error, Owned, PCSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Pipes::*;
 
+fn server_path() -> &'static str {
+    if cfg!(debug_assertions) {
+        r"C:\dev\ZLUDA\target\debug\zluda64_server.exe"
+    } else {
+        "zluda64_server.exe"
+    }
+}
+
 unsafe fn start() -> Result<String, Error> {
     let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let pipe_path = format!(r"\\.\pipe\zluda-{name}\0");
@@ -19,7 +27,7 @@ unsafe fn start() -> Result<String, Error> {
         0,
         None,
     )?);
-    let child = Command::new("zluda64.exe")
+    let child = Command::new(server_path())
         .arg(&pipe_path[..pipe_path.len() - 1])
         .stdin(Stdio::null())
         .stdout(Stdio::null())

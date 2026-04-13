@@ -34,3 +34,4 @@ zluda_ml = { path = "../zluda_ml" }
 
 [package.metadata.zluda]
 windows_only = true
+32bit = true

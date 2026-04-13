@@ -2,6 +2,7 @@ pub const PROJECT_SUFFIX: &[u8] = b" [ZLUDA]\0";
 const COMPUTE_CAPABILITY_MAJOR: i32 = 8;
 const COMPUTE_CAPABILITY_MINOR: i32 = 8;
 
+#[cfg(target_pointer_width = "64")]
 pub const BLAS_HANDLE_COOKIE: usize = 0x57c3fdb0fd72b08e;
 
 pub fn compute_capability() -> (i32, i32) {

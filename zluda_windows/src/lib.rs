@@ -30,6 +30,10 @@ use windows::{
     },
 };
 
+#[cfg(target_pointer_width = "32")]
+pub static LIBRARIES: [LibraryInfo; 1] = [NVCUDA];
+
+#[cfg(target_pointer_width = "64")]
 pub static LIBRARIES: [LibraryInfo; 16] = [
     NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS11, BLAS_LT13, BLAS_LT12, BLAS_LT11, SPARSE12,
     SPARSE11, SPARSE10, FFT12, FFT11, FFT10,
