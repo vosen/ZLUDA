@@ -1,0 +1,33 @@
+[package]
+name = "zluda32"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[lib]
+name = "nvcuda"
+crate-type = ["cdylib"]
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+cuda_macros = { path = "../cuda_macros" }
+paste = "1.0"
+ipc-channel = "^0.21.0"
+compio = { version = "0.18.0", features = ["fs"] }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_Security",
+] }
+# windows-sys = { version = "0.61.2", features = [
+#     "Win32_Foundation",
+#     "Win32_System_Pipes",
+#     "Win32_Storage_FileSystem",
+# ] }
+rand = "0.10.1"
+widestring = "1.2.1"
+
+[package.metadata.zluda]
+32bit = true

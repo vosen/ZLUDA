@@ -1,0 +1,9 @@
+[package]
+name = "zluda_server_common"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+rkyv = "0.8.15"

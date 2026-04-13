@@ -1,0 +1,16 @@
+[package]
+name = "zluda64"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "zluda64"
+path = "src/main.rs"
+
+[dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
+compio = { version = "0.18.0", features = ["macros", "fs"] }
+slab = "0.4.12"
+
+[package.metadata.zluda]
