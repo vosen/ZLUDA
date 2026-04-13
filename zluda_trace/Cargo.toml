@@ -9,7 +9,6 @@ name = "zluda_trace"
 crate-type = ["cdylib"]
 
 [dependencies]
-ptx = { path = "../ptx" }
 ptx_parser = { path = "../ptx_parser" }
 zluda_trace_common = { path = "../zluda_trace_common" }
 zluda_common = { path = "../zluda_common" }
@@ -52,3 +51,4 @@ linux_symlinks = [
     "trace_nvidia/libcuda.so.1",
 ]
 windows_paths = ["trace/nvcuda.dll"]
+32bit = true

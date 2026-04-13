@@ -30,4 +30,6 @@ rand = "0.10.1"
 widestring = "1.2.1"
 
 [package.metadata.zluda]
+windows_only = true
+64bit = false
 32bit = true

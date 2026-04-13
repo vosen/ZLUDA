@@ -241,6 +241,8 @@ struct ZludaMetadata {
     linux_only: bool,
     #[serde(default)]
     windows_only: bool,
+    #[serde(default = "always_true", rename = "64bit")]
+    is_64bit: bool,
     #[serde(default, rename = "32bit")]
     is_32bit: bool,
     #[serde(default)]
@@ -254,6 +256,10 @@ struct ZludaMetadata {
     #[serde(default)]
     #[cfg_attr(unix, allow(unused))]
     windows_extra_files: HashMap<String, String>,
+}
+
+fn always_true() -> bool {
+    true
 }
 
 fn main() {
@@ -276,24 +282,33 @@ fn main() {
 }
 
 fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
-    let (profile, is_32bit) = sniff_out_profile_name_and_32bit(&b.cargo_arguments);
+    let cargo_flags = sniff_out_cargo_flags(&b.cargo_arguments);
     let meta = MetadataCommand::new().no_deps().exec().unwrap();
-    let target_directory = meta.target_directory.into_std_path_buf();
+    let mut target_directory = meta.target_directory.into_std_path_buf();
+    if let Some(target) = &cargo_flags.target {
+        target_directory.push(target);
+    }
     let projects = meta
         .packages
         .into_iter()
         .filter_map(Project::try_new)
         .filter(|project| {
+            if cargo_flags.is_32bit {
+                if !project.meta.is_32bit {
+                    return false;
+                }
+            } else {
+                if !project.meta.is_64bit {
+                    return false;
+                }
+            }
             if project.meta.linux_only && cfg!(windows) {
                 return false;
             }
             if project.meta.windows_only && cfg!(not(windows)) {
                 return false;
             }
-            if project.meta.is_32bit != is_32bit {
-                return false;
-            }
-            if project.meta.debug_only && profile != "debug" {
+            if project.meta.debug_only && cargo_flags.profile != "debug" {
                 return false;
             }
             true
@@ -309,19 +324,19 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
     }
     command.args(b.cargo_arguments);
     assert!(command.status().unwrap().success());
-    os::make_symlinks(&target_directory, &*projects, &*profile);
-    (target_directory, profile, projects)
+    os::make_symlinks(&target_directory, &*projects, &*cargo_flags.profile);
+    (target_directory, cargo_flags.profile, projects)
 }
 
-fn sniff_out_profile_name_and_32bit(b: &[OsString]) -> (String, bool) {
+fn sniff_out_cargo_flags(b: &[OsString]) -> CargoFlags {
     let parsed_cargo_arguments = cargo().to_options().run_inner(b);
-    let is_32bit = match parsed_cargo_arguments.as_ref() {
+    let (target, is_32bit) = match parsed_cargo_arguments.as_ref() {
         Ok(Cargo {
             target: Some(target),
             ..
-        }) => target.starts_with("i686"),
-        Ok(Cargo { target: None, .. }) => cfg!(target_pointer_width = "32"),
-        _ => false,
+        }) => (Some(target.clone()), target.starts_with("i686")),
+        Ok(Cargo { target: None, .. }) => (None, cfg!(target_pointer_width = "32")),
+        _ => (None, false),
     };
     let profile = match parsed_cargo_arguments {
         Ok(Cargo {
@@ -334,7 +349,17 @@ fn sniff_out_profile_name_and_32bit(b: &[OsString]) -> (String, bool) {
         }) => profile,
         _ => "debug".to_string(),
     };
-    (profile, is_32bit)
+    CargoFlags {
+        profile,
+        target,
+        is_32bit,
+    }
+}
+
+struct CargoFlags {
+    profile: String,
+    target: Option<String>,
+    is_32bit: bool,
 }
 
 fn zip(zip: Build) {

@@ -5768,7 +5768,6 @@ dependencies = [
  "libloading",
  "parking_lot",
  "paste",
- "ptx",
  "ptx_parser",
  "regex",
  "rustc-hash 2.1.1",
