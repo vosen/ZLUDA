@@ -37,6 +37,8 @@ struct Cargo {
     release: Option<bool>,
     #[bpaf(long)]
     profile: Option<String>,
+    #[bpaf(long)]
+    target: Option<String>,
     #[bpaf(any("", Some), many)]
     _unused: Vec<OsString>,
 }
@@ -239,6 +241,8 @@ struct ZludaMetadata {
     linux_only: bool,
     #[serde(default)]
     windows_only: bool,
+    #[serde(default, rename = "32bit")]
+    is_32bit: bool,
     #[serde(default)]
     debug_only: bool,
     #[cfg_attr(not(unix), allow(unused))]
@@ -272,7 +276,7 @@ fn main() {
 }
 
 fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
-    let profile = sniff_out_profile_name(&b.cargo_arguments);
+    let (profile, is_32bit) = sniff_out_profile_name_and_32bit(&b.cargo_arguments);
     let meta = MetadataCommand::new().no_deps().exec().unwrap();
     let target_directory = meta.target_directory.into_std_path_buf();
     let projects = meta
@@ -284,6 +288,9 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
                 return false;
             }
             if project.meta.windows_only && cfg!(not(windows)) {
+                return false;
+            }
+            if project.meta.is_32bit != is_32bit {
                 return false;
             }
             if project.meta.debug_only && profile != "debug" {
@@ -306,9 +313,17 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
     (target_directory, profile, projects)
 }
 
-fn sniff_out_profile_name(b: &[OsString]) -> String {
+fn sniff_out_profile_name_and_32bit(b: &[OsString]) -> (String, bool) {
     let parsed_cargo_arguments = cargo().to_options().run_inner(b);
-    match parsed_cargo_arguments {
+    let is_32bit = match parsed_cargo_arguments.as_ref() {
+        Ok(Cargo {
+            target: Some(target),
+            ..
+        }) => target.starts_with("i686"),
+        Ok(Cargo { target: None, .. }) => cfg!(target_pointer_width = "32"),
+        _ => false,
+    };
+    let profile = match parsed_cargo_arguments {
         Ok(Cargo {
             release: Some(true),
             ..
@@ -318,7 +333,8 @@ fn sniff_out_profile_name(b: &[OsString]) -> String {
             ..
         }) => profile,
         _ => "debug".to_string(),
-    }
+    };
+    (profile, is_32bit)
 }
 
 fn zip(zip: Build) {
