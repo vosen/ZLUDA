@@ -6,4 +6,6 @@ edition = "2021"
 
 [dependencies]
 cuda_types = { path = "../cuda_types" }
+cuda_macros = { path = "../cuda_macros" }
 rkyv = "0.8.15"
+paste = "1"
