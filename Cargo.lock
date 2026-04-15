@@ -5734,7 +5734,9 @@ dependencies = [
 name = "zluda_server_common"
 version = "0.0.0"
 dependencies = [
+ "cuda_macros",
  "cuda_types",
+ "paste",
  "rkyv",
 ]
 

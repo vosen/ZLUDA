@@ -4,13 +4,13 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::FxHashMap;
+use syn::token::Type;
 use std::iter;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
-    bracketed, parse_macro_input, File, ForeignItem, ForeignItemFn, Ident, Item, Path, Signature,
-    Token
+    File, ForeignItem, ForeignItemFn, Ident, Item, PatType, Path, Signature, Token, TypeGroup, bracketed, parse_macro_input
 };
 
 const CUDA_RS: &'static str = include_str! {"cuda.rs"};
@@ -299,6 +299,91 @@ pub fn cusparse_normalize_fn(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn nvml_normalize_fn(tokens: TokenStream) -> TokenStream {
     normalize_fn_impl("nvml", None, tokens)
+}
+
+#[proc_macro]
+pub fn generate_input_struct(tokens: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(tokens as FnWithFields);
+    let struct_name = format_ident!("{}In", input.fn_name);
+    let fields = input.fields.iter().filter(|pat| is_input_field(&pat.ty)).map(use_wire_object);
+    quote! {
+        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+        struct #struct_name {
+            #(#fields),*
+        }
+    }.into()
+}
+
+#[proc_macro]
+pub fn generate_output_struct(tokens: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(tokens as FnWithFields);
+    let struct_name = format_ident!("{}Out", input.fn_name);
+    let fields = input.fields.iter().filter(|pat| !is_input_field(&pat.ty)).map(strip_mut_ptr);
+    quote! {
+        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+        struct #struct_name {
+            #(#fields),*
+        }
+    }.into()
+}
+
+fn is_input_field(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Ptr(token) if token.mutability.is_some() => false,
+        syn::Type::Group(TypeGroup {elem, ..}) => is_input_field(&*elem),
+        _ => true
+    }
+}
+
+fn use_wire_object(ty: &syn::PatType) -> proc_macro2::TokenStream {
+    let pat = &ty.pat;
+    let type_ = &ty.ty;
+    quote! { #pat : <#type_ as crate::Encode>::WireObject }
+}
+
+fn strip_mut_ptr(ty: &syn::PatType) -> proc_macro2::TokenStream {
+    fn strip_mut_ptr_from_type(ty: &syn::Type) -> proc_macro2::TokenStream {
+        match ty {
+            syn::Type::Ptr(token) => {
+                let elem = &token.elem;
+                quote! { #elem }
+            },
+            _ => unreachable!()
+        }
+    }
+    let pat = &ty.pat;
+    match &*ty.ty {
+        syn::Type::Ptr(token) => {
+            let type_ = strip_mut_ptr_from_type(&*token.elem);
+            quote! { #pat : <#type_ as crate::Encode>::WireObject }
+        },
+        syn::Type::Group(TypeGroup {elem, ..}) => {
+            let type_ = strip_mut_ptr_from_type(&*elem);
+            quote! { #pat : <#type_ as crate::Encode>::WireObject }
+        },
+        _ => unreachable!()
+    }
+}
+
+struct FnWithFields {
+    fn_name: Ident,
+    fields: Punctuated<PatType, Token![,]>,
+}
+
+impl Parse for FnWithFields {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let fn_name = input.parse::<Ident>()?;
+        let fields = if input.is_empty() {
+            Punctuated::new()
+        } else {
+            input.parse::<Token![,]>()?;
+            input.parse_terminated(PatType::parse, Token![,])?
+        };
+        Ok(Self {
+            fn_name,
+            fields,
+        })
+    }
 }
 
 fn split(fn_: &str) -> Vec<String> {
