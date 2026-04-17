@@ -306,10 +306,12 @@ pub fn generate_input_struct(tokens: TokenStream) -> TokenStream {
     let struct_name = format_ident!("{}In", input.fn_name);
     let fields = input.fields.iter().filter(|pat| is_input_field(&pat.ty)).map(use_wire_object);
     quote! {
-        #[derive(Encode, Decode, PartialEq)]
+        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+        #[repr(C)]
         pub struct #struct_name {
             #(#fields),*
         }
+        unsafe impl Portable for #struct_name {}
     }.into()
 }
 
@@ -319,10 +321,12 @@ pub fn generate_output_struct(tokens: TokenStream) -> TokenStream {
     let struct_name = format_ident!("{}Out", input.fn_name);
     let fields = input.fields.iter().filter(|pat| !is_input_field(&pat.ty)).map(strip_mut_ptr);
     quote! {
-        #[derive(Encode, Decode, PartialEq)]
+        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+        #[repr(C)]
         pub struct #struct_name {
             #(#fields),*
         }
+        unsafe impl Portable for #struct_name {}
     }.into()
 }
 

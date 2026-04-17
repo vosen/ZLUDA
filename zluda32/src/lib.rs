@@ -83,9 +83,8 @@ cuda_function_declarations! {
 }
 
 pub(crate) fn cu_init(flags: u32) -> Result<(), CUerror> {
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output = server.call::<Envelope<cuInitOut>>(Opcode::cuInit, &cuInitIn { Flags: flags })?;
-    output.result()
+    ipc::Server::remote_call::<cuInitOut>(Opcode::cuInit, cuInitIn { Flags: flags })?;
+    Ok(())
 }
 
 pub(crate) fn cu_ctx_create_v2(
@@ -94,13 +93,13 @@ pub(crate) fn cu_ctx_create_v2(
     dev: CUdevice,
 ) -> Result<(), CUerror> {
     let ctx = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output = server.call::<Envelope<cuCtxCreate_v2Out>>(
-        Opcode::cuCtxCreate_v2,
-        &cuCtxCreate_v2In { flags, dev },
-    )?;
-    output.result()?;
-    *ctx = CudaEncode::decode(output.data.pctx);
+    *ctx = CudaEncode::decode(
+        ipc::Server::remote_call::<cuCtxCreate_v2Out>(
+            Opcode::cuCtxCreate_v2,
+            cuCtxCreate_v2In { flags, dev },
+        )?
+        .pctx,
+    );
     Ok(())
 }
 
@@ -140,11 +139,9 @@ pub(crate) fn cu_device_get(
     ordinal: ::core::ffi::c_int,
 ) -> Result<(), CUerror> {
     let device = unsafe { device.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output =
-        server.call::<Envelope<cuDeviceGetOut>>(Opcode::cuDeviceGet, &cuDeviceGetIn { ordinal })?;
-    output.result()?;
-    *device = CudaEncode::decode(output.data.device);
+    *device =
+        ipc::Server::remote_call::<cuDeviceGetOut>(Opcode::cuDeviceGet, cuDeviceGetIn { ordinal })?
+            .device;
     Ok(())
 }
 
@@ -154,26 +151,24 @@ pub(crate) fn cu_device_get_attribute(
     dev: CUdevice,
 ) -> Result<(), CUerror> {
     let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output = server.call::<Envelope<cuDeviceGetAttributeOut>>(
+    *pi = ipc::Server::remote_call::<cuDeviceGetAttributeOut>(
         Opcode::cuDeviceGetAttribute,
-        &cuDeviceGetAttributeIn {
+        cuDeviceGetAttributeIn {
             attrib: CudaEncode::encode(attrib),
             dev,
         },
-    )?;
-    output.result()?;
-    *pi = CudaEncode::decode(output.data.pi);
+    )?
+    .pi;
     Ok(())
 }
 
 pub(crate) fn cu_device_get_count(count: *mut ::core::ffi::c_int) -> Result<(), CUerror> {
     let count = unsafe { count.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output = server
-        .call::<Envelope<cuDeviceGetCountOut>>(Opcode::cuDeviceGetCount, &cuDeviceGetCountIn {})?;
-    output.result()?;
-    *count = CudaEncode::decode(output.data.count);
+    *count = ipc::Server::remote_call::<cuDeviceGetCountOut>(
+        Opcode::cuDeviceGetCount,
+        cuDeviceGetCountIn {},
+    )?
+    .count;
     Ok(())
 }
 
@@ -195,13 +190,11 @@ pub(crate) fn cu_device_total_mem_v2(bytes: *mut usize, dev: CUdevice) -> Result
 
 pub(crate) fn cu_driver_get_version(driverVersion: *mut ::core::ffi::c_int) -> Result<(), CUerror> {
     let driverVersion = unsafe { driverVersion.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let mut server = ipc::Server::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-    let output = server.call::<Envelope<cuDriverGetVersionOut>>(
+    *driverVersion = ipc::Server::remote_call::<cuDriverGetVersionOut>(
         Opcode::cuDriverGetVersion,
-        &cuDriverGetVersionIn {},
-    )?;
-    output.result()?;
-    *driverVersion = CudaEncode::decode(output.data.driverVersion);
+        cuDriverGetVersionIn {},
+    )?
+    .driverVersion;
     Ok(())
 }
 

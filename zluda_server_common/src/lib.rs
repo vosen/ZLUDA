@@ -2,21 +2,26 @@ use bincode::{Decode, Encode};
 use cuda_macros::{cuda_function_declarations, generate_input_struct, generate_output_struct};
 use cuda_types::cuda::*;
 use paste::paste;
+use rkyv::{rend, Archive, Deserialize, Portable, Serialize};
 use std::ffi::CString;
 use std::num::NonZeroU32;
 use std::{ffi::CStr, num::NonZero};
+use strum_macros::FromRepr;
 
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[repr(C)]
 pub struct Envelope<T> {
     pub code: u32,
     pub data: T,
 }
 
+unsafe impl<T: Portable> Portable for Envelope<T> {}
+
 impl<T> Envelope<T> {
     pub fn result(&self) -> Result<(), CUerror> {
         match NonZeroU32::new(self.code) {
-            Some(code) => Err(CUerror(code)),
             None => Ok(()),
+            Some(code) => Err(CUerror(code)),
         }
     }
 }
@@ -33,6 +38,7 @@ macro_rules! generate_messages {
         )*
 
         #[repr(u32)]
+        #[derive(FromRepr)]
         pub enum Opcode {
             System = 0,
             $(
@@ -171,7 +177,7 @@ encode_as_u32!(CUstream);
 encode_as_u32!(CUtexref);
 
 #[repr(C)]
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CUdevprop_v1_Wire {
     pub maxThreadsPerBlock: ::core::ffi::c_int,
     pub maxThreadsDim: [::core::ffi::c_int; 3usize],
@@ -185,7 +191,10 @@ pub struct CUdevprop_v1_Wire {
     pub textureAlign: ::core::ffi::c_int,
 }
 
-#[derive(Encode, Decode, PartialEq)]
+unsafe impl Portable for CUdevprop_v1_Wire {}
+
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
+#[repr(C)]
 pub struct Foobar {
     pub text: String,
     pub buff: Vec<u8>,

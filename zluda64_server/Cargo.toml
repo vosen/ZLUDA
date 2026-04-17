@@ -9,11 +9,13 @@ name = "zluda64_server"
 path = "src/main.rs"
 
 [dependencies]
+cuda_types = { path = "../cuda_types" }
 zluda_server_common = { path = "../zluda_server_common" }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
 compio = { version = "0.18.0", features = ["macros", "fs"] }
 slab = "0.4.12"
 bincode = "2.0.1"
+rkyv = "0.8.15"
 
 [package.metadata.zluda]
 windows_only = true

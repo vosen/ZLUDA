@@ -1,11 +1,17 @@
 use cuda_types::cuda::CUerror;
 use rand::distr::{Alphanumeric, SampleString};
+use rkyv::api::high::HighSerializer;
+use rkyv::rend::u32_le;
+use rkyv::ser::allocator::ArenaHandle;
+use rkyv::util::AlignedVec;
+use rkyv::{rancor, Portable, Serialize};
+use std::io::{Read, Write};
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 // use rkyv::util::AlignedVec;
 use std::num::NonZeroU32;
 use std::process::{Child, Command, Stdio};
-use std::ptr;
 use std::sync::{Mutex, OnceLock};
+use std::{mem, ptr};
 use widestring::{u16str, U16CString};
 use windows::core::{Error, Owned, PCSTR};
 use windows::Win32::Foundation::*;
@@ -22,20 +28,22 @@ fn server_path() -> &'static str {
 
 pub(crate) struct Server {
     pipe: std::fs::File,
-    child: Child,
+    _child: Child,
+    in_buffer: AlignedVec,
+    out_buffer: AlignedVec,
 }
 
 unsafe impl Sync for Server {}
 unsafe impl Send for Server {}
 
 impl Server {
-    const CONFIG: bincode::config::Configuration<
-        bincode::config::LittleEndian,
-        bincode::config::Fixint,
-    > = bincode::config::standard().with_fixed_int_encoding();
-
     fn new(pipe: std::fs::File, child: Child) -> Self {
-        Self { pipe, child }
+        Self {
+            pipe,
+            _child: child,
+            in_buffer: AlignedVec::new(),
+            out_buffer: AlignedVec::new(),
+        }
     }
 
     unsafe fn start() -> Result<Self, Error> {
@@ -67,21 +75,36 @@ impl Server {
         }
     }
 
-    pub(crate) fn get() -> Result<&'static Mutex<Self>, CUerror> {
+    fn get() -> Result<&'static Mutex<Self>, CUerror> {
         static LOCK: OnceLock<Result<Mutex<Server>, Error>> = OnceLock::new();
         LOCK.get_or_init(|| Ok(Mutex::new(unsafe { Server::start()? })))
             .as_ref()
             .map_err(|_| CUerror::UNKNOWN)
     }
 
-    pub(crate) fn call<Out: bincode::Decode<()>>(
-        &mut self,
+    pub(crate) fn remote_call<Out: Portable + Clone>(
         opcode: Opcode,
-        input: &impl bincode::Encode,
+        data: impl for<'a, 'b> Serialize<
+            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+        >,
     ) -> Result<Out, CUerror> {
-        bincode::encode_into_std_write(input, &mut self.pipe, Self::CONFIG)
+        let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        this.in_buffer.clear();
+        let slice = rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
+            &Envelope {
+                code: opcode as u32,
+                data,
+            },
+            &mut this.in_buffer,
+        )
+        .map_err(|_| CUerror::UNKNOWN)?;
+        this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
+        this.out_buffer.resize(mem::size_of::<Envelope<Out>>(), 0);
+        this.pipe
+            .read_exact(&mut this.out_buffer)
             .map_err(|_| CUerror::UNKNOWN)?;
-        bincode::decode_from_std_read::<Out, _, _>(&mut self.pipe, Self::CONFIG)
-            .map_err(|_| CUerror::UNKNOWN)
+        let bytes = unsafe { rkyv::access_unchecked::<Envelope<Out>>(&this.out_buffer) };
+        bytes.result()?;
+        Ok(bytes.data.clone())
     }
 }
