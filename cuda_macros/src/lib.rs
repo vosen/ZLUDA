@@ -4,7 +4,6 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::FxHashMap;
-use syn::token::Type;
 use std::iter;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -307,8 +306,8 @@ pub fn generate_input_struct(tokens: TokenStream) -> TokenStream {
     let struct_name = format_ident!("{}In", input.fn_name);
     let fields = input.fields.iter().filter(|pat| is_input_field(&pat.ty)).map(use_wire_object);
     quote! {
-        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-        struct #struct_name {
+        #[derive(Encode, Decode, PartialEq)]
+        pub struct #struct_name {
             #(#fields),*
         }
     }.into()
@@ -320,8 +319,8 @@ pub fn generate_output_struct(tokens: TokenStream) -> TokenStream {
     let struct_name = format_ident!("{}Out", input.fn_name);
     let fields = input.fields.iter().filter(|pat| !is_input_field(&pat.ty)).map(strip_mut_ptr);
     quote! {
-        #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-        struct #struct_name {
+        #[derive(Encode, Decode, PartialEq)]
+        pub struct #struct_name {
             #(#fields),*
         }
     }.into()
@@ -338,7 +337,7 @@ fn is_input_field(ty: &syn::Type) -> bool {
 fn use_wire_object(ty: &syn::PatType) -> proc_macro2::TokenStream {
     let pat = &ty.pat;
     let type_ = &ty.ty;
-    quote! { #pat : <#type_ as crate::Encode>::WireObject }
+    quote! { pub #pat : <#type_ as crate::CudaEncode>::WireObject }
 }
 
 fn strip_mut_ptr(ty: &syn::PatType) -> proc_macro2::TokenStream {
@@ -355,11 +354,11 @@ fn strip_mut_ptr(ty: &syn::PatType) -> proc_macro2::TokenStream {
     match &*ty.ty {
         syn::Type::Ptr(token) => {
             let type_ = strip_mut_ptr_from_type(&*token.elem);
-            quote! { #pat : <#type_ as crate::Encode>::WireObject }
+            quote! { pub #pat : <#type_ as crate::CudaEncode>::WireObject }
         },
         syn::Type::Group(TypeGroup {elem, ..}) => {
             let type_ = strip_mut_ptr_from_type(&*elem);
-            quote! { #pat : <#type_ as crate::Encode>::WireObject }
+            quote! { pub #pat : <#type_ as crate::CudaEncode>::WireObject }
         },
         _ => unreachable!()
     }
