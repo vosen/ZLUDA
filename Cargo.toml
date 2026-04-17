@@ -49,7 +49,7 @@ members = [
     "zluda_trace",
     "zluda",
     "zluda32",
-    "zluda64",
+    "zluda64_server",
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "compiler"]

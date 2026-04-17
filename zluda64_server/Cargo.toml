@@ -1,5 +1,5 @@
 [package]
-name = "zluda64"
+name = "zluda64_server"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
@@ -9,9 +9,11 @@ name = "zluda64_server"
 path = "src/main.rs"
 
 [dependencies]
+zluda_server_common = { path = "../zluda_server_common" }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
 compio = { version = "0.18.0", features = ["macros", "fs"] }
 slab = "0.4.12"
+bincode = "2.0.1"
 
 [package.metadata.zluda]
 windows_only = true
