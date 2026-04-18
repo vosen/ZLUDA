@@ -6,7 +6,7 @@ use rkyv::ser::allocator::ArenaHandle;
 use rkyv::util::AlignedVec;
 use rkyv::{rancor, Portable, Serialize};
 use std::io::{Read, Write};
-use std::os::windows::io::{AsRawHandle, FromRawHandle};
+use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle};
 // use rkyv::util::AlignedVec;
 use std::num::NonZeroU32;
 use std::process::{Child, Command, Stdio};
@@ -29,8 +29,7 @@ fn server_path() -> &'static str {
 pub(crate) struct Server {
     pipe: std::fs::File,
     _child: Child,
-    in_buffer: AlignedVec,
-    out_buffer: AlignedVec,
+    buffer: AlignedVec,
 }
 
 unsafe impl Sync for Server {}
@@ -41,8 +40,7 @@ impl Server {
         Self {
             pipe,
             _child: child,
-            in_buffer: AlignedVec::new(),
-            out_buffer: AlignedVec::new(),
+            buffer: AlignedVec::new(),
         }
     }
 
@@ -68,6 +66,7 @@ impl Server {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
+        zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;
         match ConnectNamedPipe(HANDLE(pipe.as_raw_handle()), None) {
             Ok(_) => Ok(Server::new(pipe, child)),
             Err(e) if e.code() == ERROR_PIPE_CONNECTED.into() => Ok(Server::new(pipe, child)),
@@ -89,22 +88,30 @@ impl Server {
         >,
     ) -> Result<Out, CUerror> {
         let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-        this.in_buffer.clear();
+        this.buffer.clear();
         let slice = rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
             &Envelope {
                 code: opcode as u32,
                 data,
             },
-            &mut this.in_buffer,
+            &mut this.buffer,
         )
         .map_err(|_| CUerror::UNKNOWN)?;
         this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        this.out_buffer.resize(mem::size_of::<Envelope<Out>>(), 0);
-        this.pipe
-            .read_exact(&mut this.out_buffer)
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let bytes = unsafe { rkyv::access_unchecked::<Envelope<Out>>(&this.out_buffer) };
-        bytes.result()?;
-        Ok(bytes.data.clone())
+        read_return_code(this)?;
+        let output = unsafe { rkyv::access_unchecked::<Out>(&this.buffer) };
+        Ok(output.clone())
+    }
+}
+
+fn read_return_code(this: &mut Server) -> Result<(), CUerror> {
+    let mut code_buffer = [0; 4];
+    this.pipe
+        .read_exact(&mut code_buffer)
+        .map_err(|_| CUerror::UNKNOWN)?;
+    let code = u32::from_le_bytes(code_buffer);
+    match NonZeroU32::new(code) {
+        None => Ok(()),
+        Some(code) => Err(CUerror(code)),
     }
 }

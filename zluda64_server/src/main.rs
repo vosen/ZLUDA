@@ -1,14 +1,20 @@
-use std::mem;
+// Prevent the console window from appearing when running the server on Windows
+#![windows_subsystem = "windows"]
 
 use compio::{
     buf::{IoBuf, IoBufMut, ReserveError, ReserveExactError, SetLen},
-    fs::named_pipe::ClientOptions,
-    io::{AsyncRead, AsyncReadExt, AsyncReadManaged, AsyncWriteExt},
+    fs::named_pipe::{ClientOptions, NamedPipeClient},
+    io::{AsyncRead, AsyncReadExt, AsyncReadManaged, AsyncWrite, AsyncWriteExt},
     BufResult,
 };
+use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
-use rkyv::util::AlignedVec;
+use rkyv::{
+    api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec, Archive, Portable,
+    Serialize,
+};
 use slab::Slab;
+use std::mem;
 use windows_sys::Win32::Foundation::ERROR_MORE_DATA;
 use zluda_server_common::*;
 
@@ -30,28 +36,19 @@ async fn main() -> std::io::Result<()> {
         .await?;
     let mut buffer = AlignedVecBuffer(AlignedVec::new());
     loop {
-        let opcode = client.read_u32().await?; // Read the length prefix
+        let opcode = client.read_u32_le().await?; // Read the length prefix
         buffer.clear();
         match Opcode::from_repr(opcode) {
             Some(Opcode::cuInit) => {
-                let mut remaining_read = mem::size_of::<ArchivedcuInitIn>();
-                buffer.reserve(remaining_read)?;
-                while remaining_read > 0 {
-                    let BufResult(read_result, new_buffer) = client.append(buffer).await;
-                    let n = read_result?;
-                    remaining_read = remaining_read.checked_sub(n).ok_or_else(|| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "Read more bytes than expected",
-                        )
-                    })?;
-                    buffer = new_buffer;
-                }
-                let input = unsafe { rkyv::access_unchecked::<ArchivedcuInitIn>(buffer.as_init()) };
-                println!("cuInit({:?})", input.Flags);
+                buffer = handle_cuda_function::<ArchivedcuInitIn, cuInitOut>(
+                    &mut client,
+                    buffer,
+                    cu_init,
+                )
+                .await?;
             }
             _ => {
-                client.write_u32(CUerror::NOT_SUPPORTED.0.get()).await?;
+                client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "Unsupported operation",
@@ -59,7 +56,68 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
-    Ok(())
+}
+
+fn cu_init(input: &ArchivedcuInitIn) -> Result<cuInitOut, CUerror> {
+    unsafe { cuInit(input.Flags.to_native()) }?;
+    Ok(cuInitOut {})
+}
+
+async fn handle_cuda_function<In: Portable, Out>(
+    client: &mut NamedPipeClient,
+    mut buffer: AlignedVecBuffer,
+    handler: impl FnOnce(&In) -> Result<Out, CUerror>,
+) -> std::io::Result<AlignedVecBuffer>
+where
+    Out: for<'a, 'b> Serialize<
+        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+    >,
+{
+    buffer = read_all::<In>(buffer, client).await?;
+    let input = unsafe { rkyv::access_unchecked::<In>(buffer.as_init()) };
+    match handler(input) {
+        Ok(output) => {
+            buffer.clear();
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
+                &Envelope {
+                    code: 0,
+                    data: output,
+                },
+                &mut buffer.0,
+            )
+            .map_err(|_| {
+                std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
+            })?;
+            let BufResult(result, new_buffer) = client.write_all(buffer).await;
+            result?;
+            Ok(new_buffer)
+        }
+        Err(e) => {
+            buffer.clear();
+            client.write_u32_le(e.0.get()).await?;
+            Ok(buffer)
+        }
+    }
+}
+
+async fn read_all<T>(
+    mut buffer: AlignedVecBuffer,
+    client: &mut NamedPipeClient,
+) -> std::io::Result<AlignedVecBuffer> {
+    let mut remaining_read = mem::size_of::<T>();
+    buffer.reserve(remaining_read)?;
+    while remaining_read > 0 {
+        let BufResult(read_result, new_buffer) = client.append(buffer).await;
+        let n = read_result?;
+        remaining_read = remaining_read.checked_sub(n).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Read more bytes than expected",
+            )
+        })?;
+        buffer = new_buffer;
+    }
+    Ok(buffer)
 }
 
 struct AlignedVecBuffer(AlignedVec);
@@ -109,4 +167,68 @@ impl IoBufMut for AlignedVecBuffer {
         }
         Ok(())
     }
+}
+
+macro_rules! nop {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
+}
+
+macro_rules! implemented {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[link(name = "nvcuda", kind = "raw-dylib")]
+            unsafe extern $abi {
+                fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type;
+            }
+        )*
+
+    };
+}
+
+cuda_function_declarations! {
+    nop,
+    implemented <= [
+        // cuCtxCreate_v2,
+        // cuCtxDetach,
+        // cuCtxGetApiVersion,
+        // cuCtxGetCurrent,
+        // cuCtxGetDevice,
+        // cuCtxSynchronize,
+        // cuDeviceComputeCapability,
+        // cuDeviceGet,
+        // cuDeviceGetAttribute,
+        // cuDeviceGetCount,
+        // cuDeviceGetName,
+        // cuDeviceGetProperties,
+        // cuDeviceTotalMem_v2,
+        // cuDriverGetVersion,
+        // cuEventCreate,
+        // cuEventDestroy_v2,
+        // cuGetExportTable,
+        cuInit,
+        // cuLaunchKernel,
+        // cuMemAlloc_v2,
+        // cuMemFreeHost,
+        // cuMemFree_v2,
+        // cuMemGetAddressRange_v2,
+        // cuMemHostAlloc,
+        // cuMemcpyDtoDAsync_v2,
+        // cuMemcpyDtoHAsync_v2,
+        // cuMemcpyHtoDAsync_v2,
+        // cuMemsetD8_v2,
+        // cuModuleGetFunction,
+        // cuModuleGetGlobal_v2,
+        // cuModuleGetTexRef,
+        // cuStreamCreate,
+        // cuStreamDestroy_v2,
+        // cuTexRefSetAddressMode,
+        // cuTexRefSetAddress_v2,
+        // cuTexRefSetFilterMode,
+        // cuTexRefSetFlags,
+        // cuTexRefSetFormat,
+        // cuTexRefSetMaxAnisotropy,
+        // cuTexRefSetMipmapFilterMode,
+        // cuTexRefSetMipmapLevelBias,
+        // cuTexRefSetMipmapLevelClamp,
+    ]
 }

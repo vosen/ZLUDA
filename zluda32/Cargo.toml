@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 cuda_types = { path = "../cuda_types" }
 cuda_macros = { path = "../cuda_macros" }
+zluda_windows = { path = "../zluda_windows" }
 zluda_server_common = { path = "../zluda_server_common" }
 paste = "1.0"
 ipc-channel = "^0.21.0"

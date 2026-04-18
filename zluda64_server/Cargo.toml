@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 cuda_types = { path = "../cuda_types" }
+cuda_macros = { path = "../cuda_macros" }
 zluda_server_common = { path = "../zluda_server_common" }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
 compio = { version = "0.18.0", features = ["macros", "fs"] }
