@@ -13,11 +13,19 @@ use widestring::{u16str, U16Str, U16String};
 use windows::{
     core::{w, HRESULT, PCWSTR},
     Win32::{
-        Foundation::{HINSTANCE, HMODULE, HWND, LPARAM, S_OK, WPARAM},
-        System::LibraryLoader::{
-            GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+        Foundation::{HANDLE, HINSTANCE, HMODULE, HWND, LPARAM, S_OK, WPARAM},
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            LibraryLoader::{
+                GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+            },
         },
         UI::{
             Controls::{
@@ -585,6 +593,22 @@ pub fn get_module_path_utf16(hm: HMODULE) -> OsString {
     }
     buffer.truncate(copied as usize);
     OsString::from_wide(&buffer)
+}
+
+pub fn kill_child_on_process_exit(child: *mut c_void) -> windows::core::Result<()> {
+    let job_handle = unsafe { windows::Win32::System::JobObjects::CreateJobObjectA(None, None) }?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+        SetInformationJobObject(
+            job_handle,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            size_of_val(&info) as u32,
+        )
+    }?;
+    unsafe { AssignProcessToJobObject(job_handle, HANDLE(child)) }?;
+    Ok(())
 }
 
 #[cfg(test)]
