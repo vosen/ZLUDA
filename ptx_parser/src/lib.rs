@@ -2510,11 +2510,11 @@ derive_parser!(
         }
     }
 
-    set.CmpOp{.ftz}.u32.f16x2         d, a, b => {
+    set.CmpOp{.ftz}.dtype_f16x2.f16x2         d, a, b => {
         let base = ast::SetpData::try_parse(state, cmpop, ftz, ScalarType::F16x2);
         let data = ast::SetData {
             base,
-            dtype: ScalarType::U32
+            dtype: dtype_f16x2
         };
         ast::Instruction::Set {
             data,
@@ -2544,6 +2544,7 @@ derive_parser!(
                                   .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
     .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
     .dtype: ScalarType = { .u32, .s32, .f32 };
+    .dtype_f16x2: ScalarType = { .u32, .f16x2 };
     .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .f32, .f64 };
 
 
