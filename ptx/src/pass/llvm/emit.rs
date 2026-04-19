@@ -3187,39 +3187,66 @@ impl<'a> MethodEmitContext<'a> {
             };
             let setp_result_0 = self.emit_setp_impl(data, None, src1_0, src2_0)?;
             let setp_result_1 = self.emit_setp_impl(data, None, src1_1, src2_1)?;
-            if dtype != ast::ScalarType::U32 {
-                return Err(error_unreachable());
-            }
-            let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
-            let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
-            let vector_result = unsafe {
-                LLVMBuildInsertElement(
-                    self.builder,
-                    LLVMGetPoison(get_type(
-                        self.context,
-                        &ast::Type::Vector(2, ast::ScalarType::U16),
-                    )?),
-                    setp_result_0,
-                    zero,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            let vector_result = unsafe {
-                LLVMBuildInsertElement(
-                    self.builder,
-                    vector_result,
-                    setp_result_1,
-                    one,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            unsafe {
-                LLVMBuildBitCast(
-                    self.builder,
-                    vector_result,
-                    get_scalar_type(self.context, dtype),
-                    LLVM_UNNAMED.as_ptr(),
-                )
+            match dtype {
+                ast::ScalarType::U32 => {
+                    let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
+                    let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            LLVMGetPoison(get_type(
+                                self.context,
+                                &ast::Type::Vector(2, ast::ScalarType::U16),
+                            )?),
+                            setp_result_0,
+                            zero,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            vector_result,
+                            setp_result_1,
+                            one,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    unsafe {
+                        LLVMBuildBitCast(
+                            self.builder,
+                            vector_result,
+                            get_scalar_type(self.context, dtype),
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    }
+                }
+                ast::ScalarType::F16x2 => {
+                    let setp_result_0 = self.setp_to_set(ast::ScalarType::F16, setp_result_0)?;
+                    let setp_result_1 = self.setp_to_set(ast::ScalarType::F16, setp_result_1)?;
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            LLVMGetPoison(get_type(
+                                self.context,
+                                &ast::Type::Vector(2, ast::ScalarType::F16),
+                            )?),
+                            setp_result_0,
+                            zero,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            vector_result,
+                            setp_result_1,
+                            one,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    }
+                }
+                _ => return Err(error_unreachable()),
             }
         } else {
             let setp_result = self.emit_setp_impl(data.base, None, src1, src2)?;

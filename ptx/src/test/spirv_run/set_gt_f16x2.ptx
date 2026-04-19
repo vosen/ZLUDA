@@ -1,0 +1,23 @@
+.version 6.5
+.target sm_60
+.address_size 64
+
+.visible .entry set_gt_f16x2(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b32 	    in32_<3>;
+    .reg .f16x2 	    result;
+
+	ld.param.u64 	    in_addr, [input];
+    ld.param.u64 	    out_addr, [output];
+
+    ld.b32              in32_0, [in_addr+4];
+    ld.b32              in32_1, [in_addr+8];
+	set.gt.f16x2.f16x2  in32_2, in32_0, in32_1;
+    st.u32              [out_addr], in32_2;
+	ret;
+}
