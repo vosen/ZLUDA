@@ -5890,6 +5890,7 @@ dependencies = [
  "embed-resource",
  "libloading",
  "rocsparse-sys",
+ "unwrap_or",
  "zluda_common",
  "zluda_windows",
 ]

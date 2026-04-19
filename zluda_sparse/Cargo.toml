@@ -12,6 +12,7 @@ cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
 rocsparse-sys = { path = "../ext/rocsparse-sys" }
 zluda_common = { path = "../zluda_common" }
+unwrap_or = "1.0.1"
 
 [package.metadata.zluda]
 linux_symlinks = ["libcusparse.so.10", "libcusparse.so.11", "libcusparse.so.12"]

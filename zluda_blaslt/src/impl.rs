@@ -85,12 +85,28 @@ pub(crate) fn unimplemented() -> cublasStatus_t {
     cublasStatus_t::ERROR_NOT_SUPPORTED
 }
 
-pub(crate) fn get_status_name(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+// Same as in zluda_blas
+pub(crate) fn get_status_name(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    match status {
+        cublasStatus_t::SUCCESS => c"CUBLAS_STATUS_SUCCESS".as_ptr(),
+        cublasStatus_t::ERROR_NOT_INITIALIZED => c"CUBLAS_STATUS_NOT_INITIALIZED".as_ptr(),
+        cublasStatus_t::ERROR_ALLOC_FAILED => c"CUBLAS_STATUS_ALLOC_FAILED".as_ptr(),
+        cublasStatus_t::ERROR_INVALID_VALUE => c"CUBLAS_STATUS_INVALID_VALUE".as_ptr(),
+        cublasStatus_t::ERROR_ARCH_MISMATCH => c"CUBLAS_STATUS_ARCH_MISMATCH".as_ptr(),
+        cublasStatus_t::ERROR_MAPPING_ERROR => c"CUBLAS_STATUS_MAPPING_ERROR".as_ptr(),
+        cublasStatus_t::ERROR_EXECUTION_FAILED => c"CUBLAS_STATUS_EXECUTION_FAILED".as_ptr(),
+        cublasStatus_t::ERROR_INTERNAL_ERROR => c"CUBLAS_STATUS_INTERNAL_ERROR".as_ptr(),
+        cublasStatus_t::ERROR_NOT_SUPPORTED => c"CUBLAS_STATUS_NOT_SUPPORTED".as_ptr(),
+        cublasStatus_t::ERROR_LICENSE_ERROR => c"CUBLAS_STATUS_LICENSE_ERROR".as_ptr(),
+        _ => c"CUBLAS_STATUS_UNKNOWN".as_ptr(),
+    }
 }
 
-pub(crate) fn get_status_string(_status: cublasStatus_t) -> *const ::core::ffi::c_char {
-    todo!()
+pub(crate) fn get_status_string(status: cublasStatus_t) -> *const ::core::ffi::c_char {
+    if cfg!(windows) && status.is_err() && status.err() == hipblaslt().err().map(Into::into) {
+        return c"Neither hipblaslt.dll nor libhipblaslt.dll could be found. Please install HIP SDK: https://zluda.readthedocs.io/latest/hip_sdk.html".as_ptr();
+    }
+    get_status_name(status)
 }
 
 pub(crate) fn get_version() -> usize {
