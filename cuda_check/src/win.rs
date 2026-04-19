@@ -177,9 +177,6 @@ unsafe fn check_cusparse(library: libloading::Library) -> Result<Option<OsString
     let mut handle = mem::zeroed();
     match cusparse_create(&mut handle) {
         Ok(()) => {}
-        Err(cuda_types::cusparse::cusparseError_t::NOT_SUPPORTED) => {
-            return Ok(hip_path());
-        }
         Err(err) => {
             return Err(Error::Initialization(
                 "cusparseCreate".to_string(),
