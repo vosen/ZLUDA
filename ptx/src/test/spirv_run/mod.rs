@@ -461,6 +461,16 @@ test_ptx!(
     ],
     [4294967295u32, 65535]
 );
+test_ptx!(
+    set_gt_f16x2,
+    [
+        half::f16::from_f32(-0.0),
+        half::f16::from_bits(0x38d3),
+        half::f16::from_f32(0.0),
+        half::f16::from_bits(0x35aa),
+    ],
+    [1006632960u32]
+);
 test_ptx!(uint_to_fp_bf16, [1u32, 3u32], [0x3F80u32]);
 test_ptx!(sad_s64, [12i64, -38, 915], [965i64, 965]);
 
