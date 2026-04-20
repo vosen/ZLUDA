@@ -39,12 +39,12 @@ use windows::{
 };
 
 #[cfg(target_pointer_width = "32")]
-pub static LIBRARIES: [LibraryInfo; 1] = [NVCUDA];
+pub static LIBRARIES: [LibraryInfo; 2] = [NVCUDA, NVAPI];
 
 #[cfg(target_pointer_width = "64")]
-pub static LIBRARIES: [LibraryInfo; 16] = [
+pub static LIBRARIES: [LibraryInfo; 17] = [
     NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS11, BLAS_LT13, BLAS_LT12, BLAS_LT11, SPARSE12,
-    SPARSE11, SPARSE10, FFT12, FFT11, FFT10,
+    SPARSE11, SPARSE10, FFT12, FFT11, FFT10, NVAPI,
 ];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
@@ -205,6 +205,22 @@ pub const FFT10: LibraryInfo = LibraryInfo {
     guid: uuid!("5f199520-4f7c-4fcb-b2b0-0e8b99f15e81"),
     trace_env_var: "ZLUDA_FFT_LIB",
     in_system32: false,
+};
+
+pub const NVAPI: LibraryInfo = LibraryInfo {
+    short_name: "nvapi",
+    is_alias: false,
+    #[cfg(target_pointer_width = "32")]
+    ascii_name: "nvapi.dll",
+    #[cfg(target_pointer_width = "64")]
+    ascii_name: "nvapi64.dll",
+    #[cfg(target_pointer_width = "32")]
+    utf16_name: u16str!("nvapi.dll"),
+    #[cfg(target_pointer_width = "64")]
+    utf16_name: u16str!("nvapi64.dll"),
+    guid: uuid!("f7449ed6-d01c-4376-9fc4-446eb2e4cf70"),
+    trace_env_var: "ZLUDA_NVAPI_LIB",
+    in_system32: true,
 };
 
 #[derive(Debug)]

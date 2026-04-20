@@ -44,6 +44,7 @@ struct Cargo {
 }
 
 struct Project {
+    is_32bit: bool,
     #[cfg_attr(unix, allow(unused))]
     manifest_path: PathBuf,
     name: String,
@@ -53,7 +54,7 @@ struct Project {
 }
 
 impl Project {
-    fn try_new(p: Package) -> Option<Project> {
+    fn try_new(p: Package, is_32bit: bool) -> Option<Project> {
         let name = p.name;
         let manifest_path = p.manifest_path.into();
         serde_json::from_value::<Option<Metadata>>(p.metadata)
@@ -78,13 +79,14 @@ impl Project {
                     target_name,
                     target_kind,
                     meta: m.zluda,
+                    is_32bit,
                 }
             })
     }
 
     #[cfg(windows)]
     fn zip_compiler_output(&self) -> bool {
-        self.meta.windows_paths.is_empty()
+        self.meta.windows_paths(self.is_32bit).is_empty()
     }
 
     #[cfg(unix)]
@@ -148,7 +150,7 @@ impl Project {
             target_dir,
             profile,
             libname,
-            self.meta.windows_paths.as_slice(),
+            self.meta.windows_paths(self.is_32bit).as_slice(),
         )
         .map(move |(.., full_path, target)| {
             let copy_output = full_path.clone();
@@ -255,7 +257,20 @@ struct ZludaMetadata {
     windows_paths: Vec<String>,
     #[serde(default)]
     #[cfg_attr(unix, allow(unused))]
+    windows32_paths: Vec<String>,
+    #[serde(default)]
+    #[cfg_attr(unix, allow(unused))]
     windows_extra_files: HashMap<String, String>,
+}
+
+impl ZludaMetadata {
+    fn windows_paths(&self, is_32bit: bool) -> &Vec<String> {
+        if is_32bit && !self.windows32_paths.is_empty() {
+            &self.windows32_paths
+        } else {
+            &self.windows_paths
+        }
+    }
 }
 
 fn always_true() -> bool {
@@ -291,7 +306,7 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
     let projects = meta
         .packages
         .into_iter()
-        .filter_map(Project::try_new)
+        .filter_map(|pkg| Project::try_new(pkg, cargo_flags.is_32bit))
         .filter(|project| {
             if cargo_flags.is_32bit {
                 if !project.meta.is_32bit {
