@@ -472,3 +472,21 @@ impl ReprUsize for cuda_types::nvml::nvmlReturn_t {
         ByteVecFfi::new(writer)
     }
 }
+
+pub struct Unknown;
+
+impl ReprUsize for Unknown {
+    fn to_usize(self) -> usize {
+        0
+    }
+
+    fn from_usize(_: usize) -> Self {
+        Self
+    }
+
+    const INTERNAL_ERROR: usize = usize::MAX;
+
+    extern "C" fn format_status(_: usize) -> ByteVecFfi {
+        ByteVecFfi::new(b"UNKNOWN".to_vec())
+    }
+}

@@ -15,8 +15,8 @@ zluda_common = { path = "../zluda_common" }
 format = { path = "../format" }
 dark_api = { path = "../dark_api" }
 regex = "1.4"
-dynasm = "1.2"
-dynasmrt = "1.2"
+dynasm = "5.0"
+dynasmrt = "5.0"
 # we don't need elf32, but goblin has a bug where elf64 does not build without elf32
 goblin = { version = "0.9", default-features = false, features = [
     "elf64",

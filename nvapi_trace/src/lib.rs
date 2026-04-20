@@ -1,5 +1,5 @@
 use libloading::Library;
-use std::{ffi::c_void, ptr, sync::LazyLock};
+use std::{ffi::c_void, mem, ptr, sync::LazyLock};
 use zluda_trace_common::ReprUsize;
 
 static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
@@ -571,11 +571,70 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
         let result = fn_ptr(interface);
         result as usize
     });
-    ReprUsize::from_usize(export_table.logged_call(
+    let original = ReprUsize::from_usize(export_table.logged_call(
         cglue::slice::CSliceRef::from_str("nvapi_QueryInterface"),
         cglue::trait_obj!(&format_args as dark_api::FnFfi),
         cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
         ptr::null_mut::<c_void>() as usize,
         <*mut c_void as ReprUsize>::format_status,
-    ))
+    ));
+    if cfg!(target_pointer_width = "32") {
+        get_thunk(original, report_fn, interface)
+    } else {
+        original
+    }
+}
+
+unsafe extern "system" fn report_fn(interface: u32) {
+    use zluda_trace_common::Unknown;
+    let export_table = unwrap_or::unwrap_some_or!(::zluda_trace_common::get_export_table(), return);
+    let format_args =
+        dark_api::FnFfiWrapper(|| dark_api::ByteVecFfi::new("(...)".as_bytes().to_vec()));
+    let underlying_fn = dark_api::FnFfiWrapper(|| 0);
+    let fn_name = match interface_to_name(interface) {
+        Some(name) => name.to_string(),
+        None => {
+            format!("{{nvapi:{:#010x}}}", interface)
+        }
+    };
+    export_table.logged_call(
+        cglue::slice::CSliceRef::from_str(mem::transmute(&*fn_name)),
+        cglue::trait_obj!(&format_args as dark_api::FnFfi),
+        cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
+        <Unknown as ReprUsize>::INTERNAL_ERROR,
+        <Unknown as ReprUsize>::format_status,
+    );
+}
+
+#[cfg(target_arch = "x86")]
+pub fn get_thunk(
+    original_fn: *mut c_void,
+    report_fn: unsafe extern "system" fn(u32),
+    interface: u32,
+) -> *mut c_void {
+    use dynasmrt::{dynasm, DynasmApi};
+    let mut ops = dynasmrt::x86::Assembler::new().unwrap();
+    let start = ops.offset();
+    dynasm!(ops
+        ; .arch x86
+        ; push interface as i32
+        ; mov eax, report_fn as i32
+        ; call eax
+        ; mov eax, original_fn as i32
+        ; jmp eax
+        ; int 3
+    );
+    let exe_buf = ops.finalize().unwrap();
+    let result_fn = exe_buf.ptr(start);
+    std::mem::forget(exe_buf);
+    result_fn as *mut _
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn get_thunk(
+    _original_fn: *mut c_void,
+    _report_fn: unsafe extern "system" fn(u32),
+    _interface: u32,
+) -> *mut c_void {
+    todo!()
 }
