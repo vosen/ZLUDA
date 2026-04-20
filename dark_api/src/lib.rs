@@ -354,6 +354,7 @@ dark_api! {
         #[noformat]
         [0] = logged_call(
             fn_name: cglue::slice::CSliceRef<'static, u8>,
+            nvapi_interface: u32,
             args: crate::FnFfiRef<crate::ByteVecFfi>,
             fn_: crate::FnFfiRef<usize>,
             internal_error: usize,

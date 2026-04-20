@@ -610,14 +610,15 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
         let result = fn_ptr(interface);
         result as usize
     });
-    let original = ReprUsize::from_usize(export_table.logged_call(
+    let original: *mut c_void = ReprUsize::from_usize(export_table.logged_call(
         cglue::slice::CSliceRef::from_str("nvapi_QueryInterface"),
+        0,
         cglue::trait_obj!(&format_args as dark_api::FnFfi),
         cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
         ptr::null_mut::<c_void>() as usize,
         <*mut c_void as ReprUsize>::format_status,
     ));
-    if cfg!(target_pointer_width = "32") {
+    if cfg!(target_pointer_width = "32") && !original.is_null() {
         global_state
             .lock()
             .ok()
@@ -634,14 +635,15 @@ unsafe extern "system" fn report_fn(interface: u32) {
     let format_args =
         dark_api::FnFfiWrapper(|| dark_api::ByteVecFfi::new("(...)".as_bytes().to_vec()));
     let underlying_fn = dark_api::FnFfiWrapper(|| 0);
-    let fn_name = match interface_to_name(interface) {
-        Some(name) => name.to_string(),
+    let (fn_name, interface) = match interface_to_name(interface) {
+        Some(name) => (name, 0),
         None => {
-            format!("{{nvapi:{:#010x}}}", interface)
+            ("", interface)
         }
     };
     export_table.logged_call(
-        cglue::slice::CSliceRef::from_str(mem::transmute(&*fn_name)),
+        cglue::slice::CSliceRef::from_str(fn_name),
+        interface,
         cglue::trait_obj!(&format_args as dark_api::FnFfi),
         cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
         <Unknown as ReprUsize>::INTERNAL_ERROR,
