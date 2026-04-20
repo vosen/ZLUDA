@@ -2829,6 +2829,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nvapi_trace"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
 name = "object"
 version = "0.38.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

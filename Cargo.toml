@@ -16,6 +16,7 @@ members = [
     "ext/rocblas-sys",
     "format",
     "kernel_metadata",
+    "nvapi_trace",
     "ptx_parser_macros_impl",
     "ptx_parser_macros",
     "ptx_parser",
