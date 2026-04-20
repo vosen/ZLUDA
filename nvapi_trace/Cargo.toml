@@ -20,4 +20,7 @@ unwrap_or = "1.0.1"
 cglue = "0.3.5"
 
 [package.metadata.zluda]
+windows_only = true
 windows_paths = ["trace/nvapi64.dll"]
+windows32_paths = ["trace/nvapi.dll"]
+32bit = true

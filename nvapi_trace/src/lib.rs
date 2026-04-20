@@ -5,9 +5,13 @@ use zluda_trace_common::ReprUsize;
 static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
 
 fn get_library() -> Option<Library> {
-    let cuda_lib = std::env::var("ZLUDA_NVAPI_LIB")
-        .ok()
-        .unwrap_or_else(|| r"C:\Windows\System32\nvapi64.dll".to_string());
+    let cuda_lib = std::env::var("ZLUDA_NVAPI_LIB").ok().unwrap_or_else(|| {
+        if cfg!(target_pointer_width = "64") {
+            r"C:\Windows\System32\nvapi64.dll".to_string()
+        } else {
+            r"C:\Windows\System32\nvapi.dll".to_string()
+        }
+    });
     zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()
 }
 
@@ -25,7 +29,7 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
     let format_args = dark_api::FnFfiWrapper(|| {
         use std::io::Write;
         let mut writer = Vec::new();
-        write!(&mut writer, "interface: {}", interface).ok();
+        write!(&mut writer, "(interface: {:#010x})", interface).ok();
         dark_api::ByteVecFfi::new(writer)
     });
     let underlying_fn = dark_api::FnFfiWrapper(|| {
