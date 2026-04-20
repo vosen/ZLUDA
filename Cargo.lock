@@ -3318,6 +3318,7 @@ dependencies = [
  "format",
  "libloading",
  "paste",
+ "rustc-hash 2.1.1",
  "unwrap_or",
  "zluda_trace_common",
 ]
