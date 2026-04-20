@@ -1,10 +1,17 @@
 use libloading::Library;
-use std::{ffi::c_void, mem, ptr, sync::LazyLock};
+use rustc_hash::FxHashMap;
+use std::{
+    collections::hash_map,
+    ffi::c_void,
+    mem, ptr,
+    sync::{LazyLock, Mutex},
+};
 use zluda_trace_common::ReprUsize;
 
-static LIBRARY: LazyLock<Option<Library>> = LazyLock::new(get_library);
+static GLOBAL_STATE: LazyLock<Option<(Library, Mutex<GlobalState>)>> =
+    LazyLock::new(get_global_state);
 
-fn get_library() -> Option<Library> {
+fn get_global_state() -> Option<(Library, Mutex<GlobalState>)> {
     let cuda_lib = std::env::var("ZLUDA_NVAPI_LIB").ok().unwrap_or_else(|| {
         if cfg!(target_pointer_width = "64") {
             r"C:\Windows\System32\nvapi64.dll".to_string()
@@ -12,7 +19,36 @@ fn get_library() -> Option<Library> {
             r"C:\Windows\System32\nvapi.dll".to_string()
         }
     });
-    zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()
+    let lib = zluda_trace_common::dlopen_local_noredirect(cuda_lib).ok()?;
+    Some((Library::from(lib), Mutex::new(GlobalState::new())))
+}
+
+struct GlobalState {
+    thunks: FxHashMap<u32, usize>,
+}
+
+impl GlobalState {
+    fn new() -> Self {
+        GlobalState {
+            thunks: FxHashMap::default(),
+        }
+    }
+
+    fn get_thunk(
+        &mut self,
+        original: *mut c_void,
+        report_fn: unsafe extern "system" fn(u32),
+        interface: u32,
+    ) -> *mut c_void {
+        match self.thunks.entry(interface) {
+            hash_map::Entry::Occupied(entry) => *entry.get() as *mut c_void,
+            hash_map::Entry::Vacant(entry) => {
+                let thunk = get_thunk(original, report_fn, interface);
+                entry.insert(thunk as usize);
+                thunk
+            }
+        }
+    }
 }
 
 macro_rules! interface_to_name {
@@ -548,11 +584,14 @@ interface_to_name!(
 
 #[no_mangle]
 pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
-    let maybe_fn_ptr = (&*LIBRARY).as_ref().and_then(|lib| {
-        lib.get::<unsafe extern "C" fn(interface: u32) -> *mut c_void>(b"nvapi_QueryInterface\0")
-            .ok()
+    let maybe_fn_ptr_global = (&*GLOBAL_STATE).as_ref().and_then(|(lib, state)| {
+        let fn_ptr = lib
+            .get::<unsafe extern "C" fn(interface: u32) -> *mut c_void>(b"nvapi_QueryInterface\0")
+            .ok()?;
+        Some((fn_ptr, state))
     });
-    let fn_ptr = unwrap_or::unwrap_some_or!(maybe_fn_ptr, return ptr::null_mut());
+    let (fn_ptr, global_state) =
+        unwrap_or::unwrap_some_or!(maybe_fn_ptr_global, return ptr::null_mut());
     let export_table = unwrap_or::unwrap_some_or!(
         ::zluda_trace_common::get_export_table(),
         return ptr::null_mut()
@@ -579,7 +618,11 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
         <*mut c_void as ReprUsize>::format_status,
     ));
     if cfg!(target_pointer_width = "32") {
-        get_thunk(original, report_fn, interface)
+        global_state
+            .lock()
+            .ok()
+            .map(|mut state| state.get_thunk(original, report_fn, interface))
+            .unwrap_or_else(|| get_thunk(original, report_fn, interface))
     } else {
         original
     }
