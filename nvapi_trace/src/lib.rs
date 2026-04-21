@@ -37,7 +37,7 @@ impl GlobalState {
     fn get_thunk(
         &mut self,
         original: *mut c_void,
-        report_fn: unsafe extern "system" fn(u32),
+        report_fn: unsafe extern "C" fn(i32, u32),
         interface: u32,
     ) -> *mut c_void {
         match self.thunks.entry(interface) {
@@ -629,32 +629,29 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
     }
 }
 
-unsafe extern "system" fn report_fn(interface: u32) {
-    use zluda_trace_common::Unknown;
+unsafe extern "C" fn report_fn(result: i32, interface: u32) {
     let export_table = unwrap_or::unwrap_some_or!(::zluda_trace_common::get_export_table(), return);
     let format_args =
         dark_api::FnFfiWrapper(|| dark_api::ByteVecFfi::new("(...)".as_bytes().to_vec()));
-    let underlying_fn = dark_api::FnFfiWrapper(|| 0);
+    let underlying_fn = dark_api::FnFfiWrapper(|| ReprUsize::to_usize(result));
     let (fn_name, interface) = match interface_to_name(interface) {
         Some(name) => (name, 0),
-        None => {
-            ("", interface)
-        }
+        None => ("", interface),
     };
     export_table.logged_call(
         cglue::slice::CSliceRef::from_str(fn_name),
         interface,
         cglue::trait_obj!(&format_args as dark_api::FnFfi),
         cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
-        <Unknown as ReprUsize>::INTERNAL_ERROR,
-        <Unknown as ReprUsize>::format_status,
+        <i32 as ReprUsize>::INTERNAL_ERROR,
+        <i32 as ReprUsize>::format_status,
     );
 }
 
 #[cfg(target_arch = "x86")]
 pub fn get_thunk(
     original_fn: *mut c_void,
-    report_fn: unsafe extern "system" fn(u32),
+    report_fn: unsafe extern "C" fn(i32, u32),
     interface: u32,
 ) -> *mut c_void {
     use dynasmrt::{dynasm, DynasmApi};
@@ -662,11 +659,33 @@ pub fn get_thunk(
     let start = ops.offset();
     dynasm!(ops
         ; .arch x86
+        ; push ebp
+        ; mov ebp, esp
+        ; push DWORD [ebp+68]
+        ; push DWORD [ebp+64]
+        ; push DWORD [ebp+60]
+        ; push DWORD [ebp+56]
+        ; push DWORD [ebp+52]
+        ; push DWORD [ebp+48]
+        ; push DWORD [ebp+44]
+        ; push DWORD [ebp+40]
+        ; push DWORD [ebp+36]
+        ; push DWORD [ebp+32]
+        ; push DWORD [ebp+28]
+        ; push DWORD [ebp+24]
+        ; push DWORD [ebp+20]
+        ; push DWORD [ebp+16]
+        ; push DWORD [ebp+12]
+        ; push DWORD [ebp+8]
+        ; mov eax, original_fn as i32
+        ; call eax
         ; push interface as i32
+        ; push eax
         ; mov eax, report_fn as i32
         ; call eax
-        ; mov eax, original_fn as i32
-        ; jmp eax
+        ; pop eax
+        ; leave
+        ; ret
         ; int 3
     );
     let exe_buf = ops.finalize().unwrap();
@@ -678,7 +697,7 @@ pub fn get_thunk(
 #[cfg(target_arch = "x86_64")]
 pub fn get_thunk(
     _original_fn: *mut c_void,
-    _report_fn: unsafe extern "system" fn(u32),
+    _report_fn: unsafe extern "C" fn(i32, u32),
     _interface: u32,
 ) -> *mut c_void {
     todo!()
