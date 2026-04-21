@@ -3306,6 +3306,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nvapi"
+version = "0.0.0"
+dependencies = [
+ "cglue",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "format",
+ "libloading",
+ "paste",
+ "rustc-hash 2.1.1",
+ "unwrap_or",
+ "zluda_trace_common",
+]
+
+[[package]]
 name = "nvapi_trace"
 version = "0.0.0"
 dependencies = [
