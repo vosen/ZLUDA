@@ -542,9 +542,18 @@ interface_to_name!(
     // { NvAPI_UninstallRise, 0xab8d09f6 },
 );
 
+const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE: u32 = 1 << 0;
+const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_ENABLE: u32 = 1 << 1;
+// const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_DEDICATED: u32 = 1 << 2;
+const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_RECOMMENDED: u32 = 1 << 3;
+const NV_COMPUTE_GPU_TOPOLOGY_CUDA_AVAILABLE: u32 = 1 << 4;
+const NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE: u32 = 1 << 16;
+// const NV_COMPUTE_GPU_TOPOLOGY_CUDA_DISABLED: u32 = 1 << 17;
+const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE: u32 = 1 << 21;
+
 fn make_nvapi_version<T>(ver: u32) -> u32 {
     let size = std::mem::size_of::<T>() as u32;
-    (size << 16) | ver
+    size | (ver << 16)
 }
 
 #[no_mangle]
@@ -552,39 +561,96 @@ pub unsafe extern "C" fn nvapi_QueryInterface(interface: u32) -> *mut c_void {
     interface_to_fn(interface).unwrap_or(std::ptr::null_mut())
 }
 
+#[allow(non_snake_case)]
 unsafe extern "C" fn NvAPI_Initialize() -> i32 {
     0
 }
 
+#[allow(non_snake_case)]
 unsafe extern "C" fn NvAPI_Unload() -> i32 {
     0
 }
 
+#[allow(non_snake_case)]
 unsafe extern "C" fn NvAPI_GetDisplayDriverVersion(
-    display: NvDisplayHandle,
-    pVersion: *mut NV_DISPLAY_DRIVER_VERSION,
+    _display: NvDisplayHandle,
+    version: *mut NV_DISPLAY_DRIVER_VERSION,
 ) -> i32 {
     // return 0;
-    let version = pVersion.as_mut();
+    let version = version.as_mut();
     let version = unwrap_or::unwrap_some_or!(version, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
     if version.version != make_nvapi_version::<NV_DISPLAY_DRIVER_VERSION>(1) {
         return _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION;
     }
-    _NvAPI_Status_NVAPI_NO_IMPLEMENTATION
+    version.drvVersion = 99999;
+    version.bldChangeListNum = 0;
+    version.szBuildBranchString.fill(0);
+    version.szAdapterString.fill(0);
+    let device_name = b"ZLUDA Graphics Device";
+    std::ptr::copy_nonoverlapping(
+        device_name.as_ptr() as _,
+        version.szAdapterString.as_mut_ptr() as _,
+        device_name.len(),
+    );
+    0
 }
 
-unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(compute_topo: *mut NV_COMPUTE_GPU_TOPOLOGY) -> i32 {
-    -1
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(
+    compute_topo: *mut NV_COMPUTE_GPU_TOPOLOGY_V1,
+) -> i32 {
+    let compute_topo = compute_topo.as_mut();
+    let compute_topo =
+        unwrap_or::unwrap_some_or!(compute_topo, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    if compute_topo.version != make_nvapi_version::<NV_COMPUTE_GPU_TOPOLOGY_V1>(1) {
+        return _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION;
+    }
+    compute_topo.gpuCount = 1;
+    compute_topo.computeGpus[0] = NV_COMPUTE_GPU_TOPOLOGY_V1__bindgen_ty_1 {
+        hPhysicalGpu: 1 as _,
+        flags: NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_ENABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_RECOMMENDED
+            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_AVAILABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE,
+    };
+    0
 }
 
-unsafe extern "C" fn NvAPI_GetGPUIDfromPhysicalGPU(physical_gpu: NvPhysicalGpuHandle, pGpuId: *mut NvU32) -> i32 {
-    -1
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GetGPUIDfromPhysicalGPU(
+    physical_gpu: NvPhysicalGpuHandle,
+    gpu_id: *mut NvU32,
+) -> i32 {
+    if physical_gpu != 1 as _ {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let gpu_id = gpu_id.as_mut();
+    let gpu_id = unwrap_or::unwrap_some_or!(gpu_id, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    *gpu_id = 1;
+    0
 }
 
-unsafe extern "C" fn NvAPI_GetPhysicalGPUFromGPUID(gpuId: NvU32, pPhysicalGPU: *mut NvPhysicalGpuHandle) -> i32 {
-    -1
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GetPhysicalGPUFromGPUID(
+    gpu_id: NvU32,
+    physical_gpu: *mut NvPhysicalGpuHandle,
+) -> i32 {
+    if gpu_id != 1 {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let physical_gpu = physical_gpu.as_mut();
+    let physical_gpu =
+        unwrap_or::unwrap_some_or!(physical_gpu, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    *physical_gpu = 1 as _;
+    0
 }
 
-unsafe extern "C" fn NvAPI_SYS_GetDriverAndBranchVersion(pDriverVersion: *mut NvU32, szBuildBranchString: NvAPI_ShortString) -> i32 {
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_SYS_GetDriverAndBranchVersion(
+    _driver_version: *mut NvU32,
+    _build_branch_string: *mut NvAPI_ShortString,
+) -> i32 {
     -1
 }
