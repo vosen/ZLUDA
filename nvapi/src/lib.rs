@@ -33,7 +33,7 @@ interface_to_name!(
     // { NvAPI_SetView, 0x0957d7b6 },
     // { NvAPI_SetViewEx, 0x06b89e68 },
     { NvAPI_GetDisplayDriverVersion, 0xf951a4d1 },
-    // { NvAPI_SYS_GetDriverAndBranchVersion, 0x2926aaad },
+    { NvAPI_SYS_GetDriverAndBranchVersion, 0x2926aaad },
     // { NvAPI_GPU_GetMemoryInfo, 0x07f9b368 },
     // { NvAPI_GPU_GetMemoryInfoEx, 0xc0599498 },
     // { NvAPI_OGL_ExpertModeSet, 0x3805ef7a },
@@ -48,8 +48,8 @@ interface_to_name!(
     // { NvAPI_GetLogicalGPUFromDisplay, 0xee1370cf },
     // { NvAPI_GetLogicalGPUFromPhysicalGPU, 0xadd604d1 },
     // { NvAPI_GetPhysicalGPUsFromLogicalGPU, 0xaea3fa32 },
-    // { NvAPI_GetPhysicalGPUFromGPUID, 0x5380ad1a },
-    // { NvAPI_GetGPUIDfromPhysicalGPU, 0x6533ea3e },
+    { NvAPI_GetPhysicalGPUFromGPUID, 0x5380ad1a },
+    { NvAPI_GetGPUIDfromPhysicalGPU, 0x6533ea3e },
     // { NvAPI_GPU_GetShaderSubPipeCount, 0x0be17923 },
     // { NvAPI_GPU_GetGpuCoreCount, 0xc7026a87 },
     // { NvAPI_GPU_GetAllOutputs, 0x7d554f8e },
@@ -88,7 +88,7 @@ interface_to_name!(
     // { NvAPI_GPU_WorkstationFeatureSetup, 0x6c1f3fe4 },
     // { NvAPI_GPU_WorkstationFeatureQuery, 0x004537df },
     // { NvAPI_GPU_GetHDCPSupportStatus, 0xf089eef5 },
-    // { NvAPI_GPU_CudaEnumComputeCapableGpus, 0x5786cc6e },
+    { NvAPI_GPU_CudaEnumComputeCapableGpus, 0x5786cc6e },
     // { NvAPI_GPU_GetTachReading, 0x5f608315 },
     // { NvAPI_GPU_GetECCStatusInfo, 0xca1ddaf3 },
     // { NvAPI_GPU_GetECCErrorInfo, 0xc71f85a6 },
@@ -564,10 +564,27 @@ unsafe extern "C" fn NvAPI_GetDisplayDriverVersion(
     display: NvDisplayHandle,
     pVersion: *mut NV_DISPLAY_DRIVER_VERSION,
 ) -> i32 {
+    // return 0;
     let version = pVersion.as_mut();
     let version = unwrap_or::unwrap_some_or!(version, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
     if version.version != make_nvapi_version::<NV_DISPLAY_DRIVER_VERSION>(1) {
-        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+        return _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION;
     }
     _NvAPI_Status_NVAPI_NO_IMPLEMENTATION
+}
+
+unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(compute_topo: *mut NV_COMPUTE_GPU_TOPOLOGY) -> i32 {
+    -1
+}
+
+unsafe extern "C" fn NvAPI_GetGPUIDfromPhysicalGPU(physical_gpu: NvPhysicalGpuHandle, pGpuId: *mut NvU32) -> i32 {
+    -1
+}
+
+unsafe extern "C" fn NvAPI_GetPhysicalGPUFromGPUID(gpuId: NvU32, pPhysicalGPU: *mut NvPhysicalGpuHandle) -> i32 {
+    -1
+}
+
+unsafe extern "C" fn NvAPI_SYS_GetDriverAndBranchVersion(pDriverVersion: *mut NvU32, szBuildBranchString: NvAPI_ShortString) -> i32 {
+    -1
 }
