@@ -47,6 +47,14 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuDeviceGetCount) => {
+                buffer = handle_cuda_function::<ArchivedcuDeviceGetCountIn, cuDeviceGetCountOut>(
+                    &mut client,
+                    buffer,
+                    cu_device_get_count,
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -61,6 +69,14 @@ async fn main() -> std::io::Result<()> {
 fn cu_init(input: &ArchivedcuInitIn) -> Result<cuInitOut, CUerror> {
     unsafe { cuInit(input.Flags.to_native()) }?;
     Ok(cuInitOut {})
+}
+
+fn cu_device_get_count(
+    _input: &ArchivedcuDeviceGetCountIn,
+) -> Result<cuDeviceGetCountOut, CUerror> {
+    let mut count = 0;
+    unsafe { cuDeviceGetCount(&mut count) }?;
+    Ok(cuDeviceGetCountOut { count })
 }
 
 async fn handle_cuda_function<In: Portable, Out>(
@@ -197,7 +213,7 @@ cuda_function_declarations! {
         // cuDeviceComputeCapability,
         // cuDeviceGet,
         // cuDeviceGetAttribute,
-        // cuDeviceGetCount,
+        cuDeviceGetCount,
         // cuDeviceGetName,
         // cuDeviceGetProperties,
         // cuDeviceTotalMem_v2,

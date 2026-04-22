@@ -98,14 +98,19 @@ impl Server {
         )
         .map_err(|_| CUerror::UNKNOWN)?;
         this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
+        this.buffer.clear();
         read_return_code(this)?;
+        this.buffer.resize(mem::size_of::<Out>(), 0);
+        this.pipe
+            .read_exact(&mut this.buffer)
+            .map_err(|_| CUerror::UNKNOWN)?;
         let output = unsafe { rkyv::access_unchecked::<Out>(&this.buffer) };
         Ok(output.clone())
     }
 }
 
 fn read_return_code(this: &mut Server) -> Result<(), CUerror> {
-    let mut code_buffer = [0; 4];
+    let mut code_buffer = [0u8; 4];
     this.pipe
         .read_exact(&mut code_buffer)
         .map_err(|_| CUerror::UNKNOWN)?;
