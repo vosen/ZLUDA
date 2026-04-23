@@ -13,6 +13,7 @@ cuda_types = { path = "../cuda_types" }
 cuda_macros = { path = "../cuda_macros" }
 zluda_windows = { path = "../zluda_windows" }
 zluda_server_common = { path = "../zluda_server_common" }
+dark_api = { path = "../dark_api" }
 paste = "1.0"
 ipc-channel = "^0.21.0"
 windows = { version = "0.62.2", features = [
