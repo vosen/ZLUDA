@@ -2,29 +2,12 @@ use bincode::{Decode, Encode};
 use cuda_macros::{cuda_function_declarations, generate_input_struct, generate_output_struct};
 use cuda_types::cuda::*;
 use paste::paste;
+use rkyv::rend::u64_le;
 use rkyv::{rend, Archive, Deserialize, Portable, Serialize};
 use std::ffi::CString;
 use std::num::NonZeroU32;
 use std::{ffi::CStr, num::NonZero};
 use strum_macros::FromRepr;
-
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-#[repr(C)]
-pub struct Envelope<T> {
-    pub code: u32,
-    pub data: T,
-}
-
-unsafe impl<T: Portable> Portable for Envelope<T> {}
-
-impl<T> Envelope<T> {
-    pub fn result(&self) -> Result<(), CUerror> {
-        match NonZeroU32::new(self.code) {
-            None => Ok(()),
-            Some(code) => Err(CUerror(code)),
-        }
-    }
-}
 
 macro_rules! noop {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
@@ -45,6 +28,7 @@ macro_rules! generate_messages_inout {
                 $fn_name,
             )*
             cuDeviceGetName,
+            cuDeviceTotalMem_v2,
         }
     };
 }
@@ -71,29 +55,28 @@ cuda_function_declarations! {
         cuDeviceGetAttribute,
         cuDeviceGetCount,
         cuDeviceGetProperties,
-        cuDeviceTotalMem_v2,
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
         //cuGetExportTable,
         cuInit,
         //cuLaunchKernel,
-        cuMemAlloc_v2,
+        // cuMemAlloc_v2,
         //cuMemFreeHost,
         //cuMemFree_v2,
-        cuMemGetAddressRange_v2,
+        // cuMemGetAddressRange_v2,
         //cuMemHostAlloc,
         //cuMemcpyDtoDAsync_v2,
         //cuMemcpyDtoHAsync_v2,
         //cuMemcpyHtoDAsync_v2,
-        cuMemsetD8_v2,
+        // cuMemsetD8_v2,
         // cuModuleGetFunction,
         // cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
         cuStreamCreate,
         cuStreamDestroy_v2,
         cuTexRefSetAddressMode,
-        cuTexRefSetAddress_v2,
+        // cuTexRefSetAddress_v2,
         cuTexRefSetFilterMode,
         cuTexRefSetFlags,
         cuTexRefSetFormat,
@@ -104,6 +87,7 @@ cuda_function_declarations! {
     ],
     generate_messages_in <= [
         cuDeviceGetName,
+        cuDeviceTotalMem_v2
     ]
 }
 
@@ -167,7 +151,6 @@ encode_as_proxy!(CUfilter_mode, u32);
 encode_as_proxy!(CUaddress_mode, u32);
 encode_as_proxy!(CUarray_format, u32);
 
-encode_as_u32!(usize);
 encode_as_u32!(CUcontext);
 encode_as_u32!(CUdeviceptr_v2);
 encode_as_u32!(CUevent);
@@ -196,5 +179,11 @@ unsafe impl Portable for CUdevprop_v1_Wire {}
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuDeviceGetNameOut {
-    pub name: Vec<u8>
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuDeviceTotalMem_v2Out {
+    pub bytes: u64_le,
 }

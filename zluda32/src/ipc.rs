@@ -18,7 +18,7 @@ use widestring::{u16str, U16CString};
 use windows::core::{Error, Owned, PCSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Pipes::*;
-use zluda_server_common::{Envelope, Opcode};
+use zluda_server_common::Opcode;
 
 fn server_path() -> &'static str {
     if cfg!(debug_assertions) {
@@ -91,14 +91,12 @@ impl Server {
     ) -> Result<Out, CUerror> {
         let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
         this.buffer.clear();
-        let slice = rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
-            &Envelope {
-                code: opcode as u32,
-                data,
-            },
-            &mut this.buffer,
-        )
-        .map_err(|_| CUerror::UNKNOWN)?;
+        this.pipe
+            .write_all(&(opcode as u32).to_le_bytes()[..])
+            .map_err(|_| CUerror::UNKNOWN)?;
+        let slice =
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut this.buffer)
+                .map_err(|_| CUerror::UNKNOWN)?;
         this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
         read_return_code(this)?;
         this.buffer.resize(mem::size_of::<Out>(), 0);
@@ -120,14 +118,12 @@ impl Server {
     {
         let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
         this.buffer.clear();
-        let slice = rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
-            &Envelope {
-                code: opcode as u32,
-                data,
-            },
-            &mut this.buffer,
-        )
-        .map_err(|_| CUerror::UNKNOWN)?;
+        this.pipe
+            .write_all(&(opcode as u32).to_le_bytes()[..])
+            .map_err(|_| CUerror::UNKNOWN)?;
+        let slice =
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut this.buffer)
+                .map_err(|_| CUerror::UNKNOWN)?;
         this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
         read_return_code(this)?;
         let out_size = read_u32(this)?;

@@ -10,11 +10,14 @@ use compio::{
 use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
 use rkyv::{
-    api::high::HighSerializer, ser::allocator::ArenaHandle, util::AlignedVec, Archive, Portable,
-    Serialize,
+    api::high::HighSerializer, rend::u64_le, ser::allocator::ArenaHandle, util::AlignedVec,
+    Archive, Portable, Serialize,
 };
 use slab::Slab;
-use std::mem;
+use std::{
+    io::{self, Write},
+    mem,
+};
 use windows_sys::Win32::Foundation::ERROR_MORE_DATA;
 use zluda_server_common::*;
 
@@ -114,6 +117,13 @@ async fn main() -> std::io::Result<()> {
                     )
                     .await?;
             }
+            Some(Opcode::cuDeviceTotalMem_v2) => {
+                buffer = handle_cuda_function::<
+                    ArchivedcuDeviceTotalMem_v2In,
+                    cuDeviceTotalMem_v2Out,
+                >(&mut client, buffer, cu_device_total_mem_v2)
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -183,6 +193,16 @@ fn cu_ctx_create_v2(
     Ok(cuCtxCreate_v2Out { pctx })
 }
 
+fn cu_device_total_mem_v2(
+    input: &ArchivedcuDeviceTotalMem_v2In,
+) -> Result<cuDeviceTotalMem_v2Out, CUerror> {
+    let mut bytes = 0usize;
+    unsafe { cuDeviceTotalMem_v2(&mut bytes, input.dev.to_native()) }?;
+    Ok(cuDeviceTotalMem_v2Out {
+        bytes: u64_le::from_native(bytes as u64),
+    })
+}
+
 fn cu_driver_get_version(
     _input: &ArchivedcuDriverGetVersionIn,
 ) -> Result<cuDriverGetVersionOut, CUerror> {
@@ -208,16 +228,11 @@ where
     match handler(input) {
         Ok(output) => {
             buffer.clear();
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(
-                &Envelope {
-                    code: 0,
-                    data: output,
-                },
-                &mut buffer.0,
-            )
-            .map_err(|_| {
-                std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
-            })?;
+            client.write_u32_le(0).await?;
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
+                .map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
+                })?;
             let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
             Ok(new_buffer)
         }
@@ -362,7 +377,7 @@ cuda_function_declarations! {
         cuDeviceGetCount,
         cuDeviceGetName,
         // cuDeviceGetProperties,
-        // cuDeviceTotalMem_v2,
+        cuDeviceTotalMem_v2,
         cuDriverGetVersion,
         // cuEventCreate,
         // cuEventDestroy_v2,
