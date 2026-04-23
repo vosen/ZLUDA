@@ -30,7 +30,7 @@ macro_rules! noop {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
 }
 
-macro_rules! generate_messages {
+macro_rules! generate_messages_inout {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             generate_input_struct!($fn_name, $($arg_id : $arg_type),*);
@@ -44,13 +44,22 @@ macro_rules! generate_messages {
             $(
                 $fn_name,
             )*
+            cuDeviceGetName,
         }
+    };
+}
+
+macro_rules! generate_messages_in {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            generate_input_struct!($fn_name, $($arg_id : $arg_type),*);
+        )*
     };
 }
 
 cuda_function_declarations! {
     noop,
-    generate_messages <= [
+    generate_messages_inout <= [
         cuCtxCreate_v2,
         cuCtxDetach,
         cuCtxGetApiVersion,
@@ -61,7 +70,6 @@ cuda_function_declarations! {
         cuDeviceGet,
         cuDeviceGetAttribute,
         cuDeviceGetCount,
-        cuDeviceGetName,
         cuDeviceGetProperties,
         cuDeviceTotalMem_v2,
         cuDriverGetVersion,
@@ -79,9 +87,9 @@ cuda_function_declarations! {
         //cuMemcpyDtoHAsync_v2,
         //cuMemcpyHtoDAsync_v2,
         cuMemsetD8_v2,
-        cuModuleGetFunction,
-        cuModuleGetGlobal_v2,
-        cuModuleGetTexRef,
+        // cuModuleGetFunction,
+        // cuModuleGetGlobal_v2,
+        // cuModuleGetTexRef,
         cuStreamCreate,
         cuStreamDestroy_v2,
         cuTexRefSetAddressMode,
@@ -93,6 +101,9 @@ cuda_function_declarations! {
         cuTexRefSetMipmapFilterMode,
         cuTexRefSetMipmapLevelBias,
         cuTexRefSetMipmapLevelClamp,
+    ],
+    generate_messages_in <= [
+        cuDeviceGetName,
     ]
 }
 
@@ -144,17 +155,6 @@ macro_rules! encode_as_u32 {
     };
 }
 
-impl CudaEncode for *const i8 {
-    type WireObject = Vec<u8>;
-    fn encode(self) -> Vec<u8> {
-        unsafe { CStr::from_ptr(self) }.to_bytes_with_nul().to_vec()
-    }
-    fn decode(o: Self::WireObject) -> Self {
-        let c_string = CString::from_vec_with_nul(o).unwrap();
-        c_string.into_raw()
-    }
-}
-
 encode_as_self!(u8);
 encode_as_self!(i8);
 encode_as_self!(u32);
@@ -193,9 +193,8 @@ pub struct CUdevprop_v1_Wire {
 
 unsafe impl Portable for CUdevprop_v1_Wire {}
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
 #[repr(C)]
-pub struct Foobar {
-    pub text: String,
-    pub buff: Vec<u8>,
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuDeviceGetNameOut {
+    pub name: Vec<u8>
 }
