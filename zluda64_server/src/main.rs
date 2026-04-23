@@ -2,7 +2,7 @@
 #![windows_subsystem = "windows"]
 
 use compio::{
-    buf::{IoBuf, IoBufMut, ReserveError, ReserveExactError, SetLen},
+    buf::{buf_try, IoBuf, IoBufMut, ReserveError, ReserveExactError, SetLen},
     fs::named_pipe::{ClientOptions, NamedPipeClient},
     io::{AsyncRead, AsyncReadExt, AsyncReadManaged, AsyncWrite, AsyncWriteExt},
     BufResult,
@@ -22,6 +22,21 @@ struct State {
     handles: Slab<usize>,
 }
 
+impl State {
+    fn insert<T: Sized>(&mut self, handle: *mut T) -> u32 {
+        (self.handles.insert(handle as usize) as u32) + 1
+    }
+
+    fn get<T: Sized>(&self, id: u32) -> Option<*mut T> {
+        if id == 0 {
+            return None;
+        }
+        self.handles
+            .get((id - 1) as usize)
+            .map(|&handle| handle as *mut T)
+    }
+}
+
 #[compio::main]
 async fn main() -> std::io::Result<()> {
     let pipe_name = std::env::args_os().nth(1).ok_or(std::io::Error::new(
@@ -35,6 +50,9 @@ async fn main() -> std::io::Result<()> {
         .open(pipe_name)
         .await?;
     let mut buffer = AlignedVecBuffer(AlignedVec::new());
+    let mut state = State {
+        handles: Slab::new(),
+    };
     loop {
         let opcode = client.read_u32_le().await?; // Read the length prefix
         buffer.clear();
@@ -54,6 +72,47 @@ async fn main() -> std::io::Result<()> {
                     cu_device_get_count,
                 )
                 .await?;
+            }
+            Some(Opcode::cuDeviceGetAttribute) => {
+                buffer = handle_cuda_function::<
+                    ArchivedcuDeviceGetAttributeIn,
+                    cuDeviceGetAttributeOut,
+                >(&mut client, buffer, cu_device_get_attribute)
+                .await?;
+            }
+            Some(Opcode::cuDeviceGet) => {
+                buffer = handle_cuda_function::<ArchivedcuDeviceGetIn, cuDeviceGetOut>(
+                    &mut client,
+                    buffer,
+                    cu_device_get,
+                )
+                .await?;
+            }
+            Some(Opcode::cuCtxCreate_v2) => {
+                buffer = handle_cuda_function::<ArchivedcuCtxCreate_v2In, cuCtxCreate_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_ctx_create_v2(input, &mut state),
+                )
+                .await?;
+            }
+            Some(Opcode::cuDriverGetVersion) => {
+                buffer =
+                    handle_cuda_function::<ArchivedcuDriverGetVersionIn, cuDriverGetVersionOut>(
+                        &mut client,
+                        buffer,
+                        cu_driver_get_version,
+                    )
+                    .await?;
+            }
+            Some(Opcode::cuDeviceGetName) => {
+                buffer =
+                    handle_cuda_function_framed::<ArchivedcuDeviceGetNameIn, cuDeviceGetNameOut>(
+                        &mut client,
+                        buffer,
+                        cu_device_get_name,
+                    )
+                    .await?;
             }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
@@ -79,7 +138,62 @@ fn cu_device_get_count(
     Ok(cuDeviceGetCountOut { count })
 }
 
-async fn handle_cuda_function<In: Portable, Out>(
+fn cu_device_get_attribute(
+    input: &ArchivedcuDeviceGetAttributeIn,
+) -> Result<cuDeviceGetAttributeOut, CUerror> {
+    let mut pi = 0;
+    unsafe {
+        cuDeviceGetAttribute(
+            &mut pi,
+            CUdevice_attribute_enum(input.attrib.to_native()),
+            input.dev.to_native(),
+        )
+    }?;
+    Ok(cuDeviceGetAttributeOut { pi })
+}
+
+fn cu_device_get(input: &ArchivedcuDeviceGetIn) -> Result<cuDeviceGetOut, CUerror> {
+    let mut device = 0;
+    unsafe { cuDeviceGet(&mut device, input.ordinal.to_native()) }?;
+    Ok(cuDeviceGetOut { device })
+}
+
+fn cu_device_get_name(input: &ArchivedcuDeviceGetNameIn) -> Result<cuDeviceGetNameOut, CUerror> {
+    let mut name = vec![0u8; input.len.to_native() as usize];
+    unsafe {
+        cuDeviceGetName(
+            name.as_mut_ptr().cast(),
+            input.len.to_native(),
+            input.dev.to_native(),
+        )
+    }?;
+    if let Some(pos) = name.iter().copied().position(|c| c == 0) {
+        name.truncate(pos);
+    }
+    Ok(cuDeviceGetNameOut { name })
+}
+
+fn cu_ctx_create_v2(
+    input: &ArchivedcuCtxCreate_v2In,
+    state: &mut State,
+) -> Result<cuCtxCreate_v2Out, CUerror> {
+    let mut pctx = unsafe { mem::zeroed() };
+    unsafe { cuCtxCreate_v2(&mut pctx, input.flags.to_native(), input.dev.to_native()) }?;
+    let pctx = state.insert(pctx.0);
+    Ok(cuCtxCreate_v2Out { pctx })
+}
+
+fn cu_driver_get_version(
+    _input: &ArchivedcuDriverGetVersionIn,
+) -> Result<cuDriverGetVersionOut, CUerror> {
+    let mut driver_version = 0;
+    unsafe { cuDriverGetVersion(&mut driver_version) }?;
+    Ok(cuDriverGetVersionOut {
+        driverVersion: driver_version,
+    })
+}
+
+async fn handle_cuda_function<In: Portable, Out: Portable>(
     client: &mut NamedPipeClient,
     mut buffer: AlignedVecBuffer,
     handler: impl FnOnce(&In) -> Result<Out, CUerror>,
@@ -104,12 +218,43 @@ where
             .map_err(|_| {
                 std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
             })?;
-            let BufResult(result, new_buffer) = client.write_all(buffer).await;
-            result?;
+            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
             Ok(new_buffer)
         }
         Err(e) => {
+            client.write_u32_le(e.0.get()).await?;
+            Ok(buffer)
+        }
+    }
+}
+
+async fn handle_cuda_function_framed<In: Portable, Out>(
+    client: &mut NamedPipeClient,
+    mut buffer: AlignedVecBuffer,
+    handler: impl FnOnce(&In) -> Result<Out, CUerror>,
+) -> std::io::Result<AlignedVecBuffer>
+where
+    Out: for<'a, 'b> Serialize<
+        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+    >,
+{
+    buffer = read_all::<In>(buffer, client).await?;
+    let input = unsafe { rkyv::access_unchecked::<In>(buffer.as_init()) };
+    match handler(input) {
+        Ok(output) => {
             buffer.clear();
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
+                .map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
+                })?;
+            let code_and_len = unsafe {
+                std::mem::transmute::<(u32, u32), [u8; 8]>((0u32, buffer.0.len() as u32))
+            };
+            client.write_all(code_and_len).await.0?;
+            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
+            Ok(new_buffer)
+        }
+        Err(e) => {
             client.write_u32_le(e.0.get()).await?;
             Ok(buffer)
         }
@@ -121,6 +266,7 @@ async fn read_all<T>(
     client: &mut NamedPipeClient,
 ) -> std::io::Result<AlignedVecBuffer> {
     let mut remaining_read = mem::size_of::<T>();
+    buffer.clear();
     buffer.reserve(remaining_read)?;
     while remaining_read > 0 {
         let BufResult(read_result, new_buffer) = client.append(buffer).await;
@@ -204,23 +350,23 @@ macro_rules! implemented {
 cuda_function_declarations! {
     nop,
     implemented <= [
-        // cuCtxCreate_v2,
+        cuCtxCreate_v2,
         // cuCtxDetach,
         // cuCtxGetApiVersion,
         // cuCtxGetCurrent,
         // cuCtxGetDevice,
         // cuCtxSynchronize,
         // cuDeviceComputeCapability,
-        // cuDeviceGet,
-        // cuDeviceGetAttribute,
+        cuDeviceGet,
+        cuDeviceGetAttribute,
         cuDeviceGetCount,
-        // cuDeviceGetName,
+        cuDeviceGetName,
         // cuDeviceGetProperties,
         // cuDeviceTotalMem_v2,
-        // cuDriverGetVersion,
+        cuDriverGetVersion,
         // cuEventCreate,
         // cuEventDestroy_v2,
-        // cuGetExportTable,
+        cuGetExportTable,
         cuInit,
         // cuLaunchKernel,
         // cuMemAlloc_v2,
