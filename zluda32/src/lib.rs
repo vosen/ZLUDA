@@ -202,7 +202,15 @@ pub(crate) fn cu_device_get_properties(prop: *mut CUdevprop, dev: CUdevice) -> R
 }
 
 pub(crate) fn cu_device_total_mem_v2(bytes: *mut usize, dev: CUdevice) -> Result<(), CUerror> {
-    todo!()
+    let bytes = unsafe { bytes.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *bytes = ipc::Server::remote_call_zero_copy::<cuDeviceTotalMem_v2Out>(
+        Opcode::cuDeviceTotalMem_v2,
+        cuDeviceTotalMem_v2In { dev },
+    )?
+    .bytes
+    .to_native()
+    .min(u32::MAX as u64) as usize;
+    Ok(())
 }
 
 pub(crate) fn cu_driver_get_version(
