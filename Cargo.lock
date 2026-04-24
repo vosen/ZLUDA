@@ -5674,6 +5674,7 @@ dependencies = [
  "compio",
  "cuda_macros",
  "cuda_types",
+ "dark_api",
  "rkyv",
  "slab",
  "windows-sys 0.61.2",

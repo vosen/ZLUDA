@@ -10,33 +10,54 @@ use compio::{
 use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
 use rkyv::{
-    api::high::HighSerializer, rend::u64_le, ser::allocator::ArenaHandle, util::AlignedVec,
+    api::high::HighSerializer,
+    rend::{u32_le, u64_le},
+    ser::allocator::ArenaHandle,
+    util::AlignedVec,
     Archive, Portable, Serialize,
 };
 use slab::Slab;
 use std::{
     io::{self, Write},
-    mem,
+    mem, ptr,
 };
 use windows_sys::Win32::Foundation::ERROR_MORE_DATA;
 use zluda_server_common::*;
 
 struct State {
     handles: Slab<usize>,
+    dark_api: dark_api::cuda::ContextLocalStorageInterfaceV0301,
 }
 
 impl State {
+    fn new() -> Result<Self, CUerror> {
+        unsafe { cuInit(0) }?;
+        let mut table_ptr = std::ptr::null();
+        unsafe {
+            cuGetExportTable(
+                &mut table_ptr,
+                &dark_api::cuda::ContextLocalStorageInterfaceV0301::GUID,
+            )
+        }?;
+        let dark_api = unsafe { dark_api::cuda::ContextLocalStorageInterfaceV0301::new(table_ptr) };
+        Ok(Self {
+            handles: Slab::new(),
+            dark_api,
+        })
+    }
+
     fn insert<T: Sized>(&mut self, handle: *mut T) -> u32 {
         (self.handles.insert(handle as usize) as u32) + 1
     }
 
-    fn get<T: Sized>(&self, id: u32) -> Option<*mut T> {
+    fn get<T: Sized>(&self, id: u32) -> Result<*mut T, CUerror> {
         if id == 0 {
-            return None;
+            return Err(CUerror::INVALID_VALUE);
         }
         self.handles
             .get((id - 1) as usize)
             .map(|&handle| handle as *mut T)
+            .ok_or(CUerror::INVALID_VALUE)
     }
 }
 
@@ -53,9 +74,12 @@ async fn main() -> std::io::Result<()> {
         .open(pipe_name)
         .await?;
     let mut buffer = AlignedVecBuffer(AlignedVec::new());
-    let mut state = State {
-        handles: Slab::new(),
-    };
+    let mut state = State::new().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to initialize CUDA context",
+        )
+    })?;
     loop {
         let opcode = client.read_u32_le().await?; // Read the length prefix
         buffer.clear();
@@ -122,6 +146,24 @@ async fn main() -> std::io::Result<()> {
                     ArchivedcuDeviceTotalMem_v2In,
                     cuDeviceTotalMem_v2Out,
                 >(&mut client, buffer, cu_device_total_mem_v2)
+                .await?;
+            }
+            Some(Opcode::ContextLocalStoragePut) => {
+                buffer = handle_cuda_function::<
+                    ArchivedContextLocalStoragePutIn,
+                    ContextLocalStoragePutOut,
+                >(&mut client, buffer, |input| {
+                    context_local_storage_put(&mut state, input)
+                })
+                .await?;
+            }
+            Some(Opcode::ContextLocalStorageGet) => {
+                buffer = handle_cuda_function::<
+                    ArchivedContextLocalStorageGetIn,
+                    ContextLocalStorageGetOut,
+                >(&mut client, buffer, |input| {
+                    context_local_storage_get(&mut state, input)
+                })
                 .await?;
             }
             _ => {
@@ -210,6 +252,38 @@ fn cu_driver_get_version(
     unsafe { cuDriverGetVersion(&mut driver_version) }?;
     Ok(cuDriverGetVersionOut {
         driverVersion: driver_version,
+    })
+}
+
+fn context_local_storage_put(
+    state: &mut State,
+    input: &ArchivedContextLocalStoragePutIn,
+) -> Result<ContextLocalStoragePutOut, CUerror> {
+    unsafe {
+        state.dark_api.context_local_storage_put(
+            CUcontext(state.get(input.cu_ctx.to_native())?),
+            input.key.to_native() as _,
+            input.value.to_native() as _,
+            None,
+        )
+    }?;
+    Ok(ContextLocalStoragePutOut {})
+}
+
+fn context_local_storage_get(
+    state: &mut State,
+    input: &ArchivedContextLocalStorageGetIn,
+) -> Result<ContextLocalStorageGetOut, CUerror> {
+    let mut value = ptr::null_mut();
+    unsafe {
+        state.dark_api.context_local_storage_get(
+            &mut value,
+            CUcontext(state.get(input.cu_ctx.to_native())?),
+            input.key.to_native() as _,
+        )
+    }?;
+    Ok(ContextLocalStorageGetOut {
+        value: u32_le::from_native(value as u32),
     })
 }
 
