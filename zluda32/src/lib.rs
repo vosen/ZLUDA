@@ -3,11 +3,12 @@ use cuda_types::cuda::*;
 use dark_api::cuda::CudaDarkApi;
 use paste::paste;
 use std::sync::{Mutex, OnceLock};
+use std::{cell::RefCell, ffi::c_void, ptr};
 use zluda_server_common::*;
 
 mod ipc;
 
-macro_rules! unimplemented {
+macro_rules! not_implemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[cfg_attr(not(test), no_mangle)]
@@ -36,7 +37,7 @@ macro_rules! implemented {
 }
 
 cuda_function_declarations! {
-    unimplemented,
+    not_implemented,
     implemented <= [
         cuCtxCreate_v2,
         cuCtxDetach,
@@ -83,6 +84,39 @@ cuda_function_declarations! {
     ]
 }
 
+thread_local! {
+    pub(crate) static CONTEXT_STACK: ContextStack = ContextStack::new();
+}
+
+struct ContextStack(RefCell<Vec<CUcontext>>);
+
+impl ContextStack {
+    fn new() -> Self {
+        ContextStack(RefCell::new(Vec::new()))
+    }
+
+    fn push(&self, ctx: CUcontext) {
+        self.0.borrow_mut().push(ctx);
+    }
+
+    fn unwrap(&self, ctx: CUcontext) -> Result<CUcontext, CUerror> {
+        if ctx.0.is_null() {
+            let stack = self.0.borrow();
+            stack.last().copied().ok_or(CUerror::INVALID_VALUE)
+        } else {
+            Ok(ctx)
+        }
+    }
+
+    fn current(&self) -> CUcontext {
+        self.0
+            .borrow()
+            .last()
+            .copied()
+            .unwrap_or(CUcontext(ptr::null_mut()))
+    }
+}
+
 pub(crate) fn cu_init(flags: u32) -> Result<(), CUerror> {
     ipc::Server::remote_call_zero_copy::<cuInitOut>(Opcode::cuInit, cuInitIn { Flags: flags })?;
     Ok(())
@@ -93,38 +127,55 @@ pub(crate) fn cu_ctx_create_v2(
     flags: ::core::ffi::c_uint,
     dev: CUdevice,
 ) -> Result<(), CUerror> {
-    let ctx = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *ctx = CudaEncode::decode(
+    let ctx_ref = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let cu_ctx = CudaEncode::decode(
         ipc::Server::remote_call_zero_copy::<cuCtxCreate_v2Out>(
             Opcode::cuCtxCreate_v2,
             cuCtxCreate_v2In { flags, dev },
         )?
         .pctx,
     );
+    CONTEXT_STACK.with(|stack| {
+        stack.push(cu_ctx);
+    });
+    *ctx_ref = cu_ctx;
     Ok(())
 }
 
 pub(crate) fn cu_ctx_detach(ctx: CUcontext) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_ctx_get_api_version(
     ctx: CUcontext,
     version: *mut ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    let version = unsafe { version.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let ctx = CONTEXT_STACK.with(|s| s.unwrap(ctx))?;
+    *version = CudaEncode::decode(
+        ipc::Server::remote_call_zero_copy::<cuCtxGetApiVersionOut>(
+            Opcode::cuCtxGetApiVersion,
+            cuCtxGetApiVersionIn {
+                ctx: CudaEncode::encode(ctx),
+            },
+        )?
+        .version,
+    );
+    Ok(())
 }
 
 pub(crate) fn cu_ctx_get_current(pctx: *mut CUcontext) -> Result<(), CUerror> {
-    todo!()
+    let pctx = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *pctx = CONTEXT_STACK.with(|s| s.current());
+    Ok(())
 }
 
 pub(crate) fn cu_ctx_get_device(device: *mut CUdevice) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_ctx_synchronize() -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_device_compute_capability(
@@ -132,7 +183,7 @@ pub(crate) fn cu_device_compute_capability(
     minor: *mut ::core::ffi::c_int,
     dev: CUdevice,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_device_get(
@@ -198,7 +249,7 @@ pub(crate) fn cu_device_get_name(
 }
 
 pub(crate) fn cu_device_get_properties(prop: *mut CUdevprop, dev: CUdevice) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_device_total_mem_v2(bytes: *mut usize, dev: CUdevice) -> Result<(), CUerror> {
@@ -229,11 +280,11 @@ pub(crate) fn cu_event_create(
     phEvent: *mut CUevent,
     Flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_event_destroy_v2(hEvent: CUevent) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
@@ -270,19 +321,19 @@ pub(crate) fn cu_launch_kernel(
     kernelParams: *mut *mut ::core::ffi::c_void,
     extra: *mut *mut ::core::ffi::c_void,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_mem_alloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_mem_free_v2(dptr: CUdeviceptr) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_mem_get_address_range_v2(
@@ -290,7 +341,7 @@ pub(crate) fn cu_mem_get_address_range_v2(
     psize: *mut usize,
     dptr: CUdeviceptr,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_mem_host_alloc(
@@ -298,7 +349,7 @@ pub(crate) fn cu_mem_host_alloc(
     bytesize: usize,
     Flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_memcpy_dto_d_async_v2(
@@ -307,7 +358,7 @@ pub(crate) fn cu_memcpy_dto_d_async_v2(
     ByteCount: usize,
     hStream: CUstream,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_memcpy_dto_h_async_v2(
@@ -316,7 +367,7 @@ pub(crate) fn cu_memcpy_dto_h_async_v2(
     ByteCount: usize,
     hStream: CUstream,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_memcpy_hto_d_async_v2(
@@ -325,7 +376,7 @@ pub(crate) fn cu_memcpy_hto_d_async_v2(
     ByteCount: usize,
     hStream: CUstream,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_memset_d8_v2(
@@ -333,7 +384,7 @@ pub(crate) fn cu_memset_d8_v2(
     uc: ::core::ffi::c_uchar,
     N: usize,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_module_get_function(
@@ -341,7 +392,7 @@ pub(crate) fn cu_module_get_function(
     hmod: CUmodule,
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_module_get_global_v2(
@@ -350,7 +401,7 @@ pub(crate) fn cu_module_get_global_v2(
     hmod: CUmodule,
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_module_get_tex_ref(
@@ -358,18 +409,18 @@ pub(crate) fn cu_module_get_tex_ref(
     hmod: CUmodule,
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_stream_create(
     phStream: *mut CUstream,
     Flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_stream_destroy_v2(hStream: CUstream) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_address_mode(
@@ -377,7 +428,7 @@ pub(crate) fn cu_tex_ref_set_address_mode(
     dim: ::core::ffi::c_int,
     am: CUaddress_mode,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_address_v2(
@@ -386,21 +437,21 @@ pub(crate) fn cu_tex_ref_set_address_v2(
     dptr: CUdeviceptr,
     bytes: usize,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_filter_mode(
     hTexRef: CUtexref,
     fm: CUfilter_mode,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_flags(
     hTexRef: CUtexref,
     Flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_format(
@@ -408,28 +459,28 @@ pub(crate) fn cu_tex_ref_set_format(
     fmt: CUarray_format,
     NumPackedComponents: ::core::ffi::c_int,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_max_anisotropy(
     hTexRef: CUtexref,
     maxAniso: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_filter_mode(
     hTexRef: CUtexref,
     fm: CUfilter_mode,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_level_bias(
     hTexRef: CUtexref,
     bias: f32,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_level_clamp(
@@ -437,8 +488,28 @@ pub(crate) fn cu_tex_ref_set_mipmap_level_clamp(
     minMipmapLevelClamp: f32,
     maxMipmapLevelClamp: f32,
 ) -> Result<(), CUerror> {
-    todo!()
+    unimplemented!()
 }
+
+struct UnknownBuffer<const S: usize> {
+    buffer: std::cell::UnsafeCell<[u32; S]>,
+}
+
+impl<const S: usize> UnknownBuffer<S> {
+    const fn new() -> Self {
+        UnknownBuffer {
+            buffer: std::cell::UnsafeCell::new([0; S]),
+        }
+    }
+    const fn len(&self) -> usize {
+        S
+    }
+}
+
+unsafe impl<const S: usize> Sync for UnknownBuffer<S> {}
+
+static UNKNOWN_BUFFER1: UnknownBuffer<1024> = UnknownBuffer::new();
+static UNKNOWN_BUFFER2: UnknownBuffer<14> = UnknownBuffer::new();
 
 struct DarkApi32;
 
@@ -447,7 +518,7 @@ impl CudaDarkApi for DarkApi32 {
         module: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn cudart_interface_fn2(
@@ -466,11 +537,11 @@ impl CudaDarkApi for DarkApi32 {
         arg4: *mut std::ffi::c_void,
         arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> () {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext2(
@@ -480,32 +551,34 @@ impl CudaDarkApi for DarkApi32 {
         arg4: *mut std::ffi::c_void,
         arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn load_compilers() -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn get_unknown_buffer1(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
-        todo!()
+        *ptr = UNKNOWN_BUFFER1.buffer.get() as *mut std::ffi::c_void;
+        *size = UNKNOWN_BUFFER1.len();
     }
 
     unsafe extern "system" fn get_unknown_buffer2(
         ptr: *mut *mut std::ffi::c_void,
         size: *mut usize,
     ) -> () {
-        todo!()
+        *ptr = UNKNOWN_BUFFER2.buffer.get() as *mut std::ffi::c_void;
+        *size = UNKNOWN_BUFFER2.len();
     }
 
     unsafe extern "system" fn context_local_storage_put(
-        context: cuda_types::cuda::CUcontext,
+        cu_ctx: cuda_types::cuda::CUcontext,
         key: *mut std::ffi::c_void,
         value: *mut std::ffi::c_void,
-        dtor_cb: Option<
+        _dtor_cb: Option<
             extern "system" fn(
                 cuda_types::cuda::CUcontext,
                 *mut std::ffi::c_void,
@@ -513,14 +586,23 @@ impl CudaDarkApi for DarkApi32 {
             ),
         >,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
+        ipc::Server::remote_call_zero_copy::<ContextLocalStoragePutOut>(
+            Opcode::ContextLocalStoragePut,
+            ContextLocalStoragePutIn {
+                cu_ctx: cu_ctx.encode().into(),
+                key: (key as u32).into(),
+                value: (value as u32).into(),
+            },
+        )?;
+        Ok(())
     }
 
     unsafe extern "system" fn context_local_storage_delete(
         context: cuda_types::cuda::CUcontext,
         key: *mut std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn context_local_storage_get(
@@ -528,7 +610,18 @@ impl CudaDarkApi for DarkApi32 {
         cu_ctx: cuda_types::cuda::CUcontext,
         key: *mut std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        let value = unsafe { value.as_mut() }.ok_or(cuda_types::cuda::CUerror::INVALID_VALUE)?;
+        let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
+        *value = ipc::Server::remote_call_zero_copy::<ContextLocalStorageGetOut>(
+            Opcode::ContextLocalStorageGet,
+            ContextLocalStorageGetIn {
+                cu_ctx: cu_ctx.encode().into(),
+                key: (key as u32).into(),
+            },
+        )?
+        .value
+        .to_native() as _;
+        Ok(())
     }
 
     unsafe extern "system" fn ctx_create_v2_bypass(
@@ -544,14 +637,14 @@ impl CudaDarkApi for DarkApi32 {
         arg2: usize,
         arg3: usize,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn heap_free(
         heap_alloc_record_ptr: *const std::ffi::c_void,
         arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn device_get_attribute_ext(
@@ -560,14 +653,14 @@ impl CudaDarkApi for DarkApi32 {
         unknown: std::ffi::c_int,
         result: *mut [usize; 2],
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn device_get_something(
         result: *mut std::ffi::c_uchar,
         dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn integrity_check(
@@ -575,7 +668,7 @@ impl CudaDarkApi for DarkApi32 {
         unix_seconds: u64,
         result: *mut [u64; 2],
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn context_check(
@@ -583,11 +676,11 @@ impl CudaDarkApi for DarkApi32 {
         result1: *mut u32,
         result2: *mut *const std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn hybrid_runtime_load_get_proc_address(
@@ -595,10 +688,10 @@ impl CudaDarkApi for DarkApi32 {
         fn_ptr: *mut *const std::ffi::c_void,
         token: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 
     unsafe extern "system" fn hybrid_runtime_free(token: usize) -> cuda_types::cuda::CUresult {
-        todo!()
+        unimplemented!()
     }
 }
