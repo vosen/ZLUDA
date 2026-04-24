@@ -2,7 +2,7 @@ use bincode::{Decode, Encode};
 use cuda_macros::{cuda_function_declarations, generate_input_struct, generate_output_struct};
 use cuda_types::cuda::*;
 use paste::paste;
-use rkyv::rend::u64_le;
+use rkyv::rend::{u32_le, u64_le};
 use rkyv::{rend, Archive, Deserialize, Portable, Serialize};
 use std::ffi::CString;
 use std::num::NonZeroU32;
@@ -29,6 +29,8 @@ macro_rules! generate_messages_inout {
             )*
             cuDeviceGetName,
             cuDeviceTotalMem_v2,
+            ContextLocalStoragePut,
+            ContextLocalStorageGet,
         }
     };
 }
@@ -186,4 +188,29 @@ pub struct cuDeviceGetNameOut {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuDeviceTotalMem_v2Out {
     pub bytes: u64_le,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStoragePutIn {
+    pub cu_ctx: u32_le,
+    pub key: u32_le,
+    pub value: u32_le,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStoragePutOut {}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStorageGetIn {
+    pub cu_ctx: u32_le,
+    pub key: u32_le,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStorageGetOut {
+    pub value: u32_le,
 }
