@@ -11,6 +11,7 @@ use std::{
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+mod convert_32bit_to_64bit;
 mod deparamize_functions;
 mod expand_operands;
 mod fix_special_registers;
@@ -94,8 +95,12 @@ pub fn to_llvm_module<'input>(
     on_pass_end("remove_unreachable_basic_blocks");
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
-    let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
+    let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_explicit_load_store");
+    if ast.address_size == 32 {
+        directives = convert_32bit_to_64bit::run(&mut flat_resolver, directives)?;
+        on_pass_end("convert_32bit_to_64bit");
+    }
     let directives = insert_implicit_conversions::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
     let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
