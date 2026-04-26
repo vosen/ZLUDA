@@ -642,6 +642,7 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_createpolicy_fractional(data, arguments)
             }
             ast::Instruction::Sad { data, arguments } => self.emit_sad(data, arguments),
+            ast::Instruction::Vshr { data, arguments } => self.emit_vshr(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -3439,6 +3440,55 @@ impl<'a> MethodEmitContext<'a> {
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildAdd(self.builder, subtraction, src3, dst)
         });
+        Ok(())
+    }
+
+    fn emit_vshr(
+        &mut self,
+        data: ast::VshData,
+        arguments: ast::VshrArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let shift_amount = self.resolver.value(arguments.src2)?;
+        let shifted = match data.mode {
+            ast::FunnelShiftMode::Clamp => {
+                let pre_shifted = unsafe {
+                    LLVMBuildLShr(self.builder, src1, shift_amount, LLVM_UNNAMED.as_ptr())
+                };
+                let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+                let const_32 = unsafe { LLVMConstInt(llvm_i32, 32, 0) };
+                let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
+                let should_clamp = unsafe {
+                    LLVMBuildICmp(
+                        self.builder,
+                        LLVMIntPredicate::LLVMIntUGE,
+                        shift_amount,
+                        const_32,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                unsafe {
+                    LLVMBuildSelect(
+                        self.builder,
+                        should_clamp,
+                        const_0,
+                        pre_shifted,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                }
+            }
+            ast::FunnelShiftMode::Wrap => {
+                return Err(error_todo());
+            }
+        };
+        match data.op2 {
+            ast::VshOp::Add => {
+                let src3 = self.resolver.value(arguments.src3)?;
+                self.resolver.with_result(arguments.dst, |dst| unsafe {
+                    LLVMBuildAdd(self.builder, shifted, src3, dst)
+                });
+            }
+        }
         Ok(())
     }
 

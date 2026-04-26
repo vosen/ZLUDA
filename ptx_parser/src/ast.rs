@@ -5,7 +5,7 @@ use super::{
 use crate::{
     BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
     MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
-    VoteMode,
+    VoteMode, VshOp,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -886,6 +886,16 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(data.ctype()) },
 
                 }
+            }
+        },
+        Vshr {
+            type: Type::Scalar(ScalarType::U32),
+            data: VshData,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T
             }
         },
         Tex {
@@ -2862,4 +2872,10 @@ impl TexData {
 pub enum TexType {
     Texref,
     Texobj,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VshData {
+    pub mode: FunnelShiftMode,
+    pub op2: VshOp,
 }
