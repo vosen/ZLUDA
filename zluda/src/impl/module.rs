@@ -147,6 +147,7 @@ fn get_best_ptx_and_compile(
                     sm_version: 0,
                     directives: Vec::new(),
                     invalid_directives: usize::MAX,
+                    address_size: 64,
                 },
             )
         }
