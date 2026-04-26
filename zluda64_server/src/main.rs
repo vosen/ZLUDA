@@ -166,6 +166,15 @@ async fn main() -> std::io::Result<()> {
                 })
                 .await?;
             }
+            Some(Opcode::cuCtxGetApiVersion) => {
+                buffer =
+                    handle_cuda_function::<ArchivedcuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
+                        &mut client,
+                        buffer,
+                        |input| cu_ctx_get_api_version(&mut state, input),
+                    )
+                    .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -253,6 +262,16 @@ fn cu_driver_get_version(
     Ok(cuDriverGetVersionOut {
         driverVersion: driver_version,
     })
+}
+
+fn cu_ctx_get_api_version(
+    state: &mut State,
+    input: &ArchivedcuCtxGetApiVersionIn,
+) -> Result<cuCtxGetApiVersionOut, CUerror> {
+    let ctx = CUcontext(state.get(input.ctx.to_native())?);
+    let mut version = 0;
+    unsafe { cuCtxGetApiVersion(ctx, &mut version) }?;
+    Ok(cuCtxGetApiVersionOut { version })
 }
 
 fn context_local_storage_put(
@@ -441,7 +460,7 @@ cuda_function_declarations! {
     implemented <= [
         cuCtxCreate_v2,
         // cuCtxDetach,
-        // cuCtxGetApiVersion,
+        cuCtxGetApiVersion,
         // cuCtxGetCurrent,
         // cuCtxGetDevice,
         // cuCtxSynchronize,
