@@ -434,6 +434,11 @@ test_ptx!(
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [614127545u32]
 );
+test_ptx!(
+    vshr_clamp,
+    [0x8e2da590u32, 16, 0x248a9f70],
+    [613100957, 613064560]
+);
 test_ptx!(param_is_addressable, [0xDEAD], [0u64]);
 // TODO: re-enable when we have a patched LLVM
 //test_ptx!(
