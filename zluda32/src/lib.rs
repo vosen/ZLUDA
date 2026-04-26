@@ -88,32 +88,35 @@ thread_local! {
     pub(crate) static CONTEXT_STACK: ContextStack = ContextStack::new();
 }
 
-struct ContextStack(RefCell<Vec<CUcontext>>);
+struct ContextStack(RefCell<Vec<(CUcontext, CUdevice)>>);
 
 impl ContextStack {
     fn new() -> Self {
         ContextStack(RefCell::new(Vec::new()))
     }
 
-    fn push(&self, ctx: CUcontext) {
-        self.0.borrow_mut().push(ctx);
+    fn push(&self, ctx: CUcontext, dev: CUdevice) {
+        self.0.borrow_mut().push((ctx, dev));
     }
 
     fn unwrap(&self, ctx: CUcontext) -> Result<CUcontext, CUerror> {
         if ctx.0.is_null() {
             let stack = self.0.borrow();
-            stack.last().copied().ok_or(CUerror::INVALID_VALUE)
+            stack
+                .last()
+                .map(|(ctx, _)| *ctx)
+                .ok_or(CUerror::INVALID_VALUE)
         } else {
             Ok(ctx)
         }
     }
 
-    fn current(&self) -> CUcontext {
+    fn current(&self) -> (CUcontext, CUdevice) {
         self.0
             .borrow()
             .last()
             .copied()
-            .unwrap_or(CUcontext(ptr::null_mut()))
+            .unwrap_or((CUcontext(ptr::null_mut()), 0))
     }
 }
 
@@ -136,7 +139,7 @@ pub(crate) fn cu_ctx_create_v2(
         .pctx,
     );
     CONTEXT_STACK.with(|stack| {
-        stack.push(cu_ctx);
+        stack.push(cu_ctx, dev);
     });
     *ctx_ref = cu_ctx;
     Ok(())
@@ -166,12 +169,15 @@ pub(crate) fn cu_ctx_get_api_version(
 
 pub(crate) fn cu_ctx_get_current(pctx: *mut CUcontext) -> Result<(), CUerror> {
     let pctx = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *pctx = CONTEXT_STACK.with(|s| s.current());
+    *pctx = CONTEXT_STACK.with(|s| s.current()).0;
     Ok(())
 }
 
 pub(crate) fn cu_ctx_get_device(device: *mut CUdevice) -> Result<(), CUerror> {
-    unimplemented!()
+    let device = unsafe { device.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let (_, dev) = CONTEXT_STACK.with(|s| s.current());
+    *device = dev;
+    Ok(())
 }
 
 pub(crate) fn cu_ctx_synchronize() -> Result<(), CUerror> {
@@ -513,6 +519,12 @@ static UNKNOWN_BUFFER2: UnknownBuffer<14> = UnknownBuffer::new();
 
 struct DarkApi32;
 
+#[repr(C)]
+struct AllocRecord {
+    x: usize,
+    y: usize,
+}
+
 impl CudaDarkApi for DarkApi32 {
     unsafe extern "system" fn get_module_from_cubin(
         module: *mut cuda_types::cuda::CUmodule,
@@ -637,14 +649,22 @@ impl CudaDarkApi for DarkApi32 {
         arg2: usize,
         arg3: usize,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        let heap_alloc_record_ptr = heap_alloc_record_ptr as *mut *mut AllocRecord;
+        let alloc_record = Box::into_raw(Box::new(AllocRecord { x: arg2, y: arg3 }));
+        *heap_alloc_record_ptr = alloc_record;
+        Ok(())
     }
 
     unsafe extern "system" fn heap_free(
         heap_alloc_record_ptr: *const std::ffi::c_void,
         arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        let heap_alloc_record_ptr = heap_alloc_record_ptr as *mut AllocRecord;
+        let record = Box::from_raw(heap_alloc_record_ptr);
+        if !arg2.is_null() {
+            *arg2 = record.y;
+        }
+        Ok(())
     }
 
     unsafe extern "system" fn device_get_attribute_ext(
