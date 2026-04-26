@@ -317,6 +317,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         data: ast::CvtaDetails {
                             state_space: *new_space,
                             direction: ast::CvtaDirection::ExplicitToGeneric,
+                            size: 64,
                         },
                         arguments: ast::CvtaArgs {
                             dst: generic_var,
