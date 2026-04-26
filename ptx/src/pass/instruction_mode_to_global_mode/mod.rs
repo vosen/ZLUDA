@@ -2201,7 +2201,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Div {
             data: ast::DivDetails::Signed(..) | ast::DivDetails::Unsigned(..),
             ..
-        } => InstructionModes::none(),
+        }
+        | ast::Instruction::Vshr { .. } => InstructionModes::none(),
         ast::Instruction::Fma { data, .. }
         | ast::Instruction::Sub {
             data: ast::ArithDetails::Float(data),
