@@ -1,6 +1,7 @@
 use ptx_parser as ast;
 use quick_error::quick_error;
 use rustc_hash::FxHashMap;
+use std::alloc::Layout;
 use std::hash::Hash;
 use std::{
     borrow::Cow,
@@ -97,8 +98,12 @@ pub fn to_llvm_module<'input>(
     on_pass_end("instruction_mode_to_global_mode");
     let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_explicit_load_store");
+    let mut module32 = None;
     if ast.address_size == 32 {
-        directives = convert_32bit_to_64bit::run(&mut flat_resolver, directives)?;
+        let (new_directives, new_module32) =
+            convert_32bit_to_64bit::run(&mut flat_resolver, directives)?;
+        directives = new_directives;
+        module32 = Some(new_module32);
         on_pass_end("convert_32bit_to_64bit");
     }
     let directives = insert_implicit_conversions::run(&mut flat_resolver, directives)?;
@@ -117,6 +122,7 @@ pub fn to_llvm_module<'input>(
         kernel_info: HashMap::new(),
         context,
         metadata: kernel_metadata::KernelMetadataV1::new(sm_version),
+        module32,
     })
 }
 
@@ -126,12 +132,17 @@ pub struct Module {
     pub kernel_info: HashMap<String, KernelInfo>,
     pub context: llvm_zluda::utils::Context,
     pub metadata: kernel_metadata::KernelMetadataV1,
+    pub module32: Option<Module32>,
 }
 
 impl Module {
     pub fn linked_bitcode(&self) -> &'static [u8] {
         ZLUDA_PTX_IMPL
     }
+}
+
+struct Module32 {
+    globals: Vec<(String, Layout)>,
 }
 
 pub struct KernelInfo {
@@ -758,7 +769,7 @@ type NormalizedStatement = Statement<
 
 enum Directive2<Instruction, Operand: ast::Operand> {
     Variable(ast::LinkingDirective, ast::Variable<SpirvWord>),
-    Method(Function2<Instruction, Operand>),
+    Method(Function<Instruction, Operand>),
 }
 
 struct KernelAttributes {
@@ -768,7 +779,7 @@ struct KernelAttributes {
     rounding_mode_f16f64: ast::RoundingMode,
 }
 
-struct Function2<Instruction, Operand: ast::Operand> {
+struct Function<Instruction, Operand: ast::Operand> {
     pub return_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub name: Operand::Ident,
     pub input_arguments: Vec<ast::Variable<Operand::Ident>>,
@@ -777,9 +788,14 @@ struct Function2<Instruction, Operand: ast::Operand> {
     import_as: Option<String>,
     tuning: Vec<ast::TuningDirective>,
     linkage: ast::LinkingDirective,
+    kernel_meta32: Option<Function32>,
 }
 
-impl<I, O: ast::Operand> Function2<I, O> {
+struct Function32 {
+    global_pointer_position: u32,
+}
+
+impl<I, O: ast::Operand> Function<I, O> {
     fn is_kernel(&self) -> bool {
         self.kernel_attributes.is_some()
     }
@@ -793,7 +809,7 @@ type NormalizedDirective2 = Directive2<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-type NormalizedFunction2 = Function2<
+type NormalizedFunction2 = Function<
     (
         Option<ast::PredAt<SpirvWord>>,
         ast::Instruction<ast::ParsedOperand<SpirvWord>>,
@@ -805,7 +821,7 @@ type UnconditionalDirective =
     Directive2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
 type UnconditionalFunction =
-    Function2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
+    Function<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
 struct GlobalStringIdentResolver2<'input> {
     pub(crate) current_id: SpirvWord,
