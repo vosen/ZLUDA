@@ -214,7 +214,7 @@ fn fold_denormal() {
     ));
 }
 
-fn compile_methods(ptx: &str) -> Vec<Function2<ast::Instruction<SpirvWord>, SpirvWord>> {
+fn compile_methods(ptx: &str) -> Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>> {
     use crate::pass::*;
 
     let module = ptx_parser::parse_module_checked(ptx).unwrap();
