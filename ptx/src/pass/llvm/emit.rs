@@ -116,7 +116,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_method(
         &mut self,
-        method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+        method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
     ) -> Result<(), TranslateError> {
         let name = method
             .import_as

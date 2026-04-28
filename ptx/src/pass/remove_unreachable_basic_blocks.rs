@@ -12,7 +12,7 @@ pub(crate) fn run(
     let mut reachable_funcs = FxHashSet::default();
     for directive in directives.iter_mut() {
         match directive {
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 body: Some(body), ..
             }) => {
                 let old_body = std::mem::replace(body, Vec::new());
@@ -73,7 +73,7 @@ pub(crate) fn run(
         .into_iter()
         .filter(|directive| match directive {
             Directive2::Variable(..) => true,
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 name,
                 kernel_attributes,
                 ..

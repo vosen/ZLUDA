@@ -21,7 +21,7 @@ pub(crate) fn run(
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     for directive in directives.iter_mut() {
         let (body_ref, is_kernel) = match directive {
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 body: Some(body),
                 kernel_attributes,
                 ..

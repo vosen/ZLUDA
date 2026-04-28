@@ -15,7 +15,7 @@ pub(super) fn run<'input>(
     let mut result = fn_declarations
         .into_iter()
         .map(|(_, (return_arguments, name, input_arguments))| {
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 return_arguments,
                 name: name,
                 input_arguments,
@@ -24,6 +24,7 @@ pub(super) fn run<'input>(
                 tuning: Vec::new(),
                 linkage: ast::LinkingDirective::EXTERN,
                 kernel_attributes: None,
+                kernel_meta32: None,
             })
         })
         .collect::<Vec<_>>();

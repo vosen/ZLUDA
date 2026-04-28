@@ -1,6 +1,6 @@
 use super::BranchCondition;
 use super::Directive2;
-use super::Function2;
+use super::Function;
 use super::GlobalStringIdentResolver2;
 use super::ModeRegister;
 use super::SpirvWord;
@@ -750,7 +750,7 @@ fn create_control_flow_graph(
     let mut cfg = ControlFlowGraph::new();
     for directive in directives.iter() {
         match directive {
-            super::Directive2::Method(Function2 {
+            super::Directive2::Method(Function {
                 name,
                 body: Some(body),
                 kernel_attributes,
@@ -883,7 +883,7 @@ fn join_modes(
     let functions_exit_modes = directives
         .iter()
         .filter_map(|directive| match directive {
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 name,
                 body: None,
                 kernel_attributes: None,
@@ -902,7 +902,7 @@ fn join_modes(
                 };
                 Some(Ok((*name, modes)))
             }
-            Directive2::Method(Function2 {
+            Directive2::Method(Function {
                 name,
                 body: Some(_),
                 kernel_attributes: None,
@@ -963,11 +963,11 @@ fn apply_global_mode_controls(
         .into_iter()
         .map(|directive| {
             let (mut method, initial_mode) = match directive {
-                Directive2::Variable(..) | Directive2::Method(Function2 { body: None, .. }) => {
+                Directive2::Variable(..) | Directive2::Method(Function { body: None, .. }) => {
                     return Ok(directive);
                 }
                 Directive2::Method(
-                    mut method @ Function2 {
+                    mut method @ Function {
                         name,
                         body: Some(_),
                         ..
@@ -1076,7 +1076,7 @@ fn apply_global_mode_controls(
 }
 
 fn check_function_prelude(
-    method: &Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+    method: &Function<ast::Instruction<SpirvWord>, SpirvWord>,
     global_modes: &FullModeInsertion,
 ) -> Result<(), TranslateError> {
     let fn_mode_state = global_modes

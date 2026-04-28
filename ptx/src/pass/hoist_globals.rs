@@ -24,7 +24,7 @@ fn run_directive<'input>(
 
 fn run_function<'input>(
     result: &mut Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
-    function: &mut Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+    function: &mut Function<ast::Instruction<SpirvWord>, SpirvWord>,
 ) {
     function.body = function.body.take().map(|statements| {
         statements

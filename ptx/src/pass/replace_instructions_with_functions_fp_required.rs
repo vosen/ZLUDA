@@ -26,7 +26,7 @@ pub(crate) fn run<'input>(
         Some(imports) => {
             let mut result = Vec::with_capacity(directives.len() + 2);
             result.extend([
-                Directive2::Method(Function2 {
+                Directive2::Method(Function {
                     return_arguments: vec![
                         ast::Variable {
                             name: resolver.register_unnamed(Some((
@@ -109,8 +109,9 @@ pub(crate) fn run<'input>(
                     tuning: Vec::new(),
                     linkage: ast::LinkingDirective::EXTERN,
                     kernel_attributes: None,
+                    kernel_meta32: None,
                 }),
-                Directive2::Method(Function2 {
+                Directive2::Method(Function {
                     return_arguments: vec![ast::Variable {
                         name: resolver.register_unnamed(Some((
                             ast::Type::Scalar(ast::ScalarType::F32),
@@ -203,6 +204,7 @@ pub(crate) fn run<'input>(
                     tuning: Vec::new(),
                     linkage: ast::LinkingDirective::EXTERN,
                     kernel_attributes: None,
+                    kernel_meta32: None,
                 }),
             ]);
             result.extend(directives);
@@ -225,9 +227,9 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
-    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+    mut method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
     imports: &mut Option<FunctionImports>,
-) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     method.body = method.body.map(|body| {
         body.into_iter()
             .flat_map(|stmt| run_statement(resolver, stmt, imports))

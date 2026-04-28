@@ -158,8 +158,10 @@ fn default_implicit_conversion(
             if valid_vector_scalar_bitcast(operand_type, instruction_type) {
                 return Ok(Some(ConversionKind::Default));
             }
-        } else if is_addressable(operand_space) {
-            return Ok(Some(ConversionKind::AddressOf));
+        } else if let Some(byte_width) = is_addressable(operand_space) {
+            if byte_width <= instruction_type.layout().map(|l| l.size()).unwrap_or(0) {
+                return Ok(Some(ConversionKind::AddressOf));
+            }
         }
     }
     if instruction_space != operand_space {
@@ -171,15 +173,14 @@ fn default_implicit_conversion(
     }
 }
 
-fn is_addressable(this: ast::StateSpace) -> bool {
+fn is_addressable(this: ast::StateSpace) -> Option<usize> {
     match this {
         ast::StateSpace::Const
         | ast::StateSpace::Generic
         | ast::StateSpace::Global
-        | ast::StateSpace::Local
-        | ast::StateSpace::Shared
-        | ast::StateSpace::ParamEntry => true,
-        ast::StateSpace::Param | ast::StateSpace::Reg => false,
+        | ast::StateSpace::ParamEntry => Some(8),
+        ast::StateSpace::Local | ast::StateSpace::Shared => Some(4),
+        ast::StateSpace::Param | ast::StateSpace::Reg => None,
         ast::StateSpace::SharedCluster
         | ast::StateSpace::SharedCta
         | ast::StateSpace::ParamFunc => todo!(),

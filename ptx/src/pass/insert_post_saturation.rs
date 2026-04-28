@@ -23,8 +23,8 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2,
-    method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let mut new_statements = Vec::new();
     let body = method
         .body
@@ -35,7 +35,7 @@ fn run_method<'input>(
             Ok::<_, TranslateError>(new_statements)
         })
         .transpose()?;
-    Ok(Function2 { body, ..method })
+    Ok(Function { body, ..method })
 }
 
 fn run_statement<'input>(
