@@ -15,8 +15,8 @@
 	ld.param.u64 	    in_addr, [input];
     ld.param.u64 	    out_addr, [output];
 
-    ld.b32              in32_0, [in_addr+4];
-    ld.b32              in32_1, [in_addr+8];
+    ld.b32              in32_0, [in_addr+0];
+    ld.b32              in32_1, [in_addr+4];
 	set.gt.f16x2.f16x2  in32_2, in32_0, in32_1;
     st.u32              [out_addr], in32_2;
 	ret;
