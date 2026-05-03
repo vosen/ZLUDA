@@ -1293,20 +1293,14 @@ impl<'a> MethodEmitContext<'a> {
             8 => c"llvm.bitreverse.i64",
             _ => return Err(error_unreachable()),
         };
-        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
         let type_ = get_scalar_type(self.context, data);
-        let fn_type = get_function_type(
-            self.context,
-            iter::once(&data.into()),
-            iter::once(Ok(type_)),
+        let src = self.resolver.value(arguments.src)?;
+        self.emit_intrinsic(
+            llvm_fn,
+            Some(arguments.dst),
+            vec![&data.into()],
+            vec![(src, type_)],
         )?;
-        if fn_ == ptr::null_mut() {
-            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
-        }
-        let mut src = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildCall2(self.builder, fn_type, fn_, &mut src, 1, dst)
-        });
         Ok(())
     }
 
