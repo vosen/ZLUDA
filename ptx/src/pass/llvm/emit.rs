@@ -1497,17 +1497,17 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_vector_read(&mut self, vec_acccess: VectorRead) -> Result<(), TranslateError> {
-        let src = self.resolver.value(vec_acccess.vector_src)?;
+    fn emit_vector_read(&mut self, vector_read: VectorRead) -> Result<(), TranslateError> {
+        let src = self.resolver.value(vector_read.vector_src)?;
         let index = unsafe {
             LLVMConstInt(
                 get_scalar_type(self.context, ast::ScalarType::B8),
-                vec_acccess.member as _,
+                vector_read.member as _,
                 0,
             )
         };
         self.resolver
-            .with_result(vec_acccess.scalar_dst, |dst| unsafe {
+            .with_result(vector_read.scalar_dst, |dst| unsafe {
                 LLVMBuildExtractElement(self.builder, src, index, dst)
             });
         Ok(())
