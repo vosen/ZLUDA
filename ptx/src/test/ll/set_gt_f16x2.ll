@@ -17,12 +17,12 @@ define amdgpu_kernel void @set_gt_f16x2(ptr addrspace(4) byref(i64) %"46", ptr a
   store i64 %3, ptr addrspace(5) %"49", align 8
   %4 = load i64, ptr addrspace(5) %"48", align 8
   %"65" = inttoptr i64 %4 to ptr
-  %"42" = getelementptr inbounds i8, ptr %"65", i64 4
+  %"42" = getelementptr inbounds i8, ptr %"65", i64 0
   %5 = load i32, ptr %"42", align 4
   store i32 %5, ptr addrspace(5) %"50", align 4
   %6 = load i64, ptr addrspace(5) %"48", align 8
   %"66" = inttoptr i64 %6 to ptr
-  %"44" = getelementptr inbounds i8, ptr %"66", i64 8
+  %"44" = getelementptr inbounds i8, ptr %"66", i64 4
   %7 = load i32, ptr %"44", align 4
   store i32 %7, ptr addrspace(5) %"51", align 4
   %8 = load i32, ptr addrspace(5) %"50", align 4
