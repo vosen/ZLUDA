@@ -106,14 +106,15 @@ pub fn to_llvm_module<'input>(
         module32 = Some(new_module32);
         on_pass_end("convert_32bit_to_64bit");
     }
-    let directives = insert_implicit_conversions::run(&mut flat_resolver, directives)?;
+    let directives =
+        insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
     let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, ast.address_size == 32)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -792,7 +793,7 @@ struct Function<Instruction, Operand: ast::Operand> {
 }
 
 struct Function32 {
-    global_pointer_position: u32,
+    global_pointer_position: usize,
 }
 
 impl<I, O: ast::Operand> Function<I, O> {

@@ -66,13 +66,14 @@ pub(crate) fn run<'input>(
     context: &Context,
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    is_32bit: bool,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, is_32bit);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
-            Directive2::Method(method) => emit_ctx.emit_method(method)?,
+            Directive2::Method(method) => emit_ctx.emit_method(method, is_32bit)?,
         }
     }
     if cfg!(debug_assertions) {
@@ -89,6 +90,7 @@ struct ModuleEmitContext<'a, 'input> {
     builder: Builder,
     id_defs: &'a GlobalStringIdentResolver2<'input>,
     resolver: ResolveIdent,
+    is_32bit: bool,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -96,6 +98,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         context: &Context,
         module: &llvm::Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
+        is_32bit: bool,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -103,6 +106,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             builder: Builder::new(context),
             id_defs,
             resolver: ResolveIdent::new(&id_defs),
+            is_32bit,
         }
     }
 
@@ -117,6 +121,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     fn emit_method(
         &mut self,
         method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+        is_32bit: bool,
     ) -> Result<(), TranslateError> {
         let name = method
             .import_as
@@ -211,7 +216,12 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             let real_bb =
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
-            let mut method_emitter = MethodEmitContext::new(self, fn_, variables_builder);
+            let base_32bit_memory = method
+                .kernel_meta32
+                .as_ref()
+                .map(|m| unsafe { LLVMGetParam(fn_, m.global_pointer_position as u32) });
+            let mut method_emitter =
+                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -463,6 +473,7 @@ struct MethodEmitContext<'a> {
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
     carry_flag: Option<LLVMValueRef>,
+    base_32bit_memory: Option<LLVMValueRef>,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -470,6 +481,7 @@ impl<'a> MethodEmitContext<'a> {
         parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
+        base_32bit_memory: Option<LLVMValueRef>,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
@@ -479,6 +491,7 @@ impl<'a> MethodEmitContext<'a> {
             resolver: &mut parent.resolver,
             method,
             carry_flag: None,
+            base_32bit_memory: base_32bit_memory,
         }
     }
 
@@ -724,10 +737,35 @@ impl<'a> MethodEmitContext<'a> {
             }
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
-                let type_ = get_pointer_type(self.context, conversion.to_space)?;
-                self.resolver.with_result(conversion.dst, |dst| unsafe {
-                    LLVMBuildIntToPtr(builder, src, type_, dst)
-                });
+                let ptr_type = get_pointer_type(self.context, conversion.to_space)?;
+                if let (
+                    Some(base32_ptr),
+                    ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
+                ) = (self.base_32bit_memory, conversion.to_space)
+                {
+                    let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+                    let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                    let base32 = unsafe {
+                        LLVMBuildLoad2(builder, i64_type, base32_ptr, LLVM_UNNAMED.as_ptr())
+                    };
+                    let base32_typed = unsafe {
+                        LLVMBuildIntToPtr(builder, base32, ptr_type, LLVM_UNNAMED.as_ptr())
+                    };
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildInBoundsGEP2(
+                            builder,
+                            i8_type,
+                            base32_typed,
+                            [src].as_mut_ptr(),
+                            1,
+                            dst,
+                        )
+                    });
+                } else {
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildIntToPtr(builder, src, ptr_type, dst)
+                    });
+                };
                 Ok(())
             }
             ConversionKind::PtrToPtr => {
@@ -741,9 +779,26 @@ impl<'a> MethodEmitContext<'a> {
             ConversionKind::AddressOf => {
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_type(self.context, &conversion.to_type)?;
-                self.resolver.with_result(conversion.dst, |dst| unsafe {
-                    LLVMBuildPtrToInt(self.builder, src, dst_type, dst)
-                });
+                if let (
+                    Some(base32_ptr),
+                    ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
+                ) = (self.base_32bit_memory, conversion.to_space)
+                {
+                    let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                    let base32 = unsafe {
+                        LLVMBuildLoad2(builder, i64_type, base32_ptr, LLVM_UNNAMED.as_ptr())
+                    };
+                    let src_int =
+                        unsafe { LLVMBuildPtrToInt(builder, src, i64_type, LLVM_UNNAMED.as_ptr()) };
+                    unsafe { LLVMBuildSub(builder, src_int, base32, LLVM_UNNAMED.as_ptr()) };
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildTruncOrBitCast(builder, src, dst_type, dst)
+                    });
+                } else {
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildPtrToInt(builder, src, dst_type, dst)
+                    });
+                }
                 Ok(())
             }
         }
@@ -3727,7 +3782,7 @@ fn get_function_type_impl<'a>(
     context: LLVMContextRef,
     mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
     struct_kind: StructKind,
 ) -> Result<LLVMTypeRef, TranslateError> {
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
@@ -3754,7 +3809,7 @@ fn get_function_type<'a>(
     context: LLVMContextRef,
     return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     get_function_type_impl(context, return_args, input_args, StructKind::Named)
 }
@@ -3763,7 +3818,7 @@ fn get_intrinsic_type<'a>(
     context: LLVMContextRef,
     return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     get_function_type_impl(context, return_args, input_args, StructKind::Anonymous)
 }
