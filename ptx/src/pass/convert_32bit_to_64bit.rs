@@ -1,7 +1,7 @@
 use crate::{
     pass::{
-        error_todo, error_unreachable, Directive2, Function, GlobalStringIdentResolver2, Module32,
-        PtrAccess, SpirvWord, Statement,
+        error_todo, error_unreachable, Directive2, Function, Function32,
+        GlobalStringIdentResolver2, Module32, PtrAccess, SpirvWord, Statement,
     },
     TranslateError,
 };
@@ -140,7 +140,8 @@ fn run_method<'input>(
         while let Some(Statement::Label(_)) = old_body.peek() {
             result.push(old_body.next().unwrap());
         }
-        let hidden_ptr = add_hidden_argument(
+        let global_pointer_position = method.input_arguments.len();
+        add_hidden_argument(
             resolver,
             ast::ScalarType::B64,
             &mut method.input_arguments,
@@ -161,33 +162,34 @@ fn run_method<'input>(
             })
             .collect::<FxHashMap<_, _>>();
         for statement in old_body {
-            run_statement(
-                resolver,
-                &mut result,
-                hidden_ptr,
-                &globals_remapping,
-                statement,
-            )?;
+            run_statement(&mut result, &globals_remapping, statement)?;
         }
         *body = result;
+        method.kernel_meta32 = Some(Function32 {
+            global_pointer_position,
+        });
     }
     Ok(method)
 }
 
 fn run_statement<'input>(
-    resolver: &mut GlobalStringIdentResolver2<'input>,
     result: &mut Vec<Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-    hidden_ptr: SpirvWord,
     globals_remapping: &FxHashMap<SpirvWord, SpirvWord>,
     statement: Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>,
 ) -> Result<(), TranslateError> {
     let statement =
-        statement.visit_map(&mut |arg: SpirvWord,
+        statement.visit_map(&mut |mut arg: SpirvWord,
                                    _type_space: Option<(&ast::Type, ast::StateSpace)>,
                                    _is_dst: bool,
                                    _relaxed_type_check: bool| {
-            Ok(globals_remapping.get(&arg).copied().unwrap_or(arg))
+            if let Some(new_arg) = globals_remapping.get(&arg) {
+                arg = *new_arg;
+            }
+            Ok(arg)
         })?;
+    result.push(statement);
+    Ok(())
+    /*
     Ok(match statement {
         Statement::Instruction(ast::Instruction::Ld {
             data,
@@ -269,6 +271,7 @@ fn run_statement<'input>(
         }
         s => result.push(s),
     })
+    */
 }
 
 fn add_hidden_argument<'input>(
@@ -306,6 +309,52 @@ fn add_hidden_argument<'input>(
         },
     }));
     implicit_argument
+}
+
+fn ptr_access<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    hidden_ptr: SpirvWord,
+    result: &mut Vec<Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
+    (state_space, type_): (ast::StateSpace, ast::Type),
+    old_name: SpirvWord,
+) -> Result<SpirvWord, TranslateError> {
+    // Offset is either a 32 bit scalar or a variable in the right state space
+    // If it's a scalar then we bitcast it, if it's a variable it will
+    // be resolved later, during implicit conversion
+    let (_, offset_space) = resolver.get_typed(old_name)?;
+    let converted_src = match offset_space {
+        ast::StateSpace::Reg => {
+            let zext_dst = resolver.register_unnamed(Some((
+                ast::Type::Scalar(ast::ScalarType::B64),
+                ast::StateSpace::Reg,
+            )));
+            let zext = Statement::Instruction(ast::Instruction::Cvt {
+                data: CvtDetails {
+                    from: ast::ScalarType::B32,
+                    to: ast::ScalarType::B64,
+                    mode: ast::CvtMode::ZeroExtend,
+                },
+                arguments: ast::CvtArgs {
+                    dst: zext_dst,
+                    src: old_name,
+                    src2: None,
+                },
+            });
+            result.push(zext);
+            zext_dst
+        }
+        _ => old_name,
+    };
+    let dst = resolver.register_unnamed(Some((type_.clone(), state_space)));
+    let ptr_access = Statement::PtrAccess(PtrAccess {
+        underlying_type: type_,
+        state_space: state_space,
+        dst,
+        ptr_src: hidden_ptr,
+        offset_src: converted_src,
+    });
+    result.push(ptr_access);
+    Ok(dst)
 }
 
 fn replace_with_ptr_access<'input>(
