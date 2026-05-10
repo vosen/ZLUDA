@@ -73,9 +73,9 @@ fn main_core() -> Result<(), CompilerError> {
         .unwrap_or_else(|_| DEFAULT_ARCH.to_owned()),
     };
 
-    let ptx = fs::read(&ptx_path).map_err(CompilerError::from)?;
-    let ptx = str::from_utf8(&ptx).map_err(CompilerError::from)?;
-    let llvm = ptx_to_llvm(opts.ignore_errors, ptx).map_err(CompilerError::from)?;
+    let ptx = fs::read(&ptx_path)?;
+    let ptx = str::from_utf8(&ptx)?;
+    let llvm = ptx_to_llvm(opts.ignore_errors, ptx)?;
 
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
 
@@ -103,7 +103,7 @@ fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, Compiler
     let ast = if ignore_errors {
         ptx_parser::parse_module_unchecked(ptx)
     } else {
-        ptx_parser::parse_module_checked(ptx).map_err(CompilerError::from)?
+        ptx_parser::parse_module_checked(ptx)?
     };
     let mut start = Instant::now();
     let module = ptx::to_llvm_module(
@@ -114,8 +114,7 @@ fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, Compiler
         |pass| {
             report_pass_time(pass, &mut start);
         },
-    )
-    .map_err(CompilerError::from)?;
+    )?;
     let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
     let linked_bitcode = module.linked_bitcode().to_vec();
     let main = module.llvm_ir;
