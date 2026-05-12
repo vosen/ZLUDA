@@ -1,13 +1,24 @@
+// This pass modifies modifies 32 bit module to run on 64 bit implementation
+// It extracts each global variable (except `.shared`) and then goes through
+// every global and:
+// * If it's a global variable it gets erased
+// * If it's a kernel:
+//   * We injects new arguments
+//      * 64 bit pointer to the global memory
+//      * For each global variable, a 32 bit pseudo-pointer
+// A later pass will transform all loads from 32 bit pseudo-pointers into loads
+// from the 64 bit pointer with an offset
+
 use crate::{
     pass::{
         error_todo, error_unreachable, Directive2, Function, Function32,
-        GlobalStringIdentResolver2, Module32, PtrAccess, SpirvWord, Statement,
+        GlobalStringIdentResolver2, SpirvWord, Statement,
     },
     TranslateError,
 };
-use ptx_parser::{self as ast, CvtDetails, LdDetails, RegOrImmediate};
+use kernel_metadata::{Global32Bit, ModuleMetadata32Bit};
+use ptx_parser::{self as ast, LdDetails, RegOrImmediate, Variable};
 use rustc_hash::FxHashMap;
-use std::alloc::Layout;
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
@@ -15,27 +26,32 @@ pub(super) fn run<'input>(
 ) -> Result<
     (
         Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
-        Module32,
+        ModuleMetadata32Bit,
     ),
     TranslateError,
 > {
-    let globals = collect_globals(resolver, &directives)?;
+    let (global_ids, globals) = collect_globals(resolver, &directives)?;
+    let mut explicit_arg_count = Vec::new();
     let directives = directives
         .into_iter()
-        .map(|directive| run_directive(resolver, directive, &globals))
+        .filter_map(|directive| {
+            run_directive(resolver, directive, &global_ids, &mut explicit_arg_count).transpose()
+        })
         .collect::<Result<Vec<_>, _>>()?;
-    let globals = globals
-        .into_iter()
-        .map(|(_, name, layout)| (name, layout))
-        .collect();
-    Ok((directives, Module32 { globals }))
+    Ok((
+        directives,
+        ModuleMetadata32Bit {
+            globals,
+            explicit_arg_count,
+        },
+    ))
 }
 
 pub(super) fn collect_globals<'a, 'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
-) -> Result<Vec<(SpirvWord, String, Layout)>, TranslateError> {
-    directives
+) -> Result<(Vec<SpirvWord>, Vec<Global32Bit>), TranslateError> {
+    let (ids, globals): (Vec<SpirvWord>, Vec<Global32Bit>) = directives
         .iter()
         .filter_map(|directive| match directive {
             Directive2::Variable(
@@ -47,7 +63,7 @@ pub(super) fn collect_globals<'a, 'input>(
                             v_type:
                                 ast::Type::Array(
                                     None,
-                                    ast::ScalarType::U8 | ast::ScalarType::B8 | ast::ScalarType::S8,
+                                    ast::ScalarType::U8 | ast::ScalarType::B8,
                                     array_dims,
                                 ),
                             state_space: ast::StateSpace::Const | ast::StateSpace::Global,
@@ -59,76 +75,88 @@ pub(super) fn collect_globals<'a, 'input>(
                 && array_init.iter().all(|x| {
                     matches!(
                         x,
-                        RegOrImmediate::Imm(ptx_parser::ImmediateValue::U64(0))
-                            | RegOrImmediate::Imm(ptx_parser::ImmediateValue::S64(0))
+                        RegOrImmediate::Imm(
+                            ptx_parser::ImmediateValue::U64(_) | ptx_parser::ImmediateValue::S64(_)
+                        )
                     )
                 }) =>
             {
-                Some(get_name_layout(resolver, align, array_dims, name))
+                Some(get_global_details(resolver, align, array_init, *name))
             }
-            Directive2::Variable(
-                _,
-                ast::Variable {
-                    info:
-                        ast::VariableInfo {
-                            state_space: ast::StateSpace::Shared,
-                            ..
-                        },
-                    ..
-                },
-            )
-            | Directive2::Variable(
-                _,
-                ast::Variable {
-                    info:
-                        ast::VariableInfo {
-                            v_type: ast::Type::Texref,
-                            ..
-                        },
-                    ..
-                },
-            )
-            | Directive2::Method(..) => None,
+            Directive2::Variable(_, var) if pass_through_variable(var) => None,
+            Directive2::Method(..) => None,
             _ => Some(Err(error_todo())),
         })
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .unzip();
+    Ok((ids, globals))
 }
 
-fn get_name_layout<'input>(
+fn pass_through_variable(variable: &Variable<SpirvWord>) -> bool {
+    matches!(variable.info.state_space, ast::StateSpace::Shared)
+        || matches!(variable.info.v_type, ast::Type::Texref)
+}
+
+fn get_global_details<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     align: &Option<u32>,
-    array_dims: &Vec<u32>,
-    name: &SpirvWord,
-) -> Result<(SpirvWord, String, Layout), TranslateError> {
-    let entry = resolver.ident_map.get(name).ok_or_else(error_unreachable)?;
+    array_init: &Vec<RegOrImmediate<SpirvWord>>,
+    name: SpirvWord,
+) -> Result<(SpirvWord, Global32Bit), TranslateError> {
+    let entry = resolver
+        .ident_map
+        .get(&name)
+        .ok_or_else(error_unreachable)?;
     let text_name = entry
         .name
         .as_ref()
         .ok_or_else(error_unreachable)?
         .to_string();
+    let align = align.unwrap_or(1);
+    let initializer = array_init
+        .iter()
+        .map(|x| match x {
+            RegOrImmediate::Imm(ptx_parser::ImmediateValue::U64(x)) => Ok(*x as u8),
+            RegOrImmediate::Imm(ptx_parser::ImmediateValue::S64(x)) => Ok(*x as u8),
+            _ => Err(error_unreachable()),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok((
-        *name,
-        text_name,
-        Layout::from_size_align(array_dims[0] as usize, align.unwrap_or(1) as usize)
-            .map_err(|_| error_unreachable())?,
+        name,
+        Global32Bit {
+            name: text_name,
+            align,
+            initializer,
+        },
     ))
 }
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
-    globals: &[(SpirvWord, String, Layout)],
-) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    globals_ids: &[SpirvWord],
+    explicit_arg_count: &mut Vec<(String, u32)>,
+) -> Result<Option<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     Ok(match directive {
-        var @ Directive2::Variable(..) => var,
-        Directive2::Method(method) => Directive2::Method(run_method(resolver, method, globals)?),
+        Directive2::Variable(linking, varinfo) if pass_through_variable(&varinfo) => {
+            Some(Directive2::Variable(linking, varinfo))
+        }
+        Directive2::Method(method) => Some(Directive2::Method(run_method(
+            resolver,
+            method,
+            globals_ids,
+            explicit_arg_count,
+        )?)),
+        _ => None,
     })
 }
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     mut method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
-    globals: &[(SpirvWord, String, Layout)],
+    globals_ids: &[SpirvWord],
+    explicit_arg_count: &mut Vec<(String, u32)>,
 ) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let is_kernel = method.is_kernel();
     if let Some(ref mut body) = method.body {
@@ -140,18 +168,31 @@ fn run_method<'input>(
         while let Some(Statement::Label(_)) = old_body.peek() {
             result.push(old_body.next().unwrap());
         }
-        let global_pointer_position = method.input_arguments.len();
-        add_hidden_argument(
+        let text_name = method
+            .import_as
+            .as_deref()
+            .or_else(|| {
+                resolver
+                    .ident_map
+                    .get(&method.name)?
+                    .name
+                    .as_ref()
+                    .map(|x| x.as_ref())
+            })
+            .ok_or_else(error_unreachable)?
+            .to_string();
+        explicit_arg_count.push((text_name, method.input_arguments.len() as u32));
+        let implicit_memory_ptr = add_hidden_argument(
             resolver,
             ast::ScalarType::B64,
             &mut method.input_arguments,
             &mut result,
         );
-        let globals_remapping = globals
+        let globals_remapping = globals_ids
             .iter()
-            .map(|(name, _, _)| {
+            .map(|&id| {
                 (
-                    *name,
+                    id,
                     add_hidden_argument(
                         resolver,
                         ast::ScalarType::B32,
@@ -166,7 +207,7 @@ fn run_method<'input>(
         }
         *body = result;
         method.kernel_meta32 = Some(Function32 {
-            global_pointer_position,
+            implicit_memory_ptr,
         });
     }
     Ok(method)
@@ -189,89 +230,6 @@ fn run_statement<'input>(
         })?;
     result.push(statement);
     Ok(())
-    /*
-    Ok(match statement {
-        Statement::Instruction(ast::Instruction::Ld {
-            data,
-            mut arguments,
-        }) => {
-            if is_global_memory(data.state_space) {
-                replace_with_ptr_access(
-                    resolver,
-                    hidden_ptr,
-                    result,
-                    (data.state_space, data.typ.clone()),
-                    &mut arguments.src,
-                )?;
-            }
-            result.push(Statement::Instruction(ast::Instruction::Ld {
-                data,
-                arguments,
-            }));
-        }
-        Statement::Instruction(ast::Instruction::St {
-            data,
-            mut arguments,
-        }) => {
-            if is_global_memory(data.state_space) {
-                replace_with_ptr_access(
-                    resolver,
-                    hidden_ptr,
-                    result,
-                    (data.state_space, data.typ.clone()),
-                    &mut arguments.src1,
-                )?;
-            }
-            result.push(Statement::Instruction(ast::Instruction::St {
-                data,
-                arguments,
-            }));
-        }
-        Statement::PtrAccess(PtrAccess {
-            underlying_type,
-            state_space,
-            dst,
-            mut ptr_src,
-            offset_src,
-        }) => {
-            if is_global_memory(state_space) {
-                replace_with_ptr_access(
-                    resolver,
-                    hidden_ptr,
-                    result,
-                    (state_space, underlying_type.clone()),
-                    &mut ptr_src,
-                )?;
-            }
-            result.push(Statement::PtrAccess(PtrAccess {
-                underlying_type,
-                state_space,
-                dst,
-                ptr_src,
-                offset_src,
-            }));
-        }
-        Statement::Instruction(ast::Instruction::Atom {
-            data,
-            mut arguments,
-        }) => {
-            if is_global_memory(data.space) {
-                replace_with_ptr_access(
-                    resolver,
-                    hidden_ptr,
-                    result,
-                    (data.space, data.type_.clone()),
-                    &mut arguments.src1,
-                )?;
-            }
-            result.push(Statement::Instruction(ast::Instruction::Atom {
-                data,
-                arguments,
-            }));
-        }
-        s => result.push(s),
-    })
-    */
 }
 
 fn add_hidden_argument<'input>(
@@ -309,104 +267,4 @@ fn add_hidden_argument<'input>(
         },
     }));
     implicit_argument
-}
-
-fn ptr_access<'input>(
-    resolver: &mut GlobalStringIdentResolver2<'input>,
-    hidden_ptr: SpirvWord,
-    result: &mut Vec<Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-    (state_space, type_): (ast::StateSpace, ast::Type),
-    old_name: SpirvWord,
-) -> Result<SpirvWord, TranslateError> {
-    // Offset is either a 32 bit scalar or a variable in the right state space
-    // If it's a scalar then we bitcast it, if it's a variable it will
-    // be resolved later, during implicit conversion
-    let (_, offset_space) = resolver.get_typed(old_name)?;
-    let converted_src = match offset_space {
-        ast::StateSpace::Reg => {
-            let zext_dst = resolver.register_unnamed(Some((
-                ast::Type::Scalar(ast::ScalarType::B64),
-                ast::StateSpace::Reg,
-            )));
-            let zext = Statement::Instruction(ast::Instruction::Cvt {
-                data: CvtDetails {
-                    from: ast::ScalarType::B32,
-                    to: ast::ScalarType::B64,
-                    mode: ast::CvtMode::ZeroExtend,
-                },
-                arguments: ast::CvtArgs {
-                    dst: zext_dst,
-                    src: old_name,
-                    src2: None,
-                },
-            });
-            result.push(zext);
-            zext_dst
-        }
-        _ => old_name,
-    };
-    let dst = resolver.register_unnamed(Some((type_.clone(), state_space)));
-    let ptr_access = Statement::PtrAccess(PtrAccess {
-        underlying_type: type_,
-        state_space: state_space,
-        dst,
-        ptr_src: hidden_ptr,
-        offset_src: converted_src,
-    });
-    result.push(ptr_access);
-    Ok(dst)
-}
-
-fn replace_with_ptr_access<'input>(
-    resolver: &mut GlobalStringIdentResolver2<'input>,
-    hidden_ptr: SpirvWord,
-    result: &mut Vec<Statement<ptx_parser::Instruction<SpirvWord>, SpirvWord>>,
-    (state_space, type_): (ast::StateSpace, ast::Type),
-    offset: &mut SpirvWord,
-) -> Result<(), TranslateError> {
-    // Offset is either a 32 bit scalar or a variable in the right state space
-    // If it's a scalar then we bitcast it, if it's a variable it will
-    // be resolved later, during implicit conversion
-    let (_, offset_space) = resolver.get_typed(*offset)?;
-    let converted_src = match offset_space {
-        ast::StateSpace::Reg => {
-            let zext_dst = resolver.register_unnamed(Some((
-                ast::Type::Scalar(ast::ScalarType::B64),
-                ast::StateSpace::Reg,
-            )));
-            let zext = Statement::Instruction(ast::Instruction::Cvt {
-                data: CvtDetails {
-                    from: ast::ScalarType::B32,
-                    to: ast::ScalarType::B64,
-                    mode: ast::CvtMode::ZeroExtend,
-                },
-                arguments: ast::CvtArgs {
-                    dst: zext_dst,
-                    src: *offset,
-                    src2: None,
-                },
-            });
-            result.push(zext);
-            zext_dst
-        }
-        _ => *offset,
-    };
-    let dst = resolver.register_unnamed(Some((type_.clone(), state_space)));
-    let ptr_access = Statement::PtrAccess(PtrAccess {
-        underlying_type: type_,
-        state_space: state_space,
-        dst,
-        ptr_src: hidden_ptr,
-        offset_src: converted_src,
-    });
-    result.push(ptr_access);
-    *offset = dst;
-    Ok(())
-}
-
-fn is_global_memory(state_space: ast::StateSpace) -> bool {
-    matches!(
-        state_space,
-        ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const
-    )
 }
