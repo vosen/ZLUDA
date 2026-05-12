@@ -1,7 +1,3 @@
-use std::ffi::CStr;
-use std::ops::Deref;
-use std::{mem, ptr};
-
 use llvm_sys::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
 use llvm_sys::bit_reader::LLVMParseBitcodeInContext2;
 use llvm_sys::bit_writer::LLVMWriteBitcodeToMemoryBuffer;
@@ -18,6 +14,10 @@ use llvm_sys::target_machine::{
 use llvm_sys::transforms::pass_builder::{
     LLVMCreatePassBuilderOptions, LLVMDisposePassBuilderOptions, LLVMPassBuilderOptionsRef,
 };
+use std::borrow::Cow;
+use std::ffi::CStr;
+use std::ops::Deref;
+use std::{mem, ptr};
 
 pub struct Context(LLVMContextRef);
 
@@ -83,7 +83,7 @@ impl Module {
         };
         if error == 1 && err != ptr::null_mut() {
             let message = Message(unsafe { CStr::from_ptr(err) });
-            Err(message.to_str().to_owned())
+            Err(message.to_str().to_string())
         } else {
             Ok(())
         }
@@ -162,8 +162,8 @@ impl Message {
         self.0.to_bytes()
     }
 
-    pub fn to_str(&self) -> &str {
-        self.0.to_str().unwrap().trim()
+    pub fn to_str<'a>(&'a self) -> Cow<'a, str> {
+        self.0.to_string_lossy()
     }
 }
 pub struct MemoryBuffer(LLVMMemoryBufferRef);
@@ -239,7 +239,7 @@ impl TargetMachine {
         };
         if status != 0 {
             let message = Message(unsafe { CStr::from_ptr(err) });
-            Err(message.to_str().to_owned())
+            Err(message.to_str().to_string())
         } else {
             Ok(MemoryBuffer(buffer))
         }

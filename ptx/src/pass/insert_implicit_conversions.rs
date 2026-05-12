@@ -18,16 +18,18 @@ use ptx_parser as ast;
      b64/u64/s64, which is bitcast to a pointer
 */
 pub(super) fn run<'input>(
+    is_32bit: bool,
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     directives
         .into_iter()
-        .map(|directive| run_directive(resolver, directive))
+        .map(|directive| run_directive(is_32bit, resolver, directive))
         .collect::<Result<Vec<_>, _>>()
 }
 
 fn run_directive<'a, 'input>(
+    is_32bit: bool,
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> Result<Directive2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
@@ -36,7 +38,7 @@ fn run_directive<'a, 'input>(
         Directive2::Method(mut method) => {
             method.body = method
                 .body
-                .map(|statements| run_statements(resolver, statements))
+                .map(|statements| run_statements(is_32bit, resolver, statements))
                 .transpose()?;
             Directive2::Method(method)
         }
@@ -44,17 +46,19 @@ fn run_directive<'a, 'input>(
 }
 
 fn run_statements<'input>(
+    is_32bit: bool,
     resolver: &mut GlobalStringIdentResolver2<'input>,
     func: Vec<ExpandedStatement>,
 ) -> Result<Vec<ExpandedStatement>, TranslateError> {
     let mut result = Vec::with_capacity(func.len());
     for s in func.into_iter() {
-        insert_implicit_conversions_impl(resolver, &mut result, s)?;
+        insert_implicit_conversions_impl(is_32bit, resolver, &mut result, s)?;
     }
     Ok(result)
 }
 
 fn insert_implicit_conversions_impl<'input>(
+    is_32bit: bool,
     resolver: &mut GlobalStringIdentResolver2<'input>,
     func: &mut Vec<ExpandedStatement>,
     mut stmt: ExpandedStatement,
@@ -100,6 +104,7 @@ fn insert_implicit_conversions_impl<'input>(
             match conversion_fn(
                 (*operand_space, &operand_type),
                 (instruction_space, instr_type),
+                is_32bit,
             )? {
                 Some(conv_kind) => {
                     let conv_output = if is_dst { &mut post_conv } else { &mut *func };
@@ -152,6 +157,7 @@ fn valid_vector_scalar_bitcast(operand_type: &ast::Type, instruction_type: &ast:
 fn default_implicit_conversion(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
+    is_32bit: bool,
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if instruction_space == ast::StateSpace::Reg {
         if operand_space == ast::StateSpace::Reg {
@@ -163,7 +169,11 @@ fn default_implicit_conversion(
         }
     }
     if instruction_space != operand_space {
-        default_implicit_conversion_space((operand_space, operand_type), instruction_space)
+        default_implicit_conversion_space(
+            (operand_space, operand_type),
+            instruction_space,
+            is_32bit,
+        )
     } else if instruction_type != operand_type {
         default_implicit_conversion_type(instruction_space, operand_type, instruction_type)
     } else {
@@ -176,9 +186,9 @@ fn is_addressable(this: ast::StateSpace) -> bool {
         ast::StateSpace::Const
         | ast::StateSpace::Generic
         | ast::StateSpace::Global
+        | ast::StateSpace::ParamEntry
         | ast::StateSpace::Local
-        | ast::StateSpace::Shared
-        | ast::StateSpace::ParamEntry => true,
+        | ast::StateSpace::Shared => true,
         ast::StateSpace::Param | ast::StateSpace::Reg => false,
         ast::StateSpace::SharedCluster
         | ast::StateSpace::SharedCta
@@ -190,17 +200,21 @@ fn is_addressable(this: ast::StateSpace) -> bool {
 fn default_implicit_conversion_space(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     instruction_space: ast::StateSpace,
+    is_32bit: bool,
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if (instruction_space == ast::StateSpace::Generic && coerces_to_generic(operand_space))
         || (operand_space == ast::StateSpace::Generic && coerces_to_generic(instruction_space))
     {
         Ok(Some(ConversionKind::PtrToPtr))
     } else if operand_space == ast::StateSpace::Reg {
-        match operand_type {
+        match (operand_type, is_32bit) {
             // TODO: 32 bit
-            ast::Type::Scalar(ast::ScalarType::B64)
-            | ast::Type::Scalar(ast::ScalarType::U64)
-            | ast::Type::Scalar(ast::ScalarType::S64) => match instruction_space {
+            (ast::Type::Scalar(ast::ScalarType::B64), false)
+            | (ast::Type::Scalar(ast::ScalarType::U64), false)
+            | (ast::Type::Scalar(ast::ScalarType::S64), false)
+            | (ast::Type::Scalar(ast::ScalarType::B32), true)
+            | (ast::Type::Scalar(ast::ScalarType::U32), true)
+            | (ast::Type::Scalar(ast::ScalarType::S32), true) => match instruction_space {
                 ast::StateSpace::Global
                 | ast::StateSpace::Generic
                 | ast::StateSpace::Const
@@ -209,9 +223,9 @@ fn default_implicit_conversion_space(
                 | ast::StateSpace::Param => Ok(Some(ConversionKind::BitToPtr)),
                 _ => Err(error_mismatched_type()),
             },
-            ast::Type::Scalar(ast::ScalarType::B32)
-            | ast::Type::Scalar(ast::ScalarType::U32)
-            | ast::Type::Scalar(ast::ScalarType::S32) => match instruction_space {
+            (ast::Type::Scalar(ast::ScalarType::B32), _)
+            | (ast::Type::Scalar(ast::ScalarType::U32), _)
+            | (ast::Type::Scalar(ast::ScalarType::S32), _) => match instruction_space {
                 ast::StateSpace::Local | ast::StateSpace::Shared => {
                     Ok(Some(ConversionKind::BitToPtr))
                 }
@@ -288,6 +302,7 @@ fn should_bitcast(instr: &ast::Type, operand: &ast::Type) -> bool {
 pub(crate) fn should_convert_relaxed_dst_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
+    _is_32bit: bool,
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if operand_space != instruction_space {
         return Err(error_mismatched_type());
@@ -366,6 +381,7 @@ fn should_convert_relaxed_dst(
 pub(crate) fn should_convert_relaxed_src_wrapper(
     (operand_space, operand_type): (ast::StateSpace, &ast::Type),
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
+    _is_32bit: bool,
 ) -> Result<Option<ConversionKind>, TranslateError> {
     if operand_space != instruction_space {
         return Err(error_mismatched_type());

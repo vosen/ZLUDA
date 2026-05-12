@@ -35,7 +35,7 @@ fn run_method<'input>(
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
-    Ok(Function2 {
+    Ok(Function {
         body,
         return_arguments: method.return_arguments,
         name: method.name,
@@ -44,6 +44,7 @@ fn run_method<'input>(
         tuning: method.tuning,
         linkage: method.linkage,
         kernel_attributes: method.kernel_attributes,
+        kernel_meta32: method.kernel_meta32,
     })
 }
 

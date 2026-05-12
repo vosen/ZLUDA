@@ -509,20 +509,26 @@ fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module
             eof,
         )
             .map(
-                |(version, (target, _), _, (directives, invalid_directives), _)| ast::Module {
-                    ptx_version: version,
-                    sm_version: target,
-                    directives: directives.into_iter().flatten().collect(),
-                    invalid_directives,
+                |(version, (target, _), address_size, (directives, invalid_directives), _)| {
+                    ast::Module {
+                        ptx_version: version,
+                        sm_version: target,
+                        address_size: address_size.unwrap_or(32),
+                        directives: directives.into_iter().flatten().collect(),
+                        invalid_directives,
+                    }
                 },
             ),
     )
     .parse_next(stream)
 }
 
-fn address_size<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    (Token::DotAddressSize, u8_literal(64))
-        .void()
+fn address_size<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<u8> {
+    (
+        Token::DotAddressSize,
+        alt((u8_literal(64).value(64u8), u8_literal(32).value(32u8))),
+    )
+        .map(|(_, size)| size)
         .parse_next(stream)
 }
 
@@ -2744,12 +2750,15 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
     cvta.space.size     p, a => {
-        if size != ScalarType::U64 {
-            state.errors.push(PtxError::Unsupported32Bit);
-        }
+        let size = match size {
+            ScalarType::U32 => 32,
+            ScalarType::U64 => 64,
+            _ => unreachable!()
+        };
         let data = ast::CvtaDetails {
             state_space: space,
-            direction: ast::CvtaDirection::ExplicitToGeneric
+            direction: ast::CvtaDirection::ExplicitToGeneric,
+            size,
         };
         let arguments = ast::CvtaArgs {
             dst: p, src: a
@@ -2759,12 +2768,15 @@ derive_parser!(
         }
     }
     cvta.to.space.size  p, a => {
-        if size != ScalarType::U64 {
-            state.errors.push(PtxError::Unsupported32Bit);
-        }
+        let size = match size {
+            ScalarType::U32 => 32,
+            ScalarType::U64 => 64,
+            _ => unreachable!()
+        };
         let data = ast::CvtaDetails {
             state_space: space,
-            direction: ast::CvtaDirection::GenericToExplicit
+            direction: ast::CvtaDirection::GenericToExplicit,
+            size,
         };
         let arguments = ast::CvtaArgs {
             dst: p, src: a

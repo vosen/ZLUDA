@@ -22,8 +22,8 @@ fn run_directive<'input>(
 
 fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2,
-    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    mut method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let is_declaration = method.body.is_none();
     let mut body = Vec::new();
     let mut remap_returns = Vec::new();
@@ -99,7 +99,7 @@ fn run_method<'input>(
             Ok::<_, TranslateError>(body)
         })
         .transpose()?;
-    Ok(Function2 { body, ..method })
+    Ok(Function { body, ..method })
 }
 
 fn run_statement<'input>(

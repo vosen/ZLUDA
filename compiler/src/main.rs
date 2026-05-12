@@ -92,6 +92,7 @@ fn main_core() -> Result<(), CompilerError> {
         &llvm.linked_bitcode,
         llvm.attributes,
         llvm.metadata,
+        llvm.metadata32,
         Some(&compiler_hook),
     )?;
     report_pass_time("compile_bitcode", &mut start);
@@ -126,6 +127,7 @@ fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, Compiler
         attributes,
         llvm_ir,
         metadata: module.metadata,
+        metadata32: module.metadata32,
     })
 }
 
@@ -141,7 +143,8 @@ struct LLVMArtifacts {
     context: llvm_zluda::utils::Context,
     linked_bitcode: Vec<u8>,
     llvm_ir: Vec<u8>,
-    metadata: kernel_metadata::KernelMetadataV1,
+    metadata: kernel_metadata::ModuleMetadataV1,
+    metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
 }
 
 fn get_gpu_arch(runtime: &hip::Runtime) -> Result<String, CompilerError> {
