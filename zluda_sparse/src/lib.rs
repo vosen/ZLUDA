@@ -41,18 +41,50 @@ macro_rules! implemented_unmapped {
     };
 }
 
+macro_rules! implemented_no_error {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[cfg_attr(not(test), no_mangle)]
+            #[allow(improper_ctypes)]
+            #[allow(improper_ctypes_definitions)]
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                use unwrap_or::unwrap_ok_or;
+                let result = cuda_macros::cusparse_normalize_fn!( crate::r#impl::$fn_name ) ($(
+                    unwrap_ok_or!(
+                        zluda_common::FromCuda::<_, cuda_types::cusparse::cusparseError_t>::from_cuda(&$arg_id),
+                        _,
+                        return std::mem::zeroed()
+                    )
+                ),*);
+                std::mem::transmute(result)
+            }
+        )*
+    };
+}
+
 cuda_macros::cusparse_function_declarations!(
     unimplemented,
-    implemented_unmapped
+    implemented_unmapped <= [cusparseGetErrorName, cusparseGetErrorString,],
+    implemented_no_error
         <= [
-            cusparseGetErrorName,
-            cusparseGetErrorString,
             cusparseGetMatDiagType,
             cusparseGetMatFillMode,
             cusparseGetMatIndexBase,
             cusparseGetMatType,
         ],
-    implemented <= [cusparseCreate, cusparseDestroy,]
+    implemented
+        <= [
+            cusparseCreate,
+            cusparseCreateConstCoo,
+            cusparseCreateConstDnMat,
+            cusparseCreateDnMat,
+            cusparseDestroy,
+            cusparseDestroyDnMat,
+            cusparseDestroySpMat,
+            cusparseSpMM_bufferSize,
+            cusparseSpMM_preprocess,
+            cusparseSpMM,
+        ]
 );
 
 macro_rules! noop {
@@ -121,5 +153,21 @@ mod os_macro {
 
 cuda_macros::rocsparse_function_declarations!(
     noop,
-    os_macro::vtable_impl <= [rocsparse_create_handle, rocsparse_destroy_handle,]
+    os_macro::vtable_impl
+        <= [
+            rocsparse_create_const_coo_descr,
+            rocsparse_create_const_dnmat_descr,
+            rocsparse_create_dnmat_descr,
+            rocsparse_create_handle,
+            rocsparse_destroy_dnmat_descr,
+            rocsparse_destroy_handle,
+            rocsparse_destroy_spmat_descr,
+            rocsparse_get_mat_diag_type,
+            rocsparse_get_mat_fill_mode,
+            rocsparse_get_mat_index_base,
+            rocsparse_get_mat_type,
+            rocsparse_spmm_buffer_size,
+            rocsparse_spmm_preprocess,
+            rocsparse_spmm,
+        ]
 );
