@@ -6,7 +6,6 @@ use hip_runtime_sys::hipStream_t;
 use kernel_metadata::ArchivedModuleMetadata32Bit;
 use pretty_assertions;
 use std::alloc::Layout;
-use std::borrow::Cow;
 use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
@@ -1251,16 +1250,20 @@ fn test_llvm_assert(
     .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
-    compare_llvm(name, actual_ll, expected_ll);
+    compare_llvm(name, actual_ll.trim(), expected_ll.trim());
 
     let expected_attributes_ll = read_test_file!(concat!("../ll/_attributes.ll"));
     let actual_attributes_ll = llvm_ir.attributes_ir.print_module_to_string();
     let actual_attributes_ll = actual_attributes_ll.to_str();
-    compare_llvm("_attributes", actual_attributes_ll, &expected_attributes_ll);
+    compare_llvm(
+        "_attributes",
+        actual_attributes_ll.trim(),
+        expected_attributes_ll.trim(),
+    );
     Ok(())
 }
 
-fn compare_llvm(name: &str, actual_ll: Cow<str>, expected_ll: &str) {
+fn compare_llvm(name: &str, actual_ll: &str, expected_ll: &str) {
     if actual_ll != expected_ll {
         let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
         if let Ok(output_dir) = output_dir {
