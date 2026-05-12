@@ -1,0 +1,18 @@
+.version 6.5
+.target sm_30
+.address_size 32
+
+.visible .entry activemask(
+	.param .u32 input,
+	.param .u32 output
+)
+{
+    .reg .u32 	    out_addr;
+    .reg .b32 	    temp;
+
+    ld.param.u32 	out_addr, [output];
+
+	activemask.b32  temp;
+    st.u32          [out_addr], temp;
+	ret;
+}

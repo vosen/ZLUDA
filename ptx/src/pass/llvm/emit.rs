@@ -66,14 +66,13 @@ pub(crate) fn run<'input>(
     context: &Context,
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
-    is_32bit: bool,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, is_32bit);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
-            Directive2::Method(method) => emit_ctx.emit_method(method, is_32bit)?,
+            Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
     if cfg!(debug_assertions) {
@@ -90,7 +89,6 @@ struct ModuleEmitContext<'a, 'input> {
     builder: Builder,
     id_defs: &'a GlobalStringIdentResolver2<'input>,
     resolver: ResolveIdent,
-    is_32bit: bool,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -98,7 +96,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         context: &Context,
         module: &llvm::Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
-        is_32bit: bool,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -106,7 +103,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             builder: Builder::new(context),
             id_defs,
             resolver: ResolveIdent::new(&id_defs),
-            is_32bit,
         }
     }
 
@@ -121,7 +117,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     fn emit_method(
         &mut self,
         method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
-        is_32bit: bool,
     ) -> Result<(), TranslateError> {
         let name = method
             .import_as
@@ -216,10 +211,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             let real_bb =
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
-            let base_32bit_memory = method
-                .kernel_meta32
-                .as_ref()
-                .map(|m| unsafe { LLVMGetParam(fn_, m.global_pointer_position as u32) });
+            let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
             let mut method_emitter =
                 MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
             for var in method.return_arguments {
@@ -473,7 +465,7 @@ struct MethodEmitContext<'a> {
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
     carry_flag: Option<LLVMValueRef>,
-    base_32bit_memory: Option<LLVMValueRef>,
+    base_32bit_memory: Option<SpirvWord>,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -481,7 +473,7 @@ impl<'a> MethodEmitContext<'a> {
         parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
-        base_32bit_memory: Option<LLVMValueRef>,
+        base_32bit_memory: Option<SpirvWord>,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
@@ -739,15 +731,15 @@ impl<'a> MethodEmitContext<'a> {
                 let src = self.resolver.value(conversion.src)?;
                 let ptr_type = get_pointer_type(self.context, conversion.to_space)?;
                 if let (
-                    Some(base32_ptr),
+                    Some(base32),
                     ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
                 ) = (self.base_32bit_memory, conversion.to_space)
                 {
                     let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
                     let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
-                    let base32 = unsafe {
-                        LLVMBuildLoad2(builder, i64_type, base32_ptr, LLVM_UNNAMED.as_ptr())
-                    };
+                    let src_64 =
+                        unsafe { LLVMBuildZExt(builder, src, i64_type, LLVM_UNNAMED.as_ptr()) };
+                    let base32 = self.resolver.value(base32)?;
                     let base32_typed = unsafe {
                         LLVMBuildIntToPtr(builder, base32, ptr_type, LLVM_UNNAMED.as_ptr())
                     };
@@ -756,7 +748,7 @@ impl<'a> MethodEmitContext<'a> {
                             builder,
                             i8_type,
                             base32_typed,
-                            [src].as_mut_ptr(),
+                            [src_64].as_mut_ptr(),
                             1,
                             dst,
                         )
@@ -780,14 +772,12 @@ impl<'a> MethodEmitContext<'a> {
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_type(self.context, &conversion.to_type)?;
                 if let (
-                    Some(base32_ptr),
+                    Some(base32),
                     ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
                 ) = (self.base_32bit_memory, conversion.to_space)
                 {
                     let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
-                    let base32 = unsafe {
-                        LLVMBuildLoad2(builder, i64_type, base32_ptr, LLVM_UNNAMED.as_ptr())
-                    };
+                    let base32 = self.resolver.value(base32)?;
                     let src_int =
                         unsafe { LLVMBuildPtrToInt(builder, src, i64_type, LLVM_UNNAMED.as_ptr()) };
                     unsafe { LLVMBuildSub(builder, src_int, base32, LLVM_UNNAMED.as_ptr()) };
