@@ -2567,7 +2567,7 @@ pub enum RightShiftKind {
 pub struct CvtaDetails {
     pub state_space: StateSpace,
     pub direction: CvtaDirection,
-    pub size: u8
+    pub size: u8,
 }
 
 pub enum CvtaDirection {
