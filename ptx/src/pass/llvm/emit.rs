@@ -647,6 +647,7 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_createpolicy_fractional(data, arguments)
             }
             ast::Instruction::Sad { data, arguments } => self.emit_sad(data, arguments),
+            ast::Instruction::Vshr { data, arguments } => self.emit_vshr(data, arguments),
             ast::Instruction::CpAsyncCommitGroup {} => Ok(()), // nop
             ast::Instruction::CpAsyncWaitGroup { .. } => Ok(()), // nop
             ast::Instruction::CpAsyncWaitAll { .. } => Ok(()), // nop
@@ -1337,20 +1338,14 @@ impl<'a> MethodEmitContext<'a> {
             8 => c"llvm.bitreverse.i64",
             _ => return Err(error_unreachable()),
         };
-        let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, llvm_fn.as_ptr()) };
         let type_ = get_scalar_type(self.context, data);
-        let fn_type = get_function_type(
-            self.context,
-            iter::once(&data.into()),
-            iter::once(Ok(type_)),
+        let src = self.resolver.value(arguments.src)?;
+        self.emit_intrinsic(
+            llvm_fn,
+            Some(arguments.dst),
+            vec![&data.into()],
+            vec![(src, type_)],
         )?;
-        if fn_ == ptr::null_mut() {
-            fn_ = unsafe { LLVMAddFunction(self.module, llvm_fn.as_ptr(), fn_type) };
-        }
-        let mut src = self.resolver.value(arguments.src)?;
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildCall2(self.builder, fn_type, fn_, &mut src, 1, dst)
-        });
         Ok(())
     }
 
@@ -1547,17 +1542,17 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_vector_read(&mut self, vec_acccess: VectorRead) -> Result<(), TranslateError> {
-        let src = self.resolver.value(vec_acccess.vector_src)?;
+    fn emit_vector_read(&mut self, vector_read: VectorRead) -> Result<(), TranslateError> {
+        let src = self.resolver.value(vector_read.vector_src)?;
         let index = unsafe {
             LLVMConstInt(
                 get_scalar_type(self.context, ast::ScalarType::B8),
-                vec_acccess.member as _,
+                vector_read.member as _,
                 0,
             )
         };
         self.resolver
-            .with_result(vec_acccess.scalar_dst, |dst| unsafe {
+            .with_result(vector_read.scalar_dst, |dst| unsafe {
                 LLVMBuildExtractElement(self.builder, src, index, dst)
             });
         Ok(())
@@ -3232,39 +3227,66 @@ impl<'a> MethodEmitContext<'a> {
             };
             let setp_result_0 = self.emit_setp_impl(data, None, src1_0, src2_0)?;
             let setp_result_1 = self.emit_setp_impl(data, None, src1_1, src2_1)?;
-            if dtype != ast::ScalarType::U32 {
-                return Err(error_unreachable());
-            }
-            let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
-            let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
-            let vector_result = unsafe {
-                LLVMBuildInsertElement(
-                    self.builder,
-                    LLVMGetPoison(get_type(
-                        self.context,
-                        &ast::Type::Vector(2, ast::ScalarType::U16),
-                    )?),
-                    setp_result_0,
-                    zero,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            let vector_result = unsafe {
-                LLVMBuildInsertElement(
-                    self.builder,
-                    vector_result,
-                    setp_result_1,
-                    one,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            unsafe {
-                LLVMBuildBitCast(
-                    self.builder,
-                    vector_result,
-                    get_scalar_type(self.context, dtype),
-                    LLVM_UNNAMED.as_ptr(),
-                )
+            match dtype {
+                ast::ScalarType::U32 => {
+                    let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
+                    let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            LLVMGetPoison(get_type(
+                                self.context,
+                                &ast::Type::Vector(2, ast::ScalarType::U16),
+                            )?),
+                            setp_result_0,
+                            zero,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            vector_result,
+                            setp_result_1,
+                            one,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    unsafe {
+                        LLVMBuildBitCast(
+                            self.builder,
+                            vector_result,
+                            get_scalar_type(self.context, dtype),
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    }
+                }
+                ast::ScalarType::F16x2 => {
+                    let setp_result_0 = self.setp_to_set(ast::ScalarType::F16, setp_result_0)?;
+                    let setp_result_1 = self.setp_to_set(ast::ScalarType::F16, setp_result_1)?;
+                    let vector_result = unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            LLVMGetPoison(get_type(
+                                self.context,
+                                &ast::Type::Vector(2, ast::ScalarType::F16),
+                            )?),
+                            setp_result_0,
+                            zero,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    };
+                    unsafe {
+                        LLVMBuildInsertElement(
+                            self.builder,
+                            vector_result,
+                            setp_result_1,
+                            one,
+                            LLVM_UNNAMED.as_ptr(),
+                        )
+                    }
+                }
+                _ => return Err(error_unreachable()),
             }
         } else {
             let setp_result = self.emit_setp_impl(data.base, None, src1, src2)?;
@@ -3457,6 +3479,55 @@ impl<'a> MethodEmitContext<'a> {
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildAdd(self.builder, subtraction, src3, dst)
         });
+        Ok(())
+    }
+
+    fn emit_vshr(
+        &mut self,
+        data: ast::VshData,
+        arguments: ast::VshrArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let shift_amount = self.resolver.value(arguments.src2)?;
+        let shifted = match data.mode {
+            ast::FunnelShiftMode::Clamp => {
+                let pre_shifted = unsafe {
+                    LLVMBuildLShr(self.builder, src1, shift_amount, LLVM_UNNAMED.as_ptr())
+                };
+                let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+                let const_32 = unsafe { LLVMConstInt(llvm_i32, 32, 0) };
+                let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
+                let should_clamp = unsafe {
+                    LLVMBuildICmp(
+                        self.builder,
+                        LLVMIntPredicate::LLVMIntUGE,
+                        shift_amount,
+                        const_32,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                unsafe {
+                    LLVMBuildSelect(
+                        self.builder,
+                        should_clamp,
+                        const_0,
+                        pre_shifted,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                }
+            }
+            ast::FunnelShiftMode::Wrap => {
+                return Err(error_todo());
+            }
+        };
+        match data.op2 {
+            ast::VshOp::Add => {
+                let src3 = self.resolver.value(arguments.src3)?;
+                self.resolver.with_result(arguments.dst, |dst| unsafe {
+                    LLVMBuildAdd(self.builder, shifted, src3, dst)
+                });
+            }
+        }
         Ok(())
     }
 

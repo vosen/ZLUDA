@@ -1765,6 +1765,42 @@ fn empty_call<'input>(
     }
 }
 
+fn vshr<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    ctor: impl FnOnce(
+        FunnelShiftMode,
+        VshOp,
+        ParsedOperandStr<'input>,
+        ParsedOperandStr<'input>,
+        ParsedOperandStr<'input>,
+        ParsedOperandStr<'input>,
+    ) -> ast::Instruction<ParsedOperandStr<'input>>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    // vshr.u32.u32.u32.mode.op2 d, a, b, c
+    let ((), (), (), mode, op2, d, (), a, (), b, (), c) = trace(
+        "vshr",
+        (
+            Token::DotU32.void(),
+            Token::DotU32.void(),
+            Token::DotU32.void(),
+            alt((
+                Token::DotClamp.map(|_| FunnelShiftMode::Clamp),
+                Token::DotWrap.map(|_| FunnelShiftMode::Wrap),
+            )),
+            Token::DotAdd.map(|_| VshOp::Add),
+            ParsedOperandStr::parse,
+            Token::Comma.void(),
+            ParsedOperandStr::parse,
+            Token::Comma.void(),
+            ParsedOperandStr::parse,
+            Token::Comma.void(),
+            ParsedOperandStr::parse,
+        ),
+    )
+    .parse_next(stream)?;
+    Ok(ctor(mode, op2, d, a, b, c))
+}
+
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
 
 #[derive(Clone, PartialEq, Default, Debug, Display)]
@@ -2029,6 +2065,11 @@ derive_parser!(
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum EvictionPriority { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum VshOp {
+        Add
+    }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -2516,11 +2557,11 @@ derive_parser!(
         }
     }
 
-    set.CmpOp{.ftz}.u32.f16x2         d, a, b => {
+    set.CmpOp{.ftz}.dtype_f16x2.f16x2         d, a, b => {
         let base = ast::SetpData::try_parse(state, cmpop, ftz, ScalarType::F16x2);
         let data = ast::SetData {
             base,
-            dtype: ScalarType::U32
+            dtype: dtype_f16x2
         };
         ast::Instruction::Set {
             data,
@@ -2550,6 +2591,7 @@ derive_parser!(
                                   .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
     .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
     .dtype: ScalarType = { .u32, .s32, .f32 };
+    .dtype_f16x2: ScalarType = { .u32, .f16x2 };
     .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .f32, .f64 };
 
 
@@ -4305,6 +4347,21 @@ derive_parser!(
 
     .mode: RawMulIntControl = { .lo, .hi };
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#scalar-video-instructions-vshl-vshr
+    // This one gets custom handling because the type modifiers are at the start
+    // of the instruction instead of all being before the registers
+    vshr <= {
+        vshr(stream, |mode, op2, d, a, b, c| {
+            Instruction::Vshr {
+                data: VshData {
+                    mode: mode,
+                    op2: op2,
+                },
+                arguments: VshrArgs { dst: d, src1: a, src2: b, src3: c }
+            }
+        })
+    }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#texture-instructions-tex
     tex.1d.v4.dtype.ctype  d, [a, c] => {

@@ -1481,6 +1481,10 @@ pub mod dnn9 {
     }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {
+        if cfg!(windows) && status.is_err() && status.err() == super::miopen().err().map(Into::into)
+        {
+            return c"MIOpen.dll could not be found. Please install HIP SDK: https://zluda.readthedocs.io/latest/hip_sdk.html".as_ptr();
+        }
         match status {
             Ok(()) => c"CUDNN_STATUS_SUCCESS",
             Err(err) => match err {

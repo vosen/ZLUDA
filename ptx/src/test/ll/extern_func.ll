@@ -1,4 +1,4 @@
-declare hidden [16 x i8] @foobar(i64) #0
+declare hidden [4 x i32] @foobar(i64) #0
 
 define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"53", ptr addrspace(4) byref(i64) %"54") #1 {
   %"55" = alloca i64, align 8, addrspace(5)
@@ -6,7 +6,7 @@ define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"53", ptr ad
   %"57" = alloca i64, align 8, addrspace(5)
   %"58" = alloca i64, align 8, addrspace(5)
   %"63" = alloca i64, align 8, addrspace(5)
-  %"66" = alloca [16 x i8], align 16, addrspace(5)
+  %"66" = alloca [4 x i32], align 16, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
@@ -25,11 +25,11 @@ define amdgpu_kernel void @extern_func(ptr addrspace(4) byref(i64) %"53", ptr ad
   %6 = load i64, ptr addrspace(5) %"57", align 8
   store i64 %6, ptr addrspace(5) %"64", align 8
   %7 = load i64, ptr addrspace(5) %"63", align 8
-  %"49" = call [16 x i8] @foobar(i64 %7)
+  %"49" = call [4 x i32] @foobar(i64 %7)
   br label %"51"
 
 "51":                                             ; preds = %"50"
-  store [16 x i8] %"49", ptr addrspace(5) %"66", align 1
+  store [4 x i32] %"49", ptr addrspace(5) %"66", align 4
   %8 = load i64, ptr addrspace(5) %"66", align 8
   store i64 %8, ptr addrspace(5) %"58", align 8
   %9 = load i64, ptr addrspace(5) %"56", align 8
