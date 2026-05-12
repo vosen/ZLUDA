@@ -1,0 +1,31 @@
+.version 6.5
+.target sm_30
+.address_size 32
+
+.const .align 8 .b8 constparams[4] = { 10, 20, 30, 40 };
+
+.visible .entry const(
+	.param .u32 input,
+	.param .u32 output
+)
+{
+	.reg .u32 	    in_addr;
+    .reg .u32 	    out_addr;
+    .reg .b16 	    temp1;
+    .reg .b16 	    temp2;
+    .reg .b16 	    temp3;
+    .reg .b16 	    temp4;
+
+	ld.param.u32 	in_addr, [input];
+    ld.param.u32 	out_addr, [output];
+
+    ld.const.b8    temp1, [constparams];
+    ld.const.b8    temp2, [constparams+1];
+    ld.const.b8    temp3, [constparams+2];
+    ld.const.b8    temp4, [constparams+3];
+    st.u16          [out_addr], temp1;
+    st.u16          [out_addr+2], temp2;
+    st.u16          [out_addr+4], temp3;
+    st.u16          [out_addr+6], temp4;
+	ret;
+}
