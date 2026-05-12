@@ -1,7 +1,6 @@
 use ptx_parser as ast;
 use quick_error::quick_error;
 use rustc_hash::FxHashMap;
-use std::alloc::Layout;
 use std::hash::Hash;
 use std::{
     borrow::Cow,
@@ -98,12 +97,12 @@ pub fn to_llvm_module<'input>(
     on_pass_end("instruction_mode_to_global_mode");
     let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_explicit_load_store");
-    let mut module32 = None;
+    let mut metadata32 = None;
     if ast.address_size == 32 {
         let (new_directives, new_module32) =
             convert_32bit_to_64bit::run(&mut flat_resolver, directives)?;
         directives = new_directives;
-        module32 = Some(new_module32);
+        metadata32 = Some(new_module32);
         on_pass_end("convert_32bit_to_64bit");
     }
     let directives =
@@ -114,41 +113,30 @@ pub fn to_llvm_module<'input>(
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, ast.address_size == 32)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
         llvm_ir,
         attributes_ir,
-        kernel_info: HashMap::new(),
         context,
-        metadata: kernel_metadata::KernelMetadataV1::new(sm_version),
-        module32,
+        metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
+        metadata32,
     })
 }
 
 pub struct Module {
     pub llvm_ir: llvm_zluda::utils::Module,
     pub attributes_ir: llvm_zluda::utils::Module,
-    pub kernel_info: HashMap<String, KernelInfo>,
     pub context: llvm_zluda::utils::Context,
-    pub metadata: kernel_metadata::KernelMetadataV1,
-    pub module32: Option<Module32>,
+    pub metadata: kernel_metadata::ModuleMetadataV1,
+    pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
 }
 
 impl Module {
     pub fn linked_bitcode(&self) -> &'static [u8] {
         ZLUDA_PTX_IMPL
     }
-}
-
-struct Module32 {
-    globals: Vec<(String, Layout)>,
-}
-
-pub struct KernelInfo {
-    pub arguments_sizes: Vec<(usize, bool)>,
-    pub uses_shared_mem: bool,
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone, EnumIter)]
@@ -792,8 +780,11 @@ struct Function<Instruction, Operand: ast::Operand> {
     kernel_meta32: Option<Function32>,
 }
 
+// We transform the method so that it takes an implicit pointer to memory as an
+// additional argument, and all explicit memory accesses are done through that
+// pointer
 struct Function32 {
-    global_pointer_position: usize,
+    implicit_memory_ptr: SpirvWord,
 }
 
 impl<I, O: ast::Operand> Function<I, O> {
