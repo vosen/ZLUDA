@@ -1,0 +1,22 @@
+.version 6.5
+.target sm_30
+.address_size 32
+
+.global .u8 foobar[4] = {1};
+
+.visible .entry global_array(
+	.param .u32 input,
+	.param .u32 output
+)
+{
+	.reg .u32 	        in_addr;
+    .reg .u32 	        out_addr;
+    .reg .b32 	        temp;
+
+	mov.u32 	        in_addr, foobar;
+    ld.param.u32 	    out_addr, [output];
+
+    ld.global.u8       temp, [in_addr];
+    st.global.u32       [out_addr], temp;
+	ret;
+}
