@@ -37,7 +37,7 @@ pub(crate) use test_pass;
 
 use crate::pass::IdentEntry;
 
-use super::{Directive2, Function2, GlobalStringIdentResolver2, SpirvWord, Statement};
+use super::{Directive2, Function, GlobalStringIdentResolver2, SpirvWord, Statement};
 
 fn directive2_vec_to_string(
     resolver: &GlobalStringIdentResolver2,
@@ -69,7 +69,7 @@ fn directive_to_string(
 
 fn function_to_string(
     resolver: &GlobalStringIdentResolver2,
-    function: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+    function: Function<ast::Instruction<SpirvWord>, SpirvWord>,
 ) -> String {
     if function.import_as.is_some() || function.tuning.len() > 0 {
         todo!("Figure out some way of representing these in text");

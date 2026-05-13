@@ -116,7 +116,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_method(
         &mut self,
-        method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
+        method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
     ) -> Result<(), TranslateError> {
         let name = method
             .import_as
@@ -211,7 +211,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             let real_bb =
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
-            let mut method_emitter = MethodEmitContext::new(self, fn_, variables_builder);
+            let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
+            let mut method_emitter =
+                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -463,6 +465,7 @@ struct MethodEmitContext<'a> {
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
     carry_flag: Option<LLVMValueRef>,
+    base_32bit_memory: Option<SpirvWord>,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -470,6 +473,7 @@ impl<'a> MethodEmitContext<'a> {
         parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
+        base_32bit_memory: Option<SpirvWord>,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
@@ -479,6 +483,7 @@ impl<'a> MethodEmitContext<'a> {
             resolver: &mut parent.resolver,
             method,
             carry_flag: None,
+            base_32bit_memory: base_32bit_memory,
         }
     }
 
@@ -725,10 +730,35 @@ impl<'a> MethodEmitContext<'a> {
             }
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
-                let type_ = get_pointer_type(self.context, conversion.to_space)?;
-                self.resolver.with_result(conversion.dst, |dst| unsafe {
-                    LLVMBuildIntToPtr(builder, src, type_, dst)
-                });
+                let ptr_type = get_pointer_type(self.context, conversion.to_space)?;
+                if let (
+                    Some(base32),
+                    ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
+                ) = (self.base_32bit_memory, conversion.to_space)
+                {
+                    let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+                    let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                    let src_64 =
+                        unsafe { LLVMBuildZExt(builder, src, i64_type, LLVM_UNNAMED.as_ptr()) };
+                    let base32 = self.resolver.value(base32)?;
+                    let base32_typed = unsafe {
+                        LLVMBuildIntToPtr(builder, base32, ptr_type, LLVM_UNNAMED.as_ptr())
+                    };
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildInBoundsGEP2(
+                            builder,
+                            i8_type,
+                            base32_typed,
+                            [src_64].as_mut_ptr(),
+                            1,
+                            dst,
+                        )
+                    });
+                } else {
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildIntToPtr(builder, src, ptr_type, dst)
+                    });
+                };
                 Ok(())
             }
             ConversionKind::PtrToPtr => {
@@ -742,9 +772,18 @@ impl<'a> MethodEmitContext<'a> {
             ConversionKind::AddressOf => {
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_type(self.context, &conversion.to_type)?;
-                self.resolver.with_result(conversion.dst, |dst| unsafe {
-                    LLVMBuildPtrToInt(self.builder, src, dst_type, dst)
-                });
+                if let (
+                    Some(_),
+                    ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
+                ) = (self.base_32bit_memory, conversion.to_space)
+                {
+                    // Should never happen because globals are removed
+                    return Err(error_unreachable());
+                } else {
+                    self.resolver.with_result(conversion.dst, |dst| unsafe {
+                        LLVMBuildPtrToInt(builder, src, dst_type, dst)
+                    });
+                }
                 Ok(())
             }
         }
@@ -3798,7 +3837,7 @@ fn get_function_type_impl<'a>(
     context: LLVMContextRef,
     mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
     struct_kind: StructKind,
 ) -> Result<LLVMTypeRef, TranslateError> {
     let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
@@ -3825,7 +3864,7 @@ fn get_function_type<'a>(
     context: LLVMContextRef,
     return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     get_function_type_impl(context, return_args, input_args, StructKind::Named)
 }
@@ -3834,7 +3873,7 @@ fn get_intrinsic_type<'a>(
     context: LLVMContextRef,
     return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
         + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl ExactSizeIterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
 ) -> Result<LLVMTypeRef, TranslateError> {
     get_function_type_impl(context, return_args, input_args, StructKind::Anonymous)
 }

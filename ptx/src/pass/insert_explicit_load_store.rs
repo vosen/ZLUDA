@@ -34,8 +34,8 @@ fn run_directive<'a, 'input>(
 
 fn run_method<'a, 'input>(
     mut visitor: InsertMemSSAVisitor<'a, 'input>,
-    mut method: Function2<ast::Instruction<SpirvWord>, SpirvWord>,
-) -> Result<Function2<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
+    mut method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     if method.is_kernel() {
         for arg in method.input_arguments.iter_mut() {
             let old_name = arg.name;
@@ -63,7 +63,7 @@ fn run_method<'a, 'input>(
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
-    Ok(Function2 { body, ..method })
+    Ok(Function { body, ..method })
 }
 
 fn run_statement<'a, 'input>(
@@ -317,6 +317,7 @@ impl<'a, 'input> InsertMemSSAVisitor<'a, 'input> {
                         data: ast::CvtaDetails {
                             state_space: *new_space,
                             direction: ast::CvtaDirection::ExplicitToGeneric,
+                            size: 64,
                         },
                         arguments: ast::CvtaArgs {
                             dst: generic_var,

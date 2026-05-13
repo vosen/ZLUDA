@@ -40,7 +40,7 @@ fn run_method<'input>(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    Ok(Function2 { body, ..method })
+    Ok(Function { body, ..method })
 }
 
 fn run_statement<'input>(

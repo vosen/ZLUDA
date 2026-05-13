@@ -46,7 +46,7 @@ fn run_method<'input, 'b>(
         })
         .transpose()?;
     resolver.end_scope();
-    Ok(Function2 {
+    Ok(Function {
         return_arguments,
         name,
         input_arguments,
@@ -60,6 +60,7 @@ fn run_method<'input, 'b>(
             rounding_mode_f16f64: ptx_parser::RoundingMode::NearestEven,
         }),
         tuning: method.tuning,
+        kernel_meta32: None,
     })
 }
 

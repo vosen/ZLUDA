@@ -6,11 +6,11 @@ use std::{
     borrow::Cow,
     collections::{hash_map, HashMap},
     ffi::CString,
-    iter,
 };
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+mod convert_32bit_to_64bit;
 mod deparamize_functions;
 mod expand_operands;
 mod fix_special_registers;
@@ -94,9 +94,18 @@ pub fn to_llvm_module<'input>(
     on_pass_end("remove_unreachable_basic_blocks");
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
-    let directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
+    let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_explicit_load_store");
-    let directives = insert_implicit_conversions::run(&mut flat_resolver, directives)?;
+    let mut metadata32 = None;
+    if ast.address_size == 32 {
+        let (new_directives, new_module32) =
+            convert_32bit_to_64bit::run(&mut flat_resolver, directives)?;
+        directives = new_directives;
+        metadata32 = Some(new_module32);
+        on_pass_end("convert_32bit_to_64bit");
+    }
+    let directives =
+        insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
     let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("replace_instructions_with_functions");
@@ -109,29 +118,24 @@ pub fn to_llvm_module<'input>(
     Ok(Module {
         llvm_ir,
         attributes_ir,
-        kernel_info: HashMap::new(),
         context,
-        metadata: kernel_metadata::KernelMetadataV1::new(sm_version),
+        metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
+        metadata32,
     })
 }
 
 pub struct Module {
     pub llvm_ir: llvm_zluda::utils::Module,
     pub attributes_ir: llvm_zluda::utils::Module,
-    pub kernel_info: HashMap<String, KernelInfo>,
     pub context: llvm_zluda::utils::Context,
-    pub metadata: kernel_metadata::KernelMetadataV1,
+    pub metadata: kernel_metadata::ModuleMetadataV1,
+    pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
 }
 
 impl Module {
     pub fn linked_bitcode(&self) -> &'static [u8] {
         ZLUDA_PTX_IMPL
     }
-}
-
-pub struct KernelInfo {
-    pub arguments_sizes: Vec<(usize, bool)>,
-    pub uses_shared_mem: bool,
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone, EnumIter)]
@@ -753,7 +757,7 @@ type NormalizedStatement = Statement<
 
 enum Directive2<Instruction, Operand: ast::Operand> {
     Variable(ast::LinkingDirective, ast::Variable<SpirvWord>),
-    Method(Function2<Instruction, Operand>),
+    Method(Function<Instruction, Operand>),
 }
 
 struct KernelAttributes {
@@ -763,7 +767,7 @@ struct KernelAttributes {
     rounding_mode_f16f64: ast::RoundingMode,
 }
 
-struct Function2<Instruction, Operand: ast::Operand> {
+struct Function<Instruction, Operand: ast::Operand> {
     pub return_arguments: Vec<ast::Variable<Operand::Ident>>,
     pub name: Operand::Ident,
     pub input_arguments: Vec<ast::Variable<Operand::Ident>>,
@@ -772,9 +776,17 @@ struct Function2<Instruction, Operand: ast::Operand> {
     import_as: Option<String>,
     tuning: Vec<ast::TuningDirective>,
     linkage: ast::LinkingDirective,
+    kernel_meta32: Option<Function32>,
 }
 
-impl<I, O: ast::Operand> Function2<I, O> {
+// We transform the method so that it takes an implicit pointer to memory as an
+// additional argument, and all explicit memory accesses are done through that
+// pointer
+struct Function32 {
+    implicit_memory_ptr: SpirvWord,
+}
+
+impl<I, O: ast::Operand> Function<I, O> {
     fn is_kernel(&self) -> bool {
         self.kernel_attributes.is_some()
     }
@@ -788,7 +800,7 @@ type NormalizedDirective2 = Directive2<
     ast::ParsedOperand<SpirvWord>,
 >;
 
-type NormalizedFunction2 = Function2<
+type NormalizedFunction2 = Function<
     (
         Option<ast::PredAt<SpirvWord>>,
         ast::Instruction<ast::ParsedOperand<SpirvWord>>,
@@ -800,7 +812,7 @@ type UnconditionalDirective =
     Directive2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
 type UnconditionalFunction =
-    Function2<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
+    Function<ast::Instruction<ast::ParsedOperand<SpirvWord>>, ast::ParsedOperand<SpirvWord>>;
 
 struct GlobalStringIdentResolver2<'input> {
     pub(crate) current_id: SpirvWord,
