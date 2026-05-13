@@ -15,8 +15,8 @@ use llvm_sys::{
 };
 use llvm_sys::{LLVMLinkage, LLVMVisibility};
 use std::ffi::{CStr, CString};
-use std::fs;
 use std::sync::OnceLock;
+use std::{fs, ptr};
 use tempfile::NamedTempFile;
 
 const OCKL_MODULE: &[u8] = include_bytes!("device-libs/ockl.bc");
@@ -94,7 +94,8 @@ pub fn compile(
     main: Module,
     ptx_impl: &[u8],
     attributes: Module,
-    metadata: kernel_metadata::KernelMetadataV1,
+    metadata: kernel_metadata::ModuleMetadataV1,
+    metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<Vec<u8>, String> {
     init_globals()?;
@@ -197,17 +198,49 @@ pub fn compile(
     metadata
         .write_object(&object_file, section_path.as_file_mut())
         .map_err(|e| format!("Failed to write metadata section: {}", e))?;
+    let section32_path = if let Some(metadata32) = metadata32 {
+        let mut section32_path = NamedTempFile::with_prefix("zluda32_section")
+            .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+        metadata32
+            .write_object(&object_file, section32_path.as_file_mut())
+            .map_err(|e| format!("Failed to write 32-bit metadata section: {}", e))?;
+        Some(section32_path)
+    } else {
+        None
+    };
 
     let object_path_cstr = path_to_cstring(&object_path)?;
     let section_path_cstr = path_to_cstring(section_path.as_ref())?;
+    let section32_path_cstr = section32_path
+        .as_ref()
+        .map(|p| path_to_cstring(p.as_ref()))
+        .transpose()?;
     let executable_path_cstr = path_to_cstring(&executable_path)?;
 
-    let inputs = [object_path_cstr.as_ptr(), section_path_cstr.as_ptr()];
+    let (inputs, inputs_len) = if let Some(ref section32_path_cstr) = section32_path_cstr {
+        (
+            [
+                object_path_cstr.as_ptr(),
+                section_path_cstr.as_ptr(),
+                section32_path_cstr.as_ptr(),
+            ],
+            3,
+        )
+    } else {
+        (
+            [
+                object_path_cstr.as_ptr(),
+                section_path_cstr.as_ptr(),
+                ptr::null(),
+            ],
+            2,
+        )
+    };
 
     let mut err = std::ptr::null_mut();
     let result = unsafe {
         LLVMZludaLinkWithLLD(
-            inputs.len() as u32,
+            inputs_len,
             inputs.as_ptr(),
             executable_path_cstr.as_ptr(),
             &mut err,
@@ -278,5 +311,5 @@ fn init_globals() -> Result<(), String> {
         })
         .as_ref()
         .map(|()| ())
-        .map_err(|e| e.to_str().to_owned())
+        .map_err(|e| e.to_str().to_string())
 }

@@ -15,7 +15,8 @@ fn run_insert_implicit_conversions(ptx: ptx_parser::Module) -> String {
     let directives = normalize_identifiers::run(&mut scoped_resolver, ptx.directives).unwrap();
     let directives = normalize_predicates::run(&mut flat_resolver, directives).unwrap();
     let directives = expand_operands::run(&mut flat_resolver, directives).unwrap();
-    let directives = insert_implicit_conversions::run(&mut flat_resolver, directives).unwrap();
+    let directives =
+        insert_implicit_conversions::run(false, &mut flat_resolver, directives).unwrap();
     directive2_vec_to_string(&flat_resolver, directives)
 }
 

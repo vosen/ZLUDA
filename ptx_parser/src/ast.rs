@@ -312,7 +312,7 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Cvta {
             data: CvtaDetails,
-            type: { Type::Scalar(ScalarType::B64) },
+            type: { if data.size == 64 { Type::Scalar(ScalarType::B64) } else { Type::Scalar(ScalarType::B32) } },
             arguments<T>: {
                 dst: T,
                 src: T,
@@ -1972,6 +1972,7 @@ pub struct Module<'input> {
     pub sm_version: u32,
     pub directives: Vec<Directive<'input, ParsedOperand<&'input str>>>,
     pub invalid_directives: usize,
+    pub address_size: u8,
 }
 
 impl Module<'_> {
@@ -1981,6 +1982,7 @@ impl Module<'_> {
             sm_version: 0,
             directives: Vec::new(),
             invalid_directives: usize::MAX,
+            address_size: 64,
         }
     }
 }
@@ -2565,6 +2567,7 @@ pub enum RightShiftKind {
 pub struct CvtaDetails {
     pub state_space: StateSpace,
     pub direction: CvtaDirection,
+    pub size: u8,
 }
 
 pub enum CvtaDirection {

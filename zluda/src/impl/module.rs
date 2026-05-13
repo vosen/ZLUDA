@@ -147,6 +147,7 @@ fn get_best_ptx_and_compile(
                     sm_version: 0,
                     directives: Vec::new(),
                     invalid_directives: usize::MAX,
+                    address_size: 64,
                 },
             )
         }
@@ -232,7 +233,9 @@ fn load_cached_binary(
     let binary = cache_with_key
         .as_mut()
         .and_then(|(c, key)| c.get_module_binary(key))?;
-    let sm_version = kernel_metadata::KernelMetadataV1::read_object(&binary)?.sm_version;
+    let sm_version = kernel_metadata::ModuleMetadataV1::read_object(&binary)?
+        .sm_version
+        .to_native();
     Some((binary, sm_version))
 }
 
@@ -259,6 +262,7 @@ fn compile_and_cache(
         ptx_impl,
         llvm_module.attributes_ir,
         llvm_module.metadata,
+        llvm_module.metadata32,
         None,
     )
     .map_err(|_| CUerror::UNKNOWN)?;

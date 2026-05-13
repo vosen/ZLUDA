@@ -2,14 +2,19 @@ use super::read_test_file;
 use crate::pass;
 use cuda_types::cuda::CUstream;
 use hip_runtime_sys::hipError_t;
+use hip_runtime_sys::hipStream_t;
+use kernel_metadata::ArchivedModuleMetadata32Bit;
 use pretty_assertions;
+use std::alloc::Layout;
 use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::fs::{self, File};
 use std::io::Write;
+use std::iter;
 use std::mem;
+use std::os::raw::c_void;
 use std::path::Path;
 use std::ptr;
 use std::str;
@@ -57,6 +62,46 @@ macro_rules! test_ptx {
     };
 }
 
+macro_rules! test_ptx_with_32 {
+    ($fn_name:ident, $input:expr, $output:expr) => {
+        paste::item! {
+            #[test]
+            fn [<$fn_name _amdgpu>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let input = $input;
+                let output = $output;
+                test_hip_assert(stringify!($fn_name), &ptx, Some(&input), &output, 1)
+            }
+        }
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _cuda>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!(stringify!($fn_name), ".ptx"));
+                let input = $input;
+                let output = $output;
+                test_cuda_assert(stringify!($fn_name), &ptx, Some(&input), &output, 1)
+            }
+        }
+
+        test_ptx_llvm!($fn_name);
+
+        paste::item! {
+            #[test]
+            fn [<$fn_name _amdgpu32>]() -> Result<(), Box<dyn std::error::Error>> {
+                let ptx = read_test_file!(concat!("32/", stringify!($fn_name), ".ptx"));
+                let input = $input;
+                let output = $output;
+                test_zluda32_assert(stringify!($fn_name), &ptx, Some(&input), &output, 1)
+            }
+        }
+    };
+
+    ($fn_name:ident) => {
+        test_ptx_llvm!($fn_name);
+    };
+}
+
 macro_rules! test_ptx_warp {
     ($fn_name:ident, $output:expr) => {
         paste::item! {
@@ -86,7 +131,7 @@ test_ptx!(ld_st_implicit, [0.5f32, 0.25f32], [0.5f32]);
 test_ptx!(mov, [1u64], [1u64]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
-test_ptx!(add, [1u64], [2u64]);
+test_ptx_with_32!(add, [1u64], [2u64]);
 test_ptx!(
     add_extended,
     [
@@ -218,9 +263,9 @@ test_ptx!(
 );
 test_ptx!(min_nan_f16);
 test_ptx!(max, [555i32, 444i32], [555i32]);
-test_ptx!(global_array, [0xDEADu32], [1u32]);
+test_ptx_with_32!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(global_array_f32, [0x0], [0f32]);
-test_ptx!(extern_shared, [127u64], [127u64]);
+test_ptx_with_32!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);
 // 0b1_00000000_10000000000000000000000u32 is a large denormal
@@ -252,11 +297,11 @@ test_ptx!(
     [0x40004040, 0x40404080, 0x40A04040],
     [1183860456u32]
 );
-test_ptx!(shared_variable, [513u64], [513u64]);
+test_ptx_with_32!(shared_variable, [513u64], [513u64]);
 test_ptx!(shared_ptr_32, [513u64], [513u64]);
 test_ptx!(atom_cas, [91u32, 91u32], [91u32, 100u32]);
 test_ptx!(atom_inc, [100u32], [100u32, 101u32, 0u32]);
-test_ptx!(atom_add, [2u32, 4u32], [2u32, 6u32]);
+test_ptx_with_32!(atom_add, [2u32, 4u32], [2u32, 6u32]);
 test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
 test_ptx!(sqrt, [0.25f32], [0.5f32]);
 test_ptx!(sqrt_rn_ftz, [0x1u32], [0x0u32]);
@@ -312,7 +357,7 @@ test_ptx!(cvt_s64_s32, [-1i32], [-1i64]);
 test_ptx!(add_tuning, [2u64], [3u64]);
 test_ptx!(add_non_coherent, [3u64], [4u64]);
 test_ptx!(sign_extend, [-1i16], [-1i32]);
-test_ptx!(atom_add_float, [1.25f32, 0.5f32], [1.25f32, 1.75f32]);
+test_ptx_with_32!(atom_add_float, [1.25f32, 0.5f32], [1.25f32, 1.75f32]);
 test_ptx!(
     setp_nan,
     [
@@ -343,7 +388,7 @@ test_ptx!(
 );
 test_ptx!(non_scalar_ptr_offset, [1u32, 2u32, 3u32, 4u32], [7u32]);
 test_ptx!(stateful_neg_offset, [1237518u64], [1237518u64]);
-test_ptx!(const, [0u16], [10u16, 20, 30, 40]);
+test_ptx_with_32!(const, [0u16], [10u16, 20, 30, 40]);
 test_ptx!(const_ident, [0u16], [0u64, 0u64]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
@@ -358,7 +403,7 @@ test_ptx!(
     [0x0100FE80u32, 0x00000000u32],
     [0x800080FFu32]
 );
-test_ptx!(activemask, [0u32], [1u32]);
+test_ptx_with_32!(activemask, [0u32], [1u32]);
 test_ptx!(membar, [152731u32], [152731u32]);
 test_ptx!(shared_unify_extern, [7681u64, 7682u64], [15363u64]);
 test_ptx!(shared_unify_local, [16752u64, 714u64], [17466u64]);
@@ -1163,6 +1208,32 @@ fn test_hip_assert<
     Ok(())
 }
 
+fn test_zluda32_assert<
+    Input: From<u8> + Debug + Copy + PartialEq,
+    Output: From<u8> + Debug + Copy + PartialEq + Default,
+>(
+    name: &str,
+    ptx_text: &str,
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
+) -> Result<(), Box<dyn error::Error>> {
+    let ast = ptx_parser::parse_module_checked(&*ptx_text).unwrap();
+    let name = CString::new(name)?;
+    let llvm_ir = pass::to_llvm_module(
+        ast,
+        pass::Attributes {
+            clock_rate: 2124000,
+        },
+        |_| {},
+    )
+    .unwrap();
+    let result = run_zluda32(name.as_c_str(), llvm_ir, input, output, block_dim_x)
+        .map_err(|err| DisplayError { err })?;
+    assert_eq!(result.as_slice(), output);
+    Ok(())
+}
+
 fn test_llvm_assert(
     name: &str,
     ptx_text: &str,
@@ -1179,12 +1250,16 @@ fn test_llvm_assert(
     .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
-    compare_llvm(name, actual_ll, expected_ll);
+    compare_llvm(name, actual_ll.trim(), expected_ll.trim());
 
     let expected_attributes_ll = read_test_file!(concat!("../ll/_attributes.ll"));
     let actual_attributes_ll = llvm_ir.attributes_ir.print_module_to_string();
     let actual_attributes_ll = actual_attributes_ll.to_str();
-    compare_llvm("_attributes", actual_attributes_ll, &expected_attributes_ll);
+    compare_llvm(
+        "_attributes",
+        actual_attributes_ll.trim(),
+        expected_attributes_ll.trim(),
+    );
     Ok(())
 }
 
@@ -1370,6 +1445,7 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
             ptx_impl,
             module.attributes_ir,
             module.metadata,
+            module.metadata32,
             None,
         )
         .unwrap();
@@ -1432,6 +1508,160 @@ fn run_hip<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Def
         unsafe { hipModuleUnload(module) }.unwrap();
     }
     Ok(result)
+}
+
+fn run_zluda32<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
+    name: &CStr,
+    module: pass::Module,
+    input: Option<&[Input]>,
+    output: &[Output],
+    block_dim_x: u32,
+) -> Result<Vec<Output>, hipError_t> {
+    use hip_runtime_sys::*;
+    unsafe { hipInit(0) }.unwrap();
+    let mut result = vec![0u8.into(); output.len()];
+    {
+        let dev = 0;
+        let mut stream = unsafe { mem::zeroed() };
+        unsafe { hipStreamCreate(&mut stream) }.unwrap();
+        let mut dev_props = unsafe { mem::zeroed() };
+        unsafe { hipGetDevicePropertiesR0600(&mut dev_props, dev) }.unwrap();
+        let ptx_impl = module.linked_bitcode();
+        let elf_module = llvm_zluda::compile(
+            &module.context,
+            unsafe { CStr::from_ptr(dev_props.gcnArchName.as_ptr()) }
+                .to_str()
+                .unwrap(),
+            module.llvm_ir,
+            ptx_impl,
+            module.attributes_ir,
+            module.metadata,
+            module.metadata32,
+            None,
+        )
+        .unwrap();
+        let zluda32 = kernel_metadata::ModuleMetadata32Bit::read_object(&elf_module).unwrap();
+        assert_eq!(zluda32.explicit_arg_count.len(), 1);
+        assert_eq!(zluda32.explicit_arg_count[0].0, name.to_str().unwrap());
+        assert_eq!(zluda32.explicit_arg_count[0].1, 2);
+        let mut module = unsafe { mem::zeroed() };
+        unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
+        let mut kernel = unsafe { mem::zeroed() };
+        unsafe { hipModuleGetFunction(&mut kernel, module, name.as_ptr()) }.unwrap();
+        let mut buffer = ptr::null_mut();
+        let argument_values = create_args32(&mut buffer, stream, zluda32, output, input);
+        let mut args = argument_values
+            .iter()
+            .map(|offset| std::ptr::from_ref(offset).cast::<u32>())
+            .collect::<Vec<_>>();
+        unsafe {
+            hipModuleLaunchKernel(
+                kernel,
+                1,
+                1,
+                1,
+                block_dim_x,
+                1,
+                1,
+                1024,
+                stream,
+                args.as_mut_ptr().cast(),
+                ptr::null_mut(),
+            )
+        }
+        .unwrap();
+        unsafe {
+            hipMemcpyAsync(
+                result.as_mut_ptr() as _,
+                buffer.add(argument_values[if input.is_some() { 1 } else { 0 }]),
+                output.len() * mem::size_of::<Output>(),
+                hipMemcpyKind::hipMemcpyDeviceToHost,
+                stream,
+            )
+        }
+        .unwrap();
+        unsafe { hipStreamSynchronize(stream) }.unwrap();
+        unsafe { hipFree(buffer) }.unwrap();
+        unsafe { hipModuleUnload(module) }.unwrap();
+    }
+    Ok(result)
+}
+
+fn create_args32<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug + Default>(
+    buffer: &mut *mut c_void,
+    stream: hipStream_t,
+    zluda32: &ArchivedModuleMetadata32Bit,
+    output: &[Output],
+    input: Option<&[Input]>,
+) -> Vec<usize> {
+    use hip_runtime_sys::*;
+    let input_iter = input
+        .iter()
+        .map(|input| input.len() * mem::size_of::<Input>());
+    let output = iter::once(output.len() * mem::size_of::<Output>());
+    let globals = zluda32.globals.iter().map(|g| g.initializer.len());
+    let layouts = compute_layouts(input_iter.chain(output).chain(iter::once(0)).chain(globals))
+        .collect::<Vec<_>>();
+    let total_size = layouts.last().unwrap().0.size();
+    // allocate buffer
+    unsafe { hipMalloc(buffer, total_size) }.unwrap();
+    unsafe { hipMemset(*buffer, 0xff, total_size) }.unwrap();
+    let mut args = layouts
+        .into_iter()
+        .map(|(_, offset)| offset)
+        .collect::<Vec<_>>();
+    // set input
+    if let Some(input) = input {
+        unsafe {
+            hipMemcpyWithStream(
+                (*buffer).add(args[0]),
+                input.as_ptr() as _,
+                input.len() * mem::size_of::<Input>(),
+                hipMemcpyKind::hipMemcpyHostToDevice,
+                stream,
+            )
+        }
+        .unwrap();
+    }
+    // set hidden memory ptr
+    let buffer_arg_index = if input.is_some() { 2 } else { 1 };
+    args[buffer_arg_index] = *buffer as usize;
+    // set globals
+    for (offset, global) in args
+        .iter()
+        .skip(buffer_arg_index + 1)
+        .zip(zluda32.globals.iter())
+    {
+        unsafe {
+            hipMemcpyWithStream(
+                (*buffer).add(*offset),
+                global.initializer.as_ptr().cast(),
+                global.initializer.len(),
+                hipMemcpyKind::hipMemcpyHostToDevice,
+                stream,
+            )
+        }
+        .unwrap();
+    }
+    args
+}
+
+fn compute_layouts(sizes: impl Iterator<Item = usize>) -> impl Iterator<Item = (Layout, usize)> {
+    const ALIGN: usize = 128;
+    sizes.scan(
+        (Layout::from_size_align(ALIGN, ALIGN).unwrap(), 0usize),
+        |(layout, offset), size| {
+            if size == 0 {
+                return Some((*layout, 0));
+            }
+            let (new_layout, new_offset) = layout
+                .extend(Layout::from_size_align(size, ALIGN).unwrap())
+                .unwrap();
+            *layout = new_layout;
+            *offset = new_offset;
+            Some((*layout, *offset))
+        },
+    )
 }
 
 pub fn verify_symbols(test_name: &str, ctx: &llvm_zluda::utils::Context, elf_module: &[u8]) {
