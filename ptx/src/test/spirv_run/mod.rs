@@ -263,7 +263,7 @@ test_ptx!(
 );
 test_ptx!(min_nan_f16);
 test_ptx!(max, [555i32, 444i32], [555i32]);
-test_ptx!(global_array, [0xDEADu32], [1u32]);
+test_ptx_with_32!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(global_array_f32, [0x0], [0f32]);
 test_ptx_with_32!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
