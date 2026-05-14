@@ -773,18 +773,12 @@ impl<'a> MethodEmitContext<'a> {
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_type(self.context, &conversion.to_type)?;
                 if let (
-                    Some(base32),
+                    Some(_),
                     ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
                 ) = (self.base_32bit_memory, conversion.to_space)
                 {
-                    let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
-                    let base32 = self.resolver.value(base32)?;
-                    let src_int =
-                        unsafe { LLVMBuildPtrToInt(builder, src, i64_type, LLVM_UNNAMED.as_ptr()) };
-                    unsafe { LLVMBuildSub(builder, src_int, base32, LLVM_UNNAMED.as_ptr()) };
-                    self.resolver.with_result(conversion.dst, |dst| unsafe {
-                        LLVMBuildTruncOrBitCast(builder, src, dst_type, dst)
-                    });
+                    // Should never happen because globals are removed
+                    return Err(error_unreachable());
                 } else {
                     self.resolver.with_result(conversion.dst, |dst| unsafe {
                         LLVMBuildPtrToInt(builder, src, dst_type, dst)
