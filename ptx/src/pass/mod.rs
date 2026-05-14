@@ -6,7 +6,6 @@ use std::{
     borrow::Cow,
     collections::{hash_map, HashMap},
     ffi::CString,
-    iter,
 };
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;

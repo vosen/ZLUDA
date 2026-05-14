@@ -1,4 +1,4 @@
-// This pass modifies modifies 32 bit module to run on 64 bit implementation
+// This pass modifies 32 bit module to run on 64 bit implementation
 // It extracts each global variable (except `.shared`) and then goes through
 // every global and:
 // * If it's a global variable it gets erased
