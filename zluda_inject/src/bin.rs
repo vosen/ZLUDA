@@ -7,10 +7,6 @@ use std::ffi::{CString, OsStr};
 use std::path::PathBuf;
 use std::{env, mem, process, ptr};
 use windows::Win32::Foundation::{HANDLE, WAIT_FAILED};
-use windows::Win32::System::JobObjects::{
-    AssignProcessToJobObject, JobObjectExtendedLimitInformation, SetInformationJobObject,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-};
 use windows::Win32::System::Threading::{
     self, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_SUSPENDED,
     CREATE_UNICODE_ENVIRONMENT,
@@ -69,7 +65,7 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
             Option::None
         )
     };
-    kill_child_on_process_exit(proc_info.hProcess)?;
+    zluda_windows::kill_child_on_process_exit(proc_info.hProcess)?;
     injection_env.copy_payloads_to_process(proc_info.hProcess)?;
     os_call! { ResumeThread(HANDLE(proc_info.hThread)), |x| x == -1i32 as u32 };
     os_call! { WaitForSingleObject(HANDLE(proc_info.hProcess), Threading::INFINITE), |x| x == WAIT_FAILED };
@@ -337,20 +333,4 @@ impl InjectionConfig {
         result.push_char('\0');
         Ok(result.into_vec())
     }
-}
-
-fn kill_child_on_process_exit(child: detours_sys::HANDLE) -> Result<(), Box<dyn Error>> {
-    let job_handle = unsafe { windows::Win32::System::JobObjects::CreateJobObjectA(None, None) }?;
-    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    unsafe {
-        SetInformationJobObject(
-            job_handle,
-            JobObjectExtendedLimitInformation,
-            &mut info as *mut _ as *mut _,
-            size_of_val(&info) as u32,
-        )
-    }?;
-    unsafe { AssignProcessToJobObject(job_handle, HANDLE(child)) }?;
-    Ok(())
 }
