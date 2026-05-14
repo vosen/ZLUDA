@@ -540,6 +540,12 @@ interface_to_name!(
     // { NvAPI_RegisterRiseCallback, 0x9cfe8f94 },
     // { NvAPI_RequestRise, 0x5047de98 },
     // { NvAPI_UninstallRise, 0xab8d09f6 },
+    // Undocumented:
+    // Not sure what is the deal with this function, but looking at the
+    // implementation of NvAPI_GPU_CudaEnumComputeCapableGpus it seems to just
+    // call it with the same argument?
+    { NvAPI_Unknown_36e39e6b, 0x36e39e6b }
+
 );
 
 const NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE: u32 = 1 << 0;
@@ -596,15 +602,32 @@ unsafe extern "C" fn NvAPI_GetDisplayDriverVersion(
 }
 
 #[allow(non_snake_case)]
-unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(
-    compute_topo: *mut NV_COMPUTE_GPU_TOPOLOGY_V1,
-) -> i32 {
-    let compute_topo = compute_topo.as_mut();
-    let compute_topo =
-        unwrap_or::unwrap_some_or!(compute_topo, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
-    if compute_topo.version != make_nvapi_version::<NV_COMPUTE_GPU_TOPOLOGY_V1>(1) {
-        return _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION;
+unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(version_ptr: *mut NvU32) -> i32 {
+    let version = version_ptr.as_mut();
+    let version = unwrap_or::unwrap_some_or!(version, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    if *version == make_nvapi_version::<NV_COMPUTE_GPU_TOPOLOGY_V1>(1) {
+        NvAPI_GPU_CudaEnumComputeCapableGpus_v1(
+            version_ptr
+                .cast::<NV_COMPUTE_GPU_TOPOLOGY_V1>()
+                .as_mut()
+                .unwrap(),
+        )
+    } else if *version == make_nvapi_version::<NV_COMPUTE_GPU_TOPOLOGY_V2>(2) {
+        NvAPI_GPU_CudaEnumComputeCapableGpus_v2(
+            version_ptr
+                .cast::<NV_COMPUTE_GPU_TOPOLOGY_V2>()
+                .as_mut()
+                .unwrap(),
+        )
+    } else {
+        _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION
     }
+}
+
+#[allow(non_snake_case)]
+unsafe fn NvAPI_GPU_CudaEnumComputeCapableGpus_v1(
+    compute_topo: &mut NV_COMPUTE_GPU_TOPOLOGY_V1,
+) -> i32 {
     compute_topo.gpuCount = 1;
     compute_topo.computeGpus[0] = NV_COMPUTE_GPU_TOPOLOGY_V1__bindgen_ty_1 {
         hPhysicalGpu: 1 as _,
@@ -615,6 +638,29 @@ unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(
             | NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE
             | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE,
     };
+    0
+}
+
+#[repr(transparent)]
+struct NvComputeGpuSync(NV_COMPUTE_GPU);
+
+unsafe impl Sync for NvComputeGpuSync {}
+
+#[allow(non_snake_case)]
+unsafe fn NvAPI_GPU_CudaEnumComputeCapableGpus_v2(
+    compute_topo: &mut NV_COMPUTE_GPU_TOPOLOGY_V2,
+) -> i32 {
+    static mut FAKE_GPU: NvComputeGpuSync = NvComputeGpuSync(NV_COMPUTE_GPU {
+        hPhysicalGpu: 1 as _,
+        flags: NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_ENABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_RECOMMENDED
+            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_AVAILABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE,
+    });
+    compute_topo.gpuCount = 1;
+    compute_topo.computeGpus = (&raw mut FAKE_GPU).cast();
     0
 }
 
@@ -649,8 +695,32 @@ unsafe extern "C" fn NvAPI_GetPhysicalGPUFromGPUID(
 
 #[allow(non_snake_case)]
 unsafe extern "C" fn NvAPI_SYS_GetDriverAndBranchVersion(
-    _driver_version: *mut NvU32,
-    _build_branch_string: *mut NvAPI_ShortString,
+    driver_version: *mut NvU32,
+    build_branch_string: *mut NvAPI_ShortString,
 ) -> i32 {
-    -1
+    let driver_version = driver_version.as_mut();
+    let driver_version =
+        unwrap_or::unwrap_some_or!(driver_version, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    let build_branch_string = build_branch_string.as_mut();
+    let build_branch_string = unwrap_or::unwrap_some_or!(
+        build_branch_string,
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT
+    );
+    *driver_version = 99999;
+    build_branch_string.fill(0);
+    let version_string = b"r999_99";
+    std::ptr::copy_nonoverlapping(
+        version_string.as_ptr().cast(),
+        build_branch_string.as_mut_ptr(),
+        version_string.len(),
+    );
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_Unknown_36e39e6b(compute_topo: *mut NV_COMPUTE_GPU_TOPOLOGY_V2) -> i32 {
+    let compute_topo = compute_topo.as_mut();
+    let compute_topo =
+        unwrap_or::unwrap_some_or!(compute_topo, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
+    NvAPI_GPU_CudaEnumComputeCapableGpus_v2(compute_topo)
 }
