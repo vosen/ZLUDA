@@ -6,7 +6,6 @@ use hip_runtime_sys::hipStream_t;
 use kernel_metadata::ArchivedModuleMetadata32Bit;
 use pretty_assertions;
 use std::alloc::Layout;
-use std::borrow::Cow;
 use std::env;
 use std::error;
 use std::ffi::{CStr, CString};
@@ -264,7 +263,7 @@ test_ptx!(
 );
 test_ptx!(min_nan_f16);
 test_ptx!(max, [555i32, 444i32], [555i32]);
-test_ptx!(global_array, [0xDEADu32], [1u32]);
+test_ptx_with_32!(global_array, [0xDEADu32], [1u32]);
 test_ptx!(global_array_f32, [0x0], [0f32]);
 test_ptx_with_32!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
@@ -1251,16 +1250,20 @@ fn test_llvm_assert(
     .unwrap();
     let actual_ll = llvm_ir.llvm_ir.print_module_to_string();
     let actual_ll = actual_ll.to_str();
-    compare_llvm(name, actual_ll, expected_ll);
+    compare_llvm(name, actual_ll.trim(), expected_ll.trim());
 
     let expected_attributes_ll = read_test_file!(concat!("../ll/_attributes.ll"));
     let actual_attributes_ll = llvm_ir.attributes_ir.print_module_to_string();
     let actual_attributes_ll = actual_attributes_ll.to_str();
-    compare_llvm("_attributes", actual_attributes_ll, &expected_attributes_ll);
+    compare_llvm(
+        "_attributes",
+        actual_attributes_ll.trim(),
+        expected_attributes_ll.trim(),
+    );
     Ok(())
 }
 
-fn compare_llvm(name: &str, actual_ll: Cow<str>, expected_ll: &str) {
+fn compare_llvm(name: &str, actual_ll: &str, expected_ll: &str) {
     if actual_ll != expected_ll {
         let output_dir = env::var("TEST_PTX_LLVM_FAIL_DIR");
         if let Ok(output_dir) = output_dir {
