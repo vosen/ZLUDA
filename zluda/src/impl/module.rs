@@ -91,7 +91,7 @@ fn get_best_ptx_and_compile(
                 if file.header.kind != FatbinFileHeader::HEADER_KIND_PTX {
                     return;
                 }
-                if let Ok(text) = file.get_or_decompress_content() {
+                if let Ok(text) = file.get_or_decompress_content(true) {
                     if let Some(text) = cow_bytes_to_str(text) {
                         ptx_modules.push(text);
                     }
