@@ -29,6 +29,7 @@ macro_rules! generate_messages_inout {
             )*
             cuDeviceGetName,
             cuDeviceTotalMem_v2,
+            cuModuleLoadData,
             ContextLocalStoragePut,
             ContextLocalStorageGet,
         }
@@ -130,12 +131,12 @@ macro_rules! encode_as_proxy {
 macro_rules! encode_as_u32 {
     ($type_:ty) => {
         impl CudaEncode for $type_ {
-            type WireObject = u32;
-            fn encode(self) -> u32 {
-                unsafe { std::mem::transmute_copy::<Self, u32>(&self) }
+            type WireObject = u32_le;
+            fn encode(self) -> u32_le {
+                unsafe { std::mem::transmute_copy::<Self, u32_le>(&self) }
             }
             fn decode(o: Self::WireObject) -> Self {
-                unsafe { std::mem::transmute_copy::<u32, Self>(&o) }
+                unsafe { std::mem::transmute_copy::<u32_le, Self>(&o) }
             }
         }
     };
@@ -148,10 +149,10 @@ encode_as_self!(i32);
 encode_as_self!(f32);
 
 encode_as_proxy!(CUdevprop_v1, CUdevprop_v1_Wire);
-encode_as_proxy!(CUdevice_attribute, u32);
-encode_as_proxy!(CUfilter_mode, u32);
-encode_as_proxy!(CUaddress_mode, u32);
-encode_as_proxy!(CUarray_format, u32);
+encode_as_proxy!(CUdevice_attribute, u32_le);
+encode_as_proxy!(CUfilter_mode, u32_le);
+encode_as_proxy!(CUaddress_mode, u32_le);
+encode_as_proxy!(CUarray_format, u32_le);
 
 encode_as_u32!(CUcontext);
 encode_as_u32!(CUdeviceptr_v2);
@@ -213,4 +214,16 @@ pub struct ContextLocalStorageGetIn {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct ContextLocalStorageGetOut {
     pub value: u32_le,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleLoadDataIn {
+    pub image: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleLoadDataOut {
+    pub module: <CUmodule as CudaEncode>::WireObject,
 }
