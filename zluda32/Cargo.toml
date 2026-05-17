@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 cuda_types = { path = "../cuda_types" }
+zluda_common = { path = "../zluda_common" }
 cuda_macros = { path = "../cuda_macros" }
 zluda_windows = { path = "../zluda_windows" }
 zluda_server_common = { path = "../zluda_server_common" }
@@ -34,6 +35,7 @@ bitcode = "0.6.9"
 postcard = "1.1.3"
 bincode = "2.0.1"
 rkyv = "0.8.15"
+unwrap_or = "1.0.1"
 
 [package.metadata.zluda]
 windows_only = true

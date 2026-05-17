@@ -4,6 +4,7 @@ use dark_api::cuda::CudaDarkApi;
 use paste::paste;
 use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
+use zluda_common::{CodeLibraryRef, CodeModuleRef};
 use zluda_server_common::*;
 
 mod ipc;
@@ -59,21 +60,21 @@ cuda_function_declarations! {
         cuInit,
         cuLaunchKernel,
         cuMemAlloc_v2,
-        cuMemFreeHost,
-        cuMemFree_v2,
-        cuMemGetAddressRange_v2,
-        cuMemHostAlloc,
         cuMemcpyDtoDAsync_v2,
         cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoDAsync_v2,
+        cuMemFree_v2,
+        cuMemFreeHost,
+        cuMemGetAddressRange_v2,
+        cuMemHostAlloc,
         cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,
         cuModuleGetTexRef,
         cuStreamCreate,
         cuStreamDestroy_v2,
-        cuTexRefSetAddressMode,
         cuTexRefSetAddress_v2,
+        cuTexRefSetAddressMode,
         cuTexRefSetFilterMode,
         cuTexRefSetFlags,
         cuTexRefSetFormat,
@@ -240,7 +241,7 @@ pub(crate) fn cu_device_get_name(
     if name.is_null() {
         return Err(CUerror::INVALID_VALUE);
     }
-    let name_out = ipc::Server::remote_call_framed::<cuDeviceGetNameOut>(
+    let name_out = ipc::Server::remote_call_framed_out::<cuDeviceGetNameOut>(
         Opcode::cuDeviceGetName,
         cuDeviceGetNameIn { len, dev },
     )?;
@@ -527,10 +528,45 @@ struct AllocRecord {
 
 impl CudaDarkApi for DarkApi32 {
     unsafe extern "system" fn get_module_from_cubin(
-        module: *mut cuda_types::cuda::CUmodule,
+        result: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        let result = match result.as_mut() {
+            Some(p) => p,
+            None => return CUresult::ERROR_INVALID_VALUE,
+        };
+        let code_lib = CodeLibraryRef::try_load(fatbinc_wrapper.cast())
+            .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+        let mut modules = Vec::with_capacity(1);
+        code_lib.iterate_modules(|_, module| match module {
+            Ok(CodeModuleRef::Text(ptx)) => {
+                modules.push(std::borrow::Cow::Borrowed(ptx.as_bytes()));
+            }
+            Ok(CodeModuleRef::File(file)) => {
+                if file.kind() == "ptx" {
+                    if let Ok(text) = file.get_or_decompress_content(false) {
+                        modules.push(text);
+                    }
+                }
+            }
+            _ => {}
+        });
+        let mut last_module =
+            unwrap_or::unwrap_some_or!(modules.pop(), return Err(CUerror::NO_BINARY_FOR_GPU));
+        if last_module.last() != Some(&0) {
+            last_module.to_mut().push(0);
+        }
+        *result = CUmodule(
+            ipc::Server::remote_call_framed_in::<cuModuleLoadDataOut>(
+                Opcode::cuModuleLoadData,
+                cuModuleLoadDataIn {
+                    image: last_module.into_owned(),
+                },
+            )?
+            .module
+            .to_native() as _,
+        );
+        Ok(())
     }
 
     unsafe extern "system" fn cudart_interface_fn2(

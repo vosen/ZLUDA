@@ -102,9 +102,10 @@ impl StateTracker {
                     })
                 }
                 Ok(zluda_common::CodeModuleRef::File(file)) => {
-                    if let Some(buffer) = fn_logger
-                        .try_(|_| file.get_or_decompress_content().map_err(ErrorEntry::from))
-                    {
+                    if let Some(buffer) = fn_logger.try_(|_| {
+                        file.get_or_decompress_content(true)
+                            .map_err(ErrorEntry::from)
+                    }) {
                         self.record_new_submodule(index, &*buffer, fn_logger, file.kind());
                     }
                 }
