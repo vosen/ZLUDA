@@ -196,7 +196,10 @@ impl<'a> FatbinFile<'a> {
         std::slice::from_raw_parts(start, self.header.compressed_size as usize)
     }
 
-    pub unsafe fn get_or_decompress_content(self) -> Result<Cow<'a, [u8]>, FatbinError> {
+    pub unsafe fn get_or_decompress_content(
+        self,
+        strip_trailing_zero: bool,
+    ) -> Result<Cow<'a, [u8]>, FatbinError> {
         let mut payload = if self
             .header
             .flags
@@ -212,9 +215,8 @@ impl<'a> FatbinFile<'a> {
         } else {
             Cow::Borrowed(unsafe { self.get_non_compressed_payload() })
         };
-
         // Remove trailing zeros
-        if self.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
+        if strip_trailing_zero && self.header.kind == FatbinFileHeader::HEADER_KIND_PTX {
             match payload {
                 Cow::Borrowed(ref mut slice) => {
                     while slice.last() == Some(&0) {

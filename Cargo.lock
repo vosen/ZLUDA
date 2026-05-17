@@ -5660,8 +5660,10 @@ dependencies = [
  "postcard",
  "rand 0.10.1",
  "rkyv",
+ "unwrap_or",
  "widestring",
  "windows 0.62.2",
+ "zluda_common",
  "zluda_server_common",
  "zluda_windows",
 ]

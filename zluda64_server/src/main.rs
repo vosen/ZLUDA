@@ -85,15 +85,11 @@ async fn main() -> std::io::Result<()> {
         buffer.clear();
         match Opcode::from_repr(opcode) {
             Some(Opcode::cuInit) => {
-                buffer = handle_cuda_function::<ArchivedcuInitIn, cuInitOut>(
-                    &mut client,
-                    buffer,
-                    cu_init,
-                )
-                .await?;
+                buffer = handle_cuda_function::<cuInitIn, cuInitOut>(&mut client, buffer, cu_init)
+                    .await?;
             }
             Some(Opcode::cuDeviceGetCount) => {
-                buffer = handle_cuda_function::<ArchivedcuDeviceGetCountIn, cuDeviceGetCountOut>(
+                buffer = handle_cuda_function::<cuDeviceGetCountIn, cuDeviceGetCountOut>(
                     &mut client,
                     buffer,
                     cu_device_get_count,
@@ -101,14 +97,15 @@ async fn main() -> std::io::Result<()> {
                 .await?;
             }
             Some(Opcode::cuDeviceGetAttribute) => {
-                buffer = handle_cuda_function::<
-                    ArchivedcuDeviceGetAttributeIn,
-                    cuDeviceGetAttributeOut,
-                >(&mut client, buffer, cu_device_get_attribute)
+                buffer = handle_cuda_function::<cuDeviceGetAttributeIn, cuDeviceGetAttributeOut>(
+                    &mut client,
+                    buffer,
+                    cu_device_get_attribute,
+                )
                 .await?;
             }
             Some(Opcode::cuDeviceGet) => {
-                buffer = handle_cuda_function::<ArchivedcuDeviceGetIn, cuDeviceGetOut>(
+                buffer = handle_cuda_function::<cuDeviceGetIn, cuDeviceGetOut>(
                     &mut client,
                     buffer,
                     cu_device_get,
@@ -116,7 +113,7 @@ async fn main() -> std::io::Result<()> {
                 .await?;
             }
             Some(Opcode::cuCtxCreate_v2) => {
-                buffer = handle_cuda_function::<ArchivedcuCtxCreate_v2In, cuCtxCreate_v2Out>(
+                buffer = handle_cuda_function::<cuCtxCreate_v2In, cuCtxCreate_v2Out>(
                     &mut client,
                     buffer,
                     |input| cu_ctx_create_v2(input, &mut state),
@@ -124,56 +121,62 @@ async fn main() -> std::io::Result<()> {
                 .await?;
             }
             Some(Opcode::cuDriverGetVersion) => {
-                buffer =
-                    handle_cuda_function::<ArchivedcuDriverGetVersionIn, cuDriverGetVersionOut>(
-                        &mut client,
-                        buffer,
-                        cu_driver_get_version,
-                    )
-                    .await?;
+                buffer = handle_cuda_function::<cuDriverGetVersionIn, cuDriverGetVersionOut>(
+                    &mut client,
+                    buffer,
+                    cu_driver_get_version,
+                )
+                .await?;
             }
             Some(Opcode::cuDeviceGetName) => {
-                buffer =
-                    handle_cuda_function_framed::<ArchivedcuDeviceGetNameIn, cuDeviceGetNameOut>(
-                        &mut client,
-                        buffer,
-                        cu_device_get_name,
-                    )
-                    .await?;
+                buffer = handle_cuda_function_framed_out::<cuDeviceGetNameIn, cuDeviceGetNameOut>(
+                    &mut client,
+                    buffer,
+                    cu_device_get_name,
+                )
+                .await?;
             }
             Some(Opcode::cuDeviceTotalMem_v2) => {
-                buffer = handle_cuda_function::<
-                    ArchivedcuDeviceTotalMem_v2In,
-                    cuDeviceTotalMem_v2Out,
-                >(&mut client, buffer, cu_device_total_mem_v2)
+                buffer = handle_cuda_function::<cuDeviceTotalMem_v2In, cuDeviceTotalMem_v2Out>(
+                    &mut client,
+                    buffer,
+                    cu_device_total_mem_v2,
+                )
                 .await?;
             }
             Some(Opcode::ContextLocalStoragePut) => {
-                buffer = handle_cuda_function::<
-                    ArchivedContextLocalStoragePutIn,
-                    ContextLocalStoragePutOut,
-                >(&mut client, buffer, |input| {
-                    context_local_storage_put(&mut state, input)
-                })
-                .await?;
-            }
-            Some(Opcode::ContextLocalStorageGet) => {
-                buffer = handle_cuda_function::<
-                    ArchivedContextLocalStorageGetIn,
-                    ContextLocalStorageGetOut,
-                >(&mut client, buffer, |input| {
-                    context_local_storage_get(&mut state, input)
-                })
-                .await?;
-            }
-            Some(Opcode::cuCtxGetApiVersion) => {
                 buffer =
-                    handle_cuda_function::<ArchivedcuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
+                    handle_cuda_function::<ContextLocalStoragePutIn, ContextLocalStoragePutOut>(
                         &mut client,
                         buffer,
-                        |input| cu_ctx_get_api_version(&mut state, input),
+                        |input| context_local_storage_put(&mut state, input),
                     )
                     .await?;
+            }
+            Some(Opcode::ContextLocalStorageGet) => {
+                buffer =
+                    handle_cuda_function::<ContextLocalStorageGetIn, ContextLocalStorageGetOut>(
+                        &mut client,
+                        buffer,
+                        |input| context_local_storage_get(&mut state, input),
+                    )
+                    .await?;
+            }
+            Some(Opcode::cuCtxGetApiVersion) => {
+                buffer = handle_cuda_function::<cuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_ctx_get_api_version(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuModuleLoadData) => {
+                buffer = handle_cuda_function_framed_in::<cuModuleLoadDataIn, cuModuleLoadDataOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_module_load_data(&mut state, input),
+                )
+                .await?;
             }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
@@ -184,6 +187,17 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_module_load_data(
+    state: &mut State,
+    input: &ArchivedcuModuleLoadDataIn,
+) -> Result<cuModuleLoadDataOut, CUerror> {
+    let mut module = unsafe { mem::zeroed() };
+    unsafe { cuModuleLoadData(&mut module, input.image.as_ptr().cast()) }?;
+    Ok(cuModuleLoadDataOut {
+        module: u32_le::from_native(state.insert(module.0)),
+    })
 }
 
 fn cu_init(input: &ArchivedcuInitIn) -> Result<cuInitOut, CUerror> {
@@ -241,7 +255,9 @@ fn cu_ctx_create_v2(
     let mut pctx = unsafe { mem::zeroed() };
     unsafe { cuCtxCreate_v2(&mut pctx, input.flags.to_native(), input.dev.to_native()) }?;
     let pctx = state.insert(pctx.0);
-    Ok(cuCtxCreate_v2Out { pctx })
+    Ok(cuCtxCreate_v2Out {
+        pctx: u32_le::from_native(pctx),
+    })
 }
 
 fn cu_device_total_mem_v2(
@@ -306,18 +322,18 @@ fn context_local_storage_get(
     })
 }
 
-async fn handle_cuda_function<In: Portable, Out: Portable>(
+async fn handle_cuda_function<In: rkyv::Archive + Portable, Out: Portable>(
     client: &mut NamedPipeClient,
     mut buffer: AlignedVecBuffer,
-    handler: impl FnOnce(&In) -> Result<Out, CUerror>,
+    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
 ) -> std::io::Result<AlignedVecBuffer>
 where
     Out: for<'a, 'b> Serialize<
         HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
     >,
 {
-    buffer = read_all::<In>(buffer, client).await?;
-    let input = unsafe { rkyv::access_unchecked::<In>(buffer.as_init()) };
+    buffer = read_all::<In::Archived>(buffer, client).await?;
+    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
     match handler(input) {
         Ok(output) => {
             buffer.clear();
@@ -336,18 +352,49 @@ where
     }
 }
 
-async fn handle_cuda_function_framed<In: Portable, Out>(
+async fn handle_cuda_function_framed_in<In: Archive, Out: Portable>(
     client: &mut NamedPipeClient,
     mut buffer: AlignedVecBuffer,
-    handler: impl FnOnce(&In) -> Result<Out, CUerror>,
+    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
 ) -> std::io::Result<AlignedVecBuffer>
 where
     Out: for<'a, 'b> Serialize<
         HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
     >,
 {
-    buffer = read_all::<In>(buffer, client).await?;
-    let input = unsafe { rkyv::access_unchecked::<In>(buffer.as_init()) };
+    let length_prefix = client.read_u32_le().await? as usize;
+    buffer = read_sized(buffer, client, length_prefix).await?;
+    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
+    match handler(input) {
+        Ok(output) => {
+            buffer.clear();
+            client.write_u32_le(0).await?;
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
+                .map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
+                })?;
+            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
+            Ok(new_buffer)
+        }
+        Err(e) => {
+            client.write_u32_le(e.0.get()).await?;
+            Ok(buffer)
+        }
+    }
+}
+
+async fn handle_cuda_function_framed_out<In: Archive + Portable, Out>(
+    client: &mut NamedPipeClient,
+    mut buffer: AlignedVecBuffer,
+    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
+) -> std::io::Result<AlignedVecBuffer>
+where
+    Out: for<'a, 'b> Serialize<
+        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+    >,
+{
+    buffer = read_all::<In::Archived>(buffer, client).await?;
+    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
     match handler(input) {
         Ok(output) => {
             buffer.clear();
@@ -370,10 +417,17 @@ where
 }
 
 async fn read_all<T>(
-    mut buffer: AlignedVecBuffer,
+    buffer: AlignedVecBuffer,
     client: &mut NamedPipeClient,
 ) -> std::io::Result<AlignedVecBuffer> {
-    let mut remaining_read = mem::size_of::<T>();
+    read_sized(buffer, client, mem::size_of::<T>()).await
+}
+
+async fn read_sized(
+    mut buffer: AlignedVecBuffer,
+    client: &mut NamedPipeClient,
+    mut remaining_read: usize,
+) -> std::io::Result<AlignedVecBuffer> {
     buffer.clear();
     buffer.reserve(remaining_read)?;
     while remaining_read > 0 {
@@ -489,6 +543,7 @@ cuda_function_declarations! {
         // cuModuleGetFunction,
         // cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
+        cuModuleLoadData,
         // cuStreamCreate,
         // cuStreamDestroy_v2,
         // cuTexRefSetAddressMode,
