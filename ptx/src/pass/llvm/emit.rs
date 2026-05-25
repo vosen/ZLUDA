@@ -182,12 +182,13 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
             }
         }
-        if !method.is_kernel() {
+        let is_kernel = method.is_kernel();
+        if !is_kernel {
             unsafe {
                 LLVMSetVisibility(fn_, llvm_zluda::LLVMVisibility::LLVMHiddenVisibility);
             }
         }
-        let call_conv = if method.is_kernel() {
+        let call_conv = if is_kernel {
             Self::kernel_call_convention()
         } else {
             Self::func_call_convention()
@@ -213,7 +214,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
             let mut method_emitter =
-                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
+                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory, is_kernel);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -466,6 +467,7 @@ struct MethodEmitContext<'a> {
     resolver: &'a mut ResolveIdent,
     carry_flag: Option<LLVMValueRef>,
     base_32bit_memory: Option<SpirvWord>,
+    is_kernel: bool,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -474,6 +476,7 @@ impl<'a> MethodEmitContext<'a> {
         method: LLVMValueRef,
         variables_builder: Builder,
         base_32bit_memory: Option<SpirvWord>,
+        is_kernel: bool,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
@@ -483,7 +486,8 @@ impl<'a> MethodEmitContext<'a> {
             resolver: &mut parent.resolver,
             method,
             carry_flag: None,
-            base_32bit_memory: base_32bit_memory,
+            base_32bit_memory,
+            is_kernel,
         }
     }
 
@@ -613,6 +617,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
+            ast::Instruction::Exit {} => self.emit_exit(),
             ast::Instruction::Cvta { data, arguments } => self.emit_cvta(data, arguments),
             ast::Instruction::Abs { data, arguments } => self.emit_abs(data, arguments),
             ast::Instruction::Mad { data, arguments } => self.emit_mad(data, arguments),
@@ -3521,6 +3526,16 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildAdd(self.builder, shifted, src3, dst)
                 });
             }
+        }
+        Ok(())
+    }
+
+    fn emit_exit(&mut self) -> Result<(), TranslateError> {
+        if !self.is_kernel {
+            return Err(error_todo());
+        }
+        unsafe {
+            LLVMBuildRetVoid(self.builder);
         }
         Ok(())
     }

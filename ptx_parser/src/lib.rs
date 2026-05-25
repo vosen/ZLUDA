@@ -4063,6 +4063,12 @@ derive_parser!(
         Instruction::Trap {}
     }
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#control-flow-instructions-exit
+
+    exit => {
+        Instruction::Exit {}
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a
 
     dp4a.atype.btype  d, a, b, c => {
