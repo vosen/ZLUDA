@@ -32,7 +32,7 @@ impl Parse for ParseDefinitions {
             if lookahead.peek(Token![#]) {
                 let enum_ = input.parse::<ItemEnum>()?;
                 additional_enums.insert(enum_.ident.clone(), enum_);
-            } else if lookahead.peek(Ident) {
+            } else if lookahead.peek(Ident) || lookahead.peek(Token![match]) {
                 definitions.push(input.parse::<OpcodeDefinition>()?);
             } else {
                 return Err(lookahead.error());
@@ -229,12 +229,12 @@ impl Parse for Rule {
 }
 
 pub struct Instruction {
-    pub name: Ident,
+    pub name: IdentLike,
     pub modifiers: Vec<MaybeDotModifier>,
 }
 impl Instruction {
     fn peek(input: syn::parse::ParseStream) -> bool {
-        if !input.peek(Ident) {
+        if !input.peek(Ident) && !input.peek(Token![match]) {
             return false;
         }
         if input.peek2(Token![=]) && input.peek3(syn::token::Brace) {
@@ -246,7 +246,7 @@ impl Instruction {
 
 impl Parse for Instruction {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let instruction = input.parse::<Ident>()?;
+        let instruction = input.parse::<IdentLike>()?;
         let mut modifiers = Vec::new();
         loop {
             if !MaybeDotModifier::peek(input) {
@@ -333,7 +333,10 @@ impl DotModifier {
             write!(&mut result, "_{}", part2.0).unwrap();
         } else {
             match self.part1 {
-                IdentLike::Type(_) | IdentLike::Const(_) | IdentLike::Async(_) => result.push('_'),
+                IdentLike::Match(_)
+                | IdentLike::Type(_)
+                | IdentLike::Const(_)
+                | IdentLike::Async(_) => result.push('_'),
                 IdentLike::Ident(_) | IdentLike::Integer(_) => {}
             }
         }
@@ -443,7 +446,8 @@ impl Parse for HyphenatedIdent {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
-enum IdentLike {
+pub enum IdentLike {
+    Match(Token![match]),
     Type(Token![type]),
     Const(Token![const]),
     Async(Token![async]),
@@ -452,8 +456,9 @@ enum IdentLike {
 }
 
 impl IdentLike {
-    fn span(&self) -> Span {
+    pub fn span(&self) -> Span {
         match self {
+            IdentLike::Match(m) => m.span(),
             IdentLike::Type(c) => c.span(),
             IdentLike::Const(t) => t.span(),
             IdentLike::Async(a) => a.span(),
@@ -466,6 +471,7 @@ impl IdentLike {
 impl std::fmt::Display for IdentLike {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            IdentLike::Match(_) => f.write_str("match"),
             IdentLike::Type(_) => f.write_str("type"),
             IdentLike::Const(_) => f.write_str("const"),
             IdentLike::Async(_) => f.write_str("async"),
@@ -478,6 +484,7 @@ impl std::fmt::Display for IdentLike {
 impl ToTokens for IdentLike {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
+            IdentLike::Match(_) => quote! { match }.to_tokens(tokens),
             IdentLike::Type(_) => quote! { type }.to_tokens(tokens),
             IdentLike::Const(_) => quote! { const }.to_tokens(tokens),
             IdentLike::Async(_) => quote! { async }.to_tokens(tokens),
@@ -496,6 +503,8 @@ impl Parse for IdentLike {
             IdentLike::Type(input.parse::<Token![type]>()?)
         } else if lookahead.peek(Token![async]) {
             IdentLike::Async(input.parse::<Token![async]>()?)
+        } else if lookahead.peek(Token![match]) {
+            IdentLike::Match(input.parse::<Token![match]>()?)
         } else if lookahead.peek(Ident) {
             IdentLike::Ident(input.parse::<Ident>()?)
         } else if lookahead.peek(LitInt) {

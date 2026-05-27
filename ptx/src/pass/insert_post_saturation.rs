@@ -181,6 +181,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Setp { .. }
         | ast::Instruction::SetpBool { .. }
         | ast::Instruction::ShflSync { .. }
+        | ast::Instruction::MatchSync { .. }
         | ast::Instruction::Shf { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Shr { .. }

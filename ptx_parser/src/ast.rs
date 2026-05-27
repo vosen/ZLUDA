@@ -664,6 +664,18 @@ ptx_parser_macros::generate_instruction_type!(
                 src_membermask: T
             }
         },
+        MatchSync {
+            data: ScalarType,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.clone())
+                },
+                src_membermask: T
+            }
+        },
         Shf {
             data: ShfDetails,
             type: Type::Scalar(ScalarType::B32),
