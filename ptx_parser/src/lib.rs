@@ -9,7 +9,8 @@ use winnow::ascii::dec_uint;
 use winnow::combinator::*;
 use winnow::error::{ErrMode, ErrorKind};
 use winnow::stream::Accumulate;
-use winnow::token::{any, take_till};
+use winnow::token;
+use winnow::token::take_till;
 use winnow::{
     error::{ContextError, ParserError},
     stream::{Offset, Stream, StreamIsPartial},
@@ -154,7 +155,7 @@ type PtxParser<'a, 'input> =
 fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
     trace(
         "ident",
-        any.verify_map(|(t, _)| {
+        token::any.verify_map(|(t, _)| {
             if let Token::Ident(text) = t {
                 if matches!(
                     text,
@@ -207,7 +208,7 @@ fn ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str>
 fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
     trace(
         "dot_ident",
-        any.verify_map(|(t, _)| {
+        token::any.verify_map(|(t, _)| {
             if let Token::DotIdent(text) = t {
                 Some(text)
             } else {
@@ -221,7 +222,7 @@ fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input 
 fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, u32, bool)> {
     trace(
         "num",
-        any.verify_map(|(t, _)| {
+        token::any.verify_map(|(t, _)| {
             Some(match t {
                 Token::Hex(s) => {
                     if s.ends_with('U') {
@@ -287,7 +288,7 @@ fn int_immediate<'a, 'input>(input: &mut PtxParser<'a, 'input>) -> PResult<ast::
 }
 
 fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
-    take_error(any.verify_map(|(t, _)| match t {
+    take_error(token::any.verify_map(|(t, _)| match t {
         Token::F32Hex(f) => Some(match u32::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f32::from_bits(x)),
             Err(err) => Err((0.0, PtxError::from(err))),
@@ -298,7 +299,7 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 }
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
-    take_error(any.verify_map(|(t, _)| match t {
+    take_error(token::any.verify_map(|(t, _)| match t {
         Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f64::from_bits(x)),
             Err(err) => Err((0.0, PtxError::from(err))),
@@ -351,14 +352,15 @@ fn u32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<u32> {
 fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
     // Currently the only built-in constant is WARP_SZ
     // If new ones are added, we can change this to use a Token::Constant(&str) instead
-    any.verify_map(|(t, _)| {
-        if t == Token::WarpSz {
-            Some(ast::ImmediateValue::U64(32))
-        } else {
-            None
-        }
-    })
-    .parse_next(stream)
+    token::any
+        .verify_map(|(t, _)| {
+            if t == Token::WarpSz {
+                Some(ast::ImmediateValue::U64(32))
+            } else {
+                None
+            }
+        })
+        .parse_next(stream)
 }
 
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
@@ -552,7 +554,7 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
     (
         "sm_",
         dec_uint,
-        opt(any.verify(|c: &char| c.is_ascii_lowercase())),
+        opt(token::any.verify(|c: &char| c.is_ascii_lowercase())),
         eof,
     )
         .map(|(_, digits, arch_variant, _)| (digits, arch_variant))
@@ -582,7 +584,7 @@ fn directive<'a, 'input>(
                     .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
             )),
             (
-                any,
+                token::any,
                 take_till(1.., |(token, _)| match token {
             // visibility
             Token::DotExtern | Token::DotVisible | Token::DotWeak
@@ -716,7 +718,7 @@ fn linking_directives<'a, 'input>(
         "linking_directives",
         repeat(
             0..,
-            dispatch! { any;
+            dispatch! { token::any;
                 (Token::DotExtern, _) => empty.value(ast::LinkingDirective::EXTERN),
                 (Token::DotVisible, _) => empty.value(ast::LinkingDirective::VISIBLE),
                 (Token::DotWeak, _) => empty.value(ast::LinkingDirective::WEAK),
@@ -731,7 +733,7 @@ fn linking_directives<'a, 'input>(
 fn tuning_directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::TuningDirective> {
-    dispatch! {any;
+    dispatch! {token::any;
         (Token::DotMaxnreg, _) => u32.map(ast::TuningDirective::MaxNReg),
         (Token::DotMaxntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::MaxNtid(nx, ny, nz)),
         (Token::DotReqntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNtid(nx, ny, nz)),
@@ -745,7 +747,7 @@ fn tuning_directive<'a, 'input>(
 fn method_declaration<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::MethodDeclaration<'input, &'input str>> {
-    dispatch! {any;
+    dispatch! {token::any;
         (Token::DotEntry, _) => (ident, kernel_arguments).map(|(name, input_arguments)| ast::MethodDeclaration{
             return_arguments: Vec::new(), name: ast::MethodName::Kernel(name), input_arguments, shared_mem: None
         }),
@@ -788,7 +790,7 @@ fn kernel_input<'a, 'input>(
 }
 
 fn fn_input<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Variable<&'input str>> {
-    dispatch! { any;
+    dispatch! { token::any;
         (Token::DotParam, _) => method_parameter(StateSpace::Param, false),
         (Token::DotReg, _) => method_parameter(StateSpace::Reg, false),
         _ => fail
@@ -837,7 +839,7 @@ fn tuple1to3_u32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32
 fn function_body<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<Option<Vec<ast::Statement<ParsedOperandStr<'input>>>>> {
-    trace("function_body", dispatch! {any;
+    trace("function_body", dispatch! {token::any;
         (Token::LBrace, _) => terminated(repeat_without_none(statement), Token::RBrace).map(Some),
         (Token::Semicolon, _) => empty.map(|_| None),
         _ => fail
@@ -1323,34 +1325,35 @@ fn vector_prefix<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Opti
 }
 
 fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ScalarType> {
-    any.verify_map(|(t, _)| {
-        Some(match t {
-            Token::DotS8 => ScalarType::S8,
-            Token::DotS16 => ScalarType::S16,
-            Token::DotS16x2 => ScalarType::S16x2,
-            Token::DotS32 => ScalarType::S32,
-            Token::DotS64 => ScalarType::S64,
-            Token::DotU8 => ScalarType::U8,
-            Token::DotU16 => ScalarType::U16,
-            Token::DotU16x2 => ScalarType::U16x2,
-            Token::DotU32 => ScalarType::U32,
-            Token::DotU64 => ScalarType::U64,
-            Token::DotB8 => ScalarType::B8,
-            Token::DotB16 => ScalarType::B16,
-            Token::DotB32 => ScalarType::B32,
-            Token::DotB64 => ScalarType::B64,
-            Token::DotB128 => ScalarType::B128,
-            Token::DotPred => ScalarType::Pred,
-            Token::DotF16 => ScalarType::F16,
-            Token::DotF16x2 => ScalarType::F16x2,
-            Token::DotF32 => ScalarType::F32,
-            Token::DotF64 => ScalarType::F64,
-            Token::DotBF16 => ScalarType::BF16,
-            Token::DotBF16x2 => ScalarType::BF16x2,
-            _ => return None,
+    token::any
+        .verify_map(|(t, _)| {
+            Some(match t {
+                Token::DotS8 => ScalarType::S8,
+                Token::DotS16 => ScalarType::S16,
+                Token::DotS16x2 => ScalarType::S16x2,
+                Token::DotS32 => ScalarType::S32,
+                Token::DotS64 => ScalarType::S64,
+                Token::DotU8 => ScalarType::U8,
+                Token::DotU16 => ScalarType::U16,
+                Token::DotU16x2 => ScalarType::U16x2,
+                Token::DotU32 => ScalarType::U32,
+                Token::DotU64 => ScalarType::U64,
+                Token::DotB8 => ScalarType::B8,
+                Token::DotB16 => ScalarType::B16,
+                Token::DotB32 => ScalarType::B32,
+                Token::DotB64 => ScalarType::B64,
+                Token::DotB128 => ScalarType::B128,
+                Token::DotPred => ScalarType::Pred,
+                Token::DotF16 => ScalarType::F16,
+                Token::DotF16x2 => ScalarType::F16x2,
+                Token::DotF32 => ScalarType::F32,
+                Token::DotF64 => ScalarType::F64,
+                Token::DotBF16 => ScalarType::BF16,
+                Token::DotBF16x2 => ScalarType::BF16x2,
+                _ => return None,
+            })
         })
-    })
-    .parse_next(stream)
+        .parse_next(stream)
 }
 
 fn predicated_instruction<'a, 'input>(
@@ -1393,7 +1396,7 @@ fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()
             Token::Comma,
             ident_literal("function_name"),
             ident,
-            dispatch! { any;
+            dispatch! { token::any;
                 (Token::Comma, _) => (ident_literal("inlined_at"), u32, u32, u32).void(),
                 (Token::Plus, _) => (u32, Token::Comma, ident_literal("inlined_at"), u32, u32, u32).void(),
                 _ => fail
@@ -1458,7 +1461,8 @@ fn ident_literal<
     s: &'input str,
 ) -> impl Parser<I, (), E> + 'input {
     move |stream: &mut I| {
-        any.verify(|(t, _)| matches!(t, Token::Ident(text) if *text == s))
+        token::any
+            .verify(|(t, _)| matches!(t, Token::Ident(text) if *text == s))
             .void()
             .parse_next(stream)
     }
@@ -1672,7 +1676,7 @@ impl<'input, X, I: Stream<Token = (Self, X)> + StreamIsPartial, E: ParserError<I
     Parser<I, (Self, X), E> for Token<'input>
 {
     fn parse_next(&mut self, input: &mut I) -> PResult<(Self, X), E> {
-        any.verify(|(t, _)| t == self).parse_next(input)
+        token::any.verify(|(t, _)| t == self).parse_next(input)
     }
 }
 
@@ -1681,7 +1685,7 @@ fn bra<'a, 'input>(
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
     preceded(
         opt(Token::DotUni),
-        any.verify_map(|(t, _)| match t {
+        token::any.verify_map(|(t, _)| match t {
             Token::Ident(ident) => Some(ast::Instruction::Bra {
                 arguments: BraArgs { src: ident },
             }),
@@ -4400,6 +4404,16 @@ derive_parser!(
 
     .dtype: ScalarType = { .s32, .f32 };
     .ctype: ScalarType = { .s32, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/
+    match.any.sync.type  d, a, membermask => {
+        Instruction::MatchSync {
+            data: type_,
+            arguments: MatchSyncArgs { dst: d, src: a, src_membermask: membermask }
+        }
+    }
+
+    .type: ScalarType = { .b32, .b64 };
 );
 
 #[cfg(test)]

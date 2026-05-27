@@ -16,6 +16,7 @@ ninja clang llvm-dis llvm-as
 then cd to the directory with this file and run this simple command:
 
 ../../ext/llvm-project/build/bin/clang \
+    -DHIP_ENABLE_WARP_SYNC_BUILTINS \
     -std=c++20 \
     -Xclang -fdenormal-fp-math=dynamic \
     -Wall -Wextra -Wsign-compare -Wconversion \
@@ -48,6 +49,7 @@ then cd to the directory with this file and run this simple command:
 #include <utility>
 #include <hip/hip_runtime.h>
 #include <hip/amd_detail/amd_device_functions.h>
+#include <hip/amd_detail/amd_warp_sync_functions.h>
 #include <hip/hip_fp8.h>
 
 #define SHARED_SPACE __attribute__((address_space(3)))
@@ -650,6 +652,16 @@ extern "C"
     uint32_t FUNC(vote_sync_ballot_b32_negate)(bool value, uint32_t membermask __attribute__((unused)))
     {
         return ballot(value, true);
+    }
+
+    uint32_t FUNC(match_any_sync_b32)(uint32_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return uint32_t(__match_any<uint32_t>(value));
+    }
+
+    uint32_t FUNC(match_any_sync_b64)(uint64_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return uint32_t(__match_any<uint64_t>(value));
     }
 
 #define REDUX_SYNC_TYPE_IMPL(reducer, ptx_type, amd_type, cpp_type)                                             \
