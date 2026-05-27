@@ -2143,6 +2143,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bmsk { .. }
         | ast::Instruction::Shr { .. }
         | ast::Instruction::ShflSync { .. }
+        | ast::Instruction::MatchSync { .. }
         | ast::Instruction::CpAsync { .. }
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }

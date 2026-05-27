@@ -17,12 +17,12 @@ define amdgpu_kernel void @popc(ptr addrspace(4) byref(i64) %"39", ptr addrspace
   %5 = load i32, ptr %"52", align 4
   store i32 %5, ptr addrspace(5) %"43", align 4
   %6 = load i32, ptr addrspace(5) %"43", align 4
-  %"53" = call i32 @llvm.ctpop.i32(i32 %6)
-  store i32 %"53", ptr addrspace(5) %"43", align 4
-  %7 = load i64, ptr addrspace(5) %"42", align 8
-  %8 = load i32, ptr addrspace(5) %"43", align 4
-  %"54" = inttoptr i64 %7 to ptr
-  store i32 %8, ptr %"54", align 4
+  %7 = call i32 @llvm.ctpop.i32(i32 %6)
+  store i32 %7, ptr addrspace(5) %"43", align 4
+  %8 = load i64, ptr addrspace(5) %"42", align 8
+  %9 = load i32, ptr addrspace(5) %"43", align 4
+  %"54" = inttoptr i64 %8 to ptr
+  store i32 %9, ptr %"54", align 4
   ret void
 }
 
