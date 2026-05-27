@@ -23,11 +23,7 @@ pub struct Context(LLVMContextRef);
 
 impl Context {
     pub fn new() -> Self {
-        let ctx = unsafe { LLVMContextCreate() };
-        if !cfg!(debug_assertions) {
-            unsafe { LLVMContextSetDiscardValueNames(ctx, 1) };
-        }
-        Self(ctx)
+        Self(unsafe { LLVMContextCreate() })
     }
 
     pub fn get(&self) -> LLVMContextRef {

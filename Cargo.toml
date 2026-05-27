@@ -16,8 +16,6 @@ members = [
     "ext/rocblas-sys",
     "format",
     "kernel_metadata",
-    "nvapi",
-    "nvapi_trace",
     "ptx_parser_macros_impl",
     "ptx_parser_macros",
     "ptx_parser",
@@ -38,7 +36,6 @@ members = [
     "zluda_ml",
     "zluda_precompile",
     "zluda_redirect",
-    "zluda_server_common",
     "zluda_sparse",
     "zluda_trace_blas",
     "zluda_trace_blaslt",
@@ -50,8 +47,6 @@ members = [
     "zluda_trace_sparse",
     "zluda_trace",
     "zluda",
-    "zluda32",
-    "zluda64_server",
 ]
 
 default-members = ["zluda", "zluda_ml", "zluda_inject", "zluda_redirect", "compiler"]

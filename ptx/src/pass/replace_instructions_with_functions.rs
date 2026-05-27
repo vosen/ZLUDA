@@ -301,11 +301,6 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
-            let dtype = match dtype {
-                // For 32 bit
-                ast::ScalarType::U32 => ast::ScalarType::S32,
-                t => t,
-            };
             let prefix = match type_ {
                 ast::TexType::Texref => "texref",
                 ast::TexType::Texobj => "texobj",
@@ -568,6 +563,10 @@ fn run_instruction<'input>(
         }
         i @ ptx_parser::Instruction::Prmt { .. } => {
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
+        }
+        i @ ast::Instruction::MatchSync { data, .. } => {
+            let name = format!("match_any_sync_{}", scalar_to_ptx_name(data));
+            to_call(resolver, fn_declarations, name.into(), i)?
         }
         i => i,
     })
