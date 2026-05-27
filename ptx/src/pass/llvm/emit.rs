@@ -661,6 +661,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bmsk { .. }
             | ast::Instruction::Activemask { .. }
             | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::MatchSync { .. }
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
@@ -2728,12 +2729,16 @@ impl<'a> MethodEmitContext<'a> {
             _ => return Err(error_unreachable()),
         };
         let llvm_type = get_scalar_type(self.context, type_);
-        self.emit_intrinsic(
+        let population = self.emit_intrinsic(
             intrinsic,
-            Some(arguments.dst),
+            None,
             vec![&type_.into()],
             vec![(self.resolver.value(arguments.src)?, llvm_type)],
         )?;
+        let i32_llvm = get_scalar_type(self.context, ast::ScalarType::B32);
+        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, population, i32_llvm, dst_name)
+        });
         Ok(())
     }
 
