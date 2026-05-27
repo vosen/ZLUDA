@@ -652,6 +652,16 @@ extern "C"
         return ballot(value, true);
     }
 
+    uint32_t FUNC(match_any_sync_b32)(uint32_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return __match_any(value);
+    }
+
+    uint32_t FUNC(match_any_sync_b64)(uint64_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return __match_any(value);
+    }
+
 #define REDUX_SYNC_TYPE_IMPL(reducer, ptx_type, amd_type, cpp_type)                                             \
     cpp_type __ockl_wfred_##reducer##_##amd_type(cpp_type) __device__;                                          \
     cpp_type FUNC(redux_sync_##reducer##_##ptx_type)(cpp_type src, uint32_t membermask __attribute__((unused))) \
