@@ -4414,6 +4414,16 @@ derive_parser!(
     }
 
     .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/
+    bfind.shiftamt.u32  d, a => {
+        Instruction::Bfind {
+            data: (),
+            arguments: BfindArgs { dst: d, src: a }
+        }
+    }
+
+    .type: ScalarType = { .b32, .b64 };
 );
 
 #[cfg(test)]

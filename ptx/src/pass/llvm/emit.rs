@@ -633,6 +633,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Lg2 { data, arguments } => self.emit_lg2(data, arguments),
             ast::Instruction::Ex2 { data, arguments } => self.emit_ex2(data, arguments),
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
+            ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
             ast::Instruction::Brev { data, arguments } => self.emit_brev(data, arguments),
             ast::Instruction::Popc { data, arguments } => self.emit_popc(data, arguments),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
@@ -1394,26 +1395,35 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::ScalarType,
         arguments: ptx_parser::ClzArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_fn = match data.size_of() {
+        let clz_result = self.emit_clz_impl(data, arguments.src)?;
+        self.resolver.register(arguments.dst, clz_result);
+        Ok(())
+    }
+
+    fn emit_clz_impl(
+        &mut self,
+        type_: ptx_parser::ScalarType,
+        src: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let llvm_fn = match type_.size_of() {
             4 => c"llvm.ctlz.i32",
             8 => c"llvm.ctlz.i64",
             _ => return Err(error_unreachable()),
         };
-        let type_ = get_scalar_type(self.context, data.into());
+        let llvm_type = get_scalar_type(self.context, type_);
         let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
-        let src = self.resolver.value(arguments.src)?;
+        let src = self.resolver.value(src)?;
         let false_ = unsafe { LLVMConstInt(pred, 0, 0) };
         let result = self.emit_intrinsic(
             llvm_fn,
             None,
-            vec![&data.into()],
-            vec![(src, type_), (false_, pred)],
+            vec![&type_.into()],
+            vec![(src, llvm_type), (false_, pred)],
         )?;
         let i32_llvm = get_scalar_type(self.context, ast::ScalarType::B32);
-        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
-            LLVMBuildTruncOrBitCast(self.builder, result, i32_llvm, dst_name)
-        });
-        Ok(())
+        Ok(unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, result, i32_llvm, LLVM_UNNAMED.as_ptr())
+        })
     }
 
     fn emit_mul(
@@ -3531,6 +3541,31 @@ impl<'a> MethodEmitContext<'a> {
                 });
             }
         }
+        Ok(())
+    }
+
+    fn emit_bfind(
+        &mut self,
+        _data: (),
+        arguments: ast::BfindArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+        let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
+        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 0) };
+        let src_is_zero = unsafe {
+            LLVMBuildICmp(
+                self.builder,
+                LLVMIntPredicate::LLVMIntEQ,
+                src,
+                const_0,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let clz_result = self.emit_clz_impl(ast::ScalarType::B32, arguments.src)?;
+        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
+            LLVMBuildSelect(self.builder, src_is_zero, const_max, clz_result, dst_name)
+        });
         Ok(())
     }
 
