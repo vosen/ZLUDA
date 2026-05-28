@@ -1403,12 +1403,16 @@ impl<'a> MethodEmitContext<'a> {
         let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
         let src = self.resolver.value(arguments.src)?;
         let false_ = unsafe { LLVMConstInt(pred, 0, 0) };
-        self.emit_intrinsic(
+        let result = self.emit_intrinsic(
             llvm_fn,
-            Some(arguments.dst),
+            None,
             vec![&data.into()],
             vec![(src, type_), (false_, pred)],
         )?;
+        let i32_llvm = get_scalar_type(self.context, ast::ScalarType::B32);
+        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, result, i32_llvm, dst_name)
+        });
         Ok(())
     }
 
