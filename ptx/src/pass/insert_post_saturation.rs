@@ -87,6 +87,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Brev { .. }
         | ast::Instruction::Call { .. }
         | ast::Instruction::Clz { .. }
+        | ast::Instruction::Bfind { .. }
         | ast::Instruction::Cos { .. }
         | ast::Instruction::Copysign { .. }
         | ast::Instruction::CpAsync { .. }

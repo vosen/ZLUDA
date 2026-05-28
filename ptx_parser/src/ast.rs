@@ -944,6 +944,22 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Bfind {
+            type: !,
+            data: (),
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) }
+
+                },
+                src:  {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) }
+
+                }
+            }
+        },
     }
 );
 
