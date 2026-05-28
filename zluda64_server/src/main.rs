@@ -16,10 +16,13 @@ use rkyv::{
     util::AlignedVec,
     Archive, Portable, Serialize,
 };
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
+    ffi::c_void,
     io::{self, Write},
-    mem, ptr,
+    mem,
+    ptr::{self, NonNull},
 };
 use windows_sys::Win32::Foundation::ERROR_MORE_DATA;
 use zluda_server_common::*;
@@ -27,6 +30,72 @@ use zluda_server_common::*;
 struct State {
     handles: Slab<usize>,
     dark_api: dark_api::cuda::ContextLocalStorageInterfaceV0301,
+    devmemory: Vec<Allocator>,
+}
+
+struct Allocator {
+    device: u32,
+    start: Option<*mut c_void>,
+    allocator: range_alloc::RangeAllocator<u32>,
+    allocation_ends: FxHashMap<u32, u32>,
+}
+
+impl Allocator {
+    const ALLOCATION_UNIT: u32 = 128;
+    const ALLOCATOR_SIZE: u32 = 512 * 1024 * 1024; // 512 MiB
+
+    fn new(device: u32) -> Self {
+        Self {
+            device,
+            start: None,
+            allocator: range_alloc::RangeAllocator::new(
+                // starting from 1 to avoid handing out null pointers
+                1..Self::ALLOCATOR_SIZE / Self::ALLOCATION_UNIT,
+            ),
+            allocation_ends: FxHashMap::default(),
+        }
+    }
+
+    fn get_or_allocate_device_ptr(&mut self) -> Result<*mut c_void, CUerror> {
+        match self.start {
+            Some(ptr) => Ok(ptr),
+            None => {
+                let mut dev_ptr = CUdeviceptr_v2(ptr::null_mut());
+                unsafe { cuMemAlloc_v2(&mut dev_ptr, Self::ALLOCATOR_SIZE as usize) }?;
+                self.start = Some(dev_ptr.0);
+                Ok(dev_ptr.0)
+            }
+        }
+    }
+
+    fn get_device_ptr(&self) -> Result<*mut c_void, CUerror> {
+        self.start.ok_or(CUerror::INVALID_VALUE)
+    }
+
+    fn alloc(&mut self, size: u32) -> Result<u32, CUerror> {
+        self.get_or_allocate_device_ptr()?;
+        let units = size.next_multiple_of(Self::ALLOCATION_UNIT) / Self::ALLOCATION_UNIT;
+        let offset = self
+            .allocator
+            .allocate_range(units)
+            .map_err(|_| CUerror::OUT_OF_MEMORY)?;
+        self.allocation_ends.insert(offset.start, offset.end);
+        Ok(offset.start * Self::ALLOCATION_UNIT)
+    }
+
+    fn free(&mut self, start: u32) -> Result<(), CUerror> {
+        let end = self
+            .allocation_ends
+            .remove(&start)
+            .ok_or(CUerror::INVALID_VALUE)?;
+        self.allocator.free_range(start..end);
+        Ok(())
+    }
+
+    fn translate(&self, offset: u32) -> Result<*mut c_void, CUerror> {
+        let base_ptr = self.get_device_ptr()?;
+        Ok(base_ptr.wrapping_byte_add(offset as usize))
+    }
 }
 
 impl State {
@@ -40,9 +109,14 @@ impl State {
             )
         }?;
         let dark_api = unsafe { dark_api::cuda::ContextLocalStorageInterfaceV0301::new(table_ptr) };
+        let mut devices = 0;
+        unsafe { cuDeviceGetCount(&mut devices) }?;
         Ok(Self {
             handles: Slab::new(),
             dark_api,
+            devmemory: (0..devices)
+                .map(|device| Allocator::new(device as u32))
+                .collect(),
         })
     }
 
@@ -178,6 +252,24 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuModuleGetFunction) => {
+                buffer = handle_cuda_function_framed_in::<
+                    cuModuleGetFunctionIn,
+                    cuModuleGetFunctionOut,
+                >(&mut client, buffer, |input| {
+                    cu_module_get_function(&mut state, input)
+                })
+                .await?;
+            }
+            Some(Opcode::cuModuleGetGlobal_v2) => {
+                buffer = handle_cuda_function_framed_in::<
+                    cuModuleGetGlobal_v2In,
+                    cuModuleGetGlobal_v2Out,
+                >(&mut client, buffer, |input| {
+                    cu_module_get_global_v2(&mut state, input)
+                })
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -187,6 +279,39 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_module_get_global_v2(
+    state: &mut State,
+    input: &ArchivedcuModuleGetGlobal_v2In,
+) -> Result<cuModuleGetGlobal_v2Out, CUerror> {
+    let mut dptr = unsafe { mem::zeroed() };
+    let mut bytes = unsafe { mem::zeroed() };
+    let hmod = state.get(input.hmod.to_native())?;
+    unsafe {
+        cuModuleGetGlobal_v2(
+            &mut dptr,
+            &mut bytes,
+            CUmodule(hmod),
+            input.name.as_ptr().cast(),
+        )
+    }?;
+    Ok(cuModuleGetGlobal_v2Out {
+        dptr: u32_le::from_native(state.insert(dptr.0)),
+        bytes: u64_le::from_native(bytes as u64),
+    })
+}
+
+fn cu_module_get_function(
+    state: &mut State,
+    input: &ArchivedcuModuleGetFunctionIn,
+) -> Result<cuModuleGetFunctionOut, CUerror> {
+    let mut hfunc = unsafe { mem::zeroed() };
+    let hmod = state.get(input.hmod.to_native())?;
+    unsafe { cuModuleGetFunction(&mut hfunc, CUmodule(hmod), input.name.as_ptr().cast()) }?;
+    Ok(cuModuleGetFunctionOut {
+        hfunc: u32_le::from_native(state.insert(hfunc.0)),
+    })
 }
 
 fn cu_module_load_data(
@@ -531,7 +656,7 @@ cuda_function_declarations! {
         cuGetExportTable,
         cuInit,
         // cuLaunchKernel,
-        // cuMemAlloc_v2,
+        cuMemAlloc_v2,
         // cuMemFreeHost,
         // cuMemFree_v2,
         // cuMemGetAddressRange_v2,
@@ -540,8 +665,8 @@ cuda_function_declarations! {
         // cuMemcpyDtoHAsync_v2,
         // cuMemcpyHtoDAsync_v2,
         // cuMemsetD8_v2,
-        // cuModuleGetFunction,
-        // cuModuleGetGlobal_v2,
+        cuModuleGetFunction,
+        cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
         cuModuleLoadData,
         // cuStreamCreate,
