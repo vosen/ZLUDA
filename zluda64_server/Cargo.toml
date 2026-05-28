@@ -18,6 +18,9 @@ compio = { version = "0.18.0", features = ["macros", "fs"] }
 slab = "0.4.12"
 bincode = "2.0.1"
 rkyv = "0.8.15"
+orderly-allocator = "0.2.2"
+range-alloc = "0.1.5"
+rustc-hash = "2.0.0"
 
 [package.metadata.zluda]
 windows_only = true

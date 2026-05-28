@@ -32,6 +32,8 @@ macro_rules! generate_messages_inout {
             cuModuleLoadData,
             ContextLocalStoragePut,
             ContextLocalStorageGet,
+            cuModuleGetFunction,
+            cuModuleGetGlobal_v2
         }
     };
 }
@@ -226,4 +228,31 @@ pub struct cuModuleLoadDataIn {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuModuleLoadDataOut {
     pub module: <CUmodule as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetFunctionIn {
+    pub hmod: <CUmodule as CudaEncode>::WireObject,
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetFunctionOut {
+    pub hfunc: <CUfunction as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetGlobal_v2In {
+    pub hmod: <CUmodule as CudaEncode>::WireObject,
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetGlobal_v2Out {
+    pub dptr: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+    pub bytes: u64_le,
 }

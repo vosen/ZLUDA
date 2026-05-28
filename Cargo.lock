@@ -3366,6 +3366,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "orderly-allocator"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "801f8900aedd8c4060d155f0c8e0269e011ddd0e061bf56a87e5d9ddba3ce995"
+
+[[package]]
 name = "os_pipe"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3829,6 +3835,12 @@ dependencies = [
  "num-traits",
  "rand 0.9.2",
 ]
+
+[[package]]
+name = "range-alloc"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 
 [[package]]
 name = "raw-cpuid"
@@ -5677,7 +5689,10 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "dark_api",
+ "orderly-allocator",
+ "range-alloc",
  "rkyv",
+ "rustc-hash 2.1.1",
  "slab",
  "windows-sys 0.61.2",
  "zluda_server_common",
