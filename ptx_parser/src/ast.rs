@@ -664,6 +664,18 @@ ptx_parser_macros::generate_instruction_type!(
                 src_membermask: T
             }
         },
+        MatchSync {
+            data: ScalarType,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.clone())
+                },
+                src_membermask: T
+            }
+        },
         Shf {
             data: ShfDetails,
             type: Type::Scalar(ScalarType::B32),
@@ -931,6 +943,22 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { data.coord_type() },
 
                 },
+            }
+        },
+        Bfind {
+            type: !,
+            data: (),
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) }
+
+                },
+                src:  {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) }
+
+                }
             }
         },
     }
