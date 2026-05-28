@@ -4422,8 +4422,6 @@ derive_parser!(
             arguments: BfindArgs { dst: d, src: a }
         }
     }
-
-    .type: ScalarType = { .b32, .b64 };
 );
 
 #[cfg(test)]
