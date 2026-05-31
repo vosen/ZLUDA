@@ -4398,7 +4398,7 @@ derive_parser!(
         }
     }
 
-    .dtype: ScalarType = { .s32, .f32 };
+    .dtype: ScalarType = { .u32, .s32, .f32 };
     .ctype: ScalarType = { .s32, .f32 };
 );
 

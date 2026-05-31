@@ -466,11 +466,22 @@ pub(crate) fn cu_module_get_global_v2(
 }
 
 pub(crate) fn cu_module_get_tex_ref(
-    pTexRef: *mut CUtexref,
+    texref: *mut CUtexref,
     hmod: CUmodule,
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let texref = unsafe { texref.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let result = ipc::Server::remote_call_framed_in::<cuModuleGetTexRefOut>(
+        Opcode::cuModuleGetTexRef,
+        cuModuleGetTexRefIn {
+            hmod: CudaEncode::encode(hmod),
+            name: unsafe { std::ffi::CStr::from_ptr(name) }
+                .to_bytes_with_nul()
+                .to_vec(),
+        },
+    )?;
+    *texref = CudaEncode::decode(result.texref);
+    Ok(())
 }
 
 pub(crate) fn cu_stream_create(
