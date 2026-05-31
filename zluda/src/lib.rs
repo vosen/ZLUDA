@@ -95,6 +95,7 @@ cuda_macros::cuda_function_declarations!(
             cuDeviceGetCount,
             cuDeviceGetLuid,
             cuDeviceGetName,
+            cuDeviceGetPCIBusId,
             cuDeviceGetProperties,
             cuDeviceGetUuid_v2,
             cuDeviceGetUuid,
