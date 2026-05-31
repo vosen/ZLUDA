@@ -33,7 +33,9 @@ macro_rules! generate_messages_inout {
             ContextLocalStoragePut,
             ContextLocalStorageGet,
             cuModuleGetFunction,
-            cuModuleGetGlobal_v2
+            cuModuleGetGlobal_v2,
+            cuMemAlloc_v2,
+            cuMemcpyHtoDAsync_v2
         }
     };
 }
@@ -66,7 +68,7 @@ cuda_function_declarations! {
         //cuGetExportTable,
         cuInit,
         //cuLaunchKernel,
-        // cuMemAlloc_v2,
+        //cuMemAlloc_v2,
         //cuMemFreeHost,
         //cuMemFree_v2,
         // cuMemGetAddressRange_v2,
@@ -256,3 +258,27 @@ pub struct cuModuleGetGlobal_v2Out {
     pub dptr: <CUdeviceptr_v2 as CudaEncode>::WireObject,
     pub bytes: u64_le,
 }
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemAlloc_v2In {
+    pub bytesize: u32_le,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemAlloc_v2Out {
+    pub dptr: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoDAsync_v2In {
+    pub dst_device: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+    pub src_host: Vec<u8>,
+    pub stream: <CUstream as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoDAsync_v2Out {}
