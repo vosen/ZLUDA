@@ -372,6 +372,23 @@ async fn main() -> std::io::Result<()> {
                 })
                 .await?;
             }
+            Some(Opcode::cuMemAlloc_v2) => {
+                buffer = handle_cuda_function::<cuMemAlloc_v2In, cuMemAlloc_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_mem_alloc_v2(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuMemcpyHtoDAsync_v2) => {
+                buffer = handle_cuda_function_framed_in::<
+                    cuMemcpyHtoDAsync_v2In,
+                    cuMemcpyHtoDAsync_v2Out,
+                >(&mut client, buffer, |input| {
+                    cu_memcpy_hto_d_async_v2(&mut state, input)
+                })
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -381,6 +398,42 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_memcpy_hto_d_async_v2(
+    state: &mut State,
+    input: &ArchivedcuMemcpyHtoDAsync_v2In,
+) -> Result<cuMemcpyHtoDAsync_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let devptr = state.devmemory[device as usize].translate(input.dst_device.to_native())?;
+    let stream = input.stream.to_native();
+    let stream = if stream == 0 {
+        CUstream(ptr::null_mut())
+    } else {
+        CUstream(state.get(stream)?)
+    };
+    unsafe {
+        cuMemcpyHtoDAsync_v2(
+            CUdeviceptr_v2(devptr),
+            input.src_host.as_ptr().cast(),
+            input.src_host.len(),
+            stream,
+        )
+    }?;
+    Ok(cuMemcpyHtoDAsync_v2Out {})
+}
+
+fn cu_mem_alloc_v2(
+    state: &mut State,
+    input: &ArchivedcuMemAlloc_v2In,
+) -> Result<cuMemAlloc_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let fake_ptr = state.devmemory[device as usize].alloc(input.bytesize.to_native())?;
+    Ok(cuMemAlloc_v2Out {
+        dptr: u32_le::from_native(fake_ptr),
+    })
 }
 
 fn cu_module_get_global_v2(
@@ -766,7 +819,7 @@ cuda_function_declarations! {
         // cuMemcpyDtoDAsync_v2,
         // cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoD_v2,
-        // cuMemcpyHtoDAsync_v2,
+        cuMemcpyHtoDAsync_v2,
         // cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,

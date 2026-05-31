@@ -2,6 +2,7 @@ use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
 use dark_api::cuda::CudaDarkApi;
 use paste::paste;
+use rkyv::rend::u32_le;
 use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
 use zluda_common::{CodeLibraryRef, CodeModuleRef};
@@ -332,7 +333,17 @@ pub(crate) fn cu_launch_kernel(
 }
 
 pub(crate) fn cu_mem_alloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> Result<(), CUerror> {
-    unimplemented!()
+    let dptr = unsafe { dptr.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *dptr = CudaEncode::decode(
+        ipc::Server::remote_call_zero_copy::<cuMemAlloc_v2Out>(
+            Opcode::cuMemAlloc_v2,
+            cuMemAlloc_v2In {
+                bytesize: u32_le::from_native(bytesize as u32),
+            },
+        )?
+        .dptr,
+    );
+    Ok(())
 }
 
 pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerror> {
@@ -354,9 +365,12 @@ pub(crate) fn cu_mem_get_address_range_v2(
 pub(crate) fn cu_mem_host_alloc(
     pp: *mut *mut ::core::ffi::c_void,
     bytesize: usize,
-    Flags: ::core::ffi::c_uint,
+    _flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let pp = unsafe { pp.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *pp = unsafe { std::alloc::alloc(std::alloc::Layout::from_size_align(bytesize, 32).unwrap()) }
+        .cast();
+    Ok(())
 }
 
 pub(crate) fn cu_memcpy_dto_d_async_v2(
@@ -378,12 +392,24 @@ pub(crate) fn cu_memcpy_dto_h_async_v2(
 }
 
 pub(crate) fn cu_memcpy_hto_d_async_v2(
-    dstDevice: CUdeviceptr,
-    srcHost: *const ::core::ffi::c_void,
-    ByteCount: usize,
-    hStream: CUstream,
+    dst_device: CUdeviceptr,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+    h_stream: CUstream,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    if src_host.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let slice = unsafe { std::slice::from_raw_parts(src_host.cast::<u8>(), byte_count) };
+    ipc::Server::remote_call_framed_in::<cuMemcpyHtoDAsync_v2Out>(
+        Opcode::cuMemcpyHtoDAsync_v2,
+        cuMemcpyHtoDAsync_v2In {
+            dst_device: CudaEncode::encode(dst_device),
+            src_host: slice.to_vec(),
+            stream: CudaEncode::encode(h_stream),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_memset_d8_v2(
