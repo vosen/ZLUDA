@@ -19,7 +19,7 @@ use rkyv::{
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
-    ffi::c_void,
+    ffi::{c_void, CString},
     io::{self, Write},
     mem,
     ptr::{self, NonNull},
@@ -31,6 +31,79 @@ struct State {
     handles: Slab<usize>,
     dark_api: dark_api::cuda::ContextLocalStorageInterfaceV0301,
     devmemory: Vec<Allocator>,
+    modules: ModuleLaunchData,
+}
+
+struct ModuleLaunchData {
+    dark_api: dark_api::zluda32::Zluda32Internal,
+    modules: FxHashMap<CUmodule, Vec<Global>>,
+    functions: FxHashMap<CUfunction, Function>,
+}
+
+impl ModuleLaunchData {
+    fn new() -> Result<Self, CUerror> {
+        let mut zluda32_ptr = unsafe { mem::zeroed() };
+        unsafe { cuGetExportTable(&mut zluda32_ptr, &dark_api::zluda32::Zluda32Internal::GUID) }?;
+        let zluda32 = unsafe { dark_api::zluda32::Zluda32Internal::new(zluda32_ptr) };
+        Ok(Self {
+            dark_api: zluda32,
+            modules: FxHashMap::default(),
+            functions: FxHashMap::default(),
+        })
+    }
+
+    unsafe fn new_module(&mut self, module: CUmodule) -> Result<(), CUerror> {
+        let mut count = 0;
+        self.dark_api.get_module_globals(
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut count,
+            module,
+        )?;
+        let mut names = vec![mem::zeroed(); count as usize];
+        let mut initializers = vec![mem::zeroed(); count as usize];
+        let mut sizes = vec![mem::zeroed(); count as usize];
+        let mut alignments = vec![mem::zeroed(); count as usize];
+        self.dark_api.get_module_globals(
+            names.as_mut_ptr(),
+            initializers.as_mut_ptr(),
+            sizes.as_mut_ptr(),
+            alignments.as_mut_ptr(),
+            &mut count,
+            module,
+        )?;
+        let globals = (0..count as usize)
+            .map(|i| {
+                Ok::<_, CUerror>(Global {
+                    name: unsafe { CString::from_raw(names[i].cast()) }
+                        .into_string()
+                        .map_err(|_| CUerror::UNKNOWN)?,
+                    initial_value: unsafe {
+                        std::slice::from_raw_parts(initializers[i].cast(), sizes[i] as usize)
+                            .to_vec()
+                    },
+                    size: sizes[i],
+                    alignment: alignments[i],
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.modules.insert(module, globals);
+        Ok(())
+    }
+}
+
+struct Global {
+    name: String,
+    initial_value: Vec<u8>,
+    size: u32,
+    alignment: u32,
+}
+
+struct Function {
+    module: CUmodule,
+    explicit_argument_count: u32,
 }
 
 struct Allocator {
@@ -117,6 +190,7 @@ impl State {
             devmemory: (0..devices)
                 .map(|device| Allocator::new(device as u32))
                 .collect(),
+            modules: ModuleLaunchData::new()?,
         })
     }
 
@@ -320,6 +394,7 @@ fn cu_module_load_data(
 ) -> Result<cuModuleLoadDataOut, CUerror> {
     let mut module = unsafe { mem::zeroed() };
     unsafe { cuModuleLoadData(&mut module, input.image.as_ptr().cast()) }?;
+    unsafe { state.modules.new_module(module) }?;
     Ok(cuModuleLoadDataOut {
         module: u32_le::from_native(state.insert(module.0)),
     })
