@@ -363,6 +363,25 @@ dark_api! {
     }
 }
 
+// Purely for internal use by ZLUDA32
+dark_api! {
+    zluda32;
+    "{EE376A1B-B858-42EB-A52D-9A106D50D914}" => ZLUDA32_INTERNAL[2] {
+        [0] = get_module_globals(
+            names: *mut *mut u8,
+            initializers: *mut *const u8,
+            sizes: *mut u32,
+            alignments: *mut u32,
+            count: *mut u32,
+            module: cuda_types::cuda::CUmodule
+        ) -> cuda_types::cuda::CUresult,
+        [1] = get_function_info(
+            explicit_argument_count: *mut u32,
+            module: cuda_types::cuda::CUfunction
+        ) -> cuda_types::cuda::CUresult
+    }
+}
+
 #[repr(C)]
 pub struct ByteVecFfi {
     ptr: *mut u8,
