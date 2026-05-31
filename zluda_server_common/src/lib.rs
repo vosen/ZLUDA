@@ -35,7 +35,8 @@ macro_rules! generate_messages_inout {
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuMemAlloc_v2,
-            cuMemcpyHtoDAsync_v2
+            cuMemcpyHtoDAsync_v2,
+            cuModuleGetTexRef
         }
     };
 }
@@ -282,3 +283,16 @@ pub struct cuMemcpyHtoDAsync_v2In {
 #[repr(C)]
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuMemcpyHtoDAsync_v2Out {}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetTexRefIn {
+    pub hmod: <CUmodule as CudaEncode>::WireObject,
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetTexRefOut {
+    pub texref: <CUtexref as CudaEncode>::WireObject,
+}
