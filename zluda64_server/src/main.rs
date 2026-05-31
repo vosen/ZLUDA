@@ -28,15 +28,41 @@ use std::{
 use zluda_server_common::*;
 
 struct State {
-    handles: Slab<usize>,
+    handles: HandlePool,
     dark_api: dark_api::cuda::ContextLocalStorageInterfaceV0301,
     devmemory: Vec<Allocator>,
     modules: ModuleLaunchData,
 }
 
+struct HandlePool {
+    handles: Slab<usize>,
+}
+
+impl HandlePool {
+    fn new() -> Self {
+        Self {
+            handles: Slab::new(),
+        }
+    }
+
+    fn insert<T: Sized>(&mut self, handle: *mut T) -> u32 {
+        (self.handles.insert(handle as usize) as u32) + 1
+    }
+
+    fn get<T: Sized>(&self, id: u32) -> Result<*mut T, CUerror> {
+        if id == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        self.handles
+            .get((id - 1) as usize)
+            .map(|&handle| handle as *mut T)
+            .ok_or(CUerror::INVALID_VALUE)
+    }
+}
+
 struct ModuleLaunchData {
     dark_api: dark_api::zluda32::Zluda32Internal,
-    modules: FxHashMap<CUmodule, Vec<Global>>,
+    modules: FxHashMap<CUmodule, Module>,
     functions: FxHashMap<CUfunction, Function>,
 }
 
@@ -104,9 +130,18 @@ impl ModuleLaunchData {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        self.modules.insert(module, globals);
+        let module_data = Module {
+            globals,
+            texrefs: FxHashMap::default(),
+        };
+        self.modules.insert(module, module_data);
         Ok(())
     }
+}
+
+struct Module {
+    globals: Vec<Global>,
+    texrefs: FxHashMap<Vec<u8>, u32>,
 }
 
 struct Global {
@@ -213,27 +248,13 @@ impl State {
         let mut devices = 0;
         unsafe { cuDeviceGetCount(&mut devices) }?;
         Ok(Self {
-            handles: Slab::new(),
+            handles: HandlePool::new(),
             dark_api,
             devmemory: (0..devices)
                 .map(|device| Allocator::new(device as u32))
                 .collect(),
             modules: ModuleLaunchData::new()?,
         })
-    }
-
-    fn insert<T: Sized>(&mut self, handle: *mut T) -> u32 {
-        (self.handles.insert(handle as usize) as u32) + 1
-    }
-
-    fn get<T: Sized>(&self, id: u32) -> Result<*mut T, CUerror> {
-        if id == 0 {
-            return Err(CUerror::INVALID_VALUE);
-        }
-        self.handles
-            .get((id - 1) as usize)
-            .map(|&handle| handle as *mut T)
-            .ok_or(CUerror::INVALID_VALUE)
     }
 }
 
@@ -389,6 +410,15 @@ async fn main() -> std::io::Result<()> {
                 })
                 .await?;
             }
+            Some(Opcode::cuModuleGetTexRef) => {
+                buffer =
+                    handle_cuda_function_framed_in::<cuModuleGetTexRefIn, cuModuleGetTexRefOut>(
+                        &mut client,
+                        buffer,
+                        |input| cu_module_get_tex_ref(&mut state, input),
+                    )
+                    .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -398,6 +428,30 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_module_get_tex_ref(
+    state: &mut State,
+    input: &ArchivedcuModuleGetTexRefIn,
+) -> Result<cuModuleGetTexRefOut, CUerror> {
+    let hmod = state.handles.get::<CUmod_st>(input.hmod.to_native())?;
+    let module = state
+        .modules
+        .modules
+        .get_mut(&CUmodule(hmod))
+        .ok_or(CUerror::INVALID_VALUE)?;
+    let texref = match module.texrefs.entry(input.name.to_vec()) {
+        std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            let mut texref = unsafe { mem::zeroed() };
+            unsafe { cuModuleGetTexRef(&mut texref, CUmodule(hmod), input.name.as_ptr().cast()) }?;
+            let handle = state.handles.insert(texref);
+            *entry.insert(handle)
+        }
+    };
+    Ok(cuModuleGetTexRefOut {
+        texref: u32_le::from_native(texref),
+    })
 }
 
 fn cu_memcpy_hto_d_async_v2(
@@ -411,7 +465,7 @@ fn cu_memcpy_hto_d_async_v2(
     let stream = if stream == 0 {
         CUstream(ptr::null_mut())
     } else {
-        CUstream(state.get(stream)?)
+        CUstream(state.handles.get(stream)?)
     };
     unsafe {
         cuMemcpyHtoDAsync_v2(
@@ -440,15 +494,16 @@ fn cu_module_get_global_v2(
     state: &mut State,
     input: &ArchivedcuModuleGetGlobal_v2In,
 ) -> Result<cuModuleGetGlobal_v2Out, CUerror> {
-    let hmod = state.get::<CUmod_st>(input.hmod.to_native())?;
-    let globals = state
+    let hmod = state.handles.get::<CUmod_st>(input.hmod.to_native())?;
+    let module = state
         .modules
         .modules
         .get(&CUmodule(hmod))
         .ok_or(CUerror::INVALID_VALUE)?;
-    let global = globals
+    let global = module
+        .globals
         .iter()
-        .find(|g| g.name.as_bytes() == input.name.as_slice())
+        .find(|global| global.name.as_bytes() == input.name.as_slice())
         .ok_or(CUerror::NOT_FOUND)?;
     Ok(cuModuleGetGlobal_v2Out {
         dptr: u32_le::from_native(global.address()),
@@ -461,10 +516,10 @@ fn cu_module_get_function(
     input: &ArchivedcuModuleGetFunctionIn,
 ) -> Result<cuModuleGetFunctionOut, CUerror> {
     let mut hfunc = unsafe { mem::zeroed() };
-    let hmod = state.get(input.hmod.to_native())?;
+    let hmod = state.handles.get(input.hmod.to_native())?;
     unsafe { cuModuleGetFunction(&mut hfunc, CUmodule(hmod), input.name.as_ptr().cast()) }?;
     Ok(cuModuleGetFunctionOut {
-        hfunc: u32_le::from_native(state.insert(hfunc.0)),
+        hfunc: u32_le::from_native(state.handles.insert(hfunc.0)),
     })
 }
 
@@ -476,7 +531,7 @@ fn cu_module_load_data(
     unsafe { cuModuleLoadData(&mut module, input.image.as_ptr().cast()) }?;
     unsafe { state.modules.new_module(&mut state.devmemory, module) }?;
     Ok(cuModuleLoadDataOut {
-        module: u32_le::from_native(state.insert(module.0)),
+        module: u32_le::from_native(state.handles.insert(module.0)),
     })
 }
 
@@ -534,7 +589,7 @@ fn cu_ctx_create_v2(
 ) -> Result<cuCtxCreate_v2Out, CUerror> {
     let mut pctx = unsafe { mem::zeroed() };
     unsafe { cuCtxCreate_v2(&mut pctx, input.flags.to_native(), input.dev.to_native()) }?;
-    let pctx = state.insert(pctx.0);
+    let pctx = state.handles.insert(pctx.0);
     Ok(cuCtxCreate_v2Out {
         pctx: u32_le::from_native(pctx),
     })
@@ -564,7 +619,7 @@ fn cu_ctx_get_api_version(
     state: &mut State,
     input: &ArchivedcuCtxGetApiVersionIn,
 ) -> Result<cuCtxGetApiVersionOut, CUerror> {
-    let ctx = CUcontext(state.get(input.ctx.to_native())?);
+    let ctx = CUcontext(state.handles.get(input.ctx.to_native())?);
     let mut version = 0;
     unsafe { cuCtxGetApiVersion(ctx, &mut version) }?;
     Ok(cuCtxGetApiVersionOut { version })
@@ -576,7 +631,7 @@ fn context_local_storage_put(
 ) -> Result<ContextLocalStoragePutOut, CUerror> {
     unsafe {
         state.dark_api.context_local_storage_put(
-            CUcontext(state.get(input.cu_ctx.to_native())?),
+            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
             input.key.to_native() as _,
             input.value.to_native() as _,
             None,
@@ -593,7 +648,7 @@ fn context_local_storage_get(
     unsafe {
         state.dark_api.context_local_storage_get(
             &mut value,
-            CUcontext(state.get(input.cu_ctx.to_native())?),
+            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
             input.key.to_native() as _,
         )
     }?;
@@ -823,7 +878,7 @@ cuda_function_declarations! {
         // cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,
-        // cuModuleGetTexRef,
+        cuModuleGetTexRef,
         cuModuleLoadData,
         // cuStreamCreate,
         // cuStreamDestroy_v2,
