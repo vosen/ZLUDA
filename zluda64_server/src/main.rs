@@ -19,12 +19,12 @@ use rkyv::{
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
-    ffi::{c_void, CString},
+    ffi::{c_void, CStr, CString},
     io::{self, Write},
     mem,
+    ops::Range,
     ptr::{self, NonNull},
 };
-use windows_sys::Win32::Foundation::ERROR_MORE_DATA;
 use zluda_server_common::*;
 
 struct State {
@@ -52,7 +52,11 @@ impl ModuleLaunchData {
         })
     }
 
-    unsafe fn new_module(&mut self, module: CUmodule) -> Result<(), CUerror> {
+    unsafe fn new_module(
+        &mut self,
+        devmemory: &mut Vec<Allocator>,
+        module: CUmodule,
+    ) -> Result<(), CUerror> {
         let mut count = 0;
         self.dark_api.get_module_globals(
             ptr::null_mut(),
@@ -74,18 +78,29 @@ impl ModuleLaunchData {
             &mut count,
             module,
         )?;
+        let mut device = 0;
+        unsafe { cuCtxGetDevice(&mut device) }?;
         let globals = (0..count as usize)
             .map(|i| {
+                if alignments[i] > Allocator::ALLOCATION_UNIT {
+                    return Err(CUerror::OUT_OF_MEMORY);
+                }
+                let initializer = std::slice::from_raw_parts(initializers[i], sizes[i] as usize);
+                let allocation = devmemory[device as usize].alloc_range(sizes[i])?;
+                let devptr = devmemory[device as usize].translate_range(allocation.clone())?;
+                unsafe {
+                    cuMemcpyHtoD_v2(
+                        CUdeviceptr_v2(devptr),
+                        initializer.as_ptr().cast(),
+                        initializer.len(),
+                    )
+                }?;
                 Ok::<_, CUerror>(Global {
-                    name: unsafe { CString::from_raw(names[i].cast()) }
-                        .into_string()
-                        .map_err(|_| CUerror::UNKNOWN)?,
-                    initial_value: unsafe {
-                        std::slice::from_raw_parts(initializers[i].cast(), sizes[i] as usize)
-                            .to_vec()
-                    },
+                    name: unsafe { CStr::from_ptr(names[i].cast()) }
+                        .to_string_lossy()
+                        .into_owned(),
+                    allocation,
                     size: sizes[i],
-                    alignment: alignments[i],
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -96,9 +111,14 @@ impl ModuleLaunchData {
 
 struct Global {
     name: String,
-    initial_value: Vec<u8>,
+    allocation: Range<u32>,
     size: u32,
-    alignment: u32,
+}
+
+impl Global {
+    fn address(&self) -> u32 {
+        self.allocation.start * Allocator::ALLOCATION_UNIT
+    }
 }
 
 struct Function {
@@ -145,13 +165,16 @@ impl Allocator {
         self.start.ok_or(CUerror::INVALID_VALUE)
     }
 
-    fn alloc(&mut self, size: u32) -> Result<u32, CUerror> {
+    fn alloc_range(&mut self, size: u32) -> Result<Range<u32>, CUerror> {
         self.get_or_allocate_device_ptr()?;
         let units = size.next_multiple_of(Self::ALLOCATION_UNIT) / Self::ALLOCATION_UNIT;
-        let offset = self
-            .allocator
+        self.allocator
             .allocate_range(units)
-            .map_err(|_| CUerror::OUT_OF_MEMORY)?;
+            .map_err(|_| CUerror::OUT_OF_MEMORY)
+    }
+
+    fn alloc(&mut self, size: u32) -> Result<u32, CUerror> {
+        let offset = self.alloc_range(size)?;
         self.allocation_ends.insert(offset.start, offset.end);
         Ok(offset.start * Self::ALLOCATION_UNIT)
     }
@@ -168,6 +191,11 @@ impl Allocator {
     fn translate(&self, offset: u32) -> Result<*mut c_void, CUerror> {
         let base_ptr = self.get_device_ptr()?;
         Ok(base_ptr.wrapping_byte_add(offset as usize))
+    }
+
+    fn translate_range(&self, range: Range<u32>) -> Result<*mut c_void, CUerror> {
+        let base_ptr = self.get_device_ptr()?;
+        Ok(base_ptr.wrapping_byte_add(range.start as usize * Self::ALLOCATION_UNIT as usize))
     }
 }
 
@@ -359,20 +387,19 @@ fn cu_module_get_global_v2(
     state: &mut State,
     input: &ArchivedcuModuleGetGlobal_v2In,
 ) -> Result<cuModuleGetGlobal_v2Out, CUerror> {
-    let mut dptr = unsafe { mem::zeroed() };
-    let mut bytes = unsafe { mem::zeroed() };
-    let hmod = state.get(input.hmod.to_native())?;
-    unsafe {
-        cuModuleGetGlobal_v2(
-            &mut dptr,
-            &mut bytes,
-            CUmodule(hmod),
-            input.name.as_ptr().cast(),
-        )
-    }?;
+    let hmod = state.get::<CUmod_st>(input.hmod.to_native())?;
+    let globals = state
+        .modules
+        .modules
+        .get(&CUmodule(hmod))
+        .ok_or(CUerror::INVALID_VALUE)?;
+    let global = globals
+        .iter()
+        .find(|g| g.name.as_bytes() == input.name.as_slice())
+        .ok_or(CUerror::NOT_FOUND)?;
     Ok(cuModuleGetGlobal_v2Out {
-        dptr: u32_le::from_native(state.insert(dptr.0)),
-        bytes: u64_le::from_native(bytes as u64),
+        dptr: u32_le::from_native(global.address()),
+        bytes: u64_le::from_native(global.size as u64),
     })
 }
 
@@ -394,7 +421,7 @@ fn cu_module_load_data(
 ) -> Result<cuModuleLoadDataOut, CUerror> {
     let mut module = unsafe { mem::zeroed() };
     unsafe { cuModuleLoadData(&mut module, input.image.as_ptr().cast()) }?;
-    unsafe { state.modules.new_module(module) }?;
+    unsafe { state.modules.new_module(&mut state.devmemory, module) }?;
     Ok(cuModuleLoadDataOut {
         module: u32_le::from_native(state.insert(module.0)),
     })
@@ -716,7 +743,7 @@ cuda_function_declarations! {
         // cuCtxDetach,
         cuCtxGetApiVersion,
         // cuCtxGetCurrent,
-        // cuCtxGetDevice,
+        cuCtxGetDevice,
         // cuCtxSynchronize,
         // cuDeviceComputeCapability,
         cuDeviceGet,
@@ -738,6 +765,7 @@ cuda_function_declarations! {
         // cuMemHostAlloc,
         // cuMemcpyDtoDAsync_v2,
         // cuMemcpyDtoHAsync_v2,
+        cuMemcpyHtoD_v2,
         // cuMemcpyHtoDAsync_v2,
         // cuMemsetD8_v2,
         cuModuleGetFunction,

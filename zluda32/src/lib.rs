@@ -422,14 +422,15 @@ pub(crate) fn cu_module_get_global_v2(
     hmod: CUmodule,
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
+    let mut bytes_fallback = 0usize;
     let dptr = unsafe { dptr.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let bytes = unsafe { bytes.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let bytes = unsafe { bytes.as_mut() }.unwrap_or(&mut bytes_fallback);
     let result = ipc::Server::remote_call_framed_in::<cuModuleGetGlobal_v2Out>(
         Opcode::cuModuleGetGlobal_v2,
         cuModuleGetGlobal_v2In {
             hmod: CudaEncode::encode(hmod),
             name: unsafe { std::ffi::CStr::from_ptr(name) }
-                .to_bytes_with_nul()
+                .to_bytes()
                 .to_vec(),
         },
     )?;

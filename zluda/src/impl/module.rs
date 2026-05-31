@@ -60,7 +60,7 @@ impl ZludaObject for Module {
 }
 
 pub(crate) struct Metadata32Bit {
-    pub globals: Vec<kernel_metadata::Global32Bit>,
+    pub globals: Vec<Global32Bit>,
     pub explicit_arg_counts: FxHashMap<String, u32>,
 }
 
@@ -69,8 +69,8 @@ impl Metadata32Bit {
         let globals = meta
             .globals
             .iter()
-            .map(|g| kernel_metadata::Global32Bit {
-                name: g.name.to_string(),
+            .map(|g| Global32Bit {
+                name: CString::new(&*g.name).unwrap(),
                 initializer: g.initializer.to_vec(),
                 align: g.align,
             })
@@ -90,8 +90,8 @@ impl Metadata32Bit {
         let globals = archived
             .globals
             .iter()
-            .map(|g| kernel_metadata::Global32Bit {
-                name: g.name.to_string(),
+            .map(|g| Global32Bit {
+                name: CString::new(g.name.as_str()).unwrap(),
                 initializer: g.initializer.to_vec(),
                 align: g.align.to_native(),
             })
@@ -106,6 +106,12 @@ impl Metadata32Bit {
             explicit_arg_counts,
         }
     }
+}
+
+pub(crate) struct Global32Bit {
+    pub name: CString,
+    pub initializer: Vec<u8>,
+    pub align: u32,
 }
 
 impl Module {
