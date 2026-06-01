@@ -5,6 +5,7 @@ use std::mem;
 pub(crate) struct Function {
     pub(crate) base: hipFunction_t,
     pub(crate) sm_version: u32,
+    pub(crate) explicit_arg_sizes: Option<Vec<u32>>,
 }
 
 impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, CUfunction, E>

@@ -31,6 +31,7 @@ impl ModuleMutable {
         module: hipModule_t,
         sm_version: u32,
         name: CString,
+        explicit_arg_sizes: Option<Vec<u32>>,
     ) -> Result<&Function, CUerror> {
         Ok(match self.functions.entry(name) {
             hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
@@ -40,6 +41,7 @@ impl ModuleMutable {
                 let func = Box::new(Function {
                     base: func_handle,
                     sm_version,
+                    explicit_arg_sizes,
                 });
                 &*entry.insert(func)
             }
@@ -61,7 +63,7 @@ impl ZludaObject for Module {
 
 pub(crate) struct Metadata32Bit {
     pub globals: Vec<Global32Bit>,
-    pub explicit_arg_counts: FxHashMap<String, u32>,
+    pub explicit_arg_sizes: FxHashMap<String, Vec<u32>>,
 }
 
 impl Metadata32Bit {
@@ -75,14 +77,14 @@ impl Metadata32Bit {
                 align: g.align,
             })
             .collect();
-        let explicit_arg_counts = meta
-            .explicit_arg_count
+        let explicit_arg_sizes = meta
+            .explicit_arg_sizes
             .iter()
-            .map(|kv| (kv.0.to_string(), kv.1))
+            .map(|kv| (kv.0.to_string(), kv.1.clone()))
             .collect();
         Self {
             globals,
-            explicit_arg_counts,
+            explicit_arg_sizes,
         }
     }
 
@@ -96,14 +98,19 @@ impl Metadata32Bit {
                 align: g.align.to_native(),
             })
             .collect();
-        let explicit_arg_counts = archived
-            .explicit_arg_count
+        let explicit_arg_sizes = archived
+            .explicit_arg_sizes
             .iter()
-            .map(|kv| (kv.0.to_string(), kv.1.to_native()))
+            .map(|kv| {
+                (
+                    kv.0.to_string(),
+                    kv.1.iter().map(|&x| x.to_native()).collect(),
+                )
+            })
             .collect();
         Self {
             globals,
-            explicit_arg_counts,
+            explicit_arg_sizes,
         }
     }
 }
@@ -128,8 +135,13 @@ impl Module {
 
     pub(crate) fn get_function<'a>(&'a self, name: &CStr) -> Result<&'static Function, CUerror> {
         let mut mutable = self.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
+        let explicit_args = self.bit32.as_ref().and_then(|meta| {
+            meta.explicit_arg_sizes
+                .get(name.to_str().ok()?)
+                .map(Vec::clone)
+        });
         mutable
-            .get_function(self.base, self.sm_version, name.to_owned())
+            .get_function(self.base, self.sm_version, name.to_owned(), explicit_args)
             .map(|f| unsafe { (f as *const Function).as_ref().unwrap() })
     }
 }
