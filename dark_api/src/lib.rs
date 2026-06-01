@@ -376,8 +376,9 @@ dark_api! {
             module: cuda_types::cuda::CUmodule
         ) -> cuda_types::cuda::CUresult,
         [1] = get_function_info(
+            explicit_argument_sizes: *mut u32,
             explicit_argument_count: *mut u32,
-            module: cuda_types::cuda::CUfunction
+            func: cuda_types::cuda::CUfunction
         ) -> cuda_types::cuda::CUresult
     }
 }

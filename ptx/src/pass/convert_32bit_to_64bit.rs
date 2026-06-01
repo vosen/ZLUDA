@@ -31,18 +31,18 @@ pub(super) fn run<'input>(
     TranslateError,
 > {
     let (global_ids, globals) = collect_globals(resolver, &directives)?;
-    let mut explicit_arg_count = Vec::new();
+    let mut explicit_arg_sizes = Vec::new();
     let directives = directives
         .into_iter()
         .filter_map(|directive| {
-            run_directive(resolver, directive, &global_ids, &mut explicit_arg_count).transpose()
+            run_directive(resolver, directive, &global_ids, &mut explicit_arg_sizes).transpose()
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok((
         directives,
         ModuleMetadata32Bit {
             globals,
-            explicit_arg_count,
+            explicit_arg_sizes,
         },
     ))
 }
@@ -136,7 +136,7 @@ fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     directive: Directive2<ast::Instruction<SpirvWord>, SpirvWord>,
     globals_ids: &[SpirvWord],
-    explicit_arg_count: &mut Vec<(String, u32)>,
+    explicit_arg_sizes: &mut Vec<(String, Vec<u32>)>,
 ) -> Result<Option<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     Ok(match directive {
         Directive2::Variable(linking, varinfo) if pass_through_variable(&varinfo) => {
@@ -146,7 +146,7 @@ fn run_directive<'input>(
             resolver,
             method,
             globals_ids,
-            explicit_arg_count,
+            explicit_arg_sizes,
         )?)),
         _ => None,
     })
@@ -156,7 +156,7 @@ fn run_method<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     mut method: Function<ast::Instruction<SpirvWord>, SpirvWord>,
     globals_ids: &[SpirvWord],
-    explicit_arg_count: &mut Vec<(String, u32)>,
+    explicit_arg_sizes: &mut Vec<(String, Vec<u32>)>,
 ) -> Result<Function<ast::Instruction<SpirvWord>, SpirvWord>, TranslateError> {
     let is_kernel = method.is_kernel();
     if let Some(ref mut body) = method.body {
@@ -181,7 +181,12 @@ fn run_method<'input>(
             })
             .ok_or_else(error_unreachable)?
             .to_string();
-        explicit_arg_count.push((text_name, method.input_arguments.len() as u32));
+        let argument_sizes = method
+            .input_arguments
+            .iter()
+            .map(|arg| arg.info.v_type.layout().unwrap().size() as u32)
+            .collect();
+        explicit_arg_sizes.push((text_name, argument_sizes));
         let implicit_memory_ptr = add_hidden_argument(
             resolver,
             ast::ScalarType::B64,

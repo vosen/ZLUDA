@@ -419,6 +419,15 @@ async fn main() -> std::io::Result<()> {
                     )
                     .await?;
             }
+            Some(Opcode::zludaGetFunctionArgs) => {
+                buffer = handle_cuda_function_framed_out::<
+                    zludaGetFunctionArgsIn,
+                    zludaGetFunctionArgsOut,
+                >(&mut client, buffer, |input| {
+                    zluda_get_function_args(&mut state, input)
+                })
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -428,6 +437,30 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn zluda_get_function_args(
+    state: &mut State,
+    input: &ArchivedzludaGetFunctionArgsIn,
+) -> Result<zludaGetFunctionArgsOut, CUerror> {
+    let hfunc = state.handles.get(input.f.to_native())?;
+    let mut count = 0;
+    unsafe {
+        state.modules.dark_api.get_function_info(
+            std::ptr::null_mut(),
+            &mut count,
+            CUfunction(hfunc),
+        )
+    }?;
+    let mut arg_sizes = vec![0; count as usize];
+    unsafe {
+        state.modules.dark_api.get_function_info(
+            arg_sizes.as_mut_ptr(),
+            &mut count,
+            CUfunction(hfunc),
+        )
+    }?;
+    Ok(zludaGetFunctionArgsOut { args: arg_sizes })
 }
 
 fn cu_module_get_tex_ref(
@@ -865,7 +898,7 @@ cuda_function_declarations! {
         // cuEventDestroy_v2,
         cuGetExportTable,
         cuInit,
-        // cuLaunchKernel,
+        cuLaunchKernel,
         cuMemAlloc_v2,
         // cuMemFreeHost,
         // cuMemFree_v2,
