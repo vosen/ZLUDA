@@ -46,7 +46,7 @@ impl Server {
         }
     }
 
-    unsafe fn start() -> Result<Self, Error> {
+    pub unsafe fn start() -> Result<Self, Error> {
         let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
         let pipe_path = format!("\\\\.\\pipe\\zluda-{name}\0");
         let pipe = std::fs::File::from_raw_handle(
@@ -76,65 +76,59 @@ impl Server {
         }
     }
 
-    fn get() -> Result<&'static Mutex<Self>, CUerror> {
-        static LOCK: OnceLock<Result<Mutex<Server>, Error>> = OnceLock::new();
-        LOCK.get_or_init(|| Ok(Mutex::new(unsafe { Server::start()? })))
-            .as_ref()
-            .map_err(|_| CUerror::UNKNOWN)
-    }
-
     pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
+        &mut self,
         opcode: Opcode,
         data: impl for<'a, 'b> Serialize<
             HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
         >,
     ) -> Result<Out, CUerror> {
-        let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-        this.buffer.clear();
-        this.pipe
+        self.buffer.clear();
+        self.pipe
             .write_all(&(opcode as u32).to_le_bytes()[..])
             .map_err(|_| CUerror::UNKNOWN)?;
         let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut this.buffer)
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
                 .map_err(|_| CUerror::UNKNOWN)?;
-        this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(this)?;
-        this.buffer.resize(mem::size_of::<Out>(), 0);
-        this.pipe
-            .read_exact(&mut this.buffer)
+        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
+        read_return_code(self)?;
+        self.buffer.resize(mem::size_of::<Out>(), 0);
+        self.pipe
+            .read_exact(&mut self.buffer)
             .map_err(|_| CUerror::UNKNOWN)?;
-        let output = unsafe { rkyv::access_unchecked::<Out>(&this.buffer) };
+        let output = unsafe { rkyv::access_unchecked::<Out>(&self.buffer) };
         Ok(output.clone())
     }
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
+        &mut self,
         opcode: Opcode,
         data: impl for<'a, 'b> Serialize<
             HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
         >,
     ) -> Result<Out, CUerror> {
-        let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-        this.buffer.clear();
-        this.pipe
+        self.buffer.clear();
+        self.pipe
             .write_all(&(opcode as u32).to_le_bytes()[..])
             .map_err(|_| CUerror::UNKNOWN)?;
         let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut this.buffer)
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
                 .map_err(|_| CUerror::UNKNOWN)?;
-        this.pipe
+        self.pipe
             .write_all(&(slice.len() as u32).to_le_bytes()[..])
             .map_err(|_| CUerror::UNKNOWN)?;
-        this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(this)?;
-        this.buffer.resize(mem::size_of::<Out>(), 0);
-        this.pipe
-            .read_exact(&mut this.buffer)
+        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
+        read_return_code(self)?;
+        self.buffer.resize(mem::size_of::<Out>(), 0);
+        self.pipe
+            .read_exact(&mut self.buffer)
             .map_err(|_| CUerror::UNKNOWN)?;
-        let output = unsafe { rkyv::access_unchecked::<Out>(&this.buffer) };
+        let output = unsafe { rkyv::access_unchecked::<Out>(&self.buffer) };
         Ok(output.clone())
     }
 
     pub(crate) fn remote_call_framed_out<Out: Archive>(
+        &mut self,
         opcode: Opcode,
         data: impl for<'a, 'b> Serialize<
             HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
@@ -143,22 +137,21 @@ impl Server {
     where
         <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,
     {
-        let this = &mut *Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
-        this.buffer.clear();
-        this.pipe
+        self.buffer.clear();
+        self.pipe
             .write_all(&(opcode as u32).to_le_bytes()[..])
             .map_err(|_| CUerror::UNKNOWN)?;
         let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut this.buffer)
+            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
                 .map_err(|_| CUerror::UNKNOWN)?;
-        this.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(this)?;
-        let out_size = read_u32(this)?;
-        this.buffer.resize(out_size as usize, 0);
-        this.pipe
-            .read_exact(&mut this.buffer)
+        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
+        read_return_code(self)?;
+        let out_size = read_u32(self)?;
+        self.buffer.resize(out_size as usize, 0);
+        self.pipe
+            .read_exact(&mut self.buffer)
             .map_err(|_| CUerror::UNKNOWN)?;
-        unsafe { rkyv::from_bytes_unchecked::<Out, rkyv::rancor::Failure>(&this.buffer) }
+        unsafe { rkyv::from_bytes_unchecked::<Out, rkyv::rancor::Failure>(&self.buffer) }
             .map_err(|_| CUerror::UNKNOWN)
     }
 }

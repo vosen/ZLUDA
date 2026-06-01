@@ -36,7 +36,9 @@ macro_rules! generate_messages_inout {
             cuModuleGetGlobal_v2,
             cuMemAlloc_v2,
             cuMemcpyHtoDAsync_v2,
-            cuModuleGetTexRef
+            cuModuleGetTexRef,
+            cuLaunchKernel,
+            zludaGetFunctionArgs
         }
     };
 }
@@ -68,7 +70,7 @@ cuda_function_declarations! {
         cuEventDestroy_v2,
         //cuGetExportTable,
         cuInit,
-        //cuLaunchKernel,
+        // cuLaunchKernel,
         //cuMemAlloc_v2,
         //cuMemFreeHost,
         //cuMemFree_v2,
@@ -295,4 +297,35 @@ pub struct cuModuleGetTexRefIn {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuModuleGetTexRefOut {
     pub texref: <CUtexref as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuLaunchKernelIn {
+    pub f: <CUfunction as CudaEncode>::WireObject,
+    pub grid_dim_x: u32_le,
+    pub grid_dim_y: u32_le,
+    pub grid_dim_z: u32_le,
+    pub block_dim_x: u32_le,
+    pub block_dim_y: u32_le,
+    pub block_dim_z: u32_le,
+    pub shared_mem_bytes: u32_le,
+    pub stream: <CUstream as CudaEncode>::WireObject,
+    pub kernel_params: Vec<Vec<u8>>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuLaunchKernelOut {}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct zludaGetFunctionArgsIn {
+    pub f: <CUfunction as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct zludaGetFunctionArgsOut {
+    pub args: Vec<u32>,
 }
