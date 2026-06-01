@@ -2,10 +2,17 @@ use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
 use dark_api::cuda::CudaDarkApi;
 use paste::paste;
+use rkyv::api::high::HighSerializer;
+use rkyv::de::Pool;
+use rkyv::rancor::{Failure, Strategy};
 use rkyv::rend::u32_le;
+use rkyv::ser::allocator::ArenaHandle;
+use rkyv::util::AlignedVec;
+use rkyv::{Archive, Deserialize, Portable, Serialize};
+use rustc_hash::FxHashMap;
 use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
-use zluda_common::{CodeLibraryRef, CodeModuleRef};
+use zluda_common::{CodeLibraryRef, CodeModuleRef, CudaErrorType};
 use zluda_server_common::*;
 
 mod ipc;
@@ -122,8 +129,69 @@ impl ContextStack {
     }
 }
 
+struct GlobalState {
+    function_args: FxHashMap<CUfunction, Vec<u32>>,
+    server: ipc::Server,
+}
+
+impl GlobalState {
+    fn get() -> Result<&'static Mutex<Self>, CUerror> {
+        static LOCK: OnceLock<Result<Mutex<GlobalState>, windows::core::Error>> = OnceLock::new();
+        LOCK.get_or_init(|| {
+            Ok(Mutex::new(GlobalState {
+                function_args: FxHashMap::default(),
+                server: unsafe { ipc::Server::start() }?,
+            }))
+        })
+        .as_ref()
+        .map_err(|_| CUerror::UNKNOWN)
+    }
+
+    pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
+        opcode: Opcode,
+        data: impl for<'a, 'b> Serialize<
+            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+        >,
+    ) -> Result<Out, CUerror> {
+        Self::get()?
+            .lock()
+            .map_err(|_| CUerror::UNKNOWN)?
+            .server
+            .remote_call_zero_copy(opcode, data)
+    }
+
+    pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
+        opcode: Opcode,
+        data: impl for<'a, 'b> Serialize<
+            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+        >,
+    ) -> Result<Out, CUerror> {
+        Self::get()?
+            .lock()
+            .map_err(|_| CUerror::UNKNOWN)?
+            .server
+            .remote_call_framed_in(opcode, data)
+    }
+
+    pub(crate) fn remote_call_framed_out<Out: Archive>(
+        opcode: Opcode,
+        data: impl for<'a, 'b> Serialize<
+            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
+        >,
+    ) -> Result<Out, CUerror>
+    where
+        <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,
+    {
+        Self::get()?
+            .lock()
+            .map_err(|_| CUerror::UNKNOWN)?
+            .server
+            .remote_call_framed_out(opcode, data)
+    }
+}
+
 pub(crate) fn cu_init(flags: u32) -> Result<(), CUerror> {
-    ipc::Server::remote_call_zero_copy::<cuInitOut>(Opcode::cuInit, cuInitIn { Flags: flags })?;
+    GlobalState::remote_call_zero_copy::<cuInitOut>(Opcode::cuInit, cuInitIn { Flags: flags })?;
     Ok(())
 }
 
@@ -134,7 +202,7 @@ pub(crate) fn cu_ctx_create_v2(
 ) -> Result<(), CUerror> {
     let ctx_ref = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let cu_ctx = CudaEncode::decode(
-        ipc::Server::remote_call_zero_copy::<cuCtxCreate_v2Out>(
+        GlobalState::remote_call_zero_copy::<cuCtxCreate_v2Out>(
             Opcode::cuCtxCreate_v2,
             cuCtxCreate_v2In { flags, dev },
         )?
@@ -158,7 +226,7 @@ pub(crate) fn cu_ctx_get_api_version(
     let version = unsafe { version.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let ctx = CONTEXT_STACK.with(|s| s.unwrap(ctx))?;
     *version = CudaEncode::decode(
-        ipc::Server::remote_call_zero_copy::<cuCtxGetApiVersionOut>(
+        GlobalState::remote_call_zero_copy::<cuCtxGetApiVersionOut>(
             Opcode::cuCtxGetApiVersion,
             cuCtxGetApiVersionIn {
                 ctx: CudaEncode::encode(ctx),
@@ -199,7 +267,7 @@ pub(crate) fn cu_device_get(
     ordinal: ::core::ffi::c_int,
 ) -> Result<(), CUerror> {
     let device = unsafe { device.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *device = ipc::Server::remote_call_zero_copy::<cuDeviceGetOut>(
+    *device = GlobalState::remote_call_zero_copy::<cuDeviceGetOut>(
         Opcode::cuDeviceGet,
         cuDeviceGetIn { ordinal },
     )?
@@ -213,7 +281,7 @@ pub(crate) fn cu_device_get_attribute(
     dev: CUdevice,
 ) -> Result<(), CUerror> {
     let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *pi = ipc::Server::remote_call_zero_copy::<cuDeviceGetAttributeOut>(
+    *pi = GlobalState::remote_call_zero_copy::<cuDeviceGetAttributeOut>(
         Opcode::cuDeviceGetAttribute,
         cuDeviceGetAttributeIn {
             attrib: CudaEncode::encode(attrib),
@@ -226,7 +294,7 @@ pub(crate) fn cu_device_get_attribute(
 
 pub(crate) fn cu_device_get_count(count: *mut ::core::ffi::c_int) -> Result<(), CUerror> {
     let count = unsafe { count.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *count = ipc::Server::remote_call_zero_copy::<cuDeviceGetCountOut>(
+    *count = GlobalState::remote_call_zero_copy::<cuDeviceGetCountOut>(
         Opcode::cuDeviceGetCount,
         cuDeviceGetCountIn {},
     )?
@@ -242,7 +310,7 @@ pub(crate) fn cu_device_get_name(
     if name.is_null() {
         return Err(CUerror::INVALID_VALUE);
     }
-    let name_out = ipc::Server::remote_call_framed_out::<cuDeviceGetNameOut>(
+    let name_out = GlobalState::remote_call_framed_out::<cuDeviceGetNameOut>(
         Opcode::cuDeviceGetName,
         cuDeviceGetNameIn { len, dev },
     )?;
@@ -262,7 +330,7 @@ pub(crate) fn cu_device_get_properties(prop: *mut CUdevprop, dev: CUdevice) -> R
 
 pub(crate) fn cu_device_total_mem_v2(bytes: *mut usize, dev: CUdevice) -> Result<(), CUerror> {
     let bytes = unsafe { bytes.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *bytes = ipc::Server::remote_call_zero_copy::<cuDeviceTotalMem_v2Out>(
+    *bytes = GlobalState::remote_call_zero_copy::<cuDeviceTotalMem_v2Out>(
         Opcode::cuDeviceTotalMem_v2,
         cuDeviceTotalMem_v2In { dev },
     )?
@@ -276,7 +344,7 @@ pub(crate) fn cu_driver_get_version(
     driver_version: *mut ::core::ffi::c_int,
 ) -> Result<(), CUerror> {
     let driver_version = unsafe { driver_version.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *driver_version = ipc::Server::remote_call_zero_copy::<cuDriverGetVersionOut>(
+    *driver_version = GlobalState::remote_call_zero_copy::<cuDriverGetVersionOut>(
         Opcode::cuDriverGetVersion,
         cuDriverGetVersionIn {},
     )?
@@ -318,24 +386,42 @@ pub(crate) fn cu_get_export_table(
 
 pub(crate) fn cu_launch_kernel(
     f: CUfunction,
-    gridDimX: ::core::ffi::c_uint,
-    gridDimY: ::core::ffi::c_uint,
-    gridDimZ: ::core::ffi::c_uint,
-    blockDimX: ::core::ffi::c_uint,
-    blockDimY: ::core::ffi::c_uint,
-    blockDimZ: ::core::ffi::c_uint,
-    sharedMemBytes: ::core::ffi::c_uint,
-    hStream: CUstream,
-    kernelParams: *mut *mut ::core::ffi::c_void,
+    grid_dim_x: ::core::ffi::c_uint,
+    grid_dim_y: ::core::ffi::c_uint,
+    grid_dim_z: ::core::ffi::c_uint,
+    block_dim_x: ::core::ffi::c_uint,
+    block_dim_y: ::core::ffi::c_uint,
+    block_dim_z: ::core::ffi::c_uint,
+    shared_mem_bytes: ::core::ffi::c_uint,
+    stream: CUstream,
+    kernel_params: *mut *mut ::core::ffi::c_void,
     extra: *mut *mut ::core::ffi::c_void,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    if !extra.is_null() {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    GlobalState::remote_call_framed_in::<cuLaunchKernelOut>(
+        Opcode::cuLaunchKernel,
+        cuLaunchKernelIn {
+            f: CudaEncode::encode(f),
+            grid_dim_x: u32_le::from_native(grid_dim_x),
+            grid_dim_y: u32_le::from_native(grid_dim_y),
+            grid_dim_z: u32_le::from_native(grid_dim_z),
+            block_dim_x: u32_le::from_native(block_dim_x),
+            block_dim_y: u32_le::from_native(block_dim_y),
+            block_dim_z: u32_le::from_native(block_dim_z),
+            shared_mem_bytes: u32_le::from_native(shared_mem_bytes),
+            stream: CudaEncode::encode(stream),
+            kernel_params: Vec::new(),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_mem_alloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> Result<(), CUerror> {
     let dptr = unsafe { dptr.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     *dptr = CudaEncode::decode(
-        ipc::Server::remote_call_zero_copy::<cuMemAlloc_v2Out>(
+        GlobalState::remote_call_zero_copy::<cuMemAlloc_v2Out>(
             Opcode::cuMemAlloc_v2,
             cuMemAlloc_v2In {
                 bytesize: u32_le::from_native(bytesize as u32),
@@ -401,7 +487,7 @@ pub(crate) fn cu_memcpy_hto_d_async_v2(
         return Err(CUerror::INVALID_VALUE);
     }
     let slice = unsafe { std::slice::from_raw_parts(src_host.cast::<u8>(), byte_count) };
-    ipc::Server::remote_call_framed_in::<cuMemcpyHtoDAsync_v2Out>(
+    GlobalState::remote_call_framed_in::<cuMemcpyHtoDAsync_v2Out>(
         Opcode::cuMemcpyHtoDAsync_v2,
         cuMemcpyHtoDAsync_v2In {
             dst_device: CudaEncode::encode(dst_device),
@@ -426,19 +512,31 @@ pub(crate) fn cu_module_get_function(
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
     let hfunc = unsafe { hfunc.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
     *hfunc = CUfunction(
-        ipc::Server::remote_call_framed_in::<cuModuleGetFunctionOut>(
-            Opcode::cuModuleGetFunction,
-            cuModuleGetFunctionIn {
-                hmod: CudaEncode::encode(hmod),
-                name: unsafe { std::ffi::CStr::from_ptr(name) }
-                    .to_bytes_with_nul()
-                    .to_vec(),
-            },
-        )?
-        .hfunc
-        .to_native() as _,
+        state
+            .server
+            .remote_call_framed_in::<cuModuleGetFunctionOut>(
+                Opcode::cuModuleGetFunction,
+                cuModuleGetFunctionIn {
+                    hmod: CudaEncode::encode(hmod),
+                    name: unsafe { std::ffi::CStr::from_ptr(name) }
+                        .to_bytes_with_nul()
+                        .to_vec(),
+                },
+            )?
+            .hfunc
+            .to_native() as _,
     );
+    let arg_sizes_out = state
+        .server
+        .remote_call_framed_out::<zludaGetFunctionArgsOut>(
+            Opcode::zludaGetFunctionArgs,
+            zludaGetFunctionArgsIn {
+                f: CudaEncode::encode(*hfunc),
+            },
+        )?;
+    state.function_args.insert(*hfunc, arg_sizes_out.args);
     Ok(())
 }
 
@@ -451,7 +549,7 @@ pub(crate) fn cu_module_get_global_v2(
     let mut bytes_fallback = 0usize;
     let dptr = unsafe { dptr.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let bytes = unsafe { bytes.as_mut() }.unwrap_or(&mut bytes_fallback);
-    let result = ipc::Server::remote_call_framed_in::<cuModuleGetGlobal_v2Out>(
+    let result = GlobalState::remote_call_framed_in::<cuModuleGetGlobal_v2Out>(
         Opcode::cuModuleGetGlobal_v2,
         cuModuleGetGlobal_v2In {
             hmod: CudaEncode::encode(hmod),
@@ -471,7 +569,7 @@ pub(crate) fn cu_module_get_tex_ref(
     name: *const ::core::ffi::c_char,
 ) -> Result<(), CUerror> {
     let texref = unsafe { texref.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let result = ipc::Server::remote_call_framed_in::<cuModuleGetTexRefOut>(
+    let result = GlobalState::remote_call_framed_in::<cuModuleGetTexRefOut>(
         Opcode::cuModuleGetTexRef,
         cuModuleGetTexRefIn {
             hmod: CudaEncode::encode(hmod),
@@ -622,7 +720,7 @@ impl CudaDarkApi for DarkApi32 {
             last_module.to_mut().push(0);
         }
         *result = CUmodule(
-            ipc::Server::remote_call_framed_in::<cuModuleLoadDataOut>(
+            GlobalState::remote_call_framed_in::<cuModuleLoadDataOut>(
                 Opcode::cuModuleLoadData,
                 cuModuleLoadDataIn {
                     image: last_module.into_owned(),
@@ -700,7 +798,7 @@ impl CudaDarkApi for DarkApi32 {
         >,
     ) -> cuda_types::cuda::CUresult {
         let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
-        ipc::Server::remote_call_zero_copy::<ContextLocalStoragePutOut>(
+        GlobalState::remote_call_zero_copy::<ContextLocalStoragePutOut>(
             Opcode::ContextLocalStoragePut,
             ContextLocalStoragePutIn {
                 cu_ctx: cu_ctx.encode().into(),
@@ -725,7 +823,7 @@ impl CudaDarkApi for DarkApi32 {
     ) -> cuda_types::cuda::CUresult {
         let value = unsafe { value.as_mut() }.ok_or(cuda_types::cuda::CUerror::INVALID_VALUE)?;
         let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
-        *value = ipc::Server::remote_call_zero_copy::<ContextLocalStorageGetOut>(
+        *value = GlobalState::remote_call_zero_copy::<ContextLocalStorageGetOut>(
             Opcode::ContextLocalStorageGet,
             ContextLocalStorageGetIn {
                 cu_ctx: cu_ctx.encode().into(),

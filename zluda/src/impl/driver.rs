@@ -528,10 +528,26 @@ impl ::dark_api::zluda32::CudaDarkApi for Zluda32DarkApi {
     }
 
     unsafe extern "system" fn get_function_info(
-        explicit_argument_count: *mut u32,
-        module: cuda_types::cuda::CUfunction,
+        explicit_sizes_out: *mut u32,
+        explicit_count_out: *mut u32,
+        func: cuda_types::cuda::CUfunction,
     ) -> cuda_types::cuda::CUresult {
-        CUresult::ERROR_NOT_SUPPORTED
+        let func: &function::Function = FromCuda::<_, CUerror>::from_cuda(&func)?;
+        let explicit_arg_sizes = match &func.explicit_arg_sizes {
+            Some(sizes) => sizes,
+            None => return CUresult::ERROR_NOT_FOUND,
+        };
+        if !explicit_sizes_out.is_null() {
+            std::ptr::copy_nonoverlapping(
+                explicit_arg_sizes.as_ptr(),
+                explicit_sizes_out,
+                explicit_arg_sizes.len(),
+            );
+        }
+        if let Some(explicit_count_out) = explicit_count_out.as_mut() {
+            *explicit_count_out = explicit_arg_sizes.len() as u32;
+        }
+        Ok(())
     }
 }
 
