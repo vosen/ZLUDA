@@ -9,6 +9,7 @@ use compio::{
 };
 use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
+use dark_api::FunctionArgInfo;
 use rkyv::{
     api::high::HighSerializer,
     rend::{u32_le, u64_le},
@@ -24,6 +25,7 @@ use std::{
     mem,
     ops::Range,
     ptr::{self, NonNull},
+    rc::Rc,
 };
 use zluda_server_common::*;
 
@@ -131,7 +133,7 @@ impl ModuleLaunchData {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let module_data = Module {
-            globals,
+            globals: Rc::new(globals),
             texrefs: FxHashMap::default(),
         };
         self.modules.insert(module, module_data);
@@ -140,7 +142,7 @@ impl ModuleLaunchData {
 }
 
 struct Module {
-    globals: Vec<Global>,
+    globals: Rc<Vec<Global>>,
     texrefs: FxHashMap<Vec<u8>, u32>,
 }
 
@@ -157,12 +159,10 @@ impl Global {
 }
 
 struct Function {
-    module: CUmodule,
-    explicit_argument_count: u32,
+    globals: Rc<Vec<Global>>,
 }
 
 struct Allocator {
-    device: u32,
     start: Option<*mut c_void>,
     allocator: range_alloc::RangeAllocator<u32>,
     allocation_ends: FxHashMap<u32, u32>,
@@ -172,9 +172,8 @@ impl Allocator {
     const ALLOCATION_UNIT: u32 = 128;
     const ALLOCATOR_SIZE: u32 = 512 * 1024 * 1024; // 512 MiB
 
-    fn new(device: u32) -> Self {
+    fn new() -> Self {
         Self {
-            device,
             start: None,
             allocator: range_alloc::RangeAllocator::new(
                 // starting from 1 to avoid handing out null pointers
@@ -250,9 +249,7 @@ impl State {
         Ok(Self {
             handles: HandlePool::new(),
             dark_api,
-            devmemory: (0..devices)
-                .map(|device| Allocator::new(device as u32))
-                .collect(),
+            devmemory: (0..devices).map(|_| Allocator::new()).collect(),
             modules: ModuleLaunchData::new()?,
         })
     }
@@ -428,6 +425,14 @@ async fn main() -> std::io::Result<()> {
                 })
                 .await?;
             }
+            Some(Opcode::cuLaunchKernel) => {
+                buffer = handle_cuda_function_framed_in::<cuLaunchKernelIn, cuLaunchKernelOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_launch_kernel(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -437,6 +442,55 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_launch_kernel(
+    state: &mut State,
+    input: &ArchivedcuLaunchKernelIn,
+) -> Result<cuLaunchKernelOut, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let mut params = input
+        .kernel_params
+        .iter()
+        .map(|p| p.as_ptr().cast_mut().cast::<c_void>())
+        .collect::<Vec<_>>();
+    let mut base64_ptr = state.devmemory[device as usize].get_device_ptr()?;
+    params.push(ptr::from_mut(&mut base64_ptr).cast());
+    let function = CUfunction(state.handles.get(input.f.to_native())?);
+    let function_info = state
+        .modules
+        .functions
+        .get(&function)
+        .ok_or(CUerror::INVALID_VALUE)?;
+    let globals = function_info
+        .globals
+        .iter()
+        .map(|global| global.allocation.start * Allocator::ALLOCATION_UNIT)
+        .collect::<Vec<_>>();
+    for g in globals.iter() {
+        params.push(ptr::from_ref(g).cast_mut().cast());
+    }
+    unsafe {
+        cuLaunchKernel(
+            function,
+            input.grid_dim_x.to_native(),
+            input.grid_dim_y.to_native(),
+            input.grid_dim_z.to_native(),
+            input.block_dim_x.to_native(),
+            input.block_dim_y.to_native(),
+            input.block_dim_z.to_native(),
+            input.shared_mem_bytes.to_native(),
+            if input.stream == 0 {
+                CUstream(ptr::null_mut())
+            } else {
+                CUstream(state.handles.get(input.stream.to_native())?)
+            },
+            params.as_mut_ptr(),
+            std::ptr::null_mut(),
+        )
+    }?;
+    Ok(cuLaunchKernelOut {})
 }
 
 fn zluda_get_function_args(
@@ -452,7 +506,7 @@ fn zluda_get_function_args(
             CUfunction(hfunc),
         )
     }?;
-    let mut arg_sizes = vec![0; count as usize];
+    let mut arg_sizes = vec![FunctionArgInfo { size: 0, align: 0 }; count as usize];
     unsafe {
         state.modules.dark_api.get_function_info(
             arg_sizes.as_mut_ptr(),
@@ -551,6 +605,13 @@ fn cu_module_get_function(
     let mut hfunc = unsafe { mem::zeroed() };
     let hmod = state.handles.get(input.hmod.to_native())?;
     unsafe { cuModuleGetFunction(&mut hfunc, CUmodule(hmod), input.name.as_ptr().cast()) }?;
+    state
+        .modules
+        .functions
+        .entry(hfunc)
+        .or_insert_with(|| Function {
+            globals: Rc::clone(&state.modules.modules[&CUmodule(hmod)].globals),
+        });
     Ok(cuModuleGetFunctionOut {
         hfunc: u32_le::from_native(state.handles.insert(hfunc.0)),
     })
