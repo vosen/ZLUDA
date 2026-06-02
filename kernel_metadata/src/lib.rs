@@ -43,7 +43,7 @@ pub struct Global32Bit {
 #[derive(Archive, Serialize, Deserialize, Debug)]
 pub struct ModuleMetadata32Bit {
     pub globals: Vec<Global32Bit>,
-    pub explicit_arg_sizes: Vec<(String, Vec<u32>)>,
+    pub explicit_args_size_align: Vec<(String, Vec<(u32, u32)>)>,
 }
 
 // If the alignment is larger than u64, then we need different padding
