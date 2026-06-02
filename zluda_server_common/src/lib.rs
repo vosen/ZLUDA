@@ -327,5 +327,5 @@ pub struct zludaGetFunctionArgsIn {
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct zludaGetFunctionArgsOut {
-    pub args: Vec<u32>,
+    pub args: Vec<dark_api::FunctionArgInfo>,
 }

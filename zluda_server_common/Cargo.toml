@@ -5,6 +5,7 @@ authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [dependencies]
+dark_api = { path = "../dark_api" }
 cuda_types = { path = "../cuda_types" }
 cuda_macros = { path = "../cuda_macros" }
 bitcode = "0.6.9"
