@@ -2,6 +2,7 @@ use super::driver;
 use crate::r#impl::function;
 use crate::r#impl::{driver::GlobalState, function::Function};
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
+use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
 use rustc_hash::FxHashMap;
 use std::collections::hash_map;
@@ -31,7 +32,7 @@ impl ModuleMutable {
         module: hipModule_t,
         sm_version: u32,
         name: CString,
-        explicit_arg_sizes: Option<Vec<u32>>,
+        explicit_args_size_align: Option<Vec<FunctionArgInfo>>,
     ) -> Result<&Function, CUerror> {
         Ok(match self.functions.entry(name) {
             hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
@@ -41,7 +42,7 @@ impl ModuleMutable {
                 let func = Box::new(Function {
                     base: func_handle,
                     sm_version,
-                    explicit_arg_sizes,
+                    explicit_args_size_align,
                 });
                 &*entry.insert(func)
             }
@@ -63,7 +64,7 @@ impl ZludaObject for Module {
 
 pub(crate) struct Metadata32Bit {
     pub globals: Vec<Global32Bit>,
-    pub explicit_arg_sizes: FxHashMap<String, Vec<u32>>,
+    pub explicit_args_size_align: FxHashMap<String, Vec<FunctionArgInfo>>,
 }
 
 impl Metadata32Bit {
@@ -77,14 +78,24 @@ impl Metadata32Bit {
                 align: g.align,
             })
             .collect();
-        let explicit_arg_sizes = meta
-            .explicit_arg_sizes
+        let explicit_args_size_align = meta
+            .explicit_args_size_align
             .iter()
-            .map(|kv| (kv.0.to_string(), kv.1.clone()))
+            .map(|(key, value)| {
+                let key = key.to_string();
+                let value = value
+                    .iter()
+                    .map(|(size, align)| FunctionArgInfo {
+                        size: *size,
+                        align: *align,
+                    })
+                    .collect();
+                (key, value)
+            })
             .collect();
         Self {
             globals,
-            explicit_arg_sizes,
+            explicit_args_size_align,
         }
     }
 
@@ -98,19 +109,24 @@ impl Metadata32Bit {
                 align: g.align.to_native(),
             })
             .collect();
-        let explicit_arg_sizes = archived
-            .explicit_arg_sizes
+        let explicit_args_size_align = archived
+            .explicit_args_size_align
             .iter()
             .map(|kv| {
                 (
                     kv.0.to_string(),
-                    kv.1.iter().map(|&x| x.to_native()).collect(),
+                    kv.1.iter()
+                        .map(|x| FunctionArgInfo {
+                            size: x.0.to_native(),
+                            align: x.1.to_native(),
+                        })
+                        .collect(),
                 )
             })
             .collect();
         Self {
             globals,
-            explicit_arg_sizes,
+            explicit_args_size_align,
         }
     }
 }
@@ -136,7 +152,7 @@ impl Module {
     pub(crate) fn get_function<'a>(&'a self, name: &CStr) -> Result<&'static Function, CUerror> {
         let mut mutable = self.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
         let explicit_args = self.bit32.as_ref().and_then(|meta| {
-            meta.explicit_arg_sizes
+            meta.explicit_args_size_align
                 .get(name.to_str().ok()?)
                 .map(Vec::clone)
         });

@@ -1,11 +1,12 @@
 use cuda_types::cuda::{CUfunction, CUfunction_attribute, CUkernel};
+use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
 use std::mem;
 
 pub(crate) struct Function {
     pub(crate) base: hipFunction_t,
     pub(crate) sm_version: u32,
-    pub(crate) explicit_arg_sizes: Option<Vec<u32>>,
+    pub(crate) explicit_args_size_align: Option<Vec<FunctionArgInfo>>,
 }
 
 impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, CUfunction, E>
