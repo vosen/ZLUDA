@@ -853,6 +853,7 @@ dependencies = [
  "format",
  "lz4-sys",
  "paste",
+ "rkyv",
  "uuid",
  "zstd-safe",
 ]
@@ -5892,6 +5893,7 @@ dependencies = [
  "bitcode",
  "cuda_macros",
  "cuda_types",
+ "dark_api",
  "paste",
  "postcard",
  "rkyv",
