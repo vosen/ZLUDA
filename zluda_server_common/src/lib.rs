@@ -38,7 +38,8 @@ macro_rules! generate_messages_inout {
             cuMemcpyHtoDAsync_v2,
             cuModuleGetTexRef,
             cuLaunchKernel,
-            zludaGetFunctionArgs
+            zludaGetFunctionArgs,
+            cuMemcpyDtoHAsync_v2
         }
     };
 }
@@ -328,4 +329,18 @@ pub struct zludaGetFunctionArgsIn {
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct zludaGetFunctionArgsOut {
     pub args: Vec<dark_api::FunctionArgInfo>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyDtoHAsync_v2In {
+    pub src_device: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+    pub stream: <CUstream as CudaEncode>::WireObject,
+    pub byte_count: u32_le,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyDtoHAsync_v2Out {
+    pub dst_host: Vec<u8>,
 }
