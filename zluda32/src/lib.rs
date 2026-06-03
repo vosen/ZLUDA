@@ -254,7 +254,11 @@ pub(crate) fn cu_ctx_get_device(device: *mut CUdevice) -> Result<(), CUerror> {
 }
 
 pub(crate) fn cu_ctx_synchronize() -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuCtxSynchronizeOut>(
+        Opcode::cuCtxSynchronize,
+        cuCtxSynchronizeIn {},
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_device_compute_capability(
@@ -493,8 +497,10 @@ pub(crate) fn cu_mem_host_alloc(
     _flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
     let pp = unsafe { pp.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *pp = unsafe { std::alloc::alloc(std::alloc::Layout::from_size_align(bytesize, 32).unwrap()) }
-        .cast();
+    *pp = unsafe {
+        std::alloc::alloc_zeroed(std::alloc::Layout::from_size_align(bytesize, 32).unwrap())
+    }
+    .cast();
     Ok(())
 }
 
@@ -508,12 +514,25 @@ pub(crate) fn cu_memcpy_dto_d_async_v2(
 }
 
 pub(crate) fn cu_memcpy_dto_h_async_v2(
-    dstHost: *mut ::core::ffi::c_void,
-    srcDevice: CUdeviceptr,
-    ByteCount: usize,
-    hStream: CUstream,
+    dst_host: *mut ::core::ffi::c_void,
+    src_device: CUdeviceptr,
+    byte_count: usize,
+    stream: CUstream,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    if dst_host.is_null() || src_device.0.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let dst_slice = unsafe { std::slice::from_raw_parts_mut(dst_host.cast::<u8>(), byte_count) };
+    let result = GlobalState::remote_call_framed_out::<cuMemcpyDtoHAsync_v2Out>(
+        Opcode::cuMemcpyDtoHAsync_v2,
+        cuMemcpyDtoHAsync_v2In {
+            src_device: CudaEncode::encode(src_device),
+            stream: CudaEncode::encode(stream),
+            byte_count: u32_le::from_native(byte_count as u32),
+        },
+    )?;
+    dst_slice.copy_from_slice(&result.dst_host);
+    Ok(())
 }
 
 pub(crate) fn cu_memcpy_hto_d_async_v2(
@@ -522,7 +541,7 @@ pub(crate) fn cu_memcpy_hto_d_async_v2(
     byte_count: usize,
     h_stream: CUstream,
 ) -> Result<(), CUerror> {
-    if src_host.is_null() {
+    if src_host.is_null() || dst_device.0.is_null() {
         return Err(CUerror::INVALID_VALUE);
     }
     let slice = unsafe { std::slice::from_raw_parts(src_host.cast::<u8>(), byte_count) };
