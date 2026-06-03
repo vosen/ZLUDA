@@ -433,6 +433,23 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuCtxSynchronize) => {
+                buffer = handle_cuda_function::<cuCtxSynchronizeIn, cuCtxSynchronizeOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_ctx_synchronize(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuMemcpyDtoHAsync_v2) => {
+                buffer = handle_cuda_function_framed_out::<
+                    cuMemcpyDtoHAsync_v2In,
+                    cuMemcpyDtoHAsync_v2Out,
+                >(&mut client, buffer, |input| {
+                    cu_memcpy_dtoh_async_v2(&mut state, input)
+                })
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -442,6 +459,40 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_memcpy_dtoh_async_v2(
+    state: &mut State,
+    input: &ArchivedcuMemcpyDtoHAsync_v2In,
+) -> Result<cuMemcpyDtoHAsync_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let devptr = state.devmemory[device as usize].translate(input.src_device.to_native())?;
+    let stream = input.stream.to_native();
+    let stream = if stream == 0 {
+        CUstream(ptr::null_mut())
+    } else {
+        CUstream(state.handles.get(stream)?)
+    };
+    let mut dst_host = vec![0u8; input.byte_count.to_native() as usize];
+    unsafe {
+        cuMemcpyDtoHAsync_v2(
+            dst_host.as_mut_ptr().cast(),
+            CUdeviceptr_v2(devptr),
+            input.byte_count.to_native() as usize,
+            stream,
+        )
+    }?;
+    unsafe { cuStreamSynchronize(stream) }?;
+    Ok(cuMemcpyDtoHAsync_v2Out { dst_host })
+}
+
+fn cu_ctx_synchronize(
+    state: &mut State,
+    input: &ArchivedcuCtxSynchronizeIn,
+) -> Result<cuCtxSynchronizeOut, CUerror> {
+    unsafe { cuCtxSynchronize() }?;
+    Ok(cuCtxSynchronizeOut {})
 }
 
 fn cu_launch_kernel(
@@ -946,7 +997,7 @@ cuda_function_declarations! {
         cuCtxGetApiVersion,
         // cuCtxGetCurrent,
         cuCtxGetDevice,
-        // cuCtxSynchronize,
+        cuCtxSynchronize,
         // cuDeviceComputeCapability,
         cuDeviceGet,
         cuDeviceGetAttribute,
@@ -966,7 +1017,7 @@ cuda_function_declarations! {
         // cuMemGetAddressRange_v2,
         // cuMemHostAlloc,
         // cuMemcpyDtoDAsync_v2,
-        // cuMemcpyDtoHAsync_v2,
+        cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoD_v2,
         cuMemcpyHtoDAsync_v2,
         // cuMemsetD8_v2,
@@ -985,5 +1036,6 @@ cuda_function_declarations! {
         // cuTexRefSetMipmapFilterMode,
         // cuTexRefSetMipmapLevelBias,
         // cuTexRefSetMipmapLevelClamp,
+        cuStreamSynchronize,
     ]
 }
