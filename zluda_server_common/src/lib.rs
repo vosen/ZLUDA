@@ -75,7 +75,7 @@ cuda_function_declarations! {
         //cuMemAlloc_v2,
         //cuMemFreeHost,
         //cuMemFree_v2,
-        // cuMemGetAddressRange_v2,
+        cuMemGetAddressRange_v2,
         //cuMemHostAlloc,
         //cuMemcpyDtoDAsync_v2,
         //cuMemcpyDtoHAsync_v2,
@@ -87,7 +87,7 @@ cuda_function_declarations! {
         cuStreamCreate,
         cuStreamDestroy_v2,
         cuTexRefSetAddressMode,
-        // cuTexRefSetAddress_v2,
+        cuTexRefSetAddress_v2,
         cuTexRefSetFilterMode,
         cuTexRefSetFlags,
         cuTexRefSetFormat,
@@ -169,6 +169,16 @@ encode_as_u32!(CUfunction);
 encode_as_u32!(CUmodule);
 encode_as_u32!(CUstream);
 encode_as_u32!(CUtexref);
+
+impl CudaEncode for usize {
+    type WireObject = u32_le;
+    fn encode(self) -> u32_le {
+        (self as u32).into()
+    }
+    fn decode(o: Self::WireObject) -> Self {
+        o.to_native() as usize
+    }
+}
 
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
