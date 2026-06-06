@@ -1691,7 +1691,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         if self.base_32bit_memory.is_some()
             && matches!(
-                to_space,
+                data.state_space,
                 ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const
             )
         {
