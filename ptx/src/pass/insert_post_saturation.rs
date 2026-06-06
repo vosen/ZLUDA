@@ -202,6 +202,7 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::Tanh { .. }
         | ast::Instruction::Trap {}
+        | ast::Instruction::Exit {}
         | ast::Instruction::Xor { .. }
         | ast::Instruction::Vote { .. }
         | ast::Instruction::ReduxSync { .. }

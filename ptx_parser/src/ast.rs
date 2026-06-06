@@ -760,6 +760,9 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         Trap { },
+        Exit {
+            display: write!(f, "exit")?
+        },
         Xor {
             type: Type::Scalar(data.clone()),
             data: ScalarType,

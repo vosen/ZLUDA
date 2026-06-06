@@ -3953,6 +3953,22 @@ derive_parser!(
         Instruction::Ret { data: RetData { uniform: uni } }
     }
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-exit
+    // `exit` terminates the calling thread regardless of call depth. In a top-level
+    // entry routine -- the common case, e.g. CUB's onesweep radix-sort kernel early-outs
+    // an out-of-range tile with it -- a void return has the same effect (PTX ISA: "A
+    // return instruction executed in a top-level entry routine will terminate thread
+    // execution"), so emit lowers Exit to Ret there. Inside a `.func` device function a
+    // `ret` would only unwind to the caller and let the thread keep running, which is the
+    // wrong semantics; ZLUDA does not inline `.func`s, so emit refuses Exit in that case
+    // rather than silently mis-executing. Kept as its own opcode (not folded into Ret
+    // here) precisely so emit can tell the entry and non-entry cases apart -- without any
+    // rule the parser would instead drop the whole enclosing directive via error recovery
+    // and release builds (parse_module_unchecked) would load the module without it.
+    exit => {
+        Instruction::Exit { }
+    }
+
     mul24.mode.type  d, a, b => {
         ast::Instruction::Mul24 {
             data: ast::Mul24Details {
@@ -4574,6 +4590,27 @@ mod tests {
             errors[1],
             PtxError::UnrecognizedStatement("unknown_op2 temp2, temp;")
         ));
+    }
+
+    #[test]
+    fn exit_parses_as_terminator() {
+        // `exit` must parse; otherwise error recovery drops the whole enclosing
+        // directive (and release builds then load the module without it). Regression
+        // test for CUB onesweep radix-sort kernels, which early-out a tile with `exit`.
+        let text = "
+            .version 6.5
+            .target sm_60
+            .address_size 64
+
+            .visible .entry uses_exit(
+            )
+            {
+                exit;
+                ret;
+            }";
+        let module = parse_module_checked(text).unwrap();
+        assert_eq!(module.invalid_directives, 0);
+        assert_eq!(module.directives.len(), 1);
     }
 
     #[test]

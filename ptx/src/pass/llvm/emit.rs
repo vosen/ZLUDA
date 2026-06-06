@@ -193,6 +193,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             Self::func_call_convention()
         };
         unsafe { LLVMSetFunctionCallConv(fn_, call_conv) };
+        // Capture before the loop below: `for directive in method.tuning` calls
+        // into_iter(), which moves method.tuning and partially moves `method`,
+        // after which method.is_kernel() (a &self borrow) would be rejected.
+        let is_kernel = method.is_kernel();
         for directive in method.tuning {
             match directive {
                 ptx_parser::TuningDirective::NoReturn => {
@@ -213,7 +217,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
             let mut method_emitter =
-                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
+                MethodEmitContext::new(self, fn_, is_kernel, variables_builder, base_32bit_memory);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -461,6 +465,10 @@ struct MethodEmitContext<'a> {
     context: LLVMContextRef,
     module: LLVMModuleRef,
     method: LLVMValueRef,
+    // Whether `method` is a top-level entry routine (.entry) rather than a callable
+    // .func. Only entry routines may terminate the thread by returning, which is what
+    // `exit` lowers to; see emit_exit.
+    is_kernel: bool,
     builder: LLVMBuilderRef,
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
@@ -472,6 +480,7 @@ impl<'a> MethodEmitContext<'a> {
     fn new(
         parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
+        is_kernel: bool,
         variables_builder: Builder,
         base_32bit_memory: Option<SpirvWord>,
     ) -> MethodEmitContext<'a> {
@@ -482,6 +491,7 @@ impl<'a> MethodEmitContext<'a> {
             variables_builder,
             resolver: &mut parent.resolver,
             method,
+            is_kernel,
             carry_flag: None,
             base_32bit_memory: base_32bit_memory,
         }
@@ -641,6 +651,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::BarWarp { .. } => self.emit_bar_warp(),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => self.emit_trap(),
+            ast::Instruction::Exit {} => self.emit_exit(),
             ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
             ast::Instruction::Copysign { data, arguments } => self.emit_copysign(data, arguments),
@@ -1169,6 +1180,23 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_ret(&self, _data: ast::RetData) {
         unsafe { LLVMBuildRetVoid(self.builder) };
+    }
+
+    fn emit_exit(&self) -> Result<(), TranslateError> {
+        // `exit` terminates the calling thread regardless of how deep it is in the call
+        // stack. In a top-level entry routine returning has the same effect (PTX ISA: "A
+        // return instruction executed in a top-level entry routine will terminate thread
+        // execution"), so reuse the Ret path. ZLUDA does not inline .func device
+        // functions, so inside one a `ret` would only unwind to the caller and leave the
+        // thread running -- we can't model per-lane thread termination from a nested
+        // function, so refuse it loudly instead of mis-executing.
+        if !self.is_kernel {
+            return Err(error_todo_msg(
+                "`exit` is only supported in entry (.entry) functions, not callable (.func) functions",
+            ));
+        }
+        self.emit_ret(ast::RetData { uniform: false });
+        Ok(())
     }
 
     fn emit_call(
