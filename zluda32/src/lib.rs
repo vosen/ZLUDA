@@ -441,8 +441,6 @@ pub(crate) fn cu_launch_kernel(
     if total_size as usize != arg_size {
         return Err(CUerror::INVALID_VALUE);
     }
-    dbg!(arg_size);
-    dbg!(&kernel_params);
     state.server.remote_call_framed_in::<cuLaunchKernelOut>(
         Opcode::cuLaunchKernel,
         cuLaunchKernelIn {
@@ -488,7 +486,17 @@ pub(crate) fn cu_mem_get_address_range_v2(
     psize: *mut usize,
     dptr: CUdeviceptr,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let pbase = unsafe { pbase.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let psize = unsafe { psize.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let result = GlobalState::remote_call_zero_copy::<cuMemGetAddressRange_v2Out>(
+        Opcode::cuMemGetAddressRange_v2,
+        cuMemGetAddressRange_v2In {
+            dptr: CudaEncode::encode(dptr),
+        },
+    )?;
+    *pbase = CudaEncode::decode(result.pbase);
+    *psize = result.psize.to_native() as usize;
+    Ok(())
 }
 
 pub(crate) fn cu_mem_host_alloc(
@@ -652,71 +660,103 @@ pub(crate) fn cu_stream_destroy_v2(hStream: CUstream) -> Result<(), CUerror> {
 }
 
 pub(crate) fn cu_tex_ref_set_address_mode(
-    hTexRef: CUtexref,
-    dim: ::core::ffi::c_int,
-    am: CUaddress_mode,
+    _tex_ref: CUtexref,
+    _dim: ::core::ffi::c_int,
+    _am: CUaddress_mode,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_address_v2(
-    ByteOffset: *mut usize,
-    hTexRef: CUtexref,
+    byte_offset: *mut usize,
+    tex_ref: CUtexref,
     dptr: CUdeviceptr,
     bytes: usize,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let mut bytes_fallback = 0usize;
+    let byte_offset = unsafe { byte_offset.as_mut() }.unwrap_or(&mut bytes_fallback);
+    let result = GlobalState::remote_call_zero_copy::<cuTexRefSetAddress_v2Out>(
+        Opcode::cuTexRefSetAddress_v2,
+        cuTexRefSetAddress_v2In {
+            hTexRef: CudaEncode::encode(tex_ref),
+            dptr: CudaEncode::encode(dptr),
+            bytes: u32_le::from_native(bytes as u32),
+        },
+    )?;
+    *byte_offset = CudaEncode::decode(result.ByteOffset);
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_filter_mode(
-    hTexRef: CUtexref,
-    fm: CUfilter_mode,
+    _tex_ref: CUtexref,
+    _fm: CUfilter_mode,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_flags(
-    hTexRef: CUtexref,
-    Flags: ::core::ffi::c_uint,
+    tex_ref: CUtexref,
+    flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuTexRefSetFlagsOut>(
+        Opcode::cuTexRefSetFlags,
+        cuTexRefSetFlagsIn {
+            hTexRef: CudaEncode::encode(tex_ref),
+            Flags: flags,
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_format(
-    hTexRef: CUtexref,
+    tex_ref: CUtexref,
     fmt: CUarray_format,
-    NumPackedComponents: ::core::ffi::c_int,
+    num_packed_components: ::core::ffi::c_int,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuTexRefSetFormatOut>(
+        Opcode::cuTexRefSetFormat,
+        cuTexRefSetFormatIn {
+            hTexRef: CudaEncode::encode(tex_ref),
+            fmt: fmt.0.into(),
+            NumPackedComponents: num_packed_components,
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_max_anisotropy(
-    hTexRef: CUtexref,
-    maxAniso: ::core::ffi::c_uint,
+    _tex_ref: CUtexref,
+    _max_aniso: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_filter_mode(
-    hTexRef: CUtexref,
-    fm: CUfilter_mode,
+    _tex_ref: CUtexref,
+    _fm: CUfilter_mode,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_level_bias(
-    hTexRef: CUtexref,
-    bias: f32,
+    _tex_ref: CUtexref,
+    _bias: f32,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_mipmap_level_clamp(
-    hTexRef: CUtexref,
-    minMipmapLevelClamp: f32,
-    maxMipmapLevelClamp: f32,
+    _tex_ref: CUtexref,
+    _min_mipmap_level_clamp: f32,
+    _max_mipmap_level_clamp: f32,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    // TODO
+    Ok(())
 }
 
 struct UnknownBuffer<const S: usize> {

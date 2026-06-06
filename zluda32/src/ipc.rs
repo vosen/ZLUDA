@@ -24,7 +24,8 @@ fn server_path() -> &'static str {
     if cfg!(debug_assertions) {
         r"C:\dev\ZLUDA\target\debug\zluda64_server.exe"
     } else {
-        "zluda64_server.exe"
+        //"zluda64_server.exe"
+        r"C:\dev\ZLUDA\target\release\zluda64_server.exe"
     }
 }
 
