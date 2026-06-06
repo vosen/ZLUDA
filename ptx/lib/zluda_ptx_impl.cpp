@@ -50,6 +50,7 @@ then cd to the directory with this file and run this simple command:
 #include <hip/amd_detail/amd_device_functions.h>
 #include <hip/hip_fp8.h>
 
+#define GLOBAL_SPACE __attribute__((address_space(1)))
 #define SHARED_SPACE __attribute__((address_space(3)))
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
@@ -1034,25 +1035,25 @@ extern "C"
                c;
     }
 
-    static std::pair<CONSTANT_SPACE void *, CONSTANT_SPACE void *> get_image_and_sampler(uint64_t texobj) __device__
+    static std::pair<GLOBAL_SPACE void *, GLOBAL_SPACE void *> get_image_and_sampler(uint64_t texobj) __device__
     {
-        unsigned int CONSTANT_SPACE *image = (unsigned int CONSTANT_SPACE *)texobj;
-        unsigned int ADDRESS_SPACE_CONSTANT *sampler = image + HIP_SAMPLER_OBJECT_OFFSET_DWORD;
+        unsigned int GLOBAL_SPACE *image = (unsigned int GLOBAL_SPACE *)texobj;
+        unsigned int GLOBAL_SPACE *sampler = image + HIP_SAMPLER_OBJECT_OFFSET_DWORD;
         return {image, sampler};
     }
 
-    static v4f32 sample_1D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, float coord) __device__
+    static v4f32 sample_1D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, float coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_1d_v4f32_f32(uint32_t, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.1d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_1d_v4f32_f32(0xf, coord, *image_typed, *sampler_typed, false, 0, 0);
     }
 
-    static v4f32 sample_1Db(CONSTANT_SPACE void *image, s32 coord) __device__
+    static v4f32 sample_1Db(GLOBAL_SPACE void *image, s32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_struct_buffer_load_format_v4f32(v4s32, int, int, int, int) __asm("llvm.amdgcn.struct.buffer.load.format.v4f32");
-        CONSTANT_SPACE v4s32 *image_typed = (CONSTANT_SPACE v4s32 *)image;
+        GLOBAL_SPACE v4s32 *image_typed = (GLOBAL_SPACE v4s32 *)image;
         return __llvm_amdgcn_struct_buffer_load_format_v4f32(*image_typed, coord, 0, 0, 0);
     }
 #define tex_1d(RETURN_TYPE)                                                                                                                                                             \
@@ -1062,7 +1063,7 @@ extern "C"
         auto result = sample_1D(i, s, coord.x);                                                                                                                                         \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference CONSTANT_SPACE * texref, v1f32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1073,7 +1074,7 @@ extern "C"
         auto result = sample_1Db(i, coord.x);                                                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference CONSTANT_SPACE * texref, v1s32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1083,11 +1084,11 @@ extern "C"
     tex_1db(s32);
     tex_1db(f32);
 
-    static v4f32 sample_2D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v2f32 coord) __device__
+    static v4f32 sample_2D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, v2f32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_2d_v4f32_f32(uint32_t, float, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.2d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_2d_v4f32_f32(0xf, coord.x, coord.y, *image_typed, *sampler_typed, false, 0, 0);
     }
 #define tex_2d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
@@ -1097,7 +1098,7 @@ extern "C"
         auto result = sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1107,21 +1108,21 @@ extern "C"
     tex_2d(f32, s32);
     tex_2d(s32, f32);
 
-    static v4f32 sample_3D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v4f32 coord) __device__
+    static v4f32 sample_3D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, v4f32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_3d_v4f32_f32(uint32_t, float, float, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.3d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_3d_v4f32_f32(0xf, coord.x, coord.y, coord.z, *image_typed, *sampler_typed, false, 0, 0);
     }
 #define tex_3d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
     v4##RETURN_TYPE FUNC(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v4##COORD_TYPE coord)                                                                              \
     {                                                                                                                                                                                   \
         auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
-        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                              \
+        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v4##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
