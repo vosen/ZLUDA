@@ -20,6 +20,7 @@ use rkyv::{
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
+    collections::BTreeMap,
     ffi::{c_void, CStr, CString},
     io::{self, Write},
     mem,
@@ -165,7 +166,7 @@ struct Function {
 struct Allocator {
     start: Option<*mut c_void>,
     allocator: range_alloc::RangeAllocator<u32>,
-    allocation_ends: FxHashMap<u32, u32>,
+    allocation_ends: BTreeMap<u32, u32>,
 }
 
 impl Allocator {
@@ -179,7 +180,7 @@ impl Allocator {
                 // starting from 1 to avoid handing out null pointers
                 1..Self::ALLOCATOR_SIZE / Self::ALLOCATION_UNIT,
             ),
-            allocation_ends: FxHashMap::default(),
+            allocation_ends: BTreeMap::new(),
         }
     }
 
@@ -230,6 +231,19 @@ impl Allocator {
     fn translate_range(&self, range: Range<u32>) -> Result<*mut c_void, CUerror> {
         let base_ptr = self.get_device_ptr()?;
         Ok(base_ptr.wrapping_byte_add(range.start as usize * Self::ALLOCATION_UNIT as usize))
+    }
+
+    fn get_range(&self, mut offset: u32) -> Option<Range<u32>> {
+        offset /= Self::ALLOCATION_UNIT;
+        // Find last pair where `start <= ptr`
+        let (start, alloc) = self.allocation_ends.range(..=offset).rev().next()?;
+        let range = *start..*alloc;
+        // Check if allocation contains the pointer
+        if range.contains(&offset) {
+            Some(range)
+        } else {
+            None
+        }
     }
 }
 
@@ -437,7 +451,7 @@ async fn main() -> std::io::Result<()> {
                 buffer = handle_cuda_function::<cuCtxSynchronizeIn, cuCtxSynchronizeOut>(
                     &mut client,
                     buffer,
-                    |input| cu_ctx_synchronize(&mut state, input),
+                    cu_ctx_synchronize,
                 )
                 .await?;
             }
@@ -450,6 +464,39 @@ async fn main() -> std::io::Result<()> {
                 })
                 .await?;
             }
+            Some(Opcode::cuMemGetAddressRange_v2) => {
+                buffer = handle_cuda_function::<
+                    cuMemGetAddressRange_v2In,
+                    cuMemGetAddressRange_v2Out,
+                >(&mut client, buffer, |input| {
+                    cu_mem_get_address_range_v2(&mut state, input)
+                })
+                .await?;
+            }
+            Some(Opcode::cuTexRefSetAddress_v2) => {
+                buffer = handle_cuda_function::<cuTexRefSetAddress_v2In, cuTexRefSetAddress_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_tex_ref_set_address_v2(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuTexRefSetFlags) => {
+                buffer = handle_cuda_function::<cuTexRefSetFlagsIn, cuTexRefSetFlagsOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_tex_ref_set_flags(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuTexRefSetFormat) => {
+                buffer = handle_cuda_function::<cuTexRefSetFormatIn, cuTexRefSetFormatOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_tex_ref_set_format(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -459,6 +506,72 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_tex_ref_set_format(
+    state: &mut State,
+    input: &ArchivedcuTexRefSetFormatIn,
+) -> Result<cuTexRefSetFormatOut, CUerror> {
+    let tex_ref = state.handles.get(input.hTexRef.to_native())?;
+    unsafe {
+        cuTexRefSetFormat(
+            tex_ref,
+            CUarray_format(input.fmt.to_native()),
+            input.NumPackedComponents.to_native(),
+        )
+    }?;
+    Ok(cuTexRefSetFormatOut {})
+}
+
+fn cu_tex_ref_set_flags(
+    state: &mut State,
+    input: &ArchivedcuTexRefSetFlagsIn,
+) -> Result<cuTexRefSetFlagsOut, CUerror> {
+    let tex_ref = state.handles.get(input.hTexRef.to_native())?;
+    unsafe { cuTexRefSetFlags(tex_ref, input.Flags.to_native()) }?;
+    Ok(cuTexRefSetFlagsOut {})
+}
+
+fn cu_tex_ref_set_address_v2(
+    state: &mut State,
+    input: &ArchivedcuTexRefSetAddress_v2In,
+) -> Result<cuTexRefSetAddress_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let mut byte_offset = 0;
+    let dptr = input.dptr.to_native();
+    let dptr = if dptr != 0 {
+        CUdeviceptr_v2(state.devmemory[device as usize].translate(dptr)?)
+    } else {
+        CUdeviceptr_v2(ptr::null_mut())
+    };
+    unsafe {
+        cuTexRefSetAddress_v2(
+            &mut byte_offset,
+            state.handles.get(input.hTexRef.to_native())?,
+            dptr,
+            input.bytes.to_native() as usize,
+        )
+    }?;
+    Ok(cuTexRefSetAddress_v2Out {
+        ByteOffset: (byte_offset as u32).into(),
+    })
+}
+
+fn cu_mem_get_address_range_v2(
+    state: &mut State,
+    input: &ArchivedcuMemGetAddressRange_v2In,
+) -> Result<cuMemGetAddressRange_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let allocator = &state.devmemory[device as usize];
+    let range = allocator
+        .get_range(input.dptr.to_native())
+        .ok_or(CUerror::INVALID_VALUE)?;
+    Ok(cuMemGetAddressRange_v2Out {
+        pbase: (range.start * Allocator::ALLOCATION_UNIT).into(),
+        psize: ((range.end - range.start) * Allocator::ALLOCATION_UNIT).into(),
+    })
 }
 
 fn cu_memcpy_dtoh_async_v2(
@@ -487,10 +600,7 @@ fn cu_memcpy_dtoh_async_v2(
     Ok(cuMemcpyDtoHAsync_v2Out { dst_host })
 }
 
-fn cu_ctx_synchronize(
-    state: &mut State,
-    input: &ArchivedcuCtxSynchronizeIn,
-) -> Result<cuCtxSynchronizeOut, CUerror> {
+fn cu_ctx_synchronize(input: &ArchivedcuCtxSynchronizeIn) -> Result<cuCtxSynchronizeOut, CUerror> {
     unsafe { cuCtxSynchronize() }?;
     Ok(cuCtxSynchronizeOut {})
 }
@@ -1028,10 +1138,10 @@ cuda_function_declarations! {
         // cuStreamCreate,
         // cuStreamDestroy_v2,
         // cuTexRefSetAddressMode,
-        // cuTexRefSetAddress_v2,
+        cuTexRefSetAddress_v2,
         // cuTexRefSetFilterMode,
-        // cuTexRefSetFlags,
-        // cuTexRefSetFormat,
+        cuTexRefSetFlags,
+        cuTexRefSetFormat,
         // cuTexRefSetMaxAnisotropy,
         // cuTexRefSetMipmapFilterMode,
         // cuTexRefSetMipmapLevelBias,
