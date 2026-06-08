@@ -340,7 +340,7 @@ extern "C"
                             uint64_t char_size)
     {
         (void)char_size;
-        __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
+        [[clang::noinline]] __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
     }
 
     // * Smallest denormal is 1.4 × 10^-45
@@ -786,12 +786,13 @@ extern "C"
         return output.u32;
     }
 
-    int FUNC(vprintf)(const char *format __attribute__((unused)), void *vlist __attribute__((unused)))
+    [[clang::noinline]]
+    int FUNC(vprintf)(const char *format , void *vlist __attribute__((unused)))
     {
         // TODO: replace calls to vprintf with a raising pass to printf when we have a mechanism
         // to write SSA passes
         // Use https://github.com/ROCm/llvm-project/blob/99a81d16b9d811cadd420190bed16981a0a57bc6/llvm/lib/Transforms/Utils/AMDGPUEmitPrintf.cpp#L426
-        return -1;
+        return printf("%s", format);
     }
 }
 
