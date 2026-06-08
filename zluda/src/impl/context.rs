@@ -280,6 +280,15 @@ pub(crate) unsafe fn create_v2(
     Ok(())
 }
 
+pub(crate) unsafe fn create_v4(
+    ctx: &mut CUcontext,
+    _ctx_create_params: Option<&mut cuda_types::cuda::CUctxCreateParams>,
+    flags: ::core::ffi::c_uint,
+    dev: cuda_types::cuda::CUdevice,
+) -> CUresult {
+    create_v2(ctx, flags, dev)
+}
+
 pub(crate) unsafe fn destroy_v2(ctx: CUcontext) -> CUresult {
     zluda_common::drop_checked::<Context>(ctx)
 }
