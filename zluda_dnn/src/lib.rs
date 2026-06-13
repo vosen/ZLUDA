@@ -107,6 +107,7 @@ dual_function_declarations! {
         cudnnGetConvolutionBackwardFilterWorkspaceSize,
         cudnnGetConvolutionForwardWorkspaceSize,
         cudnnGetFilterNdDescriptor,
+        cudnnGetProperty,
         cudnnGetStream,
         cudnnGetTensorNdDescriptor,
         cudnnSetConvolution2dDescriptor,
