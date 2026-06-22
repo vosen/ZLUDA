@@ -19,12 +19,14 @@ struct DlPhdrInfo {
     dlpi_phnum: u16,
 }
 
-static FILES_FOR_REDIRECT: [&'static str; 19] = [
+static FILES_FOR_REDIRECT: [&'static str; 23] = [
     "libcublas.so.13",
     "libcublas.so.12",
+    "libcublas.so.11",
     "libcublas.so",
     "libcublasLt.so.13",
     "libcublasLt.so.12",
+    "libcublasLt.so.11",
     "libcublasLt.so",
     "libcuda.so.1",
     "libcuda.so",
@@ -33,9 +35,11 @@ static FILES_FOR_REDIRECT: [&'static str; 19] = [
     "libcudnn.so",
     "libcufft.so.12",
     "libcufft.so.11",
+    "libcufft.so.10",
     "libcufft.so",
     "libcusparse.so.13",
     "libcusparse.so.12",
+    "libcusparse.so.11",
     "libcusparse.so",
     "libnvidia-ml.so.1",
     "libnvidia-ml.so",

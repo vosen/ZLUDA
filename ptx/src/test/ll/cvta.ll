@@ -14,20 +14,22 @@ define amdgpu_kernel void @cvta(ptr addrspace(4) byref(i64) %"39", ptr addrspace
   store i64 %3, ptr addrspace(5) %"42", align 8
   %4 = load i64, ptr addrspace(5) %"41", align 8
   %5 = inttoptr i64 %4 to ptr
-  %"54" = addrspacecast ptr %5 to ptr addrspace(1)
-  store ptr addrspace(1) %"54", ptr addrspace(5) %"41", align 8
-  %6 = load i64, ptr addrspace(5) %"42", align 8
-  %7 = inttoptr i64 %6 to ptr
-  %"56" = addrspacecast ptr %7 to ptr addrspace(1)
-  store ptr addrspace(1) %"56", ptr addrspace(5) %"42", align 8
-  %8 = load i64, ptr addrspace(5) %"41", align 8
-  %"58" = inttoptr i64 %8 to ptr addrspace(1)
-  %9 = load float, ptr addrspace(1) %"58", align 4
-  store float %9, ptr addrspace(5) %"43", align 4
-  %10 = load i64, ptr addrspace(5) %"42", align 8
-  %11 = load float, ptr addrspace(5) %"43", align 4
-  %"59" = inttoptr i64 %10 to ptr addrspace(1)
-  store float %11, ptr addrspace(1) %"59", align 4
+  %6 = addrspacecast ptr %5 to ptr addrspace(1)
+  %"54" = ptrtoint ptr addrspace(1) %6 to i64
+  store i64 %"54", ptr addrspace(5) %"41", align 8
+  %7 = load i64, ptr addrspace(5) %"42", align 8
+  %8 = inttoptr i64 %7 to ptr
+  %9 = addrspacecast ptr %8 to ptr addrspace(1)
+  %"56" = ptrtoint ptr addrspace(1) %9 to i64
+  store i64 %"56", ptr addrspace(5) %"42", align 8
+  %10 = load i64, ptr addrspace(5) %"41", align 8
+  %"58" = inttoptr i64 %10 to ptr addrspace(1)
+  %11 = load float, ptr addrspace(1) %"58", align 4
+  store float %11, ptr addrspace(5) %"43", align 4
+  %12 = load i64, ptr addrspace(5) %"42", align 8
+  %13 = load float, ptr addrspace(5) %"43", align 4
+  %"59" = inttoptr i64 %12 to ptr addrspace(1)
+  store float %13, ptr addrspace(1) %"59", align 4
   ret void
 }
 

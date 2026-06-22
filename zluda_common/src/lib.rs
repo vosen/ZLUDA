@@ -256,7 +256,8 @@ from_cuda_nop!(
     cudnn9::cudnnConvolutionBwdDataAlgoPerf_t,
     cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
     cublasLtMatmulPreferenceAttributes_t,
-    CUfunc_cache
+    CUfunc_cache,
+    CUctxCreateParams
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
