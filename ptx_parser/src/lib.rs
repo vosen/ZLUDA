@@ -547,7 +547,15 @@ fn version<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u8, u8)> 
 }
 
 fn target<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, Option<char>)> {
-    preceded(Token::DotTarget, ident.and_then(shader_model)).parse_next(stream)
+    preceded(
+        Token::DotTarget,
+        (
+            ident.and_then(shader_model),
+            opt((Token::Comma, ident_literal("debug"))),
+        ),
+    )
+    .map(|((target, arch_variant), _debug)| (target, arch_variant))
+    .parse_next(stream)
 }
 
 fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {

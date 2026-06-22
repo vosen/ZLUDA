@@ -769,6 +769,13 @@ impl<'a> MethodEmitContext<'a> {
                 Ok(())
             }
             ConversionKind::PtrToPtr => {
+                if conversion.from_space == conversion.to_space {
+                    // With opaque pointers it's meaningless
+                    return self.emit_mov(ast::MovArgs {
+                        dst: conversion.dst,
+                        src: conversion.src,
+                    });
+                }
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_pointer_type(self.context, conversion.to_space)?;
                 self.resolver.with_result(conversion.dst, |dst| unsafe {
@@ -1714,8 +1721,12 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         let temp_ptr =
             unsafe { LLVMBuildIntToPtr(self.builder, src, from_type, LLVM_UNNAMED.as_ptr()) };
+        let temp_converted = unsafe {
+            LLVMBuildAddrSpaceCast(self.builder, temp_ptr, dest_type, LLVM_UNNAMED.as_ptr())
+        };
+        let scalar_type = unsafe { LLVMIntTypeInContext(self.context, data.size as u32) };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildAddrSpaceCast(self.builder, temp_ptr, dest_type, dst)
+            LLVMBuildPtrToInt(self.builder, temp_converted, scalar_type, dst)
         });
         Ok(())
     }
