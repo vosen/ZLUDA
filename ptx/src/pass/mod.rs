@@ -112,7 +112,7 @@ pub fn to_llvm_module<'input>(
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, ast.address_size == 32)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {

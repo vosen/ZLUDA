@@ -66,9 +66,10 @@ pub(crate) fn run<'input>(
     context: &Context,
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    is_32bit: bool,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, is_32bit);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -83,12 +84,223 @@ pub(crate) fn run<'input>(
     Ok(module)
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ZludaTypeToLLVM {
+    context: LLVMContextRef,
+    is_32bit: bool,
+}
+
+impl ZludaTypeToLLVM {
+    fn get_state_space(&self, space: ast::StateSpace) -> Result<u32, TranslateError> {
+        get_state_space(space, self.is_32bit)
+    }
+
+    fn get_input_argument_type(
+        &self,
+        v_type: &ast::Type,
+        state_space: ast::StateSpace,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        match state_space {
+            ast::StateSpace::ParamEntry | ast::StateSpace::Shared => Ok(unsafe {
+                LLVMPointerTypeInContext(self.context, self.get_state_space(state_space)?)
+            }),
+            ast::StateSpace::Reg => self.get_type(v_type),
+            ast::StateSpace::Global | ast::StateSpace::Const
+                if matches!(v_type, ast::Type::Texref) =>
+            {
+                Ok(unsafe {
+                    LLVMPointerTypeInContext(self.context, self.get_state_space(state_space)?)
+                })
+            }
+            _ => return Err(error_unreachable()),
+        }
+    }
+
+    fn get_pointer_type<'ctx>(
+        &self,
+        to_space: ast::StateSpace,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        Ok(unsafe { LLVMPointerTypeInContext(self.context, self.get_state_space(to_space)?) })
+    }
+
+    fn get_type(&self, type_: &ast::Type) -> Result<LLVMTypeRef, TranslateError> {
+        Ok(match type_ {
+            ast::Type::Scalar(scalar) => get_scalar_type(self.context, *scalar),
+            ast::Type::Vector(size, scalar) => {
+                let base_type = get_scalar_type(self.context, *scalar);
+                unsafe { LLVMVectorType(base_type, *size as u32) }
+            }
+            ast::Type::Array(vec, scalar, dimensions) => {
+                let mut underlying_type = get_scalar_type(self.context, *scalar);
+                if let Some(size) = vec {
+                    underlying_type = unsafe { LLVMVectorType(underlying_type, size.get() as u32) };
+                }
+                if dimensions.is_empty() {
+                    return Ok(unsafe { LLVMArrayType2(underlying_type, 0) });
+                }
+                dimensions
+                    .iter()
+                    .rfold(underlying_type, |result, dimension| unsafe {
+                        LLVMArrayType2(result, *dimension as u64)
+                    })
+            }
+            ast::Type::Texref => {
+                // Definitions taken from ROCm LLVM output
+                let format_desc = unsafe {
+                    LLVMStructCreateNamed(self.context, c"struct.hipChannelFormatDesc".as_ptr())
+                };
+                let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+                let mut format_desc_fields = [llvm_i32, llvm_i32, llvm_i32, llvm_i32, llvm_i32];
+                unsafe {
+                    LLVMStructSetBody(
+                        format_desc,
+                        format_desc_fields.as_mut_ptr(),
+                        format_desc_fields.len() as u32,
+                        0,
+                    )
+                };
+                let texture_reference = unsafe {
+                    LLVMStructCreateNamed(self.context, c"struct.textureReference".as_ptr())
+                };
+                let llvm_a3i32 = unsafe { LLVMArrayType2(llvm_i32, 3) };
+                let llvm_float = get_scalar_type(self.context, ast::ScalarType::F32);
+                let llvm_ptr = self.get_pointer_type(ast::StateSpace::Generic)?;
+                let mut texture_reference_fields = [
+                    llvm_i32,
+                    llvm_i32,
+                    llvm_i32,
+                    llvm_a3i32,
+                    format_desc,
+                    llvm_i32,
+                    llvm_i32,
+                    llvm_i32,
+                    llvm_float,
+                    llvm_float,
+                    llvm_float,
+                    llvm_ptr,
+                    llvm_i32,
+                    llvm_i32,
+                ];
+                unsafe {
+                    LLVMStructSetBody(
+                        texture_reference,
+                        texture_reference_fields.as_mut_ptr(),
+                        texture_reference_fields.len() as u32,
+                        0,
+                    )
+                };
+                let texture =
+                    unsafe { LLVMStructCreateNamed(self.context, c"struct.texture".as_ptr()) };
+                let mut texture_fields = [texture_reference];
+                unsafe {
+                    LLVMStructSetBody(
+                        texture,
+                        texture_fields.as_mut_ptr(),
+                        texture_fields.len() as u32,
+                        0,
+                    )
+                };
+                texture
+            }
+        })
+    }
+
+    fn get_anonymous_struct_type<'a>(
+        &self,
+        elem_types: impl Iterator<Item = &'a ast::Type>,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        let mut elem_types = elem_types
+            .map(|t| self.get_type(t))
+            .collect::<Result<Vec<LLVMTypeRef>, _>>()?;
+        Ok(unsafe {
+            LLVMStructTypeInContext(
+                self.context,
+                elem_types.as_mut_ptr(),
+                elem_types.len() as u32,
+                0,
+            )
+        })
+    }
+
+    fn get_function_type_impl<'a>(
+        &self,
+        mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+            + ExactSizeIterator<Item = &'a ast::Type>,
+        input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
+        struct_kind: StructKind,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
+        let return_type = match return_args.len() {
+            0 => unsafe { LLVMVoidTypeInContext(self.context) },
+            1 => self.get_type(&return_args.next().unwrap())?,
+            _ => match struct_kind {
+                StructKind::Named => self.get_or_create_struct_type(return_args)?,
+                StructKind::Anonymous => self.get_anonymous_struct_type(return_args)?,
+            },
+        };
+
+        Ok(unsafe {
+            LLVMFunctionType(
+                return_type,
+                input_args.as_mut_ptr(),
+                input_args.len() as u32,
+                0,
+            )
+        })
+    }
+
+    fn get_function_type<'a>(
+        &self,
+        return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+            + ExactSizeIterator<Item = &'a ast::Type>,
+        input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        self.get_function_type_impl(return_args, input_args, StructKind::Named)
+    }
+
+    fn get_intrinsic_type<'a>(
+        &self,
+        return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
+            + ExactSizeIterator<Item = &'a ast::Type>,
+        input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        self.get_function_type_impl(return_args, input_args, StructKind::Anonymous)
+    }
+
+    fn get_or_create_struct_type<'a>(
+        &self,
+        mut elem_types: impl Iterator<Item = &'a ast::Type>,
+    ) -> Result<LLVMTypeRef, TranslateError> {
+        use std::fmt::Write;
+        let (mut name, types) = elem_types.try_fold(
+            ("struct".to_string(), Vec::new()),
+            |(mut name, mut types), t| {
+                name.push('.');
+                if let ast::Type::Scalar(scalar) = t {
+                    write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
+                } else {
+                    return Err(error_unreachable());
+                }
+                types.push(self.get_type(t)?);
+                Ok((name, types))
+            },
+        )?;
+        name.push('\0');
+        let mut struct_type = unsafe { LLVMGetTypeByName2(self.context, name.as_ptr().cast()) };
+        if struct_type.is_null() {
+            struct_type = create_struct_type(self.context, name, types);
+        }
+        Ok(struct_type)
+    }
+}
+
 struct ModuleEmitContext<'a, 'input> {
     context: LLVMContextRef,
     module: LLVMModuleRef,
     builder: Builder,
     id_defs: &'a GlobalStringIdentResolver2<'input>,
     resolver: ResolveIdent,
+    llvm_types: ZludaTypeToLLVM,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -96,6 +308,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         context: &Context,
         module: &llvm::Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
+        is_32bit: bool,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -103,6 +316,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             builder: Builder::new(context),
             id_defs,
             resolver: ResolveIdent::new(&id_defs),
+            llvm_types: ZludaTypeToLLVM {
+                context: context.get(),
+                is_32bit,
+            },
         }
     }
 
@@ -126,11 +343,11 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         let name = CString::new(name).map_err(|_| error_unreachable())?;
         let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
         if fn_ == ptr::null_mut() {
-            let fn_type = get_function_type(
-                self.context,
+            let fn_type = self.llvm_types.get_function_type(
                 method.return_arguments.iter().map(|v| &v.info.v_type),
                 method.input_arguments.iter().map(|v| {
-                    get_input_argument_type(self.context, &v.info.v_type, v.info.state_space)
+                    self.llvm_types
+                        .get_input_argument_type(&v.info.v_type, v.info.state_space)
                 }),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
@@ -176,7 +393,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     LLVMCreateTypeAttribute(
                         self.context,
                         attr_kind,
-                        get_type(self.context, &param.info.v_type)?,
+                        self.llvm_types.get_type(&param.info.v_type)?,
                     )
                 };
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
@@ -212,8 +429,13 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
-            let mut method_emitter =
-                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory);
+            let mut method_emitter: MethodEmitContext<'_> = MethodEmitContext::new(
+                self,
+                fn_,
+                variables_builder,
+                self.llvm_types,
+                base_32bit_memory,
+            );
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -256,13 +478,13 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             .transpose()
             .map_err(|_| error_unreachable())?
             .unwrap_or(Cow::Borrowed(LLVM_UNNAMED));
-        let llvm_type = get_type(self.context, &var.info.v_type)?;
+        let llvm_type = self.llvm_types.get_type(&var.info.v_type)?;
         let global = unsafe {
             LLVMAddGlobalInAddressSpace(
                 self.module,
                 llvm_type,
                 name.as_ptr(),
-                get_state_space(var.info.state_space)?,
+                self.llvm_types.get_state_space(var.info.state_space)?,
             )
         };
         if matches!(var.info.v_type, ast::Type::Texref) {
@@ -440,23 +662,6 @@ fn llvm_ftz(ftz: bool) -> &'static str {
     }
 }
 
-fn get_input_argument_type(
-    context: LLVMContextRef,
-    v_type: &ast::Type,
-    state_space: ast::StateSpace,
-) -> Result<LLVMTypeRef, TranslateError> {
-    match state_space {
-        ast::StateSpace::ParamEntry | ast::StateSpace::Shared => {
-            Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
-        }
-        ast::StateSpace::Reg => get_type(context, v_type),
-        ast::StateSpace::Global | ast::StateSpace::Const if matches!(v_type, ast::Type::Texref) => {
-            Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
-        }
-        _ => return Err(error_unreachable()),
-    }
-}
-
 struct MethodEmitContext<'a> {
     context: LLVMContextRef,
     module: LLVMModuleRef,
@@ -465,6 +670,7 @@ struct MethodEmitContext<'a> {
     variables_builder: Builder,
     resolver: &'a mut ResolveIdent,
     carry_flag: Option<LLVMValueRef>,
+    llvm_types: ZludaTypeToLLVM,
     base_32bit_memory: Option<SpirvWord>,
 }
 
@@ -473,6 +679,7 @@ impl<'a> MethodEmitContext<'a> {
         parent: &'a mut ModuleEmitContext,
         method: LLVMValueRef,
         variables_builder: Builder,
+        llvm_types: ZludaTypeToLLVM,
         base_32bit_memory: Option<SpirvWord>,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
@@ -483,6 +690,7 @@ impl<'a> MethodEmitContext<'a> {
             resolver: &mut parent.resolver,
             method,
             carry_flag: None,
+            llvm_types,
             base_32bit_memory: base_32bit_memory,
         }
     }
@@ -539,8 +747,8 @@ impl<'a> MethodEmitContext<'a> {
         let alloca = unsafe {
             LLVMZludaBuildAlloca(
                 self.variables_builder.get(),
-                get_type(self.context, &var.info.v_type)?,
-                get_state_space(var.info.state_space)?,
+                self.llvm_types.get_type(&var.info.v_type)?,
+                self.llvm_types.get_state_space(var.info.state_space)?,
                 self.resolver.get_or_add_raw(var.name),
             )
         };
@@ -678,7 +886,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::LdArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let builder = self.builder;
-        let underlying_type = get_type(self.context, &data.typ)?;
+        let underlying_type = self.llvm_types.get_type(&data.typ)?;
         let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
         let op_type = if needs_cast {
             unsafe {
@@ -722,7 +930,7 @@ impl<'a> MethodEmitContext<'a> {
             ),
             ConversionKind::SignExtend => {
                 let src = self.resolver.value(conversion.src)?;
-                let type_ = get_type(self.context, &conversion.to_type)?;
+                let type_ = self.llvm_types.get_type(&conversion.to_type)?;
                 self.resolver.with_result(conversion.dst, |dst| unsafe {
                     LLVMBuildSExt(builder, src, type_, dst)
                 });
@@ -730,7 +938,7 @@ impl<'a> MethodEmitContext<'a> {
             }
             ConversionKind::BitToPtr => {
                 let src = self.resolver.value(conversion.src)?;
-                let ptr_type = get_pointer_type(self.context, conversion.to_space)?;
+                let ptr_type = self.llvm_types.get_pointer_type(conversion.to_space)?;
                 if let (
                     Some(base32),
                     ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
@@ -762,8 +970,18 @@ impl<'a> MethodEmitContext<'a> {
                 Ok(())
             }
             ConversionKind::PtrToPtr => {
+                if conversion.from_space == conversion.to_space {
+                    // With opaque pointers it's meaningless
+                    return self.emit_mov(ast::MovArgs {
+                        dst: conversion.dst,
+                        src: conversion.src,
+                    });
+                }
+                if self.base_32bit_memory.is_some() {
+                    return Err(error_todo());
+                }
                 let src = self.resolver.value(conversion.src)?;
-                let dst_type = get_pointer_type(self.context, conversion.to_space)?;
+                let dst_type = self.llvm_types.get_pointer_type(conversion.to_space)?;
                 self.resolver.with_result(conversion.dst, |dst| unsafe {
                     LLVMBuildAddrSpaceCast(builder, src, dst_type, dst)
                 });
@@ -771,7 +989,7 @@ impl<'a> MethodEmitContext<'a> {
             }
             ConversionKind::AddressOf => {
                 let src = self.resolver.value(conversion.src)?;
-                let dst_type = get_type(self.context, &conversion.to_type)?;
+                let dst_type = self.llvm_types.get_type(&conversion.to_type)?;
                 if let (
                     Some(_),
                     ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const,
@@ -803,7 +1021,7 @@ impl<'a> MethodEmitContext<'a> {
                 let from_layout = from_type.layout();
                 let to_layout = to_type.layout().ok_or_else(error_unreachable)?;
                 if from_layout.size() == to_layout.size() {
-                    let dst_type = get_type(self.context, &to_type)?;
+                    let dst_type = self.llvm_types.get_type(&to_type)?;
                     if from_type.kind() != ast::ScalarKind::Float
                         && to_type_scalar.kind() != ast::ScalarKind::Float
                     {
@@ -889,7 +1107,7 @@ impl<'a> MethodEmitContext<'a> {
             | (ast::Type::Scalar(..), ast::Type::Vector(..))
             | (ast::Type::Scalar(..), ast::Type::Array(..))
             | (ast::Type::Array(..), ast::Type::Scalar(..)) => {
-                let dst_type = get_type(self.context, to_type)?;
+                let dst_type = self.llvm_types.get_type(to_type)?;
                 self.resolver.with_result(dst, |dst| unsafe {
                     LLVMBuildBitCast(self.builder, src, dst_type, dst)
                 });
@@ -974,7 +1192,7 @@ impl<'a> MethodEmitContext<'a> {
             LLVMZludaBuildAlloca(
                 self.variables_builder.get(),
                 LLVMIntTypeInContext(self.context, 1),
-                get_state_space(ast::StateSpace::Reg)?,
+                self.llvm_types.get_state_space(ast::StateSpace::Reg)?,
                 c"__ZLUDA_REG_CC_CF".as_ptr(),
             )
         };
@@ -1138,7 +1356,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::StArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let ptr = self.resolver.value(arguments.src1)?;
-        let underlying_type = get_type(self.context, &data.typ)?;
+        let underlying_type = self.llvm_types.get_type(&data.typ)?;
         let needs_cast = not_supported_by_atomics(data.qualifier, underlying_type);
         let mut value = self.resolver.value(arguments.src2)?;
         if needs_cast {
@@ -1185,12 +1403,11 @@ impl<'a> MethodEmitContext<'a> {
             [dst] => self.resolver.get_or_add_raw(*dst),
             _ => LLVM_UNNAMED.as_ptr(),
         };
-        let type_ = get_function_type(
-            self.context,
+        let type_ = self.llvm_types.get_function_type(
             data.return_arguments.iter().map(|(type_, ..)| type_),
             data.input_arguments
                 .iter()
-                .map(|(type_, space)| get_input_argument_type(self.context, &type_, *space)),
+                .map(|(type_, space)| self.llvm_types.get_input_argument_type(&type_, *space)),
         )?;
         let mut input_arguments = arguments
             .input_arguments
@@ -1351,7 +1568,7 @@ impl<'a> MethodEmitContext<'a> {
             .iter()
             .map(|(value, type_)| {
                 let value = self.resolver.value(*value)?;
-                let lowered_type = get_type(self.context, type_)?;
+                let lowered_type = self.llvm_types.get_type(type_)?;
                 let load = unsafe {
                     LLVMBuildLoad2(self.builder, lowered_type, value, LLVM_UNNAMED.as_ptr())
                 };
@@ -1368,8 +1585,9 @@ impl<'a> MethodEmitContext<'a> {
             [] => unsafe { LLVMBuildRetVoid(self.builder) },
             [(value, _)] => unsafe { LLVMBuildRet(self.builder, *value) },
             loads => {
-                let struct_type =
-                    get_or_create_struct_type(self.context, loads.iter().map(|(_, type_)| *type_))?;
+                let struct_type = self
+                    .llvm_types
+                    .get_or_create_struct_type(loads.iter().map(|(_, type_)| *type_))?;
                 let mut value = unsafe { LLVMGetUndef(struct_type) };
                 for (i, (load, _)) in loads.iter().enumerate() {
                     value = unsafe {
@@ -1580,10 +1798,9 @@ impl<'a> MethodEmitContext<'a> {
                 });
             }
         } else {
-            let vector_type = get_type(
-                self.context,
-                &ast::Type::Vector(repack.unpacked.len() as u8, repack.typ),
-            )?;
+            let vector_type = self
+                .llvm_types
+                .get_type(&ast::Type::Vector(repack.unpacked.len() as u8, repack.typ))?;
             let mut temp_vec = unsafe { LLVMGetUndef(vector_type) };
             for (index, src_id) in repack.unpacked.iter().enumerate() {
                 let dst = if index == repack.unpacked.len() - 1 {
@@ -1700,8 +1917,8 @@ impl<'a> MethodEmitContext<'a> {
                 src: arguments.src,
             });
         }
-        let from_type = get_pointer_type(self.context, from_space)?;
-        let dest_type = get_pointer_type(self.context, to_space)?;
+        let from_type = self.llvm_types.get_pointer_type(from_space)?;
+        let dest_type = self.llvm_types.get_pointer_type(to_space)?;
         let src = self.resolver.value(arguments.src)?;
         let temp_ptr =
             unsafe { LLVMBuildIntToPtr(self.builder, src, from_type, LLVM_UNNAMED.as_ptr()) };
@@ -1789,8 +2006,7 @@ impl<'a> MethodEmitContext<'a> {
         return_types: Vec<&ast::Type>,
         arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
     ) -> Result<LLVMValueRef, TranslateError> {
-        let fn_type = get_intrinsic_type(
-            self.context,
+        let fn_type = self.llvm_types.get_intrinsic_type(
             return_types.iter().copied(),
             arguments.iter().map(|(_, type_)| Ok(*type_)),
         )?;
@@ -3239,10 +3455,10 @@ impl<'a> MethodEmitContext<'a> {
                     let vector_result = unsafe {
                         LLVMBuildInsertElement(
                             self.builder,
-                            LLVMGetPoison(get_type(
-                                self.context,
-                                &ast::Type::Vector(2, ast::ScalarType::U16),
-                            )?),
+                            LLVMGetPoison(
+                                self.llvm_types
+                                    .get_type(&ast::Type::Vector(2, ast::ScalarType::U16))?,
+                            ),
                             setp_result_0,
                             zero,
                             LLVM_UNNAMED.as_ptr(),
@@ -3272,10 +3488,10 @@ impl<'a> MethodEmitContext<'a> {
                     let vector_result = unsafe {
                         LLVMBuildInsertElement(
                             self.builder,
-                            LLVMGetPoison(get_type(
-                                self.context,
-                                &ast::Type::Vector(2, ast::ScalarType::F16),
-                            )?),
+                            LLVMGetPoison(
+                                self.llvm_types
+                                    .get_type(&ast::Type::Vector(2, ast::ScalarType::F16))?,
+                            ),
                             setp_result_0,
                             zero,
                             LLVM_UNNAMED.as_ptr(),
@@ -3658,13 +3874,6 @@ fn apply_qualifier(
     Ok(())
 }
 
-fn get_pointer_type<'ctx>(
-    context: LLVMContextRef,
-    to_space: ast::StateSpace,
-) -> Result<LLVMTypeRef, TranslateError> {
-    Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(to_space)?) })
-}
-
 // https://llvm.org/docs/AMDGPUUsage.html#memory-scopes
 fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
     Ok(match scope {
@@ -3705,111 +3914,6 @@ fn get_ordering_failure(semantics: ast::AtomSemantics) -> LLVMAtomicOrdering {
     }
 }
 
-fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, TranslateError> {
-    Ok(match type_ {
-        ast::Type::Scalar(scalar) => get_scalar_type(context, *scalar),
-        ast::Type::Vector(size, scalar) => {
-            let base_type = get_scalar_type(context, *scalar);
-            unsafe { LLVMVectorType(base_type, *size as u32) }
-        }
-        ast::Type::Array(vec, scalar, dimensions) => {
-            let mut underlying_type = get_scalar_type(context, *scalar);
-            if let Some(size) = vec {
-                underlying_type = unsafe { LLVMVectorType(underlying_type, size.get() as u32) };
-            }
-            if dimensions.is_empty() {
-                return Ok(unsafe { LLVMArrayType2(underlying_type, 0) });
-            }
-            dimensions
-                .iter()
-                .rfold(underlying_type, |result, dimension| unsafe {
-                    LLVMArrayType2(result, *dimension as u64)
-                })
-        }
-        ast::Type::Texref => {
-            // Definitions taken from ROCm LLVM output
-            let format_desc =
-                unsafe { LLVMStructCreateNamed(context, c"struct.hipChannelFormatDesc".as_ptr()) };
-            let llvm_i32 = get_scalar_type(context, ast::ScalarType::B32);
-            let mut format_desc_fields = [llvm_i32, llvm_i32, llvm_i32, llvm_i32, llvm_i32];
-            unsafe {
-                LLVMStructSetBody(
-                    format_desc,
-                    format_desc_fields.as_mut_ptr(),
-                    format_desc_fields.len() as u32,
-                    0,
-                )
-            };
-            let texture_reference =
-                unsafe { LLVMStructCreateNamed(context, c"struct.textureReference".as_ptr()) };
-            let llvm_a3i32 = unsafe { LLVMArrayType2(llvm_i32, 3) };
-            let llvm_float = get_scalar_type(context, ast::ScalarType::F32);
-            let llvm_ptr = get_pointer_type(context, ast::StateSpace::Generic)?;
-            let mut texture_reference_fields = [
-                llvm_i32,
-                llvm_i32,
-                llvm_i32,
-                llvm_a3i32,
-                format_desc,
-                llvm_i32,
-                llvm_i32,
-                llvm_i32,
-                llvm_float,
-                llvm_float,
-                llvm_float,
-                llvm_ptr,
-                llvm_i32,
-                llvm_i32,
-            ];
-            unsafe {
-                LLVMStructSetBody(
-                    texture_reference,
-                    texture_reference_fields.as_mut_ptr(),
-                    texture_reference_fields.len() as u32,
-                    0,
-                )
-            };
-            let texture = unsafe { LLVMStructCreateNamed(context, c"struct.texture".as_ptr()) };
-            let mut texture_fields = [texture_reference];
-            unsafe {
-                LLVMStructSetBody(
-                    texture,
-                    texture_fields.as_mut_ptr(),
-                    texture_fields.len() as u32,
-                    0,
-                )
-            };
-            texture
-        }
-    })
-}
-
-fn get_or_create_struct_type<'a>(
-    context: LLVMContextRef,
-    mut elem_types: impl Iterator<Item = &'a ast::Type>,
-) -> Result<LLVMTypeRef, TranslateError> {
-    use std::fmt::Write;
-    let (mut name, types) = elem_types.try_fold(
-        ("struct".to_string(), Vec::new()),
-        |(mut name, mut types), t| {
-            name.push('.');
-            if let ast::Type::Scalar(scalar) = t {
-                write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
-            } else {
-                return Err(error_unreachable());
-            }
-            types.push(get_type(context, t)?);
-            Ok((name, types))
-        },
-    )?;
-    name.push('\0');
-    let mut struct_type = unsafe { LLVMGetTypeByName2(context, name.as_ptr().cast()) };
-    if struct_type.is_null() {
-        struct_type = create_struct_type(context, name, types);
-    }
-    Ok(struct_type)
-}
-
 fn create_struct_type(
     context: LLVMContextRef,
     name: String,
@@ -3827,66 +3931,9 @@ fn create_struct_type(
     llvm_type
 }
 
-fn get_anonymous_struct_type<'a>(
-    context: LLVMContextRef,
-    elem_types: impl Iterator<Item = &'a ast::Type>,
-) -> Result<LLVMTypeRef, TranslateError> {
-    let mut elem_types = elem_types
-        .map(|t| get_type(context, t))
-        .collect::<Result<Vec<LLVMTypeRef>, _>>()?;
-    Ok(unsafe {
-        LLVMStructTypeInContext(context, elem_types.as_mut_ptr(), elem_types.len() as u32, 0)
-    })
-}
-
 enum StructKind {
     Named,
     Anonymous,
-}
-
-fn get_function_type_impl<'a>(
-    context: LLVMContextRef,
-    mut return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
-        + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
-    struct_kind: StructKind,
-) -> Result<LLVMTypeRef, TranslateError> {
-    let mut input_args = input_args.collect::<Result<Vec<_>, _>>()?;
-    let return_type = match return_args.len() {
-        0 => unsafe { LLVMVoidTypeInContext(context) },
-        1 => get_type(context, &return_args.next().unwrap())?,
-        _ => match struct_kind {
-            StructKind::Named => get_or_create_struct_type(context, return_args)?,
-            StructKind::Anonymous => get_anonymous_struct_type(context, return_args)?,
-        },
-    };
-
-    Ok(unsafe {
-        LLVMFunctionType(
-            return_type,
-            input_args.as_mut_ptr(),
-            input_args.len() as u32,
-            0,
-        )
-    })
-}
-
-fn get_function_type<'a>(
-    context: LLVMContextRef,
-    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
-        + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
-) -> Result<LLVMTypeRef, TranslateError> {
-    get_function_type_impl(context, return_args, input_args, StructKind::Named)
-}
-
-fn get_intrinsic_type<'a>(
-    context: LLVMContextRef,
-    return_args: impl DoubleEndedIterator<Item = &'a ast::Type>
-        + ExactSizeIterator<Item = &'a ast::Type>,
-    input_args: impl Iterator<Item = Result<LLVMTypeRef, TranslateError>>,
-) -> Result<LLVMTypeRef, TranslateError> {
-    get_function_type_impl(context, return_args, input_args, StructKind::Anonymous)
 }
 
 struct ResolveIdent {
