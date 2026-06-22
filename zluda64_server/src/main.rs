@@ -217,7 +217,7 @@ impl Allocator {
     fn free(&mut self, start: u32) -> Result<(), CUerror> {
         let end = self
             .allocation_ends
-            .remove(&start)
+            .remove(&(start / Allocator::ALLOCATION_UNIT))
             .ok_or(CUerror::INVALID_VALUE)?;
         self.allocator.free_range(start..end);
         Ok(())
@@ -370,6 +370,15 @@ async fn main() -> std::io::Result<()> {
                     )
                     .await?;
             }
+            Some(Opcode::ContextLocalStorageDelete) => {
+                buffer = handle_cuda_function::<
+                    ContextLocalStorageDeleteIn,
+                    ContextLocalStorageDeleteOut,
+                >(&mut client, buffer, |input| {
+                    context_local_storage_delete(&mut state, input)
+                })
+                .await?;
+            }
             Some(Opcode::cuCtxGetApiVersion) => {
                 buffer = handle_cuda_function::<cuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
                     &mut client,
@@ -497,6 +506,14 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuMemFree_v2) => {
+                buffer = handle_cuda_function::<cuMemFree_v2In, cuMemFree_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_mem_free_v2(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -506,6 +523,17 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_mem_free_v2(
+    state: &mut State,
+    input: &ArchivedcuMemFree_v2In,
+) -> Result<cuMemFree_v2Out, CUerror> {
+    let mut device = 0;
+    unsafe { cuCtxGetDevice(&mut device) }?;
+    let dptr = input.dptr.to_native();
+    state.devmemory[device as usize].free(dptr)?;
+    Ok(cuMemFree_v2Out {})
 }
 
 fn cu_tex_ref_set_format(
@@ -912,6 +940,19 @@ fn context_local_storage_get(
     })
 }
 
+fn context_local_storage_delete(
+    state: &mut State,
+    input: &ArchivedContextLocalStorageDeleteIn,
+) -> Result<ContextLocalStorageDeleteOut, CUerror> {
+    unsafe {
+        state.dark_api.context_local_storage_delete(
+            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
+            input.key.to_native() as _,
+        )
+    }?;
+    Ok(ContextLocalStorageDeleteOut {})
+}
+
 async fn handle_cuda_function<In: rkyv::Archive + Portable, Out: Portable>(
     client: &mut NamedPipeClient,
     mut buffer: AlignedVecBuffer,
@@ -1123,7 +1164,7 @@ cuda_function_declarations! {
         cuLaunchKernel,
         cuMemAlloc_v2,
         // cuMemFreeHost,
-        // cuMemFree_v2,
+        cuMemFree_v2,
         // cuMemGetAddressRange_v2,
         // cuMemHostAlloc,
         // cuMemcpyDtoDAsync_v2,

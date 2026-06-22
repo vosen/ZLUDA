@@ -32,6 +32,7 @@ macro_rules! generate_messages_inout {
             cuModuleLoadData,
             ContextLocalStoragePut,
             ContextLocalStorageGet,
+            ContextLocalStorageDelete,
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuMemAlloc_v2,
@@ -74,7 +75,7 @@ cuda_function_declarations! {
         // cuLaunchKernel,
         //cuMemAlloc_v2,
         //cuMemFreeHost,
-        //cuMemFree_v2,
+        cuMemFree_v2,
         cuMemGetAddressRange_v2,
         //cuMemHostAlloc,
         //cuMemcpyDtoDAsync_v2,
@@ -233,6 +234,17 @@ pub struct ContextLocalStorageGetIn {
 pub struct ContextLocalStorageGetOut {
     pub value: u32_le,
 }
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStorageDeleteIn {
+    pub cu_ctx: u32_le,
+    pub key: u32_le,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct ContextLocalStorageDeleteOut {}
 
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]

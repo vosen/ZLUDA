@@ -63,6 +63,24 @@ impl CudaDynamicFns {
     }
 }
 
+#[cfg(unix)]
+impl Drop for CudaDynamicFns {
+    fn drop(&mut self) {
+        unsafe {
+            libloading::os::unix::Library::from_raw(self.lib_handle.as_ptr() as _);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for CudaDynamicFns {
+    fn drop(&mut self) {
+        unsafe {
+            libloading::os::windows::Library::from_raw(self.lib_handle.as_ptr() as _);
+        }
+    }
+}
+
 unsafe impl Send for CudaDynamicFns {}
 unsafe impl Sync for CudaDynamicFns {}
 
