@@ -1724,7 +1724,7 @@ impl<'a> MethodEmitContext<'a> {
         let temp_converted = unsafe {
             LLVMBuildAddrSpaceCast(self.builder, temp_ptr, dest_type, LLVM_UNNAMED.as_ptr())
         };
-        let scalar_type = unsafe { LLVMIntTypeInContext(self.context, arguments.size) };
+        let scalar_type = unsafe { LLVMIntTypeInContext(self.context, data.size as u32) };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildPtrToInt(self.builder, temp_converted, scalar_type, dst)
         });

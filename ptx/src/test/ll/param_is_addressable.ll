@@ -14,20 +14,21 @@ define amdgpu_kernel void @param_is_addressable(ptr addrspace(4) byref(i64) %"39
   store i64 %3, ptr addrspace(5) %"42", align 8
   %"55" = ptrtoint ptr addrspace(4) %"39" to i64
   %4 = inttoptr i64 %"55" to ptr addrspace(4)
-  %"46" = addrspacecast ptr addrspace(4) %4 to ptr
-  store ptr %"46", ptr addrspace(5) %"43", align 8
-  %5 = load i64, ptr addrspace(5) %"43", align 8
-  %"56" = inttoptr i64 %5 to ptr
-  %6 = load i64, ptr %"56", align 8
-  store i64 %6, ptr addrspace(5) %"43", align 8
-  %7 = load i64, ptr addrspace(5) %"43", align 8
-  %8 = load i64, ptr addrspace(5) %"41", align 8
-  %"57" = sub i64 %7, %8
+  %5 = addrspacecast ptr addrspace(4) %4 to ptr
+  %"46" = ptrtoint ptr %5 to i64
+  store i64 %"46", ptr addrspace(5) %"43", align 8
+  %6 = load i64, ptr addrspace(5) %"43", align 8
+  %"56" = inttoptr i64 %6 to ptr
+  %7 = load i64, ptr %"56", align 8
+  store i64 %7, ptr addrspace(5) %"43", align 8
+  %8 = load i64, ptr addrspace(5) %"43", align 8
+  %9 = load i64, ptr addrspace(5) %"41", align 8
+  %"57" = sub i64 %8, %9
   store i64 %"57", ptr addrspace(5) %"43", align 8
-  %9 = load i64, ptr addrspace(5) %"42", align 8
-  %10 = load i64, ptr addrspace(5) %"43", align 8
-  %"59" = inttoptr i64 %9 to ptr
-  store i64 %10, ptr %"59", align 8
+  %10 = load i64, ptr addrspace(5) %"42", align 8
+  %11 = load i64, ptr addrspace(5) %"43", align 8
+  %"59" = inttoptr i64 %10 to ptr
+  store i64 %11, ptr %"59", align 8
   ret void
 }
 

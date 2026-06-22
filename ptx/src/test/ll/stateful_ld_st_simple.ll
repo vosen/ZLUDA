@@ -16,20 +16,22 @@ define amdgpu_kernel void @stateful_ld_st_simple(ptr addrspace(4) byref(i64) %"4
   store i64 %3, ptr addrspace(5) %"44", align 8
   %4 = load i64, ptr addrspace(5) %"43", align 8
   %5 = inttoptr i64 %4 to ptr
-  %"58" = addrspacecast ptr %5 to ptr addrspace(1)
-  store ptr addrspace(1) %"58", ptr addrspace(5) %"45", align 8
-  %6 = load i64, ptr addrspace(5) %"44", align 8
-  %7 = inttoptr i64 %6 to ptr
-  %"60" = addrspacecast ptr %7 to ptr addrspace(1)
-  store ptr addrspace(1) %"60", ptr addrspace(5) %"46", align 8
-  %8 = load i64, ptr addrspace(5) %"45", align 8
-  %"62" = inttoptr i64 %8 to ptr addrspace(1)
-  %9 = load i64, ptr addrspace(1) %"62", align 8
-  store i64 %9, ptr addrspace(5) %"47", align 8
-  %10 = load i64, ptr addrspace(5) %"46", align 8
-  %11 = load i64, ptr addrspace(5) %"47", align 8
-  %"63" = inttoptr i64 %10 to ptr addrspace(1)
-  store i64 %11, ptr addrspace(1) %"63", align 8
+  %6 = addrspacecast ptr %5 to ptr addrspace(1)
+  %"58" = ptrtoint ptr addrspace(1) %6 to i64
+  store i64 %"58", ptr addrspace(5) %"45", align 8
+  %7 = load i64, ptr addrspace(5) %"44", align 8
+  %8 = inttoptr i64 %7 to ptr
+  %9 = addrspacecast ptr %8 to ptr addrspace(1)
+  %"60" = ptrtoint ptr addrspace(1) %9 to i64
+  store i64 %"60", ptr addrspace(5) %"46", align 8
+  %10 = load i64, ptr addrspace(5) %"45", align 8
+  %"62" = inttoptr i64 %10 to ptr addrspace(1)
+  %11 = load i64, ptr addrspace(1) %"62", align 8
+  store i64 %11, ptr addrspace(5) %"47", align 8
+  %12 = load i64, ptr addrspace(5) %"46", align 8
+  %13 = load i64, ptr addrspace(5) %"47", align 8
+  %"63" = inttoptr i64 %12 to ptr addrspace(1)
+  store i64 %13, ptr addrspace(1) %"63", align 8
   ret void
 }
 
