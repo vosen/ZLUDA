@@ -2128,11 +2128,13 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Membar { .. }
         | ast::Instruction::Trap {}
+        | ast::Instruction::Exit {}
         | ast::Instruction::Not { .. }
         | ast::Instruction::Or { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Bra { .. }
         | ast::Instruction::Clz { .. }
+        | ast::Instruction::Bfind { .. }
         | ast::Instruction::Brev { .. }
         | ast::Instruction::Dp4a { .. }
         | ast::Instruction::Popc { .. }
@@ -2143,6 +2145,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bmsk { .. }
         | ast::Instruction::Shr { .. }
         | ast::Instruction::ShflSync { .. }
+        | ast::Instruction::MatchSync { .. }
         | ast::Instruction::CpAsync { .. }
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }

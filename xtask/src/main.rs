@@ -439,7 +439,7 @@ mod os {
 
     // Unfortunately when linking against amdhip64.so, it encodes SONAME with versioned
     // filename, e.g. libamdhip64.so.7. We instead want to link against unversioned
-    // libamdhip64.so to allow compatiblity with both ROCm 6 and ROCm 7
+    // libamdhip64.so to allow compatibility with both ROCm 6 and ROCm 7
     // We use `patchelf`. I've tried arwen library: https://nichmor.github.io/arwen/,
     // it supports replacing DT_NEEDED entries, but it seems to produce broken binaries
     pub fn strip_rocm_versions_from_dt_needed(target_dir: &PathBuf, profile: &str) {

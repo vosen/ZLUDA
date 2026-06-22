@@ -399,12 +399,13 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAddAttributeAtIndex(fn_, i as u32 + 1, attr) };
             }
         }
-        if !method.is_kernel() {
+        let is_kernel = method.is_kernel();
+        if !is_kernel {
             unsafe {
                 LLVMSetVisibility(fn_, llvm_zluda::LLVMVisibility::LLVMHiddenVisibility);
             }
         }
-        let call_conv = if method.is_kernel() {
+        let call_conv = if is_kernel {
             Self::kernel_call_convention()
         } else {
             Self::func_call_convention()
@@ -429,13 +430,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
-            let mut method_emitter: MethodEmitContext<'_> = MethodEmitContext::new(
-                self,
-                fn_,
-                variables_builder,
-                self.llvm_types,
-                base_32bit_memory,
-            );
+            let mut method_emitter =
+                MethodEmitContext::new(self, fn_, variables_builder, self.llvm_types, base_32bit_memory, is_kernel);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -672,6 +668,7 @@ struct MethodEmitContext<'a> {
     carry_flag: Option<LLVMValueRef>,
     llvm_types: ZludaTypeToLLVM,
     base_32bit_memory: Option<SpirvWord>,
+    is_kernel: bool,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -681,6 +678,7 @@ impl<'a> MethodEmitContext<'a> {
         variables_builder: Builder,
         llvm_types: ZludaTypeToLLVM,
         base_32bit_memory: Option<SpirvWord>,
+        is_kernel: bool,
     ) -> MethodEmitContext<'a> {
         MethodEmitContext {
             context: parent.context,
@@ -691,7 +689,8 @@ impl<'a> MethodEmitContext<'a> {
             method,
             carry_flag: None,
             llvm_types,
-            base_32bit_memory: base_32bit_memory,
+            base_32bit_memory,
+            is_kernel,
         }
     }
 
@@ -821,6 +820,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
             ast::Instruction::Ret { data } => Ok(self.emit_ret(data)),
+            ast::Instruction::Exit {} => self.emit_exit(),
             ast::Instruction::Cvta { data, arguments } => self.emit_cvta(data, arguments),
             ast::Instruction::Abs { data, arguments } => self.emit_abs(data, arguments),
             ast::Instruction::Mad { data, arguments } => self.emit_mad(data, arguments),
@@ -841,6 +841,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Lg2 { data, arguments } => self.emit_lg2(data, arguments),
             ast::Instruction::Ex2 { data, arguments } => self.emit_ex2(data, arguments),
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
+            ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
             ast::Instruction::Brev { data, arguments } => self.emit_brev(data, arguments),
             ast::Instruction::Popc { data, arguments } => self.emit_popc(data, arguments),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
@@ -869,6 +870,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bmsk { .. }
             | ast::Instruction::Activemask { .. }
             | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::MatchSync { .. }
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
@@ -1611,22 +1613,35 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::ScalarType,
         arguments: ptx_parser::ClzArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_fn = match data.size_of() {
+        let clz_result = self.emit_clz_impl(data, arguments.src)?;
+        self.resolver.register(arguments.dst, clz_result);
+        Ok(())
+    }
+
+    fn emit_clz_impl(
+        &mut self,
+        type_: ptx_parser::ScalarType,
+        src: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let llvm_fn = match type_.size_of() {
             4 => c"llvm.ctlz.i32",
             8 => c"llvm.ctlz.i64",
             _ => return Err(error_unreachable()),
         };
-        let type_ = get_scalar_type(self.context, data.into());
+        let llvm_type = get_scalar_type(self.context, type_);
         let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
-        let src = self.resolver.value(arguments.src)?;
+        let src = self.resolver.value(src)?;
         let false_ = unsafe { LLVMConstInt(pred, 0, 0) };
-        self.emit_intrinsic(
+        let result = self.emit_intrinsic(
             llvm_fn,
-            Some(arguments.dst),
-            vec![&data.into()],
-            vec![(src, type_), (false_, pred)],
+            None,
+            vec![&type_.into()],
+            vec![(src, llvm_type), (false_, pred)],
         )?;
-        Ok(())
+        let i32_llvm = get_scalar_type(self.context, ast::ScalarType::B32);
+        Ok(unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, result, i32_llvm, LLVM_UNNAMED.as_ptr())
+        })
     }
 
     fn emit_mul(
@@ -1922,8 +1937,12 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         let temp_ptr =
             unsafe { LLVMBuildIntToPtr(self.builder, src, from_type, LLVM_UNNAMED.as_ptr()) };
+        let temp_converted = unsafe {
+            LLVMBuildAddrSpaceCast(self.builder, temp_ptr, dest_type, LLVM_UNNAMED.as_ptr())
+        };
+        let scalar_type = unsafe { LLVMIntTypeInContext(self.context, data.size as u32) };
         self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildAddrSpaceCast(self.builder, temp_ptr, dest_type, dst)
+            LLVMBuildPtrToInt(self.builder, temp_converted, scalar_type, dst)
         });
         Ok(())
     }
@@ -2955,12 +2974,16 @@ impl<'a> MethodEmitContext<'a> {
             _ => return Err(error_unreachable()),
         };
         let llvm_type = get_scalar_type(self.context, type_);
-        self.emit_intrinsic(
+        let population = self.emit_intrinsic(
             intrinsic,
-            Some(arguments.dst),
+            None,
             vec![&type_.into()],
             vec![(self.resolver.value(arguments.src)?, llvm_type)],
         )?;
+        let i32_llvm = get_scalar_type(self.context, ast::ScalarType::B32);
+        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, population, i32_llvm, dst_name)
+        });
         Ok(())
     }
 
@@ -3748,6 +3771,41 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildAdd(self.builder, shifted, src3, dst)
                 });
             }
+        }
+        Ok(())
+    }
+
+    fn emit_bfind(
+        &mut self,
+        _data: (),
+        arguments: ast::BfindArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+        let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
+        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 0) };
+        let src_is_zero = unsafe {
+            LLVMBuildICmp(
+                self.builder,
+                LLVMIntPredicate::LLVMIntEQ,
+                src,
+                const_0,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let clz_result = self.emit_clz_impl(ast::ScalarType::B32, arguments.src)?;
+        self.resolver.with_result(arguments.dst, |dst_name| unsafe {
+            LLVMBuildSelect(self.builder, src_is_zero, const_max, clz_result, dst_name)
+        });
+        Ok(())
+    }
+
+    fn emit_exit(&mut self) -> Result<(), TranslateError> {
+        if !self.is_kernel {
+            return Err(error_todo());
+        }
+        unsafe {
+            LLVMBuildRetVoid(self.builder);
         }
         Ok(())
     }

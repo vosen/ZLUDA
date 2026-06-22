@@ -16,6 +16,7 @@ ninja clang llvm-dis llvm-as
 then cd to the directory with this file and run this simple command:
 
 ../../ext/llvm-project/build/bin/clang \
+    -DHIP_ENABLE_WARP_SYNC_BUILTINS \
     -std=c++20 \
     -Xclang -fdenormal-fp-math=dynamic \
     -Wall -Wextra -Wsign-compare -Wconversion \
@@ -48,6 +49,7 @@ then cd to the directory with this file and run this simple command:
 #include <utility>
 #include <hip/hip_runtime.h>
 #include <hip/amd_detail/amd_device_functions.h>
+#include <hip/amd_detail/amd_warp_sync_functions.h>
 #include <hip/hip_fp8.h>
 
 #define GLOBAL_SPACE __attribute__((address_space(1)))
@@ -80,12 +82,12 @@ typedef char s8x4 __attribute__((ext_vector_type(4)));
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
 #define DECLARE_ATTR(TYPE, NAME)                                        \
-    extern "C" __attribute__((constant)) CONSTANT_SPACE TYPE ATTR(NAME) \
+    extern "C" __attribute__((constant)) TYPE ATTR(NAME) \
     __device__
 
 extern "C"
 {
-    extern "C" __attribute__((constant)) CONSTANT_SPACE uint32_t __oclc_ISA_version __device__;
+    extern "C" __attribute__((constant)) uint32_t __oclc_ISA_version __device__;
 
     uint32_t FUNC(activemask)()
     {
@@ -339,7 +341,7 @@ extern "C"
                             uint64_t char_size)
     {
         (void)char_size;
-        __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
+        [[clang::noinline]] __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
     }
 
     // * Smallest denormal is 1.4 × 10^-45
@@ -653,6 +655,16 @@ extern "C"
         return ballot(value, true);
     }
 
+    uint32_t FUNC(match_any_sync_b32)(uint32_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return uint32_t(__match_any<uint32_t>(value));
+    }
+
+    uint32_t FUNC(match_any_sync_b64)(uint64_t value, uint32_t membermask __attribute__((unused)))
+    {
+        return uint32_t(__match_any<uint64_t>(value));
+    }
+
 #define REDUX_SYNC_TYPE_IMPL(reducer, ptx_type, amd_type, cpp_type)                                             \
     cpp_type __ockl_wfred_##reducer##_##amd_type(cpp_type) __device__;                                          \
     cpp_type FUNC(redux_sync_##reducer##_##ptx_type)(cpp_type src, uint32_t membermask __attribute__((unused))) \
@@ -775,12 +787,13 @@ extern "C"
         return output.u32;
     }
 
-    int FUNC(vprintf)(const char *format __attribute__((unused)), void *vlist __attribute__((unused)))
+    [[clang::noinline]]
+    int FUNC(vprintf)(const char *format , void *vlist __attribute__((unused)))
     {
         // TODO: replace calls to vprintf with a raising pass to printf when we have a mechanism
         // to write SSA passes
         // Use https://github.com/ROCm/llvm-project/blob/99a81d16b9d811cadd420190bed16981a0a57bc6/llvm/lib/Transforms/Utils/AMDGPUEmitPrintf.cpp#L426
-        return -1;
+        return printf("%s", format);
     }
 }
 
@@ -872,7 +885,7 @@ __device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_col
 }
 
 template <typename Acc, typename T>
-__device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
+__device__ HIP_vector_base<Acc, 4>::Native_vec_ fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
 {
     uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
     uint8_t quad_index = laneid % 4;
@@ -934,7 +947,7 @@ extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w));
     }
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
@@ -953,7 +966,7 @@ extern "C"
         }
         else
         {
-            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w));
         }
     }
 
@@ -1063,7 +1076,7 @@ extern "C"
         auto result = sample_1D(i, s, coord.x);                                                                                                                                         \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                  \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1074,7 +1087,7 @@ extern "C"
         auto result = sample_1Db(i, coord.x);                                                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                  \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1098,7 +1111,7 @@ extern "C"
         auto result = sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                                \
+    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                              \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1122,7 +1135,7 @@ extern "C"
         auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                                \
+    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                              \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
