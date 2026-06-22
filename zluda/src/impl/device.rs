@@ -553,6 +553,14 @@ pub(crate) unsafe fn can_access_peer(
     hipDeviceCanAccessPeer(can_access_peer, dev1, dev2)
 }
 
+pub(crate) unsafe fn get_p_c_i_bus_id(
+    pci_bus_id: *mut ::core::ffi::c_char,
+    len: ::core::ffi::c_int,
+    dev: hipDevice_t,
+) -> hipError_t {
+    hipDeviceGetPCIBusId(pci_bus_id, len, dev)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tests::CudaApi;
