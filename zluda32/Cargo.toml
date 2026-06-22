@@ -37,6 +37,7 @@ bincode = "2.0.1"
 rkyv = "0.8.15"
 unwrap_or = "1.0.1"
 rustc-hash = "2.0.0"
+libc = "0.2"
 
 [package.metadata.zluda]
 windows_only = true

@@ -13,6 +13,7 @@ use rkyv::{Archive, Deserialize, Portable, Serialize};
 use rustc_hash::FxHashMap;
 use std::alloc::Layout;
 use std::slice;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
 use zluda_common::{CodeLibraryRef, CodeModuleRef, CudaErrorType};
@@ -28,6 +29,9 @@ macro_rules! not_implemented {
             #[allow(improper_ctypes_definitions)]
             #[allow(unused_variables)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                if !crate::initialized() {
+                    return Err(CUerror::DEINITIALIZED);
+                }
                 Err(cuda_types::cuda::CUerror::NOT_SUPPORTED)
             }
         )*
@@ -41,6 +45,9 @@ macro_rules! implemented {
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                if !crate::initialized() {
+                    return Err(CUerror::DEINITIALIZED);
+                }
                 paste!{ [< $fn_name:snake >] ( $( $arg_id ),* ) }
             }
         )*
@@ -218,8 +225,9 @@ pub(crate) fn cu_ctx_create_v2(
     Ok(())
 }
 
-pub(crate) fn cu_ctx_detach(ctx: CUcontext) -> Result<(), CUerror> {
-    unimplemented!()
+pub(crate) fn cu_ctx_detach(_ctx: CUcontext) -> Result<(), CUerror> {
+    // TODO
+    Ok(())
 }
 
 pub(crate) fn cu_ctx_get_api_version(
@@ -473,12 +481,14 @@ pub(crate) fn cu_mem_alloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> Result
     Ok(())
 }
 
-pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerror> {
-    unimplemented!()
-}
-
 pub(crate) fn cu_mem_free_v2(dptr: CUdeviceptr) -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuMemFree_v2Out>(
+        Opcode::cuMemFree_v2,
+        cuMemFree_v2In {
+            dptr: CudaEncode::encode(dptr),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_mem_get_address_range_v2(
@@ -500,15 +510,20 @@ pub(crate) fn cu_mem_get_address_range_v2(
 }
 
 pub(crate) fn cu_mem_host_alloc(
-    pp: *mut *mut ::core::ffi::c_void,
+    result: *mut *mut ::core::ffi::c_void,
     bytesize: usize,
     _flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    let pp = unsafe { pp.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    *pp = unsafe {
-        std::alloc::alloc_zeroed(std::alloc::Layout::from_size_align(bytesize, 32).unwrap())
+    let result = unsafe { result.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *result = unsafe { libc::calloc(1, bytesize) };
+    Ok(())
+}
+
+pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerror> {
+    if p.is_null() {
+        return Err(CUerror::INVALID_VALUE);
     }
-    .cast();
+    unsafe { libc::free(p) };
     Ok(())
 }
 
@@ -908,10 +923,21 @@ impl CudaDarkApi for DarkApi32 {
     }
 
     unsafe extern "system" fn context_local_storage_delete(
-        context: cuda_types::cuda::CUcontext,
+        cu_ctx: cuda_types::cuda::CUcontext,
         key: *mut std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        if !initialized() {
+            return Err(CUerror::DEINITIALIZED);
+        }
+        let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
+        GlobalState::remote_call_zero_copy::<ContextLocalStorageDeleteOut>(
+            Opcode::ContextLocalStorageDelete,
+            ContextLocalStorageDeleteIn {
+                cu_ctx: cu_ctx.encode().into(),
+                key: (key as u32).into(),
+            },
+        )?;
+        Ok(())
     }
 
     unsafe extern "system" fn context_local_storage_get(
@@ -956,6 +982,9 @@ impl CudaDarkApi for DarkApi32 {
         heap_alloc_record_ptr: *const std::ffi::c_void,
         arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
+        if !initialized() {
+            return Err(CUerror::DEINITIALIZED);
+        }
         let heap_alloc_record_ptr = heap_alloc_record_ptr as *mut AllocRecord;
         let record = Box::from_raw(heap_alloc_record_ptr);
         if !arg2.is_null() {
@@ -1011,4 +1040,25 @@ impl CudaDarkApi for DarkApi32 {
     unsafe extern "system" fn hybrid_runtime_free(token: usize) -> cuda_types::cuda::CUresult {
         unimplemented!()
     }
+}
+
+const DLL_PROCESS_DETACH: u32 = 0;
+
+#[allow(non_snake_case, unused_variables)]
+#[no_mangle]
+extern "system" fn DllMain(_dll_module: *const c_void, call_reason: u32, _: *const c_void) -> bool {
+    if call_reason == DLL_PROCESS_DETACH {
+        deinitialize();
+    }
+    true
+}
+
+static INITIALIZED: AtomicBool = AtomicBool::new(true);
+
+fn initialized() -> bool {
+    INITIALIZED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+fn deinitialize() {
+    INITIALIZED.store(false, std::sync::atomic::Ordering::SeqCst);
 }
