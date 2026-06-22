@@ -1,0 +1,26 @@
+[package]
+name = "zluda64_server"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "zluda64_server"
+path = "src/main.rs"
+
+[dependencies]
+cuda_types = { path = "../cuda_types" }
+cuda_macros = { path = "../cuda_macros" }
+zluda_server_common = { path = "../zluda_server_common" }
+dark_api = { path = "../dark_api" }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation"] }
+compio = { version = "0.18.0", features = ["macros", "fs"] }
+slab = "0.4.12"
+bincode = "2.0.1"
+rkyv = "0.8.15"
+orderly-allocator = "0.2.2"
+range-alloc = "0.1.5"
+rustc-hash = "2.0.0"
+
+[package.metadata.zluda]
+windows_only = true

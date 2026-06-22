@@ -301,6 +301,11 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
+            let dtype = match dtype {
+                // For 32 bit
+                ast::ScalarType::U32 => ast::ScalarType::S32,
+                t => t,
+            };
             let prefix = match type_ {
                 ast::TexType::Texref => "texref",
                 ast::TexType::Texobj => "texobj",

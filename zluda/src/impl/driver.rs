@@ -1,5 +1,6 @@
 use crate::r#impl::{self, context, device, function, module};
 use cuda_types::cuda::*;
+use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
 use libloading::Library;
 use std::{
@@ -469,11 +470,99 @@ fn get_device_hash_info() -> Result<Vec<::dark_api::DeviceHashinfo>, CUerror> {
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
     ::dark_api::cuda::CudaDarkApiGlobalTable::new::<DarkApi>();
 
+struct Zluda32DarkApi {}
+
+impl ::dark_api::zluda32::CudaDarkApi for Zluda32DarkApi {
+    unsafe extern "system" fn get_module_globals(
+        names: *mut *mut u8,
+        initializers: *mut *const u8,
+        sizes: *mut u32,
+        alignments: *mut u32,
+        count: *mut u32,
+        module: cuda_types::cuda::CUmodule,
+    ) -> cuda_types::cuda::CUresult {
+        let module: &module::Module = FromCuda::<_, CUerror>::from_cuda(&module)?;
+        let zluda32 = module.bit32.as_ref().ok_or(CUerror::NOT_FOUND)?;
+        if let Some(c) = count.as_mut() {
+            *c = zluda32.globals.len() as u32;
+        }
+        let mut names = if names.is_null() {
+            None
+        } else {
+            Some(slice::from_raw_parts_mut(names, zluda32.globals.len()))
+        };
+        let mut initializers = if initializers.is_null() {
+            None
+        } else {
+            Some(slice::from_raw_parts_mut(
+                initializers,
+                zluda32.globals.len(),
+            ))
+        };
+        let mut sizes = if sizes.is_null() {
+            None
+        } else {
+            Some(slice::from_raw_parts_mut(sizes, zluda32.globals.len()))
+        };
+        let mut alignments = if alignments.is_null() {
+            None
+        } else {
+            Some(slice::from_raw_parts_mut(alignments, zluda32.globals.len()))
+        };
+        if names.is_some() || initializers.is_some() || sizes.is_some() || alignments.is_some() {
+            for (i, global) in zluda32.globals.iter().enumerate() {
+                if let Some(names) = &mut names {
+                    names[i] = global.name.as_ptr() as *mut u8;
+                }
+                if let Some(initializers) = &mut initializers {
+                    initializers[i] = global.initializer.as_ptr();
+                }
+                if let Some(sizes) = &mut sizes {
+                    sizes[i] = global.initializer.len() as u32;
+                }
+                if let Some(alignments) = &mut alignments {
+                    alignments[i] = global.align as u32;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    unsafe extern "system" fn get_function_info(
+        explicit_sizes_out: *mut FunctionArgInfo,
+        explicit_count_out: *mut u32,
+        func: cuda_types::cuda::CUfunction,
+    ) -> cuda_types::cuda::CUresult {
+        let func: &function::Function = FromCuda::<_, CUerror>::from_cuda(&func)?;
+        let explicit_args_size_align = match &func.explicit_args_size_align {
+            Some(sizes) => sizes,
+            None => return CUresult::ERROR_NOT_FOUND,
+        };
+        if !explicit_sizes_out.is_null() {
+            std::ptr::copy_nonoverlapping(
+                explicit_args_size_align.as_ptr(),
+                explicit_sizes_out,
+                explicit_args_size_align.len(),
+            );
+        }
+        if let Some(explicit_count_out) = explicit_count_out.as_mut() {
+            *explicit_count_out = explicit_args_size_align.len() as u32;
+        }
+        Ok(())
+    }
+}
+
+static ZLUDA32_EXPORT_TABLE: ::dark_api::zluda32::CudaDarkApiGlobalTable =
+    ::dark_api::zluda32::CudaDarkApiGlobalTable::new::<Zluda32DarkApi>();
+
 pub(crate) fn get_export_table(
     pp_export_table: &mut *const ::core::ffi::c_void,
     p_export_table_id: &CUuuid,
 ) -> CUresult {
     if let Some(table) = EXPORT_TABLE.get(p_export_table_id) {
+        *pp_export_table = table.start();
+        cuda_types::cuda::CUresult::SUCCESS
+    } else if let Some(table) = ZLUDA32_EXPORT_TABLE.get(p_export_table_id) {
         *pp_export_table = table.start();
         cuda_types::cuda::CUresult::SUCCESS
     } else {
