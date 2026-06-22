@@ -46,7 +46,7 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
     }
 }
 
-fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
+fn get_state_space(space: ast::StateSpace, is_32bit: bool) -> Result<u32, TranslateError> {
     match space {
         ast::StateSpace::Reg => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Generic => Ok(GENERIC_ADDRESS_SPACE),
@@ -58,7 +58,14 @@ fn get_state_space(space: ast::StateSpace) -> Result<u32, TranslateError> {
         ast::StateSpace::ParamFunc => Err(error_todo()),
         ast::StateSpace::Local => Ok(PRIVATE_ADDRESS_SPACE),
         ast::StateSpace::Global => Ok(GLOBAL_ADDRESS_SPACE),
-        ast::StateSpace::Const => Ok(CONSTANT_ADDRESS_SPACE),
+        ast::StateSpace::Const => Ok(if is_32bit {
+            // FIXME: This is probably incorrect, but when using constant or
+            // global address space, we get incorrect codegen. Might be a bug
+            // in LLVM, might be a bug in ZLUDA
+            GENERIC_ADDRESS_SPACE
+        } else {
+            CONSTANT_ADDRESS_SPACE
+        }),
         ast::StateSpace::Shared => Ok(SHARED_ADDRESS_SPACE),
         ast::StateSpace::SharedCta => Err(error_todo()),
         ast::StateSpace::SharedCluster => Err(error_todo()),
