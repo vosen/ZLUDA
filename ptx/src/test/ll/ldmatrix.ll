@@ -61,34 +61,35 @@ define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"60") #1 {
   store i64 ptrtoint (ptr addrspace(3) @values_s to i64), ptr addrspace(5) %"66", align 8
   %19 = load i64, ptr addrspace(5) %"66", align 8
   %20 = inttoptr i64 %19 to ptr addrspace(3)
-  %"91" = addrspacecast ptr addrspace(3) %20 to ptr
-  store ptr %"91", ptr addrspace(5) %"66", align 8
-  %21 = load i64, ptr addrspace(5) %"63", align 8
-  %22 = load i64, ptr addrspace(5) %"66", align 8
-  %23 = mul i64 %21, 16
-  %"122" = add i64 %23, %22
+  %21 = addrspacecast ptr addrspace(3) %20 to ptr
+  %"91" = ptrtoint ptr %21 to i64
+  store i64 %"91", ptr addrspace(5) %"66", align 8
+  %22 = load i64, ptr addrspace(5) %"63", align 8
+  %23 = load i64, ptr addrspace(5) %"66", align 8
+  %24 = mul i64 %22, 16
+  %"122" = add i64 %24, %23
   store i64 %"122", ptr addrspace(5) %"66", align 8
-  %24 = load i64, ptr addrspace(5) %"66", align 8
-  %"124" = inttoptr i64 %24 to ptr addrspace(3)
+  %25 = load i64, ptr addrspace(5) %"66", align 8
+  %"124" = inttoptr i64 %25 to ptr addrspace(3)
   %"54" = call <2 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x2_b16(ptr addrspace(3) %"124")
   %"125" = extractelement <2 x i32> %"54", i8 0
   %"126" = extractelement <2 x i32> %"54", i8 1
   store i32 %"125", ptr addrspace(5) %"68", align 4
   store i32 %"126", ptr addrspace(5) %"69", align 4
-  %25 = load i64, ptr addrspace(5) %"63", align 8
-  %26 = load i64, ptr addrspace(5) %"61", align 8
-  %27 = mul i64 %25, 8
-  %"99" = add i64 %27, %26
+  %26 = load i64, ptr addrspace(5) %"63", align 8
+  %27 = load i64, ptr addrspace(5) %"61", align 8
+  %28 = mul i64 %26, 8
+  %"99" = add i64 %28, %27
   store i64 %"99", ptr addrspace(5) %"61", align 8
-  %28 = load i64, ptr addrspace(5) %"61", align 8
-  %29 = load i32, ptr addrspace(5) %"68", align 4
-  %"127" = inttoptr i64 %28 to ptr
-  store i32 %29, ptr %"127", align 4
-  %30 = load i64, ptr addrspace(5) %"61", align 8
-  %"128" = inttoptr i64 %30 to ptr
+  %29 = load i64, ptr addrspace(5) %"61", align 8
+  %30 = load i32, ptr addrspace(5) %"68", align 4
+  %"127" = inttoptr i64 %29 to ptr
+  store i32 %30, ptr %"127", align 4
+  %31 = load i64, ptr addrspace(5) %"61", align 8
+  %"128" = inttoptr i64 %31 to ptr
   %"57" = getelementptr inbounds i8, ptr %"128", i64 4
-  %31 = load i32, ptr addrspace(5) %"69", align 4
-  store i32 %31, ptr %"57", align 4
+  %32 = load i32, ptr addrspace(5) %"69", align 4
+  store i32 %32, ptr %"57", align 4
   ret void
 }
 
