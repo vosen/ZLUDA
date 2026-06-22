@@ -38,7 +38,7 @@ fn emit_attribute(
             module.get(),
             attribute_type,
             name.as_ptr(),
-            get_state_space(ast::StateSpace::Const, false)?,
+            get_state_space(ast::StateSpace::Const)?,
         )
     };
     unsafe { LLVMSetLinkage(global, llvm_zluda::LLVMLinkage::LLVMExternalLinkage) };
