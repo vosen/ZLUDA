@@ -1773,7 +1773,12 @@ pub fn verify_symbols(test_name: &str, ctx: &llvm_zluda::utils::Context, elf_mod
     let expected = [
         "_DYNAMIC".to_string(),
         test_name.to_string(),
+        format!("{}.has_dyn_sized_stack", test_name),
+        format!("{}.has_recursion", test_name),
         format!("{}.kd", test_name),
+        format!("{}.num_agpr", test_name),
+        format!("{}.num_vgpr", test_name),
+        format!("{}.private_seg_size", test_name),
     ];
     if symbols != expected {
         panic!(
