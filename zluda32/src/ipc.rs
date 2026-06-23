@@ -7,6 +7,7 @@ use rkyv::rend::u32_le;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::util::AlignedVec;
 use rkyv::{rancor, Archive, Deserialize, Portable, Serialize};
+use rustc_hash::FxHashMap;
 use std::io::{Read, Write};
 use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle};
 // use rkyv::util::AlignedVec;
