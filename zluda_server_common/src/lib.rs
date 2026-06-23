@@ -81,7 +81,7 @@ cuda_function_declarations! {
         //cuMemcpyDtoDAsync_v2,
         //cuMemcpyDtoHAsync_v2,
         //cuMemcpyHtoDAsync_v2,
-        // cuMemsetD8_v2,
+        cuMemsetD8_v2,
         // cuModuleGetFunction,
         // cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
@@ -194,6 +194,40 @@ pub struct CUdevprop_v1_Wire {
     pub regsPerBlock: ::core::ffi::c_int,
     pub clockRate: ::core::ffi::c_int,
     pub textureAlign: ::core::ffi::c_int,
+}
+
+impl From<CUdevprop_v1> for CUdevprop_v1_Wire {
+    fn from(devprop: CUdevprop_v1) -> Self {
+        Self {
+            maxThreadsPerBlock: devprop.maxThreadsPerBlock,
+            maxThreadsDim: devprop.maxThreadsDim,
+            maxGridSize: devprop.maxGridSize,
+            sharedMemPerBlock: devprop.sharedMemPerBlock,
+            totalConstantMemory: devprop.totalConstantMemory,
+            SIMDWidth: devprop.SIMDWidth,
+            memPitch: devprop.memPitch,
+            regsPerBlock: devprop.regsPerBlock,
+            clockRate: devprop.clockRate,
+            textureAlign: devprop.textureAlign,
+        }
+    }
+}
+
+impl Into<CUdevprop_v1> for CUdevprop_v1_Wire {
+    fn into(self) -> CUdevprop_v1 {
+        CUdevprop_v1 {
+            maxThreadsPerBlock: self.maxThreadsPerBlock,
+            maxThreadsDim: self.maxThreadsDim,
+            maxGridSize: self.maxGridSize,
+            sharedMemPerBlock: self.sharedMemPerBlock,
+            totalConstantMemory: self.totalConstantMemory,
+            SIMDWidth: self.SIMDWidth,
+            memPitch: self.memPitch,
+            regsPerBlock: self.regsPerBlock,
+            clockRate: self.clockRate,
+            textureAlign: self.textureAlign,
+        }
+    }
 }
 
 unsafe impl Portable for CUdevprop_v1_Wire {}
