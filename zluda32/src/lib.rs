@@ -78,6 +78,7 @@ cuda_function_declarations! {
         cuInit,
         cuLaunchKernel,
         cuMemAlloc_v2,
+        cuMemcpyDtoD_v2,
         cuMemcpyDtoDAsync_v2,
         cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoDAsync_v2,
@@ -140,8 +141,25 @@ impl ContextStack {
 }
 
 struct GlobalState {
-    function_args: FxHashMap<CUfunction, Vec<FunctionArgInfo>>,
     server: ipc::Server,
+    function_args: FxHashMap<CUfunction, Vec<FunctionArgInfo>>,
+    next_context: u32,
+    context_state: FxHashMap<
+        cuda_types::cuda::CUcontext,
+        FxHashMap<
+            usize,
+            (
+                usize,
+                Option<
+                    extern "system" fn(
+                        cuda_types::cuda::CUcontext,
+                        *mut std::ffi::c_void,
+                        *mut std::ffi::c_void,
+                    ),
+                >,
+            ),
+        >,
+    >,
 }
 
 impl GlobalState {
@@ -151,6 +169,8 @@ impl GlobalState {
             Ok(Mutex::new(GlobalState {
                 function_args: FxHashMap::default(),
                 server: unsafe { ipc::Server::start() }?,
+                next_context: 1024 * 1024,
+                context_state: FxHashMap::default(),
             }))
         })
         .as_ref()
@@ -207,17 +227,18 @@ pub(crate) fn cu_init(flags: u32) -> Result<(), CUerror> {
 
 pub(crate) fn cu_ctx_create_v2(
     pctx: *mut CUcontext,
-    flags: ::core::ffi::c_uint,
+    _flags: ::core::ffi::c_uint,
     dev: CUdevice,
 ) -> Result<(), CUerror> {
     let ctx_ref = unsafe { pctx.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
-    let cu_ctx = CudaEncode::decode(
-        GlobalState::remote_call_zero_copy::<cuCtxCreate_v2Out>(
-            Opcode::cuCtxCreate_v2,
-            cuCtxCreate_v2In { flags, dev },
-        )?
-        .pctx,
-    );
+    let cu_ctx: CUcontext;
+    {
+        let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        state.next_context = state.next_context.wrapping_add(1);
+        let new_ctx = CUcontext(state.next_context as *mut _);
+        state.context_state.insert(new_ctx, FxHashMap::default());
+        cu_ctx = new_ctx;
+    }
     CONTEXT_STACK.with(|stack| {
         stack.push(cu_ctx, dev);
     });
@@ -225,8 +246,16 @@ pub(crate) fn cu_ctx_create_v2(
     Ok(())
 }
 
-pub(crate) fn cu_ctx_detach(_ctx: CUcontext) -> Result<(), CUerror> {
-    // TODO
+pub(crate) fn cu_ctx_detach(ctx: CUcontext) -> Result<(), CUerror> {
+    let ctx_storage = {
+        let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        state.context_state.remove(&ctx).ok_or(CUerror::UNKNOWN)?
+    };
+    for (key, (value, dtor_cb)) in ctx_storage {
+        if let Some(dtor_cb) = dtor_cb {
+            dtor_cb(ctx, key as _, value as _);
+        }
+    }
     Ok(())
 }
 
@@ -308,6 +337,10 @@ pub(crate) fn cu_device_get_attribute(
     dev: CUdevice,
 ) -> Result<(), CUerror> {
     let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    if attrib.0 == 537396226 {
+        *pi = 256;
+        return Ok(());
+    }
     *pi = GlobalState::remote_call_zero_copy::<cuDeviceGetAttributeOut>(
         Opcode::cuDeviceGetAttribute,
         cuDeviceGetAttributeIn {
@@ -563,13 +596,38 @@ pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerro
     Ok(())
 }
 
-pub(crate) fn cu_memcpy_dto_d_async_v2(
-    dstDevice: CUdeviceptr,
-    srcDevice: CUdeviceptr,
-    ByteCount: usize,
-    hStream: CUstream,
+pub(crate) fn cu_memcpy_dto_d_v2(
+    dst_device: CUdeviceptr,
+    src_device: CUdeviceptr,
+    byte_count: usize,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuMemcpyDtoD_v2Out>(
+        Opcode::cuMemcpyDtoD_v2,
+        cuMemcpyDtoD_v2In {
+            dstDevice: CudaEncode::encode(dst_device),
+            srcDevice: CudaEncode::encode(src_device),
+            ByteCount: u32_le::from_native(byte_count as u32),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_memcpy_dto_d_async_v2(
+    dst_device: CUdeviceptr,
+    src_device: CUdeviceptr,
+    byte_count: usize,
+    stream: CUstream,
+) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuMemcpyDtoDAsync_v2Out>(
+        Opcode::cuMemcpyDtoDAsync_v2,
+        cuMemcpyDtoDAsync_v2In {
+            dstDevice: CudaEncode::encode(dst_device),
+            srcDevice: CudaEncode::encode(src_device),
+            ByteCount: u32_le::from_native(byte_count as u32),
+            hStream: CudaEncode::encode(stream),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_memcpy_dto_h_async_v2(
@@ -968,15 +1026,16 @@ impl CudaDarkApi for DarkApi32 {
             ),
         >,
     ) -> cuda_types::cuda::CUresult {
+        if !initialized() {
+            return Err(CUerror::DEINITIALIZED);
+        }
         let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
-        GlobalState::remote_call_zero_copy::<ContextLocalStoragePutOut>(
-            Opcode::ContextLocalStoragePut,
-            ContextLocalStoragePutIn {
-                cu_ctx: cu_ctx.encode().into(),
-                key: (key as u32).into(),
-                value: (value as u32).into(),
-            },
-        )?;
+        let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        let ctx_storage = state
+            .context_state
+            .get_mut(&cu_ctx)
+            .ok_or(CUerror::INVALID_VALUE)?;
+        ctx_storage.insert(key as _, (value as _, _dtor_cb));
         Ok(())
     }
 
@@ -988,13 +1047,13 @@ impl CudaDarkApi for DarkApi32 {
             return Err(CUerror::DEINITIALIZED);
         }
         let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
-        GlobalState::remote_call_zero_copy::<ContextLocalStorageDeleteOut>(
-            Opcode::ContextLocalStorageDelete,
-            ContextLocalStorageDeleteIn {
-                cu_ctx: cu_ctx.encode().into(),
-                key: (key as u32).into(),
-            },
-        )?;
+        let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        let ctx_storage = state
+            .context_state
+            .get_mut(&cu_ctx)
+            .ok_or(CUerror::INVALID_VALUE)?;
+        let key = key as usize;
+        ctx_storage.remove(&key);
         Ok(())
     }
 
@@ -1003,17 +1062,21 @@ impl CudaDarkApi for DarkApi32 {
         cu_ctx: cuda_types::cuda::CUcontext,
         key: *mut std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
+        if !initialized() {
+            return Err(CUerror::DEINITIALIZED);
+        }
         let value = unsafe { value.as_mut() }.ok_or(cuda_types::cuda::CUerror::INVALID_VALUE)?;
-        let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
-        *value = GlobalState::remote_call_zero_copy::<ContextLocalStorageGetOut>(
-            Opcode::ContextLocalStorageGet,
-            ContextLocalStorageGetIn {
-                cu_ctx: cu_ctx.encode().into(),
-                key: (key as u32).into(),
-            },
-        )?
-        .value
-        .to_native() as _;
+        let stored_value = {
+            let cu_ctx = CONTEXT_STACK.with(|s| s.unwrap(cu_ctx))?;
+            let mut state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+            let ctx_storage = state
+                .context_state
+                .get_mut(&cu_ctx)
+                .ok_or(CUerror::INVALID_VALUE)?;
+            let key = key as usize;
+            ctx_storage.get(&key).ok_or(CUerror::INVALID_VALUE)?.0
+        };
+        *value = stored_value as _;
         Ok(())
     }
 

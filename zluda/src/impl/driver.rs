@@ -243,21 +243,21 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         value: *mut c_void,
         dtor_cb: Option<extern "system" fn(CUcontext, *mut c_void, *mut c_void)>,
     ) -> CUresult {
-        let _ctx = if cu_ctx.0 != ptr::null_mut() {
+        let ctx = if cu_ctx.0 != ptr::null_mut() {
             cu_ctx
         } else {
             let mut current_ctx: CUcontext = CUcontext(ptr::null_mut());
             context::get_current(&mut current_ctx)?;
             current_ctx
         };
-        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&_ctx)?;
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.insert(
                 key as usize,
                 context::StorageData {
                     value: value as usize,
                     reset_cb: dtor_cb,
-                    handle: _ctx,
+                    handle: ctx,
                 },
             );
             Ok(())
@@ -269,7 +269,14 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
         cu_ctx: CUcontext,
         key: *mut c_void,
     ) -> CUresult {
-        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
+        let ctx = if cu_ctx.0 != ptr::null_mut() {
+            cu_ctx
+        } else {
+            let mut current_ctx: CUcontext = CUcontext(ptr::null_mut());
+            context::get_current(&mut current_ctx)?;
+            current_ctx
+        };
+        let ctx_obj: &context::Context = FromCuda::<_, CUerror>::from_cuda(&ctx)?;
         ctx_obj.with_state_mut(|state: &mut context::ContextState| {
             state.storage.remove(&(key as usize));
             Ok(())
