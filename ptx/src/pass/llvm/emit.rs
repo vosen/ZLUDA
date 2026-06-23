@@ -229,7 +229,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             } else {
                 return Err(error_unreachable());
             }
-            method_emitter.emit_kernel_rounding_prelude(method.kernel_attributes)?;
+            method_emitter.emit_kernel_prelude(method.kernel_attributes)?;
             for statement in statements {
                 method_emitter.emit_statement(statement)?;
             }
@@ -517,10 +517,17 @@ impl<'a> MethodEmitContext<'a> {
     // This should be a kernel attribute, but sadly AMDGPU LLVM target does
     // not support attribute for it. So we have to set it as the first
     // instruction in the body of a kernel
-    fn emit_kernel_rounding_prelude(
+    fn emit_kernel_prelude(
         &mut self,
         kernel_attrs: Option<KernelAttributes>,
     ) -> Result<(), TranslateError> {
+        // TODO
+        // On Windows, with 32 bit ZLUDA on kernel _Z29KernelDeformableUberCollisionPi in
+        // SampleCloth.exe scalar memory accesses read stale memory. This might also affect
+        // Linux. Until I have a repro that's the best I can do
+        if cfg!(windows) {
+            self.emit_intrinsic(c"llvm.amdgcn.s.dcache.inv", None, Vec::new(), Vec::new())?;
+        }
         if let Some(KernelAttributes {
             rounding_mode_f32,
             rounding_mode_f16f64,
