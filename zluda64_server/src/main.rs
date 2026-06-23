@@ -4,7 +4,7 @@
 use compio::{
     buf::{buf_try, IoBuf, IoBufMut, ReserveError, ReserveExactError, SetLen},
     fs::named_pipe::{ClientOptions, NamedPipeClient},
-    io::{AsyncRead, AsyncReadExt, AsyncReadManaged, AsyncWrite, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt},
     BufResult,
 };
 use cuda_macros::cuda_function_declarations;
@@ -21,19 +21,19 @@ use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
     collections::BTreeMap,
-    ffi::{c_void, CStr, CString},
-    io::{self, Write},
+    ffi::{c_void, CStr},
     mem,
     ops::Range,
-    ptr::{self, NonNull},
+    ptr,
     rc::Rc,
 };
 use zluda_server_common::*;
 
 struct State {
+    ctx: CUcontext,
+    device: i32,
     handles: HandlePool,
-    dark_api: dark_api::cuda::ContextLocalStorageInterfaceV0301,
-    devmemory: Vec<Allocator>,
+    devmemory: Allocator,
     modules: ModuleLaunchData,
 }
 
@@ -54,7 +54,7 @@ impl HandlePool {
 
     fn get<T: Sized>(&self, id: u32) -> Result<*mut T, CUerror> {
         if id == 0 {
-            return Err(CUerror::INVALID_VALUE);
+            return Ok(ptr::null_mut());
         }
         self.handles
             .get((id - 1) as usize)
@@ -83,7 +83,7 @@ impl ModuleLaunchData {
 
     unsafe fn new_module(
         &mut self,
-        devmemory: &mut Vec<Allocator>,
+        devmemory: &mut Allocator,
         module: CUmodule,
     ) -> Result<(), CUerror> {
         let mut count = 0;
@@ -107,16 +107,14 @@ impl ModuleLaunchData {
             &mut count,
             module,
         )?;
-        let mut device = 0;
-        unsafe { cuCtxGetDevice(&mut device) }?;
         let globals = (0..count as usize)
             .map(|i| {
                 if alignments[i] > Allocator::ALLOCATION_UNIT {
                     return Err(CUerror::OUT_OF_MEMORY);
                 }
                 let initializer = std::slice::from_raw_parts(initializers[i], sizes[i] as usize);
-                let allocation = devmemory[device as usize].alloc_range(sizes[i])?;
-                let devptr = devmemory[device as usize].translate_range(allocation.clone())?;
+                let allocation = devmemory.alloc_range(sizes[i])?;
+                let devptr = devmemory.translate_range(allocation.clone())?;
                 unsafe {
                     cuMemcpyHtoD_v2(
                         CUdeviceptr_v2(devptr),
@@ -250,20 +248,14 @@ impl Allocator {
 impl State {
     fn new() -> Result<Self, CUerror> {
         unsafe { cuInit(0) }?;
-        let mut table_ptr = std::ptr::null();
-        unsafe {
-            cuGetExportTable(
-                &mut table_ptr,
-                &dark_api::cuda::ContextLocalStorageInterfaceV0301::GUID,
-            )
-        }?;
-        let dark_api = unsafe { dark_api::cuda::ContextLocalStorageInterfaceV0301::new(table_ptr) };
-        let mut devices = 0;
-        unsafe { cuDeviceGetCount(&mut devices) }?;
+        let mut ctx = unsafe { mem::zeroed() };
+        let device = 0;
+        unsafe { cuDevicePrimaryCtxRetain(&mut ctx, device) }?;
         Ok(Self {
+            ctx,
+            device,
             handles: HandlePool::new(),
-            dark_api,
-            devmemory: (0..devices).map(|_| Allocator::new()).collect(),
+            devmemory: Allocator::new(),
             modules: ModuleLaunchData::new()?,
         })
     }
@@ -308,7 +300,7 @@ async fn main() -> std::io::Result<()> {
                 buffer = handle_cuda_function::<cuDeviceGetAttributeIn, cuDeviceGetAttributeOut>(
                     &mut client,
                     buffer,
-                    cu_device_get_attribute,
+                    |input| cu_device_get_attribute(&mut state, input),
                 )
                 .await?;
             }
@@ -316,15 +308,7 @@ async fn main() -> std::io::Result<()> {
                 buffer = handle_cuda_function::<cuDeviceGetIn, cuDeviceGetOut>(
                     &mut client,
                     buffer,
-                    cu_device_get,
-                )
-                .await?;
-            }
-            Some(Opcode::cuCtxCreate_v2) => {
-                buffer = handle_cuda_function::<cuCtxCreate_v2In, cuCtxCreate_v2Out>(
-                    &mut client,
-                    buffer,
-                    |input| cu_ctx_create_v2(input, &mut state),
+                    |input| cu_device_get(&mut state, input),
                 )
                 .await?;
             }
@@ -340,7 +324,7 @@ async fn main() -> std::io::Result<()> {
                 buffer = handle_cuda_function_framed_out::<cuDeviceGetNameIn, cuDeviceGetNameOut>(
                     &mut client,
                     buffer,
-                    cu_device_get_name,
+                    |input| cu_device_get_name(&mut state, input),
                 )
                 .await?;
             }
@@ -348,35 +332,8 @@ async fn main() -> std::io::Result<()> {
                 buffer = handle_cuda_function::<cuDeviceTotalMem_v2In, cuDeviceTotalMem_v2Out>(
                     &mut client,
                     buffer,
-                    cu_device_total_mem_v2,
+                    |input| cu_device_total_mem_v2(&mut state, input),
                 )
-                .await?;
-            }
-            Some(Opcode::ContextLocalStoragePut) => {
-                buffer =
-                    handle_cuda_function::<ContextLocalStoragePutIn, ContextLocalStoragePutOut>(
-                        &mut client,
-                        buffer,
-                        |input| context_local_storage_put(&mut state, input),
-                    )
-                    .await?;
-            }
-            Some(Opcode::ContextLocalStorageGet) => {
-                buffer =
-                    handle_cuda_function::<ContextLocalStorageGetIn, ContextLocalStorageGetOut>(
-                        &mut client,
-                        buffer,
-                        |input| context_local_storage_get(&mut state, input),
-                    )
-                    .await?;
-            }
-            Some(Opcode::ContextLocalStorageDelete) => {
-                buffer = handle_cuda_function::<
-                    ContextLocalStorageDeleteIn,
-                    ContextLocalStorageDeleteOut,
-                >(&mut client, buffer, |input| {
-                    context_local_storage_delete(&mut state, input)
-                })
                 .await?;
             }
             Some(Opcode::cuCtxGetApiVersion) => {
@@ -586,7 +543,7 @@ fn cu_memset_d8_v2(
 ) -> Result<cuMemsetD8_v2Out, CUerror> {
     let dst_device = input.dstDevice.to_native();
     let dptr = if dst_device != 0 {
-        CUdeviceptr_v2(state.devmemory[dst_device as usize].translate(dst_device)?)
+        CUdeviceptr_v2(state.devmemory.translate(dst_device)?)
     } else {
         CUdeviceptr_v2(ptr::null_mut())
     };
@@ -669,10 +626,8 @@ fn cu_mem_free_v2(
     state: &mut State,
     input: &ArchivedcuMemFree_v2In,
 ) -> Result<cuMemFree_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
     let dptr = input.dptr.to_native();
-    state.devmemory[device as usize].free(dptr)?;
+    state.devmemory.free(dptr)?;
     Ok(cuMemFree_v2Out {})
 }
 
@@ -704,12 +659,10 @@ fn cu_tex_ref_set_address_v2(
     state: &mut State,
     input: &ArchivedcuTexRefSetAddress_v2In,
 ) -> Result<cuTexRefSetAddress_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
     let mut byte_offset = 0;
     let dptr = input.dptr.to_native();
     let dptr = if dptr != 0 {
-        CUdeviceptr_v2(state.devmemory[device as usize].translate(dptr)?)
+        CUdeviceptr_v2(state.devmemory.translate(dptr)?)
     } else {
         CUdeviceptr_v2(ptr::null_mut())
     };
@@ -730,10 +683,8 @@ fn cu_mem_get_address_range_v2(
     state: &mut State,
     input: &ArchivedcuMemGetAddressRange_v2In,
 ) -> Result<cuMemGetAddressRange_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
-    let allocator = &state.devmemory[device as usize];
-    let range = allocator
+    let range = state
+        .devmemory
         .get_range(input.dptr.to_native())
         .ok_or(CUerror::INVALID_VALUE)?;
     Ok(cuMemGetAddressRange_v2Out {
@@ -746,9 +697,7 @@ fn cu_memcpy_dtoh_async_v2(
     state: &mut State,
     input: &ArchivedcuMemcpyDtoHAsync_v2In,
 ) -> Result<cuMemcpyDtoHAsync_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
-    let devptr = state.devmemory[device as usize].translate(input.src_device.to_native())?;
+    let devptr = state.devmemory.translate(input.src_device.to_native())?;
     let stream = input.stream.to_native();
     let stream = if stream == 0 {
         CUstream(ptr::null_mut())
@@ -768,7 +717,7 @@ fn cu_memcpy_dtoh_async_v2(
     Ok(cuMemcpyDtoHAsync_v2Out { dst_host })
 }
 
-fn cu_ctx_synchronize(input: &ArchivedcuCtxSynchronizeIn) -> Result<cuCtxSynchronizeOut, CUerror> {
+fn cu_ctx_synchronize(_input: &ArchivedcuCtxSynchronizeIn) -> Result<cuCtxSynchronizeOut, CUerror> {
     unsafe { cuCtxSynchronize() }?;
     Ok(cuCtxSynchronizeOut {})
 }
@@ -784,7 +733,7 @@ fn cu_launch_kernel(
         .iter()
         .map(|p| p.as_ptr().cast_mut().cast::<c_void>())
         .collect::<Vec<_>>();
-    let mut base64_ptr = state.devmemory[device as usize].get_device_ptr()?;
+    let mut base64_ptr = state.devmemory.get_device_ptr()?;
     params.push(ptr::from_mut(&mut base64_ptr).cast());
     let function = CUfunction(state.handles.get(input.f.to_native())?);
     let function_info = state
@@ -874,15 +823,8 @@ fn cu_memcpy_hto_d_async_v2(
     state: &mut State,
     input: &ArchivedcuMemcpyHtoDAsync_v2In,
 ) -> Result<cuMemcpyHtoDAsync_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
-    let devptr = state.devmemory[device as usize].translate(input.dst_device.to_native())?;
-    let stream = input.stream.to_native();
-    let stream = if stream == 0 {
-        CUstream(ptr::null_mut())
-    } else {
-        CUstream(state.handles.get(stream)?)
-    };
+    let devptr = state.devmemory.translate(input.dst_device.to_native())?;
+    let stream = CUstream(state.handles.get(input.stream.to_native())?);
     unsafe {
         cuMemcpyHtoDAsync_v2(
             CUdeviceptr_v2(devptr),
@@ -898,9 +840,7 @@ fn cu_mem_alloc_v2(
     state: &mut State,
     input: &ArchivedcuMemAlloc_v2In,
 ) -> Result<cuMemAlloc_v2Out, CUerror> {
-    let mut device = 0;
-    unsafe { cuCtxGetDevice(&mut device) }?;
-    let fake_ptr = state.devmemory[device as usize].alloc(input.bytesize.to_native())?;
+    let fake_ptr = state.devmemory.alloc(input.bytesize.to_native())?;
     Ok(cuMemAlloc_v2Out {
         dptr: u32_le::from_native(fake_ptr),
     })
@@ -966,38 +906,49 @@ fn cu_init(input: &ArchivedcuInitIn) -> Result<cuInitOut, CUerror> {
 fn cu_device_get_count(
     _input: &ArchivedcuDeviceGetCountIn,
 ) -> Result<cuDeviceGetCountOut, CUerror> {
-    let mut count = 0;
-    unsafe { cuDeviceGetCount(&mut count) }?;
-    Ok(cuDeviceGetCountOut { count })
+    Ok(cuDeviceGetCountOut { count: 1 })
 }
 
 fn cu_device_get_attribute(
+    state: &mut State,
     input: &ArchivedcuDeviceGetAttributeIn,
 ) -> Result<cuDeviceGetAttributeOut, CUerror> {
+    if input.dev.to_native() != state.device {
+        return Err(CUerror::INVALID_DEVICE);
+    }
     let mut pi = 0;
     unsafe {
         cuDeviceGetAttribute(
             &mut pi,
             CUdevice_attribute_enum(input.attrib.to_native()),
-            input.dev.to_native(),
+            state.device,
         )
     }?;
     Ok(cuDeviceGetAttributeOut { pi })
 }
 
-fn cu_device_get(input: &ArchivedcuDeviceGetIn) -> Result<cuDeviceGetOut, CUerror> {
-    let mut device = 0;
-    unsafe { cuDeviceGet(&mut device, input.ordinal.to_native()) }?;
-    Ok(cuDeviceGetOut { device })
+fn cu_device_get(
+    state: &mut State,
+    _input: &ArchivedcuDeviceGetIn,
+) -> Result<cuDeviceGetOut, CUerror> {
+    Ok(cuDeviceGetOut {
+        device: state.device.into(),
+    })
 }
 
-fn cu_device_get_name(input: &ArchivedcuDeviceGetNameIn) -> Result<cuDeviceGetNameOut, CUerror> {
+fn cu_device_get_name(
+    state: &mut State,
+    input: &ArchivedcuDeviceGetNameIn,
+) -> Result<cuDeviceGetNameOut, CUerror> {
+    if input.dev.to_native() != state.device {
+        return Err(CUerror::INVALID_DEVICE);
+    }
     let mut name = vec![0u8; input.len.to_native() as usize];
     unsafe {
         cuDeviceGetName(
             name.as_mut_ptr().cast(),
             input.len.to_native(),
-            input.dev.to_native(),
+            state.device,
         )
     }?;
     if let Some(pos) = name.iter().copied().position(|c| c == 0) {
@@ -1006,23 +957,15 @@ fn cu_device_get_name(input: &ArchivedcuDeviceGetNameIn) -> Result<cuDeviceGetNa
     Ok(cuDeviceGetNameOut { name })
 }
 
-fn cu_ctx_create_v2(
-    input: &ArchivedcuCtxCreate_v2In,
-    state: &mut State,
-) -> Result<cuCtxCreate_v2Out, CUerror> {
-    let mut pctx = unsafe { mem::zeroed() };
-    unsafe { cuCtxCreate_v2(&mut pctx, input.flags.to_native(), input.dev.to_native()) }?;
-    let pctx = state.handles.insert(pctx.0);
-    Ok(cuCtxCreate_v2Out {
-        pctx: u32_le::from_native(pctx),
-    })
-}
-
 fn cu_device_total_mem_v2(
+    state: &mut State,
     input: &ArchivedcuDeviceTotalMem_v2In,
 ) -> Result<cuDeviceTotalMem_v2Out, CUerror> {
+    if input.dev.to_native() != state.device {
+        return Err(CUerror::INVALID_DEVICE);
+    }
     let mut bytes = 0usize;
-    unsafe { cuDeviceTotalMem_v2(&mut bytes, input.dev.to_native()) }?;
+    unsafe { cuDeviceTotalMem_v2(&mut bytes, state.device) }?;
     Ok(cuDeviceTotalMem_v2Out {
         bytes: u64_le::from_native(bytes as u64),
     })
@@ -1040,57 +983,11 @@ fn cu_driver_get_version(
 
 fn cu_ctx_get_api_version(
     state: &mut State,
-    input: &ArchivedcuCtxGetApiVersionIn,
+    _input: &ArchivedcuCtxGetApiVersionIn,
 ) -> Result<cuCtxGetApiVersionOut, CUerror> {
-    let ctx = CUcontext(state.handles.get(input.ctx.to_native())?);
     let mut version = 0;
-    unsafe { cuCtxGetApiVersion(ctx, &mut version) }?;
+    unsafe { cuCtxGetApiVersion(state.ctx, &mut version) }?;
     Ok(cuCtxGetApiVersionOut { version })
-}
-
-fn context_local_storage_put(
-    state: &mut State,
-    input: &ArchivedContextLocalStoragePutIn,
-) -> Result<ContextLocalStoragePutOut, CUerror> {
-    unsafe {
-        state.dark_api.context_local_storage_put(
-            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
-            input.key.to_native() as _,
-            input.value.to_native() as _,
-            None,
-        )
-    }?;
-    Ok(ContextLocalStoragePutOut {})
-}
-
-fn context_local_storage_get(
-    state: &mut State,
-    input: &ArchivedContextLocalStorageGetIn,
-) -> Result<ContextLocalStorageGetOut, CUerror> {
-    let mut value = ptr::null_mut();
-    unsafe {
-        state.dark_api.context_local_storage_get(
-            &mut value,
-            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
-            input.key.to_native() as _,
-        )
-    }?;
-    Ok(ContextLocalStorageGetOut {
-        value: u32_le::from_native(value as u32),
-    })
-}
-
-fn context_local_storage_delete(
-    state: &mut State,
-    input: &ArchivedContextLocalStorageDeleteIn,
-) -> Result<ContextLocalStorageDeleteOut, CUerror> {
-    unsafe {
-        state.dark_api.context_local_storage_delete(
-            CUcontext(state.handles.get(input.cu_ctx.to_native())?),
-            input.key.to_native() as _,
-        )
-    }?;
-    Ok(ContextLocalStorageDeleteOut {})
 }
 
 async fn handle_cuda_function<In: rkyv::Archive + Portable, Out: Portable>(
@@ -1283,16 +1180,16 @@ macro_rules! implemented {
 cuda_function_declarations! {
     nop,
     implemented <= [
-        cuCtxCreate_v2,
+        // cuCtxCreate_v2,
         // cuCtxDetach,
         cuCtxGetApiVersion,
         // cuCtxGetCurrent,
         cuCtxGetDevice,
         cuCtxSynchronize,
         cuDeviceComputeCapability,
-        cuDeviceGet,
+        // cuDeviceGet,
         cuDeviceGetAttribute,
-        cuDeviceGetCount,
+        // cuDeviceGetCount,
         cuDeviceGetName,
         cuDeviceGetProperties,
         cuDeviceTotalMem_v2,
@@ -1304,7 +1201,7 @@ cuda_function_declarations! {
         cuLaunchKernel,
         cuMemAlloc_v2,
         // cuMemFreeHost,
-        cuMemFree_v2,
+        // cuMemFree_v2,
         // cuMemGetAddressRange_v2,
         // cuMemHostAlloc,
         // cuMemcpyDtoDAsync_v2,
@@ -1313,7 +1210,7 @@ cuda_function_declarations! {
         cuMemcpyHtoDAsync_v2,
         cuMemsetD8_v2,
         cuModuleGetFunction,
-        cuModuleGetGlobal_v2,
+        // cuModuleGetGlobal_v2,
         cuModuleGetTexRef,
         cuModuleLoadData,
         cuStreamCreate,
@@ -1328,5 +1225,6 @@ cuda_function_declarations! {
         // cuTexRefSetMipmapLevelBias,
         // cuTexRefSetMipmapLevelClamp,
         cuStreamSynchronize,
+        cuDevicePrimaryCtxRetain,
     ]
 }
