@@ -274,7 +274,19 @@ pub(crate) fn cu_device_compute_capability(
     minor: *mut ::core::ffi::c_int,
     dev: CUdevice,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let major = unsafe { major.as_mut() };
+    let minor = unsafe { minor.as_mut() };
+    let capability = GlobalState::remote_call_zero_copy::<cuDeviceComputeCapabilityOut>(
+        Opcode::cuDeviceComputeCapability,
+        cuDeviceComputeCapabilityIn { dev },
+    )?;
+    if let Some(major) = major {
+        *major = capability.major;
+    }
+    if let Some(minor) = minor {
+        *minor = capability.minor;
+    }
+    Ok(())
 }
 
 pub(crate) fn cu_device_get(
@@ -339,8 +351,18 @@ pub(crate) fn cu_device_get_name(
     Ok(())
 }
 
-pub(crate) fn cu_device_get_properties(prop: *mut CUdevprop, dev: CUdevice) -> Result<(), CUerror> {
-    unimplemented!()
+pub(crate) fn cu_device_get_properties(
+    result: *mut CUdevprop,
+    dev: CUdevice,
+) -> Result<(), CUerror> {
+    let result = unsafe { result.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let prop = GlobalState::remote_call_zero_copy::<cuDeviceGetPropertiesOut>(
+        Opcode::cuDeviceGetProperties,
+        cuDeviceGetPropertiesIn { dev },
+    )?
+    .prop;
+    *result = prop.into();
+    Ok(())
 }
 
 pub(crate) fn cu_device_total_mem_v2(bytes: *mut usize, dev: CUdevice) -> Result<(), CUerror> {
@@ -368,14 +390,28 @@ pub(crate) fn cu_driver_get_version(
 }
 
 pub(crate) fn cu_event_create(
-    phEvent: *mut CUevent,
-    Flags: ::core::ffi::c_uint,
+    result: *mut CUevent,
+    flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let result = unsafe { result.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *result = CudaEncode::decode(
+        GlobalState::remote_call_zero_copy::<cuEventCreateOut>(
+            Opcode::cuEventCreate,
+            cuEventCreateIn { Flags: flags },
+        )?
+        .phEvent,
+    );
+    Ok(())
 }
 
-pub(crate) fn cu_event_destroy_v2(hEvent: CUevent) -> Result<(), CUerror> {
-    unimplemented!()
+pub(crate) fn cu_event_destroy_v2(event: CUevent) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuEventDestroy_v2Out>(
+        Opcode::cuEventDestroy_v2,
+        cuEventDestroy_v2In {
+            hEvent: CudaEncode::encode(event),
+        },
+    )?;
+    Ok(())
 }
 
 static EXPORT_TABLE: ::dark_api::cuda::CudaDarkApiGlobalTable =
@@ -580,11 +616,19 @@ pub(crate) fn cu_memcpy_hto_d_async_v2(
 }
 
 pub(crate) fn cu_memset_d8_v2(
-    dstDevice: CUdeviceptr,
+    dst_device: CUdeviceptr,
     uc: ::core::ffi::c_uchar,
-    N: usize,
+    n: usize,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    GlobalState::remote_call_zero_copy::<cuMemsetD8_v2Out>(
+        Opcode::cuMemsetD8_v2,
+        cuMemsetD8_v2In {
+            dstDevice: CudaEncode::encode(dst_device),
+            uc,
+            N: u32_le::from_native(n as u32),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_module_get_function(
@@ -664,14 +708,28 @@ pub(crate) fn cu_module_get_tex_ref(
 }
 
 pub(crate) fn cu_stream_create(
-    phStream: *mut CUstream,
-    Flags: ::core::ffi::c_uint,
+    result: *mut CUstream,
+    flags: ::core::ffi::c_uint,
 ) -> Result<(), CUerror> {
-    unimplemented!()
+    let result = unsafe { result.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *result = CudaEncode::decode(
+        GlobalState::remote_call_zero_copy::<cuStreamCreateOut>(
+            Opcode::cuStreamCreate,
+            cuStreamCreateIn { Flags: flags },
+        )?
+        .phStream,
+    );
+    Ok(())
 }
 
-pub(crate) fn cu_stream_destroy_v2(hStream: CUstream) -> Result<(), CUerror> {
-    unimplemented!()
+pub(crate) fn cu_stream_destroy_v2(stream: CUstream) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuStreamDestroy_v2Out>(
+        Opcode::cuStreamDestroy_v2,
+        cuStreamDestroy_v2In {
+            hStream: CudaEncode::encode(stream),
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn cu_tex_ref_set_address_mode(

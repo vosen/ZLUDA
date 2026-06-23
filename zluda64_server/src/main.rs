@@ -514,6 +514,61 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuDeviceComputeCapability) => {
+                buffer = handle_cuda_function::<
+                    cuDeviceComputeCapabilityIn,
+                    cuDeviceComputeCapabilityOut,
+                >(&mut client, buffer, cu_device_compute_capability)
+                .await?;
+            }
+            Some(Opcode::cuDeviceGetProperties) => {
+                buffer = handle_cuda_function::<cuDeviceGetPropertiesIn, cuDeviceGetPropertiesOut>(
+                    &mut client,
+                    buffer,
+                    cu_device_get_properties,
+                )
+                .await?;
+            }
+            Some(Opcode::cuStreamCreate) => {
+                buffer = handle_cuda_function::<cuStreamCreateIn, cuStreamCreateOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_stream_create(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuStreamDestroy_v2) => {
+                buffer = handle_cuda_function::<cuStreamDestroy_v2In, cuStreamDestroy_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_stream_destroy_v2(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuEventCreate) => {
+                buffer = handle_cuda_function::<cuEventCreateIn, cuEventCreateOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_event_create(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuEventDestroy_v2) => {
+                buffer = handle_cuda_function::<cuEventDestroy_v2In, cuEventDestroy_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_event_destroy_v2(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuMemsetD8_v2) => {
+                buffer = handle_cuda_function::<cuMemsetD8_v2In, cuMemsetD8_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_memset_d8_v2(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -523,6 +578,91 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_memset_d8_v2(
+    state: &mut State,
+    input: &ArchivedcuMemsetD8_v2In,
+) -> Result<cuMemsetD8_v2Out, CUerror> {
+    let dst_device = input.dstDevice.to_native();
+    let dptr = if dst_device != 0 {
+        CUdeviceptr_v2(state.devmemory[dst_device as usize].translate(dst_device)?)
+    } else {
+        CUdeviceptr_v2(ptr::null_mut())
+    };
+    let uc = input.uc;
+    let n = input.N.to_native();
+    unsafe { cuMemsetD8_v2(dptr, uc, n as usize) }?;
+    Ok(cuMemsetD8_v2Out {})
+}
+
+fn cu_event_create(
+    state: &mut State,
+    input: &ArchivedcuEventCreateIn,
+) -> Result<cuEventCreateOut, CUerror> {
+    let mut event = ptr::null_mut();
+    unsafe { cuEventCreate(&mut event, input.Flags.to_native()) }?;
+    let handle = state.handles.insert(event);
+    Ok(cuEventCreateOut {
+        phEvent: u32_le::from_native(handle),
+    })
+}
+
+fn cu_event_destroy_v2(
+    state: &mut State,
+    input: &ArchivedcuEventDestroy_v2In,
+) -> Result<cuEventDestroy_v2Out, CUerror> {
+    let event = input.hEvent.to_native();
+    let cu_event = if event == 0 {
+        ptr::null_mut()
+    } else {
+        state.handles.get(event)?
+    };
+    unsafe { cuEventDestroy_v2(cu_event) }?;
+    Ok(cuEventDestroy_v2Out {})
+}
+
+fn cu_stream_destroy_v2(
+    state: &mut State,
+    input: &ArchivedcuStreamDestroy_v2In,
+) -> Result<cuStreamDestroy_v2Out, CUerror> {
+    let stream = input.hStream.to_native();
+    let cu_stream = if stream == 0 {
+        CUstream(ptr::null_mut())
+    } else {
+        CUstream(state.handles.get(stream)?)
+    };
+    unsafe { cuStreamDestroy_v2(cu_stream) }?;
+    Ok(cuStreamDestroy_v2Out {})
+}
+
+fn cu_stream_create(
+    state: &mut State,
+    input: &ArchivedcuStreamCreateIn,
+) -> Result<cuStreamCreateOut, CUerror> {
+    let mut stream = CUstream(ptr::null_mut());
+    unsafe { cuStreamCreate(&mut stream, input.Flags.to_native()) }?;
+    let handle = state.handles.insert(stream.0);
+    Ok(cuStreamCreateOut {
+        phStream: u32_le::from_native(handle),
+    })
+}
+
+fn cu_device_get_properties(
+    input: &ArchivedcuDeviceGetPropertiesIn,
+) -> Result<cuDeviceGetPropertiesOut, CUerror> {
+    let mut props = unsafe { mem::zeroed() };
+    unsafe { cuDeviceGetProperties(&mut props, input.dev.to_native()) }?;
+    Ok(cuDeviceGetPropertiesOut { prop: props.into() })
+}
+
+fn cu_device_compute_capability(
+    input: &ArchivedcuDeviceComputeCapabilityIn,
+) -> Result<cuDeviceComputeCapabilityOut, CUerror> {
+    let mut major = 0;
+    let mut minor = 0;
+    unsafe { cuDeviceComputeCapability(&mut major, &mut minor, input.dev.to_native()) }?;
+    Ok(cuDeviceComputeCapabilityOut { major, minor })
 }
 
 fn cu_mem_free_v2(
@@ -1149,16 +1289,16 @@ cuda_function_declarations! {
         // cuCtxGetCurrent,
         cuCtxGetDevice,
         cuCtxSynchronize,
-        // cuDeviceComputeCapability,
+        cuDeviceComputeCapability,
         cuDeviceGet,
         cuDeviceGetAttribute,
         cuDeviceGetCount,
         cuDeviceGetName,
-        // cuDeviceGetProperties,
+        cuDeviceGetProperties,
         cuDeviceTotalMem_v2,
         cuDriverGetVersion,
-        // cuEventCreate,
-        // cuEventDestroy_v2,
+        cuEventCreate,
+        cuEventDestroy_v2,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,
@@ -1171,13 +1311,13 @@ cuda_function_declarations! {
         cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoD_v2,
         cuMemcpyHtoDAsync_v2,
-        // cuMemsetD8_v2,
+        cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,
         cuModuleGetTexRef,
         cuModuleLoadData,
-        // cuStreamCreate,
-        // cuStreamDestroy_v2,
+        cuStreamCreate,
+        cuStreamDestroy_v2,
         // cuTexRefSetAddressMode,
         cuTexRefSetAddress_v2,
         // cuTexRefSetFilterMode,
