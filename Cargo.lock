@@ -5669,6 +5669,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "ipc-channel",
+ "libc",
  "paste",
  "postcard",
  "rand 0.10.1",
