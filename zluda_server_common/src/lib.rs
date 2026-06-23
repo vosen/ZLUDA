@@ -30,9 +30,6 @@ macro_rules! generate_messages_inout {
             cuDeviceGetName,
             cuDeviceTotalMem_v2,
             cuModuleLoadData,
-            ContextLocalStoragePut,
-            ContextLocalStorageGet,
-            ContextLocalStorageDelete,
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuMemAlloc_v2,
@@ -56,7 +53,7 @@ macro_rules! generate_messages_in {
 cuda_function_declarations! {
     noop,
     generate_messages_inout <= [
-        cuCtxCreate_v2,
+        // cuCtxCreate_v2,
         cuCtxDetach,
         cuCtxGetApiVersion,
         cuCtxGetCurrent,
@@ -78,7 +75,8 @@ cuda_function_declarations! {
         cuMemFree_v2,
         cuMemGetAddressRange_v2,
         //cuMemHostAlloc,
-        //cuMemcpyDtoDAsync_v2,
+        cuMemcpyDtoD_v2,
+        cuMemcpyDtoDAsync_v2,
         //cuMemcpyDtoHAsync_v2,
         //cuMemcpyHtoDAsync_v2,
         cuMemsetD8_v2,
@@ -243,42 +241,6 @@ pub struct cuDeviceGetNameOut {
 pub struct cuDeviceTotalMem_v2Out {
     pub bytes: u64_le,
 }
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStoragePutIn {
-    pub cu_ctx: u32_le,
-    pub key: u32_le,
-    pub value: u32_le,
-}
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStoragePutOut {}
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStorageGetIn {
-    pub cu_ctx: u32_le,
-    pub key: u32_le,
-}
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStorageGetOut {
-    pub value: u32_le,
-}
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStorageDeleteIn {
-    pub cu_ctx: u32_le,
-    pub key: u32_le,
-}
-
-#[repr(C)]
-#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct ContextLocalStorageDeleteOut {}
 
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]

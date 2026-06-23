@@ -222,6 +222,9 @@ impl Allocator {
     }
 
     fn translate(&self, offset: u32) -> Result<*mut c_void, CUerror> {
+        if offset == 0 {
+            return Ok(ptr::null_mut());
+        }
         let base_ptr = self.get_device_ptr()?;
         Ok(base_ptr.wrapping_byte_add(offset as usize))
     }
@@ -251,6 +254,7 @@ impl State {
         let mut ctx = unsafe { mem::zeroed() };
         let device = 0;
         unsafe { cuDevicePrimaryCtxRetain(&mut ctx, device) }?;
+        unsafe { cuCtxSetCurrent(ctx) }?;
         Ok(Self {
             ctx,
             device,
@@ -526,6 +530,22 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuMemcpyDtoDAsync_v2) => {
+                buffer = handle_cuda_function::<cuMemcpyDtoDAsync_v2In, cuMemcpyDtoDAsync_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_memcpy_dto_d_async_v2(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuMemcpyDtoD_v2) => {
+                buffer = handle_cuda_function::<cuMemcpyDtoD_v2In, cuMemcpyDtoD_v2Out>(
+                    &mut client,
+                    buffer,
+                    |input| cu_memcpy_dto_d_v2(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -537,16 +557,34 @@ async fn main() -> std::io::Result<()> {
     }
 }
 
+fn cu_memcpy_dto_d_v2(
+    state: &mut State,
+    input: &ArchivedcuMemcpyDtoD_v2In,
+) -> Result<cuMemcpyDtoD_v2Out, CUerror> {
+    let dst_device = CUdeviceptr_v2(state.devmemory.translate(input.dstDevice.to_native())?);
+    let src_device = CUdeviceptr_v2(state.devmemory.translate(input.srcDevice.to_native())?);
+    let byte_count = input.ByteCount.to_native();
+    unsafe { cuMemcpyDtoD_v2(dst_device, src_device, byte_count as usize) }?;
+    Ok(cuMemcpyDtoD_v2Out {})
+}
+
+fn cu_memcpy_dto_d_async_v2(
+    state: &mut State,
+    input: &ArchivedcuMemcpyDtoDAsync_v2In,
+) -> Result<cuMemcpyDtoDAsync_v2Out, CUerror> {
+    let dst_device = CUdeviceptr_v2(state.devmemory.translate(input.dstDevice.to_native())?);
+    let src_device = CUdeviceptr_v2(state.devmemory.translate(input.srcDevice.to_native())?);
+    let byte_count = input.ByteCount.to_native();
+    let cu_stream = CUstream(state.handles.get(input.hStream.to_native())?);
+    unsafe { cuMemcpyDtoDAsync_v2(dst_device, src_device, byte_count as usize, cu_stream) }?;
+    Ok(cuMemcpyDtoDAsync_v2Out {})
+}
+
 fn cu_memset_d8_v2(
     state: &mut State,
     input: &ArchivedcuMemsetD8_v2In,
 ) -> Result<cuMemsetD8_v2Out, CUerror> {
-    let dst_device = input.dstDevice.to_native();
-    let dptr = if dst_device != 0 {
-        CUdeviceptr_v2(state.devmemory.translate(dst_device)?)
-    } else {
-        CUdeviceptr_v2(ptr::null_mut())
-    };
+    let dptr = CUdeviceptr_v2(state.devmemory.translate(input.dstDevice.to_native())?);
     let uc = input.uc;
     let n = input.N.to_native();
     unsafe { cuMemsetD8_v2(dptr, uc, n as usize) }?;
@@ -584,11 +622,7 @@ fn cu_stream_destroy_v2(
     input: &ArchivedcuStreamDestroy_v2In,
 ) -> Result<cuStreamDestroy_v2Out, CUerror> {
     let stream = input.hStream.to_native();
-    let cu_stream = if stream == 0 {
-        CUstream(ptr::null_mut())
-    } else {
-        CUstream(state.handles.get(stream)?)
-    };
+    let cu_stream = CUstream(state.handles.get(stream)?);
     unsafe { cuStreamDestroy_v2(cu_stream) }?;
     Ok(cuStreamDestroy_v2Out {})
 }
@@ -661,11 +695,7 @@ fn cu_tex_ref_set_address_v2(
 ) -> Result<cuTexRefSetAddress_v2Out, CUerror> {
     let mut byte_offset = 0;
     let dptr = input.dptr.to_native();
-    let dptr = if dptr != 0 {
-        CUdeviceptr_v2(state.devmemory.translate(dptr)?)
-    } else {
-        CUdeviceptr_v2(ptr::null_mut())
-    };
+    let dptr = CUdeviceptr_v2(state.devmemory.translate(dptr)?);
     unsafe {
         cuTexRefSetAddress_v2(
             &mut byte_offset,
@@ -699,11 +729,7 @@ fn cu_memcpy_dtoh_async_v2(
 ) -> Result<cuMemcpyDtoHAsync_v2Out, CUerror> {
     let devptr = state.devmemory.translate(input.src_device.to_native())?;
     let stream = input.stream.to_native();
-    let stream = if stream == 0 {
-        CUstream(ptr::null_mut())
-    } else {
-        CUstream(state.handles.get(stream)?)
-    };
+    let stream = CUstream(state.handles.get(stream)?);
     let mut dst_host = vec![0u8; input.byte_count.to_native() as usize];
     unsafe {
         cuMemcpyDtoHAsync_v2(
@@ -1204,7 +1230,8 @@ cuda_function_declarations! {
         // cuMemFree_v2,
         // cuMemGetAddressRange_v2,
         // cuMemHostAlloc,
-        // cuMemcpyDtoDAsync_v2,
+        cuMemcpyDtoD_v2,
+        cuMemcpyDtoDAsync_v2,
         cuMemcpyDtoHAsync_v2,
         cuMemcpyHtoD_v2,
         cuMemcpyHtoDAsync_v2,
@@ -1226,5 +1253,6 @@ cuda_function_declarations! {
         // cuTexRefSetMipmapLevelClamp,
         cuStreamSynchronize,
         cuDevicePrimaryCtxRetain,
+        cuCtxSetCurrent,
     ]
 }
