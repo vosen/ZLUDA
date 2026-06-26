@@ -279,6 +279,7 @@ fn init_globals() -> Result<(), String> {
                 //c"--pass-remarks-missed=.*inlin.*",
             ]
             .into_iter();
+            /* Does not provide as much performance improvement on ROCm 7.2
             let opt_options = if cfg!(debug_assertions) {
                 vec![]
             } else {
@@ -288,8 +289,9 @@ fn init_globals() -> Result<(), String> {
                     c"-inlinehint-threshold=3250",
                 ]
             };
+            */
             let llvm_args_ptrs: Vec<*const i8> = common_options
-                .chain(opt_options)
+                //.chain(opt_options)
                 .map(|s| s.as_ptr())
                 .collect();
             let mut err_msg = std::ptr::null_mut();

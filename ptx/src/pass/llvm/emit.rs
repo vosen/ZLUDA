@@ -776,6 +776,13 @@ impl<'a> MethodEmitContext<'a> {
                 Ok(())
             }
             ConversionKind::PtrToPtr => {
+                if conversion.from_space == conversion.to_space {
+                    // With opaque pointers it's meaningless
+                    return self.emit_mov(ast::MovArgs {
+                        dst: conversion.dst,
+                        src: conversion.src,
+                    });
+                }
                 let src = self.resolver.value(conversion.src)?;
                 let dst_type = get_pointer_type(self.context, conversion.to_space)?;
                 self.resolver.with_result(conversion.dst, |dst| unsafe {
