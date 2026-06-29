@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="https://vosen.github.io/ZLUDA/atom.xml">
+  
+  <!-- Courtesy of https://github.com/LeoColomb/perfectmotherfuckingwebsite -->
+  <style>
+    body {
+      max-width: 650px;
+      margin: 40px auto;
+      padding: 0 10px;
+      font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      color: #444;
+    }
+
+    h1,
+    h2,
+    h3 {
+      line-height: 1.2;
+    }
+
+    h1 small, h2 small {
+      font-size:16px;
+      font-weight:normal;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        color: #c9d1d9;
+        background: #0d1117;
+      }
+
+      a:link {
+        color: #58a6ff;
+      }
+
+      a:visited {
+        color: #8e96f0;
+      }
+    }
+    
+    
+    /* Recommended code block styling (https://www.getzola.org/documentation/content/syntax-highlighting/#styling-codeblocks) */
+    pre {
+      padding: 1rem;
+      overflow: auto;
+    }
+    /* The line numbers already provide some kind of left/right padding */
+    pre[data-linenos] {
+      padding: 1rem 0;
+    }
+    pre table td {
+      padding: 0;
+    }
+    /* The line number cells */
+    pre table td:nth-of-type(1) {
+      text-align: center;
+      vertical-align: top;
+      user-select: none;
+    }
+    pre mark {
+      /* If you want your highlights to take the full width */
+      display: block;
+      /* The default background colour of a mark is bright yellow */
+      background-color: rgba(254, 252, 232, 0.9);
+    }
+    pre table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZLUDA - ZLUDA update Q1&amp;Q2 2026 - back to the roots</title>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+    <h1>
+      <div>
+        <a style="color: #0d1117 !important; text-decoration:none;" href="https://vosen.github.io/ZLUDA">ZLUDA</a>
+        <div style="float: right;">
+          <a href="https://github.com/vosen/ZLUDA"><img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white"/></a> <a href="https://discord.gg/sg6BNzXuc7"><img src="https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white"/></a>
+        </div>
+      </div>
+      <small>
+        <p style="margin-top: 0.25em">ZLUDA allows to run unmodified CUDA applications on non-NVIDIA GPUs</p>
+      </small>
+    </h1>
+      
+<h2 class="title">
+  ZLUDA update Q1&amp;Q2 2026 - back to the roots
+  <small><div>2026-06-29</div></small>
+</h2>
+<p>Hi, and welcome to the latest ZLUDA update! Since I skipped the last update, this special issue covers all the developments made in ZLUDA since the start of the year. We now have two new major workloads: PhysX (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#physx-pre-alpha">PhysX pre-alpha</a>) and Blender (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#textures-support">Textures support</a>). Much of this overlaps with <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#much-improved-windows-support">Much improved Windows support</a>. Additionally, there has been a steady stream of minor features and improvements to existing workloads (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#better-ml-support">Better ML support</a>). These culminated in a new major release (<a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#version-6">Version 6</a>). Some of you may also be interested in the <a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/#the-new-direction-of-the-project">The new direction of the project</a>.</p>
+<h3 id="version-6">Version 6</h3>
+<p>I am finally marking a new major release. As a reminder, ZLUDA follows a continuous development model. A major release does not represent addition of any particular single feature a compatibility break, but rather signals that significant progress has been made and that it is worth trying it out again. Version 6 is identical to the latest preview build (6-preview.79).</p>
+<h3 id="physx-pre-alpha">PhysX pre-alpha</h3>
+<p>With PC component prices as high as they are, we're all being compelled to revisit gaming classics.<br />
+ZLUDA has got you covered.<br />
+This long-running PR (<a rel="external" href="https://github.com/vosen/ZLUDA/pull/651">#651</a>) is not yet comlete, but it adds support for 32-bit PhysX. This means that, in certain older games that relied on PhysX, you will be able to achieve a higher frame rate with an AMD GPU. In some games, AMD GPU owners will also be able to enjoy additional visual effects such as debris and flame for the first time.</p>
+<p>Various PhysX samples running on an AMD GPU:</p>
+<p align="center">
+<video width="512" height="512" controls autoplay loop>
+  <source src="flag_sample.mp4" type="video/mp4">
+</video>
+<video width="512" height="512" controls autoplay loop>
+  <source src="cow_sample.mp4" type="video/mp4">
+</video>
+<video width="800" height="600" controls autoplay loop>
+  <source src="frog_sample.mp4" type="video/mp4">
+</video>
+</p>
+<p>Even more interestingly, here's a screenshot from Mafia II (original 2010 version) built-in benchmark  running on an AMD GPU. All settings are maxed out and PhysX is enabled:</p>
+<p><a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/zluda_off.jpg"><img src="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/zluda_off.small.jpg" alt="ZLUDA OFF" title="ZLUDA OFF" /></a> <strong>ZLUDA OFF</strong> (click image to view the full screen)</p>
+<p><a href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/zluda_on.jpg"><img src="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/zluda_on.small.jpg" alt="ZLUDA ON" title="ZLUDA ON" /></a> <strong>ZLUDA ON</strong> (click image to view the full screen)</p>
+<p>Support is not yet complete: fluid simulations can be glitchy, and the current method of loading ZLUDA into Steam games is poor. I only tried it on my own PC, which has an unusual GPU setup. Nevertheless, if you are comfortable with editing the source code and building ZLUDA yourself, you can give it a try. For everyone else, I recommend watching the PR and waiting for it to be merged and included in the preview builds. Plese leave your feedback in the PR or on Discord.</p>
+<p>PCGamingWiki maintains a <a rel="external" href="https://www.pcgamingwiki.com/wiki/List_of_games_that_support_Nvidia_PhysX">list of PhysX games</a>. Just be aware that the list combines 32-bit PhysX and 64-bit GameWorks. These are two completely different technologies.</p>
+<h3 id="textures-support">Textures support</h3>
+<p>ZLUDA now has a texture support (<a rel="external" href="https://github.com/vosen/ZLUDA/pull/625">#625</a>). It's very basic and covers only a few use cases, but it's complete enough to support whatever is used by PhysX and Blender. This also means that Blender is now working on ZLUDA.</p>
+<h3 id="much-improved-windows-support">Much improved Windows support</h3>
+<p>Historically, ZLUDA's support for Windows has lagged behind its Linux support. The biggest issue has been the performance libraries (cuBLAS, cuDNN, etc). When you install ROCm on Linux you get everything in one compatible version at once (unless you explicitly opt out): userspace driver, performance  libraries, monitoring libraries, and so on. On Windows, you only get runtime driver with your GPU driver (Adrenalin). As for the rest of ROCm, well, you have to find it yourself. You can either use the outdated, officially supported ROCm SDK, or the fresh but buggy nightly builds. While ZLUDA does not solve the problem for you, it is now much more user-friendly and explictly tells you if you are missing library and instructs you how to install it (<a rel="external" href="https://github.com/vosen/ZLUDA/pull/612">#612</a>). ZLUDA Windows loader (<code>zluda.exe</code>), has been made more robust and now handles the loading of performance libraries automatically (instead of expecting the user to pass the right flags).</p>
+<h3 id="better-ml-support">Better ML support</h3>
+<p>There's been a trickle of PRs that were driven by ZLUDA traces we've received from users of PyTorch. New instructions in <a rel="external" href="https://github.com/vosen/ZLUDA/pull/599">#599</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/605">#605</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/607">#607</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/609">#609</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/642">#642</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/644">#644</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/629">#629</a>. Compiler bugfixes in <a rel="external" href="https://github.com/vosen/ZLUDA/pull/583">#583</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/588">#588</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/585">#585</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/596">#596</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/610">#610</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/601">#601</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/603">#603</a>. Improvements to performance libraries in <a rel="external" href="https://github.com/vosen/ZLUDA/pull/587">#587</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/615">#615</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/619">#619</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/620">#620</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/621">#621</a>, <a rel="external" href="https://github.com/vosen/ZLUDA/pull/624">#624</a>. I can't analyze every trace I receive, but I try to look at as many as possible.</p>
+<h3 id="the-new-direction-of-the-project">The new direction of the project</h3>
+<p>Some of the newly added features may come as a surprise to those of you who keep a close track of ZLUDA development. Most of them were previously explicitly outside ZLUDA's roadmap. There has been a change of plans. ZLUDA development is no longer commercially funded, so it's back to being my weekend project. This means that the priority is no longer what makes commercial sense, but what I find the most entertaining. That's why the sudden addition of textures, PhysX and better Windows support.</p>
+<p>It also means that Violet has become our first Developer Emeritus.</p>
+<p>All of this happened roughly three months ago, and ZLUDA has been my fun side project ever since. I still find it interesting, and the development continues. However, I just can't spend as much time on it, so I will probably post updates less frequently than every quarter. However, I hope you will still enjoy new versions of ZLUDA, even if they are released less frequently.</p>
+
+
+<script src="https://giscus.app/client.js"
+        data-repo="vosen/zluda_website"
+        data-repo-id="R_kgDOM5Co2g"
+        data-category="Announcements"
+        data-category-id="DIC_kwDOM5Co2s4Ci6Tj"
+        data-mapping="pathname"
+        data-strict="0"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="top"
+        data-theme="light"
+        data-lang="en"
+        crossorigin="anonymous"
+        async>
+</script>
+
+    </div>
+  </section>
+</body>
+
+</html>

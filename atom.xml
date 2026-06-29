@@ -1,0 +1,588 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+    <title>ZLUDA</title>
+    <link rel="self" type="application/atom+xml" href="https://vosen.github.io/ZLUDA/atom.xml"/>
+    <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA"/>
+    <generator uri="https://www.getzola.org/">Zola</generator>
+    <updated>2026-06-29T00:00:00+00:00</updated>
+    <id>https://vosen.github.io/ZLUDA/atom.xml</id>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q1&amp;Q2 2026 - back to the roots</title>
+        <published>2026-06-29T00:00:00+00:00</published>
+        <updated>2026-06-29T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q1q2-2026/">&lt;p&gt;Hi, and welcome to the latest ZLUDA update! Since I skipped the last update, this special issue covers all the developments made in ZLUDA since the start of the year. We now have two new major workloads: PhysX (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#physx-pre-alpha&quot;&gt;PhysX pre-alpha&lt;&#x2F;a&gt;) and Blender (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#textures-support&quot;&gt;Textures support&lt;&#x2F;a&gt;). Much of this overlaps with &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#much-improved-windows-support&quot;&gt;Much improved Windows support&lt;&#x2F;a&gt;. Additionally, there has been a steady stream of minor features and improvements to existing workloads (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#better-ml-support&quot;&gt;Better ML support&lt;&#x2F;a&gt;). These culminated in a new major release (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#version-6&quot;&gt;Version 6&lt;&#x2F;a&gt;). Some of you may also be interested in the &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;#the-new-direction-of-the-project&quot;&gt;The new direction of the project&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;version-6&quot;&gt;Version 6&lt;&#x2F;h3&gt;
+&lt;p&gt;I am finally marking a new major release. As a reminder, ZLUDA follows a continuous development model. A major release does not represent addition of any particular single feature a compatibility break, but rather signals that significant progress has been made and that it is worth trying it out again. Version 6 is identical to the latest preview build (6-preview.79).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;physx-pre-alpha&quot;&gt;PhysX pre-alpha&lt;&#x2F;h3&gt;
+&lt;p&gt;With PC component prices as high as they are, we&#x27;re all being compelled to revisit gaming classics.&lt;br &#x2F;&gt;
+ZLUDA has got you covered.&lt;br &#x2F;&gt;
+This long-running PR (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;651&quot;&gt;#651&lt;&#x2F;a&gt;) is not yet comlete, but it adds support for 32-bit PhysX. This means that, in certain older games that relied on PhysX, you will be able to achieve a higher frame rate with an AMD GPU. In some games, AMD GPU owners will also be able to enjoy additional visual effects such as debris and flame for the first time.&lt;&#x2F;p&gt;
+&lt;p&gt;Various PhysX samples running on an AMD GPU:&lt;&#x2F;p&gt;
+&lt;p align=&quot;center&quot;&gt;
+&lt;video width=&quot;512&quot; height=&quot;512&quot; controls autoplay loop&gt;
+  &lt;source src=&quot;flag_sample.mp4&quot; type=&quot;video&#x2F;mp4&quot;&gt;
+&lt;&#x2F;video&gt;
+&lt;video width=&quot;512&quot; height=&quot;512&quot; controls autoplay loop&gt;
+  &lt;source src=&quot;cow_sample.mp4&quot; type=&quot;video&#x2F;mp4&quot;&gt;
+&lt;&#x2F;video&gt;
+&lt;video width=&quot;800&quot; height=&quot;600&quot; controls autoplay loop&gt;
+  &lt;source src=&quot;frog_sample.mp4&quot; type=&quot;video&#x2F;mp4&quot;&gt;
+&lt;&#x2F;video&gt;
+&lt;&#x2F;p&gt;
+&lt;p&gt;Even more interestingly, here&#x27;s a screenshot from Mafia II (original 2010 version) built-in benchmark  running on an AMD GPU. All settings are maxed out and PhysX is enabled:&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;zluda_off.jpg&quot;&gt;&lt;img src=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;zluda_off.small.jpg&quot; alt=&quot;ZLUDA OFF&quot; title=&quot;ZLUDA OFF&quot; &#x2F;&gt;&lt;&#x2F;a&gt; &lt;strong&gt;ZLUDA OFF&lt;&#x2F;strong&gt; (click image to view the full screen)&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;zluda_on.jpg&quot;&gt;&lt;img src=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1q2-2026&#x2F;zluda_on.small.jpg&quot; alt=&quot;ZLUDA ON&quot; title=&quot;ZLUDA ON&quot; &#x2F;&gt;&lt;&#x2F;a&gt; &lt;strong&gt;ZLUDA ON&lt;&#x2F;strong&gt; (click image to view the full screen)&lt;&#x2F;p&gt;
+&lt;p&gt;Support is not yet complete: fluid simulations can be glitchy, and the current method of loading ZLUDA into Steam games is poor. I only tried it on my own PC, which has an unusual GPU setup. Nevertheless, if you are comfortable with editing the source code and building ZLUDA yourself, you can give it a try. For everyone else, I recommend watching the PR and waiting for it to be merged and included in the preview builds. Plese leave your feedback in the PR or on Discord.&lt;&#x2F;p&gt;
+&lt;p&gt;PCGamingWiki maintains a &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;www.pcgamingwiki.com&#x2F;wiki&#x2F;List_of_games_that_support_Nvidia_PhysX&quot;&gt;list of PhysX games&lt;&#x2F;a&gt;. Just be aware that the list combines 32-bit PhysX and 64-bit GameWorks. These are two completely different technologies.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;textures-support&quot;&gt;Textures support&lt;&#x2F;h3&gt;
+&lt;p&gt;ZLUDA now has a texture support (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;625&quot;&gt;#625&lt;&#x2F;a&gt;). It&#x27;s very basic and covers only a few use cases, but it&#x27;s complete enough to support whatever is used by PhysX and Blender. This also means that Blender is now working on ZLUDA.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;much-improved-windows-support&quot;&gt;Much improved Windows support&lt;&#x2F;h3&gt;
+&lt;p&gt;Historically, ZLUDA&#x27;s support for Windows has lagged behind its Linux support. The biggest issue has been the performance libraries (cuBLAS, cuDNN, etc). When you install ROCm on Linux you get everything in one compatible version at once (unless you explicitly opt out): userspace driver, performance  libraries, monitoring libraries, and so on. On Windows, you only get runtime driver with your GPU driver (Adrenalin). As for the rest of ROCm, well, you have to find it yourself. You can either use the outdated, officially supported ROCm SDK, or the fresh but buggy nightly builds. While ZLUDA does not solve the problem for you, it is now much more user-friendly and explictly tells you if you are missing library and instructs you how to install it (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;612&quot;&gt;#612&lt;&#x2F;a&gt;). ZLUDA Windows loader (&lt;code&gt;zluda.exe&lt;&#x2F;code&gt;), has been made more robust and now handles the loading of performance libraries automatically (instead of expecting the user to pass the right flags).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;better-ml-support&quot;&gt;Better ML support&lt;&#x2F;h3&gt;
+&lt;p&gt;There&#x27;s been a trickle of PRs that were driven by ZLUDA traces we&#x27;ve received from users of PyTorch. New instructions in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;599&quot;&gt;#599&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;605&quot;&gt;#605&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;607&quot;&gt;#607&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;609&quot;&gt;#609&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;642&quot;&gt;#642&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;644&quot;&gt;#644&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;629&quot;&gt;#629&lt;&#x2F;a&gt;. Compiler bugfixes in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;583&quot;&gt;#583&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;588&quot;&gt;#588&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;585&quot;&gt;#585&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;596&quot;&gt;#596&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;610&quot;&gt;#610&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;601&quot;&gt;#601&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;603&quot;&gt;#603&lt;&#x2F;a&gt;. Improvements to performance libraries in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;587&quot;&gt;#587&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;615&quot;&gt;#615&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;619&quot;&gt;#619&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;620&quot;&gt;#620&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;621&quot;&gt;#621&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;624&quot;&gt;#624&lt;&#x2F;a&gt;. I can&#x27;t analyze every trace I receive, but I try to look at as many as possible.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;the-new-direction-of-the-project&quot;&gt;The new direction of the project&lt;&#x2F;h3&gt;
+&lt;p&gt;Some of the newly added features may come as a surprise to those of you who keep a close track of ZLUDA development. Most of them were previously explicitly outside ZLUDA&#x27;s roadmap. There has been a change of plans. ZLUDA development is no longer commercially funded, so it&#x27;s back to being my weekend project. This means that the priority is no longer what makes commercial sense, but what I find the most entertaining. That&#x27;s why the sudden addition of textures, PhysX and better Windows support.&lt;&#x2F;p&gt;
+&lt;p&gt;It also means that Violet has become our first Developer Emeritus.&lt;&#x2F;p&gt;
+&lt;p&gt;All of this happened roughly three months ago, and ZLUDA has been my fun side project ever since. I still find it interesting, and the development continues. However, I just can&#x27;t spend as much time on it, so I will probably post updates less frequently than every quarter. However, I hope you will still enjoy new versions of ZLUDA, even if they are released less frequently.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q4 2025 - ROCm7, Windows, full llama.cpp and more</title>
+        <published>2026-01-13T00:00:00+00:00</published>
+        <updated>2026-01-13T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2025/">&lt;p&gt;Hi, and welcome to a new ZLUDA update! It&#x27;s been a  busy quarter and while we didn&#x27;t quite reach our goal of providing robust PyTorch support by the end of the year. We now have complete llama.cpp support (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#full-llama-cpp-support&quot;&gt;Full llama.cpp support&lt;&#x2F;a&gt;) and significantly improved Windows support (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#better-windows-support&quot;&gt;Better Windows support&lt;&#x2F;a&gt;). We&#x27;ve also made several other improvements in preparation for PyTorch (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#zluda-now-ships-with-a-bundled-llvm&quot;&gt;ZLUDA now ships with a bundled LLVM&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#compiler-performance-improvements&quot;&gt;Compiler performance improvements&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#rocm-7-works-now&quot;&gt;ROCm 7 works now&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2025&#x2F;#pytorch-support-underway&quot;&gt;PyTorch support underway&lt;&#x2F;a&gt;).&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;zluda-now-ships-with-a-bundled-llvm&quot;&gt;ZLUDA now ships with a bundled LLVM.&lt;&#x2F;h1&gt;
+&lt;p&gt;Historically, ZLUDA has used the AMD-provided comgr library (&quot;Code Object Manager API&quot;), which is installed on your system as part of ROCm. This library is a wrapper around LLVM. It works well for the most part, but there are two caveats:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;AMD LLVM is often buggy and AMD does not backport LLVM fixes. If a user has an older, &quot;stable&quot; version of LLVM bundled with ROCm, we cannot fix bugs in it. This is especially important for PyTorch because there are patterns in PyTorch GPU code that cause crashes in AMD GPU LLVM purely because due to bugs in the AMDGPU target.&lt;&#x2F;li&gt;
+&lt;li&gt;We can&#x27;t perform all the optimizations we want. Although we strive to emit the best possible LLVM bitcode, the ZLUDA compiler simply is not an optimizing, SSA-based compiler. There are certain optimizations relevant to machine learning workloads that are beyond our reach without custom LLVM optimization passes.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;We have wanted to ship a ZLUDA-patched LLVM for a long time. As part of the work on llama.cpp and PyTorch we finally did so and started shipping LLVM with ZLUDA. The ZLUDA side was merged in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;555&quot;&gt;#555&lt;&#x2F;a&gt; with required LLVM work done &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;llvm-project&#x2F;commit&#x2F;f83cd44622f6792d9f1672ce700ab10ee1c23f92&quot;&gt;here&lt;&#x2F;a&gt; and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;llvm-project&#x2F;pull&#x2F;1&quot;&gt;here&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;There&#x27;s one downside to our new approach: LLVM is a massive project, so building it is time-consuming. Our automatic builds are mostly unaffected because we use sccache. However if you are compiling ZLUDA yourself, expect much longer build times. We recommend that users who want to try work-in-progress builds download prerelease binaries from GitHub. We build binaries for every merged pull request.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;rocm-7-works-now&quot;&gt;ROCm 7 works now&lt;&#x2F;h1&gt;
+&lt;p&gt;ROCm 7 has been out for several months already, but we did not start working on it right away. This is partially because we&#x27;ve been busy addressing the issues described in this update and partially because ROCm version updates can introduce hard breaks that take a long time to resolve. Our goal is for ZLUDA to work equally well with both ROCm 6 and ROCm 7, so that we don&#x27;t have to maintain two separate builds. Upgrading from ROCm 5 to ROCm 6 was a difficult and involved many breaking changes. Granted, most of the changes were necessary and made sense, but it was still a lot of extra work. Thankfully, ROCm 7 is mostly backward compatible. Only two functions broke the ABI, but ZLUDA did not use them. They were also clearly marked as experimental.&lt;&#x2F;p&gt;
+&lt;p&gt;This time, the problem stems from some unfortunate packaging choices and interactions on Windows. The AMD graphics driver ships with &lt;em&gt;all&lt;&#x2F;em&gt; ROCm 5, ROCm 6 and ROCm 7 runtimes simultaneously (respectively &lt;code&gt;amdhip64.dll&lt;&#x2F;code&gt;, &lt;code&gt;amdhip64_6.dll&lt;&#x2F;code&gt; and &lt;code&gt;amdhip64_7.dll&lt;&#x2F;code&gt;). Which is fine; backwards compatibility is good. The problem is with the performance libraries. For some reason, the latest official version of the performance libraries on Windows is 6.4. This version is slightly outdated and relies on amdhip64_6.dll. This can lead to some unfortunate interactions. ZLUDA works with either &lt;code&gt;amdhip64_6.dll&lt;&#x2F;code&gt; or &lt;code&gt;amdhip64_7.dll&lt;&#x2F;code&gt; and prefers to load &lt;code&gt;amdhip64_7.dll&lt;&#x2F;code&gt;. It&#x27;s possible for ZLUDA to launch, load &lt;code&gt;amdhip64_7.dll&lt;&#x2F;code&gt; , but then load a performance library that loads &lt;code&gt;amdhip64_6.dll&lt;&#x2F;code&gt;. Having both ROCm 7 and ROCm 6 runtimes loaded in a process at the same time and trying to interoperate between them simply does not work and leads to mysterious crashes.&lt;&#x2F;p&gt;
+&lt;p&gt;Since we can&#x27;t time-travel, we settled on the next best solution: preloading performance libraries into the process and then scanning it for the presence of either &lt;code&gt;amdhip64_6.dll&lt;&#x2F;code&gt; or &lt;code&gt;amdhip64_7.dll&lt;&#x2F;code&gt;. See the details in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;579&quot;&gt;#579&lt;&#x2F;a&gt;. This makes ZLUDA startup slightly slower, but should be fine.
+In the future, we might consider shipping the ROCm performance libraries with ZLUDA. What do you think?&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;too-slow-for-katago&quot;&gt;Too slow for katago&lt;&#x2F;h1&gt;
+&lt;p&gt;As mentioned in the last update, we now have a mechanism for collecting execution traces that doesn&#x27;t require you to be a developer. Happily, some of you provided traces of your favorite application. One of those apps was Katago, an ML-based library for playing Go. The trace revealed two things. First, the majority of the required CUDA support for Katago is already in place. Second, the missing component, cuDNN support, is on our priority list.&lt;&#x2F;p&gt;
+&lt;p&gt;Katago uses CUDA in a fairly straightforward manner. However, it utilizes some cuDNN features for which there is no direct ROCm support. After adding missing functionality and various workarounds, Katago finally ran! However, it ran extremely slowly, thousands of times slower than on NVIDIA GPUs. A quick investigation revealed the source of the problem: certain Katago operations have a slow, naive implementation in MIOpen and an optimized implementation in cuDNN. Unfortunately, there&#x27;s nothing we can do about it. Hopefully, AMD will one day optimize those convolutions and make AMD GPUs a viable target for Katago.&lt;&#x2F;p&gt;
+&lt;p&gt;You can see the whole story here &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;541&quot;&gt;#541&lt;&#x2F;a&gt;. Please keep sending us traces. While we might not be able to work on each of them right away, they are important for prioritization and debugging.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;better-windows-support&quot;&gt;Better Windows support&lt;&#x2F;h1&gt;
+&lt;p&gt;For most of modern ZLUDA&#x27;s history, Windows support was an afterthought. Although we ensured that every change compiled on Windows, the loader that injects ZLUDA into an executable was in poor condition. In the last update, we asked you to share traces from your favorite CUDA application, and most of the traces you sent us were from Windows. Or, at least, you attempted to do so given how poorly the ZLUDA loader functioned. This forced us to face reality: we must fix the loader, or we will receive no traces.&lt;&#x2F;p&gt;
+&lt;p&gt;This led to a major (19100 lines added, 2377 lines removed) PR &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;550&quot;&gt;#550&lt;&#x2F;a&gt; which brought &lt;code&gt;zluda.exe&lt;&#x2F;code&gt; on Windows to a more acceptable quality and allows ZLUDA to work as well as on Linux.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;full-llama-cpp-support&quot;&gt;Full llama.cpp support&lt;&#x2F;h1&gt;
+&lt;p&gt;In the previous update, we announced the initial release of Llama.cpp support. Since then, we have started benchmarking ZLUDA&#x27;s Llama.cpp support against the top models from Hugging Face. This process revealed several issues, but we are pleased to announce that we currently have full llama.cpp support. Our performance is nearly identical to that of the native ROCm backend. See the documentation &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;zluda.readthedocs.io&#x2F;latest&#x2F;llama_cpp.html&quot;&gt;here&lt;&#x2F;a&gt; for details on how to build Llama.cpp with the CUDA backend so that it works at full performance with ZLUDA.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;compiler-performance-improvements&quot;&gt;Compiler performance improvements&lt;&#x2F;h1&gt;
+&lt;p&gt;One way PyTorch differs from other CUDA projects is that it ships with large PTX modules, which can be several megabytes in size. This poses a challenge for the ZLUDA compiler, which is tuned to produce high-quality code but not to run quickly. In particular, there was one compiler pass: &lt;code&gt;instruction_mode_to_global_mode&lt;&#x2F;code&gt;, which, on large PTX modules, could account for 60% of the total compilation time. After pull request &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;552&quot;&gt;#552&lt;&#x2F;a&gt; was merged, this time decreased to less than 1%, with the majority of the time now being spent in LLVM.&lt;&#x2F;p&gt;
+&lt;p&gt;We have also added an experimental precompilation tool that can scan a directory, detect all CUDA binaries, and precompile all PTX modules. This tool uses all the cores on your machine, making it much faster than the CUDA runtime&#x27;s one-by-one compilation. The effect varies by application: some applications will try to load (and compile) every possible GPU kernel, even if it&#x27;s not actually being used. There are also applications that compile only the subset of kernels strictly required by a given workload. In our experience, the former category is much larger than the latter.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;pytorch-support-underway&quot;&gt;PyTorch support underway&lt;&#x2F;h1&gt;
+&lt;p&gt;We are working hard on PyTorch. It&#x27;s impossible to support every PyTorch configuration and project, so we are focusing on someting specific. Our primary objective is vLLM, and to that end, we have been landing multiple PRs that make ZLUDA run more and more of vLLM. See recent PRs: &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;580&quot;&gt;#580&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;583&quot;&gt;#583&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;585&quot;&gt;#585&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;590&quot;&gt;#590&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;596&quot;&gt;#596&lt;&#x2F;a&gt; and more.&lt;&#x2F;p&gt;
+&lt;p&gt;We don&#x27;t have much PyTorch support to show yet, and we&#x27;ve made many significant changes, such as bundling LLVM and adding ROCm 7 support. Therefore, there is no new major release. However, we encourage you to try out the prerelease builds and report any problems you encounter.&lt;&#x2F;p&gt;
+&lt;p&gt;Until next time&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q3 2025 - ZLUDA 5 is here</title>
+        <published>2025-10-02T00:00:00+00:00</published>
+        <updated>2025-10-02T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q3-2025/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q3-2025/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q3-2025/">&lt;p&gt;We&#x27;re happy to announce the release of ZLUDA version 5. This release brings with it new debugging tools, better correctness and preliminary support for llama.cpp.&lt;&#x2F;p&gt;
+&lt;p&gt;ZLUDA version 5 includes a tool called &lt;code&gt;zluda_trace&lt;&#x2F;code&gt;. Community members often ask us what they can do to help with the project. One of the most impactful things you can do without needing programming skills is to run your favorite workload using &lt;code&gt;zluda_trace&lt;&#x2F;code&gt; and create a &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;issues&#x2F;new?template=zluda_dump.yml&quot;&gt;bug report issue&lt;&#x2F;a&gt; with the trace attached. Just make sure you collect logs on Linux, we are not yet ready accept logs from Windows (more &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;issues&#x2F;522&quot;&gt;here&lt;&#x2F;a&gt;). You can find more information on our &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;zluda.readthedocs.io&#x2F;latest&#x2F;troubleshooting.html&quot;&gt;Troubleshooting&lt;&#x2F;a&gt; page.&lt;&#x2F;p&gt;
+&lt;p&gt;And if you are interested in writing code, we have a list of issues labeled &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;issues?q=is%3Aissue%20state%3Aopen%20label%3A%22help%20wanted%22&quot;&gt;help wanted&lt;&#x2F;a&gt; on our repository.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;zoc-zluda-offline-compiler&quot;&gt;zoc (ZLUDA offline compiler)&lt;&#x2F;h1&gt;
+&lt;p&gt;ZLUDA includes an NVIDIA PTX to AMD RDNA compiler. Previously, this compiler was only accessible from the ZLUDA library - it runs when &lt;code&gt;cuModuleLoadData&lt;&#x2F;code&gt; or &lt;code&gt;cuLibraryLoadData&lt;&#x2F;code&gt; are called. However, for ZLUDA developers, it is useful for debugging purposes to have a command line interface as well, similar to NVIDIA&#x27;s &lt;code&gt;ptxas&lt;&#x2F;code&gt; tool.&lt;&#x2F;p&gt;
+&lt;p&gt;For this purpose, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;JoelleJS&quot;&gt;JoelleJS&lt;&#x2F;a&gt; has contributed &lt;code&gt;zoc&lt;&#x2F;code&gt; in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;344&quot;&gt;#344&lt;&#x2F;a&gt;, the ZLUDA offline compiler. This compiler takes a PTX file as input, and will output the LLVM IR generated by ZLUDA before and after linking and the RDNA assembly for your GPU generated by the ROCm compiler.&lt;&#x2F;p&gt;
+&lt;p&gt;We&#x27;ve been using this tool intensively and merged minor ergonomics improvements in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;491&quot;&gt;#491&lt;&#x2F;a&gt; and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;504&quot;&gt;#504&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;machine-learning-workloads&quot;&gt;Machine Learning Workloads&lt;&#x2F;h1&gt;
+&lt;p&gt;Our focus on running machine learning inference workloads continues. In this release, we have prioritized correctness over performance, which will be an area of focus for future updates.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;llm-c&quot;&gt;llm.c&lt;&#x2F;h2&gt;
+&lt;p&gt;We hit our first ML milestone.&lt;&#x2F;p&gt;
+&lt;p&gt;llm.c&#x27;s &lt;code&gt;test_gpt2fp32cu&lt;&#x2F;code&gt; and &lt;code&gt;test_gptc2cu&lt;&#x2F;code&gt; now both run on ZLUDA, when built without Multi-GPU and without Flash Attention. Support for Flash Attention is right now blocked by missing APIs in MIOpen. We plan to backfill them in the future.&lt;&#x2F;p&gt;
+&lt;p&gt;This took a large number of commits across our host API implementation and compiler, including &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;402&quot;&gt;#402&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;406&quot;&gt;#406&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;412&quot;&gt;#412&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;417&quot;&gt;#417&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;409&quot;&gt;#409&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;421&quot;&gt;#421&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;427&quot;&gt;#427&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;454&quot;&gt;#454&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;463&quot;&gt;#463&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;468&quot;&gt;#468&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;496&quot;&gt;#496&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;500&quot;&gt;#500&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;501&quot;&gt;#501&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;503&quot;&gt;#503&lt;&#x2F;a&gt;, and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;511&quot;&gt;#511&lt;&#x2F;a&gt;, in addition to the performance library work mentioned below.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;llama-cpp&quot;&gt;llama.cpp&lt;&#x2F;h2&gt;
+&lt;p&gt;We hit our second ML milestone.&lt;&#x2F;p&gt;
+&lt;p&gt;The CUDA backend for llama.cpp can now run on ZLUDA. We&#x27;ve done some preliminary measurements and found the performance to be within range of the results measured by Phoronix on ROCm (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;www.phoronix.com&#x2F;review&#x2F;llama-cpp-windows-linux&#x2F;5&quot;&gt;Latest Open-Source AMD Improvements Allowing For Better Llama.cpp AI Performance Against Windows 11 - Phoronix&lt;&#x2F;a&gt;). We&#x27;re interested in your feedback, if it doesn&#x27;t work or you are getting worse performance than with ROCm, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;issues&quot;&gt;please share in the issues&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;Much of the required functionality in the host API and compiler was implemented at this point, so this took a relatively fewer number of commits to enable, including &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;509&quot;&gt;#509&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;515&quot;&gt;#515&lt;&#x2F;a&gt;, and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;518&quot;&gt;#518&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;initial-pytorch-work&quot;&gt;Initial PyTorch work&lt;&#x2F;h2&gt;
+&lt;p&gt;We did not yet hit our third ML milestone&lt;&#x2F;p&gt;
+&lt;p&gt;We&#x27;ve been continuing to work on PyTorch support, which is our next big milestone. Other than work on host functions and instruction support in the compiler, we have added the &lt;code&gt;zluda_ld&lt;&#x2F;code&gt; library (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;447&quot;&gt;#447&lt;&#x2F;a&gt; and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;508&quot;&gt;#508&lt;&#x2F;a&gt;). PyTorch uses the &lt;code&gt;DT_RPATH&lt;&#x2F;code&gt; attribute in its executables to hard-code the path to the CUDA library and so ignores the &lt;code&gt;LD_LIBRARY_PATH&lt;&#x2F;code&gt; attribute we normally use to nudge applications to load ZLUDA on Unix. &lt;code&gt;zluda_ld&lt;&#x2F;code&gt; can be used with the little-known &lt;code&gt;LD_AUDIT&lt;&#x2F;code&gt; environment variable to get around this problem, and force loading ZLUDA.&lt;&#x2F;p&gt;
+&lt;p&gt;PyTorch is far from being ready: we are blocked by the slowness of our compiler, missing performance libraries (cuBLAS, cuDNN, etc) coverage and bugs (or missing features) in LLVM AMDGPU target. This quarter we will be focusing on all those problems - please check our prerelease builds from time to time.&lt;&#x2F;p&gt;
+&lt;h1 id=&quot;other-improvements&quot;&gt;Other improvements&lt;&#x2F;h1&gt;
+&lt;h2 id=&quot;kernel-cache&quot;&gt;Kernel cache&lt;&#x2F;h2&gt;
+&lt;p&gt;We have added a kernel caching mechanism to our PTX module loader (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;465&quot;&gt;#465&lt;&#x2F;a&gt;). When a CUDA application loads a GPU code module, we need to extract the PTX from the fat binary provided and then compile it to machine code for the specific GPU being used. This can be a costly operation and significantly slow down runtime for a workload with many modules. We now avoid this by locally caching the machine code for kernels.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;performance-libraries&quot;&gt;Performance libraries&lt;&#x2F;h2&gt;
+&lt;p&gt;We have added initial support for running applications that use cuBLAS, cuBLASLt, and nvml (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;440&quot;&gt;#440&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;444&quot;&gt;#444&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;449&quot;&gt;#449&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;452&quot;&gt;#452&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;455&quot;&gt;#455&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;457&quot;&gt;#457&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;481&quot;&gt;#481&lt;&#x2F;a&gt;). The number of supported operations is still small, but it&#x27;s set up for rapid additions. Expect to see the list of supported functions grow (and the addition of cuDNN).&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;more-testing&quot;&gt;More testing&lt;&#x2F;h2&gt;
+&lt;p&gt;We&#x27;ve set up CI, including running unit tests for every PR (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;401&quot;&gt;#401&lt;&#x2F;a&gt;) and running our PTX sweep test suite nightly. This will help us prevent regressions and measure our conformance to CUDA behavior. We also have set up some initial scaffolding for testing the host API.&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;prerelease-builds&quot;&gt;Prerelease builds&lt;&#x2F;h2&gt;
+&lt;p&gt;We&#x27;ve started publishing preview (prerelease) builds. Now, after every code change we automatically compile and publish the binary into the &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;releases&quot;&gt;Release section on Github&lt;&#x2F;a&gt;. Try them out. There&#x27;s no longer any reason to do build from sources by yourself (unless you are a developer).&lt;&#x2F;p&gt;
+&lt;h2 id=&quot;final-bit-of-correctness&quot;&gt;Final bit of correctness&lt;&#x2F;h2&gt;
+&lt;p&gt;CI improvements unlocked a flurry of compiler fixes in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;416&quot;&gt;#416&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;467&quot;&gt;#467&lt;&#x2F;a&gt; and more. According to our testing we are now bit-accurate (we return results within CUDA-documented precision) with NVIDIA GPUs across almost all supported operations and their variants with all floating-point subnormal and rounding control modes. There are two exceptions:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;32-bit floating-point square root with non-default rounding modes (which is very rare)&lt;&#x2F;li&gt;
+&lt;li&gt;64-bit floating-point transcendentals (division, square root, etc.)&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Some widely used instructions are still not supported by the compiler, but that number gets smaller every day.&lt;&#x2F;p&gt;
+&lt;p&gt;Overall, this is a major improvement over pre-rollback ZLUDA, which would cut corners and not always be bit-accurate.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q2 2025 - bigger team, more groundwork, less bugs</title>
+        <published>2025-07-02T00:00:00+00:00</published>
+        <updated>2025-07-02T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q2-2025/">&lt;p&gt;Welcome to the newest ZLUDA update. This quarter we doubled the size of our development team (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#zluda-team-doubles-in-size&quot;&gt;ZLUDA team doubles in size&lt;&#x2F;a&gt;), resolved a critical regression in the AMD driver (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#comgr-abi-break&quot;&gt;comgr ABI break&lt;&#x2F;a&gt;), improved correctness of the code emitted by the compiler (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#road-to-bit-accurate-execution&quot;&gt;Road to bit-accurate execution&lt;&#x2F;a&gt;), set up automated builds (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#automated-builds-on-github&quot;&gt;Automated builds on GitHub&lt;&#x2F;a&gt;), implemented actually useful logging (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#improved-logging&quot;&gt;Improved logging&lt;&#x2F;a&gt;), made tiny progress on PhysX (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#32-bit-physx-update&quot;&gt;32 bit PhysX update&lt;&#x2F;a&gt;) and made a much bigger progress on llm.c (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#llm-c-0-to-552&quot;&gt;llm.c: 0 to 552&lt;&#x2F;a&gt;).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;zluda-team-doubles-in-size&quot;&gt;ZLUDA team doubles in size&lt;&#x2F;h3&gt;
+&lt;p&gt;I am pleased to announce that ZLUDA has doubled the size of its full-time development team and now has two developers working on the project.&lt;&#x2F;p&gt;
+&lt;p&gt;Welcome Violet. They joined the project less than a month ago and already made significant contributions. For more details, feel free to check out the &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q2-2025&#x2F;#llm-c-0-to-552&quot;&gt;llm.c: 0 to 552&lt;&#x2F;a&gt; section.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;comgr-abi-break&quot;&gt;comgr ABI break&lt;&#x2F;h3&gt;
+&lt;p&gt;GPU runtimes (CUDA, ROCm&#x2F;HIP, ZLUDA, OpenCL, etc.) must be able to compile GPU code during run time of an application. This is necessary to ensure forward compatibility: GPU code developed in the past should be able to compile on new GPU architectures.&lt;&#x2F;p&gt;
+&lt;p&gt;ROCm&#x2F;HIP run time compilation library is comgr (ROCm-CompilerSupport). It&#x27;s a small, focused library with a verbose, but well-designed interface. It ships on both Linux and Windows and has been unproblematic. Until now.&lt;&#x2F;p&gt;
+&lt;p&gt;ROCm&#x2F;HIP 6.4 shipped with a subtle ABI break in comgr. comgr&#x27;s interface is fairly generic, it consists of a handful of functions, with the most important being amd_comgr_do_action. This function takes kind  parameter: the kind LLVM of action you want to do: compilation, linking, disassembly.&lt;&#x2F;p&gt;
+&lt;p&gt;The problem is that in ROCm&#x2F;HIP 6.4, comgr ships with a new ABI (v3) which reordered the integer values assigned to each of the action. This meant that on the new ABI ZLUDA suddenly started requesting comgr to e.g. do linking instead of compilation and this led to silent, unexplainable failures.&lt;&#x2F;p&gt;
+&lt;p&gt;On Windows the problem is even worse: AMD somehow shipped a mixture of v2 and v3. The library advertises itself as version v2.9, but actually uses ABI v3.&lt;&#x2F;p&gt;
+&lt;p&gt;This was fixed in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;364&quot;&gt;#364&lt;&#x2F;a&gt; and &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;366&quot;&gt;#366&lt;&#x2F;a&gt;. If you are using some other project which uses ROCm&#x2F;HIP and which suddenly started failing on Linux with ROCm 6.4 and on Windows with Adrenalin 25.5.1 that&#x27;s why.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;road-to-bit-accurate-execution&quot;&gt;Road to bit-accurate execution&lt;&#x2F;h3&gt;
+&lt;p&gt;The stated goal of ZLUDA is to execute unmodified CUDA binaries on non-NVIDIA GPUs. A consequence of that is that we must execute every on-GPU instruction bit-exactly or, if bit-exact execution is not possible, within error bounds of the NVIDIA cards.&lt;&#x2F;p&gt;
+&lt;p&gt;Old, pre-rollback ZLUDA code would cut a lot of corners here and ignore certain instruction modifiers or did not execute them with full precision.&lt;&#x2F;p&gt;
+&lt;p&gt;New ZLUDA is doing a lot better on that front. We verify correctness with PTX &quot;sweep&quot; tests: for every relevant instruction with every possible instruction modifier we check that for every possible input ZLUDA produces correct output. The project lives &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ptx_tests&quot;&gt;here&lt;&#x2F;a&gt;, outside of the main repo.&lt;&#x2F;p&gt;
+&lt;p&gt;This test suite was verified against original NVIDIA&#x27;s CUDA but was never actually used with ZLUDA. We have now ran ZLUDA under this test suite and uncovered some bugs in the compiler, fixed here: &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;379&quot;&gt;#379&lt;&#x2F;a&gt;. Not every instruction went through this process yet, but already some of the trickiest cases (like cvt instruction) are bit-accurate.&lt;&#x2F;p&gt;
+&lt;p&gt;Special thanks to our friends at &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;scale-lang.com&#x2F;&quot;&gt;SCALE lang&lt;&#x2F;a&gt;, who contributed a major refactor to the test suite &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ptx_tests&#x2F;pull&#x2F;1&quot;&gt;here&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;automated-builds-on-github&quot;&gt;Automated builds on GitHub&lt;&#x2F;h3&gt;
+&lt;p&gt;As of &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;358&quot;&gt;#358&lt;&#x2F;a&gt;, we now post automatic builds to GitHub. You don&#x27;t have to build from source anymore if you want to try the freshest code. This is not completely finished yet, as we want to post those builds into &quot;prerelease&quot; section on GitHub page for better discoverability.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;improved-logging&quot;&gt;Improved logging&lt;&#x2F;h3&gt;
+&lt;p&gt;The first step to enabling any CUDA application on ZLUDA (no matter if it&#x27;s a game, 3D suite, ML library) is to precisely log all the ways an application interact with CUDA, including calls to Dark API and calls to performance libraries.&lt;&#x2F;p&gt;
+&lt;p&gt;As of the (giant) PR &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;372&quot;&gt;#372&lt;&#x2F;a&gt; we now have a much better logging implementation that logs interactions that were not collected previously. It can even handle intermediate interactions (e.g. can show us when and how cuBLAS uses cuBLASLt or when and how cuDNN uses Driver API).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;32-bit-physx-update&quot;&gt;32 bit PhysX update&lt;&#x2F;h3&gt;
+&lt;p&gt;Minor update on the 32 bit PhysX. @Groowy from ZLUDA Discord started poking at the first step of 32 bit PhysX support: collecting CUDA logs. This quickly uncovered bugs in ZLUDA, tracked in #374. Because some of them might affect 64 bit CUDA this step was pulled into official roadmap. Only this step though, full 32 bit PhysX support will still require open source contributions.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;llm-c-0-to-552&quot;&gt;llm.c: 0 to 552&lt;&#x2F;h3&gt;
+&lt;p&gt;The extensive effort outlined in the previous paragraphs may appear random at first glance; however, they serve as stepping stones toward our first milestone: llm.c. Just the groundwork is not enough, someone must work on the workload directly.&lt;&#x2F;p&gt;
+&lt;p&gt;We are focusing on llm.c test project: test_gpt2fp32cu. It&#x27;s fairly small, but for ZLUDA it&#x27;s the first project using CUDA Runtime and the first project using CUDA performance libraries (cuBLAS). It does 8186 CUDA calls to 44 different functions&lt;&#x2F;p&gt;
+&lt;p&gt;Violet landed a flurry of commits (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;377&quot;&gt;#377&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;380&quot;&gt;#380&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;381&quot;&gt;#381&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;382&quot;&gt;#382&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;383&quot;&gt;#383&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;386&quot;&gt;#386&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;387&quot;&gt;#387&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;388&quot;&gt;#388&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;389&quot;&gt;#389&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;390&quot;&gt;#390&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;391&quot;&gt;#391&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;394&quot;&gt;#394&lt;&#x2F;a&gt;) for llm.c. Before, ZLUDA failed at the very first CUDA call and now it fails at the 552nd. With 16 of 44 functions implemented we hope to have llm.c running soon. All that work of course will apply to other, more complex projects, like PyTorch.&lt;&#x2F;p&gt;
+&lt;p&gt;We would love to hear your thoughts in the comments below. Until next time!&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q1 2025 - roadmap update, LLVM tests, denormals</title>
+        <published>2025-04-03T00:00:00+00:00</published>
+        <updated>2025-04-03T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q1-2025/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q1-2025/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q1-2025/">&lt;p&gt;Welcome to the new ZLUDA update. Read about our plans for the nearest future (that include PyTorch and PhysX) in &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1-2025&#x2F;#roadmap-update&quot;&gt;Roadmap update&lt;&#x2F;a&gt; and about progress made this quarter in &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1-2025&#x2F;#llvm-bitcode-unit-tests&quot;&gt;LLVM bitcode unit tests&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1-2025&#x2F;#correct-rounding-and-denormal-modes-on-amd-gpus&quot;&gt;Correct rounding and denormal modes on AMD GPUs&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;roadmap-update&quot;&gt;Roadmap update&lt;&#x2F;h3&gt;
+&lt;h4 id=&quot;pytorch&quot;&gt;PyTorch&lt;&#x2F;h4&gt;
+&lt;p&gt;PyTorch remains my top priority and I still aim at being able to have PyTorch running on ZLUDA Q3&#x2F;Q4 this year. Before PyTorch is up and running I am aiming for an intermediate goal: llm.c. You can see the progress towards getting llm.c up and running &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;milestone&#x2F;5&quot;&gt;here&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;physx&quot;&gt;PhysX&lt;&#x2F;h4&gt;
+&lt;p&gt;As you might have read &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;www.techpowerup.com&#x2F;332763&#x2F;nvidias-32-bit-physx-waves-goodbye-with-geforce-rtx-50-series-ending-32-bit-cuda-software-support&quot;&gt;here&lt;&#x2F;a&gt;, &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;www.tomshardware.com&#x2F;pc-components&#x2F;gpus&#x2F;physx-quietly-retired-on-rtx-50-series-gpus-nvidia-ends-32-bit-cuda-app-support&quot;&gt;here&lt;&#x2F;a&gt; and on multiple other sites, NVIDIA dropped support for 32-bit PhysX in their latest generation of GPUs, leaving a number of older games stranded.&lt;&#x2F;p&gt;
+&lt;p&gt;This reignited the debate about &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;discussions&#x2F;31&quot;&gt;ZLUDA’s PhysX support&lt;&#x2F;a&gt;. After reading through it several times, it’s clear to me that there is a path in ZLUDA to rescuing those games and getting them to run on both AMD and NVIDIA GPUs.&lt;&#x2F;p&gt;
+&lt;p&gt;I broke down the implementation into tasks &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;milestone&#x2F;6&quot;&gt;here&lt;&#x2F;a&gt;. If you can program Rust and want to make a lot of people happy, I encourage you to contribute. I won&#x27;t be able to work on it myself because I&#x27;ll be busy with PyTorch support, but I&#x27;ll help in any way I can.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;llvm-bitcode-unit-tests&quot;&gt;LLVM bitcode unit tests&lt;&#x2F;h3&gt;
+&lt;p&gt;The ZLUDA compiler is the cornerstone of the project. It processes PTX modules by applying a series of transformations, ultimately generating LLVM bitcode. This LLVM bitcode is subsequently fed into the installed ROCm&#x2F;HIP driver, which compiles it into a binary suitable for the currently installed GPU.&lt;&#x2F;p&gt;
+&lt;p&gt;The compiler codebase includes multiple unit tests. Each test asserts that for:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;given PTX source code&lt;&#x2F;li&gt;
+&lt;li&gt;given input data&lt;&#x2F;li&gt;
+&lt;li&gt;given output data&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;It can compile successfully and execute compiled binary with input data and produce the output data.&lt;&#x2F;p&gt;
+&lt;p&gt;While this covers the entire end-to-end flow, there is a valuable sub-flow hiding here that could be tested too: the compilation from PTX to the LLVM bitcode. For each PTX source module, we could commit the compiled LLVM bitcode in a textual format and implement tests to ensure it remains unchanged. This approach is particularly useful for newly written complex compiler transformations that modify the emitted LLVM across the board. By using LLVM bitcode tests, you can observe how your modifications impact LLVM generation across various use cases, even those you might assume are unrelated.&lt;&#x2F;p&gt;
+&lt;p&gt;This feature sat on the &quot;help wanted&quot; list for quite some time and I’m happy to see the first external contributor address this issue. JoelleJS merged it in &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;pull&#x2F;324&quot;&gt;#324&lt;&#x2F;a&gt;. Just in time for a significant feature that will use these tests.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;correct-rounding-and-denormal-modes-on-amd-gpus&quot;&gt;Correct rounding and denormal modes on AMD GPUs&lt;&#x2F;h3&gt;
+&lt;p&gt;This is an important feature that I have wanted to do for years. It is not present even in the old (pre-rollback) ZLUDA. The priority was always given to enabling new workloads, instead of making everything perfectly correct. Now we are out of proof-of-concept mode and can spend some time on correctness. As you will read below, it is a complex feature that is quite often invisible to the end user. It was acceptable for old ZLUDA do things incorrectly.&lt;&#x2F;p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;Warning&lt;&#x2F;strong&gt;&lt;br &#x2F;&gt;
+The remainder of this article assumes you know what PTX, floating-point numbers, control flow graphs, and basic blocks are. You don&#x27;t need to be an expert, but a lack of familiarity with these concept will make everything below incomprehensible.&lt;&#x2F;p&gt;
+&lt;&#x2F;blockquote&gt;
+&lt;p&gt;If you know what floating-point denormals and rounding modes are you can skip to the next section (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q1-2025&#x2F;#previously-on-zluda&quot;&gt;Previously on &quot;ZLUDA&quot; ...&lt;&#x2F;a&gt;).&lt;&#x2F;p&gt;
+&lt;p&gt;First, some definitions. What exactly is denormal mode, and what are denormal numbers? Denormals (subnormals), represent a category of very small floating-point values. For the most common floating point size (32 bit), these values fall within the range of -3.4×1038 to 3.4×1038 (excluding 0). Due to the encoding of floating-point numbers, this category necessitates additional processing and has historically been either unsupported or supported with reduced performance. When we say &quot;unsupported,&quot; it means that denormal values are treated as zeros. In the context of PTX, denormal mode refers to a flag (&lt;code&gt;.ftz&lt;&#x2F;code&gt;) on floating-point instructions that determines whether they process denormal values or treat them as zeros, &quot;flushing to zero.&quot; In general, modern, mainstream hardware architectures can handle basic operations - add, multiply, fused multiply add, etc. - with denormal values at full speed.&lt;&#x2F;p&gt;
+&lt;p&gt;Now rounding mode. Most of the &quot;simple&quot; operations floating-point operations are formally defined as &quot;performs the operation with infinite precision and then rounds infinite value to a finite value using chosen mode&quot;. Usual rounding modes are &quot;round to nearest even&quot;, &quot;round to zero&quot;, &quot;round to positive infinity&quot;, &quot;round to negative infinity&quot;. Rounding mode effectively controls the least-significant bit of the mantissa of the floating-point result. Although a single least-significant bit may seem insignificant, it can have a noticeable impact. For instance, consider two values that differ only by the least significant bit: 1.0000000 and 1.0000001. In certain contexts, the difference of 0.0000001 can be substantial.&lt;&#x2F;p&gt;
+&lt;p&gt;Now that we understand the denormal and rounding part, let&#x27;s focus on the mode part. Typically, CPUs will do some mix of integer calculations and floating-point calculations, with the specific proportions varying based on the workload. In contrast, GPUs—regardless of whether they are tailored for gaming, high-performance computing (HPC), or machine learning—primarily dedicate their processing cycles to floating-point operations. This focus prompts GPU architects to prioritise floating-point support in their hardware designs.&lt;&#x2F;p&gt;
+&lt;p&gt;One notable feature found in NVIDIA hardware, and consequently in PTX, is the per-instruction control for denormal and rounding operations. In a CPU, a common approach to managing this issue is to implement a global control (as seen in x86 and ARM architectures) or to forgo denormal control altogether (as in RISC-V). While this design choice is beneficial for programmers, it presents unique challenges for ZLUDA when translating to an AMD GPU which uses global control (like a CPU).&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;previously-on-zluda&quot;&gt;Previously on &quot;ZLUDA&quot; ...&lt;&#x2F;h4&gt;
+&lt;p&gt;Pre-rollback ZLUDA used the simplest possible approach that almost works:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;For denormal mode (which is either &quot;flush-to-zero&quot; or &quot;preserve denormals&quot;) hold a &quot;vote&quot; for each function. Count the number of instructions using each mode and then just use the more prolific mode across the function&lt;&#x2F;li&gt;
+&lt;li&gt;For rounding mode, ignore it completely and always use &quot;round to nearest even&quot;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;PTX module compiled from C++ CUDA sources will usually use the same denormal mode across the whole module with particular mode depending on the compiler flags. Rounding mode use is somewhat uncommon.&lt;&#x2F;p&gt;
+&lt;p&gt;Sure, this approach is not correct, but it worked somewhat okayish and it led to only a single major bug (that I’ve noticed). Still, ZLUDA is now out of proof-of-concept mode and we are now doing things correctly.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;dead-end-1-llvm-hip-rocm&quot;&gt;Dead end#1: LLVM &amp;amp; HIP&#x2F;ROCm&lt;&#x2F;h4&gt;
+&lt;p&gt;When implementing a new compiler feature in ZLUDA, the first step is to check if it&#x27;s implemented by the baseline LLVM. The perfect LLVM support would allow ZLUDA to do a trivial per-instruction transformation like this:&lt;&#x2F;p&gt;
+&lt;p&gt;from (PTX pseudocode):&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;z = add.ftz x, y&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;a = add.ftz b, c&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;to (LLVM pseduocode):&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;old_fpstate1 = llvm.get_fpstate()&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;llvm.set_ftz(true)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;z = add x, y&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;llvm.set_fpstate(old_fpstate1)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;old_fpstate2 = llvm.get_fpstate()&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;llvm.set_ftz(true)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;a = add b, c&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;llvm.set_fpstate(old_fpstate2)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;and have LLVM optimize that to (AMD GPU assembler pseudocode):&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;S_DENORM_MODE flush, flush&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;V_ADD_NC_U32 z, x, y&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;V_ADD_NC_U32 a, b, c&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The initial research on LLVM floating point builtins appeared promising, as this collection of intrinsics seemed to address our specific use case:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;llvm.get.fpenv&#x2F;llvm.set.fpenv&lt;&#x2F;code&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;llvm.get.fpmode&#x2F;llvm.set.fpmode&lt;&#x2F;code&gt;&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;code&gt;llvm.experimental.*&lt;&#x2F;code&gt; family&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Sadly, they are all deficient in some way. They either compile down to poor, unoptimized AMD GPU code or do not work at all . Granted, &lt;code&gt;llvm.experimental.*&lt;&#x2F;code&gt; support is being worked on by AMD and should appear in the future ROCm versions, but this does not help us today.&lt;&#x2F;p&gt;
+&lt;p&gt;This raises the question: in CUDA C++ you have a bunch of builtins to do operations with the specified rounding mode, e.g. &lt;code&gt;__fadd_rz&lt;&#x2F;code&gt; for floating point addition with &quot;round-to-zero&quot; mode. What happens on ROCm?&lt;&#x2F;p&gt;
+&lt;p&gt;Further exploration revealed (&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;rocm.docs.amd.com&#x2F;projects&#x2F;HIP&#x2F;en&#x2F;latest&#x2F;reference&#x2F;math_api.html#floating-point-intrinsics&quot;&gt;source&lt;&#x2F;a&gt;):&lt;&#x2F;p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Only the nearest-even rounding mode is supported by default on AMD GPUs. The &lt;code&gt;_rz&lt;&#x2F;code&gt;, &lt;code&gt;_ru&lt;&#x2F;code&gt;, and &lt;code&gt;_rd&lt;&#x2F;code&gt; suffixed intrinsic functions exist in the HIP AMD backend if the &lt;code&gt;OCML_BASIC_ROUNDED_OPERATIONS&lt;&#x2F;code&gt; macro is defined.&lt;&#x2F;p&gt;
+&lt;&#x2F;blockquote&gt;
+&lt;p&gt;Ok. You can use those functions, but they are hidden behind a define. That’s weird. Time to try it!&lt;&#x2F;p&gt;
+&lt;p&gt;The HIP&#x2F;ROCm source code:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;#include &amp;lt;hip&#x2F;hip_runtime.h&amp;gt;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;__global__ void foobar(int* array, int n) {&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;    int tid = blockDim.x * blockIdx.x + threadIdx.x;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;    array[tid] = __fadd_rz(array[tid], array[tid]);&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;    array[tid+1] = __fadd_rz(array[tid+1], array[tid+1]);&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;}&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;When using ROCm 6.3, compiles down to this (some output omitted for clarity):&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;0000000000001900 &amp;lt;__ocml_add_rtz_f32&amp;gt;:&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_waitcnt vmcnt(0) expcnt(0) lgkmcnt(0)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_setreg_imm32_b32 hwreg(HW_REG_MODE, 0, 2), 3&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        v_add_f32_e32 v0, v0, v1&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_setreg_imm32_b32 hwreg(HW_REG_MODE, 0, 2), 0&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_setpc_b64 s[30:31]&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;...&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;0000000000001a00 &amp;lt;_Z6foobarPii&amp;gt;:&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        ...&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_getpc_b64 s[0:1]&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_add_u32 s0, s0, 0xfffffeac&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_addc_u32 s1, s1, -1&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        ...&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_swappc_b64 s[30:31], s[0:1]&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        v_cvt_f32_i32_e32 v1, v5&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        v_cvt_i32_f32_e32 v4, v0&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        v_mov_b32_e32 v0, v1&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_swappc_b64 s[30:31], s[0:1]&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_delay_alu instid0(VALU_DEP_1)&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        v_cvt_i32_f32_e32 v5, v0&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        global_store_b64 v[2:3], v[4:5], off&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;        s_endpgm&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Ok, mystery solved. I too, would like to hide this compiler output.&lt;&#x2F;p&gt;
+&lt;p&gt;For those of us who are not proficient in AMD GPU assembly: every use of &lt;code&gt;__fadd_rz&lt;&#x2F;code&gt; requires a function call (&lt;code&gt;s_swappc_b64&lt;&#x2F;code&gt;, expensive) and two calls to set rounding mode (&lt;code&gt;s_setreg_imm32_b32&lt;&#x2F;code&gt;, also expensive). This is simply too much overhead to be acceptable.&lt;&#x2F;p&gt;
+&lt;p&gt;We are going to build our own support. Our goal, for the code above, is a single instruction to set the rounding mode (or even zero instructions as we will see later).&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;building-support-in-zluda&quot;&gt;Building support in ZLUDA&lt;&#x2F;h4&gt;
+&lt;p&gt;Our new goal is to write a complete transformation (compiler pass) in ZLUDA that will insert instructions that set the global modes (rounding and denormal). We want to insert as few instructions as possible for the best possible performance - there’s no LLVM pass that is going to optimize the insertions for us.&lt;&#x2F;p&gt;
+&lt;p&gt;Let’s take half of a step back. We know that the trivial (and slow) approach is to simply set the global mode before every instruction that makes use of a mode. It can be improved by omitting the mode-setting instructions if we know that the previous instruction uses the same mode. We can always track this in straight-line code, but what happens if there are branches? What happens if there are multiple branches with from different sources, but into the same target? It seems to be sufficient to figure out which branches require mode change and which do not.&lt;&#x2F;p&gt;
+&lt;p&gt;This leads us to a new reformulation. We can express this problem as a control flow graph augmented with a little bit of extra information: for each mode (denormal, rounding) each node (basic block) will have &quot;entry&quot; state and &quot;exit&quot; state. Entry state for a basic block is the mode of the first mode-using instruction in the basic block. Similarly, exit mode is the mode of the last mode-using instruction. This simplifies problem quite a bit. We must now compute which edges (jumps) in the control flow graph require an insertion of mode change.&lt;&#x2F;p&gt;
+&lt;p&gt;For illustrative purpose we will only consider mode that takes two values: true (green) and false (red). Picture below is node &quot;A&quot; that has a &quot;true&quot; entry mode and &quot;false&quot; exit mode and jumps to node B that has &quot;true&quot; entry mode and &quot;false&quot; exit mode:&lt;&#x2F;p&gt;
+&lt;p align=&quot;center&quot;&gt;
+&lt;img src=&quot;25q1-1.svg&quot; alt=&quot;drawing&quot; width=&quot;25%&quot;&#x2F;&gt;
+&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;dead-end-2-mode-forward-propagation&quot;&gt;Dead end #2: mode forward propagation&lt;&#x2F;h4&gt;
+&lt;p&gt;Something I did not mention explicitly, but is important: some nodes lack both entry and exit modes. Consider the following example:&lt;&#x2F;p&gt;
+&lt;p align=&quot;center&quot;&gt;
+&lt;img src=&quot;25q1-2.svg&quot; alt=&quot;drawing&quot; width=&quot;25%&quot;&#x2F;&gt;
+&lt;&#x2F;p&gt;
+&lt;p&gt;There’s no need to enter mode-setting instruction - node B will propagate the &quot;false&quot; value, but in this example:&lt;&#x2F;p&gt;
+&lt;p align=&quot;center&quot;&gt;
+&lt;img src=&quot;25q1-3.svg&quot; alt=&quot;drawing&quot; width=&quot;25%&quot;&#x2F;&gt;
+&lt;&#x2F;p&gt;
+&lt;p&gt;we need to insert mode change from &quot;false&quot; to &quot;true&quot; somewhere between nodes A and C.&lt;&#x2F;p&gt;
+&lt;p&gt;My first instinct was to propagate modes forward: for each node propagate its exit mode to all its successor nodes. While it is instinctively correct and solves two examples above, there are two problems:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;It’s relatively awakward to implement. Remember, a node can have more than one predecessor nodes. What happens if there is a node with an empty incoming edge and a &quot;true&quot; incoming edge? Should we do post-processing?&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;More concretely, this does not really handle codependence patterns like this:&lt;&#x2F;p&gt;
+&lt;p align=&quot;center&quot;&gt;&lt;img src=&quot;25q1-4.svg&quot; width=&quot;80%&quot;&#x2F;&gt;&lt;&#x2F;p&gt;
+In this example node A can’t propagate its mode to B or C outright because they have more incoming edges. B and C can’t propagate their mode either because they have no mode - they depend on A.
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;h4 id=&quot;better-approach-backward-propagation&quot;&gt;Better approach: backward propagation&lt;&#x2F;h4&gt;
+&lt;p&gt;Dependency problems from the previous solution hint at a better approach: backward propagation. Instead of propagating the exit mode we can compute the set of incoming modes. This set is the set of all possible values a given mode can have on the first instruction of the basic block. Sounds complex, but can be computed easily if you have our augmented control flow graph. Take all incoming nodes and if an incoming node’s exit mode is non-empty then add that value to the set, if the incoming node’s exit mode is empty then recursively check its incoming nodes.&lt;&#x2F;p&gt;
+&lt;p&gt;We now have the core of our algorithm, but it’s not a complete solution yet: the realities of AMD GPU hardware make it far more complex.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;hardware-quirks&quot;&gt;Hardware quirks&lt;&#x2F;h4&gt;
+&lt;p&gt;When targeting AMD GPUs, there are several hardware properties that we should take into account:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;Kernel, on startup, has a certain initial state that is controlled by the programmer (or the compiler in our case). Part of the initial state is the initial state of denormal and rounding registers (global modes). We get this initial mode for free, no extra instructions needed&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;Each mode (denormal and rounding) is actually split into two registers (global modes). One for f32 and one for joint f16 and f64. In total there are four registers: denormal f32, denormal f16+f64, rounding f32, rounding f16+f64&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Registers (global modes) of the same kind (denormal, rounding), but with different width (f32, f16+f64) are for our purpose twin registers. One quirk of AMD GPU is that there are three instructions for settings global mode: &lt;code&gt;S_SETREG&lt;&#x2F;code&gt; to set any hardware (non-generic purpose) register and &lt;code&gt;S_ROUND_MODE&lt;&#x2F;code&gt;, &lt;code&gt;S_DENORM_MODE&lt;&#x2F;code&gt; to set just the rounding or denormal mode. &lt;code&gt;S_ROUND_MODE&lt;&#x2F;code&gt;, &lt;code&gt;S_DENORM_MODE&lt;&#x2F;code&gt; are much cheaper than &lt;code&gt;S_SETREG&lt;&#x2F;code&gt;. The annoying limitation of &lt;code&gt;S_ROUND_MODE&lt;&#x2F;code&gt;, &lt;code&gt;S_DENORM_MODE&lt;&#x2F;code&gt; is that they can only set both f32 and f16+f64. For this reason we will only do mode insertions for both f32 and f16+f64&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;final-algorithm&quot;&gt;Final algorithm&lt;&#x2F;h4&gt;
+&lt;p&gt;If you made it this far, congratulations, you made it through the introduction. Now we can start implementing our algorithm.&lt;&#x2F;p&gt;
+&lt;h5 id=&quot;create-control-flow-graph&quot;&gt;Create control flow graph&lt;&#x2F;h5&gt;
+&lt;p&gt;Our first step is to compute the control flow graph. Every basic block contains entry and exit mode. For efficiency each node actually contains four entry modes and four exit modes. One for each AMD GPU mode: denormal f32, denormal f16+f64, rounding f32, rounding f16+f64.&lt;&#x2F;p&gt;
+&lt;p&gt;We handle function calls by including them in the graph. Call from function &quot;foo&quot; to function &quot;bar&quot; is expressed as a node from the caling basic block of &quot;foo&quot; to the first basic block of &quot;bar&quot;. We don’t support virtual calls in the current ZLUDA, because they are extremally rare. They can be easily added later.&lt;&#x2F;p&gt;
+&lt;p&gt;During this step we compute both entry and exit mode for each basic block. Additionally, each kernel starts with an artificial starting node. This node get a special &quot;entry&quot; and &quot;exit&quot; value: the numeric identifier of the kernel. This numeric identifier is used across the whole ZLUDA compiler. It is already present (generated by previous compiler passes) and unique for a kernel. For example: while denormals register can take one of two values: true or false, in our CFG, the values that represent denormals can be true, false or arbitrary numeric id of a kernel. While going from a bounded to an ubounded set does not intuitively sound like a good decision, it’s temporary. We will optimize it back to the bounded set soon.&lt;&#x2F;p&gt;
+&lt;h5 id=&quot;compute-minimal-insertions&quot;&gt;Compute minimal insertions&lt;&#x2F;h5&gt;
+&lt;p&gt;Our next goal is, for each of the four modes, compute minimal set of insertions. In other words: figure out which basic blocks can be reached with different mode than expected by the first instruction. We do this computation for each of the four modes separately.&lt;&#x2F;p&gt;
+&lt;p&gt;We start by computing two sets: required insertions and potential insertions. We choose nodes which have an entry mode (we skip the nodes with empty entry mode and kernel nodes with numeric ids). Then, for each node, we compute the set of incoming modes:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;If the set contains a value that is different from the node’s entry mode then we add the node to required insertions&lt;&#x2F;li&gt;
+&lt;li&gt;If the set of incoming modes is purely a set of kernel numeric ids (with no conflicting specific mode values) then we add the node id along with its mode and kernel ids to the potential insertions&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Required insertions are set in stone: if we jump from another node with different mode then we must insert a mode set instruction. Potential insertions on the other hand can be omitted: for a given node, if all the related kernels have the same initial value as the node then we can skip the mode set instruction.&lt;&#x2F;p&gt;
+&lt;p&gt;E.g. if we have kernels &quot;foo&quot; and &quot;bar&quot; that both call function &quot;asdf&quot; and &quot;asdf&quot; entry mode is &quot;true&quot;, then we should set initial mode for &quot;foo&quot; and &quot;bar&quot; to &quot;true&quot; and avoid inserting additional mode-setting instructions.&lt;&#x2F;p&gt;
+&lt;p&gt;The problem is easy to solve in the example above, the general case is not trivial. I could not come up with a non-brute force algorithm and opted to encode the problem as an integer linear programming problem and use an external solver. &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;cs.stackexchange.com&#x2F;questions&#x2F;12102&#x2F;express-boolean-logic-operations-in-zero-one-integer-linear-programming-ilp&#x2F;12118#12118&quot;&gt;This excellent post&lt;&#x2F;a&gt; helped encode my constraints. As for the solver I went with &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;Specy&#x2F;microlp&quot;&gt;microlp&lt;&#x2F;a&gt;, mainly because it’s a relatively small dependency. I wanted to avoid dragging something big like SCIP or even Z3 into the project. Our problem sizes are not going to be big. PTX modules tend to have a handful of kernels and simple control flow.&lt;&#x2F;p&gt;
+&lt;h5 id=&quot;compute-full-insertions&quot;&gt;Compute full insertions&lt;&#x2F;h5&gt;
+&lt;p&gt;Now we have:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;Provisional control flow graph (with some nodes empty and kernel starting nodes containing numeric ids instead of specific values)&lt;&#x2F;li&gt;
+&lt;li&gt;List of nodes that require a mode change on entry (if the incoming mode is different - there might be multiple nodes incoming, each with their own mode)&lt;&#x2F;li&gt;
+&lt;li&gt;For kernels that were subject to optimization in the previous step: its initial state&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;We are almost ready to start inserting &lt;code&gt;S_ROUND_MODE&lt;&#x2F;code&gt; and &lt;code&gt;S_DENORM_MODE&lt;&#x2F;code&gt;. We have all the necessary information, we just need to do some more preprocessing. Specifically we need to know two things:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;What is the effective entry mode for each block&lt;br &#x2F;&gt;
+Note that even though mode instructions are inserted along edges in the CFG (jumps in code), we don’t explictly store edges. That’s because when inserting mode-setting instructions in a basic blocks we will implictly calculate exit mode anyway. And since we know what identifier we jump into, as long as we have information what are the modes of our jump target we know if they are different and in consequence if the jump requires a mode change&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;
+&lt;p&gt;What is the exit mode for a function&lt;br &#x2F;&gt;
+This is necessary because functions calls are mechanically different from normal jumps. Function calls terminate a basic block and we need to know if the new basic block starting from the first post-call instruction requires a mode change. Since a function can be called from many places it is a responsibility of the caller to do post-call mode adjustments (if necessary)&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Computing both of those is relatively straightforward. First, we take our incomplete control flow graph and resolve all empty nodes and special kernel nodes. For empty nodes we compute the incoming set - if the set contains more than a single value, we use a special value &quot;conflict&quot;. For special starting kernel nodes we have a list of kernel with their initial values from the previous optimization pass.&lt;&#x2F;p&gt;
+&lt;p&gt;Lastly, we join four separate logical CFGs (each for one AMD GPU mode) into two lookup tables. One lookup table contains all the necessary information to support mode changes for branches, the other lookup table contains all the necessary information to support mode changes for functions calls.&lt;&#x2F;p&gt;
+&lt;h5 id=&quot;apply-mode-control&quot;&gt;Apply mode control&lt;&#x2F;h5&gt;
+&lt;p&gt;In this stage we walk through every function (kernel and non-kernel) and modify it accordingly:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;If necessary, insert mode change &quot;prelude&quot; basic block before each basic block&lt;&#x2F;li&gt;
+&lt;li&gt;If necessary, redirect branch to go into mode change &quot;prelude&quot;&lt;&#x2F;li&gt;
+&lt;li&gt;Insert all mode changes inside a basic block. We fold twin registers together. For example pseudocode like this:&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.ftz.f32 a, b, c;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.no_ftz.f16 x, y, z;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;gets converted into this pseudocode:&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;set_denormal.f32.f16 ftz, no_ftz;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.f32 a, b, c;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.f16 x, y, z;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;After all this hard work we now get a new module with a small number of freshly inserted mode change instructions. It’s not optimal in the absolute sense, but it’s much better than the alternatives. The AMD GPU code is now as correct as we can make it. Unfortunately, after all this hard work, our code can still miscompute some code. Read below for more.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;llvm-sadness&quot;&gt;LLVM sadness&lt;&#x2F;h4&gt;
+&lt;p&gt;Sadly, there are still some issues outside of our control.&lt;&#x2F;p&gt;
+&lt;p&gt;Firstly, a minor issue. As mentioned previously, for each AMD GPU kernel we can sat initial denormal mode and initial rounding mode. This is true in the general sense, but for some reason LLVM AMDGPU backend exposes the control for initial denormal mode, but not for initial rounding mode. Right now, we set initial rounding mode by inserting the instruction for it at the start of the kernel. We could skip this single instruction with better LLVM AMD GPU support.&lt;&#x2F;p&gt;
+&lt;p&gt;Secondly, a bigger issue. Hardware-agnostic LLVM passes don’t understand AMD GPU instructions that set global state. So this pseudocode:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;set_denormal.f32.f16 ftz, ftz;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.f32 x, b, c;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;set_denormal.f32.f16 no_ftz, no_ftz;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.f32 y, b, c;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;after LLVM optimizations ends up as:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;set_denormal.f32.f16 ftz, ftz;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;add.f32 x, b, c;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;mov.f32 y, x;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Which gives incorrect result. While it’s rare to see the same input being computed twice with different modes, it’s concerning.&lt;&#x2F;p&gt;
+&lt;p&gt;Fixing this would require deeper changes in LLVM (making mode part of the instruction, like in llvm.experimental.constrained.*) and probably porting this pass to LLVM. We might do eventually do it, but that’s enough effort for now.&lt;&#x2F;p&gt;
+&lt;hr &#x2F;&gt;
+&lt;p&gt;If you made it this far, let me know in the comments what do you think. See you next time.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA update Q4 2024</title>
+        <published>2024-12-31T00:00:00+00:00</published>
+        <updated>2024-12-31T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zluda-update-q4-2024/">&lt;p&gt;Hello everyone, it&#x27;s the first of many ZLUDA updates. I&#x27;ve been working hard and I&#x27;m happy to announce that we reached the first milestone: we have a new version of ZLUDA with an actual working application. ZLUDA can run Geekbench 5.&lt;&#x2F;p&gt;
+&lt;p&gt;This update also includes a few words on how to contribute (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;#contributing-to-zluda&quot;&gt;Contributing to ZLUDA&lt;&#x2F;a&gt;) and changes in the internals of the &quot;new&quot; ZLUDA (&lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;#new-parser&quot;&gt;New parser&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;#atomics-modulo&quot;&gt;Atomics modulo&lt;&#x2F;a&gt;).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;geekbench-5&quot;&gt;Geekbench 5&lt;&#x2F;h3&gt;
+&lt;p&gt;While Geekbench is far from being the most requested application, it&#x27;s important for ZLUDA&#x27;s development:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;It uses a relatively small CUDA API surface, which makes it easy for ZLUDA to support (at least easy when compared to Blender or PyTorch).&lt;&#x2F;li&gt;
+&lt;li&gt;It&#x27;s closed-source, so it&#x27;s not possible to port it to HIP (via HIPIFY or other means).&lt;&#x2F;li&gt;
+&lt;li&gt;It has both a generic OpenCL backend and an NVIDIA-specific CUDA backend, so we can measure the performance gain when using ZLUDA.&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;The &quot;old&quot; ZLUDA was about 1% faster than the native OpenCL. I was worried that the fresh new code would be slow, but the &quot;new&quot; ZLUDA turned out to be even better than the &quot;old&quot; one and is approximately 10% faster than the native OpenCL. Note that &lt;u&gt;this performance improvement is Geekbench specific and not generalizable&lt;&#x2F;u&gt;. Still, I&#x27;m happy with how things turned out. If you are interested in the technical details read the &lt;a href=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;#atomics-modulo&quot;&gt;Atomics modulo&lt;&#x2F;a&gt; section down below.&lt;&#x2F;p&gt;
+&lt;p&gt;(The graphs below show slightly inconsistent results because the top graph uses previously collected numbers for OpenCL and ZLUDA 3, the bottom graph uses freshly collected numbers for OpenCL)&lt;&#x2F;p&gt;
+&lt;p&gt;Next on the roadmap is llm.c.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;img src=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;geekbench.svg&quot; alt=&quot;&quot; &#x2F;&gt;
+&lt;img src=&quot;https:&#x2F;&#x2F;vosen.github.io&#x2F;ZLUDA&#x2F;blog&#x2F;zluda-update-q4-2024&#x2F;geekbench_detail.svg&quot; alt=&quot;&quot; &#x2F;&gt;&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;contributing-to-zluda&quot;&gt;Contributing to ZLUDA&lt;&#x2F;h3&gt;
+&lt;p&gt;I regularly get questions about how to contribute to ZLUDA, here&#x27;s how (this information is now also in the project&#x27;s README):&lt;&#x2F;p&gt;
+&lt;p&gt;ZLUDA project has a commercial backing and does not accept donations.
+ZLUDA project accepts pull requests and other non-monetary contributions.&lt;&#x2F;p&gt;
+&lt;p&gt;If you want to contribute a code fix or documentation update feel free to open a Pull Request.&lt;&#x2F;p&gt;
+&lt;p&gt;There&#x27;s no architecture document (yet). Two most important crates in ZLUDA are &lt;code&gt;ptx&lt;&#x2F;code&gt; (PTX compiler) and &lt;code&gt;zluda&lt;&#x2F;code&gt; (AMD GPU runtime). A good starting point to tinkering the project is to run one of the ptx unit tests under a debugger and understand what it is doing. &lt;code&gt;cargo test -p ptx -- ::add_hip&lt;&#x2F;code&gt; is a simple test that adds two numbers.&lt;&#x2F;p&gt;
+&lt;p&gt;Github issues tagged with &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22&quot;&gt;&quot;help wanted&quot;&lt;&#x2F;a&gt; are tasks that are self-containted. Their level of difficulty varies, they are not always good beginner tasks, but they defined unambiguously.&lt;&#x2F;p&gt;
+&lt;p&gt;If you have questions feel free to ask on &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;discord.com&#x2F;channels&#x2F;1273316903783497778&#x2F;1303329281409159270&quot;&gt;#devtalk channel on Discord&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;new-parser&quot;&gt;New parser&lt;&#x2F;h3&gt;
+&lt;p&gt;This is the first time I&#x27;ve written an extensive write-up about an issue like this and I&#x27;m curious to know what do you think. Is this too detailed? Not detailed enough? Should all issues be broken down like this? Leave a comment.&lt;&#x2F;p&gt;
+&lt;p&gt;&lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;vosen&#x2F;ZLUDA&#x2F;commit&#x2F;193eb29&quot;&gt;Commit 193eb29&lt;&#x2F;a&gt; finally brought a major feature that solves one of the least visible and hardest to fix problems in ZLUDA.&lt;&#x2F;p&gt;
+&lt;p&gt;First, you need to understand what PTX is. PTX is the NVIDIA GPU intermediate language. Intermediate languages work like this:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;Programmer writes source code&lt;&#x2F;li&gt;
+&lt;li&gt;Programmer compiles their source code into an intermediate language X and sends it to the user&lt;&#x2F;li&gt;
+&lt;li&gt;User runs the application. At some point, the intermediate code X is compiled (finalized) into binary for his particular hardware&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Intermediate languages are a fairly common solution: Java has JVM bytecode .NET has CIL, gaming GPUs have SPIR-V, LLVM has LLVM IR. They all solve slightly different problems, but in the GPU context they are used to to avoid the forward compatibility problem. That&#x27;s why GPU code written ten years ago works just fine on modern GPUs even though your GPU vendor has made major changes to his GPU architecture.&lt;&#x2F;p&gt;
+&lt;p&gt;What if your software stack does not have an intermediate language? Then either:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;You declare your hardware to be strictly forward-compatible. All changes are strictly additive: code compiled for older hardware will work on the newer hardware, but will not be able to take advantage of the hardware features. This is what the x86 CPU family does&lt;&#x2F;li&gt;
+&lt;li&gt;You simply ignore the forward compatibility and compile from scratch for each new hardware target. This is the AMD GPU way&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;The CUDA driver ships with a compiler that compiles (finalizes) from PTX to the particular NVIDIA GPU architecture and of course ZLUDA does the same, but for AMD GPUs.&lt;&#x2F;p&gt;
+&lt;p&gt;The compilation itself is divided into several steps and the first step is parsing: converting from textual representation (PTX is a text format) to in-memory representation.&lt;&#x2F;p&gt;
+&lt;p&gt;PTX, being a language, follows certain grammatical rules. For example, this line:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;ld.global.cs.b32  r1, [addr1];&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;means &quot;load (&lt;code&gt;ld&lt;&#x2F;code&gt;) from global address space (&lt;code&gt;.global&lt;&#x2F;code&gt;) with streaming cache behavior (&lt;code&gt;cs&lt;&#x2F;code&gt;) 32-bit integer (&lt;code&gt;.b32&lt;&#x2F;code&gt;) into variable &lt;code&gt;r1&lt;&#x2F;code&gt; from address stored in variable &lt;code&gt;addr1&lt;&#x2F;code&gt;&quot;. You don&#x27;t need to understand what all this means, just that there is an order to words in an instruction: operand, operands, registers. If the same instruction were written this way, it would violate grammar rules and result in an error:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;ld r1, [addr1] .global.cs.b32;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Writing a PTX parser is not hard. As long as you are familiar with a parser generator you can get a high quality parser working relatively quickly and painlessly. ZLUDA used &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;lalrpop&#x2F;lalrpop&quot;&gt;lalrpop&lt;&#x2F;a&gt; for this task&lt;&#x2F;p&gt;
+&lt;p&gt;It turns out that there is an important undocumented &quot;feature&quot; of the PTX language. Although the documentation lays out a certain language grammar and the NVIDIA PTX-generating compiler follows it, the NVIDIA PTX-consuming (finalizing) compiler is more permissive. NVIDIA PTX-consuming (fnalizing) compiler allows some (but not all) words in an instruction to be passed out-of-order, so both &lt;code&gt;ld.global.cs.b32  r1, [addr1];&lt;&#x2F;code&gt; and &lt;code&gt;ld.cs.global.b32  r1, [addr1];&lt;&#x2F;code&gt; are accepted. For 99.99% of the code out there, it&#x27;s not a problem: the compiler will correctly generate all the instructions in the documented form. The problem is &quot;inline assembly&quot;. The CUDA the programming language (dialect of C++) allows programmers to write PTX instructions directly. And programmers get the PTX grammar wrong all the time. NVIDIA&#x27;s PTX parser is tolerant of the mistakes, but ZLUDA&#x27;s old parser was strict and was special cased for every new project that got its PTX instructions out-of-order.&lt;&#x2F;p&gt;
+&lt;p&gt;ZLUDA&#x27;s parser is strict because we want to have a strongly-typed representation of instructions as soon as possible and carry the same representation through all stages of compilation. Strongly-typed means that invalid combinations of operands are not only rejected by the parser but impossible to even express in the code.&lt;&#x2F;p&gt;
+&lt;p&gt;I can only speculate about NVIDIA&#x27;s PTX parser, but its tolerance for out-of-order operands is probably an artifact of a more weakly typed internal representation or a two-stage parsing strategy (first do a simple parse to a weakly-typed representation and then validate and convert weakly-typed to strongly-typed).&lt;&#x2F;p&gt;
+&lt;p&gt;Back to ZLUDA&#x27;s parser: it&#x27;s easy enough to support the previous example: just have one rule for &lt;code&gt;ld.&amp;lt;address_space&amp;gt;.&amp;lt;cache_hint&amp;gt;.&amp;lt;type&amp;gt;&lt;&#x2F;code&gt; and one for &lt;code&gt;ld.&amp;lt;cache_hint&amp;gt;.&amp;lt;address_space&amp;gt;.&amp;lt;type&amp;gt;&lt;&#x2F;code&gt;. The problem is that ld operation can be very long. Its full form is:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;ld{.weak}{.ss}{.cop}{.level::cache_hint}{.level::prefetch_size}{.vec}.type&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;With 5 possible operands (&lt;code&gt;ld&lt;&#x2F;code&gt; is always at the start, &lt;code&gt;.vec&lt;&#x2F;code&gt; and &lt;code&gt;.type&lt;&#x2F;code&gt; are always at the end), there are up to 120 separate rules. And this does not even take into account optionality (every segment  in &lt;code&gt;{&lt;&#x2F;code&gt; &lt;code&gt;}&lt;&#x2F;code&gt; brackets is optional).&lt;&#x2F;p&gt;
+&lt;p&gt;&quot;Out-of-orderness&quot; is difficult to express well in a lalrpop-style parser (very few grammars want this &quot;feature&quot;). I replaced our old parser with the one based on &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;winnow-rs&#x2F;winnow&quot;&gt;winnow&lt;&#x2F;a&gt;. Since ZLUDA tries to be strongly-typed this had a knock-on changes across all the compiler passes. But we now support all the broken PTX in the wild (which funnily enough comes mostly from NVIDIA&#x27;s own libraries).&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;atomics-modulo&quot;&gt;Atomics modulo&lt;&#x2F;h3&gt;
+&lt;p&gt;NVIDIA hardware supports a weird little atomic modulo increment&#x2F;decrement instruction (&lt;code&gt;atom.inc&lt;&#x2F;code&gt;&#x2F;&lt;code&gt;atom.dec&lt;&#x2F;code&gt;) with semantics like this:&lt;&#x2F;p&gt;
+&lt;pre class=&quot;giallo&quot; style=&quot;color: #E1E4E8; background-color: #24292E;&quot;&gt;&lt;code data-lang=&quot;plain&quot;&gt;&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;unsigned atomic_inc(unsigned volatile* p, unsigned modulo) {&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;  unsigned result;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;  atomic {&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;    result = *p;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;    *p = (result &amp;gt;= modulo) ? 0 : result+1;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;  }&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;  return result;&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;
+&lt;span class=&quot;giallo-l&quot;&gt;&lt;span&gt;}&lt;&#x2F;span&gt;&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;For the longest time, I simply did not realize that AMD hardware natively supports this instruction and ZLUDA emulated it with a &lt;code&gt;cmpxchg&lt;&#x2F;code&gt; loop. Now that it is natively supported in ZLUDA, code using it is much faster. Unfortunately, other than GeekBench, there really aren&#x27;t that many users of this instruction, so it won&#x27;t have much performance impact overall.&lt;&#x2F;p&gt;
+&lt;p&gt;To my knowledge, this instruction is not commonly available on CPUs. Do you know of any algorithms or data structures that benefit from this instruction? If so, let us know in the comments, I&#x27;ve been wondering about this for a few years now.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;bonus-content-interview&quot;&gt;Bonus content: interview&lt;&#x2F;h3&gt;
+&lt;p&gt;I was interviewed about ZLUDA for Youtube channel &quot;Tech over Tea&quot;. Watch it &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;www.youtube.com&#x2F;watch?v=ze25Sie2gVQ&quot;&gt;here&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>ZLUDA&#x27;s third life</title>
+        <published>2024-10-04T00:00:00+00:00</published>
+        <updated>2024-10-04T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Unknown
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://vosen.github.io/ZLUDA/blog/zludas-third-life/"/>
+        <id>https://vosen.github.io/ZLUDA/blog/zludas-third-life/</id>
+        
+        <content type="html" xml:base="https://vosen.github.io/ZLUDA/blog/zludas-third-life/">&lt;p&gt;ZLUDA is back. For the last few months, I&#x27;ve been trying to find a commercial organization that would guarantee the continued development of the project. I am happy to announce that I have found one that is not only willing to fund further development, but also has an excellent vision for the future of ZLUDA.
+I share their long-term vision and I can&#x27;t wait to talk more about it. We don’t want to disclose everything just yet, but for now, we know that we want to make ZLUDA better. If you think ZLUDA is a cool project, we have even cooler projects in the works. Development has begun, and as soon as we have something to share, we will.
+What I can talk about now is the current state and the direction of ZLUDA itself.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;where-we-are-now&quot;&gt;Where we are now:&lt;&#x2F;h3&gt;
+&lt;p&gt;The code has been rolled back to the pre-AMD state and I&#x27;ve been working furiously on improving the codebase. I’ve been writing the improved PTX parser I always wanted and laid the groundwork for the rebuild. Currently, some very simple synthetic GPU test programs can be run on an AMD GPU, but we are not yet at the point where ZLUDA can support a full application.&lt;&#x2F;p&gt;
+&lt;h3 id=&quot;where-we-are-going&quot;&gt;Where we are going:&lt;&#x2F;h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;h5 id=&quot;the-year-of-rebuild&quot;&gt;The year of rebuild&lt;&#x2F;h5&gt;
+&lt;p&gt;The ultimate goal is to bring &quot;new&quot; ZLUDA to a similar state as before the rollback in one year (Q3 2025). &quot;Similar state&quot; is very subjective here. I don&#x27;t have precise criteria, but an application of similar complexity should work just as well. Not every pre-rollback application will be supported again due to new priorities (more below).&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;focus-on-machine-learning&quot;&gt;Focus on machine learning&lt;&#x2F;h5&gt;
+&lt;p&gt;In the past, ZLUDA focused mainly on professional creator workloads. This meant focusing on applications like Arnold Render, Blender, 3DF Zephyr, etc. We even had a working prototype of GameWorks. While all of these workloads are important extremely satisfying to have running, machine learning workloads are in much higher demand. We are targeting for llm.c, llama.cpp, PyTorch, TensorFlow and others.&lt;br &#x2F;&gt;
+Additionally, HIP support for anything image-related is disappointing. The time saved by skipping layers of workarounds can be spent more productively writing more tests and enabling more applications.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;raytracing-is-gone&quot;&gt;Raytracing is gone&lt;&#x2F;h5&gt;
+&lt;p&gt;This is related to the previous point. Not many people realized it, but ZLUDA had an OptiX implementation. While ZLUDA-OptiX only supported just a handful of OptiX demos and simple Arnold scenes, it required a lot of code and broke all the time. Considering how underpowered it was and how much maintenance it required, it is a feature that is unlikely to ever come back.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;gpu-support&quot;&gt;GPU support&lt;&#x2F;h5&gt;
+&lt;p&gt;The new ZLUDA will be built to support multiple GPU architectures. The mainline development will happen on AMD GPUs as that&#x27;s what most of our users have. Still, I do realize there is lot of interest in other GPUs (e.g. Intel) and hopefully this will lead to more code contributions and new backends.&lt;br &#x2F;&gt;
+Pre-rollback ZLUDA stayed on ROCm 5 mainly because I did not want to re-test all the version-specific workarounds. Since we are starting with a clean slate, AMD backend will target ROCm 6.1+.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;more-modest-set-of-supported-amd-gpus&quot;&gt;More modest set of supported AMD GPUs&lt;&#x2F;h5&gt;
+&lt;p&gt;We will only support RDNA1 and newer non-server AMD GPUs. Supporting pre-RDNA1 and server GPU architectures was an additional support burden and never worked as well as RDNA1+ GPUs due to the wavefront 64 configuration they use.&lt;br &#x2F;&gt;
+Note that this applies to the &lt;em&gt;current&lt;&#x2F;em&gt; architectures. AMD recently announced the merging of RDNA and CDNA into a single architecture (UDNA). I have high hopes for this new architecture and expect it to simplify porting CUDA → HIP and to bring ZLUDA to server GPUs.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;downgraded-windows-support&quot;&gt;Downgraded Windows support&lt;&#x2F;h5&gt;
+&lt;p&gt;Windows will still work and be supported, it will just be less user-friendly. &lt;code&gt;zluda.exe&lt;&#x2F;code&gt; will be gone. Windows developers have invented several imaginative ways to load CUDA into a process. &lt;code&gt;zluda.exe&lt;&#x2F;code&gt; has tried to support all of them, and even succeeded. Most of the time.&lt;br &#x2F;&gt;
+As a user, you have to fashion some other way to load ZLUDA into the target process. Usually copying the ZLUDA binaries to the application is sufficient. We will provide ready-to-download Windows binaries.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;code-improvements&quot;&gt;Code improvements&lt;&#x2F;h5&gt;
+&lt;p&gt;The current ZLUDA code is not the worst, but there is clearly room for improvement. During its second life, ZLUDA was written as a proof-of-concept solution for closed-source graphics applications (Arnold, 3DF Zephyr, etc.). This had two important consequences. First, since we were only concerned with one-time proof, it was enough to enable an application once and move on to the next without worrying about regressions. Second, some floating-point operations were handled with too little (or too much) precision - if you are rendering a scene, you can probably live with some pixels being imperceptibly different shades of red.&lt;br &#x2F;&gt;
+Now that the concept has been thoroughly proven, ZLUDA will maintain application-level testing and more rigorously test for floating-point correctness (and document differences where strict compatibility is not possible).&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;&lt;h5 id=&quot;let-s-talk&quot;&gt;Let’s talk&lt;&#x2F;h5&gt;
+&lt;p&gt;If you think there&#x27;s not enough ZLUDA in your life, there&#x27;s now a ZLUDA Discord channel &lt;a rel=&quot;external&quot; href=&quot;https:&#x2F;&#x2F;discord.gg&#x2F;sg6BNzXuc7&quot;&gt;here&lt;&#x2F;a&gt;. Feel free to drop by and say hello.
+I will also try to post development updates from time to time. I hope that learning about all the creative ways developers are abusing CUDA APIs will be as exciting as it is for me to implement them.&lt;&#x2F;p&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;Of course, ZLUDA will remain open source. This means that any features that are not part of the plan are fair game if someone steps up and submits a pull request. Personally, I think there is no better way to express your undying love for your Radeon VII than to add support for it in ZLUDA.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+</feed>
