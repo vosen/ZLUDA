@@ -42,6 +42,8 @@ struct HandlePool {
 }
 
 impl HandlePool {
+    const OFFSET: u32 = 512 * 1024 * 1024;
+
     fn new() -> Self {
         Self {
             handles: Slab::new(),
@@ -49,7 +51,7 @@ impl HandlePool {
     }
 
     fn insert<T: Sized>(&mut self, handle: *mut T) -> u32 {
-        (self.handles.insert(handle as usize) as u32) + 1
+        (self.handles.insert(handle as usize) as u32) + Self::OFFSET
     }
 
     fn get<T: Sized>(&self, id: u32) -> Result<*mut T, CUerror> {
@@ -57,7 +59,7 @@ impl HandlePool {
             return Ok(ptr::null_mut());
         }
         self.handles
-            .get((id - 1) as usize)
+            .get((id - Self::OFFSET) as usize)
             .map(|&handle| handle as *mut T)
             .ok_or(CUerror::INVALID_VALUE)
     }
@@ -168,7 +170,11 @@ struct Allocator {
 }
 
 impl Allocator {
-    const ALLOCATION_UNIT: u32 = 128;
+    // This should be at least a multiple of texture pitch
+    // otherwise fluidmark fails in myserious ways
+    // I could query at runtime, but it's hard to imagine a GPU
+    // with larger pitch
+    const ALLOCATION_UNIT: u32 = 256;
     const ALLOCATOR_SIZE: u32 = 512 * 1024 * 1024; // 512 MiB
 
     fn new() -> Self {
@@ -608,11 +614,7 @@ fn cu_event_destroy_v2(
     input: &ArchivedcuEventDestroy_v2In,
 ) -> Result<cuEventDestroy_v2Out, CUerror> {
     let event = input.hEvent.to_native();
-    let cu_event = if event == 0 {
-        ptr::null_mut()
-    } else {
-        state.handles.get(event)?
-    };
+    let cu_event = state.handles.get(event)?;
     unsafe { cuEventDestroy_v2(cu_event) }?;
     Ok(cuEventDestroy_v2Out {})
 }
@@ -785,11 +787,7 @@ fn cu_launch_kernel(
             input.block_dim_y.to_native(),
             input.block_dim_z.to_native(),
             input.shared_mem_bytes.to_native(),
-            if input.stream == 0 {
-                CUstream(ptr::null_mut())
-            } else {
-                CUstream(state.handles.get(input.stream.to_native())?)
-            },
+            CUstream(state.handles.get(input.stream.to_native())?),
             params.as_mut_ptr(),
             std::ptr::null_mut(),
         )
