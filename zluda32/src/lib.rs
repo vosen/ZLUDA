@@ -58,6 +58,7 @@ macro_rules! implemented {
 cuda_function_declarations! {
     not_implemented,
     implemented <= [
+        cuCtxCreate,
         cuCtxCreate_v2,
         cuCtxDetach,
         cuCtxGetApiVersion,
@@ -223,6 +224,14 @@ impl GlobalState {
 pub(crate) fn cu_init(flags: u32) -> Result<(), CUerror> {
     GlobalState::remote_call_zero_copy::<cuInitOut>(Opcode::cuInit, cuInitIn { Flags: flags })?;
     Ok(())
+}
+
+pub(crate) fn cu_ctx_create(
+    pctx: *mut CUcontext,
+    flags: ::core::ffi::c_uint,
+    dev: CUdevice,
+) -> Result<(), CUerror> {
+    return cu_ctx_create_v2(pctx, flags, dev);
 }
 
 pub(crate) fn cu_ctx_create_v2(
