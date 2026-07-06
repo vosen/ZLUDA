@@ -552,6 +552,22 @@ async fn main() -> std::io::Result<()> {
                 )
                 .await?;
             }
+            Some(Opcode::cuEventQuery) => {
+                buffer = handle_cuda_function::<cuEventQueryIn, cuEventQueryOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_event_query(&mut state, input),
+                )
+                .await?;
+            }
+            Some(Opcode::cuEventRecord) => {
+                buffer = handle_cuda_function::<cuEventRecordIn, cuEventRecordOut>(
+                    &mut client,
+                    buffer,
+                    |input| cu_event_record(&mut state, input),
+                )
+                .await?;
+            }
             _ => {
                 client.write_u32_le(CUerror::NOT_SUPPORTED.0.get()).await?;
                 return Err(std::io::Error::new(
@@ -561,6 +577,28 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_event_query(
+    state: &mut State,
+    input: &ArchivedcuEventQueryIn,
+) -> Result<cuEventQueryOut, CUerror> {
+    let event = input.hEvent.to_native();
+    let cu_event = state.handles.get(event)?;
+    unsafe { cuEventQuery(cu_event) }?;
+    Ok(cuEventQueryOut {})
+}
+
+fn cu_event_record(
+    state: &mut State,
+    input: &ArchivedcuEventRecordIn,
+) -> Result<cuEventRecordOut, CUerror> {
+    let event = input.hEvent.to_native();
+    let cu_event = state.handles.get(event)?;
+    let stream = input.hStream.to_native();
+    let cu_stream = CUstream(state.handles.get(stream)?);
+    unsafe { cuEventRecord(cu_event, cu_stream) }?;
+    Ok(cuEventRecordOut {})
 }
 
 fn cu_memcpy_dto_d_v2(
@@ -1220,6 +1258,8 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventQuery,
+        cuEventRecord,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,

@@ -67,6 +67,8 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventQuery,
+        cuEventRecord,
         //cuGetExportTable,
         cuInit,
         // cuLaunchKernel,

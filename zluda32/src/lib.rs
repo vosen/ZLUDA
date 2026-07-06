@@ -58,12 +58,13 @@ macro_rules! implemented {
 cuda_function_declarations! {
     not_implemented,
     implemented <= [
-        cuCtxCreate,
         cuCtxCreate_v2,
+        cuCtxCreate,
         cuCtxDetach,
         cuCtxGetApiVersion,
         cuCtxGetCurrent,
         cuCtxGetDevice,
+        cuCtxSetCacheConfig,
         cuCtxSynchronize,
         cuDeviceComputeCapability,
         cuDeviceGet,
@@ -75,6 +76,8 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventQuery,
+        cuEventRecord,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,
@@ -599,7 +602,7 @@ pub(crate) fn cu_mem_host_alloc(
 
 pub(crate) fn cu_mem_free_host(p: *mut ::core::ffi::c_void) -> Result<(), CUerror> {
     if p.is_null() {
-        return Err(CUerror::INVALID_VALUE);
+        return Ok(());
     }
     unsafe { libc::free(p) };
     Ok(())
@@ -896,6 +899,36 @@ pub(crate) fn cu_tex_ref_set_mipmap_level_clamp(
     _max_mipmap_level_clamp: f32,
 ) -> Result<(), CUerror> {
     // TODO
+    Ok(())
+}
+
+pub(crate) fn cu_event_query(event: cuda_types::cuda::CUevent) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuEventQueryOut>(
+        Opcode::cuEventQuery,
+        cuEventQueryIn {
+            hEvent: CudaEncode::encode(event),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_event_record(
+    event: cuda_types::cuda::CUevent,
+    stream: cuda_types::cuda::CUstream,
+) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuEventRecordOut>(
+        Opcode::cuEventRecord,
+        cuEventRecordIn {
+            hEvent: CudaEncode::encode(event),
+            hStream: CudaEncode::encode(stream),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_ctx_set_cache_config(
+    _config: cuda_types::cuda::CUfunc_cache,
+) -> Result<(), CUerror> {
     Ok(())
 }
 
