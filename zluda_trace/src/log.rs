@@ -236,7 +236,7 @@ impl Write for WriteBuffer {
 pub(crate) enum CudaFunctionName {
     Normal(&'static str),
     Dark { guid: CUuuid, index: usize },
-    Nvapi(u32)
+    Nvapi(u32),
 }
 
 impl Display for CudaFunctionName {

@@ -1,12 +1,7 @@
-use bincode::{Decode, Encode};
 use cuda_macros::{cuda_function_declarations, generate_input_struct, generate_output_struct};
 use cuda_types::cuda::*;
-use paste::paste;
 use rkyv::rend::{u32_le, u64_le};
-use rkyv::{rend, Archive, Deserialize, Portable, Serialize};
-use std::ffi::CString;
-use std::num::NonZeroU32;
-use std::{ffi::CStr, num::NonZero};
+use rkyv::{Archive, Deserialize, Portable, Serialize};
 use strum_macros::FromRepr;
 
 macro_rules! noop {
@@ -22,6 +17,7 @@ macro_rules! generate_messages_inout {
 
         #[repr(u32)]
         #[derive(FromRepr)]
+        #[allow(non_camel_case_types)]
         pub enum Opcode {
             System = 0,
             $(
@@ -184,31 +180,31 @@ impl CudaEncode for usize {
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CUdevprop_v1_Wire {
-    pub maxThreadsPerBlock: ::core::ffi::c_int,
-    pub maxThreadsDim: [::core::ffi::c_int; 3usize],
-    pub maxGridSize: [::core::ffi::c_int; 3usize],
-    pub sharedMemPerBlock: ::core::ffi::c_int,
-    pub totalConstantMemory: ::core::ffi::c_int,
-    pub SIMDWidth: ::core::ffi::c_int,
-    pub memPitch: ::core::ffi::c_int,
-    pub regsPerBlock: ::core::ffi::c_int,
-    pub clockRate: ::core::ffi::c_int,
-    pub textureAlign: ::core::ffi::c_int,
+    pub max_threads_per_block: ::core::ffi::c_int,
+    pub max_threads_dim: [::core::ffi::c_int; 3usize],
+    pub max_grid_size: [::core::ffi::c_int; 3usize],
+    pub shared_mem_per_block: ::core::ffi::c_int,
+    pub total_constant_memory: ::core::ffi::c_int,
+    pub simd_width: ::core::ffi::c_int,
+    pub mem_pitch: ::core::ffi::c_int,
+    pub regs_per_block: ::core::ffi::c_int,
+    pub clock_rate: ::core::ffi::c_int,
+    pub texture_align: ::core::ffi::c_int,
 }
 
 impl From<CUdevprop_v1> for CUdevprop_v1_Wire {
     fn from(devprop: CUdevprop_v1) -> Self {
         Self {
-            maxThreadsPerBlock: devprop.maxThreadsPerBlock,
-            maxThreadsDim: devprop.maxThreadsDim,
-            maxGridSize: devprop.maxGridSize,
-            sharedMemPerBlock: devprop.sharedMemPerBlock,
-            totalConstantMemory: devprop.totalConstantMemory,
-            SIMDWidth: devprop.SIMDWidth,
-            memPitch: devprop.memPitch,
-            regsPerBlock: devprop.regsPerBlock,
-            clockRate: devprop.clockRate,
-            textureAlign: devprop.textureAlign,
+            max_threads_per_block: devprop.maxThreadsPerBlock,
+            max_threads_dim: devprop.maxThreadsDim,
+            max_grid_size: devprop.maxGridSize,
+            shared_mem_per_block: devprop.sharedMemPerBlock,
+            total_constant_memory: devprop.totalConstantMemory,
+            simd_width: devprop.SIMDWidth,
+            mem_pitch: devprop.memPitch,
+            regs_per_block: devprop.regsPerBlock,
+            clock_rate: devprop.clockRate,
+            texture_align: devprop.textureAlign,
         }
     }
 }
@@ -216,16 +212,16 @@ impl From<CUdevprop_v1> for CUdevprop_v1_Wire {
 impl Into<CUdevprop_v1> for CUdevprop_v1_Wire {
     fn into(self) -> CUdevprop_v1 {
         CUdevprop_v1 {
-            maxThreadsPerBlock: self.maxThreadsPerBlock,
-            maxThreadsDim: self.maxThreadsDim,
-            maxGridSize: self.maxGridSize,
-            sharedMemPerBlock: self.sharedMemPerBlock,
-            totalConstantMemory: self.totalConstantMemory,
-            SIMDWidth: self.SIMDWidth,
-            memPitch: self.memPitch,
-            regsPerBlock: self.regsPerBlock,
-            clockRate: self.clockRate,
-            textureAlign: self.textureAlign,
+            maxThreadsPerBlock: self.max_threads_per_block,
+            maxThreadsDim: self.max_threads_dim,
+            maxGridSize: self.max_grid_size,
+            sharedMemPerBlock: self.shared_mem_per_block,
+            totalConstantMemory: self.total_constant_memory,
+            SIMDWidth: self.simd_width,
+            memPitch: self.mem_pitch,
+            regsPerBlock: self.regs_per_block,
+            clockRate: self.clock_rate,
+            textureAlign: self.texture_align,
         }
     }
 }

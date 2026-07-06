@@ -12,11 +12,10 @@ use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Portable, Serialize};
 use rustc_hash::FxHashMap;
 use std::alloc::Layout;
-use std::slice;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
-use zluda_common::{CodeLibraryRef, CodeModuleRef, CudaErrorType};
+use zluda_common::{CodeLibraryRef, CodeModuleRef};
 use zluda_server_common::*;
 
 mod ipc;
@@ -1013,31 +1012,31 @@ impl CudaDarkApi for DarkApi32 {
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext1(
-        result: *mut cuda_types::cuda::CUmodule,
-        fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
-        arg3: *mut std::ffi::c_void,
-        arg4: *mut std::ffi::c_void,
-        arg5: u32,
+        _result: *mut cuda_types::cuda::CUmodule,
+        _fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
+        _arg3: *mut std::ffi::c_void,
+        _arg4: *mut std::ffi::c_void,
+        _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
-    unsafe extern "system" fn cudart_interface_fn7(arg1: usize) -> () {
-        unimplemented!()
+    unsafe extern "system" fn cudart_interface_fn7(_arg1: usize) -> () {
+        ()
     }
 
     unsafe extern "system" fn get_module_from_cubin_ext2(
-        fatbin_header: *const cuda_types::dark_api::FatbinHeader,
-        result: *mut cuda_types::cuda::CUmodule,
-        arg3: *mut std::ffi::c_void,
-        arg4: *mut std::ffi::c_void,
-        arg5: u32,
+        _fatbin_header: *const cuda_types::dark_api::FatbinHeader,
+        _result: *mut cuda_types::cuda::CUmodule,
+        _arg3: *mut std::ffi::c_void,
+        _arg4: *mut std::ffi::c_void,
+        _arg5: u32,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn load_compilers() -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn get_unknown_buffer1(
@@ -1157,51 +1156,51 @@ impl CudaDarkApi for DarkApi32 {
     }
 
     unsafe extern "system" fn device_get_attribute_ext(
-        dev: cuda_types::cuda::CUdevice,
-        attribute: std::ffi::c_uint,
-        unknown: std::ffi::c_int,
-        result: *mut [usize; 2],
+        _dev: cuda_types::cuda::CUdevice,
+        _attribute: std::ffi::c_uint,
+        _unknown: std::ffi::c_int,
+        _result: *mut [usize; 2],
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn device_get_something(
-        result: *mut std::ffi::c_uchar,
-        dev: cuda_types::cuda::CUdevice,
+        _result: *mut std::ffi::c_uchar,
+        _dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn integrity_check(
-        version: u32,
-        unix_seconds: u64,
-        result: *mut [u64; 2],
+        _version: u32,
+        _unix_seconds: u64,
+        _result: *mut [u64; 2],
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn context_check(
-        ctx_in: cuda_types::cuda::CUcontext,
-        result1: *mut u32,
-        result2: *mut *const std::ffi::c_void,
+        _ctx_in: cuda_types::cuda::CUcontext,
+        _result1: *mut u32,
+        _result2: *mut *const std::ffi::c_void,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
     unsafe extern "system" fn check_fn3() -> u32 {
-        unimplemented!()
+        0
     }
 
     unsafe extern "system" fn hybrid_runtime_load_get_proc_address(
-        name: *const std::ffi::c_char,
-        fn_ptr: *mut *const std::ffi::c_void,
-        token: *mut usize,
+        _name: *const std::ffi::c_char,
+        _fn_ptr: *mut *const std::ffi::c_void,
+        _token: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+        Err(CUerror::NOT_SUPPORTED)
     }
 
-    unsafe extern "system" fn hybrid_runtime_free(token: usize) -> cuda_types::cuda::CUresult {
-        unimplemented!()
+    unsafe extern "system" fn hybrid_runtime_free(_token: usize) -> cuda_types::cuda::CUresult {
+        Err(CUerror::NOT_SUPPORTED)
     }
 }
 

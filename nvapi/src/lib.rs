@@ -1,12 +1,5 @@
 use crate::nvapi::*;
-use libloading::Library;
-use rustc_hash::FxHashMap;
-use std::{
-    collections::hash_map,
-    ffi::c_void,
-    mem, ptr,
-    sync::{LazyLock, Mutex},
-};
+use std::ffi::c_void;
 
 #[allow(warnings)]
 mod nvapi;

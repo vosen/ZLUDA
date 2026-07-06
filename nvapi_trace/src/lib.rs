@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use std::{
     collections::hash_map,
     ffi::c_void,
-    mem, ptr,
+    ptr,
     sync::{LazyLock, Mutex},
 };
 use zluda_trace_common::ReprUsize;
