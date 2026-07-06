@@ -23,7 +23,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Pipes",
     "Win32_Security",
 ] }
-rand = "0.10.1"
+rand = "0.10"
 rkyv = "0.8"
 unwrap_or = "1.0.1"
 rustc-hash = "2.0.0"
