@@ -24,8 +24,8 @@ paste = "1.0"
 libloading = "0.8"
 candle-core = "0.9.2"
 half = { version = "2.7", features = ["rand_distr"] }
-rand = { version = "0.10" }
-rand_chacha = { version = "0.10" }
+rand = { version = "0.9" }
+rand_chacha = { version = "0.9" }
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
