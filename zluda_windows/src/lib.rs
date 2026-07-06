@@ -534,7 +534,7 @@ pub unsafe fn delay_load_check(
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
-    let path = get_module_path_for_function(try_load_from_self_dir as usize)?;
+    let path = get_module_path_for_function(try_load_from_self_dir as *const () as usize)?;
     let mut path_buf = PathBuf::from(path);
     path_buf.pop();
     path_buf.push(libname);
