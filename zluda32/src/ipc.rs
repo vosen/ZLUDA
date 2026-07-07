@@ -8,10 +8,10 @@ use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Portable, Serialize};
 use std::io::{Read, Write};
 use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle};
-// use rkyv::util::AlignedVec;
-use std::mem;
+use std::path::PathBuf;
 use std::num::NonZeroU32;
 use std::process::{Child, Command, Stdio};
+use std::{env, mem};
 use windows::core::{Error, PCSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Pipes::*;
@@ -51,22 +51,31 @@ impl Server {
             )?
             .0,
         );
-        let mut server_path = zluda_common::os::self_path().ok_or(Error::new(
+        let mut primary_path = zluda_common::os::self_path().ok_or(Error::new(
             E_FAIL,
             "Could not get path to the executing module",
         ))?;
-        server_path.pop();
+        primary_path.pop();
         if cfg!(debug_assertions) {
-            server_path.push("../../debug/zluda64_server.exe");
+            primary_path.push("../../debug/zluda64_server.exe");
         } else {
-            server_path.push("../zluda64_server.exe");
-        }
-        let child = Command::new(server_path)
-            .arg(&pipe_path[..pipe_path.len() - 1])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
+            primary_path.push("../zluda64_server.exe");
+        };
+        let fallback_path = env::var("ZLUDA64_PATH").ok().map(PathBuf::from);
+        let spawn_server = |path: &PathBuf| {
+            Command::new(path)
+                .arg(&pipe_path[..pipe_path.len() - 1])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .current_dir(path.parent().unwrap())
+                .spawn()
+        };
+        let child = match (spawn_server(&primary_path), fallback_path) {
+            (Ok(c), _) => c,
+            (Err(_), Some(fallback_path)) => spawn_server(&fallback_path)?,
+            (Err(e), None) => return Err(e.into()),
+        };
         zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;
         match ConnectNamedPipe(HANDLE(pipe.as_raw_handle()), None) {
             Ok(_) => Ok(Server::new(pipe, child)),
