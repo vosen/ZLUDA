@@ -17,15 +17,6 @@ use windows::Win32::Foundation::*;
 use windows::Win32::System::Pipes::*;
 use zluda_server_common::Opcode;
 
-fn server_path() -> &'static str {
-    if cfg!(debug_assertions) {
-        r"C:\dev\ZLUDA\target\debug\zluda64_server.exe"
-    } else {
-        //"zluda64_server.exe"
-        r"C:\dev\ZLUDA\target\release\zluda64_server.exe"
-    }
-}
-
 pub(crate) struct Server {
     pipe: std::fs::File,
     _child: Child,
@@ -60,7 +51,17 @@ impl Server {
             )?
             .0,
         );
-        let child = Command::new(server_path())
+        let mut server_path = zluda_common::os::self_path().ok_or(Error::new(
+            E_FAIL,
+            "Could not get path to the executing module",
+        ))?;
+        server_path.pop();
+        if cfg!(debug_assertions) {
+            server_path.push("../../debug/zluda64_server.exe");
+        } else {
+            server_path.push("../zluda64_server.exe");
+        }
+        let child = Command::new(server_path)
             .arg(&pipe_path[..pipe_path.len() - 1])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
