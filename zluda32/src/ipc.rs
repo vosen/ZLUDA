@@ -23,9 +23,6 @@ pub(crate) struct Server {
     buffer: AlignedVec,
 }
 
-unsafe impl Sync for Server {}
-unsafe impl Send for Server {}
-
 impl Server {
     fn new(pipe: std::fs::File, child: Child) -> Self {
         Self {

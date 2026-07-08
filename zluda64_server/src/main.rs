@@ -58,9 +58,21 @@ impl HandlePool {
         if id == 0 {
             return Ok(ptr::null_mut());
         }
+        let idx = id.checked_sub(Self::OFFSET).ok_or(CUerror::INVALID_VALUE)? as usize;
         self.handles
-            .get((id - Self::OFFSET) as usize)
+            .get(idx)
             .map(|&handle| handle as *mut T)
+            .ok_or(CUerror::INVALID_VALUE)
+    }
+
+    fn remove<T: Sized>(&mut self, id: u32) -> Result<*mut T, CUerror> {
+        if id == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        let idx = id.checked_sub(Self::OFFSET).ok_or(CUerror::INVALID_VALUE)? as usize;
+        self.handles
+            .try_remove(idx)
+            .map(|handle| handle as *mut T)
             .ok_or(CUerror::INVALID_VALUE)
     }
 }
@@ -219,11 +231,12 @@ impl Allocator {
     }
 
     fn free(&mut self, start: u32) -> Result<(), CUerror> {
+        let start_in_units = start / Allocator::ALLOCATION_UNIT;
         let end = self
             .allocation_ends
-            .remove(&(start / Allocator::ALLOCATION_UNIT))
+            .remove(&start_in_units)
             .ok_or(CUerror::INVALID_VALUE)?;
-        self.allocator.free_range(start..end);
+        self.allocator.free_range(start_in_units..end);
         Ok(())
     }
 
@@ -652,7 +665,7 @@ fn cu_event_destroy_v2(
     input: &ArchivedcuEventDestroy_v2In,
 ) -> Result<cuEventDestroy_v2Out, CUerror> {
     let event = input.hEvent.to_native();
-    let cu_event = state.handles.get(event)?;
+    let cu_event = state.handles.remove(event)?;
     unsafe { cuEventDestroy_v2(cu_event) }?;
     Ok(cuEventDestroy_v2Out {})
 }
@@ -662,7 +675,7 @@ fn cu_stream_destroy_v2(
     input: &ArchivedcuStreamDestroy_v2In,
 ) -> Result<cuStreamDestroy_v2Out, CUerror> {
     let stream = input.hStream.to_native();
-    let cu_stream = CUstream(state.handles.get(stream)?);
+    let cu_stream = CUstream(state.handles.remove(stream)?);
     unsafe { cuStreamDestroy_v2(cu_stream) }?;
     Ok(cuStreamDestroy_v2Out {})
 }
