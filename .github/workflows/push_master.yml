@@ -81,6 +81,9 @@ jobs:
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
         Expand-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda
+        cargo xtask zip --profile ${{ env.CARGO_PROFILE }} --target=i686-pc-windows-msvc
+        Expand-Archive -Path target/i686-pc-windows-msvc/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda/32
+        Move-Item -Path target/${{ env.CARGO_PROFILE }}/zluda/32/zluda -Destination target/${{ env.CARGO_PROFILE }}/zluda/zluda/32
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
@@ -138,7 +141,11 @@ jobs:
           --exclude cuda_macros \
           --exclude ptx_parser_macros \
           --exclude zluda_inject \
-          --exclude zluda_redirect
+          --exclude zluda_redirect \
+          --exclude zluda32 \
+          --exclude zluda64_server \
+          --exclude nvapi \
+          --exclude nvapi_trace
         mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
         strip target/amdgpu/*

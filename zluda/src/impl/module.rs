@@ -2,6 +2,7 @@ use super::driver;
 use crate::r#impl::function;
 use crate::r#impl::{driver::GlobalState, function::Function};
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
+use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
 use rustc_hash::FxHashMap;
 use std::collections::hash_map;
@@ -17,6 +18,7 @@ use zluda_common::{CodeLibraryRef, CodeModuleRef, ZludaObject};
 pub(crate) struct Module {
     pub(crate) base: hipModule_t,
     pub(crate) sm_version: u32,
+    pub(crate) bit32: Option<Metadata32Bit>,
     mutable: Mutex<ModuleMutable>,
 }
 
@@ -30,6 +32,7 @@ impl ModuleMutable {
         module: hipModule_t,
         sm_version: u32,
         name: CString,
+        explicit_args_size_align: Option<Vec<FunctionArgInfo>>,
     ) -> Result<&Function, CUerror> {
         Ok(match self.functions.entry(name) {
             hash_map::Entry::Occupied(entry) => &*entry.into_mut(),
@@ -39,6 +42,7 @@ impl ModuleMutable {
                 let func = Box::new(Function {
                     base: func_handle,
                     sm_version,
+                    explicit_args_size_align,
                 });
                 &*entry.insert(func)
             }
@@ -58,21 +62,102 @@ impl ZludaObject for Module {
     }
 }
 
+pub(crate) struct Metadata32Bit {
+    pub globals: Vec<Global32Bit>,
+    pub explicit_args_size_align: FxHashMap<String, Vec<FunctionArgInfo>>,
+}
+
+impl Metadata32Bit {
+    fn new(meta: &kernel_metadata::ModuleMetadata32Bit) -> Self {
+        let globals = meta
+            .globals
+            .iter()
+            .map(|g| Global32Bit {
+                name: CString::new(&*g.name).unwrap(),
+                initializer: g.initializer.to_vec(),
+                align: g.align,
+            })
+            .collect();
+        let explicit_args_size_align = meta
+            .explicit_args_size_align
+            .iter()
+            .map(|(key, value)| {
+                let key = key.to_string();
+                let value = value
+                    .iter()
+                    .map(|(size, align)| FunctionArgInfo {
+                        size: *size,
+                        align: *align,
+                    })
+                    .collect();
+                (key, value)
+            })
+            .collect();
+        Self {
+            globals,
+            explicit_args_size_align,
+        }
+    }
+
+    fn from_archived(archived: &kernel_metadata::ArchivedModuleMetadata32Bit) -> Self {
+        let globals = archived
+            .globals
+            .iter()
+            .map(|g| Global32Bit {
+                name: CString::new(g.name.as_str()).unwrap(),
+                initializer: g.initializer.to_vec(),
+                align: g.align.to_native(),
+            })
+            .collect();
+        let explicit_args_size_align = archived
+            .explicit_args_size_align
+            .iter()
+            .map(|kv| {
+                (
+                    kv.0.to_string(),
+                    kv.1.iter()
+                        .map(|x| FunctionArgInfo {
+                            size: x.0.to_native(),
+                            align: x.1.to_native(),
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        Self {
+            globals,
+            explicit_args_size_align,
+        }
+    }
+}
+
+pub(crate) struct Global32Bit {
+    pub name: CString,
+    pub initializer: Vec<u8>,
+    pub align: u32,
+}
+
 impl Module {
-    pub(crate) fn new(base: hipModule_t, sm_version: u32) -> Self {
+    pub(crate) fn new(base: hipModule_t, sm_version: u32, bit32: Option<Metadata32Bit>) -> Self {
         Self {
             base,
             sm_version,
             mutable: Mutex::new(ModuleMutable {
                 functions: FxHashMap::default(),
             }),
+            bit32,
         }
     }
 
     pub(crate) fn get_function<'a>(&'a self, name: &CStr) -> Result<&'static Function, CUerror> {
         let mut mutable = self.mutable.lock().map_err(|_| CUerror::UNKNOWN)?;
+        let explicit_args = self.bit32.as_ref().and_then(|meta| {
+            meta.explicit_args_size_align
+                .get(name.to_str().ok()?)
+                .map(Vec::clone)
+        });
         mutable
-            .get_function(self.base, self.sm_version, name.to_owned())
+            .get_function(self.base, self.sm_version, name.to_owned(), explicit_args)
             .map(|f| unsafe { (f as *const Function).as_ref().unwrap() })
     }
 }
@@ -80,7 +165,7 @@ impl Module {
 fn get_best_ptx_and_compile(
     global_state: &GlobalState,
     image: CodeLibraryRef<'_>,
-) -> Result<(hipModule_t, u32), CUerror> {
+) -> Result<(hipModule_t, u32, Option<Metadata32Bit>), CUerror> {
     let mut ptx_modules = Vec::new();
     unsafe {
         CodeLibraryRef::iterate_modules(image, |_, module| match module {
@@ -91,7 +176,7 @@ fn get_best_ptx_and_compile(
                 if file.header.kind != FatbinFileHeader::HEADER_KIND_PTX {
                     return;
                 }
-                if let Ok(text) = file.get_or_decompress_content() {
+                if let Ok(text) = file.get_or_decompress_content(true) {
                     if let Some(text) = cow_bytes_to_str(text) {
                         ptx_modules.push(text);
                     }
@@ -168,12 +253,12 @@ fn get_best_ptx_and_compile(
         _ => None,
     };
     let cached_binary = load_cached_binary(&mut cache_with_key);
-    let (elf_module, sm_version) = cached_binary
+    let (elf_module, sm_version, zluda32) = cached_binary
         .ok_or(CUerror::UNKNOWN)
         .or_else(|_| compile_and_cache(gcn_arch, attributes, module, &mut cache_with_key))?;
     let mut hip_module = unsafe { mem::zeroed() };
     unsafe { hipModuleLoadData(&mut hip_module, elf_module.as_ptr().cast()) }?;
-    Ok((hip_module, sm_version))
+    Ok((hip_module, sm_version, zluda32))
 }
 
 fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
@@ -183,7 +268,9 @@ fn cow_bytes_to_str<'a>(data: Cow<'a, [u8]>) -> Option<Cow<'a, str>> {
     }
 }
 
-pub(crate) fn load_hip_module(library: CodeLibraryRef) -> Result<(hipModule_t, u32), CUerror> {
+pub(crate) fn load_hip_module(
+    library: CodeLibraryRef,
+) -> Result<(hipModule_t, u32, Option<Metadata32Bit>), CUerror> {
     let global_state = driver::global_state()?;
     get_best_ptx_and_compile(global_state, library)
 }
@@ -229,14 +316,16 @@ fn get_cache_key<'a, 'b>(
 
 fn load_cached_binary(
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
-) -> Option<(Vec<u8>, u32)> {
+) -> Option<(Vec<u8>, u32, Option<Metadata32Bit>)> {
     let binary = cache_with_key
         .as_mut()
         .and_then(|(c, key)| c.get_module_binary(key))?;
     let sm_version = kernel_metadata::ModuleMetadataV1::read_object(&binary)?
         .sm_version
         .to_native();
-    Some((binary, sm_version))
+    let zluda32 = kernel_metadata::ModuleMetadata32Bit::read_object(&binary)
+        .map(Metadata32Bit::from_archived);
+    Some((binary, sm_version, zluda32))
 }
 
 fn compile_and_cache(
@@ -244,7 +333,7 @@ fn compile_and_cache(
     attributes: ExtraCacheAttributes,
     ast: ptx_parser::Module,
     cache_with_key: &mut Option<(zluda_cache::ModuleCache, zluda_cache::ModuleKey)>,
-) -> Result<(Vec<u8>, u32), CUerror> {
+) -> Result<(Vec<u8>, u32, Option<Metadata32Bit>), CUerror> {
     let llvm_module = ptx::to_llvm_module(
         ast,
         ptx::Attributes {
@@ -255,6 +344,7 @@ fn compile_and_cache(
     .map_err(|_| CUerror::UNKNOWN)?;
     let ptx_impl = llvm_module.linked_bitcode();
     let sm_version = llvm_module.metadata.sm_version;
+    let metadata32 = llvm_module.metadata32.as_ref().map(Metadata32Bit::new);
     let elf_module = llvm_zluda::compile(
         &llvm_module.context,
         gcn_arch,
@@ -270,7 +360,7 @@ fn compile_and_cache(
         key.last_access = zluda_cache::ModuleCache::time_now();
         cache.insert_module(key, &elf_module);
     }
-    Ok((elf_module, sm_version))
+    Ok((elf_module, sm_version, metadata32))
 }
 
 pub(crate) fn load(module: &mut CUmodule, fname: &CStr) -> CUresult {
@@ -280,16 +370,16 @@ pub(crate) fn load(module: &mut CUmodule, fname: &CStr) -> CUresult {
     image.push(0);
     let library = unsafe { CodeLibraryRef::try_load(image.as_ptr() as *const std::ffi::c_void) }
         .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let (hip_module, sm_version) = load_hip_module(library)?;
-    *module = Module::new(hip_module, sm_version).wrap();
+    let (hip_module, sm_version, meta32) = load_hip_module(library)?;
+    *module = Module::new(hip_module, sm_version, meta32).wrap();
     Ok(())
 }
 
 pub(crate) fn load_data(module: &mut CUmodule, image: &std::ffi::c_void) -> CUresult {
     let library =
         unsafe { CodeLibraryRef::try_load(image) }.map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-    let (hip_module, sm_version) = load_hip_module(library)?;
-    *module = Module::new(hip_module, sm_version).wrap();
+    let (hip_module, sm_version, meta32) = load_hip_module(library)?;
+    *module = Module::new(hip_module, sm_version, meta32).wrap();
     Ok(())
 }
 

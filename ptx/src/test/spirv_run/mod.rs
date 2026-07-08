@@ -1617,9 +1617,12 @@ fn run_zluda32<Input: From<u8> + Copy + Debug, Output: From<u8> + Copy + Debug +
         )
         .unwrap();
         let zluda32 = kernel_metadata::ModuleMetadata32Bit::read_object(&elf_module).unwrap();
-        assert_eq!(zluda32.explicit_arg_count.len(), 1);
-        assert_eq!(zluda32.explicit_arg_count[0].0, name.to_str().unwrap());
-        assert_eq!(zluda32.explicit_arg_count[0].1, 2);
+        assert_eq!(zluda32.explicit_args_size_align.len(), 1);
+        assert_eq!(
+            zluda32.explicit_args_size_align[0].0,
+            name.to_str().unwrap()
+        );
+        assert_eq!(zluda32.explicit_args_size_align[0].1.len(), 2);
         let mut module = unsafe { mem::zeroed() };
         unsafe { hipModuleLoadData(&mut module, elf_module.as_ptr() as _) }.unwrap();
         let mut kernel = unsafe { mem::zeroed() };

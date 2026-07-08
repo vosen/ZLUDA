@@ -1132,7 +1132,7 @@ extern "C"
     v4##RETURN_TYPE FUNC(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v4##COORD_TYPE coord)                                                                              \
     {                                                                                                                                                                                   \
         auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
-        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                              \
+        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
     v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                              \

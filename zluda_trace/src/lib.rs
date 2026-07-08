@@ -63,6 +63,24 @@ impl CudaDynamicFns {
     }
 }
 
+#[cfg(unix)]
+impl Drop for CudaDynamicFns {
+    fn drop(&mut self) {
+        unsafe {
+            libloading::os::unix::Library::from_raw(self.lib_handle.as_ptr() as _);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for CudaDynamicFns {
+    fn drop(&mut self) {
+        unsafe {
+            libloading::os::windows::Library::from_raw(self.lib_handle.as_ptr() as _);
+        }
+    }
+}
+
 unsafe impl Send for CudaDynamicFns {}
 unsafe impl Sync for CudaDynamicFns {}
 
@@ -147,13 +165,19 @@ struct InternalTableImpl;
 impl ::dark_api::zluda_trace::CudaDarkApi for InternalTableImpl {
     unsafe extern "system" fn logged_call(
         fn_name: cglue::slice::CSliceRef<'static, u8>,
+        nvapi_interface: u32,
         args: ::dark_api::FnFfiRef<::dark_api::ByteVecFfi>,
         fn_: ::dark_api::FnFfiRef<usize>,
         internal_error: usize,
         format_status: extern "C" fn(usize) -> ::dark_api::ByteVecFfi,
     ) -> usize {
+        let fn_name = if nvapi_interface == 0 {
+            CudaFunctionName::Normal(unsafe { fn_name.into_str() })
+        } else {
+            CudaFunctionName::Nvapi(nvapi_interface)
+        };
         GlobalState2::under_lock(
-            CudaFunctionName::Normal(unsafe { fn_name.into_str() }),
+            fn_name,
             Some(|| args.call().to_vec()),
             internal_error,
             |status| format_status(status).to_vec(),

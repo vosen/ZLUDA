@@ -135,6 +135,7 @@ macro_rules! from_cuda_nop {
 macro_rules! from_cuda_transmute {
     ($($from:ty => $to:ty),*) => {
         $(
+            #[cfg(target_pointer_width = "64")]
             impl<'a, E: CudaErrorType> FromCuda<'a, $from, E> for $to {
                 fn from_cuda(x: &'a $from) -> Result<Self, E> {
                     Ok(unsafe { std::mem::transmute(*x) })

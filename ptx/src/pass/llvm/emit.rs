@@ -1723,6 +1723,17 @@ impl<'a> MethodEmitContext<'a> {
                 (data.state_space, ast::StateSpace::Generic)
             }
         };
+        if self.base_32bit_memory.is_some()
+            && matches!(
+                data.state_space,
+                ast::StateSpace::Global | ast::StateSpace::Generic | ast::StateSpace::Const
+            )
+        {
+            return self.emit_mov(ast::MovArgs {
+                dst: arguments.dst,
+                src: arguments.src,
+            });
+        }
         let from_type = get_pointer_type(self.context, from_space)?;
         let dest_type = get_pointer_type(self.context, to_space)?;
         let src = self.resolver.value(arguments.src)?;
