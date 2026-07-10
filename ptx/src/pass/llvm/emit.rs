@@ -2798,7 +2798,12 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_prefix = match data {
             ptx_parser::MinMaxDetails::Signed(..) => "llvm.smin",
             ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umin",
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.minnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }) => {
+                "llvm.minimumnum"
+            }
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
+                "llvm.minimum"
+            }
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
@@ -2812,32 +2817,7 @@ impl<'a> MethodEmitContext<'a> {
             vec![&data.type_().into()],
             vec![(a, llvm_type), (b, llvm_type)],
         )?;
-
-        if let ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat {
-            nan: true, type_, ..
-        }) = data
-        {
-            let is_nan = unsafe {
-                LLVMBuildFCmp(
-                    self.builder,
-                    LLVMRealPredicate::LLVMRealUNO,
-                    a,
-                    b,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildSelect(
-                    self.builder,
-                    is_nan,
-                    LLVMConstReal(get_scalar_type(self.context, type_), f64::NAN),
-                    min,
-                    dst,
-                )
-            });
-        } else {
-            self.resolver.register(arguments.dst, min);
-        }
+        self.resolver.register(arguments.dst, min);
         Ok(())
     }
 
@@ -2849,7 +2829,12 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_prefix = match data {
             ptx_parser::MinMaxDetails::Signed(..) => "llvm.smax",
             ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umax",
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { .. }) => "llvm.maxnum",
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }) => {
+                "llvm.maximumnum"
+            }
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
+                "llvm.maximum"
+            }
         };
         let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
         let llvm_type = get_scalar_type(self.context, data.type_());
@@ -2863,32 +2848,7 @@ impl<'a> MethodEmitContext<'a> {
             vec![&data.type_().into()],
             vec![(a, llvm_type), (b, llvm_type)],
         )?;
-
-        if let ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat {
-            nan: true, type_, ..
-        }) = data
-        {
-            let is_nan = unsafe {
-                LLVMBuildFCmp(
-                    self.builder,
-                    LLVMRealPredicate::LLVMRealUNO,
-                    a,
-                    b,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildSelect(
-                    self.builder,
-                    is_nan,
-                    LLVMConstReal(get_scalar_type(self.context, type_), f64::NAN),
-                    max,
-                    dst,
-                )
-            });
-        } else {
-            self.resolver.register(arguments.dst, max);
-        }
+        self.resolver.register(arguments.dst, max);
         Ok(())
     }
 
