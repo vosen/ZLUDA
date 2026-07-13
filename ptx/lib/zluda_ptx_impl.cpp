@@ -1,5 +1,5 @@
 /*
-Every time this file changes it must be rebuilt.
+Every time this file (or any other file in this directory) changes it must be rebuilt.
 You must use LLVM from ZLUDA submodule dir ext/llvm-project:
 
 cd ext/llvm-project && \
@@ -13,7 +13,7 @@ cmake \
     ../llvm && \
 ninja clang llvm-dis llvm-as
 
-then cd to the directory with this file and run this simple command:
+then cd to the directory with this file and run those simple commands:
 
 ../../ext/llvm-project/build/bin/clang \
     -DHIP_ENABLE_WARP_SYNC_BUILTINS \
@@ -40,6 +40,35 @@ then cd to the directory with this file and run this simple command:
     | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
 ../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl.bc && \
 ../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc
+
+../../ext/llvm-project/build/bin/clang \
+    -DHIP_ENABLE_WARP_SYNC_BUILTINS \
+    -std=c++20 \
+    -Xclang -fdenormal-fp-math=dynamic \
+    -Wall -Wextra -Wsign-compare -Wconversion \
+    -x hip \
+    zluda_ptx_impl_fp.cpp \
+    -nogpulib \
+    -O3 \
+    -mno-wavefrontsize64 \
+    -o zluda_ptx_impl_fp.bc \
+    -emit-llvm \
+    -c \
+    --offload-device-only --offload-arch=gfx1030 && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_fp.bc -o - \
+    | sed '/@llvm.used/d' \
+    | sed '/wchar_size/d' \
+    | sed '/llvm.module.flags/d' \
+    | sed '/__hip_cuid/d' \
+    | sed 's/optnone//g' \
+    | sed 's/define hidden/define linkonce_odr/g' \
+    | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
+    | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
+../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl_fp.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_fp.bc
+
+../../ext/llvm-project/build/bin/llvm-as /workspaces/ZLUDA/ptx/lib/zluda_ptx_impl_fp_constrained.ll
+
 */
 
 #include <cstddef>

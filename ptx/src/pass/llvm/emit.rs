@@ -468,6 +468,7 @@ struct MethodEmitContext<'a> {
     carry_flag: Option<LLVMValueRef>,
     base_32bit_memory: Option<SpirvWord>,
     is_kernel: bool,
+    fp: FloatingPoint,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -478,6 +479,12 @@ impl<'a> MethodEmitContext<'a> {
         base_32bit_memory: Option<SpirvWord>,
         is_kernel: bool,
     ) -> MethodEmitContext<'a> {
+        let fp = FloatingPoint {
+            context: parent.context,
+            module: parent.module,
+            builder: parent.builder.get(),
+            mode: FloatingPointMode::Constrained,
+        };
         MethodEmitContext {
             context: parent.context,
             module: parent.module,
@@ -488,6 +495,7 @@ impl<'a> MethodEmitContext<'a> {
             carry_flag: None,
             base_32bit_memory,
             is_kernel,
+            fp,
         }
     }
 
@@ -932,6 +940,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::AddArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let builder = self.builder;
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
         let fn_ = match data {
             ast::ArithDetails::Integer(ast::ArithInteger {
                 saturate: true,
@@ -942,24 +952,20 @@ impl<'a> MethodEmitContext<'a> {
                 } else {
                     "uadd"
                 };
-                return self.emit_intrinsic_saturate(
-                    op,
-                    type_,
-                    arguments.dst,
-                    arguments.src1,
-                    arguments.src2,
-                );
+                return self.emit_intrinsic_saturate(op, type_, arguments.dst, src1, src2);
             }
             ast::ArithDetails::Integer(ast::ArithInteger {
                 saturate: false, ..
-            }) => LLVMBuildAdd,
-            ast::ArithDetails::Float(..) => LLVMBuildFAdd,
+            }) => {
+                self.resolver.with_result(arguments.dst, |dst| unsafe {
+                    LLVMBuildAdd(builder, src1, src2, dst)
+                });
+            }
+            ast::ArithDetails::Float(..) => {
+                self.fp
+                    .fadd(self.resolver, data.type_(), arguments.dst, src1, src2)?;
+            }
         };
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
-        self.resolver.with_result(arguments.dst, |dst| unsafe {
-            fn_(builder, src1, src2, dst)
-        });
         Ok(())
     }
 
@@ -1469,7 +1475,9 @@ impl<'a> MethodEmitContext<'a> {
                     return Ok(self.emit_mul_wide_impl(type_, dst, src1, src2)?.1)
                 }
             },
-            ast::MulDetails::Float(..) => LLVMBuildFMul,
+            ast::MulDetails::Float(..) => {
+                return self.fp.fmul(self.resolver, data.type_(), dst, src1, src2)
+            }
         };
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
@@ -1675,9 +1683,9 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::DivFloatKind::ApproxFull => LLVMZludaFastMathNone,
             ptx_parser::DivFloatKind::Rounding(_) => LLVMZludaFastMathNone,
         };
-        let fdiv = self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildFDiv(builder, src1, src2, dst)
-        });
+        let fdiv = self
+            .fp
+            .fdiv(self.resolver, float_div.type_, arguments.dst, src1, src2)?;
         unsafe { LLVMZludaSetFastMathFlags(fdiv, approx) };
         if let ptx_parser::DivFloatKind::ApproxFull = float_div.kind {
             // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-div:
@@ -1769,6 +1777,8 @@ impl<'a> MethodEmitContext<'a> {
         arith_integer: ptx_parser::ArithInteger,
         arguments: ptx_parser::SubArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        let src1 = self.resolver.value(arguments.src1)?;
+        let src2 = self.resolver.value(arguments.src2)?;
         if arith_integer.saturate {
             let op = if arith_integer.type_.kind() == ast::ScalarKind::Signed {
                 "ssub"
@@ -1779,12 +1789,10 @@ impl<'a> MethodEmitContext<'a> {
                 op,
                 arith_integer.type_,
                 arguments.dst,
-                arguments.src1,
-                arguments.src2,
+                src1,
+                src2,
             );
         }
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildSub(self.builder, src1, src2, dst)
         });
@@ -2520,9 +2528,9 @@ impl<'a> MethodEmitContext<'a> {
         let type_ = get_scalar_type(self.context, data.type_);
         let one = unsafe { LLVMConstReal(type_, 1.0) };
         let src = self.resolver.value(arguments.src)?;
-        let rcp = self.resolver.with_result(arguments.dst, |dst| unsafe {
-            LLVMBuildFDiv(self.builder, one, src, dst)
-        });
+        let rcp = self
+            .fp
+            .fdiv(self.resolver, data.type_, arguments.dst, one, src)?;
         unsafe { LLVMZludaSetFastMathFlags(rcp, LLVMZludaFastMathAllowReciprocal) };
         Ok(())
     }
@@ -3088,8 +3096,8 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_type = get_scalar_type(self.context, type_);
         let zero = unsafe { LLVMConstReal(llvm_type, 0.0) };
         let one = unsafe { LLVMConstReal(llvm_type, 1.0) };
-        let maxnum_intrinsic = format!("llvm.maxnum.{}\0", LLVMTypeDisplay(type_));
-        let minnum_intrinsic = format!("llvm.minnum.{}\0", LLVMTypeDisplay(type_));
+        let maxnum_intrinsic = format!("llvm.maximumnum.{}\0", LLVMTypeDisplay(type_));
+        let minnum_intrinsic = format!("llvm.minimumnum.{}\0", LLVMTypeDisplay(type_));
         let src = self.resolver.value(src)?;
         let maxnum = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(maxnum_intrinsic.as_bytes()) },
@@ -3111,12 +3119,10 @@ impl<'a> MethodEmitContext<'a> {
         op: &str,
         type_: ast::ScalarType,
         dst: SpirvWord,
-        src1: SpirvWord,
-        src2: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
     ) -> Result<(), TranslateError> {
         let llvm_type = get_scalar_type(self.context, type_);
-        let src1 = self.resolver.value(src1)?;
-        let src2 = self.resolver.value(src2)?;
         let intrinsic = format!("llvm.{}.sat.{}\0", op, LLVMTypeDisplay(type_));
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
@@ -4028,3 +4034,361 @@ fn rounding_to_llvm(this: ast::RoundingMode) -> u32 {
     }
 }
 */
+
+struct FloatingPoint {
+    context: LLVMContextRef,
+    module: LLVMModuleRef,
+    builder: LLVMBuilderRef,
+    mode: FloatingPointMode,
+}
+
+impl FloatingPoint {
+    fn emit_constrained<const N: usize, const M: usize>(
+        &self,
+        resolver: &mut ResolveIdent,
+        name: &'static str,
+        dst_type: ast::ScalarType,
+        dst: Option<SpirvWord>,
+        src_type: ast::ScalarType,
+        srcs: [LLVMValueRef; N],
+        metadata: [&str; M],
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let metadata_type = unsafe { LLVMMetadataTypeInContext(self.context) };
+        let metadata = metadata.map(|m| {
+            let m_value =
+                unsafe { LLVMMDStringInContext2(self.context, m.as_ptr().cast(), m.len()) };
+            (
+                unsafe { LLVMMetadataAsValue(self.context, m_value) },
+                metadata_type,
+            )
+        });
+        let name = unsafe {
+            CString::from_vec_with_nul_unchecked(
+                format!("{}.{}\0", name, LLVMTypeDisplay(dst_type)).into_bytes(),
+            )
+        };
+        emit_intrinsic(
+            self.context,
+            self.module,
+            self.builder,
+            resolver,
+            &name,
+            dst,
+            vec![&dst_type.into()],
+            srcs.iter()
+                .map(|&src| (src, get_scalar_type(self.context, src_type)))
+                .chain(metadata.into_iter())
+                .collect(),
+        )
+    }
+
+    fn fadd(
+        &self,
+        resolver: &mut ResolveIdent,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFAdd(self.builder, src1, src2, dst)
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fadd",
+                type_,
+                Some(dst),
+                type_,
+                [src1, src2],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fmul(
+        &self,
+        resolver: &mut ResolveIdent,
+        type_: ast::ScalarType,
+        dst: Option<SpirvWord>,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let src1 = resolver.value(src1)?;
+        let src2 = resolver.value(src2)?;
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result_option(dst, |dst| unsafe {
+                LLVMBuildFMul(self.builder, src1, src2, dst)
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fmul",
+                type_,
+                dst,
+                type_,
+                [src1, src2],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fdiv(
+        &self,
+        resolver: &mut ResolveIdent,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFDiv(self.builder, src1, src2, dst)
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fdiv",
+                type_,
+                Some(dst),
+                type_,
+                [src1, src2],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fsub(
+        &self,
+        resolver: &mut ResolveIdent,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFSub(self.builder, src1, src2, dst)
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fsub",
+                type_,
+                Some(dst),
+                type_,
+                [src1, src2],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fpext(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFPExt(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fpext",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fptrunc(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFPTrunc(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fptrunc",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fptosi(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFPToSI(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fptosi",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn fptoui(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildFPToUI(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.fptoui",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn sitofp(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildSIToFP(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.sitofp",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn uitofp(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        type_: ast::ScalarType,
+        src1: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => Ok(resolver.with_result(dst, |dst| unsafe {
+                LLVMBuildUIToFP(
+                    self.builder,
+                    src1,
+                    get_scalar_type(self.context, dst_type),
+                    dst,
+                )
+            })),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.uitofp",
+                dst_type,
+                Some(dst),
+                type_,
+                [src1],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FloatingPointMode {
+    Normal,
+    Constrained,
+}
+
+fn emit_intrinsic(
+    context: LLVMContextRef,
+    module: LLVMModuleRef,
+    builder: LLVMBuilderRef,
+    resolver: &mut ResolveIdent,
+    name: &CStr,
+    dst: Option<SpirvWord>,
+    return_types: Vec<&ast::Type>,
+    arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
+) -> Result<LLVMValueRef, TranslateError> {
+    let fn_type = get_intrinsic_type(
+        context,
+        return_types.iter().copied(),
+        arguments.iter().map(|(_, type_)| Ok(*type_)),
+    )?;
+    let mut fn_ = unsafe { LLVMGetNamedFunction(module, name.as_ptr()) };
+    if fn_ == ptr::null_mut() {
+        fn_ = unsafe { LLVMAddFunction(module, name.as_ptr(), fn_type) };
+    }
+    let mut arguments = arguments.iter().map(|(arg, _)| *arg).collect::<Vec<_>>();
+    Ok(resolver.with_result_option(dst, |dst| unsafe {
+        LLVMBuildCall2(
+            builder,
+            fn_type,
+            fn_,
+            arguments.as_mut_ptr(),
+            arguments.len() as u32,
+            dst,
+        )
+    }))
+}
