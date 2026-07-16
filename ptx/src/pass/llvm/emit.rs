@@ -2502,10 +2502,20 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::RcpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        let intrinsic = match (data.type_, data.kind) {
-            (ast::ScalarType::F32, ast::RcpKind::Approx) => c"llvm.amdgcn.rcp.f32",
-            (ast::ScalarType::F64, ast::RcpKind::Approx) => c"llvm.amdgcn.rcp.f64",
-            (_, ast::RcpKind::Compliant(rnd)) => {
+        let intrinsic = match (data.type_, data.kind, self.fp.mode) {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
+                c"llvm.amdgcn.rcp.f32"
+            }
+            (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.rcp.f32"
+            }
+            (ast::ScalarType::F64, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
+                c"llvm.amdgcn.rcp.f64"
+            }
+            (ast::ScalarType::F64, ast::RcpKind::Approx, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.rcp.f64"
+            }
+            (_, ast::RcpKind::Compliant(rnd), _) => {
                 return self.emit_rcp_compliant(data, arguments, rnd)
             }
             _ => return Err(error_unreachable()),

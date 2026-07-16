@@ -92,7 +92,7 @@ pub fn compile(
     ctx: &Context,
     gcn_arch: &str,
     main: Module,
-    ptx_impl: &[u8],
+    ptx_impl: &[&[u8]],
     attributes: Module,
     metadata: kernel_metadata::ModuleMetadataV1,
     metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
@@ -102,7 +102,6 @@ pub fn compile(
 
     let linked = Module::new(ctx, c"llvm-link");
 
-    let ptx_impl = load_module(ctx, ptx_impl, c"ptx_impl.bc")?;
     let ockl = load_module(ctx, OCKL_MODULE, c"ockl.bc")?;
     let ocml = load_module(ctx, OCML_MODULE, c"ocml.bc")?;
 
@@ -111,7 +110,9 @@ pub fn compile(
     linked.link(main)?;
     linked.link(attributes)?;
     linked.link(oclc_constants)?;
-    linked.link(ptx_impl)?;
+    for ptx_impl in ptx_impl {
+        linked.link(load_module(ctx, ptx_impl, c"ptx_impl.bc")?)?;
+    }
     linked.link(ockl)?;
     linked.link(ocml)?;
 
@@ -272,6 +273,7 @@ fn init_globals() -> Result<(), String> {
                 // Uncomment to save passes
                 // c"-print-before-all",
                 c"llvm_zluda",
+                //c"-debug-only=isel",
                 c"-ignore-tti-inline-compatible",
                 // c"-amdgpu-early-inline-all=true",
                 c"-amdgpu-internalize-symbols",

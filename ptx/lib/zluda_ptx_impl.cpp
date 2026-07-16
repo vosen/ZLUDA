@@ -13,7 +13,7 @@ cmake \
     ../llvm && \
 ninja clang llvm-dis llvm-as
 
-then cd to the directory with this file and run those simple commands:
+then cd to the directory with this file and run this simple command:
 
 ../../ext/llvm-project/build/bin/clang \
     -DHIP_ENABLE_WARP_SYNC_BUILTINS \
@@ -39,8 +39,7 @@ then cd to the directory with this file and run those simple commands:
     | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
     | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
 ../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl.bc && \
-../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc
-
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc && \
 ../../ext/llvm-project/build/bin/clang \
     -DHIP_ENABLE_WARP_SYNC_BUILTINS \
     -std=c++20 \
@@ -65,8 +64,7 @@ then cd to the directory with this file and run those simple commands:
     | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
     | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
 ../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl_fp.bc && \
-../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_fp.bc
-
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_fp.bc && \
 ../../ext/llvm-project/build/bin/llvm-as /workspaces/ZLUDA/ptx/lib/zluda_ptx_impl_fp_constrained.ll
 
 */
@@ -378,10 +376,6 @@ extern "C"
     // * Now, 1.175494351×10^-38 / 1.4 × 10^-45  = 8396388 + 31/140
     // * Next power of 2 is 16777216
     const float DENORMAL_TO_NORMAL_FACTOR_F32 = 16777216.0f;
-    // * Largest subnormal is ~1.175494210692441e × 10^(-38)
-    // * Then any value equal or larger than following will produce subnormals: 8.50706018714406320806444272332455743547934627837873057975602739772164... × 10^37
-    const float RCP_DENORMAL_OUTPUT = 8.50706018714406320806444272332455743547934627837873057975602739772164e37f;
-    const float REVERSE_DENORMAL_TO_NORMAL_FACTOR_F32 = 0.029387360490963111877208252592662410455594571842846914442095471744599661631813495980086003637902577995683214210345151992265999035207077609582844f;
 
     float FUNC(sqrt_approx_f32)(float x)
     {
@@ -407,20 +401,6 @@ extern "C"
             return value * 4096.0f;
         else
             return value;
-    }
-
-    float FUNC(rcp_approx_f32)(float x)
-    {
-        float factor = 1.0f;
-        if (__builtin_isfpclass(x, __FPCLASS_NEGSUBNORMAL | __FPCLASS_POSSUBNORMAL))
-        {
-            factor = DENORMAL_TO_NORMAL_FACTOR_F32;
-        }
-        if (std::fabs(x) >= RCP_DENORMAL_OUTPUT)
-        {
-            factor = REVERSE_DENORMAL_TO_NORMAL_FACTOR_F32;
-        }
-        return __builtin_amdgcn_rcpf(x * factor) * factor;
     }
 
     // When x = -126, exp2(x) = 2^(-126) ≈ 1.175494351 × 10^(-38),

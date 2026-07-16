@@ -5,3 +5,4 @@ Cargo.lock
 .idea/
 
 ptx/lib/zluda_ptx_impl.ll
+ptx/lib/zluda_ptx_impl_fp.ll
