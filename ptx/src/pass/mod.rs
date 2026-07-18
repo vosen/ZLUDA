@@ -114,7 +114,7 @@ pub fn to_llvm_module<'input>(
     on_pass_end("hoist_globals");
     let _kernel_method_sets = kernel_dependencies::kernel_method_sets(&directives);
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let llvm_ir = llvm::emit::run(&context, &flat_resolver, directives)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
