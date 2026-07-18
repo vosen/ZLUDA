@@ -1,3 +1,4 @@
+mod kernel_dependencies;
 use ptx_parser as ast;
 use std::{
     env, error,

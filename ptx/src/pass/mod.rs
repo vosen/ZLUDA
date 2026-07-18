@@ -19,6 +19,7 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
+mod kernel_dependencies;
 pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers;
@@ -116,6 +117,8 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
+    let _kernel_method_sets = kernel_dependencies::kernel_method_sets(&directives);
+
     let fp_mode = get_fp_mode(&directives[..]);
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
