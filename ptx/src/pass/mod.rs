@@ -117,7 +117,7 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
-    let _kernel_method_sets = kernel_dependencies::kernel_method_sets(&directives);
+    let _kernel_declaration_sets = kernel_dependencies::kernel_declaration_sets(&directives);
 
     let fp_mode = get_fp_mode(&directives[..]);
     on_pass_end("get_fp_mode");

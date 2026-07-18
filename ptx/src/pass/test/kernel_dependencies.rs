@@ -1,5 +1,6 @@
 use super::super::kernel_dependencies::{
-    direct_callees, function_index, kernel_dependencies, kernel_method_sets, reachable_callees,
+    direct_callees, function_index, kernel_declaration_sets, kernel_dependencies,
+    kernel_method_sets, method_declaration, reachable_callees,
 };
 use super::super::*;
 
@@ -287,4 +288,110 @@ fn includes_kernel_in_its_method_set() {
     assert!(methods.contains(&kernel_name));
     assert!(methods.contains(&helper_a_name));
     assert!(methods.contains(&helper_b_name));
+}
+
+#[test]
+fn creates_bodyless_helper_declaration() {
+    let helper_name = SpirvWord(10);
+    let input_name = SpirvWord(11);
+    let return_name = SpirvWord(12);
+
+    let helper = Function {
+        return_arguments: vec![ast::Variable {
+            name: return_name,
+            info: ast::VariableInfo {
+                align: None,
+                v_type: ast::Type::Scalar(ast::ScalarType::U32),
+                state_space: ast::StateSpace::Param,
+                array_init: Vec::new(),
+            },
+        }],
+        name: helper_name,
+        input_arguments: vec![ast::Variable {
+            name: input_name,
+            info: ast::VariableInfo {
+                align: None,
+                v_type: ast::Type::Scalar(ast::ScalarType::U32),
+                state_space: ast::StateSpace::Param,
+                array_init: Vec::new(),
+            },
+        }],
+        body: Some(Vec::new()),
+        kernel_attributes: None,
+        import_as: None,
+        tuning: vec![ast::TuningDirective::NoReturn],
+        linkage: ast::LinkingDirective::VISIBLE,
+        kernel_meta32: None,
+    };
+
+    let declaration = method_declaration(&helper);
+
+    assert_eq!(declaration.name, helper_name);
+    assert_eq!(declaration.return_arguments.len(), 1);
+    assert_eq!(declaration.input_arguments.len(), 1);
+    assert!(declaration.body.is_none());
+    assert!(!declaration.is_kernel());
+
+    assert!(helper.body.is_some());
+}
+
+#[test]
+fn builds_helper_declarations_for_kernel() {
+    let kernel_name = SpirvWord(1);
+    let helper_name = SpirvWord(2);
+
+    let make_call = |callee| {
+        Statement::Instruction(ast::Instruction::Call {
+            data: ast::CallDetails {
+                uniform: false,
+                return_arguments: Vec::new(),
+                input_arguments: Vec::new(),
+            },
+            arguments: ast::CallArgs {
+                return_arguments: Vec::new(),
+                func: callee,
+                input_arguments: Vec::new(),
+                is_external: false,
+            },
+        })
+    };
+
+    let make_function = |name, body, kernel_attributes| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let kernel_attributes = KernelAttributes {
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ast::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+    };
+
+    let directives = vec![
+        Directive2::Method(make_function(
+            kernel_name,
+            Some(vec![make_call(helper_name)]),
+            Some(kernel_attributes),
+        )),
+        Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
+    ];
+
+    let declaration_sets = kernel_declaration_sets(&directives);
+    let declarations = declaration_sets
+        .get(&kernel_name)
+        .expect("kernel declaration set should exist");
+
+    assert_eq!(declaration_sets.len(), 1);
+    assert_eq!(declarations.len(), 1);
+    assert_eq!(declarations[0].name, helper_name);
+    assert!(declarations[0].body.is_none());
+    assert!(!declarations[0].is_kernel());
 }

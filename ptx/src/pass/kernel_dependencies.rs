@@ -80,3 +80,41 @@ pub(super) fn kernel_method_sets(
         })
         .collect()
 }
+
+pub(super) fn method_declaration(
+    function: &Function<ast::Instruction<SpirvWord>, SpirvWord>,
+) -> Function<ast::Instruction<SpirvWord>, SpirvWord> {
+    debug_assert!(!function.is_kernel());
+
+    Function {
+        return_arguments: function.return_arguments.clone(),
+        name: function.name,
+        input_arguments: function.input_arguments.clone(),
+        body: None,
+        kernel_attributes: None,
+        import_as: function.import_as.clone(),
+        tuning: function.tuning.clone(),
+        linkage: function.linkage,
+        kernel_meta32: None,
+    }
+}
+
+pub(super) fn kernel_declaration_sets(
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+) -> FxHashMap<SpirvWord, Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
+    let functions = function_index(directives);
+
+    kernel_method_sets(directives)
+        .into_iter()
+        .map(|(kernel, methods)| {
+            let declarations = methods
+                .into_iter()
+                .filter(|method| *method != kernel)
+                .filter_map(|method| functions.get(&method))
+                .map(|function| method_declaration(function))
+                .collect();
+
+            (kernel, declarations)
+        })
+        .collect()
+}
