@@ -68,7 +68,8 @@ pub(crate) fn run<'input>(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
+    let mut emit_ctx =
+        ModuleEmitContext::new(context, &module, &id_defs, FloatingPointMode::Constrained);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -89,6 +90,7 @@ struct ModuleEmitContext<'a, 'input> {
     builder: Builder,
     id_defs: &'a GlobalStringIdentResolver2<'input>,
     resolver: ResolveIdent,
+    fp_mode: FloatingPointMode,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -96,6 +98,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         context: &Context,
         module: &llvm::Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
+        fp_mode: FloatingPointMode,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -103,6 +106,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             builder: Builder::new(context),
             id_defs,
             resolver: ResolveIdent::new(&id_defs),
+            fp_mode,
         }
     }
 
@@ -134,29 +138,32 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 }),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
-            self.emit_fn_attribute(fn_, "amdgpu-unsafe-fp-atomics", "true");
-            self.emit_fn_attribute(fn_, "uniform-work-group-size", "true");
-            self.emit_fn_attribute(fn_, "no-trapping-math", "true");
+            self.emit_fn_attribute_string(fn_, "amdgpu-unsafe-fp-atomics", "true");
+            self.emit_fn_attribute_string(fn_, "uniform-work-group-size", "true");
+            self.emit_fn_attribute_string(fn_, "no-trapping-math", "true");
+            if self.fp_mode == FloatingPointMode::Constrained {
+                self.emit_fn_attribute_enum(fn_, "strictfp");
+            }
         }
         self.emit_target_features(fn_);
         self.emit_tuning(fn_, &method.tuning);
         if let Some(kernel_attrs) = &method.kernel_attributes {
-            self.emit_fn_attribute(
+            self.emit_fn_attribute_string(
                 fn_,
                 "denormal-fp-math-f32",
                 llvm_ftz(kernel_attrs.flush_to_zero_f32),
             );
-            self.emit_fn_attribute(
+            self.emit_fn_attribute_string(
                 fn_,
                 "denormal-fp-math",
                 llvm_ftz(kernel_attrs.flush_to_zero_f16f64),
             );
         } else {
             self.resolver.register(method.name, fn_);
-            self.emit_fn_attribute(fn_, "denormal-fp-math-f32", "dynamic");
-            self.emit_fn_attribute(fn_, "denormal-fp-math", "dynamic");
+            self.emit_fn_attribute_string(fn_, "denormal-fp-math-f32", "dynamic");
+            self.emit_fn_attribute_string(fn_, "denormal-fp-math", "dynamic");
         }
-        self.emit_fn_attribute(fn_, "amdgpu-ieee", "false");
+        self.emit_fn_attribute_string(fn_, "amdgpu-ieee", "false");
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
             let name = self.resolver.get_or_add(param.name);
@@ -197,7 +204,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         for directive in method.tuning {
             match directive {
                 ptx_parser::TuningDirective::NoReturn => {
-                    self.emit_fn_attribute(fn_, "noreturn", "true")
+                    self.emit_fn_attribute_string(fn_, "noreturn", "true")
                 }
                 _ => {
                     // Ignore other tuning directives for now
@@ -325,7 +332,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         Ok(initializer)
     }
 
-    fn emit_fn_attribute(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
+    fn emit_fn_attribute_string(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
         let attribute = unsafe {
             LLVMCreateStringAttribute(
                 self.context,
@@ -335,6 +342,12 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 value.len() as u32,
             )
         };
+        unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
+    }
+
+    fn emit_fn_attribute_enum(&self, llvm_object: LLVMValueRef, key: &str) {
+        let attr_kind = unsafe { LLVMGetEnumAttributeKindForName(key.as_ptr().cast(), key.len()) };
+        let attribute = unsafe { LLVMCreateEnumAttribute(self.context, attr_kind, 0) };
         unsafe { LLVMAddAttributeAtIndex(llvm_object, LLVMAttributeFunctionIndex, attribute) };
     }
 
@@ -350,16 +363,16 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 ptx_parser::TuningDirective::MaxNtid(x, y, z) => {
                     let size = x * y * z;
                     let value = format!("1,{size}");
-                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                    self.emit_fn_attribute_string(fn_, "amdgpu-flat-work-group-size", &value);
                 }
                 ptx_parser::TuningDirective::ReqNtid(x, y, z) => {
                     let size = x * y * z;
                     let value = format!("{size},{size}");
-                    self.emit_fn_attribute(fn_, "amdgpu-flat-work-group-size", &value);
+                    self.emit_fn_attribute_string(fn_, "amdgpu-flat-work-group-size", &value);
                 }
                 ptx_parser::TuningDirective::MinNCtaPerSm(ctas) => {
                     let value = format!("{ctas},1024");
-                    self.emit_fn_attribute(fn_, "amdgpu-waves-per-eu", &value);
+                    self.emit_fn_attribute_string(fn_, "amdgpu-waves-per-eu", &value);
                 }
             }
         }
@@ -374,7 +387,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 ""
             }
         );
-        self.emit_fn_attribute(fn_, "target-features", &*value)
+        self.emit_fn_attribute_string(fn_, "target-features", &*value)
     }
 
     fn emit_linkage(
@@ -483,7 +496,7 @@ impl<'a> MethodEmitContext<'a> {
             context: parent.context,
             module: parent.module,
             builder: parent.builder.get(),
-            mode: FloatingPointMode::Constrained,
+            mode: parent.fp_mode,
         };
         MethodEmitContext {
             context: parent.context,
@@ -1828,13 +1841,27 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    fn emit_intrinsic(
+    fn emit_intrinsic_with_metadata(
         &mut self,
         name: &CStr,
         dst: Option<SpirvWord>,
         return_types: Vec<&ast::Type>,
-        arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
+        mut arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
+        metadata: &[&str],
     ) -> Result<LLVMValueRef, TranslateError> {
+        let has_metadata_args = !metadata.is_empty();
+        let metadata_type = unsafe { LLVMMetadataTypeInContext(self.context) };
+        let metadata = metadata.iter().map(|m| {
+            let m_value =
+                unsafe { LLVMMDStringInContext2(self.context, m.as_ptr().cast(), m.len()) };
+            (
+                unsafe { LLVMMetadataAsValue(self.context, m_value) },
+                metadata_type,
+            )
+        });
+        if has_metadata_args {
+            arguments = arguments.into_iter().chain(metadata).collect::<Vec<_>>();
+        }
         let fn_type = get_intrinsic_type(
             self.context,
             return_types.iter().copied(),
@@ -1855,6 +1882,16 @@ impl<'a> MethodEmitContext<'a> {
                 dst,
             )
         }))
+    }
+
+    fn emit_intrinsic(
+        &mut self,
+        name: &CStr,
+        dst: Option<SpirvWord>,
+        return_types: Vec<&ast::Type>,
+        arguments: Vec<(LLVMValueRef, LLVMTypeRef)>,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        self.emit_intrinsic_with_metadata(name, dst, return_types, arguments, &[])
     }
 
     fn emit_neg(
@@ -2461,9 +2498,15 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::RsqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        let intrinsic = match data.type_ {
-            ast::ScalarType::F32 => c"llvm.amdgcn.rsq.f32",
-            ast::ScalarType::F64 => c"llvm.amdgcn.rsq.f64",
+        let intrinsic = match (data.type_, self.fp.mode) {
+            (ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
+            (ast::ScalarType::F32, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.rsq.f32"
+            }
+            (ast::ScalarType::F64, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f64",
+            (ast::ScalarType::F64, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.rsq.f64"
+            }
             _ => return Err(error_unreachable()),
         };
         self.emit_intrinsic(
@@ -2481,17 +2524,39 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        let intrinsic = match (data.type_, data.kind) {
-            (ast::ScalarType::F32, ast::RcpKind::Approx) => c"llvm.amdgcn.sqrt.f32",
-            (ast::ScalarType::F32, ast::RcpKind::Compliant(..)) => c"llvm.sqrt.f32",
-            (ast::ScalarType::F64, ast::RcpKind::Compliant(..)) => c"llvm.sqrt.f64",
+        let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, self.fp.mode) {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
+                (c"llvm.amdgcn.sqrt.f32", &[])
+            }
+            (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Constrained) => {
+                (c"llvm.amdgcn.constrained.sqrt.f32", &[])
+            }
+            (ast::ScalarType::F32, ast::RcpKind::Compliant(..), FloatingPointMode::Normal) => {
+                (c"llvm.sqrt.f32", &[])
+            }
+            (ast::ScalarType::F32, ast::RcpKind::Compliant(..), FloatingPointMode::Constrained) => {
+                (
+                    c"llvm.constrained.sqrt.f32",
+                    &["round.dynamic", "fpexcept.ignore"],
+                )
+            }
+            (ast::ScalarType::F64, ast::RcpKind::Compliant(..), FloatingPointMode::Normal) => {
+                (c"llvm.sqrt.f64", &[])
+            }
+            (ast::ScalarType::F64, ast::RcpKind::Compliant(..), FloatingPointMode::Constrained) => {
+                (
+                    c"llvm.constrained.sqrt.f64",
+                    &["round.dynamic", "fpexcept.ignore"],
+                )
+            }
             _ => return Err(error_unreachable()),
         };
-        self.emit_intrinsic(
+        self.emit_intrinsic_with_metadata(
             intrinsic,
             Some(arguments.dst),
             vec![&data.type_.into()],
             vec![(self.resolver.value(arguments.src)?, type_)],
+            metadata,
         )?;
         Ok(())
     }
@@ -2713,9 +2778,15 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::TypeFtz,
         arguments: ptx_parser::Ex2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let intrinsic = match data.type_ {
-            ast::ScalarType::F16 => c"llvm.amdgcn.exp2.f16",
-            ast::ScalarType::F32 => c"llvm.amdgcn.exp2.f32",
+        let intrinsic = match (data.type_, self.fp.mode) {
+            (ast::ScalarType::F16, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f16",
+            (ast::ScalarType::F16, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.exp2.f16"
+            }
+            (ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f32",
+            (ast::ScalarType::F32, FloatingPointMode::Constrained) => {
+                c"llvm.amdgcn.constrained.exp2.f32"
+            }
             _ => return Err(error_unreachable()),
         };
         self.emit_intrinsic(
@@ -2735,8 +2806,12 @@ impl<'a> MethodEmitContext<'a> {
         _data: ptx_parser::FlushToZero,
         arguments: ptx_parser::Lg2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        let intrinsic = match self.fp.mode {
+            FloatingPointMode::Normal => c"llvm.amdgcn.log.f32",
+            FloatingPointMode::Constrained => c"llvm.amdgcn.constrained.log.f32",
+        };
         self.emit_intrinsic(
-            c"llvm.amdgcn.log.f32",
+            intrinsic,
             Some(arguments.dst),
             vec![&ast::ScalarType::F32.into()],
             vec![(
@@ -4365,7 +4440,7 @@ impl FloatingPoint {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum FloatingPointMode {
     Normal,
     Constrained,
