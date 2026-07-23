@@ -112,7 +112,8 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
-    let _kernel_declaration_sets = kernel_dependencies::kernel_declaration_sets(&directives);
+    let compilation_plan = kernel_dependencies::build_compilation_plan(directives);
+    let directives = compilation_plan.into_monolithic_directives();
     let context = llvm_zluda::utils::Context::new();
     let llvm_ir = llvm::emit::run(&context, &flat_resolver, directives)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
