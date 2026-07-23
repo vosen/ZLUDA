@@ -174,6 +174,7 @@ pub(super) fn build_compilation_plan(
 }
 
 impl KernelCompilationPlan {
+    #[cfg(test)]
     pub(super) fn into_monolithic_directives(
         self,
     ) -> Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>> {
