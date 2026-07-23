@@ -119,8 +119,19 @@ pub(super) fn kernel_declaration_sets(
         .collect()
 }
 
+pub(super) fn global_declaration(
+    linking: ast::LinkingDirective,
+    variable: &ast::Variable<SpirvWord>,
+) -> (ast::LinkingDirective, ast::Variable<SpirvWord>) {
+    let mut declaration = variable.clone();
+    declaration.info.array_init.clear();
+
+    (linking, declaration)
+}
+
 pub(super) struct KernelModulePlan {
     pub(super) kernel: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+    pub(super) global_declarations: Vec<(ast::LinkingDirective, ast::Variable<SpirvWord>)>,
     pub(super) declarations: Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>,
 }
 
@@ -133,6 +144,13 @@ pub(super) fn build_compilation_plan(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> KernelCompilationPlan {
     let mut declaration_sets = kernel_declaration_sets(&directives);
+    let global_declarations = directives
+        .iter()
+        .filter_map(|directive| match directive {
+            Directive2::Variable(linking, variable) => Some(global_declaration(*linking, variable)),
+            Directive2::Method(..) => None,
+        })
+        .collect::<Vec<_>>();
     let mut common = Vec::new();
     let mut kernels = Vec::new();
 
@@ -144,6 +162,7 @@ pub(super) fn build_compilation_plan(
 
                 kernels.push(KernelModulePlan {
                     kernel: function,
+                    global_declarations: global_declarations.clone(),
                     declarations,
                 });
             }
@@ -163,9 +182,11 @@ impl KernelCompilationPlan {
         directives.extend(self.kernels.into_iter().map(|kernel_plan| {
             let KernelModulePlan {
                 kernel,
+                global_declarations,
                 declarations,
             } = kernel_plan;
 
+            drop(global_declarations);
             drop(declarations);
             Directive2::Method(kernel)
         }));
