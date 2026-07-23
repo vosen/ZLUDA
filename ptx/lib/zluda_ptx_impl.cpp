@@ -28,7 +28,8 @@ then cd to the directory with this file and run this simple command:
     -o zluda_ptx_impl.bc \
     -emit-llvm \
     -c \
-    --offload-device-only --offload-arch=gfx1030 && \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
 ../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc -o - \
     | sed '/@llvm.used/d' \
     | sed '/wchar_size/d' \
@@ -54,7 +55,8 @@ then cd to the directory with this file and run this simple command:
     -o zluda_ptx_impl_constrained.bc \
     -emit-llvm \
     -c \
-    --offload-device-only --offload-arch=gfx1030 && \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
 ../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_constrained.bc -o - \
     | sed '/@llvm.used/d' \
     | sed '/wchar_size/d' \
@@ -1170,4 +1172,16 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+
+    __device__ half __ocml_tanh_f16(half);
+    half FUNC(tanh_f16)(half a)
+    {
+        return __ocml_tanh_f16(a);
+    }
+
+    __device__ float __ocml_tanh_f32(float);
+    float FUNC(tanh_f32)(float a)
+    {
+        return __ocml_tanh_f32(a);
+    }
 }
