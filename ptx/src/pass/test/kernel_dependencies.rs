@@ -637,6 +637,7 @@ fn global_declaration_removes_initializer() {
     let (linking, declaration) = global_declaration(ast::LinkingDirective::VISIBLE, &variable);
 
     assert!(linking.contains(ast::LinkingDirective::VISIBLE));
+    assert!(linking.contains(ast::LinkingDirective::EXTERN));
     assert_eq!(declaration.name, global_name);
     assert_eq!(declaration.info.align, Some(8));
     assert!(declaration.info.array_init.is_empty());
@@ -693,6 +694,7 @@ fn compilation_plan_adds_global_declarations_to_each_kernel() {
         let (linking, declaration) = &kernel_plan.global_declarations[0];
 
         assert!(linking.contains(ast::LinkingDirective::VISIBLE));
+        assert!(linking.contains(ast::LinkingDirective::EXTERN));
         assert_eq!(declaration.name, global_name);
         assert!(declaration.info.array_init.is_empty());
     }
