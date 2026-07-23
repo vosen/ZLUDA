@@ -126,7 +126,7 @@ pub(super) fn global_declaration(
     let mut declaration = variable.clone();
     declaration.info.array_init.clear();
 
-    (linking, declaration)
+    (linking | ast::LinkingDirective::EXTERN, declaration)
 }
 
 pub(super) struct KernelModulePlan {
