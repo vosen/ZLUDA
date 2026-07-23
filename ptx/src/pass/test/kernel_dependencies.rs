@@ -1,6 +1,7 @@
 use super::super::kernel_dependencies::{
-    build_compilation_plan, direct_callees, function_index, kernel_declaration_sets,
-    kernel_dependencies, kernel_method_sets, method_declaration, reachable_callees,
+    build_compilation_plan, direct_callees, function_index, global_declaration,
+    kernel_declaration_sets, kernel_dependencies, kernel_method_sets, method_declaration,
+    reachable_callees,
 };
 use super::super::*;
 
@@ -618,4 +619,88 @@ fn monolithic_conversion_restores_definitions_without_declarations() {
         Directive2::Method(function)
             if function.name == helper_name && function.body.is_none()
     )));
+}
+
+#[test]
+fn global_declaration_removes_initializer() {
+    let global_name = SpirvWord(1);
+    let variable = ast::Variable {
+        name: global_name,
+        info: ast::VariableInfo {
+            align: Some(8),
+            v_type: ast::Type::Scalar(ast::ScalarType::U32),
+            state_space: ast::StateSpace::Global,
+            array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(42))],
+        },
+    };
+
+    let (linking, declaration) = global_declaration(ast::LinkingDirective::VISIBLE, &variable);
+
+    assert!(linking.contains(ast::LinkingDirective::VISIBLE));
+    assert_eq!(declaration.name, global_name);
+    assert_eq!(declaration.info.align, Some(8));
+    assert!(declaration.info.array_init.is_empty());
+
+    assert_eq!(variable.info.array_init.len(), 1);
+}
+
+#[test]
+fn compilation_plan_adds_global_declarations_to_each_kernel() {
+    let global_name = SpirvWord(1);
+    let first_kernel_name = SpirvWord(2);
+    let second_kernel_name = SpirvWord(3);
+
+    let make_kernel = |name| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body: Some(Vec::new()),
+        kernel_attributes: Some(KernelAttributes {
+            flush_to_zero_f32: false,
+            flush_to_zero_f16f64: false,
+            rounding_mode_f32: ast::RoundingMode::NearestEven,
+            rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+        }),
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let global = ast::Variable {
+        name: global_name,
+        info: ast::VariableInfo {
+            align: None,
+            v_type: ast::Type::Scalar(ast::ScalarType::U32),
+            state_space: ast::StateSpace::Global,
+            array_init: vec![ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(7))],
+        },
+    };
+
+    let directives = vec![
+        Directive2::Variable(ast::LinkingDirective::VISIBLE, global),
+        Directive2::Method(make_kernel(first_kernel_name)),
+        Directive2::Method(make_kernel(second_kernel_name)),
+    ];
+
+    let plan = build_compilation_plan(directives);
+
+    assert_eq!(plan.kernels.len(), 2);
+
+    for kernel_plan in &plan.kernels {
+        assert_eq!(kernel_plan.global_declarations.len(), 1);
+
+        let (linking, declaration) = &kernel_plan.global_declarations[0];
+
+        assert!(linking.contains(ast::LinkingDirective::VISIBLE));
+        assert_eq!(declaration.name, global_name);
+        assert!(declaration.info.array_init.is_empty());
+    }
+
+    assert!(matches!(
+        &plan.common[0],
+        Directive2::Variable(_, variable)
+            if variable.name == global_name
+                && variable.info.array_init.len() == 1
+    ));
 }
