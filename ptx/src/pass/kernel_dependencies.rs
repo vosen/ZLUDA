@@ -118,3 +118,58 @@ pub(super) fn kernel_declaration_sets(
         })
         .collect()
 }
+
+pub(super) struct KernelModulePlan {
+    pub(super) kernel: Function<ast::Instruction<SpirvWord>, SpirvWord>,
+    pub(super) declarations: Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>,
+}
+
+pub(super) struct KernelCompilationPlan {
+    pub(super) common: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    pub(super) kernels: Vec<KernelModulePlan>,
+}
+
+pub(super) fn build_compilation_plan(
+    directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> KernelCompilationPlan {
+    let mut declaration_sets = kernel_declaration_sets(&directives);
+    let mut common = Vec::new();
+    let mut kernels = Vec::new();
+
+    for directive in directives {
+        match directive {
+            Directive2::Variable(..) => common.push(directive),
+            Directive2::Method(function) if function.is_kernel() => {
+                let declarations = declaration_sets.remove(&function.name).unwrap_or_default();
+
+                kernels.push(KernelModulePlan {
+                    kernel: function,
+                    declarations,
+                });
+            }
+            Directive2::Method(..) => common.push(directive),
+        }
+    }
+
+    KernelCompilationPlan { common, kernels }
+}
+
+impl KernelCompilationPlan {
+    pub(super) fn into_monolithic_directives(
+        self,
+    ) -> Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>> {
+        let mut directives = self.common;
+
+        directives.extend(self.kernels.into_iter().map(|kernel_plan| {
+            let KernelModulePlan {
+                kernel,
+                declarations,
+            } = kernel_plan;
+
+            drop(declarations);
+            Directive2::Method(kernel)
+        }));
+
+        directives
+    }
+}
