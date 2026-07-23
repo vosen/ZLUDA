@@ -34,9 +34,8 @@ mod resolve_function_pointers;
 mod test;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
-static ZLUDA_PTX_IMPL_FP: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl_fp.bc");
-static ZLUDA_PTX_IMPL_FP_CONSTRAINED: &'static [u8] =
-    include_bytes!("../../lib/zluda_ptx_impl_fp_constrained.bc");
+static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
+    include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
@@ -138,14 +137,11 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn linked_bitcode(&self) -> &'static [&'static [u8]; 2] {
-        static PTX_BITCODE_CONSTRAINED: [&'static [u8]; 2] =
-            [ZLUDA_PTX_IMPL, ZLUDA_PTX_IMPL_FP_CONSTRAINED];
-        static PTX_BITCODE: [&'static [u8]; 2] = [ZLUDA_PTX_IMPL, ZLUDA_PTX_IMPL_FP];
+    pub fn linked_bitcode(&self) -> &'static [u8] {
         if self.constrained_fp {
-            &PTX_BITCODE_CONSTRAINED
+            ZLUDA_PTX_IMPL_CONSTRAINED
         } else {
-            &PTX_BITCODE
+            ZLUDA_PTX_IMPL
         }
     }
 }

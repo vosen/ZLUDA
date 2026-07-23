@@ -674,7 +674,6 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::BarWarp { .. } => self.emit_bar_warp(),
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => self.emit_trap(),
-            ast::Instruction::Tanh { data, arguments } => self.emit_tanh(data, arguments),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
             ast::Instruction::Copysign { data, arguments } => self.emit_copysign(data, arguments),
             ast::Instruction::CreatePolicyFractional { data, arguments } => {
@@ -703,6 +702,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Prmt { .. }
             | ast::Instruction::Mma { .. }
             | ast::Instruction::Dp2a { .. }
+            | ast::Instruction::Tanh { .. }
             | ast::Instruction::Tex { .. } => return Err(error_unreachable()),
         }
     }
@@ -3456,26 +3456,6 @@ impl<'a> MethodEmitContext<'a> {
             unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 0) }
         };
         Ok(unsafe { LLVMBuildSelect(self.builder, setp_result, one, zero, LLVM_UNNAMED.as_ptr()) })
-    }
-
-    // TODO: revisit this on gfx1250 which has native tanh support
-    fn emit_tanh(
-        &mut self,
-        data: ast::ScalarType,
-        arguments: ast::TanhArgs<SpirvWord>,
-    ) -> Result<(), TranslateError> {
-        let src = self.resolver.value(arguments.src)?;
-        let llvm_type = get_scalar_type(self.context, data);
-        let name = format!("__ocml_tanh_{}\0", LLVMTypeDisplay(data));
-        let tanh = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(name.as_bytes()) },
-            Some(arguments.dst),
-            vec![&data.into()],
-            vec![(src, llvm_type)],
-        )?;
-        // Not sure if it ultimately does anything
-        unsafe { LLVMZludaSetFastMathFlags(tanh, LLVMZludaFastMathApproxFunc) }
-        Ok(())
     }
 
     fn emit_dp4a(

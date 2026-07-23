@@ -573,6 +573,15 @@ fn run_instruction<'input>(
             let name = format!("match_any_sync_{}", scalar_to_ptx_name(data));
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        ast::Instruction::Tanh { data, arguments } => {
+            let name = format!("tanh_{}", scalar_to_ptx_name(data));
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ast::Instruction::Tanh { data, arguments },
+            )?
+        }
         i => i,
     })
 }
