@@ -1,6 +1,6 @@
 use super::super::kernel_dependencies::{
-    direct_callees, function_index, kernel_declaration_sets, kernel_dependencies,
-    kernel_method_sets, method_declaration, reachable_callees,
+    build_compilation_plan, direct_callees, function_index, kernel_declaration_sets,
+    kernel_dependencies, kernel_method_sets, method_declaration, reachable_callees,
 };
 use super::super::*;
 
@@ -394,4 +394,228 @@ fn builds_helper_declarations_for_kernel() {
     assert_eq!(declarations[0].name, helper_name);
     assert!(declarations[0].body.is_none());
     assert!(!declarations[0].is_kernel());
+}
+
+#[test]
+fn compilation_plan_separates_kernels_from_common_directives() {
+    let global_name = SpirvWord(1);
+    let kernel_name = SpirvWord(2);
+    let helper_name = SpirvWord(3);
+
+    let make_call = |callee| {
+        Statement::Instruction(ast::Instruction::Call {
+            data: ast::CallDetails {
+                uniform: false,
+                return_arguments: Vec::new(),
+                input_arguments: Vec::new(),
+            },
+            arguments: ast::CallArgs {
+                return_arguments: Vec::new(),
+                func: callee,
+                input_arguments: Vec::new(),
+                is_external: false,
+            },
+        })
+    };
+
+    let make_function = |name, body, kernel_attributes| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let kernel_attributes = KernelAttributes {
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ast::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+    };
+
+    let global = ast::Variable {
+        name: global_name,
+        info: ast::VariableInfo {
+            align: None,
+            v_type: ast::Type::Scalar(ast::ScalarType::U32),
+            state_space: ast::StateSpace::Global,
+            array_init: Vec::new(),
+        },
+    };
+
+    let directives = vec![
+        Directive2::Variable(ast::LinkingDirective::NONE, global),
+        Directive2::Method(make_function(
+            kernel_name,
+            Some(vec![make_call(helper_name)]),
+            Some(kernel_attributes),
+        )),
+        Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
+    ];
+
+    let plan = build_compilation_plan(directives);
+
+    assert_eq!(plan.common.len(), 2);
+    assert_eq!(plan.kernels.len(), 1);
+
+    assert!(matches!(
+        &plan.common[0],
+        Directive2::Variable(_, variable) if variable.name == global_name
+    ));
+    assert!(matches!(
+        &plan.common[1],
+        Directive2::Method(function) if function.name == helper_name
+    ));
+
+    let kernel_plan = &plan.kernels[0];
+
+    assert_eq!(kernel_plan.kernel.name, kernel_name);
+    assert!(kernel_plan.kernel.is_kernel());
+    assert_eq!(kernel_plan.declarations.len(), 1);
+    assert_eq!(kernel_plan.declarations[0].name, helper_name);
+    assert!(kernel_plan.declarations[0].body.is_none());
+    assert!(!kernel_plan.declarations[0].is_kernel());
+}
+
+#[test]
+fn compilation_plan_includes_only_reachable_helper_declarations() {
+    let kernel_name = SpirvWord(1);
+    let reachable_helper = SpirvWord(2);
+    let unreachable_helper = SpirvWord(3);
+
+    let make_call = |callee| {
+        Statement::Instruction(ast::Instruction::Call {
+            data: ast::CallDetails {
+                uniform: false,
+                return_arguments: Vec::new(),
+                input_arguments: Vec::new(),
+            },
+            arguments: ast::CallArgs {
+                return_arguments: Vec::new(),
+                func: callee,
+                input_arguments: Vec::new(),
+                is_external: false,
+            },
+        })
+    };
+
+    let make_function = |name, body, kernel_attributes| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let kernel_attributes = KernelAttributes {
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ast::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+    };
+
+    let directives = vec![
+        Directive2::Method(make_function(
+            kernel_name,
+            Some(vec![make_call(reachable_helper)]),
+            Some(kernel_attributes),
+        )),
+        Directive2::Method(make_function(reachable_helper, Some(Vec::new()), None)),
+        Directive2::Method(make_function(unreachable_helper, Some(Vec::new()), None)),
+    ];
+
+    let plan = build_compilation_plan(directives);
+    let kernel_plan = &plan.kernels[0];
+
+    assert_eq!(kernel_plan.declarations.len(), 1);
+    assert_eq!(kernel_plan.declarations[0].name, reachable_helper);
+
+    assert!(plan.common.iter().any(|directive| matches!(
+        directive,
+        Directive2::Method(function) if function.name == reachable_helper
+    )));
+    assert!(plan.common.iter().any(|directive| matches!(
+        directive,
+        Directive2::Method(function) if function.name == unreachable_helper
+    )));
+}
+
+#[test]
+fn monolithic_conversion_restores_definitions_without_declarations() {
+    let kernel_name = SpirvWord(1);
+    let helper_name = SpirvWord(2);
+
+    let make_call = |callee| {
+        Statement::Instruction(ast::Instruction::Call {
+            data: ast::CallDetails {
+                uniform: false,
+                return_arguments: Vec::new(),
+                input_arguments: Vec::new(),
+            },
+            arguments: ast::CallArgs {
+                return_arguments: Vec::new(),
+                func: callee,
+                input_arguments: Vec::new(),
+                is_external: false,
+            },
+        })
+    };
+
+    let make_function = |name, body, kernel_attributes| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let kernel_attributes = KernelAttributes {
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ast::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+    };
+
+    let directives = vec![
+        Directive2::Method(make_function(
+            kernel_name,
+            Some(vec![make_call(helper_name)]),
+            Some(kernel_attributes),
+        )),
+        Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
+    ];
+
+    let restored = build_compilation_plan(directives).into_monolithic_directives();
+
+    assert_eq!(restored.len(), 2);
+
+    assert!(restored.iter().any(|directive| matches!(
+        directive,
+        Directive2::Method(function)
+            if function.name == helper_name && function.body.is_some()
+    )));
+
+    assert!(restored.iter().any(|directive| matches!(
+        directive,
+        Directive2::Method(function)
+            if function.name == kernel_name && function.is_kernel()
+    )));
+
+    assert!(!restored.iter().any(|directive| matches!(
+        directive,
+        Directive2::Method(function)
+            if function.name == helper_name && function.body.is_none()
+    )));
 }
