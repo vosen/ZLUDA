@@ -34,6 +34,8 @@ mod resolve_function_pointers;
 mod test;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
+static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
+    include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
@@ -121,6 +123,7 @@ pub fn to_llvm_module<'input>(
         context,
         metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
         metadata32,
+        constrained_fp: true,
     })
 }
 
@@ -130,11 +133,16 @@ pub struct Module {
     pub context: llvm_zluda::utils::Context,
     pub metadata: kernel_metadata::ModuleMetadataV1,
     pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
+    pub constrained_fp: bool,
 }
 
 impl Module {
     pub fn linked_bitcode(&self) -> &'static [u8] {
-        ZLUDA_PTX_IMPL
+        if self.constrained_fp {
+            ZLUDA_PTX_IMPL_CONSTRAINED
+        } else {
+            ZLUDA_PTX_IMPL
+        }
     }
 }
 
