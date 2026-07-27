@@ -955,7 +955,7 @@ impl<'a> MethodEmitContext<'a> {
         let builder = self.builder;
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        let fn_ = match data {
+        match data {
             ast::ArithDetails::Integer(ast::ArithInteger {
                 saturate: true,
                 type_,
@@ -1681,7 +1681,6 @@ impl<'a> MethodEmitContext<'a> {
         float_div: ptx_parser::DivFloatDetails,
         arguments: ptx_parser::DivArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let builder = self.builder;
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let _rnd = match float_div.kind {
