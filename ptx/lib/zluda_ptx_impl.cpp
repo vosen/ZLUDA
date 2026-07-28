@@ -603,6 +603,17 @@ extern "C"
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
 
+    // Taken from LLVM, pasted here because LLVM doesn't support constrained fdiv
+    __device__ float FUNC(div_full_f32)(float a, float b)
+    {
+        float mb = __builtin_amdgcn_frexp_mantf(b);
+        int eb = __builtin_amdgcn_frexp_expf(b);
+        float r = __builtin_amdgcn_rcpf(mb);
+        float ma = __builtin_amdgcn_frexp_mantf(a);
+        int ea = __builtin_amdgcn_frexp_expf(a);
+        return __builtin_ldexpf(ma * r, ea - eb);
+    }
+
     __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
     {
         const uint32_t bits = reinterpret_cast<uint32_t &>(f);

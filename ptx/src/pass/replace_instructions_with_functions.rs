@@ -291,6 +291,18 @@ fn run_instruction<'input>(
     instruction: ptx_parser::Instruction<SpirvWord>,
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     Ok(match instruction {
+        i @ ast::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    kind: ast::DivFloatKind::ApproxFull,
+                    type_: ast::ScalarType::F32,
+                    ..
+                }),
+            ..
+        } => {
+            let name = "div_full_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Tex {
             data:
                 ast::TexData {
