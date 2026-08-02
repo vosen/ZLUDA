@@ -1,48 +1,101 @@
 use super::{Directive2, Function, SpirvWord, Statement};
+use petgraph::{graph::NodeIndex, visit::Dfs, Graph};
 use ptx_parser as ast;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-pub(super) fn direct_callees(
-    function: &Function<ast::Instruction<SpirvWord>, SpirvWord>,
-) -> FxHashSet<SpirvWord> {
-    let Some(body) = &function.body else {
-        return FxHashSet::default();
-    };
-
-    body.iter()
-        .filter_map(|statement| match statement {
-            Statement::Instruction(ast::Instruction::Call { arguments, .. }) => {
-                Some(arguments.func)
-            }
-            _ => None,
-        })
-        .collect()
+pub(super) struct DependencyGraph {
+    graph: Graph<SpirvWord, ()>,
+    nodes: FxHashMap<SpirvWord, NodeIndex>,
 }
 
-pub(super) fn reachable_callees(
-    root: SpirvWord,
-    functions: &FxHashMap<SpirvWord, &Function<ast::Instruction<SpirvWord>, SpirvWord>>,
-) -> FxHashSet<SpirvWord> {
-    let mut reachable = FxHashSet::default();
-    let mut visited = FxHashSet::default();
-    let mut pending = vec![root];
-
-    visited.insert(root);
-
-    while let Some(function_name) = pending.pop() {
-        let Some(function) = functions.get(&function_name) else {
-            continue;
+impl DependencyGraph {
+    pub(super) fn from_directives(
+        directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    ) -> Self {
+        let mut result = Self {
+            graph: Graph::new(),
+            nodes: FxHashMap::default(),
         };
 
-        for callee in direct_callees(function) {
-            if visited.insert(callee) {
-                reachable.insert(callee);
-                pending.push(callee);
+        // Register all module-level symbols before adding edges. A function
+        // declaration and its definition share the same SpirvWord node.
+        for directive in directives {
+            match directive {
+                Directive2::Variable(_, variable) => {
+                    result.add_node(variable.name);
+                }
+                Directive2::Method(function) => {
+                    result.add_node(function.name);
+                }
             }
+        }
+
+        for directive in directives {
+            match directive {
+                Directive2::Variable(_, variable) => {
+                    for initializer in &variable.info.array_init {
+                        if let ast::RegOrImmediate::Reg(dependency) = initializer {
+                            result.add_dependency(variable.name, *dependency);
+                        }
+                    }
+                }
+                Directive2::Method(function) => {
+                    let Some(body) = &function.body else {
+                        continue;
+                    };
+
+                    for statement in body {
+                        if let Statement::Instruction(ast::Instruction::Call {
+                            arguments, ..
+                        }) = statement
+                        {
+                            result.add_dependency(function.name, arguments.func);
+                        }
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn add_node(&mut self, symbol: SpirvWord) -> NodeIndex {
+        if let Some(index) = self.nodes.get(&symbol) {
+            return *index;
+        }
+
+        let index = self.graph.add_node(symbol);
+        self.nodes.insert(symbol, index);
+        index
+    }
+
+    fn add_dependency(&mut self, from: SpirvWord, to: SpirvWord) {
+        let from = self.add_node(from);
+        let to = self.add_node(to);
+
+        if self.graph.find_edge(from, to).is_none() {
+            self.graph.add_edge(from, to, ());
         }
     }
 
-    reachable
+    pub(super) fn reachable_from(&self, root: SpirvWord) -> FxHashSet<SpirvWord> {
+        let Some(root_index) = self.nodes.get(&root).copied() else {
+            return FxHashSet::default();
+        };
+
+        let mut reachable = FxHashSet::default();
+        let mut traversal = Dfs::new(&self.graph, root_index);
+
+        while let Some(index) = traversal.next(&self.graph) {
+            let symbol = self.graph[index];
+
+            if symbol != root {
+                reachable.insert(symbol);
+            }
+        }
+
+        reachable
+    }
 }
 
 pub(super) fn function_index<'a>(
@@ -60,12 +113,16 @@ pub(super) fn function_index<'a>(
 pub(super) fn kernel_dependencies(
     directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
-    let functions = function_index(directives);
+    let graph = DependencyGraph::from_directives(directives);
 
-    functions
-        .values()
-        .filter(|function| function.is_kernel())
-        .map(|function| (function.name, reachable_callees(function.name, &functions)))
+    directives
+        .iter()
+        .filter_map(|directive| match directive {
+            Directive2::Method(function) if function.is_kernel() => {
+                Some((function.name, graph.reachable_from(function.name)))
+            }
+            _ => None,
+        })
         .collect()
 }
 
