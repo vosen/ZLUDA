@@ -2,6 +2,44 @@ use super::{Directive2, Function, SpirvWord, Statement};
 use petgraph::{graph::NodeIndex, visit::Dfs, Graph};
 use ptx_parser as ast;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::convert::Infallible;
+
+struct GlobalReferenceVisitor<'a> {
+    globals: &'a FxHashSet<SpirvWord>,
+    references: FxHashSet<SpirvWord>,
+}
+
+impl ast::VisitorMap<SpirvWord, SpirvWord, Infallible> for GlobalReferenceVisitor<'_> {
+    fn visit(
+        &mut self,
+        operand: SpirvWord,
+        _type_space: Option<(&ast::Type, ast::StateSpace)>,
+        _is_dst: bool,
+        _relaxed_type_check: bool,
+    ) -> Result<SpirvWord, Infallible> {
+        self.record(operand);
+        Ok(operand)
+    }
+
+    fn visit_ident(
+        &mut self,
+        ident: SpirvWord,
+        _type_space: Option<(&ast::Type, ast::StateSpace)>,
+        _is_dst: bool,
+        _relaxed_type_check: bool,
+    ) -> Result<SpirvWord, Infallible> {
+        self.record(ident);
+        Ok(ident)
+    }
+}
+
+impl GlobalReferenceVisitor<'_> {
+    fn record(&mut self, ident: SpirvWord) {
+        if self.globals.contains(&ident) {
+            self.references.insert(ident);
+        }
+    }
+}
 
 pub(super) struct DependencyGraph {
     graph: Graph<SpirvWord, ()>,
@@ -10,7 +48,7 @@ pub(super) struct DependencyGraph {
 
 impl DependencyGraph {
     pub(super) fn from_directives(
-        directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+        directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
     ) -> Self {
         let mut result = Self {
             graph: Graph::new(),
@@ -19,7 +57,15 @@ impl DependencyGraph {
 
         // Register all module-level symbols before adding edges. A function
         // declaration and its definition share the same SpirvWord node.
-        for directive in directives {
+        let globals = directives
+            .iter()
+            .filter_map(|directive| match directive {
+                Directive2::Variable(_, variable) => Some(variable.name),
+                Directive2::Method(_) => None,
+            })
+            .collect::<FxHashSet<_>>();
+
+        for directive in directives.iter() {
             match directive {
                 Directive2::Variable(_, variable) => {
                     result.add_node(variable.name);
@@ -30,7 +76,7 @@ impl DependencyGraph {
             }
         }
 
-        for directive in directives {
+        for directive in directives.iter_mut() {
             match directive {
                 Directive2::Variable(_, variable) => {
                     for initializer in &variable.info.array_init {
@@ -40,17 +86,40 @@ impl DependencyGraph {
                     }
                 }
                 Directive2::Method(function) => {
-                    let Some(body) = &function.body else {
+                    let Some(body) = function.body.as_mut() else {
                         continue;
                     };
 
-                    for statement in body {
-                        if let Statement::Instruction(ast::Instruction::Call {
-                            arguments, ..
-                        }) = statement
-                        {
-                            result.add_dependency(function.name, arguments.func);
-                        }
+                    let mut global_references = GlobalReferenceVisitor {
+                        globals: &globals,
+                        references: FxHashSet::default(),
+                    };
+                    let mut calls = FxHashSet::default();
+
+                    let old_body = std::mem::take(body);
+                    *body = old_body
+                        .into_iter()
+                        .map(|statement| {
+                            if let Statement::Instruction(ast::Instruction::Call {
+                                arguments,
+                                ..
+                            }) = &statement
+                            {
+                                calls.insert(arguments.func);
+                            }
+
+                            statement
+                                .visit_map(&mut global_references)
+                                .expect("infallible global reference visitor")
+                        })
+                        .collect();
+
+                    for callee in calls {
+                        result.add_dependency(function.name, callee);
+                    }
+
+                    for global in global_references.references {
+                        result.add_dependency(function.name, global);
                     }
                 }
             }
@@ -118,7 +187,7 @@ pub(super) fn function_index<'a>(
 }
 
 pub(super) fn kernel_dependencies(
-    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
     let graph = DependencyGraph::from_directives(directives);
 
@@ -134,7 +203,7 @@ pub(super) fn kernel_dependencies(
 }
 
 pub(super) fn kernel_method_sets(
-    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
     kernel_dependencies(directives)
         .into_iter()
@@ -164,11 +233,12 @@ pub(super) fn method_declaration(
 }
 
 pub(super) fn kernel_declaration_sets(
-    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
+    let method_sets = kernel_method_sets(directives);
     let functions = function_index(directives);
 
-    kernel_method_sets(directives)
+    method_sets
         .into_iter()
         .map(|(kernel, methods)| {
             let declarations = methods
@@ -214,7 +284,8 @@ pub(super) struct KernelCompilationPlan {
 pub(super) fn build_compilation_plan(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> KernelCompilationPlan {
-    let mut declaration_sets = kernel_declaration_sets(&directives);
+    let mut directives = directives;
+    let mut declaration_sets = kernel_declaration_sets(&mut directives);
     let global_declarations = directives
         .iter()
         .filter_map(|directive| match directive {
