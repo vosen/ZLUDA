@@ -100,14 +100,21 @@ impl DependencyGraph {
 
 pub(super) fn function_index<'a>(
     directives: &'a [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
-) -> FxHashMap<SpirvWord, &'a Function<ast::Instruction<SpirvWord>, SpirvWord>> {
-    directives
-        .iter()
-        .filter_map(|directive| match directive {
-            Directive2::Method(function) => Some((function.name, function)),
-            Directive2::Variable(..) => None,
-        })
-        .collect()
+) -> FxHashMap<SpirvWord, Vec<&'a Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
+    let mut functions: FxHashMap<
+        SpirvWord,
+        Vec<&'a Function<ast::Instruction<SpirvWord>, SpirvWord>>,
+    > = FxHashMap::default();
+
+    for directive in directives {
+        let Directive2::Method(function) = directive else {
+            continue;
+        };
+
+        functions.entry(function.name).or_default().push(function);
+    }
+
+    functions
 }
 
 pub(super) fn kernel_dependencies(
@@ -168,7 +175,14 @@ pub(super) fn kernel_declaration_sets(
                 .into_iter()
                 .filter(|method| *method != kernel)
                 .filter_map(|method| functions.get(&method))
-                .map(|function| method_declaration(function))
+                .filter_map(|functions| {
+                    functions
+                        .iter()
+                        .copied()
+                        .find(|function| function.body.is_some())
+                        .or_else(|| functions.first().copied())
+                })
+                .map(method_declaration)
                 .collect();
 
             (kernel, declarations)

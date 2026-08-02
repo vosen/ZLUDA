@@ -1,6 +1,6 @@
 use super::super::kernel_dependencies::{
-    build_compilation_plan, global_declaration, kernel_declaration_sets, kernel_dependencies,
-    kernel_method_sets, method_declaration, DependencyGraph,
+    build_compilation_plan, function_index, global_declaration, kernel_declaration_sets,
+    kernel_dependencies, kernel_method_sets, method_declaration, DependencyGraph,
 };
 use super::super::*;
 
@@ -640,4 +640,35 @@ fn dependency_graph_tracks_global_initializer_dependencies() {
 
     assert_eq!(reachable.len(), 1);
     assert!(reachable.contains(&source_name));
+}
+
+#[test]
+fn function_index_preserves_declaration_and_definition() {
+    let function_name = SpirvWord(1);
+
+    let make_function = |body| Function {
+        return_arguments: Vec::new(),
+        name: function_name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes: None,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let directives = vec![
+        Directive2::Method(make_function(None)),
+        Directive2::Method(make_function(Some(Vec::new()))),
+    ];
+
+    let functions = function_index(&directives);
+    let entries = functions
+        .get(&function_name)
+        .expect("function should be indexed");
+
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().any(|function| function.body.is_none()));
+    assert!(entries.iter().any(|function| function.body.is_some()));
 }
