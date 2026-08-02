@@ -285,11 +285,14 @@ pub(super) fn build_compilation_plan(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> KernelCompilationPlan {
     let mut directives = directives;
+    let reachable_symbols = kernel_dependencies(&mut directives);
     let mut declaration_sets = kernel_declaration_sets(&mut directives);
-    let global_declarations = directives
+    let globals = directives
         .iter()
         .filter_map(|directive| match directive {
-            Directive2::Variable(linking, variable) => Some(global_declaration(*linking, variable)),
+            Directive2::Variable(linking, variable) => {
+                Some((variable.name, global_declaration(*linking, variable)))
+            }
             Directive2::Method(..) => None,
         })
         .collect::<Vec<_>>();
@@ -301,10 +304,20 @@ pub(super) fn build_compilation_plan(
             Directive2::Variable(..) => common.push(directive),
             Directive2::Method(function) if function.is_kernel() => {
                 let declarations = declaration_sets.remove(&function.name).unwrap_or_default();
+                let global_declarations = reachable_symbols
+                    .get(&function.name)
+                    .map(|reachable| {
+                        globals
+                            .iter()
+                            .filter(|(name, _)| reachable.contains(name))
+                            .map(|(_, declaration)| declaration.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default();
 
                 kernels.push(KernelModulePlan {
                     kernel: function,
-                    global_declarations: global_declarations.clone(),
+                    global_declarations,
                     declarations,
                 });
             }
