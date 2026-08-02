@@ -725,3 +725,62 @@ fn dependency_graph_tracks_global_references_in_function_body() {
     assert!(reachable.contains(&global_name));
     assert!(!reachable.contains(&destination));
 }
+
+#[test]
+fn compilation_plan_includes_only_reachable_global_declarations() {
+    let reachable_global = SpirvWord(1);
+    let unreachable_global = SpirvWord(2);
+    let kernel_name = SpirvWord(3);
+    let destination = SpirvWord(4);
+
+    let variable = |name| ast::Variable {
+        name,
+        info: ast::VariableInfo {
+            align: None,
+            v_type: ast::Type::Scalar(ast::ScalarType::U32),
+            state_space: ast::StateSpace::Global,
+            array_init: Vec::new(),
+        },
+    };
+
+    let kernel = Function {
+        return_arguments: Vec::new(),
+        name: kernel_name,
+        input_arguments: Vec::new(),
+        body: Some(vec![Statement::Instruction(ast::Instruction::Ld {
+            data: ast::LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ast::StateSpace::Global,
+                caching: ast::LdCacheOperator::Cached,
+                typ: ast::Type::Scalar(ast::ScalarType::U32),
+                non_coherent: false,
+            },
+            arguments: ast::LdArgs {
+                dst: destination,
+                src: reachable_global,
+            },
+        })]),
+        kernel_attributes: Some(KernelAttributes {
+            flush_to_zero_f32: false,
+            flush_to_zero_f16f64: false,
+            rounding_mode_f32: ast::RoundingMode::NearestEven,
+            rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+        }),
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let plan = build_compilation_plan(vec![
+        Directive2::Variable(ast::LinkingDirective::NONE, variable(reachable_global)),
+        Directive2::Variable(ast::LinkingDirective::NONE, variable(unreachable_global)),
+        Directive2::Method(kernel),
+    ]);
+
+    assert_eq!(plan.kernels.len(), 1);
+
+    let globals = &plan.kernels[0].global_declarations;
+    assert_eq!(globals.len(), 1);
+    assert_eq!(globals[0].1.name, reachable_global);
+}
