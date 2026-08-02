@@ -202,6 +202,7 @@ pub(super) fn kernel_dependencies(
         .collect()
 }
 
+#[cfg(test)]
 pub(super) fn kernel_method_sets(
     directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
@@ -232,19 +233,20 @@ pub(super) fn method_declaration(
     }
 }
 
-pub(super) fn kernel_declaration_sets(
-    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+fn kernel_declaration_sets_from_dependencies(
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    dependencies: &FxHashMap<SpirvWord, FxHashSet<SpirvWord>>,
 ) -> FxHashMap<SpirvWord, Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
-    let method_sets = kernel_method_sets(directives);
     let functions = function_index(directives);
 
-    method_sets
-        .into_iter()
-        .map(|(kernel, methods)| {
-            let declarations = methods
-                .into_iter()
-                .filter(|method| *method != kernel)
-                .filter_map(|method| functions.get(&method))
+    dependencies
+        .iter()
+        .map(|(&kernel, symbols)| {
+            let declarations = symbols
+                .iter()
+                .copied()
+                .filter(|symbol| *symbol != kernel)
+                .filter_map(|symbol| functions.get(&symbol))
                 .filter_map(|functions| {
                     functions
                         .iter()
@@ -258,6 +260,14 @@ pub(super) fn kernel_declaration_sets(
             (kernel, declarations)
         })
         .collect()
+}
+
+#[cfg(test)]
+pub(super) fn kernel_declaration_sets(
+    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+) -> FxHashMap<SpirvWord, Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
+    let dependencies = kernel_dependencies(directives);
+    kernel_declaration_sets_from_dependencies(directives, &dependencies)
 }
 
 pub(super) fn global_declaration(
@@ -286,7 +296,8 @@ pub(super) fn build_compilation_plan(
 ) -> KernelCompilationPlan {
     let mut directives = directives;
     let reachable_symbols = kernel_dependencies(&mut directives);
-    let mut declaration_sets = kernel_declaration_sets(&mut directives);
+    let mut declaration_sets =
+        kernel_declaration_sets_from_dependencies(&directives, &reachable_symbols);
     let globals = directives
         .iter()
         .filter_map(|directive| match directive {
