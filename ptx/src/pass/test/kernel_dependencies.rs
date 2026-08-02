@@ -45,7 +45,7 @@ fn computes_dependencies_for_each_kernel() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let directives = vec![
+    let mut directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_a_name)]),
@@ -59,7 +59,7 @@ fn computes_dependencies_for_each_kernel() {
         Directive2::Method(make_function(helper_b_name, Some(Vec::new()), None)),
     ];
 
-    let dependencies = kernel_dependencies(&directives);
+    let dependencies = kernel_dependencies(&mut directives);
     let kernel_callees = dependencies
         .get(&kernel_name)
         .expect("kernel dependency entry should exist");
@@ -112,7 +112,7 @@ fn includes_kernel_in_its_method_set() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let directives = vec![
+    let mut directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_a_name)]),
@@ -126,7 +126,7 @@ fn includes_kernel_in_its_method_set() {
         Directive2::Method(make_function(helper_b_name, Some(Vec::new()), None)),
     ];
 
-    let method_sets = kernel_method_sets(&directives);
+    let method_sets = kernel_method_sets(&mut directives);
     let methods = method_sets
         .get(&kernel_name)
         .expect("kernel method set should exist");
@@ -223,7 +223,7 @@ fn builds_helper_declarations_for_kernel() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let directives = vec![
+    let mut directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_name)]),
@@ -232,7 +232,7 @@ fn builds_helper_declarations_for_kernel() {
         Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
     ];
 
-    let declaration_sets = kernel_declaration_sets(&directives);
+    let declaration_sets = kernel_declaration_sets(&mut directives);
     let declarations = declaration_sets
         .get(&kernel_name)
         .expect("kernel declaration set should exist");
@@ -592,7 +592,7 @@ fn dependency_graph_unifies_function_declaration_and_definition() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let directives = vec![
+    let mut directives = vec![
         Directive2::Method(make_function(helper_name, None, None)),
         Directive2::Method(make_function(
             kernel_name,
@@ -602,7 +602,7 @@ fn dependency_graph_unifies_function_declaration_and_definition() {
         Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
     ];
 
-    let graph = DependencyGraph::from_directives(&directives);
+    let graph = DependencyGraph::from_directives(&mut directives);
     let reachable = graph.reachable_from(kernel_name);
 
     assert_eq!(reachable.len(), 1);
@@ -624,7 +624,7 @@ fn dependency_graph_tracks_global_initializer_dependencies() {
         },
     };
 
-    let directives = vec![
+    let mut directives = vec![
         Directive2::Variable(
             ast::LinkingDirective::NONE,
             variable(source_name, Vec::new()),
@@ -635,7 +635,7 @@ fn dependency_graph_tracks_global_initializer_dependencies() {
         ),
     ];
 
-    let graph = DependencyGraph::from_directives(&directives);
+    let graph = DependencyGraph::from_directives(&mut directives);
     let reachable = graph.reachable_from(dependent_name);
 
     assert_eq!(reachable.len(), 1);
@@ -671,4 +671,57 @@ fn function_index_preserves_declaration_and_definition() {
     assert_eq!(entries.len(), 2);
     assert!(entries.iter().any(|function| function.body.is_none()));
     assert!(entries.iter().any(|function| function.body.is_some()));
+}
+
+#[test]
+fn dependency_graph_tracks_global_references_in_function_body() {
+    let global_name = SpirvWord(1);
+    let function_name = SpirvWord(2);
+    let destination = SpirvWord(3);
+
+    let global = ast::Variable {
+        name: global_name,
+        info: ast::VariableInfo {
+            align: None,
+            v_type: ast::Type::Scalar(ast::ScalarType::U32),
+            state_space: ast::StateSpace::Global,
+            array_init: Vec::new(),
+        },
+    };
+
+    let function = Function {
+        return_arguments: Vec::new(),
+        name: function_name,
+        input_arguments: Vec::new(),
+        body: Some(vec![Statement::Instruction(ast::Instruction::Ld {
+            data: ast::LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ast::StateSpace::Global,
+                caching: ast::LdCacheOperator::Cached,
+                typ: ast::Type::Scalar(ast::ScalarType::U32),
+                non_coherent: false,
+            },
+            arguments: ast::LdArgs {
+                dst: destination,
+                src: global_name,
+            },
+        })]),
+        kernel_attributes: None,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let mut directives = vec![
+        Directive2::Variable(ast::LinkingDirective::NONE, global),
+        Directive2::Method(function),
+    ];
+
+    let graph = DependencyGraph::from_directives(&mut directives);
+    let reachable = graph.reachable_from(function_name);
+
+    assert_eq!(reachable.len(), 1);
+    assert!(reachable.contains(&global_name));
+    assert!(!reachable.contains(&destination));
 }
