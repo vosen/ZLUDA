@@ -45,7 +45,7 @@ fn computes_dependencies_for_each_kernel() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_a_name)]),
@@ -59,7 +59,7 @@ fn computes_dependencies_for_each_kernel() {
         Directive2::Method(make_function(helper_b_name, Some(Vec::new()), None)),
     ];
 
-    let dependencies = kernel_dependencies(&mut directives);
+    let dependencies = kernel_dependencies(&directives);
     let kernel_callees = dependencies
         .get(&kernel_name)
         .expect("kernel dependency entry should exist");
@@ -112,7 +112,7 @@ fn includes_kernel_in_its_method_set() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_a_name)]),
@@ -126,7 +126,7 @@ fn includes_kernel_in_its_method_set() {
         Directive2::Method(make_function(helper_b_name, Some(Vec::new()), None)),
     ];
 
-    let method_sets = kernel_method_sets(&mut directives);
+    let method_sets = kernel_method_sets(&directives);
     let methods = method_sets
         .get(&kernel_name)
         .expect("kernel method set should exist");
@@ -223,7 +223,7 @@ fn builds_helper_declarations_for_kernel() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Method(make_function(
             kernel_name,
             Some(vec![make_call(helper_name)]),
@@ -232,7 +232,7 @@ fn builds_helper_declarations_for_kernel() {
         Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
     ];
 
-    let declaration_sets = kernel_declaration_sets(&mut directives);
+    let declaration_sets = kernel_declaration_sets(&directives);
     let declarations = declaration_sets
         .get(&kernel_name)
         .expect("kernel declaration set should exist");
@@ -592,7 +592,7 @@ fn dependency_graph_unifies_function_declaration_and_definition() {
         rounding_mode_f16f64: ast::RoundingMode::NearestEven,
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Method(make_function(helper_name, None, None)),
         Directive2::Method(make_function(
             kernel_name,
@@ -602,7 +602,7 @@ fn dependency_graph_unifies_function_declaration_and_definition() {
         Directive2::Method(make_function(helper_name, Some(Vec::new()), None)),
     ];
 
-    let graph = DependencyGraph::from_directives(&mut directives);
+    let graph = DependencyGraph::from_directives(&directives);
     let reachable = graph.reachable_from(kernel_name);
 
     assert_eq!(reachable.len(), 1);
@@ -624,7 +624,7 @@ fn dependency_graph_tracks_global_initializer_dependencies() {
         },
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Variable(
             ast::LinkingDirective::NONE,
             variable(source_name, Vec::new()),
@@ -635,7 +635,7 @@ fn dependency_graph_tracks_global_initializer_dependencies() {
         ),
     ];
 
-    let graph = DependencyGraph::from_directives(&mut directives);
+    let graph = DependencyGraph::from_directives(&directives);
     let reachable = graph.reachable_from(dependent_name);
 
     assert_eq!(reachable.len(), 1);
@@ -713,12 +713,12 @@ fn dependency_graph_tracks_global_references_in_function_body() {
         kernel_meta32: None,
     };
 
-    let mut directives = vec![
+    let directives = vec![
         Directive2::Variable(ast::LinkingDirective::NONE, global),
         Directive2::Method(function),
     ];
 
-    let graph = DependencyGraph::from_directives(&mut directives);
+    let graph = DependencyGraph::from_directives(&directives);
     let reachable = graph.reachable_from(function_name);
 
     assert_eq!(reachable.len(), 1);
