@@ -232,11 +232,19 @@ fn kernel_declaration_sets_from_dependencies(
     dependencies
         .iter()
         .map(|(&kernel, symbols)| {
-            let declarations = symbols
+            let mut emitted = FxHashSet::default();
+            let declarations = directives
                 .iter()
-                .copied()
-                .filter(|symbol| *symbol != kernel)
-                .filter_map(|symbol| functions.get(&symbol))
+                .filter_map(|directive| match directive {
+                    Directive2::Method(function)
+                        if function.name != kernel
+                            && symbols.contains(&function.name)
+                            && emitted.insert(function.name) =>
+                    {
+                        functions.get(&function.name)
+                    }
+                    _ => None,
+                })
                 .filter_map(|functions| {
                     functions
                         .iter()
@@ -284,7 +292,6 @@ pub(super) struct KernelCompilationPlan {
 pub(super) fn build_compilation_plan(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> KernelCompilationPlan {
-    let directives = directives;
     let reachable_symbols = kernel_dependencies(&directives);
     let mut declaration_sets =
         kernel_declaration_sets_from_dependencies(&directives, &reachable_symbols);

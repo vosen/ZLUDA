@@ -797,3 +797,73 @@ fn compilation_plan_includes_only_reachable_global_declarations() {
     assert_eq!(globals.len(), 1);
     assert_eq!(globals[0].1.name, reachable_global);
 }
+
+#[test]
+fn kernel_declarations_preserve_directive_order() {
+    let kernel_name = SpirvWord(1);
+    let first_helper_name = SpirvWord(2);
+    let second_helper_name = SpirvWord(3);
+
+    let make_call = |function| {
+        Statement::Instruction(ast::Instruction::Call {
+            data: ast::CallDetails {
+                uniform: false,
+                return_arguments: Vec::new(),
+                input_arguments: Vec::new(),
+            },
+            arguments: ast::CallArgs {
+                return_arguments: Vec::new(),
+                func: function,
+                input_arguments: Vec::new(),
+                is_external: false,
+            },
+        })
+    };
+
+    let make_function = |name, body, kernel_attributes| Function {
+        return_arguments: Vec::new(),
+        name,
+        input_arguments: Vec::new(),
+        body,
+        kernel_attributes,
+        import_as: None,
+        tuning: Vec::new(),
+        linkage: ast::LinkingDirective::NONE,
+        kernel_meta32: None,
+    };
+
+    let kernel_attributes = KernelAttributes {
+        flush_to_zero_f32: false,
+        flush_to_zero_f16f64: false,
+        rounding_mode_f32: ast::RoundingMode::NearestEven,
+        rounding_mode_f16f64: ast::RoundingMode::NearestEven,
+    };
+
+    let directives = vec![
+        Directive2::Method(make_function(
+            kernel_name,
+            Some(vec![
+                make_call(second_helper_name),
+                make_call(first_helper_name),
+            ]),
+            Some(kernel_attributes),
+        )),
+        Directive2::Method(make_function(first_helper_name, Some(Vec::new()), None)),
+        Directive2::Method(make_function(second_helper_name, Some(Vec::new()), None)),
+    ];
+
+    let declaration_sets = kernel_declaration_sets(&directives);
+    let declarations = declaration_sets
+        .get(&kernel_name)
+        .expect("kernel declaration set should exist");
+
+    let declaration_names = declarations
+        .iter()
+        .map(|declaration| declaration.name)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        declaration_names,
+        vec![first_helper_name, second_helper_name]
+    );
+}
