@@ -2225,7 +2225,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<LLVMValueRef, TranslateError> {
         let llvm_type = get_scalar_type(self.context, type_);
         let zero = unsafe { LLVMConstNull(llvm_type) };
-        let intrinsic = format!("llvm.maximumnum.{}\0", LLVMTypeDisplay(type_));
+        let intrinsic = format!("llvm.maximum.{}\0", LLVMTypeDisplay(type_));
         self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             None,
