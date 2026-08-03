@@ -493,16 +493,29 @@ fn global_declaration_removes_initializer() {
 }
 
 #[test]
-fn compilation_plan_adds_global_declarations_to_each_kernel() {
+fn compilation_plan_adds_reachable_global_declarations_to_each_kernel() {
     let global_name = SpirvWord(1);
     let first_kernel_name = SpirvWord(2);
     let second_kernel_name = SpirvWord(3);
+    let destination = SpirvWord(4);
 
     let make_kernel = |name| Function {
         return_arguments: Vec::new(),
         name,
         input_arguments: Vec::new(),
-        body: Some(Vec::new()),
+        body: Some(vec![Statement::Instruction(ast::Instruction::Ld {
+            data: ast::LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ast::StateSpace::Global,
+                caching: ast::LdCacheOperator::Cached,
+                typ: ast::Type::Scalar(ast::ScalarType::U32),
+                non_coherent: false,
+            },
+            arguments: ast::LdArgs {
+                dst: destination,
+                src: global_name,
+            },
+        })]),
         kernel_attributes: Some(KernelAttributes {
             flush_to_zero_f32: false,
             flush_to_zero_f16f64: false,
