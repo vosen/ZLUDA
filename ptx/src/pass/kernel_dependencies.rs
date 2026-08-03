@@ -9,27 +9,27 @@ struct GlobalReferenceVisitor<'a> {
     references: FxHashSet<SpirvWord>,
 }
 
-impl ast::VisitorMap<SpirvWord, SpirvWord, Infallible> for GlobalReferenceVisitor<'_> {
+impl ast::Visitor<SpirvWord, Infallible> for GlobalReferenceVisitor<'_> {
     fn visit(
         &mut self,
-        operand: SpirvWord,
+        operand: &SpirvWord,
         _type_space: Option<(&ast::Type, ast::StateSpace)>,
         _is_dst: bool,
         _relaxed_type_check: bool,
-    ) -> Result<SpirvWord, Infallible> {
-        self.record(operand);
-        Ok(operand)
+    ) -> Result<(), Infallible> {
+        self.record(*operand);
+        Ok(())
     }
 
     fn visit_ident(
         &mut self,
-        ident: SpirvWord,
+        ident: &SpirvWord,
         _type_space: Option<(&ast::Type, ast::StateSpace)>,
         _is_dst: bool,
         _relaxed_type_check: bool,
-    ) -> Result<SpirvWord, Infallible> {
-        self.record(ident);
-        Ok(ident)
+    ) -> Result<(), Infallible> {
+        self.record(*ident);
+        Ok(())
     }
 }
 
@@ -48,7 +48,7 @@ pub(super) struct DependencyGraph {
 
 impl DependencyGraph {
     pub(super) fn from_directives(
-        directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+        directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
     ) -> Self {
         let mut result = Self {
             graph: Graph::new(),
@@ -76,7 +76,7 @@ impl DependencyGraph {
             }
         }
 
-        for directive in directives.iter_mut() {
+        for directive in directives {
             match directive {
                 Directive2::Variable(_, variable) => {
                     for initializer in &variable.info.array_init {
@@ -86,7 +86,7 @@ impl DependencyGraph {
                     }
                 }
                 Directive2::Method(function) => {
-                    let Some(body) = function.body.as_mut() else {
+                    let Some(body) = &function.body else {
                         continue;
                     };
 
@@ -94,28 +94,18 @@ impl DependencyGraph {
                         globals: &globals,
                         references: FxHashSet::default(),
                     };
-                    let mut calls = FxHashSet::default();
 
-                    let old_body = std::mem::take(body);
-                    *body = old_body
-                        .into_iter()
-                        .map(|statement| {
-                            if let Statement::Instruction(ast::Instruction::Call {
-                                arguments,
-                                ..
-                            }) = &statement
-                            {
-                                calls.insert(arguments.func);
-                            }
+                    for statement in body {
+                        let Statement::Instruction(instruction) = statement else {
+                            continue;
+                        };
 
-                            statement
-                                .visit_map(&mut global_references)
-                                .expect("infallible global reference visitor")
-                        })
-                        .collect();
+                        ast::visit(instruction, &mut global_references)
+                            .expect("infallible global reference visitor");
 
-                    for callee in calls {
-                        result.add_dependency(function.name, callee);
+                        if let ast::Instruction::Call { arguments, .. } = instruction {
+                            result.add_dependency(function.name, arguments.func);
+                        }
                     }
 
                     for global in global_references.references {
@@ -187,7 +177,7 @@ pub(super) fn function_index<'a>(
 }
 
 pub(super) fn kernel_dependencies(
-    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
     let graph = DependencyGraph::from_directives(directives);
 
@@ -204,7 +194,7 @@ pub(super) fn kernel_dependencies(
 
 #[cfg(test)]
 pub(super) fn kernel_method_sets(
-    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, FxHashSet<SpirvWord>> {
     kernel_dependencies(directives)
         .into_iter()
@@ -264,7 +254,7 @@ fn kernel_declaration_sets_from_dependencies(
 
 #[cfg(test)]
 pub(super) fn kernel_declaration_sets(
-    directives: &mut [Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> FxHashMap<SpirvWord, Vec<Function<ast::Instruction<SpirvWord>, SpirvWord>>> {
     let dependencies = kernel_dependencies(directives);
     kernel_declaration_sets_from_dependencies(directives, &dependencies)
@@ -294,8 +284,8 @@ pub(super) struct KernelCompilationPlan {
 pub(super) fn build_compilation_plan(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> KernelCompilationPlan {
-    let mut directives = directives;
-    let reachable_symbols = kernel_dependencies(&mut directives);
+    let directives = directives;
+    let reachable_symbols = kernel_dependencies(&directives);
     let mut declaration_sets =
         kernel_declaration_sets_from_dependencies(&directives, &reachable_symbols);
     let globals = directives
