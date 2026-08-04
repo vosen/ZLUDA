@@ -64,11 +64,11 @@ impl Drop for Builder {
 
 pub(crate) fn run<'input>(
     context: &Context,
-    id_defs: GlobalStringIdentResolver2<'input>,
+    id_defs: &GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, id_defs);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -240,7 +240,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_global(
         &mut self,
-        _linking: ast::LinkingDirective,
+        linking: ast::LinkingDirective,
         var: ast::Variable<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let name = self
@@ -266,18 +266,31 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 get_state_space(var.info.state_space)?,
             )
         };
-        if matches!(var.info.v_type, ast::Type::Texref) {
+        let is_declaration = linking.contains(ast::LinkingDirective::EXTERN);
+
+        if matches!(var.info.v_type, ast::Type::Texref) && !is_declaration {
             unsafe { LLVMSetInitializer(global, LLVMGetUndef(llvm_type)) };
             unsafe {
                 LLVMSetAlignment(global, 8);
             }
         }
-        self.emit_linkage(global, &var.info)?;
+
+        if is_declaration {
+            unsafe {
+                LLVMSetLinkage(global, LLVMLinkage::LLVMExternalLinkage);
+                LLVMSetVisibility(global, LLVMVisibility::LLVMDefaultVisibility);
+            }
+        } else {
+            self.emit_linkage(global, &var.info)?;
+        }
+
         self.resolver.register(var.name, global);
+
         if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(global, align) };
         }
-        if !var.info.array_init.is_empty() {
+
+        if !is_declaration && !var.info.array_init.is_empty() {
             let initializer = self.get_array_init(&var.info.v_type, &*var.info.array_init)?;
             unsafe { LLVMSetInitializer(global, initializer) };
         }
