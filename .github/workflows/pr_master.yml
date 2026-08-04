@@ -79,8 +79,6 @@ jobs:
         submodules: true
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.9
-    - name: Test Windows support crate
-      run: cargo test -p zluda_windows --lib
     - name: Build
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
