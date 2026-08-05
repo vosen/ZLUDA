@@ -98,19 +98,19 @@ define amdgpu_kernel void @bar_red_and_pred(ptr addrspace(4) byref(i64) %"81", p
 
 "29":                                             ; preds = %"28", %"27"
   %21 = load i32, ptr addrspace(5) %"85", align 4
-  %22 = zext i32 %21 to i64
-  store i64 %22, ptr addrspace(5) %"84", align 8
-  %23 = load i64, ptr addrspace(5) %"84", align 8
-  %"127" = mul i64 %23, 4
+  %"125" = zext i32 %21 to i64
+  store i64 %"125", ptr addrspace(5) %"84", align 8
+  %22 = load i64, ptr addrspace(5) %"84", align 8
+  %"127" = mul i64 %22, 4
   store i64 %"127", ptr addrspace(5) %"84", align 8
-  %24 = load i64, ptr addrspace(5) %"83", align 8
-  %25 = load i64, ptr addrspace(5) %"84", align 8
-  %"129" = add i64 %24, %25
+  %23 = load i64, ptr addrspace(5) %"83", align 8
+  %24 = load i64, ptr addrspace(5) %"84", align 8
+  %"129" = add i64 %23, %24
   store i64 %"129", ptr addrspace(5) %"83", align 8
-  %26 = load i64, ptr addrspace(5) %"83", align 8
-  %27 = load i32, ptr addrspace(5) %"89", align 4
-  %"134" = inttoptr i64 %26 to ptr
-  store i32 %27, ptr %"134", align 4
+  %25 = load i64, ptr addrspace(5) %"83", align 8
+  %26 = load i32, ptr addrspace(5) %"89", align 4
+  %"134" = inttoptr i64 %25 to ptr
+  store i32 %26, ptr %"134", align 4
   ret void
 }
 

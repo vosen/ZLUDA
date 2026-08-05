@@ -3998,14 +3998,15 @@ derive_parser!(
             arguments: TanhArgs { dst: d, src: a }
         }
     }
-    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
+    .type: ScalarType = { .f32, .f16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
                              [dst], [src], cp-size{, src-size}{, cache-policy} => {
-        if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo("cp.async instruction with cache policy/cache hints/prefetch size".to_string()));
-        }
+        // TODO: handle cache hints and cache policies
+        let _ = level_cache_hint;
+        let _ = level_prefetch_size;
+        let _ = cache_policy;
 
         let cp_size = cp_size
             .as_immediate()

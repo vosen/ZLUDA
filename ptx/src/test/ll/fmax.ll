@@ -28,7 +28,7 @@ define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"44", ptr addrspace
   store half %"57", ptr addrspace(5) %"49", align 2
   %8 = load half, ptr addrspace(5) %"49", align 2
   %9 = load half, ptr addrspace(5) %"48", align 2
-  %10 = call half @llvm.maxnum.f16(half %8, half %9)
+  %10 = call half @llvm.maximumnum.f16(half %8, half %9)
   store half %10, ptr addrspace(5) %"50", align 2
   %11 = load i64, ptr addrspace(5) %"47", align 8
   %12 = load half, ptr addrspace(5) %"50", align 2
@@ -39,7 +39,7 @@ define amdgpu_kernel void @fmax(ptr addrspace(4) byref(i64) %"44", ptr addrspace
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare half @llvm.maxnum.f16(half, half) #1
+declare half @llvm.maximumnum.f16(half, half) #1
 
 attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
 attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }

@@ -269,6 +269,7 @@ test_ptx!(global_array_f32, [0x0], [0f32]);
 test_ptx_with_32!(extern_shared, [127u64], [127u64]);
 test_ptx!(extern_shared_call, [121u64], [123u64]);
 test_ptx!(rcp, [2f32], [0.5f32]);
+test_ptx!(rcp_f64, [2f64], [0.5f64]);
 // 0b1_00000000_10000000000000000000000u32 is a large denormal
 // 0x3f000000 is 0.5
 test_ptx!(

@@ -1,5 +1,5 @@
 /*
-Every time this file changes it must be rebuilt.
+Every time this file (or any other file in this directory) changes it must be rebuilt.
 You must use LLVM from ZLUDA submodule dir ext/llvm-project:
 
 cd ext/llvm-project && \
@@ -28,7 +28,8 @@ then cd to the directory with this file and run this simple command:
     -o zluda_ptx_impl.bc \
     -emit-llvm \
     -c \
-    --offload-device-only --offload-arch=gfx1030 && \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
 ../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc -o - \
     | sed '/@llvm.used/d' \
     | sed '/wchar_size/d' \
@@ -39,7 +40,34 @@ then cd to the directory with this file and run this simple command:
     | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
     | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
 ../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl.bc && \
-../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc && \
+../../ext/llvm-project/build/bin/clang \
+    -ffp-model=strict -ffp-exception-behavior=ignore \
+    -DHIP_ENABLE_WARP_SYNC_BUILTINS \
+    -std=c++20 \
+    -Xclang -fdenormal-fp-math=dynamic \
+    -Wall -Wextra -Wsign-compare -Wconversion \
+    -x hip \
+    zluda_ptx_impl.cpp \
+    -nogpulib \
+    -O3 \
+    -mno-wavefrontsize64 \
+    -o zluda_ptx_impl_constrained.bc \
+    -emit-llvm \
+    -c \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_constrained.bc -o - \
+    | sed '/@llvm.used/d' \
+    | sed '/wchar_size/d' \
+    | sed '/llvm.module.flags/d' \
+    | sed '/__hip_cuid/d' \
+    | sed 's/optnone//g' \
+    | sed 's/define hidden/define linkonce_odr/g' \
+    | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
+    | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
+../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl_constrained.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_constrained.bc
 */
 
 #include <cstddef>
@@ -81,7 +109,7 @@ typedef char s8x4 __attribute__((ext_vector_type(4)));
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME)                                        \
+#define DECLARE_ATTR(TYPE, NAME)                         \
     extern "C" __attribute__((constant)) TYPE ATTR(NAME) \
     __device__
 
@@ -575,6 +603,58 @@ extern "C"
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
 
+    struct DivRnFtzF64Part1Result
+    {
+        double fma4;
+        double fma3;
+        double mul;
+        uint8_t num_scaled;
+    };
+
+    DivRnFtzF64Part1Result FUNC(div_f64_part1)(double x, double y)
+    {
+        bool den_scaled, num_scaled;
+        double div_scale0 = __builtin_amdgcn_div_scale(x, y, false, &den_scaled);
+        double div_scale1 = __builtin_amdgcn_div_scale(x, y, true, &num_scaled);
+
+        double neg_div_scale0 = -div_scale0;
+        double rcp = __builtin_amdgcn_rcp(div_scale0);
+        double fma0 = __builtin_fma(neg_div_scale0, rcp, 1.0);
+        double fma1 = __builtin_fma(rcp, fma0, rcp);
+        double fma2 = __builtin_fma(neg_div_scale0, fma1, 1.0);
+        double fma3 = __builtin_fma(fma1, fma2, fma1);
+
+        double mul = div_scale1 * fma3;
+        double fma4 = __builtin_fma(neg_div_scale0, mul, div_scale1);
+        return {fma4, fma3, mul, num_scaled};
+    }
+
+    __device__ static double div_f64_part2(double x, double y, DivRnFtzF64Part1Result part1)
+    {
+        double fmas = __builtin_amdgcn_div_fmas(part1.fma4, part1.fma3, part1.mul, part1.num_scaled);
+        return __builtin_amdgcn_div_fixup(fmas, y, x);
+    }
+
+    double FUNC(div_f64_part2)(double x, double y,
+                               double fma4,
+                               double fma3,
+                               double mul,
+                               uint8_t num_scaled)
+    {
+        return div_f64_part2(x, y, {fma4, fma3, mul, num_scaled});
+    }
+
+    // Taken from LLVM, pasted here because LLVM doesn't support constrained fdiv
+    __device__ float FUNC(div_full_f32)(float a, float b)
+    {
+        float mb = __builtin_amdgcn_frexp_mantf(b);
+        int eb = __builtin_amdgcn_frexp_expf(b);
+        float r = __builtin_amdgcn_rcpf(mb);
+        float ma = __builtin_amdgcn_frexp_mantf(a);
+        int ea = __builtin_amdgcn_frexp_expf(a);
+        return __builtin_ldexpf(ma * r, ea - eb);
+    }
+
     __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
     {
         const uint32_t bits = reinterpret_cast<uint32_t &>(f);
@@ -788,7 +868,7 @@ extern "C"
     }
 
     [[clang::noinline]]
-    int FUNC(vprintf)(const char *format , void *vlist __attribute__((unused)))
+    int FUNC(vprintf)(const char *format, void *vlist __attribute__((unused)))
     {
         // TODO: replace calls to vprintf with a raising pass to printf when we have a mechanism
         // to write SSA passes
@@ -1076,7 +1156,7 @@ extern "C"
         auto result = sample_1D(i, s, coord.x);                                                                                                                                         \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1087,7 +1167,7 @@ extern "C"
         auto result = sample_1Db(i, coord.x);                                                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1111,7 +1191,7 @@ extern "C"
         auto result = sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1135,7 +1215,7 @@ extern "C"
         auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1144,4 +1224,16 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+
+    __device__ half __ocml_tanh_f16(half);
+    half FUNC(tanh_f16)(half a)
+    {
+        return __ocml_tanh_f16(a);
+    }
+
+    __device__ float __ocml_tanh_f32(float);
+    float FUNC(tanh_f32)(float a)
+    {
+        return __ocml_tanh_f32(a);
+    }
 }

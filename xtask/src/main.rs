@@ -44,6 +44,7 @@ struct Cargo {
 }
 
 struct Project {
+    #[cfg_attr(unix, allow(unused))]
     is_32bit: bool,
     #[cfg_attr(unix, allow(unused))]
     manifest_path: PathBuf,
@@ -264,6 +265,7 @@ struct ZludaMetadata {
 }
 
 impl ZludaMetadata {
+    #[cfg(windows)]
     fn windows_paths(&self, is_32bit: bool) -> &Vec<String> {
         if is_32bit && !self.windows32_paths.is_empty() {
             &self.windows32_paths

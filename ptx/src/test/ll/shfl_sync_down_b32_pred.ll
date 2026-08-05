@@ -22,33 +22,33 @@ define amdgpu_kernel void @shfl_sync_down_b32_pred(ptr addrspace(4) byref(i64) %
   %"76" = call <2 x i32> @__zluda_ptx_impl_shfl_sync_down_b32_pred(i32 %3, i32 3, i32 31, i32 -1)
   %"73" = extractelement <2 x i32> %"76", i8 0
   %"77" = extractelement <2 x i32> %"76", i8 1
-  %4 = trunc i32 %"77" to i1
+  %"59" = trunc i32 %"77" to i1
   store i32 %"73", ptr addrspace(5) %"54", align 4
-  store i1 %4, ptr addrspace(5) %"55", align 1
-  %5 = load i1, ptr addrspace(5) %"55", align 1
-  br i1 %5, label %"18", label %"17"
+  store i1 %"59", ptr addrspace(5) %"55", align 1
+  %4 = load i1, ptr addrspace(5) %"55", align 1
+  br i1 %4, label %"18", label %"17"
 
 "17":                                             ; preds = %"48"
-  %6 = load i32, ptr addrspace(5) %"54", align 4
-  %"62" = add i32 %6, 1000
+  %5 = load i32, ptr addrspace(5) %"54", align 4
+  %"62" = add i32 %5, 1000
   store i32 %"62", ptr addrspace(5) %"54", align 4
   br label %"18"
 
 "18":                                             ; preds = %"17", %"48"
-  %7 = load i32, ptr addrspace(5) %"53", align 4
-  %8 = zext i32 %7 to i64
-  store i64 %8, ptr addrspace(5) %"52", align 8
-  %9 = load i64, ptr addrspace(5) %"52", align 8
-  %"66" = mul i64 %9, 4
+  %6 = load i32, ptr addrspace(5) %"53", align 4
+  %"64" = zext i32 %6 to i64
+  store i64 %"64", ptr addrspace(5) %"52", align 8
+  %7 = load i64, ptr addrspace(5) %"52", align 8
+  %"66" = mul i64 %7, 4
   store i64 %"66", ptr addrspace(5) %"52", align 8
-  %10 = load i64, ptr addrspace(5) %"51", align 8
-  %11 = load i64, ptr addrspace(5) %"52", align 8
-  %"68" = add i64 %10, %11
+  %8 = load i64, ptr addrspace(5) %"51", align 8
+  %9 = load i64, ptr addrspace(5) %"52", align 8
+  %"68" = add i64 %8, %9
   store i64 %"68", ptr addrspace(5) %"51", align 8
-  %12 = load i64, ptr addrspace(5) %"51", align 8
-  %13 = load i32, ptr addrspace(5) %"54", align 4
-  %"75" = inttoptr i64 %12 to ptr
-  store i32 %13, ptr %"75", align 4
+  %10 = load i64, ptr addrspace(5) %"51", align 8
+  %11 = load i32, ptr addrspace(5) %"54", align 4
+  %"75" = inttoptr i64 %10 to ptr
+  store i32 %11, ptr %"75", align 4
   ret void
 }
 

@@ -24,6 +24,7 @@ mod normalize_basic_blocks;
 mod normalize_identifiers;
 mod normalize_predicates;
 mod optimize_function_arguments;
+mod rcp_f64_into_div;
 mod remove_unreachable_basic_blocks;
 mod replace_instructions_with_functions;
 mod replace_instructions_with_functions_fp_required;
@@ -34,6 +35,8 @@ mod resolve_function_pointers;
 mod test;
 
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
+static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
+    include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
@@ -85,6 +88,8 @@ pub fn to_llvm_module<'input>(
     on_pass_end("insert_post_saturation");
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("deparamize_functions");
+    let directives = rcp_f64_into_div::run(&mut flat_resolver, directives)?;
+    on_pass_end("rcp_f64_into_div");
     let directives =
         replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
     on_pass_end("replace_instructions_with_functions_fp_required");
@@ -111,8 +116,10 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
+    let fp_mode = get_fp_mode(&directives[..]);
+    on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -121,7 +128,23 @@ pub fn to_llvm_module<'input>(
         context,
         metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
         metadata32,
+        constrained_fp: fp_mode == llvm::emit::FloatingPointMode::Constrained,
     })
+}
+
+fn get_fp_mode(
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+) -> llvm::emit::FloatingPointMode {
+    for d in directives {
+        if let Directive2::Method(method) = d {
+            for s in method.body.iter().flatten() {
+                if let Statement::SetMode(_) = s {
+                    return llvm::emit::FloatingPointMode::Constrained;
+                }
+            }
+        }
+    }
+    llvm::emit::FloatingPointMode::Normal
 }
 
 pub struct Module {
@@ -130,11 +153,16 @@ pub struct Module {
     pub context: llvm_zluda::utils::Context,
     pub metadata: kernel_metadata::ModuleMetadataV1,
     pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
+    pub constrained_fp: bool,
 }
 
 impl Module {
     pub fn linked_bitcode(&self) -> &'static [u8] {
-        ZLUDA_PTX_IMPL
+        if self.constrained_fp {
+            ZLUDA_PTX_IMPL_CONSTRAINED
+        } else {
+            ZLUDA_PTX_IMPL
+        }
     }
 }
 
@@ -292,6 +320,8 @@ enum Statement<I, P: ast::Operand> {
     FpModeRequired {
         ftz_f32: Option<bool>,
         rnd_f32: Option<ast::RoundingMode>,
+        ftz_f16f64: Option<bool>,
+        rnd_f16f64: Option<ast::RoundingMode>,
     },
     FpSaturate {
         dst: SpirvWord,
@@ -617,9 +647,17 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
-            Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
-                Statement::FpModeRequired { ftz_f32, rnd_f32 }
-            }
+            Statement::FpModeRequired {
+                ftz_f32,
+                rnd_f32,
+                ftz_f16f64,
+                rnd_f16f64,
+            } => Statement::FpModeRequired {
+                ftz_f32,
+                rnd_f32,
+                ftz_f16f64,
+                rnd_f16f64,
+            },
         })
     }
 }

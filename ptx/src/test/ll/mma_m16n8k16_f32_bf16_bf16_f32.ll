@@ -139,34 +139,34 @@ define amdgpu_kernel void @mma_m16n8k16_f32_bf16_bf16_f32(ptr addrspace(4) byref
   store float %"150", ptr addrspace(5) %"98", align 4
   store float %"151", ptr addrspace(5) %"99", align 4
   %59 = load i32, ptr addrspace(5) %"81", align 4
-  %60 = zext i32 %59 to i64
-  store i64 %60, ptr addrspace(5) %"80", align 8
-  %61 = load i64, ptr addrspace(5) %"80", align 8
-  %"154" = mul i64 %61, 16
+  %"152" = zext i32 %59 to i64
+  store i64 %"152", ptr addrspace(5) %"80", align 8
+  %60 = load i64, ptr addrspace(5) %"80", align 8
+  %"154" = mul i64 %60, 16
   store i64 %"154", ptr addrspace(5) %"80", align 8
-  %62 = load i64, ptr addrspace(5) %"79", align 8
-  %63 = load i64, ptr addrspace(5) %"80", align 8
-  %"156" = add i64 %62, %63
+  %61 = load i64, ptr addrspace(5) %"79", align 8
+  %62 = load i64, ptr addrspace(5) %"80", align 8
+  %"156" = add i64 %61, %62
   store i64 %"156", ptr addrspace(5) %"79", align 8
-  %64 = load i64, ptr addrspace(5) %"79", align 8
-  %65 = load float, ptr addrspace(5) %"96", align 4
-  %"179" = inttoptr i64 %64 to ptr
-  store float %65, ptr %"179", align 4
-  %66 = load i64, ptr addrspace(5) %"79", align 8
-  %"180" = inttoptr i64 %66 to ptr
+  %63 = load i64, ptr addrspace(5) %"79", align 8
+  %64 = load float, ptr addrspace(5) %"96", align 4
+  %"179" = inttoptr i64 %63 to ptr
+  store float %64, ptr %"179", align 4
+  %65 = load i64, ptr addrspace(5) %"79", align 8
+  %"180" = inttoptr i64 %65 to ptr
   %"71" = getelementptr inbounds i8, ptr %"180", i64 4
-  %67 = load float, ptr addrspace(5) %"97", align 4
-  store float %67, ptr %"71", align 4
-  %68 = load i64, ptr addrspace(5) %"79", align 8
-  %"181" = inttoptr i64 %68 to ptr
+  %66 = load float, ptr addrspace(5) %"97", align 4
+  store float %66, ptr %"71", align 4
+  %67 = load i64, ptr addrspace(5) %"79", align 8
+  %"181" = inttoptr i64 %67 to ptr
   %"73" = getelementptr inbounds i8, ptr %"181", i64 8
-  %69 = load float, ptr addrspace(5) %"98", align 4
-  store float %69, ptr %"73", align 4
-  %70 = load i64, ptr addrspace(5) %"79", align 8
-  %"182" = inttoptr i64 %70 to ptr
+  %68 = load float, ptr addrspace(5) %"98", align 4
+  store float %68, ptr %"73", align 4
+  %69 = load i64, ptr addrspace(5) %"79", align 8
+  %"182" = inttoptr i64 %69 to ptr
   %"75" = getelementptr inbounds i8, ptr %"182", i64 12
-  %71 = load float, ptr addrspace(5) %"99", align 4
-  store float %71, ptr %"75", align 4
+  %70 = load float, ptr addrspace(5) %"99", align 4
+  store float %70, ptr %"75", align 4
   ret void
 }
 

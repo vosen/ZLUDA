@@ -20,10 +20,7 @@ const COMPONENTS: &[&'static str] = &[
 fn main() {
     let bc_path1 = "src/device-libs/ockl.bc";
     println!("cargo:rerun-if-changed={}", bc_path1);
-    let bc_path2 = "src/device-libs/ocml.bc";
-    println!("cargo:rerun-if-changed={}", bc_path2);
     check_lfs_file(bc_path1);
-    check_lfs_file(bc_path2);
 
     let mut cmake = Config::new(r"../ext/llvm-project/llvm");
     try_use_sccache(&mut cmake);

@@ -117,7 +117,7 @@ fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, Compiler
         },
     )?;
     let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
-    let linked_bitcode = module.linked_bitcode().to_vec();
+    let linked_bitcode = module.linked_bitcode();
     let main = module.llvm_ir;
     let attributes = module.attributes_ir;
     Ok(LLVMArtifacts {
@@ -141,7 +141,7 @@ struct LLVMArtifacts {
     main: llvm_zluda::utils::Module,
     attributes: llvm_zluda::utils::Module,
     context: llvm_zluda::utils::Context,
-    linked_bitcode: Vec<u8>,
+    linked_bitcode: &'static [u8],
     llvm_ir: Vec<u8>,
     metadata: kernel_metadata::ModuleMetadataV1,
     metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
