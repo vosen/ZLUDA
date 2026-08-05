@@ -24,6 +24,7 @@ mod normalize_basic_blocks;
 mod normalize_identifiers;
 mod normalize_predicates;
 mod optimize_function_arguments;
+mod rcp_f64_into_div;
 mod remove_unreachable_basic_blocks;
 mod replace_instructions_with_functions;
 mod replace_instructions_with_functions_fp_required;
@@ -87,6 +88,8 @@ pub fn to_llvm_module<'input>(
     on_pass_end("insert_post_saturation");
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("deparamize_functions");
+    let directives = rcp_f64_into_div::run(&mut flat_resolver, directives)?;
+    on_pass_end("rcp_f64_into_div");
     let directives =
         replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
     on_pass_end("replace_instructions_with_functions_fp_required");
@@ -300,6 +303,8 @@ enum Statement<I, P: ast::Operand> {
     FpModeRequired {
         ftz_f32: Option<bool>,
         rnd_f32: Option<ast::RoundingMode>,
+        ftz_f16f64: Option<bool>,
+        rnd_f16f64: Option<ast::RoundingMode>,
     },
     FpSaturate {
         dst: SpirvWord,
@@ -625,9 +630,17 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
-            Statement::FpModeRequired { ftz_f32, rnd_f32 } => {
-                Statement::FpModeRequired { ftz_f32, rnd_f32 }
-            }
+            Statement::FpModeRequired {
+                ftz_f32,
+                rnd_f32,
+                ftz_f16f64,
+                rnd_f16f64,
+            } => Statement::FpModeRequired {
+                ftz_f32,
+                rnd_f32,
+                ftz_f16f64,
+                rnd_f16f64,
+            },
         })
     }
 }

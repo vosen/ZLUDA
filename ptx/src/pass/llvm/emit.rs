@@ -1683,50 +1683,21 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        let _rnd = match float_div.kind {
-            ptx_parser::DivFloatKind::Approx => ast::RoundingMode::NearestEven,
-            ptx_parser::DivFloatKind::ApproxFull => ast::RoundingMode::NearestEven,
-            ptx_parser::DivFloatKind::Rounding(rounding_mode) => rounding_mode,
-        };
-        let approx = match float_div.kind {
-            ptx_parser::DivFloatKind::Approx => {
-                LLVMZludaFastMathAllowReciprocal | LLVMZludaFastMathApproxFunc
-            }
-            ptx_parser::DivFloatKind::ApproxFull => LLVMZludaFastMathNone,
-            ptx_parser::DivFloatKind::Rounding(_) => LLVMZludaFastMathNone,
-        };
+        if matches!(
+            float_div.kind,
+            ptx_parser::DivFloatKind::ApproxFull | ptx_parser::DivFloatKind::Rounding(_)
+        ) {
+            return Err(error_unreachable());
+        }
         let fdiv = self
             .fp
             .fdiv(self.resolver, float_div.type_, arguments.dst, src1, src2)?;
-        unsafe { LLVMZludaSetFastMathFlags(fdiv, approx) };
-        if let ptx_parser::DivFloatKind::ApproxFull = float_div.kind {
-            // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-div:
-            // div.full.f32 implements a relatively fast, full-range approximation that scales
-            // operands to achieve better accuracy, but is not fully IEEE 754 compliant and does not
-            // support rounding modifiers. The maximum ulp error is 2 across the full range of
-            // inputs.
-            // https://llvm.org/docs/LangRef.html#fpmath-metadata
-            let fpmath_value =
-                unsafe { LLVMConstReal(get_scalar_type(self.context, ast::ScalarType::F32), 2.0) };
-            let fpmath_value = unsafe { LLVMValueAsMetadata(fpmath_value) };
-            let mut md_node_content = [fpmath_value];
-            let md_node = unsafe {
-                LLVMMDNodeInContext2(
-                    self.context,
-                    md_node_content.as_mut_ptr(),
-                    md_node_content.len(),
-                )
-            };
-            let md_node = unsafe { LLVMMetadataAsValue(self.context, md_node) };
-            let kind = unsafe {
-                LLVMGetMDKindIDInContext(
-                    self.context,
-                    "fpmath".as_ptr().cast(),
-                    "fpmath".len() as u32,
-                )
-            };
-            unsafe { LLVMSetMetadata(fdiv, kind, md_node) };
-        }
+        unsafe {
+            LLVMZludaSetFastMathFlags(
+                fdiv,
+                LLVMZludaFastMathAllowReciprocal | LLVMZludaFastMathApproxFunc,
+            )
+        };
         Ok(())
     }
 
@@ -2628,9 +2599,6 @@ impl<'a> MethodEmitContext<'a> {
             (ast::ScalarType::F64, ast::RcpKind::Approx, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.rcp.f64"
             }
-            (_, ast::RcpKind::Compliant(rnd), _) => {
-                return self.emit_rcp_compliant(data, arguments, rnd)
-            }
             _ => return Err(error_unreachable()),
         };
         self.emit_intrinsic(
@@ -2639,22 +2607,6 @@ impl<'a> MethodEmitContext<'a> {
             vec![&data.type_.into()],
             vec![(self.resolver.value(arguments.src)?, type_)],
         )?;
-        Ok(())
-    }
-
-    fn emit_rcp_compliant(
-        &mut self,
-        data: ptx_parser::RcpData,
-        arguments: ptx_parser::RcpArgs<SpirvWord>,
-        _rnd: ast::RoundingMode,
-    ) -> Result<(), TranslateError> {
-        let type_ = get_scalar_type(self.context, data.type_);
-        let one = unsafe { LLVMConstReal(type_, 1.0) };
-        let src = self.resolver.value(arguments.src)?;
-        let rcp = self
-            .fp
-            .fdiv(self.resolver, data.type_, arguments.dst, one, src)?;
-        unsafe { LLVMZludaSetFastMathFlags(rcp, LLVMZludaFastMathAllowReciprocal) };
         Ok(())
     }
 
