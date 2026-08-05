@@ -69,8 +69,7 @@ pub(crate) fn run<'input>(
     fp_mode: FloatingPointMode,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx =
-        ModuleEmitContext::new(context, &module, &id_defs, fp_mode);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, fp_mode);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
