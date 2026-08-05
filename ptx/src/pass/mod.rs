@@ -116,8 +116,10 @@ pub fn to_llvm_module<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
+    let fp_mode = get_fp_mode(&directives[..]);
+    on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -126,8 +128,23 @@ pub fn to_llvm_module<'input>(
         context,
         metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
         metadata32,
-        constrained_fp: true,
+        constrained_fp: fp_mode == llvm::emit::FloatingPointMode::Constrained,
     })
+}
+
+fn get_fp_mode(
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+) -> llvm::emit::FloatingPointMode {
+    for d in directives {
+        if let Directive2::Method(method) = d {
+            for s in method.body.iter().flatten() {
+                if let Statement::SetMode(_) = s {
+                    return llvm::emit::FloatingPointMode::Constrained;
+                }
+            }
+        }
+    }
+    llvm::emit::FloatingPointMode::Normal
 }
 
 pub struct Module {

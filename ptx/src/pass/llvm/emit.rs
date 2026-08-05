@@ -66,10 +66,11 @@ pub(crate) fn run<'input>(
     context: &Context,
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    fp_mode: FloatingPointMode,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
     let mut emit_ctx =
-        ModuleEmitContext::new(context, &module, &id_defs, FloatingPointMode::Constrained);
+        ModuleEmitContext::new(context, &module, &id_defs, fp_mode);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -4455,7 +4456,7 @@ impl FloatingPoint {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FloatingPointMode {
+pub enum FloatingPointMode {
     Normal,
     Constrained,
 }

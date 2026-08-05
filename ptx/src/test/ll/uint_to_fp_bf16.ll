@@ -65,13 +65,13 @@ define amdgpu_kernel void @uint_to_fp_bf16(ptr addrspace(4) byref(i64) %"62", pt
   %"94" = uitofp i32 %20 to float
   store float %"94", ptr addrspace(5) %"70", align 4
   %21 = load float, ptr addrspace(5) %"70", align 4
-  %22 = fptrunc float %21 to bfloat
-  %"96" = bitcast bfloat %22 to i16
+  %"104" = fptrunc float %21 to bfloat
+  %"96" = bitcast bfloat %"104" to i16
   store i16 %"96", ptr addrspace(5) %"66", align 2
-  %23 = load i64, ptr addrspace(5) %"65", align 8
-  %24 = load i16, ptr addrspace(5) %"66", align 2
-  %"105" = inttoptr i64 %23 to ptr addrspace(1)
-  store i16 %24, ptr addrspace(1) %"105", align 2
+  %22 = load i64, ptr addrspace(5) %"65", align 8
+  %23 = load i16, ptr addrspace(5) %"66", align 2
+  %"105" = inttoptr i64 %22 to ptr addrspace(1)
+  store i16 %23, ptr addrspace(1) %"105", align 2
   br label %"15"
 
 "15":                                             ; preds = %"14", %"13", %"29"
