@@ -4,6 +4,7 @@ use dark_api::cuda::CudaDarkApi;
 use dark_api::FunctionArgInfo;
 use paste::paste;
 use rkyv::api::high::HighSerializer;
+use rkyv::api::low::LowSerializer;
 use rkyv::de::Pool;
 use rkyv::rancor::{Failure, Strategy};
 use rkyv::rend::u32_le;
@@ -17,6 +18,8 @@ use std::sync::{Mutex, OnceLock};
 use std::{cell::RefCell, ffi::c_void, ptr};
 use zluda_common::{CodeLibraryRef, CodeModuleRef};
 use zluda_server_common::*;
+
+use crate::ipc::{AllocError, SliceWriter};
 
 mod ipc;
 
@@ -182,9 +185,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -195,9 +196,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -208,9 +207,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_out<Out: Archive>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror>
     where
         <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,

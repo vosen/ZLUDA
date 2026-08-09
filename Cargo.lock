@@ -3636,6 +3636,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "readme-rustdocifier"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08ad765b21a08b1a8e5cdce052719188a23772bcbefb3c439f0baaf62c56ceac"
+
+[[package]]
 name = "reborrow"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4080,6 +4086,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "stumpalo"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf4a1e52ba589579bfea17e809d8845f5f216b76aac28c370a566b2a23f4ac09"
+dependencies = [
+ "readme-rustdocifier",
+ "rustc_version",
 ]
 
 [[package]]
@@ -5173,6 +5189,7 @@ dependencies = [
  "rand",
  "rkyv",
  "rustc-hash 2.1.2",
+ "stumpalo",
  "unwrap_or",
  "windows",
  "zluda_common",
