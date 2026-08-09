@@ -85,6 +85,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxPushCurrent_v2,
             cuCtxPushCurrent,
             cuCtxSetCurrent,
+            cuCtxSetCacheConfig,
             cuCtxSetFlags,
             cuCtxSetLimit,
             cuCtxSynchronize_v2,
