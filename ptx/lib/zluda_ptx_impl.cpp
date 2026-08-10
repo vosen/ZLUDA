@@ -311,6 +311,7 @@ extern "C"
     {                                                                                                                                           \
         int32_t section_mask = (opts >> 8) & 0b11111;                                                                                           \
         int32_t warp_end = opts & 0b11111;                                                                                                      \
+        delta &= 0b11111;                                                                                                                       \
         int32_t self = (int32_t)__lane_id();                                                                                                    \
         int32_t subsection = section_mask & self;                                                                                               \
         int32_t subsection_end = subsection | (~section_mask & warp_end);                                                                       \
