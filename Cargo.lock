@@ -5209,7 +5209,7 @@ dependencies = [
  "rkyv",
  "rustc-hash 2.1.2",
  "slab",
- "windows-sys 0.61.2",
+ "windows",
  "zluda_server_common",
 ]
 

@@ -1,3 +1,4 @@
+use core::slice;
 use cuda_types::cuda::CUerror;
 use rand::distr::{Alphanumeric, SampleString};
 use rkyv::api::high::HighSerializer;
@@ -13,7 +14,7 @@ use std::num::NonZeroU32;
 use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{env, mem};
+use std::{env, mem, ptr};
 use windows::core::{Error, PCSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Memory::*;
@@ -69,27 +70,27 @@ impl Endpoint {
 
     fn random_global_name() -> String {
         let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
-        format!("Global\\zluda-{name}\0")
+        format!("Local\\zluda-{name}\0")
     }
 }
 pub(crate) struct Server {
-    client: Endpoint,
-    server: Endpoint,
+    local: Endpoint,
+    remote: Endpoint,
     _child: Child,
     arena: stumpalo::Arena,
 }
 
 impl Server {
     pub unsafe fn start() -> Result<Self, Error> {
-        let client = Endpoint::new()?;
-        let server = Endpoint::new()?;
+        let local = Endpoint::new()?;
+        let remote = Endpoint::new()?;
         let spawn_server = |path: &PathBuf| {
             Command::new(path)
                 .args([
-                    &client.event_name,
-                    &client.shared_memory_name,
-                    &server.event_name,
-                    &server.shared_memory_name,
+                    &local.event_name,
+                    &local.shared_memory_name,
+                    &remote.event_name,
+                    &remote.shared_memory_name,
                 ])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -114,11 +115,10 @@ impl Server {
             (Err(e), None) => return Err(e.into()),
         };
         zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;
-
         let arena = stumpalo::Arena::new();
         Ok(Server {
-            client,
-            server,
+            local,
+            remote,
             _child: child,
             arena,
         })
@@ -129,42 +129,73 @@ impl Server {
         opcode: Opcode,
         data: impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
-        unsafe {
-            std::ptr::copy_nonoverlapping(&(opcode as u32), self.server.shared_memory.0.cast(), 1)
-        };
-        let arena = ScopedArena {
-            arena: &mut self.arena,
-        };
-        let mut serializer = rkyv::ser::Serializer::new(
+        unsafe { ptr::copy_nonoverlapping(&(opcode as u32), self.remote.view.Value.cast(), 1) };
+        let mut remote_serializer_base = rkyv::ser::Serializer::new(
             SliceWriter {
-                offset: 0,
+                offset: 16,
                 slice: unsafe {
-                    std::slice::from_raw_parts_mut(
-                        self.server.shared_memory.0.cast(),
+                    slice::from_raw_parts_mut(
+                        self.remote.view.Value.cast(),
                         Endpoint::INITIAL_SHARED_MEMORY_SIZE,
                     )
                 },
             },
-            arena,
+            ScopedArena {
+                arena: &mut self.arena,
+            },
             (),
         );
-        let mut serializer = Strategy::<_, AllocError>::wrap(&mut serializer);
-        let x = data.serialize(serializer);
-        todo!();
-        /*
-        self.pipe.write_all().map_err(|_| CUerror::UNKNOWN)?;
-        let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
-                .map_err(|_| CUerror::UNKNOWN)?;
-        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(self)?;
-        self.buffer.resize(mem::size_of::<Out>(), 0);
-        self.pipe
-            .read_exact(&mut self.buffer)
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let output = unsafe { rkyv::access_unchecked::<Out>(&self.buffer) };
+        let remote_serializer = Strategy::<_, AllocError>::wrap(&mut remote_serializer_base);
+        rkyv::api::serialize_using(&data, remote_serializer).unwrap();
+        drop(remote_serializer_base);
+        unsafe { SignalObjectAndWait(self.remote.event, self.local.event, INFINITE, false) };
+        let mut return_value = 0u32;
+        unsafe { ptr::copy_nonoverlapping(self.local.view.Value.cast(), &mut return_value, 1) };
+        match NonZeroU32::new(return_value) {
+            None => Ok(()),
+            Some(code) => Err(CUerror(code)),
+        }?;
+        let local_ptr = self.local.view.Value.wrapping_byte_add(16);
+        let output =
+            unsafe { slice::from_raw_parts(local_ptr.cast::<u8>(), mem::size_of::<Out>()) };
+        let output = unsafe { rkyv::access_unchecked::<Out>(output) };
         Ok(output.clone())
-         */
+    }
+
+    fn local_serializer(&mut self) -> rkyv::ser::Serializer<SliceWriter<'_>, ScopedArena<'_>, ()> {
+        rkyv::ser::Serializer::new(
+            SliceWriter {
+                offset: 16,
+                slice: unsafe {
+                    slice::from_raw_parts_mut(
+                        self.local.view.Value.cast(),
+                        Endpoint::INITIAL_SHARED_MEMORY_SIZE,
+                    )
+                },
+            },
+            ScopedArena {
+                arena: &mut self.arena,
+            },
+            (),
+        )
+    }
+
+    fn remote_serializer(&mut self) -> rkyv::ser::Serializer<SliceWriter<'_>, ScopedArena<'_>, ()> {
+        rkyv::ser::Serializer::new(
+            SliceWriter {
+                offset: 16,
+                slice: unsafe {
+                    slice::from_raw_parts_mut(
+                        self.remote.view.Value.cast(),
+                        Endpoint::INITIAL_SHARED_MEMORY_SIZE,
+                    )
+                },
+            },
+            ScopedArena {
+                arena: &mut self.arena,
+            },
+            (),
+        )
     }
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
@@ -223,6 +254,15 @@ impl Server {
             .map_err(|_| CUerror::UNKNOWN)
         */
     }
+
+    fn read_return_code(&mut self) -> Result<(), CUerror> {
+        let mut return_value = 0u32;
+        unsafe { ptr::copy_nonoverlapping(self.local.view.Value.cast(), &mut return_value, 1) };
+        match NonZeroU32::new(return_value) {
+            None => Ok(()),
+            Some(code) => Err(CUerror(code)),
+        }
+    }
 }
 
 pub struct SliceWriter<'a> {
@@ -238,17 +278,13 @@ impl<'a> rkyv::ser::Positional for SliceWriter<'a> {
 
 impl<'a> rkyv::ser::Writer<AllocError> for SliceWriter<'a> {
     fn write(&mut self, bytes: &[u8]) -> Result<(), AllocError> {
-        let end = self
-            .offset
-            .checked_add(bytes.len())
-            .ok_or(AllocError::NotEnoughMemory {
-                more_bytes: bytes.len(),
-            })?;
-        if end > self.slice.len() {
+        let available = self.slice.len().saturating_sub(self.offset);
+        if bytes.len() > available {
             return Err(AllocError::NotEnoughMemory {
-                more_bytes: end - self.slice.len(),
+                more_bytes: bytes.len() - available,
             });
         }
+        let end = self.offset + bytes.len();
         self.slice[self.offset..end].copy_from_slice(bytes);
         self.offset = end;
         Ok(())
@@ -269,23 +305,24 @@ unsafe impl<'a> Allocator<AllocError> for ScopedArena<'a> {
     unsafe fn push_alloc(
         &mut self,
         layout: std::alloc::Layout,
-    ) -> Result<std::ptr::NonNull<[u8]>, AllocError> {
+    ) -> Result<ptr::NonNull<[u8]>, AllocError> {
         self.arena
             .try_alloc_layout(layout)
-            .map_err(|_| AllocError::StumpaloError)
+            .map_err(|_| AllocError::Stumpalo)
     }
 
     unsafe fn pop_alloc(
         &mut self,
-        _ptr: std::ptr::NonNull<u8>,
+        _ptr: ptr::NonNull<u8>,
         _layout: std::alloc::Layout,
     ) -> Result<(), AllocError> {
         Ok(())
     }
 }
 
+#[derive(Debug)]
 pub enum AllocError {
-    StumpaloError,
+    Stumpalo,
     NotEnoughMemory { more_bytes: usize },
 }
 
