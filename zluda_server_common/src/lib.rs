@@ -3,7 +3,7 @@ use cuda_types::cuda::*;
 use rand::distr::{Alphanumeric, SampleString};
 use rkyv::rancor::{Failure, Strategy};
 use rkyv::rend::{u32_le, u64_le};
-use rkyv::ser::Allocator;
+use rkyv::ser::{Allocator, Positional};
 use rkyv::{Archive, Deserialize, Portable, Serialize};
 use std::{mem, ptr, slice};
 use strum_macros::FromRepr;
@@ -413,6 +413,21 @@ impl Endpoint {
             shared_memory,
         })
     }
+
+    pub unsafe fn open(
+        mut event_name: String,
+        shared_memory_name: String,
+    ) -> windows::core::Result<Self> {
+        event_name.push('\0');
+        let event =
+            Owned::new(unsafe { OpenEventA(EVENT_ALL_ACCESS, false, PCSTR(event_name.as_ptr())) }?);
+        event_name.pop();
+        Ok(Self {
+            event,
+            event_name,
+            shared_memory: SharedMemory::open(shared_memory_name)?,
+        })
+    }
 }
 
 pub struct SharedMemory {
@@ -438,6 +453,25 @@ impl SharedMemory {
             Self::INITIAL_SHARED_MEMORY_SIZE as u32,
             PCSTR(shared_memory_name.as_ptr()),
         )?);
+        shared_memory_name.pop();
+        let view = OwnedView::new(*shared_memory, Self::INITIAL_SHARED_MEMORY_SIZE)?;
+        Ok(SharedMemory {
+            name: shared_memory_name,
+            handle: shared_memory,
+            view,
+            size: Self::INITIAL_SHARED_MEMORY_SIZE,
+        })
+    }
+
+    pub unsafe fn open(mut shared_memory_name: String) -> windows::core::Result<Self> {
+        shared_memory_name.push('\0');
+        let shared_memory = Owned::new(unsafe {
+            OpenFileMappingA(
+                FILE_MAP_ALL_ACCESS.0,
+                false,
+                PCSTR(shared_memory_name.as_ptr()),
+            )
+        }?);
         shared_memory_name.pop();
         let view = OwnedView::new(*shared_memory, Self::INITIAL_SHARED_MEMORY_SIZE)?;
         Ok(SharedMemory {
@@ -523,13 +557,31 @@ impl SharedMemory {
         unsafe { rkyv::api::low::from_bytes_unchecked(slice) }.map_err(|_| CUerror::UNKNOWN)
     }
 
+    pub fn deserialize_body2<Out: Archive>(&self) -> &Out::Archived
+    where
+        <Out as Archive>::Archived: Portable,
+    {
+        let size = self.read_size();
+        let slice = unsafe {
+            slice::from_raw_parts(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                size as usize,
+            )
+        };
+        unsafe { rkyv::access_unchecked::<Out::Archived>(slice) }
+    }
+
     pub fn serialize_body(
         &mut self,
         arena: &mut stumpalo::Arena,
         body: &impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Option<SharedMemory>, CUerror> {
         let mut dropped_shmem = None;
-        loop {
+        let length = loop {
             let mut serializer_base = rkyv::ser::Serializer::new(
                 SliceWriter {
                     offset: 16,
@@ -545,7 +597,7 @@ impl SharedMemory {
             );
             let serializer = Strategy::<_, AllocError>::wrap(&mut serializer_base);
             match rkyv::api::serialize_using(body, serializer) {
-                Ok(_) => break,
+                Ok(_) => break serializer_base.writer.pos() - Self::OFFSET_BODY,
                 Err(AllocError::Stumpalo) => {
                     return Err(CUerror::OUT_OF_MEMORY);
                 }
@@ -577,7 +629,8 @@ impl SharedMemory {
                     dropped_shmem.get_or_insert(old_shmem);
                 }
             }
-        }
+        };
+        self.write_size(length as u32);
         Ok(dropped_shmem)
     }
 }

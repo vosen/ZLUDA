@@ -5208,6 +5208,7 @@ dependencies = [
  "rkyv",
  "rustc-hash 2.1.2",
  "slab",
+ "stumpalo",
  "windows",
  "zluda_server_common",
 ]

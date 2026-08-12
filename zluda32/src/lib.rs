@@ -210,11 +210,8 @@ impl GlobalState {
     where
         <Out as Archive>::Archived: Deserialize<Out, Strategy<(), Failure>>,
     {
-        Self::get()?
-            .lock()
-            .map_err(|_| CUerror::UNKNOWN)?
-            .server
-            .remote_call_framed_out(opcode, data)
+        let mut state = Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        state.server.remote_call_framed_out(opcode, data)
     }
 }
 

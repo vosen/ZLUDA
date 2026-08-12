@@ -23,6 +23,7 @@ slab = "0.4.12"
 rkyv = "0.8"
 rustc-hash = "2.0.0"
 range-alloc = "0.1.5"
+stumpalo = "1.0.0"
 
 [package.metadata.zluda]
 windows_only = true
