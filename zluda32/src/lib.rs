@@ -19,8 +19,6 @@ use std::{cell::RefCell, ffi::c_void, ptr};
 use zluda_common::{CodeLibraryRef, CodeModuleRef};
 use zluda_server_common::*;
 
-use crate::ipc::{AllocError, SliceWriter};
-
 mod ipc;
 
 macro_rules! not_implemented {
@@ -185,7 +183,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -196,7 +194,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -207,10 +205,10 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_out<Out: Archive>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<ipc::Serializer<'a, 'b>>,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror>
     where
-        <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,
+        <Out as Archive>::Archived: Deserialize<Out, Strategy<(), Failure>>,
     {
         Self::get()?
             .lock()

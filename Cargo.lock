@@ -5186,7 +5186,6 @@ dependencies = [
  "dark_api",
  "libc",
  "paste",
- "rand",
  "rkyv",
  "rustc-hash 2.1.2",
  "stumpalo",
@@ -5406,9 +5405,12 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "paste",
+ "rand",
  "rkyv",
  "strum",
  "strum_macros",
+ "stumpalo",
+ "windows",
 ]
 
 [[package]]
