@@ -123,7 +123,17 @@ impl Server {
         self.remote.shared_memory.write_header(opcode as u32);
         self.remote.shared_memory.write_body(&data);
         unsafe { SignalObjectAndWait(*self.remote.event, *self.local.event, INFINITE, false) };
-        let return_value = self.local.shared_memory.read_header();
+        let mut return_value = self.local.shared_memory.read_header();
+        if return_value == u32::MAX {
+            let new_shmem_name = unsafe {
+                String::from_utf8_unchecked(self.local.shared_memory.read_buffer().to_vec())
+            };
+            let new_shmem =
+                unsafe { zluda_server_common::SharedMemory::open(new_shmem_name, None) }
+                    .map_err(|_| CUerror::MAP_FAILED)?;
+            self.local.shared_memory = new_shmem;
+            return_value = self.local.shared_memory.read_header();
+        }
         match NonZeroU32::new(return_value) {
             None => Ok(()),
             Some(code) => Err(CUerror(code)),
