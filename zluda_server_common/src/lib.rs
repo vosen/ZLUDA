@@ -521,7 +521,7 @@ impl SharedMemory {
     }
 
     pub fn write_buffer(&mut self, body: &[u8]) {
-        self.write_header(body.len() as u32);
+        self.write_size(body.len() as u32);
         let output = unsafe {
             std::slice::from_raw_parts_mut(
                 self.view
@@ -586,10 +586,7 @@ impl SharedMemory {
                 SliceWriter {
                     offset: 16,
                     slice: unsafe {
-                        slice::from_raw_parts_mut(
-                            self.view.0.Value.cast(),
-                            SharedMemory::INITIAL_SHARED_MEMORY_SIZE,
-                        )
+                        slice::from_raw_parts_mut(self.view.0.Value.cast(), self.size)
                     },
                 },
                 ScopedArena { arena },

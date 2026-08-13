@@ -1065,8 +1065,8 @@ where
     remote.shared_memory.write_header(0);
     let old_shmem = remote.shared_memory.serialize_body(arena, &output)?;
     if let Some(mut old_shmem) = old_shmem {
+        remote.shared_memory.write_header(0);
         old_shmem.write_header(u32::MAX);
-        old_shmem.write_size(remote.shared_memory.name.as_bytes().len() as u32);
         old_shmem.write_buffer(remote.shared_memory.name.as_bytes());
     }
     Ok(())

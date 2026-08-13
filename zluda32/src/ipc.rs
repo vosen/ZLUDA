@@ -92,12 +92,14 @@ impl Server {
         opcode: Opcode,
         data: impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
-        self.remote.shared_memory.write_header(opcode as u32);
+        let opcode = opcode as u32;
+        self.remote.shared_memory.write_header(opcode);
         let old_shmem = self
             .remote
             .shared_memory
             .serialize_body(&mut self.arena, &data)?;
         if let Some(mut old_shmem) = old_shmem {
+            self.remote.shared_memory.write_header(opcode);
             old_shmem.write_header(u32::MAX);
             old_shmem.write_buffer(self.remote.shared_memory.name.as_bytes());
         }
