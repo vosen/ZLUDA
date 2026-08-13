@@ -425,7 +425,10 @@ impl Endpoint {
         Ok(Self {
             event,
             event_name,
-            shared_memory: SharedMemory::open(shared_memory_name)?,
+            shared_memory: SharedMemory::open(
+                shared_memory_name,
+                Some(SharedMemory::INITIAL_SHARED_MEMORY_SIZE),
+            )?,
         })
     }
 }
@@ -463,7 +466,10 @@ impl SharedMemory {
         })
     }
 
-    pub unsafe fn open(mut shared_memory_name: String) -> windows::core::Result<Self> {
+    pub unsafe fn open(
+        mut shared_memory_name: String,
+        size: Option<usize>,
+    ) -> windows::core::Result<Self> {
         shared_memory_name.push('\0');
         let shared_memory = Owned::new(unsafe {
             OpenFileMappingA(
@@ -473,12 +479,22 @@ impl SharedMemory {
             )
         }?);
         shared_memory_name.pop();
-        let view = OwnedView::new(*shared_memory, Self::INITIAL_SHARED_MEMORY_SIZE)?;
+        let view = OwnedView::new(*shared_memory, size.unwrap_or(0))?;
+        let size = match size {
+            Some(s) => s,
+            None => {
+                let mut query = mem::zeroed();
+                if 0 == VirtualQuery(Some(view.0.Value), &mut query, mem::size_of_val(&query)) {
+                    return Err(windows::core::Error::empty());
+                }
+                query.RegionSize
+            }
+        };
         Ok(SharedMemory {
             name: shared_memory_name,
             handle: shared_memory,
             view,
-            size: Self::INITIAL_SHARED_MEMORY_SIZE,
+            size,
         })
     }
 
@@ -533,6 +549,20 @@ impl SharedMemory {
             )
         };
         output.copy_from_slice(body);
+    }
+
+    pub fn read_buffer<'a>(&'a self) -> &'a [u8] {
+        let size = self.read_size();
+        unsafe {
+            std::slice::from_raw_parts(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                size as usize,
+            )
+        }
     }
 
     pub fn read_body<T>(&self) -> T {

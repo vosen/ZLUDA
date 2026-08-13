@@ -313,7 +313,11 @@ fn main() -> std::io::Result<()> {
     loop {
         let opcode = local.shared_memory.read_header();
         if opcode == u32::MAX {
-            todo!()
+            let new_shmem_name =
+                unsafe { String::from_utf8_unchecked(local.shared_memory.read_buffer().to_vec()) };
+            let new_shmem = unsafe { SharedMemory::open(new_shmem_name, None) }?;
+            local.shared_memory = new_shmem;
+            continue;
         }
         match Opcode::from_repr(opcode) {
             Some(Opcode::cuInit) => {
