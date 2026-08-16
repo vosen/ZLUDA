@@ -1323,6 +1323,32 @@ pub(crate) unsafe fn get_convolution_backward_filter_workspace_size(
     )
 }
 
+pub(crate) unsafe fn create_dropout_descriptor(
+    dropout_desc: &mut miopenDropoutDescriptor_t,
+) -> miopenStatus_t {
+    miopen()?.miopenCreateDropoutDescriptor(dropout_desc)
+}
+
+pub(crate) unsafe fn destroy_dropout_descriptor(
+    dropout_desc: miopenDropoutDescriptor_t,
+) -> miopenStatus_t {
+    miopen()?.miopenDestroyDropoutDescriptor(dropout_desc)
+}
+
+pub(crate) unsafe fn get_property(
+    property_type: libraryPropertyType,
+    value: &mut i32,
+) -> miopenStatus_t {
+    let version = match property_type {
+        libraryPropertyType::MAJOR_VERSION => CUDNN_MAJOR,
+        libraryPropertyType::MINOR_VERSION => CUDNN_MINOR,
+        libraryPropertyType::PATCH_LEVEL => CUDNN_PATCHLEVEL,
+        _ => return miopenStatus_t::ErrorNotImplemented,
+    };
+    *value = version as i32;
+    Ok(())
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use static_assertions::assert_eq_size;

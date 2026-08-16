@@ -257,7 +257,8 @@ from_cuda_nop!(
     cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
     cublasLtMatmulPreferenceAttributes_t,
     CUfunc_cache,
-    CUctxCreateParams
+    CUctxCreateParams,
+    cudnn9::libraryPropertyType
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -279,6 +280,7 @@ from_cuda_transmute!(
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t,
+    cudnn9::cudnnDropoutDescriptor_t => miopenDropoutDescriptor_t,
     cusparseHandle_t => rocsparse_handle,
     cusparseMatrixType_t => rocsparse_matrix_type,
     cusparseConstSpMatDescr_t => rocsparse_const_spmat_descr,
