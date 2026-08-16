@@ -7,7 +7,7 @@ use rkyv::ser::{Allocator, Positional};
 use rkyv::{Archive, Deserialize, Portable, Serialize};
 use std::{mem, ptr, slice};
 use strum_macros::FromRepr;
-use windows::core::{Error, Owned, PCSTR};
+use windows::core::{Owned, PCSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Memory::*;
 use windows::Win32::System::Threading::*;

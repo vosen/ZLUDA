@@ -1,22 +1,13 @@
-use core::slice;
 use cuda_types::cuda::CUerror;
-use rkyv::api::high::HighSerializer;
-use rkyv::api::low::LowSerializer;
-use rkyv::de::Pool;
-use rkyv::rancor::{Failure, Fallible, Strategy};
-use rkyv::ser::allocator::ArenaHandle;
-use rkyv::ser::Allocator;
-use rkyv::util::AlignedVec;
+use rkyv::rancor::{Failure, Strategy};
 use rkyv::{Archive, Deserialize, Portable, Serialize};
-use std::io::{Read, Write};
+use std::env;
 use std::num::NonZeroU32;
 use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{env, mem, ptr};
-use windows::core::{Error, Owned, PCSTR};
+use windows::core::Error;
 use windows::Win32::Foundation::*;
-use windows::Win32::System::Memory::*;
 use windows::Win32::System::Threading::*;
 use zluda_server_common::{Opcode, Serializer};
 
@@ -58,7 +49,10 @@ impl Server {
         let fallback_path = env::var("ZLUDA64_PATH").ok().map(PathBuf::from);
         let child = match (spawn_server(&primary_path), fallback_path) {
             (Ok(c), _) => c,
-            (Err(_), Some(fallback_path)) => spawn_server(&fallback_path)?,
+            (Err(_), Some(mut fallback_path)) => {
+                fallback_path.push("zluda64_server.exe");
+                spawn_server(&fallback_path)?
+            }
             (Err(e), None) => return Err(e.into()),
         };
         zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;

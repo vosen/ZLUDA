@@ -1,20 +1,11 @@
 // Prevent the console window from appearing when running the server on Windows
 #![windows_subsystem = "windows"]
 
-use compio::{
-    buf::{buf_try, IoBuf, IoBufMut, ReserveError, ReserveExactError, SetLen},
-    fs::named_pipe::{ClientOptions, NamedPipeClient},
-    io::{AsyncReadExt, AsyncWriteExt},
-    BufResult,
-};
 use cuda_macros::cuda_function_declarations;
 use cuda_types::cuda::*;
 use dark_api::FunctionArgInfo;
 use rkyv::{
-    api::high::HighSerializer,
     rend::{u32_le, u64_le},
-    ser::allocator::ArenaHandle,
-    util::AlignedVec,
     Archive, Portable, Serialize,
 };
 use rustc_hash::FxHashMap;
@@ -27,9 +18,6 @@ use std::{
     ptr,
     rc::Rc,
 };
-use windows::core::PCSTR;
-use windows::Win32::Foundation::*;
-use windows::Win32::System::Memory::*;
 use windows::Win32::System::Threading::*;
 use zluda_server_common::*;
 
@@ -321,38 +309,38 @@ fn main() -> std::io::Result<()> {
         }
         match Opcode::from_repr(opcode) {
             Some(Opcode::cuInit) => {
-                handle_cuda_function2::<cuInitIn, cuInitOut>(&mut local, &mut remote, cu_init);
+                handle_cuda_function::<cuInitIn, cuInitOut>(&mut local, &mut remote, cu_init);
             }
             Some(Opcode::cuDeviceGetCount) => {
-                handle_cuda_function2::<cuDeviceGetCountIn, cuDeviceGetCountOut>(
+                handle_cuda_function::<cuDeviceGetCountIn, cuDeviceGetCountOut>(
                     &mut local,
                     &mut remote,
                     cu_device_get_count,
                 );
             }
             Some(Opcode::cuDeviceGetAttribute) => {
-                handle_cuda_function2::<cuDeviceGetAttributeIn, cuDeviceGetAttributeOut>(
+                handle_cuda_function::<cuDeviceGetAttributeIn, cuDeviceGetAttributeOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_device_get_attribute(&mut state, input),
                 );
             }
             Some(Opcode::cuDeviceGet) => {
-                handle_cuda_function2::<cuDeviceGetIn, cuDeviceGetOut>(
+                handle_cuda_function::<cuDeviceGetIn, cuDeviceGetOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_device_get(&mut state, input),
                 );
             }
             Some(Opcode::cuDriverGetVersion) => {
-                handle_cuda_function2::<cuDriverGetVersionIn, cuDriverGetVersionOut>(
+                handle_cuda_function::<cuDriverGetVersionIn, cuDriverGetVersionOut>(
                     &mut local,
                     &mut remote,
                     cu_driver_get_version,
                 );
             }
             Some(Opcode::cuDeviceGetName) => {
-                handle_cuda_function_framed_out2::<cuDeviceGetNameIn, cuDeviceGetNameOut>(
+                handle_cuda_function_framed_out::<cuDeviceGetNameIn, cuDeviceGetNameOut>(
                     &mut local,
                     &mut remote,
                     &mut arena,
@@ -360,63 +348,63 @@ fn main() -> std::io::Result<()> {
                 );
             }
             Some(Opcode::cuDeviceTotalMem_v2) => {
-                handle_cuda_function2::<cuDeviceTotalMem_v2In, cuDeviceTotalMem_v2Out>(
+                handle_cuda_function::<cuDeviceTotalMem_v2In, cuDeviceTotalMem_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_device_total_mem_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuCtxGetApiVersion) => {
-                handle_cuda_function2::<cuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
+                handle_cuda_function::<cuCtxGetApiVersionIn, cuCtxGetApiVersionOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_ctx_get_api_version(&mut state, input),
                 );
             }
             Some(Opcode::cuModuleLoadData) => {
-                handle_cuda_function_framed_in2::<cuModuleLoadDataIn, cuModuleLoadDataOut>(
+                handle_cuda_function_framed_in::<cuModuleLoadDataIn, cuModuleLoadDataOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_module_load_data(&mut state, input),
                 );
             }
             Some(Opcode::cuModuleGetFunction) => {
-                handle_cuda_function_framed_in2::<cuModuleGetFunctionIn, cuModuleGetFunctionOut>(
+                handle_cuda_function_framed_in::<cuModuleGetFunctionIn, cuModuleGetFunctionOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_module_get_function(&mut state, input),
                 );
             }
             Some(Opcode::cuModuleGetGlobal_v2) => {
-                handle_cuda_function_framed_in2::<cuModuleGetGlobal_v2In, cuModuleGetGlobal_v2Out>(
+                handle_cuda_function_framed_in::<cuModuleGetGlobal_v2In, cuModuleGetGlobal_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_module_get_global_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuMemAlloc_v2) => {
-                handle_cuda_function2::<cuMemAlloc_v2In, cuMemAlloc_v2Out>(
+                handle_cuda_function::<cuMemAlloc_v2In, cuMemAlloc_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_mem_alloc_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuMemcpyHtoDAsync_v2) => {
-                handle_cuda_function_framed_in2::<cuMemcpyHtoDAsync_v2In, cuMemcpyHtoDAsync_v2Out>(
+                handle_cuda_function_framed_in::<cuMemcpyHtoDAsync_v2In, cuMemcpyHtoDAsync_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_memcpy_hto_d_async_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuModuleGetTexRef) => {
-                handle_cuda_function_framed_in2::<cuModuleGetTexRefIn, cuModuleGetTexRefOut>(
+                handle_cuda_function_framed_in::<cuModuleGetTexRefIn, cuModuleGetTexRefOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_module_get_tex_ref(&mut state, input),
                 );
             }
             Some(Opcode::zludaGetFunctionArgs) => {
-                handle_cuda_function_framed_out2::<zludaGetFunctionArgsIn, zludaGetFunctionArgsOut>(
+                handle_cuda_function_framed_out::<zludaGetFunctionArgsIn, zludaGetFunctionArgsOut>(
                     &mut local,
                     &mut remote,
                     &mut arena,
@@ -424,21 +412,21 @@ fn main() -> std::io::Result<()> {
                 );
             }
             Some(Opcode::cuLaunchKernel) => {
-                handle_cuda_function_framed_in2::<cuLaunchKernelIn, cuLaunchKernelOut>(
+                handle_cuda_function_framed_in::<cuLaunchKernelIn, cuLaunchKernelOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_launch_kernel(&mut state, input),
                 );
             }
             Some(Opcode::cuCtxSynchronize) => {
-                handle_cuda_function2::<cuCtxSynchronizeIn, cuCtxSynchronizeOut>(
+                handle_cuda_function::<cuCtxSynchronizeIn, cuCtxSynchronizeOut>(
                     &mut local,
                     &mut remote,
                     cu_ctx_synchronize,
                 );
             }
             Some(Opcode::cuMemcpyDtoHAsync_v2) => {
-                handle_cuda_function_framed_out2::<cuMemcpyDtoHAsync_v2In, cuMemcpyDtoHAsync_v2Out>(
+                handle_cuda_function_framed_out::<cuMemcpyDtoHAsync_v2In, cuMemcpyDtoHAsync_v2Out>(
                     &mut local,
                     &mut remote,
                     &mut arena,
@@ -446,112 +434,112 @@ fn main() -> std::io::Result<()> {
                 );
             }
             Some(Opcode::cuMemGetAddressRange_v2) => {
-                handle_cuda_function2::<cuMemGetAddressRange_v2In, cuMemGetAddressRange_v2Out>(
+                handle_cuda_function::<cuMemGetAddressRange_v2In, cuMemGetAddressRange_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_mem_get_address_range_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuTexRefSetAddress_v2) => {
-                handle_cuda_function2::<cuTexRefSetAddress_v2In, cuTexRefSetAddress_v2Out>(
+                handle_cuda_function::<cuTexRefSetAddress_v2In, cuTexRefSetAddress_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_tex_ref_set_address_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuTexRefSetFlags) => {
-                handle_cuda_function2::<cuTexRefSetFlagsIn, cuTexRefSetFlagsOut>(
+                handle_cuda_function::<cuTexRefSetFlagsIn, cuTexRefSetFlagsOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_tex_ref_set_flags(&mut state, input),
                 );
             }
             Some(Opcode::cuTexRefSetFormat) => {
-                handle_cuda_function2::<cuTexRefSetFormatIn, cuTexRefSetFormatOut>(
+                handle_cuda_function::<cuTexRefSetFormatIn, cuTexRefSetFormatOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_tex_ref_set_format(&mut state, input),
                 );
             }
             Some(Opcode::cuMemFree_v2) => {
-                handle_cuda_function2::<cuMemFree_v2In, cuMemFree_v2Out>(
+                handle_cuda_function::<cuMemFree_v2In, cuMemFree_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_mem_free_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuDeviceComputeCapability) => {
-                handle_cuda_function2::<cuDeviceComputeCapabilityIn, cuDeviceComputeCapabilityOut>(
+                handle_cuda_function::<cuDeviceComputeCapabilityIn, cuDeviceComputeCapabilityOut>(
                     &mut local,
                     &mut remote,
                     cu_device_compute_capability,
                 );
             }
             Some(Opcode::cuDeviceGetProperties) => {
-                handle_cuda_function2::<cuDeviceGetPropertiesIn, cuDeviceGetPropertiesOut>(
+                handle_cuda_function::<cuDeviceGetPropertiesIn, cuDeviceGetPropertiesOut>(
                     &mut local,
                     &mut remote,
                     cu_device_get_properties,
                 );
             }
             Some(Opcode::cuStreamCreate) => {
-                handle_cuda_function2::<cuStreamCreateIn, cuStreamCreateOut>(
+                handle_cuda_function::<cuStreamCreateIn, cuStreamCreateOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_stream_create(&mut state, input),
                 );
             }
             Some(Opcode::cuStreamDestroy_v2) => {
-                handle_cuda_function2::<cuStreamDestroy_v2In, cuStreamDestroy_v2Out>(
+                handle_cuda_function::<cuStreamDestroy_v2In, cuStreamDestroy_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_stream_destroy_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuEventCreate) => {
-                handle_cuda_function2::<cuEventCreateIn, cuEventCreateOut>(
+                handle_cuda_function::<cuEventCreateIn, cuEventCreateOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_event_create(&mut state, input),
                 );
             }
             Some(Opcode::cuEventDestroy_v2) => {
-                handle_cuda_function2::<cuEventDestroy_v2In, cuEventDestroy_v2Out>(
+                handle_cuda_function::<cuEventDestroy_v2In, cuEventDestroy_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_event_destroy_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuMemsetD8_v2) => {
-                handle_cuda_function2::<cuMemsetD8_v2In, cuMemsetD8_v2Out>(
+                handle_cuda_function::<cuMemsetD8_v2In, cuMemsetD8_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_memset_d8_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuMemcpyDtoDAsync_v2) => {
-                handle_cuda_function2::<cuMemcpyDtoDAsync_v2In, cuMemcpyDtoDAsync_v2Out>(
+                handle_cuda_function::<cuMemcpyDtoDAsync_v2In, cuMemcpyDtoDAsync_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_memcpy_dto_d_async_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuMemcpyDtoD_v2) => {
-                handle_cuda_function2::<cuMemcpyDtoD_v2In, cuMemcpyDtoD_v2Out>(
+                handle_cuda_function::<cuMemcpyDtoD_v2In, cuMemcpyDtoD_v2Out>(
                     &mut local,
                     &mut remote,
                     |input| cu_memcpy_dto_d_v2(&mut state, input),
                 );
             }
             Some(Opcode::cuEventQuery) => {
-                handle_cuda_function2::<cuEventQueryIn, cuEventQueryOut>(
+                handle_cuda_function::<cuEventQueryIn, cuEventQueryOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_event_query(&mut state, input),
                 );
             }
             Some(Opcode::cuEventRecord) => {
-                handle_cuda_function2::<cuEventRecordIn, cuEventRecordOut>(
+                handle_cuda_function::<cuEventRecordIn, cuEventRecordOut>(
                     &mut local,
                     &mut remote,
                     |input| cu_event_record(&mut state, input),
@@ -1039,7 +1027,7 @@ fn cu_ctx_get_api_version(
     Ok(cuCtxGetApiVersionOut { version })
 }
 
-fn handle_cuda_function2<In: rkyv::Archive + Portable, Out: Portable>(
+fn handle_cuda_function<In: rkyv::Archive + Portable, Out: Portable>(
     local: &mut Endpoint,
     remote: &mut Endpoint,
     handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
@@ -1055,7 +1043,7 @@ fn handle_cuda_function2<In: rkyv::Archive + Portable, Out: Portable>(
     unsafe { SignalObjectAndWait(*remote.event, *local.event, INFINITE, false) };
 }
 
-fn handle_cuda_function_framed_out2_impl<In: Archive + Portable, Out>(
+fn handle_cuda_function_framed_out_impl<In: Archive + Portable, Out>(
     local: &mut Endpoint,
     remote: &mut Endpoint,
     arena: &mut stumpalo::Arena,
@@ -1076,7 +1064,7 @@ where
     Ok(())
 }
 
-fn handle_cuda_function_framed_out2<In: Archive + Portable, Out>(
+fn handle_cuda_function_framed_out<In: Archive + Portable, Out>(
     local: &mut Endpoint,
     remote: &mut Endpoint,
     arena: &mut stumpalo::Arena,
@@ -1084,15 +1072,14 @@ fn handle_cuda_function_framed_out2<In: Archive + Portable, Out>(
 ) where
     Out: for<'a, 'b> Serialize<Serializer<'a, 'b>>,
 {
-    if let Err(err) =
-        handle_cuda_function_framed_out2_impl::<In, Out>(local, remote, arena, handler)
+    if let Err(err) = handle_cuda_function_framed_out_impl::<In, Out>(local, remote, arena, handler)
     {
         remote.shared_memory.write_header(err.0.get());
     }
     unsafe { SignalObjectAndWait(*remote.event, *local.event, INFINITE, false) };
 }
 
-fn handle_cuda_function_framed_in2_impl<In: Archive, Out: Portable>(
+fn handle_cuda_function_framed_in_impl<In: Archive, Out: Portable>(
     local: &mut Endpoint,
     remote: &mut Endpoint,
     handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
@@ -1111,188 +1098,17 @@ where
     Ok(())
 }
 
-fn handle_cuda_function_framed_in2<In: Archive, Out: Portable>(
+fn handle_cuda_function_framed_in<In: Archive, Out: Portable>(
     local: &mut Endpoint,
     remote: &mut Endpoint,
     handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
 ) where
     Out: for<'a, 'b> Serialize<Serializer<'a, 'b>>,
 {
-    if let Err(err) = handle_cuda_function_framed_in2_impl::<In, Out>(local, remote, handler) {
+    if let Err(err) = handle_cuda_function_framed_in_impl::<In, Out>(local, remote, handler) {
         remote.shared_memory.write_header(err.0.get());
     }
     unsafe { SignalObjectAndWait(*remote.event, *local.event, INFINITE, false) };
-}
-
-async fn handle_cuda_function<In: rkyv::Archive + Portable, Out: Portable>(
-    client: &mut NamedPipeClient,
-    mut buffer: AlignedVecBuffer,
-    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
-) -> std::io::Result<AlignedVecBuffer>
-where
-    Out: for<'a, 'b> Serialize<
-        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-    >,
-{
-    buffer = read_all::<In::Archived>(buffer, client).await?;
-    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
-    match handler(input) {
-        Ok(output) => {
-            buffer.clear();
-            client.write_u32_le(0).await?;
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
-                .map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
-                })?;
-            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
-            Ok(new_buffer)
-        }
-        Err(e) => {
-            client.write_u32_le(e.0.get()).await?;
-            Ok(buffer)
-        }
-    }
-}
-
-async fn handle_cuda_function_framed_in<In: Archive, Out: Portable>(
-    client: &mut NamedPipeClient,
-    mut buffer: AlignedVecBuffer,
-    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
-) -> std::io::Result<AlignedVecBuffer>
-where
-    Out: for<'a, 'b> Serialize<
-        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-    >,
-{
-    let length_prefix = client.read_u32_le().await? as usize;
-    buffer = read_sized(buffer, client, length_prefix).await?;
-    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
-    match handler(input) {
-        Ok(output) => {
-            buffer.clear();
-            client.write_u32_le(0).await?;
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
-                .map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
-                })?;
-            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
-            Ok(new_buffer)
-        }
-        Err(e) => {
-            client.write_u32_le(e.0.get()).await?;
-            Ok(buffer)
-        }
-    }
-}
-
-async fn handle_cuda_function_framed_out<In: Archive + Portable, Out>(
-    client: &mut NamedPipeClient,
-    mut buffer: AlignedVecBuffer,
-    handler: impl FnOnce(&In::Archived) -> Result<Out, CUerror>,
-) -> std::io::Result<AlignedVecBuffer>
-where
-    Out: for<'a, 'b> Serialize<
-        HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-    >,
-{
-    buffer = read_all::<In::Archived>(buffer, client).await?;
-    let input = unsafe { rkyv::access_unchecked::<In::Archived>(buffer.as_init()) };
-    match handler(input) {
-        Ok(output) => {
-            buffer.clear();
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&output, &mut buffer.0)
-                .map_err(|_| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "Failed to serialize response")
-                })?;
-            let code_and_len = unsafe {
-                std::mem::transmute::<(u32, u32), [u8; 8]>((0u32, buffer.0.len() as u32))
-            };
-            client.write_all(code_and_len).await.0?;
-            let ((), new_buffer) = buf_try!(@try client.write_all(buffer).await);
-            Ok(new_buffer)
-        }
-        Err(e) => {
-            client.write_u32_le(e.0.get()).await?;
-            Ok(buffer)
-        }
-    }
-}
-
-async fn read_all<T>(
-    buffer: AlignedVecBuffer,
-    client: &mut NamedPipeClient,
-) -> std::io::Result<AlignedVecBuffer> {
-    read_sized(buffer, client, mem::size_of::<T>()).await
-}
-
-async fn read_sized(
-    mut buffer: AlignedVecBuffer,
-    client: &mut NamedPipeClient,
-    mut remaining_read: usize,
-) -> std::io::Result<AlignedVecBuffer> {
-    buffer.clear();
-    buffer.reserve(remaining_read)?;
-    while remaining_read > 0 {
-        let BufResult(read_result, new_buffer) = client.append(buffer).await;
-        let n = read_result?;
-        remaining_read = remaining_read.checked_sub(n).ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Read more bytes than expected",
-            )
-        })?;
-        buffer = new_buffer;
-    }
-    Ok(buffer)
-}
-
-struct AlignedVecBuffer(AlignedVec);
-
-impl AlignedVecBuffer {
-    fn clear(&mut self) {
-        self.0.clear();
-    }
-}
-
-impl IoBuf for AlignedVecBuffer {
-    fn as_init(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-}
-
-impl SetLen for AlignedVecBuffer {
-    unsafe fn set_len(&mut self, len: usize) {
-        unsafe { self.0.set_len(len) }
-    }
-}
-
-impl IoBufMut for AlignedVecBuffer {
-    fn as_uninit(&mut self) -> &mut [std::mem::MaybeUninit<u8>] {
-        let ptr = self.0.as_mut_ptr() as *mut std::mem::MaybeUninit<u8>;
-        let cap = self.0.capacity();
-        unsafe { std::slice::from_raw_parts_mut(ptr, cap) }
-    }
-
-    fn reserve(&mut self, len: usize) -> Result<(), ReserveError> {
-        self.0.reserve(len);
-        Ok(())
-    }
-
-    fn reserve_exact(&mut self, len: usize) -> Result<(), ReserveExactError> {
-        if self.0.capacity() - self.0.len() >= len {
-            return Ok(());
-        }
-
-        self.0.reserve_exact(len);
-
-        if self.0.capacity() - self.0.len() != len {
-            return Err(ReserveExactError::ExactSizeMismatch {
-                reserved: self.0.capacity() - self.0.len(),
-                expected: len,
-            });
-        }
-        Ok(())
-    }
 }
 
 macro_rules! nop {
