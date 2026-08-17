@@ -297,6 +297,7 @@ fn main() -> std::io::Result<()> {
         )
     })?;
     let mut arena = stumpalo::Arena::new();
+    write_git_version(&mut remote)?;
     unsafe { WaitForSingleObject(*local.event, INFINITE) };
     loop {
         let opcode = local.shared_memory.read_header();
@@ -601,6 +602,14 @@ fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn write_git_version(remote: &mut Endpoint) -> std::io::Result<()> {
+    let git_sha = env!("VERGEN_GIT_SHA");
+    remote.shared_memory.write_header(Opcode::Startup as u32);
+    remote.shared_memory.write_buffer(git_sha.as_bytes());
+    unsafe { SetEvent(*remote.event) }?;
+    Ok(())
 }
 
 fn cu_module_unload(

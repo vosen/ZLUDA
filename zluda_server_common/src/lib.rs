@@ -43,7 +43,8 @@ macro_rules! generate_messages_inout {
             zludaGetFunctionArgs,
             cuMemcpyDtoHAsync_v2,
             cuModuleGetSurfRef,
-            cuMemcpyHtoD_v2
+            cuMemcpyHtoD_v2,
+            Startup,
         }
     };
 }

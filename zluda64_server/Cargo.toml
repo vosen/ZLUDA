@@ -25,5 +25,8 @@ rustc-hash = "2.0.0"
 range-alloc = "0.1.5"
 stumpalo = "1.0.0"
 
+[build-dependencies]
+vergen-gix = "10.0.2"
+
 [package.metadata.zluda]
 windows_only = true

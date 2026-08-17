@@ -43,7 +43,7 @@ libc = "0.2"
 dtor = "0.0.7"
 
 [build-dependencies]
-vergen-gix = "1.0.9"
+vergen-gix = "10.0.2"
 
 [dev-dependencies]
 half = "2.7"

@@ -56,6 +56,7 @@ impl Server {
             (Err(e), None) => return Err(e.into()),
         };
         zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;
+        read_git_version(&local)?;
         let arena = stumpalo::Arena::new();
         Ok(Server {
             local,
@@ -134,4 +135,21 @@ impl Server {
         }?;
         self.local.shared_memory.deserialize_body()
     }
+}
+
+fn read_git_version(local: &zluda_server_common::Endpoint) -> Result<(), Error> {
+    unsafe { WaitForSingleObject(*local.event, INFINITE) };
+    let opcode = local.shared_memory.read_header();
+    if opcode != Opcode::Startup as u32 {
+        return Err(Error::empty());
+    }
+    let git_sha = env!("VERGEN_GIT_SHA");
+    let git_version = local.shared_memory.read_buffer();
+    if git_version != git_sha.as_bytes() {
+        return Err(Error::new(
+            E_FAIL,
+            "Git version mismatch between zluda and zluda64_server",
+        ));
+    }
+    Ok(())
 }
