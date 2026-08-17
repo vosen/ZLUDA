@@ -42,7 +42,8 @@ macro_rules! generate_messages_inout {
             cuLaunchKernel,
             zludaGetFunctionArgs,
             cuMemcpyDtoHAsync_v2,
-            cuModuleGetSurfRef
+            cuModuleGetSurfRef,
+            cuMemcpyHtoD_v2
         }
     };
 }
@@ -72,8 +73,10 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventElapsedTime,
         cuEventQuery,
         cuEventRecord,
+        cuEventSynchronize,
         cuFuncGetAttribute,
         //cuGetExportTable,
         cuInit,
@@ -91,8 +94,10 @@ cuda_function_declarations! {
         // cuModuleGetFunction,
         // cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
+        cuModuleUnload,
         cuStreamCreate,
         cuStreamDestroy_v2,
+        cuStreamQuery,
         cuTexRefSetAddressMode,
         cuTexRefSetAddress_v2,
         cuTexRefSetFilterMode,
@@ -302,6 +307,17 @@ pub struct cuMemAlloc_v2In {
 pub struct cuMemAlloc_v2Out {
     pub dptr: <CUdeviceptr_v2 as CudaEncode>::WireObject,
 }
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoD_v2In {
+    pub dst_device: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+    pub src_host: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoD_v2Out {}
 
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]

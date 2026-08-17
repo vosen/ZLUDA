@@ -196,6 +196,7 @@ cuda_macros::cuda_function_declarations!(
             cuStreamGetCaptureInfo_v2,
             cuStreamGetCaptureInfo_v3,
             cuStreamIsCapturing,
+            cuStreamQuery,
             cuStreamSynchronize,
             cuStreamWaitEvent,
             cuTexObjectCreate,

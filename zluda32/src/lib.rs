@@ -55,6 +55,7 @@ cuda_function_declarations! {
     implemented <= [
         cuCtxCreate_v2,
         cuCtxCreate,
+        cuCtxDestroy_v2,
         cuCtxDetach,
         cuCtxGetApiVersion,
         cuCtxGetCurrent,
@@ -72,8 +73,10 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventElapsedTime,
         cuEventQuery,
         cuEventRecord,
+        cuEventSynchronize,
         cuFuncGetAttribute,
         cuGetExportTable,
         cuInit,
@@ -82,6 +85,7 @@ cuda_function_declarations! {
         cuMemcpyDtoD_v2,
         cuMemcpyDtoDAsync_v2,
         cuMemcpyDtoHAsync_v2,
+        cuMemcpyHtoD_v2,
         cuMemcpyHtoDAsync_v2,
         cuMemFree_v2,
         cuMemFreeHost,
@@ -94,8 +98,10 @@ cuda_function_declarations! {
         cuModuleGetTexRef,
         cuModuleLoadData,
         cuModuleLoadDataEx,
+        cuModuleUnload,
         cuStreamCreate,
         cuStreamDestroy_v2,
+        cuStreamQuery,
         cuTexRefSetAddress_v2,
         cuTexRefSetAddressMode,
         cuTexRefSetFilterMode,
@@ -787,7 +793,7 @@ pub(crate) fn cu_module_get_surf_ref(
 ) -> Result<(), CUerror> {
     let surfref = unsafe { surfref.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let result = GlobalState::remote_call_framed_in::<cuModuleGetSurfRefOut>(
-        Opcode::cuModuleGetSurfef,
+        Opcode::cuModuleGetSurfRef,
         cuModuleGetSurfRefIn {
             hmod: CudaEncode::encode(hmod),
             name: unsafe { std::ffi::CStr::from_ptr(name) }
@@ -1023,6 +1029,79 @@ pub(crate) fn cu_func_get_attribute(
         },
     )?
     .pi;
+    Ok(())
+}
+
+pub(crate) fn cu_module_unload(hmod: cuda_types::cuda::CUmodule) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuModuleUnloadOut>(
+        Opcode::cuModuleUnload,
+        cuModuleUnloadIn {
+            hmod: CudaEncode::encode(hmod),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_ctx_destroy_v2(ctx: cuda_types::cuda::CUcontext) -> Result<(), CUerror> {
+    let mut global_state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+    global_state.context_state.remove(&ctx);
+    // TODO: keep track of which allocations are on which context
+    Ok(())
+}
+
+pub(crate) fn cu_event_synchronize(event: cuda_types::cuda::CUevent) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuEventSynchronizeOut>(
+        Opcode::cuEventSynchronize,
+        cuEventSynchronizeIn {
+            hEvent: CudaEncode::encode(event),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_stream_query(stream: cuda_types::cuda::CUstream) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuStreamQueryOut>(
+        Opcode::cuStreamQuery,
+        cuStreamQueryIn {
+            hStream: CudaEncode::encode(stream),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_event_elapsed_time(
+    milliseconds: *mut f32,
+    start: cuda_types::cuda::CUevent,
+    end: cuda_types::cuda::CUevent,
+) -> Result<(), CUerror> {
+    let milliseconds = unsafe { milliseconds.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *milliseconds = GlobalState::remote_call_zero_copy::<cuEventElapsedTimeOut>(
+        Opcode::cuEventElapsedTime,
+        cuEventElapsedTimeIn {
+            hStart: CudaEncode::encode(start),
+            hEnd: CudaEncode::encode(end),
+        },
+    )?
+    .pMilliseconds;
+    Ok(())
+}
+
+pub(crate) fn cu_memcpy_hto_d_v2(
+    dst_device: cuda_types::cuda::CUdeviceptr,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+) -> Result<(), CUerror> {
+    if src_host.is_null() || dst_device.0.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let slice = unsafe { std::slice::from_raw_parts(src_host.cast::<u8>(), byte_count) };
+    GlobalState::remote_call_framed_in::<cuMemcpyHtoD_v2Out>(
+        Opcode::cuMemcpyHtoD_v2,
+        cuMemcpyHtoD_v2In {
+            dst_device: CudaEncode::encode(dst_device),
+            src_host: slice.to_vec(),
+        },
+    )?;
     Ok(())
 }
 

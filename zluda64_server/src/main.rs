@@ -559,6 +559,41 @@ fn main() -> std::io::Result<()> {
                     |input| cu_module_get_surf_ref(&mut state, input),
                 );
             }
+            Some(Opcode::cuEventSynchronize) => {
+                handle_cuda_function::<cuEventSynchronizeIn, cuEventSynchronizeOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_event_synchronize(&mut state, input),
+                );
+            }
+            Some(Opcode::cuStreamQuery) => {
+                handle_cuda_function::<cuStreamQueryIn, cuStreamQueryOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_stream_query(&mut state, input),
+                );
+            }
+            Some(Opcode::cuEventElapsedTime) => {
+                handle_cuda_function::<cuEventElapsedTimeIn, cuEventElapsedTimeOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_event_elapsed_time(&mut state, input),
+                );
+            }
+            Some(Opcode::cuMemcpyHtoD_v2) => {
+                handle_cuda_function_framed_in::<cuMemcpyHtoD_v2In, cuMemcpyHtoD_v2Out>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_memcpy_h_to_d_v2(&mut state, input),
+                );
+            }
+            Some(Opcode::cuModuleUnload) => {
+                handle_cuda_function::<cuModuleUnloadIn, cuModuleUnloadOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_module_unload(&mut state, input),
+                );
+            }
             _ => {
                 let return_code = CUerror::NOT_SUPPORTED.0.get();
                 remote.shared_memory.write_header(return_code);
@@ -566,6 +601,70 @@ fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_module_unload(
+    state: &mut State,
+    input: &ArchivedcuModuleUnloadIn,
+) -> Result<cuModuleUnloadOut, CUerror> {
+    let hmod = CUmodule(state.handles.remove(input.hmod.to_native())?);
+    if let Some(module) = state.modules.modules.remove(&hmod) {
+        for global in module.globals.iter() {
+            state
+                .devmemory
+                .allocator
+                .free_range(global.allocation.clone());
+        }
+        for texref in module.texrefs.values() {
+            state.handles.remove::<CUtexref>(*texref)?;
+        }
+    }
+    unsafe { cuModuleUnload(hmod) }?;
+    Ok(cuModuleUnloadOut {})
+}
+
+fn cu_memcpy_h_to_d_v2(
+    state: &mut State,
+    input: &ArchivedcuMemcpyHtoD_v2In,
+) -> Result<cuMemcpyHtoD_v2Out, CUerror> {
+    let dst_device = state.devmemory.translate(input.dst_device.to_native())?;
+    unsafe {
+        cuMemcpyHtoD_v2(
+            CUdeviceptr_v2(dst_device),
+            input.src_host.as_ptr().cast(),
+            input.src_host.len(),
+        )
+    }?;
+    Ok(cuMemcpyHtoD_v2Out {})
+}
+
+fn cu_event_elapsed_time(
+    state: &mut State,
+    input: &ArchivedcuEventElapsedTimeIn,
+) -> Result<cuEventElapsedTimeOut, CUerror> {
+    let cu_start_event = state.handles.get(input.hStart.to_native())?;
+    let cu_end_event = state.handles.get(input.hEnd.to_native())?;
+    let mut ms = 0.0;
+    unsafe { cuEventElapsedTime(&mut ms, cu_start_event, cu_end_event) }?;
+    Ok(cuEventElapsedTimeOut { pMilliseconds: ms })
+}
+
+fn cu_stream_query(
+    state: &mut State,
+    input: &ArchivedcuStreamQueryIn,
+) -> Result<cuStreamQueryOut, CUerror> {
+    let cu_stream = state.handles.get(input.hStream.to_native())?;
+    unsafe { cuStreamQuery(CUstream(cu_stream)) }?;
+    Ok(cuStreamQueryOut {})
+}
+
+fn cu_event_synchronize(
+    state: &mut State,
+    input: &ArchivedcuEventSynchronizeIn,
+) -> Result<cuEventSynchronizeOut, CUerror> {
+    let cu_event = state.handles.get(input.hEvent.to_native())?;
+    unsafe { cuEventSynchronize(cu_event) }?;
+    Ok(cuEventSynchronizeOut {})
 }
 
 fn cu_module_get_surf_ref(
@@ -1189,8 +1288,10 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventElapsedTime,
         cuEventQuery,
         cuEventRecord,
+        cuEventSynchronize,
         cuFuncGetAttribute,
         cuGetExportTable,
         cuInit,
@@ -1210,8 +1311,10 @@ cuda_function_declarations! {
         // cuModuleGetGlobal_v2,
         cuModuleGetTexRef,
         cuModuleLoadData,
+        cuModuleUnload,
         cuStreamCreate,
         cuStreamDestroy_v2,
+        cuStreamQuery,
         // cuTexRefSetAddressMode,
         cuTexRefSetAddress_v2,
         // cuTexRefSetFilterMode,
