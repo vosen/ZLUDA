@@ -400,7 +400,7 @@ fn main() -> std::io::Result<()> {
                 handle_cuda_function_framed_in::<cuModuleGetTexRefIn, cuModuleGetTexRefOut>(
                     &mut local,
                     &mut remote,
-                    |input| cu_module_get_tex_ref(&mut state, input),
+                    |input| cu_module_get_tex_ref(&mut state, input.hmod, &input.name),
                 );
             }
             Some(Opcode::zludaGetFunctionArgs) => {
@@ -545,6 +545,20 @@ fn main() -> std::io::Result<()> {
                     |input| cu_event_record(&mut state, input),
                 );
             }
+            Some(Opcode::cuFuncGetAttribute) => {
+                handle_cuda_function::<cuFuncGetAttributeIn, cuFuncGetAttributeOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_func_get_attribute(&mut state, input),
+                );
+            }
+            Some(Opcode::cuModuleGetSurfRef) => {
+                handle_cuda_function_framed_in::<cuModuleGetSurfRefIn, cuModuleGetSurfRefOut>(
+                    &mut local,
+                    &mut remote,
+                    |input| cu_module_get_surf_ref(&mut state, input),
+                );
+            }
             _ => {
                 let return_code = CUerror::NOT_SUPPORTED.0.get();
                 remote.shared_memory.write_header(return_code);
@@ -552,6 +566,34 @@ fn main() -> std::io::Result<()> {
             }
         }
     }
+}
+
+fn cu_module_get_surf_ref(
+    state: &mut State,
+    input: &ArchivedcuModuleGetSurfRefIn,
+) -> Result<cuModuleGetSurfRefOut, CUerror> {
+    let result = cu_module_get_tex_ref(state, input.hmod, &input.name)?;
+    Ok(cuModuleGetSurfRefOut {
+        surfref: result.texref,
+    })
+}
+
+fn cu_func_get_attribute(
+    state: &mut State,
+    input: &ArchivedcuFuncGetAttributeIn,
+) -> Result<cuFuncGetAttributeOut, CUerror> {
+    let mut result = 0;
+    let func = state.handles.get(input.hfunc.to_native())?;
+    unsafe {
+        cuFuncGetAttribute(
+            &mut result,
+            CUfunction_attribute_enum(input.attrib.to_native()),
+            CUfunction(func),
+        )
+    }?;
+    Ok(cuFuncGetAttributeOut {
+        pi: CudaEncode::encode(result),
+    })
 }
 
 fn cu_event_query(
@@ -834,19 +876,20 @@ fn zluda_get_function_args(
 
 fn cu_module_get_tex_ref(
     state: &mut State,
-    input: &ArchivedcuModuleGetTexRefIn,
+    hmod: u32_le,
+    name: &rkyv::vec::ArchivedVec<u8>,
 ) -> Result<cuModuleGetTexRefOut, CUerror> {
-    let hmod = state.handles.get::<CUmod_st>(input.hmod.to_native())?;
+    let hmod = state.handles.get::<CUmod_st>(hmod.to_native())?;
     let module = state
         .modules
         .modules
         .get_mut(&CUmodule(hmod))
         .ok_or(CUerror::INVALID_VALUE)?;
-    let texref = match module.texrefs.entry(input.name.to_vec()) {
+    let texref = match module.texrefs.entry(name.to_vec()) {
         std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
         std::collections::hash_map::Entry::Vacant(entry) => {
             let mut texref = unsafe { mem::zeroed() };
-            unsafe { cuModuleGetTexRef(&mut texref, CUmodule(hmod), input.name.as_ptr().cast()) }?;
+            unsafe { cuModuleGetTexRef(&mut texref, CUmodule(hmod), name.as_ptr().cast()) }?;
             let handle = state.handles.insert(texref);
             *entry.insert(handle)
         }
@@ -1148,6 +1191,7 @@ cuda_function_declarations! {
         cuEventDestroy_v2,
         cuEventQuery,
         cuEventRecord,
+        cuFuncGetAttribute,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,

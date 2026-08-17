@@ -649,8 +649,8 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
-        ShflSync {
-            data: ShflSyncDetails,
+        Shfl {
+            data: ShflDetails,
             type: Type::Scalar(ScalarType::B32),
             arguments<T>: {
                 dst: T,
@@ -661,7 +661,7 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T,
                 src_lane: T,
                 src_opts: T,
-                src_membermask: T
+                src_membermask: Option<T>
             }
         },
         MatchSync {
@@ -788,7 +788,7 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(ScalarType::Pred) },
                 },
                 src2: {
-                    repr: T,
+                    repr: Option<T>,
                     type: { Type::Scalar(ScalarType::U32) },
                 }
             }
@@ -1508,7 +1508,7 @@ impl MovDetails {
 }
 
 #[derive(Copy, Clone)]
-pub struct ShflSyncDetails {
+pub struct ShflDetails {
     pub mode: ShuffleMode,
 }
 

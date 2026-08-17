@@ -175,6 +175,7 @@ cuda_macros::cuda_function_declarations!(
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuModuleGetLoadingMode,
+            cuModuleGetSurfRef,
             cuModuleGetTexRef,
             cuModuleLoad,
             cuModuleLoadData,

@@ -41,7 +41,8 @@ macro_rules! generate_messages_inout {
             cuModuleGetTexRef,
             cuLaunchKernel,
             zludaGetFunctionArgs,
-            cuMemcpyDtoHAsync_v2
+            cuMemcpyDtoHAsync_v2,
+            cuModuleGetSurfRef
         }
     };
 }
@@ -73,6 +74,7 @@ cuda_function_declarations! {
         cuEventDestroy_v2,
         cuEventQuery,
         cuEventRecord,
+        cuFuncGetAttribute,
         //cuGetExportTable,
         cuInit,
         // cuLaunchKernel,
@@ -166,6 +168,7 @@ encode_as_proxy!(CUdevice_attribute, u32_le);
 encode_as_proxy!(CUfilter_mode, u32_le);
 encode_as_proxy!(CUaddress_mode, u32_le);
 encode_as_proxy!(CUarray_format, u32_le);
+encode_as_proxy!(CUfunction_attribute, u32_le);
 
 encode_as_u32!(CUcontext);
 encode_as_u32!(CUdeviceptr_v2);
@@ -174,6 +177,7 @@ encode_as_u32!(CUfunction);
 encode_as_u32!(CUmodule);
 encode_as_u32!(CUstream);
 encode_as_u32!(CUtexref);
+encode_as_u32!(CUsurfref);
 
 impl CudaEncode for usize {
     type WireObject = u32_le;
@@ -322,6 +326,19 @@ pub struct cuModuleGetTexRefIn {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuModuleGetTexRefOut {
     pub texref: <CUtexref as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetSurfRefIn {
+    pub hmod: <CUmodule as CudaEncode>::WireObject,
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetSurfRefOut {
+    pub surfref: <CUsurfref as CudaEncode>::WireObject,
 }
 
 #[repr(C)]

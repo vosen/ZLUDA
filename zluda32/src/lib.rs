@@ -60,6 +60,7 @@ cuda_function_declarations! {
         cuCtxGetCurrent,
         cuCtxGetDevice,
         cuCtxSetCacheConfig,
+        cuCtxSetCurrent,
         cuCtxSynchronize,
         cuDeviceComputeCapability,
         cuDeviceGet,
@@ -73,6 +74,7 @@ cuda_function_declarations! {
         cuEventDestroy_v2,
         cuEventQuery,
         cuEventRecord,
+        cuFuncGetAttribute,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,
@@ -88,7 +90,10 @@ cuda_function_declarations! {
         cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,
+        cuModuleGetSurfRef,
         cuModuleGetTexRef,
+        cuModuleLoadData,
+        cuModuleLoadDataEx,
         cuStreamCreate,
         cuStreamDestroy_v2,
         cuTexRefSetAddress_v2,
@@ -281,6 +286,14 @@ pub(crate) fn cu_ctx_get_current(pctx: *mut CUcontext) -> Result<(), CUerror> {
     Ok(())
 }
 
+pub(crate) fn cu_ctx_set_current(ctx: CUcontext) -> Result<(), CUerror> {
+    if ctx.0.is_null() {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    CONTEXT_STACK.with(|s| s.push(ctx, 0));
+    Ok(())
+}
+
 pub(crate) fn cu_ctx_get_device(device: *mut CUdevice) -> Result<(), CUerror> {
     let device = unsafe { device.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let (_, dev) = CONTEXT_STACK.with(|s| s.current());
@@ -337,6 +350,10 @@ pub(crate) fn cu_device_get_attribute(
     let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     if attrib.0 == 537396226 {
         *pi = 256;
+        return Ok(());
+    }
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY {
+        *pi = 0;
         return Ok(());
     }
     *pi = GlobalState::remote_call_zero_copy::<cuDeviceGetAttributeOut>(
@@ -763,6 +780,25 @@ pub(crate) fn cu_module_get_tex_ref(
     Ok(())
 }
 
+pub(crate) fn cu_module_get_surf_ref(
+    surfref: *mut CUsurfref,
+    hmod: CUmodule,
+    name: *const ::core::ffi::c_char,
+) -> Result<(), CUerror> {
+    let surfref = unsafe { surfref.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let result = GlobalState::remote_call_framed_in::<cuModuleGetSurfRefOut>(
+        Opcode::cuModuleGetSurfef,
+        cuModuleGetSurfRefIn {
+            hmod: CudaEncode::encode(hmod),
+            name: unsafe { std::ffi::CStr::from_ptr(name) }
+                .to_bytes_with_nul()
+                .to_vec(),
+        },
+    )?;
+    *surfref = CudaEncode::decode(result.surfref);
+    Ok(())
+}
+
 pub(crate) fn cu_stream_create(
     result: *mut CUstream,
     flags: ::core::ffi::c_uint,
@@ -918,6 +954,78 @@ pub(crate) fn cu_ctx_set_cache_config(
     Ok(())
 }
 
+pub(crate) unsafe fn cu_module_load_data(
+    result: *mut cuda_types::cuda::CUmodule,
+    image: *const ::core::ffi::c_void,
+) -> Result<(), CUerror> {
+    let result = match result.as_mut() {
+        Some(p) => p,
+        None => return CUresult::ERROR_INVALID_VALUE,
+    };
+    let code_lib =
+        CodeLibraryRef::try_load(image.cast()).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let mut modules = Vec::with_capacity(1);
+    code_lib.iterate_modules(|_, module| match module {
+        Ok(CodeModuleRef::Text(ptx)) => {
+            modules.push(std::borrow::Cow::Borrowed(ptx.as_bytes()));
+        }
+        Ok(CodeModuleRef::File(file)) => {
+            if file.kind() == "ptx" {
+                if let Ok(text) = file.get_or_decompress_content(false) {
+                    modules.push(text);
+                }
+            }
+        }
+        _ => {}
+    });
+    let mut last_module =
+        unwrap_or::unwrap_some_or!(modules.pop(), return Err(CUerror::NO_BINARY_FOR_GPU));
+    if last_module.last() != Some(&0) {
+        last_module.to_mut().push(0);
+    }
+    *result = CUmodule(
+        GlobalState::remote_call_framed_in::<cuModuleLoadDataOut>(
+            Opcode::cuModuleLoadData,
+            cuModuleLoadDataIn {
+                image: last_module.into_owned(),
+            },
+        )?
+        .module
+        .to_native() as _,
+    );
+    Ok(())
+}
+
+pub(crate) unsafe fn cu_module_load_data_ex(
+    module: *mut cuda_types::cuda::CUmodule,
+    image: *const ::core::ffi::c_void,
+    num_options: ::core::ffi::c_uint,
+    _options: *mut cuda_types::cuda::CUjit_option,
+    _option_values: *mut *mut ::core::ffi::c_void,
+) -> Result<(), CUerror> {
+    if num_options != 0 {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    cu_module_load_data(module, image)
+}
+
+pub(crate) fn cu_func_get_attribute(
+    pi: *mut ::core::ffi::c_int,
+    attrib: cuda_types::cuda::CUfunction_attribute,
+    hfunc: cuda_types::cuda::CUfunction,
+) -> Result<(), CUerror> {
+    let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *pi = GlobalState::remote_call_zero_copy::<cuFuncGetAttributeOut>(
+        Opcode::cuFuncGetAttribute,
+        cuFuncGetAttributeIn {
+            attrib: CudaEncode::encode(attrib),
+            hfunc: CudaEncode::encode(hfunc),
+        },
+    )?
+    .pi;
+    Ok(())
+}
+
 struct UnknownBuffer<const S: usize> {
     buffer: std::cell::UnsafeCell<[u32; S]>,
 }
@@ -951,42 +1059,7 @@ impl CudaDarkApi for DarkApi32 {
         result: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        let result = match result.as_mut() {
-            Some(p) => p,
-            None => return CUresult::ERROR_INVALID_VALUE,
-        };
-        let code_lib = CodeLibraryRef::try_load(fatbinc_wrapper.cast())
-            .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-        let mut modules = Vec::with_capacity(1);
-        code_lib.iterate_modules(|_, module| match module {
-            Ok(CodeModuleRef::Text(ptx)) => {
-                modules.push(std::borrow::Cow::Borrowed(ptx.as_bytes()));
-            }
-            Ok(CodeModuleRef::File(file)) => {
-                if file.kind() == "ptx" {
-                    if let Ok(text) = file.get_or_decompress_content(false) {
-                        modules.push(text);
-                    }
-                }
-            }
-            _ => {}
-        });
-        let mut last_module =
-            unwrap_or::unwrap_some_or!(modules.pop(), return Err(CUerror::NO_BINARY_FOR_GPU));
-        if last_module.last() != Some(&0) {
-            last_module.to_mut().push(0);
-        }
-        *result = CUmodule(
-            GlobalState::remote_call_framed_in::<cuModuleLoadDataOut>(
-                Opcode::cuModuleLoadData,
-                cuModuleLoadDataIn {
-                    image: last_module.into_owned(),
-                },
-            )?
-            .module
-            .to_native() as _,
-        );
-        Ok(())
+        cu_module_load_data(result, fatbinc_wrapper.cast())
     }
 
     unsafe extern "system" fn cudart_interface_fn2(
