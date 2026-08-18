@@ -10,6 +10,13 @@ name = "cufft"
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
+libloading = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+zluda_windows = { path = "../zluda_windows" }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3.0"
 
 [package.metadata.zluda]
 linux_symlinks = [
