@@ -5214,6 +5214,9 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
+ "libloading",
+ "zluda_windows",
 ]
 
 [[package]]
