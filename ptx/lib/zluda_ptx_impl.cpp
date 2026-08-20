@@ -736,6 +736,16 @@ extern "C"
         return ballot(value, true);
     }
 
+    uint32_t FUNC(vote_ballot_b32)(bool value)
+    {
+        return ballot(value, false);
+    }
+
+    uint32_t FUNC(vote_ballot_b32_negate)(bool value)
+    {
+        return ballot(value, true);
+    }
+
     uint32_t FUNC(match_any_sync_b32)(uint32_t value, uint32_t membermask __attribute__((unused)))
     {
         return uint32_t(__match_any<uint32_t>(value));

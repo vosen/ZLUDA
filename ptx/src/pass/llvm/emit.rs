@@ -693,7 +693,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Bmsk { .. }
             | ast::Instruction::Activemask { .. }
-            | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::Shfl { .. }
             | ast::Instruction::MatchSync { .. }
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }

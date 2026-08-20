@@ -1,8 +1,16 @@
 use cuda_macros::{cuda_function_declarations, generate_input_struct, generate_output_struct};
 use cuda_types::cuda::*;
+use rand::distr::{Alphanumeric, SampleString};
+use rkyv::rancor::{Failure, Strategy};
 use rkyv::rend::{u32_le, u64_le};
+use rkyv::ser::{Allocator, Positional};
 use rkyv::{Archive, Deserialize, Portable, Serialize};
+use std::{mem, ptr, slice};
 use strum_macros::FromRepr;
+use windows::core::{Owned, PCSTR};
+use windows::Win32::Foundation::*;
+use windows::Win32::System::Memory::*;
+use windows::Win32::System::Threading::*;
 
 macro_rules! noop {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
@@ -33,7 +41,10 @@ macro_rules! generate_messages_inout {
             cuModuleGetTexRef,
             cuLaunchKernel,
             zludaGetFunctionArgs,
-            cuMemcpyDtoHAsync_v2
+            cuMemcpyDtoHAsync_v2,
+            cuModuleGetSurfRef,
+            cuMemcpyHtoD_v2,
+            Startup,
         }
     };
 }
@@ -63,8 +74,11 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventElapsedTime,
         cuEventQuery,
         cuEventRecord,
+        cuEventSynchronize,
+        cuFuncGetAttribute,
         //cuGetExportTable,
         cuInit,
         // cuLaunchKernel,
@@ -81,8 +95,10 @@ cuda_function_declarations! {
         // cuModuleGetFunction,
         // cuModuleGetGlobal_v2,
         // cuModuleGetTexRef,
+        cuModuleUnload,
         cuStreamCreate,
         cuStreamDestroy_v2,
+        cuStreamQuery,
         cuTexRefSetAddressMode,
         cuTexRefSetAddress_v2,
         cuTexRefSetFilterMode,
@@ -158,6 +174,7 @@ encode_as_proxy!(CUdevice_attribute, u32_le);
 encode_as_proxy!(CUfilter_mode, u32_le);
 encode_as_proxy!(CUaddress_mode, u32_le);
 encode_as_proxy!(CUarray_format, u32_le);
+encode_as_proxy!(CUfunction_attribute, u32_le);
 
 encode_as_u32!(CUcontext);
 encode_as_u32!(CUdeviceptr_v2);
@@ -166,6 +183,7 @@ encode_as_u32!(CUfunction);
 encode_as_u32!(CUmodule);
 encode_as_u32!(CUstream);
 encode_as_u32!(CUtexref);
+encode_as_u32!(CUsurfref);
 
 impl CudaEncode for usize {
     type WireObject = u32_le;
@@ -293,6 +311,17 @@ pub struct cuMemAlloc_v2Out {
 
 #[repr(C)]
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoD_v2In {
+    pub dst_device: <CUdeviceptr_v2 as CudaEncode>::WireObject,
+    pub src_host: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuMemcpyHtoD_v2Out {}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuMemcpyHtoDAsync_v2In {
     pub dst_device: <CUdeviceptr_v2 as CudaEncode>::WireObject,
     pub src_host: Vec<u8>,
@@ -314,6 +343,19 @@ pub struct cuModuleGetTexRefIn {
 #[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct cuModuleGetTexRefOut {
     pub texref: <CUtexref as CudaEncode>::WireObject,
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetSurfRefIn {
+    pub hmod: <CUmodule as CudaEncode>::WireObject,
+    pub name: Vec<u8>,
+}
+
+#[repr(C)]
+#[derive(Portable, Archive, Deserialize, Serialize, Debug, PartialEq, Clone)]
+pub struct cuModuleGetSurfRefOut {
+    pub surfref: <CUsurfref as CudaEncode>::WireObject,
 }
 
 #[repr(C)]
@@ -360,3 +402,365 @@ pub struct cuMemcpyDtoHAsync_v2In {
 pub struct cuMemcpyDtoHAsync_v2Out {
     pub dst_host: Vec<u8>,
 }
+
+pub struct OwnedView(MEMORY_MAPPED_VIEW_ADDRESS);
+
+impl OwnedView {
+    fn new(shmem: HANDLE, size: usize) -> windows::core::Result<Self> {
+        let view = unsafe { MapViewOfFile(shmem, FILE_MAP_ALL_ACCESS, 0, 0, size) };
+        if view.Value.is_null() {
+            return Err(windows::core::Error::empty());
+        }
+        Ok(OwnedView(view))
+    }
+}
+
+impl Drop for OwnedView {
+    fn drop(&mut self) {
+        let _ = unsafe { UnmapViewOfFile(self.0) };
+    }
+}
+
+pub struct Endpoint {
+    pub event: Owned<HANDLE>,
+    pub event_name: String,
+    pub shared_memory: SharedMemory,
+}
+
+unsafe impl Send for Endpoint {}
+unsafe impl Sync for Endpoint {}
+
+impl Endpoint {
+    pub unsafe fn new() -> windows::core::Result<Self> {
+        let shared_memory = SharedMemory::new()?;
+        let mut event_name = random_global_name();
+        let event = Owned::new(CreateEventA(
+            None,
+            false,
+            false,
+            PCSTR(event_name.as_ptr()),
+        )?);
+        event_name.pop();
+        Ok(Endpoint {
+            event,
+            event_name,
+            shared_memory,
+        })
+    }
+
+    pub unsafe fn open(
+        mut event_name: String,
+        shared_memory_name: String,
+    ) -> windows::core::Result<Self> {
+        event_name.push('\0');
+        let event =
+            Owned::new(unsafe { OpenEventA(EVENT_ALL_ACCESS, false, PCSTR(event_name.as_ptr())) }?);
+        event_name.pop();
+        Ok(Self {
+            event,
+            event_name,
+            shared_memory: SharedMemory::open(
+                shared_memory_name,
+                Some(SharedMemory::INITIAL_SHARED_MEMORY_SIZE),
+            )?,
+        })
+    }
+}
+
+pub struct SharedMemory {
+    pub view: OwnedView,
+    pub handle: Owned<HANDLE>,
+    pub size: usize,
+    pub name: String,
+}
+
+impl SharedMemory {
+    const INITIAL_SHARED_MEMORY_SIZE: usize = 1024 * 1024;
+    const OFFSET_HEADER: usize = 0;
+    const OFFSET_SIZE: usize = 4;
+    const OFFSET_BODY: usize = 16;
+
+    pub unsafe fn new() -> windows::core::Result<Self> {
+        let mut shared_memory_name = random_global_name();
+        let shared_memory = Owned::new(CreateFileMappingA(
+            INVALID_HANDLE_VALUE,
+            None,
+            PAGE_READWRITE,
+            0,
+            Self::INITIAL_SHARED_MEMORY_SIZE as u32,
+            PCSTR(shared_memory_name.as_ptr()),
+        )?);
+        shared_memory_name.pop();
+        let view = OwnedView::new(*shared_memory, Self::INITIAL_SHARED_MEMORY_SIZE)?;
+        Ok(SharedMemory {
+            name: shared_memory_name,
+            handle: shared_memory,
+            view,
+            size: Self::INITIAL_SHARED_MEMORY_SIZE,
+        })
+    }
+
+    pub unsafe fn open(
+        mut shared_memory_name: String,
+        size: Option<usize>,
+    ) -> windows::core::Result<Self> {
+        shared_memory_name.push('\0');
+        let shared_memory = Owned::new(unsafe {
+            OpenFileMappingA(
+                FILE_MAP_ALL_ACCESS.0,
+                false,
+                PCSTR(shared_memory_name.as_ptr()),
+            )
+        }?);
+        shared_memory_name.pop();
+        let view = OwnedView::new(*shared_memory, size.unwrap_or(0))?;
+        let size = match size {
+            Some(s) => s,
+            None => {
+                let mut query = mem::zeroed();
+                if 0 == VirtualQuery(Some(view.0.Value), &mut query, mem::size_of_val(&query)) {
+                    return Err(windows::core::Error::empty());
+                }
+                query.RegionSize
+            }
+        };
+        Ok(SharedMemory {
+            name: shared_memory_name,
+            handle: shared_memory,
+            view,
+            size,
+        })
+    }
+
+    fn write<T>(&mut self, offset: usize, data: &T) {
+        unsafe {
+            ptr::copy_nonoverlapping(data, self.view.0.Value.wrapping_byte_add(offset).cast(), 1)
+        };
+    }
+
+    fn read<T>(&self, offset: usize) -> T {
+        let mut body = std::mem::MaybeUninit::<T>::uninit();
+        unsafe {
+            ptr::copy_nonoverlapping(
+                self.view.0.Value.wrapping_byte_add(offset).cast(),
+                body.as_mut_ptr(),
+                1,
+            )
+        };
+        unsafe { body.assume_init() }
+    }
+
+    pub fn write_header(&mut self, header: u32) {
+        self.write(Self::OFFSET_HEADER, &header);
+    }
+
+    pub fn read_header(&self) -> u32 {
+        self.read(Self::OFFSET_HEADER)
+    }
+
+    pub fn write_size(&mut self, size: u32) {
+        self.write(Self::OFFSET_SIZE, &size);
+    }
+
+    pub fn read_size(&self) -> u32 {
+        self.read(Self::OFFSET_SIZE)
+    }
+
+    pub fn write_body<T>(&mut self, body: &T) {
+        self.write(Self::OFFSET_BODY, body);
+    }
+
+    pub fn write_buffer(&mut self, body: &[u8]) {
+        self.write_size(body.len() as u32);
+        let output = unsafe {
+            std::slice::from_raw_parts_mut(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                body.len(),
+            )
+        };
+        output.copy_from_slice(body);
+    }
+
+    pub fn read_buffer<'a>(&'a self) -> &'a [u8] {
+        let size = self.read_size();
+        unsafe {
+            std::slice::from_raw_parts(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                size as usize,
+            )
+        }
+    }
+
+    pub fn read_body<T>(&self) -> T {
+        self.read(Self::OFFSET_BODY)
+    }
+
+    pub fn deserialize_body<Out: Archive>(&self) -> Result<Out, CUerror>
+    where
+        <Out as Archive>::Archived: Deserialize<Out, Strategy<(), Failure>>,
+    {
+        let size = self.read_size();
+        let slice = unsafe {
+            slice::from_raw_parts(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                size as usize,
+            )
+        };
+        unsafe { rkyv::api::low::from_bytes_unchecked(slice) }.map_err(|_| CUerror::UNKNOWN)
+    }
+
+    pub fn deserialize_body2<Out: Archive>(&self) -> &Out::Archived
+    where
+        <Out as Archive>::Archived: Portable,
+    {
+        let size = self.read_size();
+        let slice = unsafe {
+            slice::from_raw_parts(
+                self.view
+                    .0
+                    .Value
+                    .wrapping_byte_add(Self::OFFSET_BODY)
+                    .cast(),
+                size as usize,
+            )
+        };
+        unsafe { rkyv::access_unchecked::<Out::Archived>(slice) }
+    }
+
+    pub fn serialize_body(
+        &mut self,
+        arena: &mut stumpalo::Arena,
+        body: &impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
+    ) -> Result<Option<SharedMemory>, CUerror> {
+        let mut dropped_shmem = None;
+        let length = loop {
+            let mut serializer_base = rkyv::ser::Serializer::new(
+                SliceWriter {
+                    offset: 16,
+                    slice: unsafe {
+                        slice::from_raw_parts_mut(self.view.0.Value.cast(), self.size)
+                    },
+                },
+                ScopedArena { arena },
+                (),
+            );
+            let serializer = Strategy::<_, AllocError>::wrap(&mut serializer_base);
+            match rkyv::api::serialize_using(body, serializer) {
+                Ok(_) => break serializer_base.writer.pos() - Self::OFFSET_BODY,
+                Err(AllocError::Stumpalo) => {
+                    return Err(CUerror::OUT_OF_MEMORY);
+                }
+                Err(AllocError::NotEnoughMemory { more_bytes }) => {
+                    let new_size = (self.size + more_bytes).next_power_of_two();
+                    let new_shared_memory_name = random_global_name();
+                    let new_shared_memory = unsafe {
+                        Owned::new(
+                            CreateFileMappingA(
+                                INVALID_HANDLE_VALUE,
+                                None,
+                                PAGE_READWRITE,
+                                0,
+                                new_size as u32,
+                                PCSTR(new_shared_memory_name.as_ptr()),
+                            )
+                            .map_err(|_| CUerror::MAP_FAILED)?,
+                        )
+                    };
+                    let new_view = OwnedView::new(*new_shared_memory, new_size)
+                        .map_err(|_| CUerror::MAP_FAILED)?;
+                    let new_shmem = SharedMemory {
+                        handle: new_shared_memory,
+                        view: new_view,
+                        size: new_size,
+                        name: new_shared_memory_name,
+                    };
+                    let old_shmem = mem::replace(self, new_shmem);
+                    dropped_shmem.get_or_insert(old_shmem);
+                }
+            }
+        };
+        self.write_size(length as u32);
+        Ok(dropped_shmem)
+    }
+}
+
+fn random_global_name() -> String {
+    let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    format!("Local\\zluda-{name}\0")
+}
+
+#[derive(Debug)]
+pub enum AllocError {
+    Stumpalo,
+    NotEnoughMemory { more_bytes: usize },
+}
+
+pub struct SliceWriter<'a> {
+    offset: usize,
+    slice: &'a mut [u8],
+}
+
+impl<'a> rkyv::ser::Positional for SliceWriter<'a> {
+    fn pos(&self) -> usize {
+        self.offset
+    }
+}
+
+impl<'a> rkyv::ser::Writer<AllocError> for SliceWriter<'a> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), AllocError> {
+        let available = self.slice.len().saturating_sub(self.offset);
+        if bytes.len() > available {
+            return Err(AllocError::NotEnoughMemory {
+                more_bytes: bytes.len() - available,
+            });
+        }
+        let end = self.offset + bytes.len();
+        self.slice[self.offset..end].copy_from_slice(bytes);
+        self.offset = end;
+        Ok(())
+    }
+}
+
+pub struct ScopedArena<'a> {
+    arena: &'a mut stumpalo::Arena,
+}
+
+impl Drop for ScopedArena<'_> {
+    fn drop(&mut self) {
+        self.arena.clear();
+    }
+}
+
+unsafe impl<'a> Allocator<AllocError> for ScopedArena<'a> {
+    unsafe fn push_alloc(
+        &mut self,
+        layout: std::alloc::Layout,
+    ) -> Result<ptr::NonNull<[u8]>, AllocError> {
+        self.arena
+            .try_alloc_layout(layout)
+            .map_err(|_| AllocError::Stumpalo)
+    }
+
+    unsafe fn pop_alloc(
+        &mut self,
+        _ptr: ptr::NonNull<u8>,
+        _layout: std::alloc::Layout,
+    ) -> Result<(), AllocError> {
+        Ok(())
+    }
+}
+
+pub type Serializer<'a, 'local> =
+    Strategy<rkyv::ser::Serializer<SliceWriter<'a>, ScopedArena<'local>, ()>, AllocError>;

@@ -295,6 +295,7 @@ from_cuda_transmute!(
     CUDA_ARRAY_DESCRIPTOR => HIP_ARRAY_DESCRIPTOR,
     CUDA_ARRAY3D_DESCRIPTOR => HIP_ARRAY3D_DESCRIPTOR,
     CUtexref => *mut textureReference,
+    CUsurfref => *mut textureReference,
     CUarray_format => hipArray_Format,
     CUaddress_mode => hipTextureAddressMode,
     CUfilter_mode => hipTextureFilterMode

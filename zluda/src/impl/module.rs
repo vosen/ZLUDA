@@ -431,3 +431,11 @@ pub(crate) unsafe fn get_tex_ref(
 ) -> hipError_t {
     hipModuleGetTexRef(texref, hmod.base, name)
 }
+
+pub(crate) unsafe fn get_surf_ref(
+    surfref: *mut *mut textureReference,
+    hmod: &Module,
+    name: *const ::core::ffi::c_char,
+) -> hipError_t {
+    hipModuleGetTexRef(surfref, hmod.base, name)
+}

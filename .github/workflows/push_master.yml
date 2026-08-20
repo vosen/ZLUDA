@@ -145,6 +145,7 @@ jobs:
           --exclude zluda_redirect \
           --exclude zluda32 \
           --exclude zluda64_server \
+          --exclude zluda_server_common \
           --exclude nvapi \
           --exclude nvapi_trace
         mkdir -p target/amdgpu
