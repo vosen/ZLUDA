@@ -140,6 +140,7 @@ cuda_macros::rocfft_function_declarations!(
     os_macro::vtable_impl
         <= [
             rocfft_plan_create,
-            rocfft_setup
+            rocfft_plan_get_work_buffer_size,
+            rocfft_setup,
         ]
 );

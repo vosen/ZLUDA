@@ -13,6 +13,7 @@ cuda_types = { path = "../cuda_types" }
 rocfft-sys = { path = "../ext/rocfft-sys" }
 zluda_common = { path = "../zluda_common" }
 rustc-hash = "2.0.0"
+unwrap_or = "1.0.1"
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
