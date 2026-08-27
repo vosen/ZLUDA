@@ -1,8 +1,7 @@
-#![allow(non_snake_case)]
-
-use crate::{hipfft, plan};
+use crate::plan;
 use cuda_types::cufft::*;
-use std::{ffi::c_void, ptr};
+use rocfft_sys::rocfft_error;
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(debug_assertions)]
 pub(crate) fn unimplemented() -> cufftResult {
@@ -14,6 +13,64 @@ pub(crate) fn unimplemented() -> cufftResult {
     cufftResult::ERROR_NOT_SUPPORTED
 }
 
+fn rocfft() -> Result<&'static super::RocfftVtable, rocfft_error> {
+    static LOCK: OnceLock<Result<super::RocfftVtable, rocfft_error>> = OnceLock::new();
+    let unwrapped: &Result<super::RocfftVtable, rocfft_error> = LOCK.get_or_init(|| {
+        let rocfft = unsafe { super::RocfftVtable::new()? };
+        unsafe { rocfft.rocfft_setup() }?;
+        Ok(rocfft)
+    });
+    unwrapped.as_ref().map_err(|x| *x)
+}
+
+struct GlobalState {
+    registry: plan::Registry,
+}
+
+impl GlobalState {
+    fn get() -> &'static Mutex<Self> {
+        static LOCK: OnceLock<Mutex<GlobalState>> = OnceLock::new();
+        LOCK.get_or_init(|| {
+            Mutex::new(GlobalState {
+                registry: plan::Registry::new(),
+            })
+        })
+    }
+
+    fn with<T>(f: impl FnOnce(&mut Self) -> Result<T, cufftError_t>) -> Result<T, cufftError_t> {
+        let mut lock = Self::get()
+            .lock()
+            .map_err(|_| cufftError_t::INTERNAL_ERROR)?;
+        f(&mut *lock)
+    }
+}
+
+pub(crate) unsafe fn create(handle: &mut cufftHandle) -> Result<(), cufftError_t> {
+    let plan = GlobalState::with(|state| Ok(state.registry.new_empty()))?;
+    *handle = plan;
+    Ok(())
+}
+
+pub(crate) unsafe fn make_plan1d(
+    _plan: cufftHandle,
+    _nx: i32,
+    _type_: cufftType,
+    _batch: i32,
+    _work_size: *mut usize,
+) -> Result<(), cufftError_t> {
+    todo!()
+}
+
+pub(crate) unsafe fn plan1d(
+    _plan: &mut cufftHandle,
+    _nx: i32,
+    _type_: cufftType,
+    _batch: i32,
+) -> Result<(), cufftError_t> {
+    todo!()
+}
+
+/*
 unsafe fn create_plan(
     output: *mut cufftHandle,
     create: impl FnOnce(&hipfft::Vtable, *mut hipfft::Handle) -> u32,
@@ -45,11 +102,71 @@ pub(crate) unsafe fn cufftPlan1d(
     type_: cufftType,
     batch: i32,
 ) -> cufftResult {
-    let type_ = hipfft::transform_type(type_)?;
-    unsafe {
-        create_plan(plan, |lib, backend| {
-            (lib.hipfftPlan1d)(backend, nx, type_, batch)
-        })
+    if plan.is_null() {
+        return cufftResult::ERROR_INVALID_VALUE;
+    }
+
+    let transform = match type_ {
+        cufftType::CUFFT_R2C => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_forward,
+        cufftType::CUFFT_C2R => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_inverse,
+        cufftType::CUFFT_C2C => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_forward,
+        cufftType::CUFFT_D2Z => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_forward,
+        cufftType::CUFFT_Z2D => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_inverse,
+        cufftType::CUFFT_Z2Z => rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_forward,
+        _ => return cufftResult::ERROR_INVALID_TYPE,
+    };
+
+    let precision = match type_ {
+        cufftType::CUFFT_R2C
+        | cufftType::CUFFT_C2R
+        | cufftType::CUFFT_C2C => rocfft_sys::rocfft_precision_e::rocfft_precision_single,
+        cufftType::CUFFT_D2Z
+        | cufftType::CUFFT_Z2D
+        | cufftType::CUFFT_Z2Z => rocfft_sys::rocfft_precision_e::rocfft_precision_double,
+        _ => return cufftResult::ERROR_INVALID_TYPE,
+    };
+
+    let dimensions = 1usize;
+    let lengths = [nx as usize];
+    let mut backend = ptr::null_mut();
+    let status = rocfft_sys::rocfft_plan_create(
+        &mut backend,
+        rocfft_sys::rocfft_result_placement_e::rocfft_placement_notinplace,
+        transform,
+        precision,
+        dimensions,
+        lengths.as_ptr(),
+        batch as usize,
+        ptr::null_mut(),
+    );
+
+    if status != rocfft_sys::rocfft_status_e::rocfft_status_success {
+        return match status {
+            rocfft_sys::rocfft_status_e::rocfft_status_invalid_arg_value => {
+                cufftResult::ERROR_INVALID_VALUE
+            }
+            rocfft_sys::rocfft_status_e::rocfft_status_invalid_dimensions => {
+                cufftResult::ERROR_INVALID_SIZE
+            }
+            rocfft_sys::rocfft_status_e::rocfft_status_invalid_array_type => {
+                cufftResult::ERROR_INVALID_TYPE
+            }
+            rocfft_sys::rocfft_status_e::rocfft_status_invalid_work_buffer => {
+                cufftResult::ERROR_NO_WORKSPACE
+            }
+            _ => cufftResult::ERROR_INTERNAL_ERROR,
+        };
+    }
+
+    match plan::insert(backend) {
+        Ok(handle) => {
+            plan.write(handle);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = rocfft_sys::rocfft_plan_destroy(backend);
+            Err(error)
+        }
     }
 }
 
@@ -459,3 +576,4 @@ pub(crate) unsafe fn cufftGetProperty(type_: libraryPropertyType, value: *mut i3
     let type_ = hipfft::property_type(type_)?;
     hipfft::status(unsafe { (hipfft::library()?.hipfftGetProperty)(type_, value) })
 }
+ */

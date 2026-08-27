@@ -3,6 +3,7 @@ use cuda_types::{
     cublaslt::*,
     cuda::*,
     cudnn9,
+    cufft::*,
     cusparse::*,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
@@ -86,6 +87,11 @@ impl CudaErrorType for cusparseError_t {
 impl CudaErrorType for rocsparse_error {
     const INVALID_VALUE: Self = Self::invalid_value;
     const NOT_SUPPORTED: Self = Self::not_implemented;
+}
+
+impl CudaErrorType for cufftError_t {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
 
 /// Used to try to convert CUDA API values into our internal representation.
@@ -257,7 +263,9 @@ from_cuda_nop!(
     cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
     cublasLtMatmulPreferenceAttributes_t,
     CUfunc_cache,
-    CUctxCreateParams
+    CUctxCreateParams,
+    cufftType_t,
+    cufftHandle
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,

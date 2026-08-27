@@ -505,6 +505,11 @@ mod os {
                 ("librocm_smi64.so.1", "librocm_smi64.so"),
             ],
         );
+        patch_single_lib(
+            &current_dir,
+            "librocfft.so",
+            &[("librocfft.so.0", "librocfft.so")],
+        );
     }
 
     fn patch_single_lib(current_dir: &PathBuf, lib: &str, from_to: &[(&str, &str)]) {

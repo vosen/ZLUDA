@@ -10,18 +10,20 @@ name = "cufft"
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
 cuda_types = { path = "../cuda_types" }
-libloading = "0.8"
+rocfft-sys = { path = "../ext/rocfft-sys" }
+zluda_common = { path = "../zluda_common" }
+rustc-hash = "2.0.0"
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
+libloading = "0.8"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3.0"
 
+[dev-dependencies]
+libloading = "0.8"
+
 [package.metadata.zluda]
-linux_symlinks = [
-    "libcufft.so.10",
-    "libcufft.so.11",
-    "libcufft.so.12",
-]
+linux_symlinks = ["libcufft.so.10", "libcufft.so.11", "libcufft.so.12"]
 windows_paths = ["cufft64_10.dll", "cufft64_11.dll", "cufft64_12.dll"]

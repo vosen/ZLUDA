@@ -1,4 +1,3 @@
-mod hipfft;
 mod r#impl;
 mod plan;
 
@@ -25,9 +24,9 @@ macro_rules! implemented {
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes)]
             #[allow(improper_ctypes_definitions)]
-            #[allow(non_snake_case)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                unsafe { crate::r#impl::$fn_name($( $arg_id ),*) }
+                cuda_macros::cufft_normalize_fn!( crate::r#impl::$fn_name ) ($(zluda_common::FromCuda::<_, cuda_types::cufft::cufftError_t>::from_cuda(&$arg_id)?),*)?;
+                Ok(())
             }
         )*
     };
@@ -38,36 +37,109 @@ cuda_macros::cufft_function_declarations!(
     implemented
         <= [
             cufftPlan1d,
-            cufftPlan2d,
-            cufftPlan3d,
-            cufftPlanMany,
+            // cufftPlan2d,
+            // cufftPlan3d,
+            // cufftPlanMany,
             cufftMakePlan1d,
-            cufftMakePlan2d,
-            cufftMakePlan3d,
-            cufftMakePlanMany,
-            cufftMakePlanMany64,
-            cufftGetSizeMany64,
-            cufftEstimate1d,
-            cufftEstimate2d,
-            cufftEstimate3d,
-            cufftEstimateMany,
+            // cufftMakePlan2d,
+            // cufftMakePlan3d,
+            // cufftMakePlanMany,
+            // cufftMakePlanMany64,
+            // cufftGetSizeMany64,
+            // cufftEstimate1d,
+            // cufftEstimate2d,
+            // cufftEstimate3d,
+            // cufftEstimateMany,
             cufftCreate,
-            cufftGetSize1d,
-            cufftGetSize2d,
-            cufftGetSize3d,
-            cufftGetSizeMany,
-            cufftGetSize,
-            cufftSetWorkArea,
-            cufftSetAutoAllocation,
-            cufftExecC2C,
-            cufftExecR2C,
-            cufftExecC2R,
-            cufftExecZ2Z,
-            cufftExecD2Z,
-            cufftExecZ2D,
-            cufftSetStream,
-            cufftDestroy,
-            cufftGetVersion,
-            cufftGetProperty,
+            // cufftGetSize1d,
+            // cufftGetSize2d,
+            // cufftGetSize3d,
+            // cufftGetSizeMany,
+            // cufftGetSize,
+            // cufftSetWorkArea,
+            // cufftSetAutoAllocation,
+            // cufftExecC2C,
+            // cufftExecR2C,
+            // cufftExecC2R,
+            // cufftExecZ2Z,
+            // cufftExecD2Z,
+            // cufftExecZ2D,
+            // cufftSetStream,
+            // cufftDestroy,
+            // cufftGetVersion,
+            // cufftGetProperty,
+        ]
+);
+
+macro_rules! noop {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {};
+}
+
+#[cfg(windows)]
+mod os_macro {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use rocfft_sys::*;
+            struct RocfftVtable {
+                _lib: libloading::os::windows::Library,
+                $($fn_name: unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type,)*
+            }
+
+            impl RocfftVtable {
+                pub unsafe fn new() -> Result<Self, rocfft_error> {
+                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["rocfft.dll"]).ok_or(rocfft_error::rocfft_status_internal_error)?;
+                    let lib = libloading::os::windows::Library::from_raw(hmodule.0 as _);
+                    $(
+                        let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| rocfft_error::rocfft_status_internal_error)?;
+                    )*
+                    Ok(Self {
+                        _lib: lib,
+                        $($fn_name,)*
+                    })
+                }
+
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (self.$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+#[cfg(not(windows))]
+mod os_macro {
+    macro_rules! vtable_impl {
+        ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+            use rocfft_sys::*;
+
+            struct RocfftVtable {}
+
+            impl RocfftVtable {
+                pub unsafe fn new() -> Result<Self, rocfft_error> {
+                    Ok(Self {})
+                }
+            }
+
+            impl RocfftVtable {
+                $(
+                    pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
+                        (rocfft_sys::$fn_name)($($arg_id),*)
+                    }
+                )*
+            }
+        };
+    }
+    pub(crate) use vtable_impl;
+}
+
+cuda_macros::rocfft_function_declarations!(
+    noop,
+    os_macro::vtable_impl
+        <= [
+            rocfft_plan_create,
+            rocfft_setup
         ]
 );

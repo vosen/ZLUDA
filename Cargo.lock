@@ -742,6 +742,7 @@ dependencies = [
  "hipblaslt-sys",
  "miopen-sys",
  "rocblas-sys",
+ "rocfft-sys",
  "rocm_smi-sys",
  "rocsparse-sys",
 ]
@@ -3743,6 +3744,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rocfft-sys"
+version = "0.0.0"
+
+[[package]]
 name = "rocm_smi-sys"
 version = "0.0.0"
 
@@ -5262,6 +5267,7 @@ dependencies = [
  "hipblaslt-sys",
  "miopen-sys",
  "rocblas-sys",
+ "rocfft-sys",
  "rocsparse-sys",
  "zluda_windows",
 ]
@@ -5320,6 +5326,9 @@ dependencies = [
  "cuda_types",
  "embed-resource",
  "libloading",
+ "rocfft-sys",
+ "rustc-hash 2.1.2",
+ "zluda_common",
  "zluda_windows",
 ]
 
