@@ -740,9 +740,9 @@ dependencies = [
  "cuda_macros",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "hipfft-sys",
  "miopen-sys",
  "rocblas-sys",
- "rocfft-sys",
  "rocm_smi-sys",
  "rocsparse-sys",
 ]
@@ -2400,6 +2400,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hipfft-sys"
+version = "0.0.0"
+dependencies = [
+ "hip_runtime-sys",
+]
+
+[[package]]
 name = "home"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3742,10 +3749,6 @@ version = "0.1.0"
 dependencies = [
  "hip_runtime-sys",
 ]
-
-[[package]]
-name = "rocfft-sys"
-version = "0.0.0"
 
 [[package]]
 name = "rocm_smi-sys"
@@ -5265,9 +5268,9 @@ dependencies = [
  "dark_api",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "hipfft-sys",
  "miopen-sys",
  "rocblas-sys",
- "rocfft-sys",
  "rocsparse-sys",
  "zluda_windows",
 ]
@@ -5325,8 +5328,9 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "embed-resource",
+ "hip_runtime-sys",
+ "hipfft-sys",
  "libloading",
- "rocfft-sys",
  "rustc-hash 2.1.2",
  "unwrap_or",
  "zluda_common",

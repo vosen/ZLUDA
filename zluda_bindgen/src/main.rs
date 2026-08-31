@@ -97,15 +97,15 @@ fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
     write_rust_to_file(output, text)
 }
 
-fn generate_rocfft(output: &PathBuf, path: &[&str]) {
+fn generate_hipfft(output: &PathBuf, path: &[&str]) {
     let rocfft_header = new_builder()
-        .header("/opt/rocm/include/rocfft/rocfft.h")
-        .allowlist_type("^rocfft.*")
-        .allowlist_function("^rocfft.*")
-        .allowlist_var("^rocfft.*")
-        .must_use_type("rocfft_status_e")
-        .constified_enum("rocfft_status_e")
-        .new_type_alias("^rocfft_plan$")
+        .header("/opt/rocm/include/hipfft/hipfft.h")
+        .allowlist_type("^hipfft.*")
+        .allowlist_function("^hipfft.*")
+        .allowlist_var("^hipfft.*")
+        .must_use_type("hipfftResult_t")
+        .constified_enum("hipfftResult_t")
+        .new_type_alias("^hipfftHandle$")
         .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-x", "c++"])
         .generate()
         .unwrap()
@@ -116,11 +116,11 @@ fn generate_rocfft(output: &PathBuf, path: &[&str]) {
     remove_type(&mut module, "hipEvent_t");
     remove_type(&mut module, "ihipEvent_t");
     let result_options = ConvertIntoRustResultOptions {
-        type_: "rocfft_status",
-        underlying_type: "rocfft_status_e",
-        new_error_type: "rocfft_error",
-        error_prefix: ("rocfft_status_", "error_"),
-        success: ("rocfft_status_success", "success"),
+        type_: "hipfftResult",
+        underlying_type: "hipfftResult_t",
+        new_error_type: "hipfftError",
+        error_prefix: ("HIPFFT_", "ERROR_"),
+        success: ("HIPFFT_SUCCESS", "SUCCESS"),
         hip_types: vec![],
     };
     let mut converter = ConvertIntoRustResult::new(result_options);
@@ -135,7 +135,7 @@ fn generate_rocfft(output: &PathBuf, path: &[&str]) {
         })
         .collect();
     converter.flush(&mut module.items);
-    add_send_sync(&mut module.items, &["rocfft_plan"]);
+    add_send_sync(&mut module.items, &["hipfftHandle"]);
     let mut output = output.clone();
     output.extend(path);
     let text = &prettyplease::unparse(&module)
@@ -368,19 +368,9 @@ fn generate_cufft(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix = "
-impl From<rocfft_sys::rocfft_error> for cufftError_t {
-    fn from(error: rocfft_sys::rocfft_error) -> Self {
-        match error {
-            rocfft_sys::rocfft_error::failure => cufftError_t::INTERNAL_ERROR,
-            rocfft_sys::rocfft_error::invalid_arg_value => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_dimensions => cufftError_t::INVALID_SIZE,
-            rocfft_sys::rocfft_error::invalid_array_type => cufftError_t::INVALID_TYPE,
-            rocfft_sys::rocfft_error::invalid_strides => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_distance => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_offset => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_work_buffer => cufftError_t::NO_WORKSPACE,
-            _ => cufftError_t::INTERNAL_ERROR,
-        }
+impl From<hipfft_sys::hipfftError> for cufftError_t {
+    fn from(error: hipfft_sys::hipfftError) -> Self {
+        Self(error.0)
     }
 }";
     generate_types_library(

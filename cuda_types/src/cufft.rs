@@ -487,18 +487,8 @@ const _: fn() = || {
     let _ = std::mem::transmute::<cufftResult, u32>;
 };
 
-impl From<rocfft_sys::rocfft_error> for cufftError_t {
-    fn from(error: rocfft_sys::rocfft_error) -> Self {
-        match error {
-            rocfft_sys::rocfft_error::failure => cufftError_t::INTERNAL_ERROR,
-            rocfft_sys::rocfft_error::invalid_arg_value => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_dimensions => cufftError_t::INVALID_SIZE,
-            rocfft_sys::rocfft_error::invalid_array_type => cufftError_t::INVALID_TYPE,
-            rocfft_sys::rocfft_error::invalid_strides => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_distance => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_offset => cufftError_t::INVALID_VALUE,
-            rocfft_sys::rocfft_error::invalid_work_buffer => cufftError_t::NO_WORKSPACE,
-            _ => cufftError_t::INTERNAL_ERROR,
-        }
+impl From<hipfft_sys::hipfftError> for cufftError_t {
+    fn from(error: hipfft_sys::hipfftError) -> Self {
+        Self(error.0)
     }
 }

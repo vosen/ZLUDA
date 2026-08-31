@@ -1,50 +1,34 @@
 use cuda_types::cufft::{cufftError_t, cufftHandle};
-use rocfft_sys::rocfft_plan;
+use hipfft_sys::hipfftHandle;
 use rustc_hash::FxHashMap;
-
-pub(crate) struct Plan {
-    pub(crate) nx: i32,
-    pub(crate) type_: i32,
-    pub(crate) batch: i32,
-    pub(crate) work_size: usize,
-    pub(crate) plans: [rocfft_plan; 4],
-}
 
 pub struct Registry {
     next_handle: u32,
-    plans: FxHashMap<cuda_types::cufft::cufftHandle, Option<Plan>>,
+    handles: FxHashMap<cuda_types::cufft::cufftHandle, hipfftHandle>,
 }
 
 impl Registry {
     pub(crate) fn new() -> Self {
         Self {
             next_handle: 1,
-            plans: FxHashMap::default(),
+            handles: FxHashMap::default(),
         }
     }
 
     pub(crate) fn get(
         &mut self,
         cu_handle: cufftHandle,
-    ) -> Result<&mut Option<Plan>, cufftError_t> {
-        self.plans
+    ) -> Result<&mut hipfftHandle, cufftError_t> {
+        self.handles
             .get_mut(&cu_handle)
-            .ok_or(cufftError_t::INVALID_PLAN)
+            .ok_or(cufftError_t::INVALID_VALUE)
     }
 
-    pub(crate) fn insert(&mut self, plan: Option<Plan>) -> cufftHandle {
+    pub(crate) fn insert(&mut self, handle: hipfftHandle) -> cufftHandle {
         let raw_handle = self.next_handle as i32;
         self.next_handle += 1;
         let cu_handle = cufftHandle(raw_handle);
-        self.plans.insert(cu_handle, plan);
+        self.handles.insert(cu_handle, handle);
         cu_handle
     }
-
-    /*
-    pub(crate) fn remove(&mut self, cu_handle: cufftHandle) -> Result<rocfft_plan, cufftError_t> {
-        self.plans
-            .remove(&cu_handle)
-            .ok_or(cufftError_t::INVALID_PLAN)
-    }
-    */
 }

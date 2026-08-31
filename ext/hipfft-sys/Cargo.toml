@@ -1,7 +1,10 @@
 [package]
-name = "rocfft-sys"
+name = "hipfft-sys"
 version = "0.0.0"
 authors = ["Andrzej Janik <vosen@vosen.pl>"]
 edition = "2021"
 
 [lib]
+
+[dependencies]
+hip_runtime-sys = { path = "../hip_runtime-sys" }

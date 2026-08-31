@@ -11,7 +11,7 @@ rocblas-sys = { path = "../ext/rocblas-sys" }
 hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
 miopen-sys = { path = "../ext/miopen-sys" }
 rocsparse-sys = { path = "../ext/rocsparse-sys" }
-rocfft-sys = { path = "../ext/rocfft-sys" }
+hipfft-sys = { path = "../ext/hipfft-sys" }
 dark_api = { path = "../dark_api" }
 
 [target.'cfg(windows)'.dependencies]

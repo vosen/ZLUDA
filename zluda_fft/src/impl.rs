@@ -1,8 +1,8 @@
 use crate::plan;
 use cuda_types::cufft::*;
-use rocfft_sys::rocfft_error;
+use hipfft_sys::*;
 use std::{
-    cmp, mem,
+    mem,
     sync::{Mutex, OnceLock},
 };
 
@@ -16,12 +16,11 @@ pub(crate) fn unimplemented() -> cufftResult {
     cufftResult::ERROR_NOT_SUPPORTED
 }
 
-fn rocfft() -> Result<&'static super::RocfftVtable, rocfft_error> {
-    static LOCK: OnceLock<Result<super::RocfftVtable, rocfft_error>> = OnceLock::new();
-    let unwrapped: &Result<super::RocfftVtable, rocfft_error> = LOCK.get_or_init(|| {
-        let rocfft = unsafe { super::RocfftVtable::new()? };
-        unsafe { rocfft.rocfft_setup() }?;
-        Ok(rocfft)
+fn hipfft() -> Result<&'static super::HipfftVtable, hipfftError> {
+    static LOCK: OnceLock<Result<super::HipfftVtable, hipfftError>> = OnceLock::new();
+    let unwrapped: &Result<super::HipfftVtable, hipfftError> = LOCK.get_or_init(|| {
+        let hipfft = unsafe { super::HipfftVtable::new()? };
+        Ok(hipfft)
     });
     unwrapped.as_ref().map_err(|x| *x)
 }
@@ -49,153 +48,103 @@ impl GlobalState {
 }
 
 pub(crate) unsafe fn create(handle: &mut cufftHandle) -> Result<(), cufftError_t> {
-    let plan = GlobalState::with(|state| Ok(state.registry.insert(None)))?;
+    let hipfft = hipfft()?;
+    let mut plan = mem::zeroed();
+    hipfft.hipfftCreate(&mut plan)?;
+    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
     *handle = plan;
+    Ok(())
+}
+
+pub(crate) unsafe fn plan1d(
+    output: &mut cufftHandle,
+    nx: i32,
+    cu_type: hipfftType,
+    batch: i32,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    let mut plan = mem::zeroed();
+    hipfft.hipfftPlan1d(&mut plan, nx, cu_type, batch)?;
+    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
+    *output = plan;
+    Ok(())
+}
+
+pub(crate) unsafe fn plan2d(
+    output: &mut cufftHandle,
+    nx: ::core::ffi::c_int,
+    ny: ::core::ffi::c_int,
+    cu_type: hipfftType,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    let mut plan = mem::zeroed();
+    hipfft.hipfftPlan2d(&mut plan, nx, ny, cu_type)?;
+    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
+    *output = plan;
+    Ok(())
+}
+
+pub(crate) unsafe fn plan3d(
+    output: &mut cufftHandle,
+    nx: ::core::ffi::c_int,
+    ny: ::core::ffi::c_int,
+    nz: ::core::ffi::c_int,
+    cu_type: hipfftType,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    let mut plan = mem::zeroed();
+    hipfft.hipfftPlan3d(&mut plan, nx, ny, nz, cu_type)?;
+    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
+    *output = plan;
     Ok(())
 }
 
 pub(crate) unsafe fn make_plan1d(
     plan: cufftHandle,
     nx: i32,
-    cu_type: cufftType,
+    cu_type: hipfftType,
     batch: i32,
     work_size: &mut usize,
 ) -> Result<(), cufftError_t> {
-    if nx < 1 || batch < 1 {
-        return Err(cufftError_t::INVALID_VALUE);
-    }
-    let precision = to_precision(cu_type)?;
-    let max_work_size = {
-        let mut global_state = GlobalState::get()
-            .lock()
-            .map_err(|_| cufftError_t::INTERNAL_ERROR)?;
-        let plan_mut = global_state.registry.get(plan)?;
-        if plan_mut.is_some() {
-            return Err(cufftError_t::INVALID_PLAN);
-        }
-        let rocfft = rocfft()?;
-        let plan_struct = build_plan(&rocfft, nx, cu_type, batch, precision)?;
-        let max_work_size = plan_struct.work_size;
-        *plan_mut = Some(plan_struct);
-        max_work_size
-    };
-    *work_size = max_work_size;
+    let hipfft = hipfft()?;
+    GlobalState::with(|state| {
+        let plan = state.registry.get(plan)?;
+        hipfft.hipfftMakePlan1d(*plan, nx, cu_type, batch, work_size)?;
+        Ok(())
+    })?;
     Ok(())
 }
 
-fn build_plan(
-    rocfft: &super::RocfftVtable,
+pub(crate) unsafe fn make_plan2d(
+    plan: cufftHandle,
     nx: i32,
-    cu_type: cufftType,
-    batch: i32,
-    precision: rocfft_sys::rocfft_precision,
-) -> Result<plan::Plan, cufftError_t> {
-    let mut max_work_size = 0;
-    let mut rocm_plans = [unsafe { mem::zeroed() }; 4];
-    for (placement_index, placement) in [
-        rocfft_sys::rocfft_result_placement_e::rocfft_placement_inplace,
-        rocfft_sys::rocfft_result_placement_e::rocfft_placement_notinplace,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        for (forward_index, is_forward) in [false, true].into_iter().enumerate() {
-            let transform = unwrap_or::unwrap_some_or!(to_type(cu_type, is_forward)?, continue);
-            let backend = &mut rocm_plans[placement_index * 2 + forward_index];
-            unsafe {
-                rocfft.rocfft_plan_create(
-                    backend,
-                    placement,
-                    transform,
-                    precision,
-                    1,
-                    &(nx as usize),
-                    batch as usize,
-                    std::ptr::null_mut(),
-                )
-            }?;
-            let mut config_worksize = 0;
-            unsafe { rocfft.rocfft_plan_get_work_buffer_size(*backend, &mut config_worksize) }?;
-            max_work_size = cmp::max(max_work_size, config_worksize);
-        }
-    }
-    Ok(plan::Plan {
-        nx,
-        type_: cu_type.0 as i32,
-        batch,
-        work_size: max_work_size,
-        plans: rocm_plans,
-    })
-}
-
-fn to_precision(type_: cufftType) -> Result<rocfft_sys::rocfft_precision_e, cufftError_t> {
-    Ok(match type_ {
-        cufftType::CUFFT_R2C | cufftType::CUFFT_C2R | cufftType::CUFFT_C2C => {
-            rocfft_sys::rocfft_precision_e::rocfft_precision_single
-        }
-        cufftType::CUFFT_D2Z | cufftType::CUFFT_Z2D | cufftType::CUFFT_Z2Z => {
-            rocfft_sys::rocfft_precision_e::rocfft_precision_double
-        }
-        _ => return Err(cufftError_t::INVALID_VALUE),
-    })
-}
-
-fn to_type(
-    type_: cufftType,
-    forward: bool,
-) -> Result<Option<rocfft_sys::rocfft_transform_type_e>, cufftError_t> {
-    Ok(match (type_, forward) {
-        (cufftType::CUFFT_R2C, true) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_forward)
-        }
-        (cufftType::CUFFT_R2C, false) => None,
-        (cufftType::CUFFT_C2R, true) => None,
-        (cufftType::CUFFT_C2R, false) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_inverse)
-        }
-        (cufftType::CUFFT_C2C, true) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_forward)
-        }
-        (cufftType::CUFFT_C2C, false) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_inverse)
-        }
-        (cufftType::CUFFT_D2Z, true) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_forward)
-        }
-        (cufftType::CUFFT_D2Z, false) => None,
-        (cufftType::CUFFT_Z2D, true) => None,
-        (cufftType::CUFFT_Z2D, false) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_real_inverse)
-        }
-        (cufftType::CUFFT_Z2Z, true) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_forward)
-        }
-        (cufftType::CUFFT_Z2Z, false) => {
-            Some(rocfft_sys::rocfft_transform_type_e::rocfft_transform_type_complex_inverse)
-        }
-        _ => return Err(cufftError_t::INVALID_VALUE),
-    })
-}
-
-pub(crate) unsafe fn plan1d(
-    output: &mut cufftHandle,
-    nx: i32,
-    cu_type: cufftType,
-    batch: i32,
+    ny: i32,
+    cu_type: hipfftType,
+    work_size: &mut usize,
 ) -> Result<(), cufftError_t> {
-    if nx < 1 || batch < 1 {
-        return Err(cufftError_t::INVALID_VALUE);
-    }
-    let precision = to_precision(cu_type)?;
-    let plan = {
-        let rocfft = rocfft()?;
-        let plan_struct = build_plan(&rocfft, nx, cu_type, batch, precision)?;
-        let mut global_state = GlobalState::get()
-            .lock()
-            .map_err(|_| cufftError_t::INTERNAL_ERROR)?;
-        global_state.registry.insert(Some(plan_struct))
-    };
-    *output = plan;
+    let hipfft = hipfft()?;
+    GlobalState::with(|state| {
+        let plan = state.registry.get(plan)?;
+        hipfft.hipfftMakePlan2d(*plan, nx, ny, cu_type, work_size)?;
+        Ok(())
+    })?;
+    Ok(())
+}
+
+pub(crate) unsafe fn make_plan3d(
+    plan: cufftHandle,
+    nx: i32,
+    ny: i32,
+    nz: i32,
+    cu_type: hipfftType,
+    work_size: &mut usize,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    GlobalState::with(|state| {
+        let plan = state.registry.get(plan)?;
+        hipfft.hipfftMakePlan3d(*plan, nx, ny, nz, cu_type, work_size)?;
+        Ok(())
+    })?;
     Ok(())
 }
 

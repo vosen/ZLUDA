@@ -37,12 +37,12 @@ cuda_macros::cufft_function_declarations!(
     implemented
         <= [
             cufftPlan1d,
-            // cufftPlan2d,
-            // cufftPlan3d,
+            cufftPlan2d,
+            cufftPlan3d,
             // cufftPlanMany,
             cufftMakePlan1d,
-            // cufftMakePlan2d,
-            // cufftMakePlan3d,
+            cufftMakePlan2d,
+            cufftMakePlan3d,
             // cufftMakePlanMany,
             // cufftMakePlanMany64,
             // cufftGetSizeMany64,
@@ -79,18 +79,18 @@ macro_rules! noop {
 mod os_macro {
     macro_rules! vtable_impl {
         ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
-            use rocfft_sys::*;
-            struct RocfftVtable {
+            use hipfft_sys::*;
+            struct HipfftVtable {
                 _lib: libloading::os::windows::Library,
                 $($fn_name: unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type,)*
             }
 
-            impl RocfftVtable {
-                pub unsafe fn new() -> Result<Self, rocfft_error> {
-                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["rocfft.dll"]).ok_or(rocfft_error::rocfft_status_internal_error)?;
+            impl HipfftVtable {
+                pub unsafe fn new() -> Result<Self, hipfftError> {
+                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["hipfft.dll"]).ok_or(hipfftError::HIPFFT_STATUS_INTERNAL_ERROR)?;
                     let lib = libloading::os::windows::Library::from_raw(hmodule.0 as _);
                     $(
-                        let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| rocfft_error::rocfft_status_internal_error)?;
+                        let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| hipfftError::HIPFFT_STATUS_INTERNAL_ERROR)?;
                     )*
                     Ok(Self {
                         _lib: lib,
@@ -113,20 +113,20 @@ mod os_macro {
 mod os_macro {
     macro_rules! vtable_impl {
         ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
-            use rocfft_sys::*;
+            use hipfft_sys::*;
 
-            struct RocfftVtable {}
+            struct HipfftVtable {}
 
-            impl RocfftVtable {
-                pub unsafe fn new() -> Result<Self, rocfft_error> {
+            impl HipfftVtable {
+                pub unsafe fn new() -> Result<Self, hipfftError> {
                     Ok(Self {})
                 }
             }
 
-            impl RocfftVtable {
+            impl HipfftVtable {
                 $(
                     pub unsafe fn $fn_name(&self, $($arg_id: $arg_type),*) -> $ret_type {
-                        (rocfft_sys::$fn_name)($($arg_id),*)
+                        (hipfft_sys::$fn_name)($($arg_id),*)
                     }
                 )*
             }
@@ -135,12 +135,41 @@ mod os_macro {
     pub(crate) use vtable_impl;
 }
 
-cuda_macros::rocfft_function_declarations!(
+cuda_macros::hipfft_function_declarations!(
     noop,
     os_macro::vtable_impl
         <= [
-            rocfft_plan_create,
-            rocfft_plan_get_work_buffer_size,
-            rocfft_setup,
+            hipfftPlan1d,
+            hipfftPlan2d,
+            hipfftPlan3d,
+            hipfftPlanMany,
+            hipfftCreate,
+            hipfftMakePlan1d,
+            hipfftMakePlan2d,
+            hipfftMakePlan3d,
+            hipfftMakePlanMany,
+            hipfftMakePlanMany64,
+            hipfftEstimate1d,
+            hipfftEstimate2d,
+            hipfftEstimate3d,
+            hipfftEstimateMany,
+            hipfftGetSize1d,
+            hipfftGetSize2d,
+            hipfftGetSize3d,
+            hipfftGetSizeMany,
+            hipfftGetSizeMany64,
+            hipfftGetSize,
+            hipfftSetAutoAllocation,
+            hipfftSetWorkArea,
+            hipfftExecC2C,
+            hipfftExecR2C,
+            hipfftExecC2R,
+            hipfftExecZ2Z,
+            hipfftExecD2Z,
+            hipfftExecZ2D,
+            hipfftSetStream,
+            hipfftDestroy,
+            hipfftGetVersion,
+            hipfftGetProperty,
         ]
 );

@@ -52,7 +52,7 @@ RUN mkdir --parents --mode=0755 /etc/apt/keyrings && \
     rocm-llvm-dev \
     hip-runtime-amd \
     miopen-hip-dev \
-    rocfft-dev \
+    hipfft-dev \
     rocblas-dev \
     hipblaslt-dev \
     rocsolver-dev \

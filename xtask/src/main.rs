@@ -507,8 +507,8 @@ mod os {
         );
         patch_single_lib(
             &current_dir,
-            "librocfft.so",
-            &[("librocfft.so.0", "librocfft.so")],
+            "libhipfft.so",
+            &[("libhipfft.so.0", "libhipfft.so")],
         );
     }
 
