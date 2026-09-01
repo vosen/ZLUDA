@@ -1,4 +1,4 @@
-use vergen_gix::{Emitter, GixBuilder};
+use vergen_gix::{Emitter, Gix};
 
 fn main() {
     if cfg!(windows) {
@@ -8,7 +8,7 @@ fn main() {
         println!("cargo:rerun-if-changed={}", dll_path);
         check_lfs_file(dll_path);
     }
-    let git = GixBuilder::default().sha(false).build().unwrap();
+    let git = Gix::builder().sha(false).build();
     Emitter::default()
         .add_instructions(&git)
         .unwrap()

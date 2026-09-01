@@ -693,7 +693,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bfi { .. }
             | ast::Instruction::Bmsk { .. }
             | ast::Instruction::Activemask { .. }
-            | ast::Instruction::ShflSync { .. }
+            | ast::Instruction::Shfl { .. }
             | ast::Instruction::MatchSync { .. }
             | ast::Instruction::Vote { .. }
             | ast::Instruction::Nanosleep { .. }
@@ -1554,13 +1554,8 @@ impl<'a> MethodEmitContext<'a> {
         _data: ast::FlushToZero,
         arguments: ast::CosArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_f32 = get_scalar_type(self.context, ast::ScalarType::F32);
-        let cos = self.emit_intrinsic(
-            c"llvm.cos.f32",
-            Some(arguments.dst),
-            vec![&ast::ScalarType::F32.into()],
-            vec![(self.resolver.value(arguments.src)?, llvm_f32)],
-        )?;
+        let src = self.resolver.value(arguments.src)?;
+        let cos = self.fp.cos_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(cos, LLVMZludaFastMathApproxFunc) }
         Ok(())
     }
@@ -1799,13 +1794,8 @@ impl<'a> MethodEmitContext<'a> {
         _data: ptx_parser::FlushToZero,
         arguments: ptx_parser::SinArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_f32 = get_scalar_type(self.context, ast::ScalarType::F32);
-        let sin = self.emit_intrinsic(
-            c"llvm.sin.f32",
-            Some(arguments.dst),
-            vec![&ast::ScalarType::F32.into()],
-            vec![(self.resolver.value(arguments.src)?, llvm_f32)],
-        )?;
+        let src = self.resolver.value(arguments.src)?;
+        let sin = self.fp.sin_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(sin, LLVMZludaFastMathApproxFunc) }
         Ok(())
     }
@@ -4097,17 +4087,6 @@ impl std::fmt::Display for LLVMTypeDisplay {
     }
 }
 
-/*
-fn rounding_to_llvm(this: ast::RoundingMode) -> u32 {
-    match this {
-        ptx_parser::RoundingMode::Zero => 0,
-        ptx_parser::RoundingMode::NearestEven => 1,
-        ptx_parser::RoundingMode::PositiveInf => 2,
-        ptx_parser::RoundingMode::NegativeInf => 3,
-    }
-}
-*/
-
 struct FloatingPoint {
     context: LLVMContextRef,
     module: LLVMModuleRef,
@@ -4448,6 +4427,62 @@ impl FloatingPoint {
                 dst,
                 src_type,
                 src,
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn sin_f32(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst: SpirvWord,
+        src: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => emit_intrinsic(
+                self.context,
+                self.module,
+                self.builder,
+                resolver,
+                c"llvm.sin.f32",
+                Some(dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            ),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.sin",
+                ast::ScalarType::F32,
+                Some(dst),
+                [src],
+                ["round.dynamic", "fpexcept.ignore"],
+            ),
+        }
+    }
+
+    fn cos_f32(
+        &self,
+        resolver: &mut ResolveIdent,
+        dst: SpirvWord,
+        src: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        match self.mode {
+            FloatingPointMode::Normal => emit_intrinsic(
+                self.context,
+                self.module,
+                self.builder,
+                resolver,
+                c"llvm.cos.f32",
+                Some(dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            ),
+            FloatingPointMode::Constrained => self.emit_constrained(
+                resolver,
+                "llvm.experimental.constrained.cos",
+                ast::ScalarType::F32,
+                Some(dst),
+                [src],
                 ["round.dynamic", "fpexcept.ignore"],
             ),
         }

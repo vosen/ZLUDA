@@ -1019,7 +1019,11 @@ enum ParsedType {
 }
 
 fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
-    trace("texref", (Token::DotTexref).map(|_| ParsedType::Texref)).parse_next(stream)
+    trace(
+        "texref",
+        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+    )
+    .parse_next(stream)
 }
 
 fn parse_if<Input, Output, Error, ParseNext>(
@@ -2020,7 +2024,9 @@ derive_parser!(
         #[token(".noreturn")]
         DotNoreturn,
         #[token(".texref")]
-        DotTexref
+        DotTexref,
+        #[token(".surfref")]
+        DotSurfref
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -3975,10 +3981,16 @@ derive_parser!(
     .type: ScalarType = { .u32, .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
+    shfl.mode.b32  d[|p], a, b, c => {
+        Instruction::Shfl  {
+            data: ast::ShflDetails { mode },
+            arguments: ShflArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: None }
+        }
+    }
     shfl.sync.mode.b32  d[|p], a, b, c, membermask => {
-        Instruction::ShflSync  {
-            data: ast::ShflSyncDetails { mode },
-            arguments: ShflSyncArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: membermask }
+        Instruction::Shfl  {
+            data: ast::ShflDetails { mode },
+            arguments: ShflArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: Some(membermask) }
         }
     }
     .mode: ShuffleMode = { .up, .down, .bfly, .idx };
@@ -4106,7 +4118,17 @@ derive_parser!(
                 mode,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
+        }
+    }
+    vote.ballot.b32 d, {!}a => {
+        let (negate, a) = a;
+        Instruction::Vote {
+            data: VoteDetails {
+                mode: VoteMode::Ballot,
+                negate
+            },
+            arguments: VoteArgs { dst: d, src1: a, src2: None }
         }
     }
     vote.sync.ballot.b32 d, {!}a, membermask => {
@@ -4116,7 +4138,7 @@ derive_parser!(
                 mode: VoteMode::Ballot,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
         }
     }
 

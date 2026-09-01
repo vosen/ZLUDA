@@ -1,53 +1,41 @@
 use cuda_types::cuda::CUerror;
-use rand::distr::{Alphanumeric, SampleString};
-use rkyv::api::high::HighSerializer;
-use rkyv::de::Pool;
 use rkyv::rancor::{Failure, Strategy};
-use rkyv::ser::allocator::ArenaHandle;
-use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Portable, Serialize};
-use std::io::{Read, Write};
+use std::env;
 use std::num::NonZeroU32;
-use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle};
+use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{env, mem};
-use windows::core::{Error, PCSTR};
+use windows::core::Error;
 use windows::Win32::Foundation::*;
-use windows::Win32::System::Pipes::*;
-use zluda_server_common::Opcode;
+use windows::Win32::System::Threading::*;
+use zluda_server_common::{Opcode, Serializer};
 
 pub(crate) struct Server {
-    pipe: std::fs::File,
+    local: zluda_server_common::Endpoint,
+    remote: zluda_server_common::Endpoint,
     _child: Child,
-    buffer: AlignedVec,
+    arena: stumpalo::Arena,
 }
 
 impl Server {
-    fn new(pipe: std::fs::File, child: Child) -> Self {
-        Self {
-            pipe,
-            _child: child,
-            buffer: AlignedVec::new(),
-        }
-    }
-
     pub unsafe fn start() -> Result<Self, Error> {
-        let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
-        let pipe_path = format!("\\\\.\\pipe\\zluda-{name}\0");
-        let pipe = std::fs::File::from_raw_handle(
-            CreateNamedPipeA(
-                PCSTR(pipe_path.as_ptr()),
-                windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                1,
-                4 * 1024,
-                4 * 1024,
-                0,
-                None,
-            )?
-            .0,
-        );
+        let local = zluda_server_common::Endpoint::new()?;
+        let remote = zluda_server_common::Endpoint::new()?;
+        let spawn_server = |path: &PathBuf| {
+            Command::new(path)
+                .args([
+                    &local.event_name,
+                    &local.shared_memory.name,
+                    &remote.event_name,
+                    &remote.shared_memory.name,
+                ])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .current_dir(path.parent().unwrap())
+                .spawn()
+        };
         let mut primary_path = zluda_common::os::self_path().ok_or(Error::new(
             E_FAIL,
             "Could not get path to the executing module",
@@ -59,121 +47,109 @@ impl Server {
             primary_path.push("../zluda64_server.exe");
         };
         let fallback_path = env::var("ZLUDA64_PATH").ok().map(PathBuf::from);
-        let spawn_server = |path: &PathBuf| {
-            Command::new(path)
-                .arg(&pipe_path[..pipe_path.len() - 1])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .current_dir(path.parent().unwrap())
-                .spawn()
-        };
         let child = match (spawn_server(&primary_path), fallback_path) {
             (Ok(c), _) => c,
-            (Err(_), Some(fallback_path)) => spawn_server(&fallback_path)?,
+            (Err(_), Some(mut fallback_path)) => {
+                fallback_path.push("zluda64_server.exe");
+                spawn_server(&fallback_path)?
+            }
             (Err(e), None) => return Err(e.into()),
         };
         zluda_windows::kill_child_on_process_exit(child.as_handle().as_raw_handle())?;
-        match ConnectNamedPipe(HANDLE(pipe.as_raw_handle()), None) {
-            Ok(_) => Ok(Server::new(pipe, child)),
-            Err(e) if e.code() == ERROR_PIPE_CONNECTED.into() => Ok(Server::new(pipe, child)),
-            Err(e) => Err(e),
-        }
+        read_git_version(&local)?;
+        let arena = stumpalo::Arena::new();
+        Ok(Server {
+            local,
+            remote,
+            _child: child,
+            arena,
+        })
     }
 
     pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
         &mut self,
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
-        self.buffer.clear();
-        self.pipe
-            .write_all(&(opcode as u32).to_le_bytes()[..])
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
-                .map_err(|_| CUerror::UNKNOWN)?;
-        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(self)?;
-        self.buffer.resize(mem::size_of::<Out>(), 0);
-        self.pipe
-            .read_exact(&mut self.buffer)
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let output = unsafe { rkyv::access_unchecked::<Out>(&self.buffer) };
-        Ok(output.clone())
+        self.remote.shared_memory.write_header(opcode as u32);
+        self.remote.shared_memory.write_body(&data);
+        unsafe { SignalObjectAndWait(*self.remote.event, *self.local.event, INFINITE, false) };
+        let return_value = self.local.shared_memory.read_header();
+        match NonZeroU32::new(return_value) {
+            None => Ok(()),
+            Some(code) => Err(CUerror(code)),
+        }?;
+        Ok(self.local.shared_memory.read_body())
     }
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
         &mut self,
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
-        self.buffer.clear();
-        self.pipe
-            .write_all(&(opcode as u32).to_le_bytes()[..])
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
-                .map_err(|_| CUerror::UNKNOWN)?;
-        self.pipe
-            .write_all(&(slice.len() as u32).to_le_bytes()[..])
-            .map_err(|_| CUerror::UNKNOWN)?;
-        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(self)?;
-        self.buffer.resize(mem::size_of::<Out>(), 0);
-        self.pipe
-            .read_exact(&mut self.buffer)
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let output = unsafe { rkyv::access_unchecked::<Out>(&self.buffer) };
-        Ok(output.clone())
+        let opcode = opcode as u32;
+        self.remote.shared_memory.write_header(opcode);
+        let old_shmem = self
+            .remote
+            .shared_memory
+            .serialize_body(&mut self.arena, &data)?;
+        if let Some(mut old_shmem) = old_shmem {
+            self.remote.shared_memory.write_header(opcode);
+            old_shmem.write_header(u32::MAX);
+            old_shmem.write_buffer(self.remote.shared_memory.name.as_bytes());
+        }
+        unsafe { SignalObjectAndWait(*self.remote.event, *self.local.event, INFINITE, false) };
+        let return_value = self.local.shared_memory.read_header();
+        match NonZeroU32::new(return_value) {
+            None => Ok(()),
+            Some(code) => Err(CUerror(code)),
+        }?;
+        Ok(self.local.shared_memory.read_body())
     }
 
     pub(crate) fn remote_call_framed_out<Out: Archive>(
         &mut self,
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror>
     where
-        <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,
+        <Out as Archive>::Archived: Deserialize<Out, Strategy<(), Failure>>,
     {
-        self.buffer.clear();
-        self.pipe
-            .write_all(&(opcode as u32).to_le_bytes()[..])
-            .map_err(|_| CUerror::UNKNOWN)?;
-        let slice =
-            rkyv::api::high::to_bytes_in::<_, rkyv::rancor::Failure>(&data, &mut self.buffer)
-                .map_err(|_| CUerror::UNKNOWN)?;
-        self.pipe.write_all(&slice).map_err(|_| CUerror::UNKNOWN)?;
-        read_return_code(self)?;
-        let out_size = read_u32(self)?;
-        self.buffer.resize(out_size as usize, 0);
-        self.pipe
-            .read_exact(&mut self.buffer)
-            .map_err(|_| CUerror::UNKNOWN)?;
-        unsafe { rkyv::from_bytes_unchecked::<Out, rkyv::rancor::Failure>(&self.buffer) }
-            .map_err(|_| CUerror::UNKNOWN)
+        self.remote.shared_memory.write_header(opcode as u32);
+        self.remote.shared_memory.write_body(&data);
+        unsafe { SignalObjectAndWait(*self.remote.event, *self.local.event, INFINITE, false) };
+        let mut return_value = self.local.shared_memory.read_header();
+        if return_value == u32::MAX {
+            let new_shmem_name = unsafe {
+                String::from_utf8_unchecked(self.local.shared_memory.read_buffer().to_vec())
+            };
+            let new_shmem =
+                unsafe { zluda_server_common::SharedMemory::open(new_shmem_name, None) }
+                    .map_err(|_| CUerror::MAP_FAILED)?;
+            self.local.shared_memory = new_shmem;
+            return_value = self.local.shared_memory.read_header();
+        }
+        match NonZeroU32::new(return_value) {
+            None => Ok(()),
+            Some(code) => Err(CUerror(code)),
+        }?;
+        self.local.shared_memory.deserialize_body()
     }
 }
 
-fn read_return_code(this: &mut Server) -> Result<(), CUerror> {
-    let code = read_u32(this)?;
-    match NonZeroU32::new(code) {
-        None => Ok(()),
-        Some(code) => Err(CUerror(code)),
+fn read_git_version(local: &zluda_server_common::Endpoint) -> Result<(), Error> {
+    unsafe { WaitForSingleObject(*local.event, INFINITE) };
+    let opcode = local.shared_memory.read_header();
+    if opcode != Opcode::Startup as u32 {
+        return Err(Error::empty());
     }
-}
-
-fn read_u32(this: &mut Server) -> Result<u32, CUerror> {
-    let mut code_buffer = [0u8; 4];
-    this.pipe
-        .read_exact(&mut code_buffer)
-        .map_err(|_| CUerror::UNKNOWN)?;
-    let code = u32::from_le_bytes(code_buffer);
-    Ok(code)
+    let git_sha = env!("VERGEN_GIT_SHA");
+    let git_version = local.shared_memory.read_buffer();
+    if git_version != git_sha.as_bytes() {
+        return Err(Error::new(
+            E_FAIL,
+            "Git version mismatch between zluda and zluda64_server",
+        ));
+    }
+    Ok(())
 }

@@ -86,3 +86,7 @@ pub(crate) fn wait_event(
 ) -> hipError_t {
     unsafe { hipStreamWaitEvent(stream, event, flags) }
 }
+
+pub(crate) fn query(stream: hipStream_t) -> hipError_t {
+    unsafe { hipStreamQuery(stream) }
+}

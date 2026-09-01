@@ -3,12 +3,8 @@ use cuda_types::cuda::*;
 use dark_api::cuda::CudaDarkApi;
 use dark_api::FunctionArgInfo;
 use paste::paste;
-use rkyv::api::high::HighSerializer;
-use rkyv::de::Pool;
 use rkyv::rancor::{Failure, Strategy};
 use rkyv::rend::u32_le;
-use rkyv::ser::allocator::ArenaHandle;
-use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Portable, Serialize};
 use rustc_hash::FxHashMap;
 use std::alloc::Layout;
@@ -59,11 +55,13 @@ cuda_function_declarations! {
     implemented <= [
         cuCtxCreate_v2,
         cuCtxCreate,
+        cuCtxDestroy_v2,
         cuCtxDetach,
         cuCtxGetApiVersion,
         cuCtxGetCurrent,
         cuCtxGetDevice,
         cuCtxSetCacheConfig,
+        cuCtxSetCurrent,
         cuCtxSynchronize,
         cuDeviceComputeCapability,
         cuDeviceGet,
@@ -75,8 +73,11 @@ cuda_function_declarations! {
         cuDriverGetVersion,
         cuEventCreate,
         cuEventDestroy_v2,
+        cuEventElapsedTime,
         cuEventQuery,
         cuEventRecord,
+        cuEventSynchronize,
+        cuFuncGetAttribute,
         cuGetExportTable,
         cuInit,
         cuLaunchKernel,
@@ -84,6 +85,7 @@ cuda_function_declarations! {
         cuMemcpyDtoD_v2,
         cuMemcpyDtoDAsync_v2,
         cuMemcpyDtoHAsync_v2,
+        cuMemcpyHtoD_v2,
         cuMemcpyHtoDAsync_v2,
         cuMemFree_v2,
         cuMemFreeHost,
@@ -92,9 +94,14 @@ cuda_function_declarations! {
         cuMemsetD8_v2,
         cuModuleGetFunction,
         cuModuleGetGlobal_v2,
+        cuModuleGetSurfRef,
         cuModuleGetTexRef,
+        cuModuleLoadData,
+        cuModuleLoadDataEx,
+        cuModuleUnload,
         cuStreamCreate,
         cuStreamDestroy_v2,
+        cuStreamQuery,
         cuTexRefSetAddress_v2,
         cuTexRefSetAddressMode,
         cuTexRefSetFilterMode,
@@ -182,9 +189,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_zero_copy<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -195,9 +200,7 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_in<Out: Portable + Clone>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror> {
         Self::get()?
             .lock()
@@ -208,18 +211,13 @@ impl GlobalState {
 
     pub(crate) fn remote_call_framed_out<Out: Archive>(
         opcode: Opcode,
-        data: impl for<'a, 'b> Serialize<
-            HighSerializer<&'a mut AlignedVec, ArenaHandle<'b>, rkyv::rancor::Failure>,
-        >,
+        data: impl for<'a, 'b> Serialize<zluda_server_common::Serializer<'a, 'b>>,
     ) -> Result<Out, CUerror>
     where
-        <Out as Archive>::Archived: Deserialize<Out, Strategy<Pool, Failure>>,
+        <Out as Archive>::Archived: Deserialize<Out, Strategy<(), Failure>>,
     {
-        Self::get()?
-            .lock()
-            .map_err(|_| CUerror::UNKNOWN)?
-            .server
-            .remote_call_framed_out(opcode, data)
+        let mut state = Self::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+        state.server.remote_call_framed_out(opcode, data)
     }
 }
 
@@ -294,6 +292,14 @@ pub(crate) fn cu_ctx_get_current(pctx: *mut CUcontext) -> Result<(), CUerror> {
     Ok(())
 }
 
+pub(crate) fn cu_ctx_set_current(ctx: CUcontext) -> Result<(), CUerror> {
+    if ctx.0.is_null() {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    CONTEXT_STACK.with(|s| s.push(ctx, 0));
+    Ok(())
+}
+
 pub(crate) fn cu_ctx_get_device(device: *mut CUdevice) -> Result<(), CUerror> {
     let device = unsafe { device.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     let (_, dev) = CONTEXT_STACK.with(|s| s.current());
@@ -350,6 +356,10 @@ pub(crate) fn cu_device_get_attribute(
     let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
     if attrib.0 == 537396226 {
         *pi = 256;
+        return Ok(());
+    }
+    if attrib == CUdevice_attribute::CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY {
+        *pi = 0;
         return Ok(());
     }
     *pi = GlobalState::remote_call_zero_copy::<cuDeviceGetAttributeOut>(
@@ -776,6 +786,25 @@ pub(crate) fn cu_module_get_tex_ref(
     Ok(())
 }
 
+pub(crate) fn cu_module_get_surf_ref(
+    surfref: *mut CUsurfref,
+    hmod: CUmodule,
+    name: *const ::core::ffi::c_char,
+) -> Result<(), CUerror> {
+    let surfref = unsafe { surfref.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    let result = GlobalState::remote_call_framed_in::<cuModuleGetSurfRefOut>(
+        Opcode::cuModuleGetSurfRef,
+        cuModuleGetSurfRefIn {
+            hmod: CudaEncode::encode(hmod),
+            name: unsafe { std::ffi::CStr::from_ptr(name) }
+                .to_bytes_with_nul()
+                .to_vec(),
+        },
+    )?;
+    *surfref = CudaEncode::decode(result.surfref);
+    Ok(())
+}
+
 pub(crate) fn cu_stream_create(
     result: *mut CUstream,
     flags: ::core::ffi::c_uint,
@@ -931,6 +960,151 @@ pub(crate) fn cu_ctx_set_cache_config(
     Ok(())
 }
 
+pub(crate) unsafe fn cu_module_load_data(
+    result: *mut cuda_types::cuda::CUmodule,
+    image: *const ::core::ffi::c_void,
+) -> Result<(), CUerror> {
+    let result = match result.as_mut() {
+        Some(p) => p,
+        None => return CUresult::ERROR_INVALID_VALUE,
+    };
+    let code_lib =
+        CodeLibraryRef::try_load(image.cast()).map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
+    let mut modules = Vec::with_capacity(1);
+    code_lib.iterate_modules(|_, module| match module {
+        Ok(CodeModuleRef::Text(ptx)) => {
+            modules.push(std::borrow::Cow::Borrowed(ptx.as_bytes()));
+        }
+        Ok(CodeModuleRef::File(file)) => {
+            if file.kind() == "ptx" {
+                if let Ok(text) = file.get_or_decompress_content(false) {
+                    modules.push(text);
+                }
+            }
+        }
+        _ => {}
+    });
+    let mut last_module =
+        unwrap_or::unwrap_some_or!(modules.pop(), return Err(CUerror::NO_BINARY_FOR_GPU));
+    if last_module.last() != Some(&0) {
+        last_module.to_mut().push(0);
+    }
+    *result = CUmodule(
+        GlobalState::remote_call_framed_in::<cuModuleLoadDataOut>(
+            Opcode::cuModuleLoadData,
+            cuModuleLoadDataIn {
+                image: last_module.into_owned(),
+            },
+        )?
+        .module
+        .to_native() as _,
+    );
+    Ok(())
+}
+
+pub(crate) unsafe fn cu_module_load_data_ex(
+    module: *mut cuda_types::cuda::CUmodule,
+    image: *const ::core::ffi::c_void,
+    num_options: ::core::ffi::c_uint,
+    _options: *mut cuda_types::cuda::CUjit_option,
+    _option_values: *mut *mut ::core::ffi::c_void,
+) -> Result<(), CUerror> {
+    if num_options != 0 {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    cu_module_load_data(module, image)
+}
+
+pub(crate) fn cu_func_get_attribute(
+    pi: *mut ::core::ffi::c_int,
+    attrib: cuda_types::cuda::CUfunction_attribute,
+    hfunc: cuda_types::cuda::CUfunction,
+) -> Result<(), CUerror> {
+    let pi = unsafe { pi.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *pi = GlobalState::remote_call_zero_copy::<cuFuncGetAttributeOut>(
+        Opcode::cuFuncGetAttribute,
+        cuFuncGetAttributeIn {
+            attrib: CudaEncode::encode(attrib),
+            hfunc: CudaEncode::encode(hfunc),
+        },
+    )?
+    .pi;
+    Ok(())
+}
+
+pub(crate) fn cu_module_unload(hmod: cuda_types::cuda::CUmodule) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuModuleUnloadOut>(
+        Opcode::cuModuleUnload,
+        cuModuleUnloadIn {
+            hmod: CudaEncode::encode(hmod),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_ctx_destroy_v2(ctx: cuda_types::cuda::CUcontext) -> Result<(), CUerror> {
+    let mut global_state = GlobalState::get()?.lock().map_err(|_| CUerror::UNKNOWN)?;
+    global_state.context_state.remove(&ctx);
+    // TODO: keep track of which allocations are on which context
+    Ok(())
+}
+
+pub(crate) fn cu_event_synchronize(event: cuda_types::cuda::CUevent) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuEventSynchronizeOut>(
+        Opcode::cuEventSynchronize,
+        cuEventSynchronizeIn {
+            hEvent: CudaEncode::encode(event),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_stream_query(stream: cuda_types::cuda::CUstream) -> Result<(), CUerror> {
+    GlobalState::remote_call_zero_copy::<cuStreamQueryOut>(
+        Opcode::cuStreamQuery,
+        cuStreamQueryIn {
+            hStream: CudaEncode::encode(stream),
+        },
+    )?;
+    Ok(())
+}
+
+pub(crate) fn cu_event_elapsed_time(
+    milliseconds: *mut f32,
+    start: cuda_types::cuda::CUevent,
+    end: cuda_types::cuda::CUevent,
+) -> Result<(), CUerror> {
+    let milliseconds = unsafe { milliseconds.as_mut() }.ok_or(CUerror::INVALID_VALUE)?;
+    *milliseconds = GlobalState::remote_call_zero_copy::<cuEventElapsedTimeOut>(
+        Opcode::cuEventElapsedTime,
+        cuEventElapsedTimeIn {
+            hStart: CudaEncode::encode(start),
+            hEnd: CudaEncode::encode(end),
+        },
+    )?
+    .pMilliseconds;
+    Ok(())
+}
+
+pub(crate) fn cu_memcpy_hto_d_v2(
+    dst_device: cuda_types::cuda::CUdeviceptr,
+    src_host: *const ::core::ffi::c_void,
+    byte_count: usize,
+) -> Result<(), CUerror> {
+    if src_host.is_null() || dst_device.0.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let slice = unsafe { std::slice::from_raw_parts(src_host.cast::<u8>(), byte_count) };
+    GlobalState::remote_call_framed_in::<cuMemcpyHtoD_v2Out>(
+        Opcode::cuMemcpyHtoD_v2,
+        cuMemcpyHtoD_v2In {
+            dst_device: CudaEncode::encode(dst_device),
+            src_host: slice.to_vec(),
+        },
+    )?;
+    Ok(())
+}
+
 struct UnknownBuffer<const S: usize> {
     buffer: std::cell::UnsafeCell<[u32; S]>,
 }
@@ -964,42 +1138,7 @@ impl CudaDarkApi for DarkApi32 {
         result: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
     ) -> cuda_types::cuda::CUresult {
-        let result = match result.as_mut() {
-            Some(p) => p,
-            None => return CUresult::ERROR_INVALID_VALUE,
-        };
-        let code_lib = CodeLibraryRef::try_load(fatbinc_wrapper.cast())
-            .map_err(|_| CUerror::NO_BINARY_FOR_GPU)?;
-        let mut modules = Vec::with_capacity(1);
-        code_lib.iterate_modules(|_, module| match module {
-            Ok(CodeModuleRef::Text(ptx)) => {
-                modules.push(std::borrow::Cow::Borrowed(ptx.as_bytes()));
-            }
-            Ok(CodeModuleRef::File(file)) => {
-                if file.kind() == "ptx" {
-                    if let Ok(text) = file.get_or_decompress_content(false) {
-                        modules.push(text);
-                    }
-                }
-            }
-            _ => {}
-        });
-        let mut last_module =
-            unwrap_or::unwrap_some_or!(modules.pop(), return Err(CUerror::NO_BINARY_FOR_GPU));
-        if last_module.last() != Some(&0) {
-            last_module.to_mut().push(0);
-        }
-        *result = CUmodule(
-            GlobalState::remote_call_framed_in::<cuModuleLoadDataOut>(
-                Opcode::cuModuleLoadData,
-                cuModuleLoadDataIn {
-                    image: last_module.into_owned(),
-                },
-            )?
-            .module
-            .to_native() as _,
-        );
-        Ok(())
+        cu_module_load_data(result, fatbinc_wrapper.cast())
     }
 
     unsafe extern "system" fn cudart_interface_fn2(
