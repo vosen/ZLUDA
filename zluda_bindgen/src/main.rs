@@ -40,6 +40,7 @@ fn main() {
         &crate_root,
         &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
     );
+    generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
