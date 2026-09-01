@@ -1,5 +1,6 @@
 use crate::plan;
-use cuda_types::cufft::*;
+use cuda_types::cufft::{self, *};
+use hip_runtime_sys::hipStream_t;
 use hipfft_sys::*;
 use std::{
     mem,
@@ -45,10 +46,6 @@ impl GlobalState {
             .map_err(|_| cufftError_t::INTERNAL_ERROR)?;
         f(&mut *lock)
     }
-}
-
-pub(crate) unsafe fn create(handle: &mut cufftHandle) -> Result<(), cufftError_t> {
-    create_plan(handle, |hipfft, result| hipfft.hipfftCreate(result))
 }
 
 pub(crate) unsafe fn plan1d(
@@ -208,6 +205,60 @@ pub(crate) unsafe fn get_size_many64(
     })
 }
 
+pub(crate) unsafe fn estimate1d(
+    nx: i32,
+    type_: hipfftType,
+    batch: i32,
+    work_size: *mut usize,
+) -> cufftResult {
+    hipfft()?.hipfftEstimate1d(nx, type_, batch, work_size)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn estimate2d(
+    nx: i32,
+    ny: i32,
+    type_: hipfftType,
+    work_size: *mut usize,
+) -> cufftResult {
+    hipfft()?.hipfftEstimate2d(nx, ny, type_, work_size)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn estimate3d(
+    nx: i32,
+    ny: i32,
+    nz: i32,
+    type_: hipfftType,
+    work_size: *mut usize,
+) -> cufftResult {
+    hipfft()?.hipfftEstimate3d(nx, ny, nz, type_, work_size)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn estimate_many(
+    rank: i32,
+    n: *mut i32,
+    inembed: *mut i32,
+    istride: i32,
+    idist: i32,
+    onembed: *mut i32,
+    ostride: i32,
+    odist: i32,
+    type_: hipfftType,
+    batch: i32,
+    work_size: *mut usize,
+) -> cufftResult {
+    hipfft()?.hipfftEstimateMany(
+        rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch, work_size,
+    )?;
+    Ok(())
+}
+
+pub(crate) unsafe fn create(handle: &mut cufftHandle) -> Result<(), cufftError_t> {
+    create_plan(handle, |hipfft, result| hipfft.hipfftCreate(result))
+}
+
 unsafe fn create_plan(
     output: &mut cufftHandle,
     fn_: impl FnOnce(&super::HipfftVtable, &mut hipfftHandle) -> Result<(), hipfftError>,
@@ -230,6 +281,108 @@ unsafe fn with_plan(
         fn_(&hipfft, *plan)?;
         Ok(())
     })?;
+    Ok(())
+}
+
+pub(crate) unsafe fn get_size1d(
+    plan: cufftHandle,
+    nx: i32,
+    type_: hipfftType,
+    batch: i32,
+    work_size: *mut usize,
+) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftGetSize1d(plan, nx, type_, batch, work_size)
+    })
+}
+
+pub(crate) unsafe fn get_size2d(
+    plan: cufftHandle,
+    nx: i32,
+    ny: i32,
+    type_: hipfftType,
+    work_size: *mut usize,
+) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftGetSize2d(plan, nx, ny, type_, work_size)
+    })
+}
+
+pub(crate) unsafe fn get_size3d(
+    plan: cufftHandle,
+    nx: i32,
+    ny: i32,
+    nz: i32,
+    type_: hipfftType,
+    work_size: *mut usize,
+) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftGetSize3d(plan, nx, ny, nz, type_, work_size)
+    })
+}
+
+pub(crate) unsafe fn get_size_many(
+    plan: cufftHandle,
+    rank: i32,
+    n: *mut i32,
+    inembed: *mut i32,
+    istride: i32,
+    idist: i32,
+    onembed: *mut i32,
+    ostride: i32,
+    odist: i32,
+    type_: hipfftType,
+    batch: i32,
+    work_size: *mut usize,
+) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftGetSizeMany(
+            plan, rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch,
+            work_size,
+        )
+    })
+}
+
+pub(crate) unsafe fn get_size(plan: cufftHandle, work_size: *mut usize) -> cufftResult {
+    with_plan(plan, |hipfft, plan| hipfft.hipfftGetSize(plan, work_size))
+}
+
+pub(crate) unsafe fn set_work_area(
+    plan: cufftHandle,
+    work_area: *mut std::ffi::c_void,
+) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftSetWorkArea(plan, work_area)
+    })
+}
+
+pub(crate) unsafe fn set_auto_allocation(plan: cufftHandle, auto_allocate: i32) -> cufftResult {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftSetAutoAllocation(plan, auto_allocate)
+    })
+}
+
+pub(crate) unsafe fn set_stream(plan: cufftHandle, stream: hipStream_t) -> cufftResult {
+    with_plan(plan, |hipfft, plan| hipfft.hipfftSetStream(plan, stream))
+}
+
+pub(crate) unsafe fn destroy(plan: cufftHandle) -> cufftResult {
+    with_plan(plan, |hipfft, plan| hipfft.hipfftDestroy(plan))
+}
+
+pub(crate) unsafe fn get_version(version: &mut i32) -> cufftResult {
+    *version = cufft::CUFFT_VERSION as i32;
+    Ok(())
+}
+
+pub(crate) unsafe fn get_property(type_: libraryPropertyType, value: &mut i32) -> cufftResult {
+    let result = match type_ {
+        libraryPropertyType::MAJOR_VERSION => cufft::CUFFT_VER_MAJOR,
+        libraryPropertyType::MINOR_VERSION => cufft::CUFFT_VER_MINOR,
+        libraryPropertyType::PATCH_LEVEL => cufft::CUFFT_VER_PATCH,
+        _ => return Err(cufftError_t::INVALID_VALUE),
+    };
+    *value = result as i32;
     Ok(())
 }
 

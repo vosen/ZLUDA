@@ -265,7 +265,8 @@ from_cuda_nop!(
     cublasLtMatmulPreferenceAttributes_t,
     CUfunc_cache,
     CUctxCreateParams,
-    cufftHandle
+    cufftHandle,
+    cuda_types::cufft::libraryPropertyType
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
