@@ -1,7 +1,15 @@
 #![allow(non_snake_case)]
 
 use std::error;
+use std::ffi::OsString;
 use std::fmt;
+use std::mem;
+use std::os::windows::ffi::OsStringExt;
+use windows::core::{w, PWSTR};
+use windows::Win32::UI::Controls::Dialogs::{
+    CommDlgExtendedError, GetOpenFileNameW, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_NOCHANGEDIR,
+    OFN_PATHMUSTEXIST, OPENFILENAMEW,
+};
 
 mod c {
     use std::os::raw::c_ulong;
@@ -42,6 +50,39 @@ impl fmt::Display for OsError {
 impl error::Error for OsError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
+    }
+}
+
+pub(crate) fn select_executable() -> Result<Option<OsString>, OsError> {
+    let mut path = [0u16; 32768];
+    let mut dialog = OPENFILENAMEW {
+        lStructSize: mem::size_of::<OPENFILENAMEW>() as u32,
+        lpstrFilter: w!("Executable files (*.exe)\0*.exe\0"),
+        lpstrFile: PWSTR(path.as_mut_ptr()),
+        nMaxFile: path.len() as u32,
+        nFilterIndex: 1,
+        lpstrTitle: w!("Select an application to launch with ZLUDA"),
+        Flags: OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
+        lpstrDefExt: w!("exe"),
+        ..Default::default()
+    };
+    if unsafe { GetOpenFileNameW(&mut dialog) }.as_bool() {
+        let path_len = path
+            .iter()
+            .position(|character| *character == 0)
+            .unwrap_or(path.len());
+        return Ok(Some(OsString::from_wide(&path[..path_len])));
+    }
+
+    let error = unsafe { CommDlgExtendedError() };
+    if error.0 == 0 {
+        Ok(None)
+    } else {
+        Err(OsError {
+            function: "GetOpenFileNameW",
+            error_code: error.0,
+            message: format!("Common dialog error 0x{:08x}", error.0),
+        })
     }
 }
 

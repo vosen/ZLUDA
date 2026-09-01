@@ -1,5 +1,10 @@
 use bpaf::{choice, construct, pure, Bpaf, Parser};
-use std::{ffi::OsString, os::windows::ffi::OsStrExt, path::PathBuf};
+use std::{
+    ffi::{OsStr, OsString},
+    io,
+    os::windows::ffi::OsStrExt,
+    path::PathBuf,
+};
 
 /// Launch an application and redirect its CUDA calls
 #[derive(Debug, Clone, Bpaf)]
@@ -18,16 +23,59 @@ pub struct Arguments {
 }
 
 impl Arguments {
-    pub fn command_line_zero_terminated(&self) -> Vec<u16> {
+    pub fn command_line_zero_terminated(&self) -> io::Result<Vec<u16>> {
         let mut cmdline = Vec::with_capacity(1 + self.exe.len());
-        cmdline.extend(self.exe.encode_wide());
+        append_windows_argument(&mut cmdline, &self.exe, true)?;
         for arg in self.args.iter() {
             cmdline.push(' ' as u16);
-            cmdline.extend(arg.encode_wide());
+            append_windows_argument(&mut cmdline, arg, false)?;
         }
         cmdline.push(0);
-        cmdline
+        Ok(cmdline)
     }
+}
+
+fn append_windows_argument(
+    command_line: &mut Vec<u16>,
+    argument: &OsStr,
+    force_quotes: bool,
+) -> io::Result<()> {
+    let argument = argument.encode_wide().collect::<Vec<_>>();
+    if argument.contains(&0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "argument contains a null character",
+        ));
+    }
+
+    let quote = force_quotes
+        || argument.is_empty()
+        || argument
+            .iter()
+            .any(|character| *character == b' ' as u16 || *character == b'\t' as u16);
+    if quote {
+        command_line.push(b'"' as u16);
+    }
+
+    // Backslashes only need duplication before a literal quote or the closing quote.
+    let mut backslashes = 0;
+    for character in argument {
+        if character == b'\\' as u16 {
+            backslashes += 1;
+        } else {
+            if character == b'"' as u16 {
+                command_line.extend(std::iter::repeat_n(b'\\' as u16, backslashes + 1));
+            }
+            backslashes = 0;
+        }
+        command_line.push(character);
+    }
+
+    if quote {
+        command_line.extend(std::iter::repeat_n(b'\\' as u16, backslashes));
+        command_line.push(b'"' as u16);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -102,6 +150,7 @@ pub fn custom_args() -> impl Parser<Vec<LibraryWithPath>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::windows::ffi::OsStringExt;
 
     #[test]
     fn fail_on_duplicate_config_sets() {
@@ -140,5 +189,55 @@ mod tests {
         let parser = config_set().to_options();
         let err = parser.run_inner(&args[..]).unwrap_err();
         assert!(format!("{:?}", err).contains("cufoobar"));
+    }
+
+    #[test]
+    fn command_line_quotes_executable_and_arguments() {
+        let args = Arguments {
+            paths: ConfigSet::Zluda,
+            exe: OsString::from(r"C:\Program Files\app.exe"),
+            args: vec![
+                OsString::from("plain"),
+                OsString::from("two words"),
+                OsString::new(),
+            ],
+        };
+        let command_line =
+            String::from_utf16(&args.command_line_zero_terminated().unwrap()).unwrap();
+        assert_eq!(
+            command_line,
+            "\"C:\\Program Files\\app.exe\" plain \"two words\" \"\"\0"
+        );
+    }
+
+    #[test]
+    fn command_line_escapes_quotes_and_trailing_backslashes() {
+        let args = Arguments {
+            paths: ConfigSet::Zluda,
+            exe: OsString::from("app.exe"),
+            args: vec![
+                OsString::from("say\"hello"),
+                OsString::from("C:\\path with space\\"),
+            ],
+        };
+        let command_line =
+            String::from_utf16(&args.command_line_zero_terminated().unwrap()).unwrap();
+        assert_eq!(
+            command_line,
+            "\"app.exe\" say\\\"hello \"C:\\path with space\\\\\"\0"
+        );
+    }
+
+    #[test]
+    fn command_line_rejects_null_characters() {
+        let args = Arguments {
+            paths: ConfigSet::Zluda,
+            exe: OsString::from_wide(&[b'a' as u16, 0, b'b' as u16]),
+            args: Vec::new(),
+        };
+        assert_eq!(
+            args.command_line_zero_terminated().unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 }

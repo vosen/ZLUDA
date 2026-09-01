@@ -37,9 +37,20 @@ macro_rules! os_call {
 }
 
 pub fn main_impl() -> Result<(), Box<dyn Error>> {
-    let args = args::arguments().run();
+    let args = if env::args_os().nth(1).is_none() {
+        match crate::win::select_executable()? {
+            Some(exe) => args::Arguments {
+                paths: args::ConfigSet::Zluda,
+                exe,
+                args: Vec::new(),
+            },
+            None => return Ok(()),
+        }
+    } else {
+        args::arguments().run()
+    };
     let injection_env = InjectionConfig::new(args.clone())?;
-    let mut command_line = args.command_line_zero_terminated();
+    let mut command_line = args.command_line_zero_terminated()?;
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
     let mut env_vars_block = injection_env.get_env_variables_block()?;
