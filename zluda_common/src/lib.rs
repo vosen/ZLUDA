@@ -203,6 +203,7 @@ from_cuda_nop!(
     *mut i8,
     *mut i32,
     *const i32,
+    *mut i64,
     *mut u64,
     *mut usize,
     *const f32,

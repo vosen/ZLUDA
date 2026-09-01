@@ -48,12 +48,7 @@ impl GlobalState {
 }
 
 pub(crate) unsafe fn create(handle: &mut cufftHandle) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    let mut plan = mem::zeroed();
-    hipfft.hipfftCreate(&mut plan)?;
-    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
-    *handle = plan;
-    Ok(())
+    create_plan(handle, |hipfft, result| hipfft.hipfftCreate(result))
 }
 
 pub(crate) unsafe fn plan1d(
@@ -62,12 +57,9 @@ pub(crate) unsafe fn plan1d(
     cu_type: hipfftType,
     batch: i32,
 ) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    let mut plan = mem::zeroed();
-    hipfft.hipfftPlan1d(&mut plan, nx, cu_type, batch)?;
-    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
-    *output = plan;
-    Ok(())
+    create_plan(output, |hipfft, result| {
+        hipfft.hipfftPlan1d(result, nx, cu_type, batch)
+    })
 }
 
 pub(crate) unsafe fn plan2d(
@@ -76,12 +68,9 @@ pub(crate) unsafe fn plan2d(
     ny: ::core::ffi::c_int,
     cu_type: hipfftType,
 ) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    let mut plan = mem::zeroed();
-    hipfft.hipfftPlan2d(&mut plan, nx, ny, cu_type)?;
-    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
-    *output = plan;
-    Ok(())
+    create_plan(output, |hipfft, result| {
+        hipfft.hipfftPlan2d(result, nx, ny, cu_type)
+    })
 }
 
 pub(crate) unsafe fn plan3d(
@@ -91,12 +80,29 @@ pub(crate) unsafe fn plan3d(
     nz: ::core::ffi::c_int,
     cu_type: hipfftType,
 ) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    let mut plan = mem::zeroed();
-    hipfft.hipfftPlan3d(&mut plan, nx, ny, nz, cu_type)?;
-    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
-    *output = plan;
-    Ok(())
+    create_plan(output, |hipfft, result| {
+        hipfft.hipfftPlan3d(result, nx, ny, nz, cu_type)
+    })
+}
+
+pub(crate) unsafe fn plan_many(
+    output: &mut cufftHandle,
+    rank: ::core::ffi::c_int,
+    n: *mut ::core::ffi::c_int,
+    inembed: *mut ::core::ffi::c_int,
+    istride: ::core::ffi::c_int,
+    idist: ::core::ffi::c_int,
+    onembed: *mut ::core::ffi::c_int,
+    ostride: ::core::ffi::c_int,
+    odist: ::core::ffi::c_int,
+    type_: hipfftType,
+    batch: ::core::ffi::c_int,
+) -> Result<(), cufftError_t> {
+    create_plan(output, |hipfft, result| {
+        hipfft.hipfftPlanMany(
+            result, rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch,
+        )
+    })
 }
 
 pub(crate) unsafe fn make_plan1d(
@@ -106,13 +112,9 @@ pub(crate) unsafe fn make_plan1d(
     batch: i32,
     work_size: &mut usize,
 ) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    GlobalState::with(|state| {
-        let plan = state.registry.get(plan)?;
-        hipfft.hipfftMakePlan1d(*plan, nx, cu_type, batch, work_size)?;
-        Ok(())
-    })?;
-    Ok(())
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftMakePlan1d(plan, nx, cu_type, batch, work_size)
+    })
 }
 
 pub(crate) unsafe fn make_plan2d(
@@ -122,13 +124,9 @@ pub(crate) unsafe fn make_plan2d(
     cu_type: hipfftType,
     work_size: &mut usize,
 ) -> Result<(), cufftError_t> {
-    let hipfft = hipfft()?;
-    GlobalState::with(|state| {
-        let plan = state.registry.get(plan)?;
-        hipfft.hipfftMakePlan2d(*plan, nx, ny, cu_type, work_size)?;
-        Ok(())
-    })?;
-    Ok(())
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftMakePlan2d(plan, nx, ny, cu_type, work_size)
+    })
 }
 
 pub(crate) unsafe fn make_plan3d(
@@ -139,10 +137,97 @@ pub(crate) unsafe fn make_plan3d(
     cu_type: hipfftType,
     work_size: &mut usize,
 ) -> Result<(), cufftError_t> {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftMakePlan3d(plan, nx, ny, nz, cu_type, work_size)
+    })
+}
+
+pub(crate) unsafe fn make_plan_many(
+    plan: cufftHandle,
+    rank: ::core::ffi::c_int,
+    n: *mut ::core::ffi::c_int,
+    inembed: *mut ::core::ffi::c_int,
+    istride: ::core::ffi::c_int,
+    idist: ::core::ffi::c_int,
+    onembed: *mut ::core::ffi::c_int,
+    ostride: ::core::ffi::c_int,
+    odist: ::core::ffi::c_int,
+    type_: hipfftType,
+    batch: ::core::ffi::c_int,
+    work_size: *mut usize,
+) -> Result<(), cufftError_t> {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftMakePlanMany(
+            plan, rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch,
+            work_size,
+        )
+    })
+}
+
+pub(crate) unsafe fn make_plan_many64(
+    plan: cufftHandle,
+    rank: ::core::ffi::c_int,
+    n: *mut ::core::ffi::c_longlong,
+    inembed: *mut ::core::ffi::c_longlong,
+    istride: ::core::ffi::c_longlong,
+    idist: ::core::ffi::c_longlong,
+    onembed: *mut ::core::ffi::c_longlong,
+    ostride: ::core::ffi::c_longlong,
+    odist: ::core::ffi::c_longlong,
+    type_: hipfftType,
+    batch: ::core::ffi::c_longlong,
+    work_size: *mut usize,
+) -> Result<(), cufftError_t> {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftMakePlanMany64(
+            plan, rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch,
+            work_size,
+        )
+    })
+}
+
+pub(crate) unsafe fn get_size_many64(
+    plan: cufftHandle,
+    rank: ::core::ffi::c_int,
+    n: *mut ::core::ffi::c_longlong,
+    inembed: *mut ::core::ffi::c_longlong,
+    istride: ::core::ffi::c_longlong,
+    idist: ::core::ffi::c_longlong,
+    onembed: *mut ::core::ffi::c_longlong,
+    ostride: ::core::ffi::c_longlong,
+    odist: ::core::ffi::c_longlong,
+    type_: hipfftType,
+    batch: ::core::ffi::c_longlong,
+    work_size: *mut usize,
+) -> Result<(), cufftError_t> {
+    with_plan(plan, |hipfft, plan| {
+        hipfft.hipfftGetSizeMany64(
+            plan, rank, n, inembed, istride, idist, onembed, ostride, odist, type_, batch,
+            work_size,
+        )
+    })
+}
+
+unsafe fn create_plan(
+    output: &mut cufftHandle,
+    fn_: impl FnOnce(&super::HipfftVtable, &mut hipfftHandle) -> Result<(), hipfftError>,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    let mut plan = mem::zeroed();
+    fn_(&hipfft, &mut plan)?;
+    let plan = GlobalState::with(|state| Ok(state.registry.insert(plan)))?;
+    *output = plan;
+    Ok(())
+}
+
+unsafe fn with_plan(
+    cu_plan: cufftHandle,
+    fn_: impl FnOnce(&super::HipfftVtable, hipfftHandle) -> Result<(), hipfftError>,
+) -> Result<(), cufftError_t> {
     let hipfft = hipfft()?;
     GlobalState::with(|state| {
-        let plan = state.registry.get(plan)?;
-        hipfft.hipfftMakePlan3d(*plan, nx, ny, nz, cu_type, work_size)?;
+        let plan = state.registry.get(cu_plan)?;
+        fn_(&hipfft, *plan)?;
         Ok(())
     })?;
     Ok(())
