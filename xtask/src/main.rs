@@ -507,7 +507,7 @@ mod os {
         );
         patch_single_lib(
             &current_dir,
-            "libhipfft.so",
+            "libcufft.so",
             &[("libhipfft.so.0", "libhipfft.so")],
         );
     }
