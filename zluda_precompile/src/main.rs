@@ -168,19 +168,105 @@ fn elf_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
     )
     .ok()?;
     let string_table_section = section_headers.get(header.e_shstrndx as usize)?;
-    let string_table_start = string_table_section.sh_offset as usize;
+    let string_table_start = usize::try_from(string_table_section.sh_offset).ok()?;
+    let string_table_size = usize::try_from(string_table_section.sh_size).ok()?;
+    let string_table_end = string_table_start.checked_add(string_table_size)?;
+    let string_table = bytes.get(string_table_start..string_table_end)?;
     section_headers.into_iter().find_map(|section| {
-        let section_name =
-            CStr::from_bytes_until_nul(&bytes[string_table_start + section.sh_name as usize..])
-                .ok()?;
+        let name_start = section.sh_name as usize;
+        let section_name = CStr::from_bytes_until_nul(string_table.get(name_start..)?).ok()?;
         if section_name.to_bytes() == b".nv_fatbin" {
-            let range = section.sh_offset as usize
-                ..(section.sh_offset.saturating_add(section.sh_size)) as usize;
+            let section_start = usize::try_from(section.sh_offset).ok()?;
+            let section_size = usize::try_from(section.sh_size).ok()?;
+            let section_end = section_start.checked_add(section_size)?;
+            let range = section_start..section_end;
+            bytes.get(range.clone())?;
             Some(range)
         } else {
             None
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::elf_find_fatbin_section;
+
+    fn elf_with_sections(
+        string_table_offset: u64,
+        string_table_size: u64,
+        name: u32,
+        section_offset: u64,
+        section_size: u64,
+    ) -> Vec<u8> {
+        let mut bytes = vec![0; 400];
+        bytes[..4].copy_from_slice(b"\x7fELF");
+        bytes[4] = 2;
+        bytes[5] = 1;
+        bytes[6] = 1;
+        bytes[16..18].copy_from_slice(&1u16.to_le_bytes());
+        bytes[18..20].copy_from_slice(&62u16.to_le_bytes());
+        bytes[20..24].copy_from_slice(&1u32.to_le_bytes());
+        bytes[52..54].copy_from_slice(&64u16.to_le_bytes());
+        bytes[40..48].copy_from_slice(&64u64.to_le_bytes());
+        bytes[58..60].copy_from_slice(&64u16.to_le_bytes());
+        bytes[60..62].copy_from_slice(&3u16.to_le_bytes());
+        bytes[62..64].copy_from_slice(&1u16.to_le_bytes());
+        let string_header = &mut bytes[128..192];
+        string_header[4..8].copy_from_slice(&3u32.to_le_bytes());
+        string_header[24..32].copy_from_slice(&string_table_offset.to_le_bytes());
+        string_header[32..40].copy_from_slice(&string_table_size.to_le_bytes());
+        let fatbin_header = &mut bytes[192..256];
+        fatbin_header[0..4].copy_from_slice(&name.to_le_bytes());
+        fatbin_header[4..8].copy_from_slice(&1u32.to_le_bytes());
+        fatbin_header[24..32].copy_from_slice(&section_offset.to_le_bytes());
+        fatbin_header[32..40].copy_from_slice(&section_size.to_le_bytes());
+        if let Some(end) = (string_table_offset as usize).checked_add(12) {
+            if let Some(table) = bytes.get_mut(string_table_offset as usize..end) {
+                table.copy_from_slice(b"\0.nv_fatbin\0");
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn finds_fatbin_section_with_bounded_string_table() {
+        let bytes = elf_with_sections(256, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), Some(380..384));
+    }
+
+    #[test]
+    fn rejects_string_table_outside_file() {
+        let bytes = elf_with_sections(0x1000, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_section_name_outside_string_table() {
+        let bytes = elf_with_sections(256, 12, 99, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_unterminated_section_name() {
+        let bytes = elf_with_sections(256, 11, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_fatbin_section_outside_file() {
+        let bytes = elf_with_sections(256, 12, 1, 0x1000, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+    #[test]
+    fn rejects_offset_overflow() {
+        let bytes = elf_with_sections(u64::MAX, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+        let bytes = elf_with_sections(256, 12, 1, u64::MAX, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+        let bytes = elf_with_sections(256, 12, 1, 380, u64::MAX);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
 }
 
 fn extract_from_binary(
