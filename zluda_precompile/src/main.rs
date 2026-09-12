@@ -190,7 +190,7 @@ fn elf_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
 
 #[cfg(test)]
 mod tests {
-    use super::elf_find_fatbin_section;
+    use super::{elf_find_fatbin_section, fatbin_frames};
 
     fn elf_with_sections(
         string_table_offset: u64,
@@ -267,8 +267,107 @@ mod tests {
         let bytes = elf_with_sections(256, 12, 1, 380, u64::MAX);
         assert_eq!(elf_find_fatbin_section(&bytes), None);
     }
+    fn frame(header_size: u16, files_size: u64) -> Vec<u8> {
+        let mut bytes = vec![0; usize::from(header_size).max(16) + files_size.min(32) as usize];
+        bytes[0..4].copy_from_slice(&cuda_types::dark_api::FatbinHeader::MAGIC);
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&header_size.to_le_bytes());
+        bytes[8..16].copy_from_slice(&files_size.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn iterates_two_bounded_frames_and_stops_at_trailer() {
+        let mut bytes = frame(16, 4);
+        bytes.extend(frame(16, 4));
+        bytes.extend([0; 16]);
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..20, 20..40]
+        );
+    }
+
+    #[test]
+    fn rejects_zero_or_short_header_without_progress() {
+        assert_eq!(fatbin_frames(&frame(0, 0), 0..16).count(), 0);
+        assert_eq!(fatbin_frames(&frame(15, 1), 0..16).count(), 0);
+    }
+
+    #[test]
+    fn accepts_extended_header_in_offset_section() {
+        let mut bytes = vec![0; 7];
+        bytes.extend(frame(24, 4));
+        assert_eq!(
+            fatbin_frames(&bytes, 7..bytes.len()).collect::<Vec<_>>(),
+            vec![7..35]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_section_ranges() {
+        let bytes = frame(16, 4);
+        assert_eq!(fatbin_frames(&bytes, 0..bytes.len() + 1).count(), 0);
+        assert_eq!(fatbin_frames(&bytes, 10..5).count(), 0);
+        assert_eq!(fatbin_frames(&bytes, 0..15).count(), 0);
+    }
+
+    #[test]
+    fn stops_after_valid_frame_before_invalid_frame() {
+        let mut bytes = frame(16, 4);
+        bytes.extend(frame(0, 0));
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..20]
+        );
+    }
+
+    #[test]
+    fn accepts_empty_payload_and_short_trailer() {
+        let mut bytes = frame(16, 0);
+        bytes.extend([0; 3]);
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..16]
+        );
+    }
+
+    #[test]
+    fn rejects_overflow_and_truncated_frames() {
+        assert_eq!(fatbin_frames(&frame(16, u64::MAX), 0..16).count(), 0);
+        assert_eq!(fatbin_frames(&frame(16, 4), 0..19).count(), 0);
+    }
 }
 
+fn fatbin_frames(
+    bytes: &[u8],
+    section: std::ops::Range<usize>,
+) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+    let mut next_start = section.start;
+    let section_end = section.end;
+    std::iter::from_fn(move || {
+        let remaining = bytes.get(next_start..section_end)?;
+        if remaining.len() < mem::size_of::<FatbinHeader>() {
+            return None;
+        }
+        let header = unsafe { remaining.as_ptr().cast::<FatbinHeader>().read_unaligned() };
+        if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
+            return None;
+        }
+        let header_size = usize::from(header.header_size);
+        if header_size < mem::size_of::<FatbinHeader>() {
+            return None;
+        }
+        let files_size = usize::try_from(header.files_size).ok()?;
+        let frame_size = header_size.checked_add(files_size)?;
+        if frame_size > remaining.len() {
+            return None;
+        }
+        let frame_end = next_start.checked_add(frame_size)?;
+        let frame = next_start..frame_end;
+        next_start = frame_end;
+        Some(frame)
+    })
+}
 fn extract_from_binary(
     scope: &Scope,
     context: ParallelContext,
@@ -283,46 +382,27 @@ fn extract_from_binary(
     let buffer = &mut Arc::get_mut(&mut compilation).unwrap().buffer;
     buffer.extend_from_slice(&header);
     file.read_to_end(buffer).ok()?;
-    let mut fatbin_range = get_fatbin_section(&compilation.buffer)?;
-    loop {
-        if fatbin_range.len() < mem::size_of::<FatbinHeader>() {
-            break;
-        }
-        let header = unsafe {
-            compilation.buffer[fatbin_range.clone()]
-                .as_ptr()
-                .cast::<FatbinHeader>()
-                .read_unaligned()
-        };
-        if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
-            break;
-        }
-        {
-            let compilation = compilation.clone();
-            let fatbin_range = fatbin_range.clone();
-            let context = context.clone();
-            scope.spawn(move |_| {
-                (|| {
-                    unsafe { (context.cuda.cuCtxSetCurrent)(context.cu_ctx) }.ok()?;
-                    let mut module = CUmodule(ptr::null_mut());
-                    if unsafe {
-                        (context.cuda.cuModuleLoadData)(
-                            &mut module,
-                            compilation.buffer[fatbin_range].as_ptr().cast(),
-                        )
-                    }
-                    .is_ok()
-                    {
-                        unsafe { (context.cuda.cuModuleUnload)(module) }.ok()?;
-                    }
-                    Some(())
-                })();
-            });
-        }
-        fatbin_range.start = fatbin_range
-            .start
-            .saturating_add(header.header_size as usize)
-            .saturating_add(header.files_size as usize);
+    let fatbin_section = get_fatbin_section(&compilation.buffer)?;
+    for fatbin_range in fatbin_frames(&compilation.buffer, fatbin_section) {
+        let compilation = compilation.clone();
+        let context = context.clone();
+        scope.spawn(move |_| {
+            (|| {
+                unsafe { (context.cuda.cuCtxSetCurrent)(context.cu_ctx) }.ok()?;
+                let mut module = CUmodule(ptr::null_mut());
+                if unsafe {
+                    (context.cuda.cuModuleLoadData)(
+                        &mut module,
+                        compilation.buffer[fatbin_range].as_ptr().cast(),
+                    )
+                }
+                .is_ok()
+                {
+                    unsafe { (context.cuda.cuModuleUnload)(module) }.ok()?;
+                }
+                Some(())
+            })();
+        });
     }
     Some(())
 }
