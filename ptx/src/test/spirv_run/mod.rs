@@ -308,6 +308,11 @@ test_ptx!(div_approx, [1f32, 2f32], [0.5f32]);
 test_ptx!(sqrt, [0.25f32], [0.5f32]);
 test_ptx!(sqrt_rn_ftz, [0x1u32], [0x0u32]);
 test_ptx!(rsqrt, [0.25f64], [2f64]);
+test_ptx!(
+    rsqrt_ftz_f64,
+    [f64::from_bits(0x3FF0_0000_1234_5678)],
+    [1.0f64]
+);
 test_ptx!(neg, [181i32], [-181i32]);
 test_ptx!(sin, [std::f32::consts::PI / 2f32], [1f32]);
 test_ptx!(cos, [std::f32::consts::PI], [-1f32]);

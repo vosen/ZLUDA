@@ -2518,12 +2518,68 @@ impl<'a> MethodEmitContext<'a> {
             }
             _ => return Err(error_unreachable()),
         };
-        self.emit_intrinsic(
-            intrinsic,
-            Some(arguments.dst),
-            vec![&data.type_.into()],
-            vec![(self.resolver.value(arguments.src)?, type_)],
-        )?;
+        let src = self.resolver.value(arguments.src)?;
+        if data.type_ == ast::ScalarType::F64 && data.flush_to_zero == Some(true) {
+            // PTX rsqrt.approx.ftz.f64 operates on the input's upper word and
+            // clears the destination's lower word.
+            let bits_type = get_scalar_type(self.context, ast::ScalarType::B64);
+            let word_mask = unsafe { LLVMConstInt(bits_type, 0xFFFF_FFFF_0000_0000, 0) };
+            let is_nan = unsafe {
+                LLVMBuildFCmp(
+                    self.builder,
+                    LLVMRealPredicate::LLVMRealUNO,
+                    src,
+                    src,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let src_bits =
+                unsafe { LLVMBuildBitCast(self.builder, src, bits_type, LLVM_UNNAMED.as_ptr()) };
+            let src = unsafe {
+                LLVMBuildBitCast(
+                    self.builder,
+                    LLVMBuildAnd(self.builder, src_bits, word_mask, LLVM_UNNAMED.as_ptr()),
+                    type_,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let result = self.emit_intrinsic(
+                intrinsic,
+                None,
+                vec![&data.type_.into()],
+                vec![(src, type_)],
+            )?;
+            let result_bits = unsafe {
+                LLVMBuildAnd(
+                    self.builder,
+                    LLVMBuildBitCast(self.builder, result, bits_type, LLVM_UNNAMED.as_ptr()),
+                    word_mask,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let canonical_nan = unsafe { LLVMConstInt(bits_type, 0x7FFF_FFFF_0000_0000, 0) };
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildBitCast(
+                    self.builder,
+                    LLVMBuildSelect(
+                        self.builder,
+                        is_nan,
+                        canonical_nan,
+                        result_bits,
+                        LLVM_UNNAMED.as_ptr(),
+                    ),
+                    type_,
+                    dst,
+                )
+            });
+        } else {
+            self.emit_intrinsic(
+                intrinsic,
+                Some(arguments.dst),
+                vec![&data.type_.into()],
+                vec![(src, type_)],
+            )?;
+        }
         Ok(())
     }
 
