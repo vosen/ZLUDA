@@ -18,9 +18,10 @@ impl Registry {
     pub(crate) fn get(
         &mut self,
         cu_handle: cufftHandle,
-    ) -> Result<&mut hipfftHandle, cufftError_t> {
+    ) -> Result<hipfftHandle, cufftError_t> {
         self.handles
-            .get_mut(&cu_handle)
+            .get(&cu_handle)
+            .copied()
             .ok_or(cufftError_t::INVALID_VALUE)
     }
 
@@ -30,5 +31,11 @@ impl Registry {
         let cu_handle = cufftHandle(raw_handle);
         self.handles.insert(cu_handle, handle);
         cu_handle
+    }
+
+    pub(crate) fn remove(&mut self, cu_handle: cufftHandle) -> Result<hipfftHandle, cufftError_t> {
+        self.handles
+            .remove(&cu_handle)
+            .ok_or(cufftError_t::INVALID_VALUE)
     }
 }

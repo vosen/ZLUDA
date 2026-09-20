@@ -5227,6 +5227,7 @@ dependencies = [
  "hip_runtime-sys",
  "hipfft-sys",
  "libloading",
+ "paste",
  "rustc-hash 2.1.2",
  "unwrap_or",
  "zluda_common",

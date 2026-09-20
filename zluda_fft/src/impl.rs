@@ -278,7 +278,20 @@ unsafe fn with_plan(
     let hipfft = hipfft()?;
     GlobalState::with(|state| {
         let plan = state.registry.get(cu_plan)?;
-        fn_(&hipfft, *plan)?;
+        fn_(&hipfft, plan)?;
+        Ok(())
+    })?;
+    Ok(())
+}
+
+unsafe fn remove_plan(
+    cu_plan: cufftHandle,
+    fn_: impl FnOnce(&super::HipfftVtable, hipfftHandle) -> Result<(), hipfftError>,
+) -> Result<(), cufftError_t> {
+    let hipfft = hipfft()?;
+    GlobalState::with(|state| {
+        let plan = state.registry.remove(cu_plan)?;
+        fn_(&hipfft, plan)?;
         Ok(())
     })?;
     Ok(())
@@ -367,7 +380,7 @@ pub(crate) unsafe fn set_stream(plan: cufftHandle, stream: hipStream_t) -> cufft
 }
 
 pub(crate) unsafe fn destroy(plan: cufftHandle) -> cufftResult {
-    with_plan(plan, |hipfft, plan| hipfft.hipfftDestroy(plan))
+    remove_plan(plan, |hipfft, plan| hipfft.hipfftDestroy(plan))
 }
 
 pub(crate) unsafe fn get_version(version: &mut i32) -> cufftResult {
