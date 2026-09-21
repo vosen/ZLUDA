@@ -1,16 +1,22 @@
-pub(crate) struct Zluda;
+use zluda_common::test;
+
+pub(crate) struct Zluda {
+    runtime: test::Runtime,
+}
+
+impl Zluda {
+    fn load() -> Self {
+        let runtime = test::Runtime::load_hip();
+        Self { runtime }
+    }
+}
 
 pub(crate) struct Cuda {
-    _cuda: libloading::Library,
+    runtime: test::Runtime,
     cufft: libloading::Library,
 }
 
 impl Cuda {
-    #[cfg(not(windows))]
-    const CUDA_PATH: &'static str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
-    #[cfg(windows)]
-    const CUDA_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
-
     #[cfg(windows)]
     fn cufft_path() -> String {
         std::env::var("CUDA_PATH")
@@ -24,9 +30,9 @@ impl Cuda {
     }
 
     fn load() -> Self {
-        let _cuda = unsafe { libloading::Library::new(Self::CUDA_PATH) }.unwrap();
+        let runtime = test::Runtime::load_cuda();
         let cufft = unsafe { libloading::Library::new(Self::cufft_path()) }.unwrap();
-        Self { _cuda, cufft }
+        Self { runtime, cufft }
     }
 }
 
@@ -34,6 +40,7 @@ macro_rules! api {
     ($($abi:literal fn $fn_name:ident( $( $arg_id:ident : $arg_type:ty ),* ) -> $ret_type:ty;)* ) => {
         pub(crate) trait CufftApi {
             fn new() -> Self;
+            fn runtime(&self) -> &zluda_common::test::Runtime;
             $(
                 #[allow(non_snake_case, dead_code)]
                 fn $fn_name(&self, $( $arg_id : $arg_type ),* ) {
@@ -44,7 +51,8 @@ macro_rules! api {
         }
 
         impl CufftApi for Zluda {
-            fn new() -> Self { Self  }
+            fn new() -> Self { Self::load() }
+            fn runtime(&self) -> &zluda_common::test::Runtime { &self.runtime }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
                     unsafe { super::$fn_name( $( $arg_id ),* ) }
@@ -53,7 +61,8 @@ macro_rules! api {
         }
 
         impl CufftApi for Cuda {
-            fn new() -> Self {Self::load() }
+            fn new() -> Self { Self::load() }
+            fn runtime(&self) -> &zluda_common::test::Runtime { &self.runtime }
             $(
                 paste::paste!{ fn [< $fn_name _unchecked >](&self, $( $arg_id : $arg_type ),* )  -> $ret_type {
                     let func = unsafe { self.cufft.get::<unsafe extern $abi fn ( $( $arg_type ),* ) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()) }.unwrap();
@@ -91,8 +100,9 @@ cuda_macros::cufft_function_declarations!(
 mod api_tests {
     use super::CufftApi;
     use cuda_macros::test_cuda;
-    use cuda_types::cufft::{
-        cufftComplex, cufftResult, cufftResultConsts, cufftType, libraryPropertyType,
+    use cuda_types::{
+        cuda::CUstream,
+        cufft::{cufftComplex, cufftResult, cufftResultConsts, cufftType, libraryPropertyType},
     };
     use std::mem;
 
@@ -105,7 +115,6 @@ mod api_tests {
         assert_ne!(api.cufftDestroy_unchecked(handle), cufftResult::SUCCESS);
     }
 
-    /*
     #[test_cuda]
     fn plan_non_cubic_3d_transforms(api: impl CufftApi) {
         for type_ in [
@@ -116,93 +125,81 @@ mod api_tests {
             cufftType::CUFFT_D2Z,
             cufftType::CUFFT_Z2D,
         ] {
-            let mut handle = 0;
-            assert_eq!(
-                api.cufftPlan3d(&mut handle, 3, 4, 5, type_),
-                cufftResult::SUCCESS
-            );
-            assert_eq!(api.cufftDestroy(handle), cufftResult::SUCCESS);
+            let mut handle = unsafe { mem::zeroed() };
+            api.cufftPlan3d(&mut handle, 3, 4, 5, type_);
+            api.cufftDestroy(handle);
         }
     }
 
     #[test_cuda]
     fn plan_lifecycle(api: impl CufftApi) {
-        let mut handle = 0;
-        assert_eq!(api.cufftCreate(&mut handle), cufftResult::SUCCESS);
+        let context = api.runtime().init_context();
+        let mut handle = unsafe { mem::zeroed() };
+        api.cufftCreate(&mut handle);
         let stream = api.runtime().create_stream();
-        assert_eq!(api.cufftSetStream(handle, stream), cufftResult::SUCCESS);
-        assert_eq!(api.cufftSetAutoAllocation(handle, 0), cufftResult::SUCCESS);
+        api.cufftSetStream(handle, CUstream(stream.cast()));
+        api.cufftSetAutoAllocation(handle, 0);
 
         let mut work_size = 0;
-        assert_eq!(
-            api.cufftMakePlan3d(handle, 3, 4, 5, cufftType::CUFFT_R2C, &mut work_size),
-            cufftResult::SUCCESS
-        );
+
+        api.cufftMakePlan3d(handle, 3, 4, 5, cufftType::CUFFT_R2C, &mut work_size);
         let mut queried_work_size = 0;
-        assert_eq!(
-            api.cufftGetSize(handle, &mut queried_work_size),
-            cufftResult::SUCCESS
-        );
+
+        api.cufftGetSize(handle, &mut queried_work_size);
         assert_eq!(queried_work_size, work_size);
-        let workspace = api.runtime().allocate(work_size.max(1));
-        assert_eq!(
-            api.cufftSetWorkArea(handle, workspace),
-            cufftResult::SUCCESS
-        );
-        assert_eq!(api.cufftDestroy(handle), cufftResult::SUCCESS);
+        let workspace: *mut std::ffi::c_void = api.runtime().allocate(work_size.max(1));
+
+        api.cufftSetWorkArea(handle, workspace);
+        api.cufftDestroy(handle);
         api.runtime().free(workspace);
         api.runtime().destroy_stream(stream);
+        api.runtime().destroy_context(context);
     }
 
     #[test_cuda]
     fn plan_many_64_bit(api: impl CufftApi) {
-        let mut handle = 0;
-        assert_eq!(api.cufftCreate(&mut handle), cufftResult::SUCCESS);
+        let mut handle = unsafe { mem::zeroed() };
+        api.cufftCreate(&mut handle);
         let mut dimensions = [3_i64, 4, 5];
         let mut work_size = 0;
-        assert_eq!(
-            api.cufftMakePlanMany64(
-                handle,
-                dimensions.len() as i32,
-                dimensions.as_mut_ptr(),
-                std::ptr::null_mut(),
-                1,
-                60,
-                std::ptr::null_mut(),
-                1,
-                36,
-                cufftType::CUFFT_R2C,
-                1,
-                &mut work_size,
-            ),
-            cufftResult::SUCCESS
+        api.cufftMakePlanMany64(
+            handle,
+            dimensions.len() as i32,
+            dimensions.as_mut_ptr(),
+            std::ptr::null_mut(),
+            1,
+            60,
+            std::ptr::null_mut(),
+            1,
+            36,
+            cufftType::CUFFT_R2C,
+            1,
+            &mut work_size,
         );
-        assert_eq!(api.cufftDestroy(handle), cufftResult::SUCCESS);
+        api.cufftDestroy(handle);
 
-        assert_eq!(api.cufftCreate(&mut handle), cufftResult::SUCCESS);
+        api.cufftCreate(&mut handle);
         let mut queried_work_size = 0;
-        assert_eq!(
-            api.cufftGetSizeMany64(
-                handle,
-                dimensions.len() as i32,
-                dimensions.as_mut_ptr(),
-                std::ptr::null_mut(),
-                1,
-                60,
-                std::ptr::null_mut(),
-                1,
-                36,
-                cufftType::CUFFT_R2C,
-                1,
-                &mut queried_work_size,
-            ),
-            cufftResult::SUCCESS
+        api.cufftGetSizeMany64(
+            handle,
+            dimensions.len() as i32,
+            dimensions.as_mut_ptr(),
+            std::ptr::null_mut(),
+            1,
+            60,
+            std::ptr::null_mut(),
+            1,
+            36,
+            cufftType::CUFFT_R2C,
+            1,
+            &mut queried_work_size,
         );
-        assert_eq!(api.cufftDestroy(handle), cufftResult::SUCCESS);
+        api.cufftDestroy(handle);
     }
 
     #[test_cuda]
     fn real_3d_execution(api: impl CufftApi) {
+        let context = api.runtime().init_context();
         const NX: usize = 3;
         const NY: usize = 4;
         const NZ: usize = 5;
@@ -214,35 +211,26 @@ mod api_tests {
             .collect::<Vec<_>>();
         let device_input = api
             .runtime()
-            .allocate(std::mem::size_of_val(input.as_slice()))
-            .cast::<f32>();
+            .allocate(std::mem::size_of_val(input.as_slice()));
         let device_spectrum = api
             .runtime()
-            .allocate(COMPLEX_ELEMENTS * std::mem::size_of::<cufftComplex>())
-            .cast::<cufftComplex>();
+            .allocate(COMPLEX_ELEMENTS * std::mem::size_of::<cufftComplex>());
         let device_round_trip = api
             .runtime()
-            .allocate(ELEMENTS * std::mem::size_of::<f32>())
-            .cast::<f32>();
+            .allocate(ELEMENTS * std::mem::size_of::<f32>());
         api.runtime().copy_to_device(device_input, &input);
 
         let stream = api.runtime().create_stream();
-        let mut forward = 0;
-        assert_eq!(
-            api.cufftPlan3d(
-                &mut forward,
-                NX as i32,
-                NY as i32,
-                NZ as i32,
-                cufftType::CUFFT_R2C,
-            ),
-            cufftResult::SUCCESS
+        let mut forward = cuda_types::cufft::cufftHandle(0);
+        api.cufftPlan3d(
+            &mut forward,
+            NX as i32,
+            NY as i32,
+            NZ as i32,
+            cufftType::CUFFT_R2C,
         );
-        assert_eq!(api.cufftSetStream(forward, stream), cufftResult::SUCCESS);
-        assert_eq!(
-            api.cufftExecR2C(forward, device_input, device_spectrum),
-            cufftResult::SUCCESS
-        );
+        api.cufftSetStream(forward, CUstream(stream.cast()));
+        api.cufftExecR2C(forward, device_input.cast(), device_spectrum.cast());
         api.runtime().synchronize(stream);
 
         let mut spectrum = vec![cufftComplex { x: 0.0, y: 0.0 }; COMPLEX_ELEMENTS];
@@ -272,22 +260,16 @@ mod api_tests {
             }
         }
 
-        let mut inverse = 0;
-        assert_eq!(
-            api.cufftPlan3d(
-                &mut inverse,
-                NX as i32,
-                NY as i32,
-                NZ as i32,
-                cufftType::CUFFT_C2R,
-            ),
-            cufftResult::SUCCESS
+        let mut inverse = cuda_types::cufft::cufftHandle(0);
+        api.cufftPlan3d(
+            &mut inverse,
+            NX as i32,
+            NY as i32,
+            NZ as i32,
+            cufftType::CUFFT_C2R,
         );
-        assert_eq!(api.cufftSetStream(inverse, stream), cufftResult::SUCCESS);
-        assert_eq!(
-            api.cufftExecC2R(inverse, device_spectrum, device_round_trip),
-            cufftResult::SUCCESS
-        );
+        api.cufftSetStream(inverse, CUstream(stream.cast()));
+        api.cufftExecC2R(inverse, device_spectrum.cast(), device_round_trip.cast());
         api.runtime().synchronize(stream);
 
         let mut round_trip = vec![0.0; ELEMENTS];
@@ -299,18 +281,19 @@ mod api_tests {
             assert!((actual - expected).abs() <= tolerance);
         }
 
-        assert_eq!(api.cufftDestroy(inverse), cufftResult::SUCCESS);
-        assert_eq!(api.cufftDestroy(forward), cufftResult::SUCCESS);
+        api.cufftDestroy(inverse);
+        api.cufftDestroy(forward);
         api.runtime().destroy_stream(stream);
-        api.runtime().free(device_round_trip.cast());
-        api.runtime().free(device_spectrum.cast());
-        api.runtime().free(device_input.cast());
+        api.runtime().free(device_round_trip);
+        api.runtime().free(device_spectrum);
+        api.runtime().free(device_input);
+        api.runtime().destroy_context(context);
     }
 
     #[test_cuda]
     fn version_and_properties(api: impl CufftApi) {
         let mut version = 0;
-        assert_eq!(api.cufftGetVersion(&mut version), cufftResult::SUCCESS);
+        api.cufftGetVersion(&mut version);
         assert!(version > 0);
 
         for property in [
@@ -319,12 +302,8 @@ mod api_tests {
             libraryPropertyType::PATCH_LEVEL,
         ] {
             let mut value = -1;
-            assert_eq!(
-                api.cufftGetProperty(property, &mut value),
-                cufftResult::SUCCESS
-            );
+            api.cufftGetProperty(property, &mut value);
             assert!(value >= 0);
         }
     }
-     */
 }

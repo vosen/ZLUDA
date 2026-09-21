@@ -5165,6 +5165,7 @@ dependencies = [
  "hip_runtime-sys",
  "hipblaslt-sys",
  "hipfft-sys",
+ "libloading",
  "miopen-sys",
  "rocblas-sys",
  "rocsparse-sys",
