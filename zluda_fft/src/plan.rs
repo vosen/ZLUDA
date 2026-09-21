@@ -2,6 +2,7 @@ use cuda_types::cufft::{cufftError_t, cufftHandle};
 use hipfft_sys::hipfftHandle;
 use rustc_hash::FxHashMap;
 
+// TODO: do a smarter implementation that reuses old handles
 pub struct Registry {
     next_handle: u32,
     handles: FxHashMap<cuda_types::cufft::cufftHandle, hipfftHandle>,
