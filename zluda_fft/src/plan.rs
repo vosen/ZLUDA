@@ -15,10 +15,7 @@ impl Registry {
         }
     }
 
-    pub(crate) fn get(
-        &mut self,
-        cu_handle: cufftHandle,
-    ) -> Result<hipfftHandle, cufftError_t> {
+    pub(crate) fn get(&mut self, cu_handle: cufftHandle) -> Result<hipfftHandle, cufftError_t> {
         self.handles
             .get(&cu_handle)
             .copied()
