@@ -20,18 +20,25 @@ define amdgpu_kernel void @rsqrt_ftz_f64(ptr addrspace(4) byref(i64) %"39", ptr 
   %6 = load double, ptr addrspace(5) %"43", align 8
   %7 = fcmp uno double %6, %6
   %8 = bitcast double %6 to i64
-  %9 = and i64 %8, -4294967296
-  %10 = bitcast i64 %9 to double
-  %11 = call double @llvm.amdgcn.rsq.f64(double %10)
-  %12 = bitcast double %11 to i64
-  %13 = and i64 %12, -4294967296
-  %14 = select i1 %7, i64 9223372032559808512, i64 %13
-  %"48" = bitcast i64 %14 to double
+  %9 = and i64 %8, 9218868437227405312
+  %10 = icmp eq i64 %9, 0
+  %11 = and i64 %8, 4503599627370495
+  %12 = icmp ne i64 %11, 0
+  %13 = and i1 %10, %12
+  %14 = and i64 %8, -9223372036854775808
+  %15 = and i64 %8, -4294967296
+  %16 = select i1 %13, i64 %14, i64 %15
+  %17 = bitcast i64 %16 to double
+  %18 = call double @llvm.amdgcn.rsq.f64(double %17)
+  %19 = bitcast double %18 to i64
+  %20 = and i64 %19, -4294967296
+  %21 = select i1 %7, i64 9223372032559808512, i64 %20
+  %"48" = bitcast i64 %21 to double
   store double %"48", ptr addrspace(5) %"43", align 8
-  %15 = load i64, ptr addrspace(5) %"42", align 8
-  %16 = load double, ptr addrspace(5) %"43", align 8
-  %"53" = inttoptr i64 %15 to ptr
-  store double %16, ptr %"53", align 8
+  %22 = load i64, ptr addrspace(5) %"42", align 8
+  %23 = load double, ptr addrspace(5) %"43", align 8
+  %"53" = inttoptr i64 %22 to ptr
+  store double %23, ptr %"53", align 8
   ret void
 }
 

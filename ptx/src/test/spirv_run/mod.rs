@@ -313,6 +313,14 @@ test_ptx!(
     [f64::from_bits(0x3FF0_0000_1234_5678)],
     [1.0f64]
 );
+test_ptx!(
+    rsqrt_ftz_f64_subnormal,
+    [
+        f64::from_bits(0x000F_FFFF_FFFF_FFFF),
+        f64::from_bits(0x800F_FFFF_FFFF_FFFF)
+    ],
+    [f64::INFINITY, f64::NEG_INFINITY]
+);
 test_ptx!(neg, [181i32], [-181i32]);
 test_ptx!(sin, [std::f32::consts::PI / 2f32], [1f32]);
 test_ptx!(cos, [std::f32::consts::PI], [-1f32]);

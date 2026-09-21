@@ -2524,6 +2524,10 @@ impl<'a> MethodEmitContext<'a> {
             // clears the destination's lower word.
             let bits_type = get_scalar_type(self.context, ast::ScalarType::B64);
             let word_mask = unsafe { LLVMConstInt(bits_type, 0xFFFF_FFFF_0000_0000, 0) };
+            let sign_mask = unsafe { LLVMConstInt(bits_type, 0x8000_0000_0000_0000, 0) };
+            let exponent_mask = unsafe { LLVMConstInt(bits_type, 0x7FF0_0000_0000_0000, 0) };
+            let mantissa_mask = unsafe { LLVMConstInt(bits_type, 0x000F_FFFF_FFFF_FFFF, 0) };
+            let zero = unsafe { LLVMConstInt(bits_type, 0, 0) };
             let is_nan = unsafe {
                 LLVMBuildFCmp(
                     self.builder,
@@ -2535,14 +2539,37 @@ impl<'a> MethodEmitContext<'a> {
             };
             let src_bits =
                 unsafe { LLVMBuildBitCast(self.builder, src, bits_type, LLVM_UNNAMED.as_ptr()) };
-            let src = unsafe {
-                LLVMBuildBitCast(
+            let is_subnormal = unsafe {
+                LLVMBuildAnd(
                     self.builder,
-                    LLVMBuildAnd(self.builder, src_bits, word_mask, LLVM_UNNAMED.as_ptr()),
-                    type_,
+                    LLVMBuildICmp(
+                        self.builder,
+                        LLVMIntPredicate::LLVMIntEQ,
+                        LLVMBuildAnd(self.builder, src_bits, exponent_mask, LLVM_UNNAMED.as_ptr()),
+                        zero,
+                        LLVM_UNNAMED.as_ptr(),
+                    ),
+                    LLVMBuildICmp(
+                        self.builder,
+                        LLVMIntPredicate::LLVMIntNE,
+                        LLVMBuildAnd(self.builder, src_bits, mantissa_mask, LLVM_UNNAMED.as_ptr()),
+                        zero,
+                        LLVM_UNNAMED.as_ptr(),
+                    ),
                     LLVM_UNNAMED.as_ptr(),
                 )
             };
+            let src_bits = unsafe {
+                LLVMBuildSelect(
+                    self.builder,
+                    is_subnormal,
+                    LLVMBuildAnd(self.builder, src_bits, sign_mask, LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildAnd(self.builder, src_bits, word_mask, LLVM_UNNAMED.as_ptr()),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let src =
+                unsafe { LLVMBuildBitCast(self.builder, src_bits, type_, LLVM_UNNAMED.as_ptr()) };
             let result = self.emit_intrinsic(
                 intrinsic,
                 None,
