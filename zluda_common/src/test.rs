@@ -1,4 +1,4 @@
-use std::ffi::{CStr, c_void};
+use std::ffi::{c_void, CStr};
 
 pub struct Runtime {
     library: libloading::Library,
@@ -23,8 +23,7 @@ impl Runtime {
 
     pub fn load_cuda() -> Self {
         let library = unsafe {
-            libloading::Library::new(Self::CUDA_PATH)
-                .expect("Failed to load CUDA runtime")
+            libloading::Library::new(Self::CUDA_PATH).expect("Failed to load CUDA runtime")
         };
         Self {
             library,
@@ -68,15 +67,13 @@ impl Runtime {
     }
 
     pub fn init_context(&self) -> *mut c_void {
-        let init = self.function::<unsafe extern "system" fn(u32) -> u32>(
-            c"cuInit",
-            c"hipInit"
-        );
+        let init = self.function::<unsafe extern "system" fn(u32) -> u32>(c"cuInit", c"hipInit");
         assert_eq!(unsafe { init(0) }, 0);
-        let function = self.function::<unsafe extern "system" fn(*mut *mut c_void, u32, i32) -> u32>(
-            c"cuCtxCreate_v2",
-            c"hipCtxCreate"
-        );
+        let function = self
+            .function::<unsafe extern "system" fn(*mut *mut c_void, u32, i32) -> u32>(
+                c"cuCtxCreate_v2",
+                c"hipCtxCreate",
+            );
         let mut context = unsafe { std::mem::zeroed() };
         assert_eq!(unsafe { function(&mut context, 0, 0) }, 0);
         context
@@ -122,7 +119,16 @@ impl Runtime {
                 c"cuMemcpyHtoD_v2",
                 c"hipMemcpyHtoD",
             );
-        assert_eq!(unsafe { function(device, host.as_ptr().cast(), std::mem::size_of::<T>() * host.len()) }, 0);
+        assert_eq!(
+            unsafe {
+                function(
+                    device,
+                    host.as_ptr().cast(),
+                    std::mem::size_of::<T>() * host.len(),
+                )
+            },
+            0
+        );
     }
 
     pub fn copy_to_host<T>(&self, host: &mut [T], device: *mut c_void) {
@@ -131,6 +137,15 @@ impl Runtime {
                 c"cuMemcpyDtoH_v2",
                 c"hipMemcpyDtoH",
             );
-        assert_eq!(unsafe { function(host.as_mut_ptr().cast(), device, std::mem::size_of::<T>() * host.len()) }, 0);
+        assert_eq!(
+            unsafe {
+                function(
+                    host.as_mut_ptr().cast(),
+                    device,
+                    std::mem::size_of::<T>() * host.len(),
+                )
+            },
+            0
+        );
     }
 }
