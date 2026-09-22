@@ -25,6 +25,7 @@ const ROCBLAS_RS: &'static str = include_str! {"../../ext/rocblas-sys/src/lib.rs
 const ROCSPARSE_RS: &'static str = include_str! {"../../ext/rocsparse-sys/src/lib.rs"};
 const HIPBLASLT_RS: &'static str = include_str! {"../../ext/hipblaslt-sys/src/lib.rs"};
 const MIOPEN_RS: &'static str = include_str! {"../../ext/miopen-sys/src/lib.rs"};
+const HIPFFT_RS: &'static str = include_str! {"../../ext/hipfft-sys/src/lib.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -88,6 +89,11 @@ pub fn rocblas_function_declarations(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn rocsparse_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, ROCSPARSE_RS, true)
+}
+
+#[proc_macro]
+pub fn hipfft_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, HIPFFT_RS, true)
 }
 
 #[proc_macro]
@@ -293,6 +299,11 @@ pub fn cudnn_normalize_fn(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn cusparse_normalize_fn(tokens: TokenStream) -> TokenStream {
     normalize_fn_impl("cusparse", None, tokens)
+}
+
+#[proc_macro]
+pub fn cufft_normalize_fn(tokens: TokenStream) -> TokenStream {
+    normalize_fn_impl("cufft", None, tokens)
 }
 
 #[proc_macro]
