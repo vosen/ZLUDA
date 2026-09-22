@@ -168,14 +168,19 @@ fn elf_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
     )
     .ok()?;
     let string_table_section = section_headers.get(header.e_shstrndx as usize)?;
-    let string_table_start = string_table_section.sh_offset as usize;
+    let string_table_start = usize::try_from(string_table_section.sh_offset).ok()?;
+    let string_table_size = usize::try_from(string_table_section.sh_size).ok()?;
+    let string_table_end = string_table_start.checked_add(string_table_size)?;
+    let string_table = bytes.get(string_table_start..string_table_end)?;
     section_headers.into_iter().find_map(|section| {
-        let section_name =
-            CStr::from_bytes_until_nul(&bytes[string_table_start + section.sh_name as usize..])
-                .ok()?;
+        let name_start = section.sh_name as usize;
+        let section_name = CStr::from_bytes_until_nul(string_table.get(name_start..)?).ok()?;
         if section_name.to_bytes() == b".nv_fatbin" {
-            let range = section.sh_offset as usize
-                ..(section.sh_offset.saturating_add(section.sh_size)) as usize;
+            let section_start = usize::try_from(section.sh_offset).ok()?;
+            let section_size = usize::try_from(section.sh_size).ok()?;
+            let section_end = section_start.checked_add(section_size)?;
+            let range = section_start..section_end;
+            bytes.get(range.clone())?;
             Some(range)
         } else {
             None
@@ -183,6 +188,186 @@ fn elf_find_fatbin_section(bytes: &[u8]) -> Option<std::ops::Range<usize>> {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{elf_find_fatbin_section, fatbin_frames};
+
+    fn elf_with_sections(
+        string_table_offset: u64,
+        string_table_size: u64,
+        name: u32,
+        section_offset: u64,
+        section_size: u64,
+    ) -> Vec<u8> {
+        let mut bytes = vec![0; 400];
+        bytes[..4].copy_from_slice(b"\x7fELF");
+        bytes[4] = 2;
+        bytes[5] = 1;
+        bytes[6] = 1;
+        bytes[16..18].copy_from_slice(&1u16.to_le_bytes());
+        bytes[18..20].copy_from_slice(&62u16.to_le_bytes());
+        bytes[20..24].copy_from_slice(&1u32.to_le_bytes());
+        bytes[52..54].copy_from_slice(&64u16.to_le_bytes());
+        bytes[40..48].copy_from_slice(&64u64.to_le_bytes());
+        bytes[58..60].copy_from_slice(&64u16.to_le_bytes());
+        bytes[60..62].copy_from_slice(&3u16.to_le_bytes());
+        bytes[62..64].copy_from_slice(&1u16.to_le_bytes());
+        let string_header = &mut bytes[128..192];
+        string_header[4..8].copy_from_slice(&3u32.to_le_bytes());
+        string_header[24..32].copy_from_slice(&string_table_offset.to_le_bytes());
+        string_header[32..40].copy_from_slice(&string_table_size.to_le_bytes());
+        let fatbin_header = &mut bytes[192..256];
+        fatbin_header[0..4].copy_from_slice(&name.to_le_bytes());
+        fatbin_header[4..8].copy_from_slice(&1u32.to_le_bytes());
+        fatbin_header[24..32].copy_from_slice(&section_offset.to_le_bytes());
+        fatbin_header[32..40].copy_from_slice(&section_size.to_le_bytes());
+        if let Some(end) = (string_table_offset as usize).checked_add(12) {
+            if let Some(table) = bytes.get_mut(string_table_offset as usize..end) {
+                table.copy_from_slice(b"\0.nv_fatbin\0");
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn finds_fatbin_section_with_bounded_string_table() {
+        let bytes = elf_with_sections(256, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), Some(380..384));
+    }
+
+    #[test]
+    fn rejects_string_table_outside_file() {
+        let bytes = elf_with_sections(0x1000, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_section_name_outside_string_table() {
+        let bytes = elf_with_sections(256, 12, 99, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_unterminated_section_name() {
+        let bytes = elf_with_sections(256, 11, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+
+    #[test]
+    fn rejects_fatbin_section_outside_file() {
+        let bytes = elf_with_sections(256, 12, 1, 0x1000, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+    #[test]
+    fn rejects_offset_overflow() {
+        let bytes = elf_with_sections(u64::MAX, 12, 1, 380, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+        let bytes = elf_with_sections(256, 12, 1, u64::MAX, 4);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+        let bytes = elf_with_sections(256, 12, 1, 380, u64::MAX);
+        assert_eq!(elf_find_fatbin_section(&bytes), None);
+    }
+    fn frame(header_size: u16, files_size: u64) -> Vec<u8> {
+        let mut bytes = vec![0; usize::from(header_size).max(16) + files_size.min(32) as usize];
+        bytes[0..4].copy_from_slice(&cuda_types::dark_api::FatbinHeader::MAGIC);
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&header_size.to_le_bytes());
+        bytes[8..16].copy_from_slice(&files_size.to_le_bytes());
+        bytes
+    }
+
+    #[test]
+    fn iterates_two_bounded_frames_and_stops_at_trailer() {
+        let mut bytes = frame(16, 4);
+        bytes.extend(frame(16, 4));
+        bytes.extend([0; 16]);
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..20, 20..40]
+        );
+    }
+
+    #[test]
+    fn rejects_zero_or_short_header_without_progress() {
+        assert_eq!(fatbin_frames(&frame(0, 0), 0..16).count(), 0);
+        assert_eq!(fatbin_frames(&frame(15, 1), 0..16).count(), 0);
+    }
+
+    #[test]
+    fn accepts_extended_header_in_offset_section() {
+        let mut bytes = vec![0; 7];
+        bytes.extend(frame(24, 4));
+        assert_eq!(
+            fatbin_frames(&bytes, 7..bytes.len()).collect::<Vec<_>>(),
+            vec![7..35]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_section_ranges() {
+        let bytes = frame(16, 4);
+        assert_eq!(fatbin_frames(&bytes, 0..bytes.len() + 1).count(), 0);
+        assert_eq!(fatbin_frames(&bytes, 10..5).count(), 0);
+        assert_eq!(fatbin_frames(&bytes, 0..15).count(), 0);
+    }
+
+    #[test]
+    fn stops_after_valid_frame_before_invalid_frame() {
+        let mut bytes = frame(16, 4);
+        bytes.extend(frame(0, 0));
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..20]
+        );
+    }
+
+    #[test]
+    fn accepts_empty_payload_and_short_trailer() {
+        let mut bytes = frame(16, 0);
+        bytes.extend([0; 3]);
+        assert_eq!(
+            fatbin_frames(&bytes, 0..bytes.len()).collect::<Vec<_>>(),
+            vec![0..16]
+        );
+    }
+
+    #[test]
+    fn rejects_overflow_and_truncated_frames() {
+        assert_eq!(fatbin_frames(&frame(16, u64::MAX), 0..16).count(), 0);
+        assert_eq!(fatbin_frames(&frame(16, 4), 0..19).count(), 0);
+    }
+}
+
+fn fatbin_frames(
+    bytes: &[u8],
+    section: std::ops::Range<usize>,
+) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+    let mut next_start = section.start;
+    let section_end = section.end;
+    std::iter::from_fn(move || {
+        let remaining = bytes.get(next_start..section_end)?;
+        if remaining.len() < mem::size_of::<FatbinHeader>() {
+            return None;
+        }
+        let header = unsafe { remaining.as_ptr().cast::<FatbinHeader>().read_unaligned() };
+        if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
+            return None;
+        }
+        let header_size = usize::from(header.header_size);
+        if header_size < mem::size_of::<FatbinHeader>() {
+            return None;
+        }
+        let files_size = usize::try_from(header.files_size).ok()?;
+        let frame_size = header_size.checked_add(files_size)?;
+        if frame_size > remaining.len() {
+            return None;
+        }
+        let frame_end = next_start.checked_add(frame_size)?;
+        let frame = next_start..frame_end;
+        next_start = frame_end;
+        Some(frame)
+    })
+}
 fn extract_from_binary(
     scope: &Scope,
     context: ParallelContext,
@@ -197,46 +382,27 @@ fn extract_from_binary(
     let buffer = &mut Arc::get_mut(&mut compilation).unwrap().buffer;
     buffer.extend_from_slice(&header);
     file.read_to_end(buffer).ok()?;
-    let mut fatbin_range = get_fatbin_section(&compilation.buffer)?;
-    loop {
-        if fatbin_range.len() < mem::size_of::<FatbinHeader>() {
-            break;
-        }
-        let header = unsafe {
-            compilation.buffer[fatbin_range.clone()]
-                .as_ptr()
-                .cast::<FatbinHeader>()
-                .read_unaligned()
-        };
-        if header.magic.to_le_bytes() != FatbinHeader::MAGIC {
-            break;
-        }
-        {
-            let compilation = compilation.clone();
-            let fatbin_range = fatbin_range.clone();
-            let context = context.clone();
-            scope.spawn(move |_| {
-                (|| {
-                    unsafe { (context.cuda.cuCtxSetCurrent)(context.cu_ctx) }.ok()?;
-                    let mut module = CUmodule(ptr::null_mut());
-                    if unsafe {
-                        (context.cuda.cuModuleLoadData)(
-                            &mut module,
-                            compilation.buffer[fatbin_range].as_ptr().cast(),
-                        )
-                    }
-                    .is_ok()
-                    {
-                        unsafe { (context.cuda.cuModuleUnload)(module) }.ok()?;
-                    }
-                    Some(())
-                })();
-            });
-        }
-        fatbin_range.start = fatbin_range
-            .start
-            .saturating_add(header.header_size as usize)
-            .saturating_add(header.files_size as usize);
+    let fatbin_section = get_fatbin_section(&compilation.buffer)?;
+    for fatbin_range in fatbin_frames(&compilation.buffer, fatbin_section) {
+        let compilation = compilation.clone();
+        let context = context.clone();
+        scope.spawn(move |_| {
+            (|| {
+                unsafe { (context.cuda.cuCtxSetCurrent)(context.cu_ctx) }.ok()?;
+                let mut module = CUmodule(ptr::null_mut());
+                if unsafe {
+                    (context.cuda.cuModuleLoadData)(
+                        &mut module,
+                        compilation.buffer[fatbin_range].as_ptr().cast(),
+                    )
+                }
+                .is_ok()
+                {
+                    unsafe { (context.cuda.cuModuleUnload)(module) }.ok()?;
+                }
+                Some(())
+            })();
+        });
     }
     Some(())
 }
