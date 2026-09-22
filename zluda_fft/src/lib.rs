@@ -87,7 +87,7 @@ mod os_macro {
 
             impl HipfftVtable {
                 pub unsafe fn new() -> Result<Self, hipfftError> {
-                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["hipfft.dll"]).ok_or(hipfftError::MISSING_DEPENDENCY)?;
+                    let hmodule = zluda_windows::try_load_from_self_or_hip_with_message(&["hipfft.dll"]).ok_or(hipfftError::INTERNAL_ERROR)?;
                     let lib = libloading::os::windows::Library::from_raw(hmodule.0 as _);
                     $(
                         let $fn_name = *lib.get::<unsafe extern "C" fn($($arg_id: $arg_type),*) -> $ret_type>(concat!(stringify!($fn_name), "\0").as_bytes()).map_err(|_| hipfftError::INTERNAL_ERROR)?;
