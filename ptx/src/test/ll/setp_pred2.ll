@@ -13,7 +13,7 @@ define amdgpu_kernel void @setp_pred2(ptr addrspace(4) byref(i64) %"71", ptr add
   %"84" = alloca i1, align 1, addrspace(5)
   %"85" = alloca i1, align 1, addrspace(5)
   %"86" = alloca i1, align 1, addrspace(5)
-  %"97" = alloca i1, align 1, addrspace(5)
+  %"87" = alloca i1, align 1, addrspace(5)
   br label %1
 
 1:                                                ; preds = %0
@@ -43,7 +43,7 @@ define amdgpu_kernel void @setp_pred2(ptr addrspace(4) byref(i64) %"71", ptr add
   %13 = load i32, ptr addrspace(5) %"75", align 4
   %14 = icmp ult i32 %12, %13
   %15 = xor i1 %14, true
-  store i1 %14, ptr addrspace(5) %"97", align 1
+  store i1 %14, ptr addrspace(5) %"87", align 1
   store i1 %15, ptr addrspace(5) %"84", align 1
   %16 = load i32, ptr addrspace(5) %"75", align 4
   %17 = load i32, ptr addrspace(5) %"76", align 4

@@ -21,6 +21,7 @@
 	.reg .pred 	    p3;
 	.reg .pred 	    p4;
 	.reg .pred 	    p5;
+	.reg .pred 	    p6;
 
 	ld.param.u64 	in_addr, [input];
 	ld.param.u64 	out_addr, [output];
@@ -28,7 +29,7 @@
 	ld.u32          a, [in_addr];
 	ld.u32          b, [in_addr+4];
 	setp.lt.u32     p1|p2, a, b;
-	setp.lt.u32     _|p3, b, a;
+	setp.lt.u32     p6|p3, b, a;
 	setp.lt.xor.u32 p4|p5, a, b, p1;
 	selp.u32        r1, 1, 0, p1;
 	selp.u32        r2, 1, 0, p2;
