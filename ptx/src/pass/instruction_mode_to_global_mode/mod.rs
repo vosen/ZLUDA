@@ -253,6 +253,11 @@ impl InstructionModes {
             | ast::CvtMode::Bitcast
             | ast::CvtMode::IntSaturateToSigned
             | ast::CvtMode::IntSaturateToUnsigned => Self::none(),
+            // f16 values, subnormal or not, are normal f32 values: the f32 mode does not matter.
+            ast::CvtMode::FPExtend { .. } if cvt.from == ast::ScalarType::F16 => InstructionModes {
+                denormal_f16f64: Some(DenormalMode::Preserve),
+                ..Self::none()
+            },
             ast::CvtMode::FPExtend { flush_to_zero, .. } => Self::from_typed_denormal(
                 cvt.from,
                 cvt.to,
@@ -260,6 +265,18 @@ impl InstructionModes {
                     .map(DenormalMode::from_ftz)
                     .unwrap_or(DenormalMode::Preserve),
             ),
+            // f32 subnormals are below half the smallest f16 subnormal: rounded to nearest or
+            // toward zero they become a zero of the same sign, flushed first or not.
+            ast::CvtMode::FPTruncate {
+                rounding: rounding @ (ast::RoundingMode::NearestEven | ast::RoundingMode::Zero),
+                is_integer_rounding: false,
+                ..
+            } if cvt.from == ast::ScalarType::F32 && cvt.to == ast::ScalarType::F16 => InstructionModes {
+                denormal_f16f64: Some(DenormalMode::Preserve),
+                rounding_f32: Some(RoundingMode::from_ast(rounding)),
+                rounding_f16f64: Some(RoundingMode::from_ast(rounding)),
+                ..Self::none()
+            },
             ast::CvtMode::FPTruncate {
                 rounding,
                 flush_to_zero,
@@ -2344,7 +2361,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             InstructionModes::from_rtz_special(data)
         },
         ast::Instruction::Cvt { data, .. } => InstructionModes::from_cvt(data),
-        ast::Instruction::Tanh { data, .. } => InstructionModes::from_ftz(*data, Some(false)),
+        // Subnormal inputs and results are within the absolute error bound of tanh.approx.
+        ast::Instruction::Tanh { .. } => InstructionModes::none(),
     }
 }
 
