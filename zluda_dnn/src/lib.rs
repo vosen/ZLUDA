@@ -113,6 +113,7 @@ dual_function_declarations! {
         cudnnGetProperty,
         cudnnGetStream,
         cudnnGetTensorNdDescriptor,
+        cudnnRestoreDropoutDescriptor,
         cudnnSetConvolution2dDescriptor,
         cudnnSetConvolutionGroupCount,
         cudnnSetConvolutionMathType,
@@ -217,12 +218,13 @@ cuda_macros::miopen_function_declarations!(
             miopenGetTensorNumBytes,
             miopenInitConvolutionDescriptor,
             miopenOpTensor,
+            miopenRestoreDropoutDescriptor,
             miopenRunSolution,
             miopenSetConvolutionGroupCount,
             miopenSetDropoutDescriptor,
             miopenSetNdTensorDescriptorWithLayout,
             miopenSetProblemTensorDescriptor,
             miopenSetStream,
-            miopenSetTensorDescriptor,
+            miopenSetTensorDescriptor
         ]
 );
