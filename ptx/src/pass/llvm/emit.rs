@@ -1904,25 +1904,26 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpData,
         arguments: ptx_parser::SetpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        if data.type_.packed_type().is_some() {
+            return Err(error_todo_msg("setp with a packed type not yet supported"));
+        }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        let dst = self.emit_setp_impl(data, arguments.dst2, src1, src2)?;
+        let dst = self.emit_setp_impl(data, src1, src2)?;
         self.resolver.register(arguments.dst1, dst);
+        if let Some(dst2) = arguments.dst2 {
+            let not = unsafe { LLVMBuildNot(self.builder, dst, LLVM_UNNAMED.as_ptr()) };
+            self.resolver.register(dst2, not);
+        }
         Ok(())
     }
 
     fn emit_setp_impl(
         &mut self,
         data: ptx_parser::SetpData,
-        dst2: Option<SpirvWord>,
         src1: LLVMValueRef,
         src2: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslateError> {
-        if dst2.is_some() {
-            return Err(error_todo_msg(
-                "setp with two dst arguments not yet supported",
-            ));
-        }
         match data.cmp_op {
             ptx_parser::SetpCompareOp::Integer(setp_compare_int) => {
                 self.emit_setp_int(setp_compare_int, src1, src2)
@@ -3321,8 +3322,8 @@ impl<'a> MethodEmitContext<'a> {
                 type_: scalar_type,
                 ..data.base
             };
-            let setp_result_0 = self.emit_setp_impl(data, None, src1_0, src2_0)?;
-            let setp_result_1 = self.emit_setp_impl(data, None, src1_1, src2_1)?;
+            let setp_result_0 = self.emit_setp_impl(data, src1_0, src2_0)?;
+            let setp_result_1 = self.emit_setp_impl(data, src1_1, src2_1)?;
             match dtype {
                 ast::ScalarType::U32 => {
                     let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
@@ -3385,7 +3386,7 @@ impl<'a> MethodEmitContext<'a> {
                 _ => return Err(error_unreachable()),
             }
         } else {
-            let setp_result = self.emit_setp_impl(data.base, None, src1, src2)?;
+            let setp_result = self.emit_setp_impl(data.base, src1, src2)?;
             self.setp_to_set(data.dtype, setp_result)?
         };
         self.resolver.register(arguments.dst, result);
@@ -3397,8 +3398,9 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetBoolData,
         arguments: ptx_parser::SetBoolArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let result_bool =
-            self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, arguments.src3)?;
+        let src3 = self.resolver.value(arguments.src3)?;
+        let (result_bool, _) =
+            self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, src3, false)?;
         let set_result = self.setp_to_set(data.dtype, result_bool)?;
         self.resolver.register(arguments.dst, set_result);
         Ok(())
@@ -3409,8 +3411,13 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::SetpBoolData,
         args: ast::SetpBoolArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let dst = self.emit_setp_bool_impl(data, args.src1, args.src2, args.src3)?;
+        let src3 = self.resolver.value(args.src3)?;
+        let (dst, dst2_value) =
+            self.emit_setp_bool_impl(data, args.src1, args.src2, src3, args.dst2.is_some())?;
         self.resolver.register(args.dst1, dst);
+        if let (Some(dst2), Some(dst2_value)) = (args.dst2, dst2_value) {
+            self.resolver.register(dst2, dst2_value);
+        }
         Ok(())
     }
 
@@ -3419,17 +3426,17 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpBoolData,
         src1: SpirvWord,
         src2: SpirvWord,
-        src3: SpirvWord,
-    ) -> Result<LLVMValueRef, TranslateError> {
+        src3: LLVMValueRef,
+        with_dst2: bool,
+    ) -> Result<(LLVMValueRef, Option<LLVMValueRef>), TranslateError> {
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
-        let bool_result = self.emit_setp_impl(data.base, None, src1, src2)?;
+        let bool_result = self.emit_setp_impl(data.base, src1, src2)?;
         let post_op = match data.bool_op {
             ptx_parser::SetpBoolPostOp::Xor => LLVMBuildXor,
             ptx_parser::SetpBoolPostOp::And => LLVMBuildAnd,
             ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
         };
-        let src3 = self.resolver.value(src3)?;
         let src3 = if data.negate_src3 {
             let constant =
                 unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
@@ -3437,7 +3444,12 @@ impl<'a> MethodEmitContext<'a> {
         } else {
             src3
         };
-        Ok(unsafe { post_op(self.builder, bool_result, src3, LLVM_UNNAMED.as_ptr()) })
+        let result = unsafe { post_op(self.builder, bool_result, src3, LLVM_UNNAMED.as_ptr()) };
+        let dst2_value = with_dst2.then(|| {
+            let not = unsafe { LLVMBuildNot(self.builder, bool_result, LLVM_UNNAMED.as_ptr()) };
+            unsafe { post_op(self.builder, not, src3, LLVM_UNNAMED.as_ptr()) }
+        });
+        Ok((result, dst2_value))
     }
 
     #[must_use]

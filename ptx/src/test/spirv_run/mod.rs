@@ -209,6 +209,7 @@ test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(setp_bool_and, [1u32, 2u32, 0u32], [1u32]);
+test_ptx!(setp_pred2, [1u32, 2u32], [1u32, 0u32, 1u32, 0u32, 1u32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
