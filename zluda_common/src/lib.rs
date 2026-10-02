@@ -224,6 +224,7 @@ from_cuda_nop!(
     u32,
     u64,
     i64,
+    f32,
     usize,
     cuda_types::cuda::CUdevprop,
     CUdevice_attribute,

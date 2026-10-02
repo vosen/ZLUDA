@@ -1335,6 +1335,34 @@ pub(crate) unsafe fn destroy_dropout_descriptor(
     miopen()?.miopenDestroyDropoutDescriptor(dropout_desc)
 }
 
+pub(crate) unsafe fn dropout_get_states_size(
+    handle: &Context,
+    size_in_bytes: *mut usize,
+) -> miopenStatus_t {
+    miopen()?.miopenDropoutGetStatesSize(handle.base, size_in_bytes)
+}
+
+pub(crate) unsafe fn set_dropout_descriptor(
+    dropout_desc: miopenDropoutDescriptor_t,
+    handle: &Context,
+    dropout: f32,
+    states: *mut ::core::ffi::c_void,
+    state_size_in_bytes: usize,
+    seed: ::core::ffi::c_ulonglong,
+) -> miopenStatus_t {
+    miopen()?.miopenSetDropoutDescriptor(
+        dropout_desc,
+        handle.base,
+        dropout,
+        states,
+        state_size_in_bytes,
+        seed,
+        false,
+        false,
+        miopenRNGType_t::MIOPEN_RNG_PSEUDO_XORWOW,
+    )
+}
+
 pub(crate) unsafe fn get_property(
     property_type: libraryPropertyType,
     value: &mut i32,
