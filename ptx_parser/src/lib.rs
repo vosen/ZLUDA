@@ -313,6 +313,21 @@ fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     .parse_next(stream)
 }
 
+fn negative_f64_decimal<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
+    (
+        Token::Minus,
+        take_error(token::any.verify_map(|(t, _)| match t {
+            Token::F64(f) => Some(match f.parse::<f64>() {
+                Ok(x) => Ok(-x),
+                Err(err) => Err((0.0, PtxError::from(err))),
+            }),
+            _ => None,
+        })),
+    )
+        .map(|(_, value)| value)
+        .parse_next(stream)
+}
+
 fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
@@ -369,6 +384,7 @@ fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<as
         alt((
             int_immediate,
             f32.map(ast::ImmediateValue::F32),
+            negative_f64_decimal.map(ast::ImmediateValue::F64),
             f64.map(ast::ImmediateValue::F64),
             constant,
         )),
@@ -4895,5 +4911,56 @@ mod tests {
             result.array_init,
             vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0))]
         );
+    }
+
+    #[test]
+    fn signed_decimal_float_immediates() {
+        fn parse_value(text: &str) -> crate::ImmediateValue {
+            let tokens = Token::lexer(text)
+                .map(|t| t.map(|t| (t, Span::default())))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let mut errors = Vec::new();
+            let stream = super::PtxParser {
+                input: &tokens[..],
+                state: PtxParserState::new(text, &mut errors),
+            };
+            let result = super::immediate_value.parse(stream).unwrap();
+            assert!(errors.is_empty());
+            result
+        }
+
+        assert_eq!(parse_value("-1.5"), crate::ImmediateValue::F64(-1.5));
+        assert_eq!(parse_value("-1.5e-2"), crate::ImmediateValue::F64(-0.015));
+        assert_eq!(parse_value("-1.5E+2"), crate::ImmediateValue::F64(-150.0));
+        assert_eq!(parse_value("-42"), crate::ImmediateValue::S64(-42));
+        assert_eq!(parse_value("42U"), crate::ImmediateValue::U64(42));
+        assert_eq!(parse_value("0f3fc00000"), crate::ImmediateValue::F32(1.5));
+        let crate::ImmediateValue::F64(negative_zero) = parse_value("-0.0") else {
+            panic!("expected f64 immediate");
+        };
+        assert!(negative_zero.is_sign_negative());
+        assert_eq!(
+            parse_value("0d3ff8000000000000"),
+            crate::ImmediateValue::F64(1.5)
+        );
+    }
+
+    #[test]
+    fn signed_decimal_float_module() {
+        let text = "
+.version 7.0
+.target sm_70
+.address_size 64
+.global .f64 negative = -1.5;
+.global .f64 negative_zero = -0.0;
+.visible .entry test() {
+    .reg .f64 %fd;
+    mov.f64 %fd, -1.5;
+    ret;
+}";
+        let module = parse_module_checked(text).unwrap();
+        assert_eq!(module.invalid_directives, 0);
+        assert_eq!(module.directives.len(), 3);
     }
 }
