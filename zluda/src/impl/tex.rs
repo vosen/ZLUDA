@@ -101,6 +101,9 @@ pub(crate) unsafe fn ref_set_address_v2(
     dev_ptr: hipDeviceptr_t,
     bytes: usize,
 ) -> hipError_t {
+    if dev_ptr.0.is_null() {
+        return hipUnbindTexture(texref);
+    }
     hipTexRefSetAddress(byte_offset, texref, dev_ptr, bytes)
 }
 

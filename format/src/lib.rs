@@ -1526,6 +1526,17 @@ impl crate::CudaDisplay for cuda_types::cudnn8::cudnnAlgorithmUnionStruct_Algori
     }
 }
 
+impl crate::CudaDisplay for cuda_types::cufft::cufftHandle {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        write!(writer, "{:#x}", self.0)
+    }
+}
+
 mod dark_api;
 mod format_generated;
 pub use format_generated::*;

@@ -13,11 +13,19 @@ use widestring::{u16str, U16Str, U16String};
 use windows::{
     core::{w, HRESULT, PCWSTR},
     Win32::{
-        Foundation::{HINSTANCE, HMODULE, HWND, LPARAM, S_OK, WPARAM},
-        System::LibraryLoader::{
-            GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+        Foundation::{HANDLE, HINSTANCE, HMODULE, HWND, LPARAM, S_OK, WPARAM},
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            LibraryLoader::{
+                GetModuleFileNameA, GetModuleFileNameW, GetModuleHandleExW, LoadLibraryExW,
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+            },
         },
         UI::{
             Controls::{
@@ -30,9 +38,13 @@ use windows::{
     },
 };
 
-pub static LIBRARIES: [LibraryInfo; 16] = [
+#[cfg(target_pointer_width = "32")]
+pub static LIBRARIES: [LibraryInfo; 2] = [NVCUDA, NVAPI];
+
+#[cfg(target_pointer_width = "64")]
+pub static LIBRARIES: [LibraryInfo; 17] = [
     NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS11, BLAS_LT13, BLAS_LT12, BLAS_LT11, SPARSE12,
-    SPARSE11, SPARSE10, FFT12, FFT11, FFT10,
+    SPARSE11, SPARSE10, FFT12, FFT11, FFT10, NVAPI,
 ];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
@@ -193,6 +205,22 @@ pub const FFT10: LibraryInfo = LibraryInfo {
     guid: uuid!("5f199520-4f7c-4fcb-b2b0-0e8b99f15e81"),
     trace_env_var: "ZLUDA_FFT_LIB",
     in_system32: false,
+};
+
+pub const NVAPI: LibraryInfo = LibraryInfo {
+    short_name: "nvapi",
+    is_alias: false,
+    #[cfg(target_pointer_width = "32")]
+    ascii_name: "nvapi.dll",
+    #[cfg(target_pointer_width = "64")]
+    ascii_name: "nvapi64.dll",
+    #[cfg(target_pointer_width = "32")]
+    utf16_name: u16str!("nvapi.dll"),
+    #[cfg(target_pointer_width = "64")]
+    utf16_name: u16str!("nvapi64.dll"),
+    guid: uuid!("f7449ed6-d01c-4376-9fc4-446eb2e4cf70"),
+    trace_env_var: "ZLUDA_NVAPI_LIB",
+    in_system32: true,
 };
 
 #[derive(Debug)]
@@ -506,7 +534,7 @@ pub unsafe fn delay_load_check(
 }
 
 pub unsafe fn try_load_from_self_dir(libname: &str) -> Option<HMODULE> {
-    let path = get_module_path_for_function(try_load_from_self_dir as usize)?;
+    let path = get_module_path_for_function(try_load_from_self_dir as *const () as usize)?;
     let mut path_buf = PathBuf::from(path);
     path_buf.pop();
     path_buf.push(libname);
@@ -581,6 +609,22 @@ pub fn get_module_path_utf16(hm: HMODULE) -> OsString {
     }
     buffer.truncate(copied as usize);
     OsString::from_wide(&buffer)
+}
+
+pub fn kill_child_on_process_exit(child: *mut c_void) -> windows::core::Result<()> {
+    let job_handle = unsafe { windows::Win32::System::JobObjects::CreateJobObjectA(None, None) }?;
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    unsafe {
+        SetInformationJobObject(
+            job_handle,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut _,
+            size_of_val(&info) as u32,
+        )
+    }?;
+    unsafe { AssignProcessToJobObject(job_handle, HANDLE(child)) }?;
+    Ok(())
 }
 
 #[cfg(test)]

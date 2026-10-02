@@ -547,7 +547,15 @@ fn version<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u8, u8)> 
 }
 
 fn target<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, Option<char>)> {
-    preceded(Token::DotTarget, ident.and_then(shader_model)).parse_next(stream)
+    preceded(
+        Token::DotTarget,
+        (
+            ident.and_then(shader_model),
+            opt((Token::Comma, ident_literal("debug"))),
+        ),
+    )
+    .map(|((target, arch_variant), _debug)| (target, arch_variant))
+    .parse_next(stream)
 }
 
 fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
@@ -1011,7 +1019,11 @@ enum ParsedType {
 }
 
 fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
-    trace("texref", (Token::DotTexref).map(|_| ParsedType::Texref)).parse_next(stream)
+    trace(
+        "texref",
+        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+    )
+    .parse_next(stream)
 }
 
 fn parse_if<Input, Output, Error, ParseNext>(
@@ -2012,7 +2024,9 @@ derive_parser!(
         #[token(".noreturn")]
         DotNoreturn,
         #[token(".texref")]
-        DotTexref
+        DotTexref,
+        #[token(".surfref")]
+        DotSurfref
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -3967,10 +3981,16 @@ derive_parser!(
     .type: ScalarType = { .u32, .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
+    shfl.mode.b32  d[|p], a, b, c => {
+        Instruction::Shfl  {
+            data: ast::ShflDetails { mode },
+            arguments: ShflArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: None }
+        }
+    }
     shfl.sync.mode.b32  d[|p], a, b, c, membermask => {
-        Instruction::ShflSync  {
-            data: ast::ShflSyncDetails { mode },
-            arguments: ShflSyncArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: membermask }
+        Instruction::Shfl  {
+            data: ast::ShflDetails { mode },
+            arguments: ShflArgs { dst: d, dst_pred: p, src: a, src_lane: b, src_opts: c, src_membermask: Some(membermask) }
         }
     }
     .mode: ShuffleMode = { .up, .down, .bfly, .idx };
@@ -3990,14 +4010,15 @@ derive_parser!(
             arguments: TanhArgs { dst: d, src: a }
         }
     }
-    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
+    .type: ScalarType = { .f32, .f16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
                              [dst], [src], cp-size{, src-size}{, cache-policy} => {
-        if level_cache_hint || cache_policy.is_some() || level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo("cp.async instruction with cache policy/cache hints/prefetch size".to_string()));
-        }
+        // TODO: handle cache hints and cache policies
+        let _ = level_cache_hint;
+        let _ = level_prefetch_size;
+        let _ = cache_policy;
 
         let cp_size = cp_size
             .as_immediate()
@@ -4097,7 +4118,17 @@ derive_parser!(
                 mode,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
+        }
+    }
+    vote.ballot.b32 d, {!}a => {
+        let (negate, a) = a;
+        Instruction::Vote {
+            data: VoteDetails {
+                mode: VoteMode::Ballot,
+                negate
+            },
+            arguments: VoteArgs { dst: d, src1: a, src2: None }
         }
     }
     vote.sync.ballot.b32 d, {!}a, membermask => {
@@ -4107,7 +4138,7 @@ derive_parser!(
                 mode: VoteMode::Ballot,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
+            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
         }
     }
 
@@ -4408,7 +4439,7 @@ derive_parser!(
         }
     }
 
-    .dtype: ScalarType = { .s32, .f32 };
+    .dtype: ScalarType = { .u32, .s32, .f32 };
     .ctype: ScalarType = { .s32, .f32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/

@@ -81,6 +81,10 @@ jobs:
       run: |
         cargo xtask zip --profile ${{ env.CARGO_PROFILE }}
         Expand-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda
+        cargo xtask zip --profile ${{ env.CARGO_PROFILE }} --target=i686-pc-windows-msvc
+        Expand-Archive -Path target/i686-pc-windows-msvc/${{ env.CARGO_PROFILE }}/zluda.zip -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda/32
+        Move-Item -Path target/${{ env.CARGO_PROFILE }}/zluda/32/zluda -Destination target/${{ env.CARGO_PROFILE }}/zluda/zluda/32
+        Compress-Archive -Path target/${{ env.CARGO_PROFILE }}/zluda/zluda -DestinationPath target/${{ env.CARGO_PROFILE }}/zluda/upload.zip
     - name: Set revision hash
       run: echo "SHORT_SHA=$("${{ github.sha }}".SubString(0, 7))" >> $env:GITHUB_ENV
     - name: Upload
@@ -92,7 +96,7 @@ jobs:
       shell: bash
       working-directory: ${{ github.workspace }}
       run: |
-        mv target/${{ env.CARGO_PROFILE }}/zluda.zip target/${{ env.CARGO_PROFILE }}/zluda-windows-${{ env.SHORT_SHA }}.zip
+        mv target/${{ env.CARGO_PROFILE }}/zluda/upload.zip target/${{ env.CARGO_PROFILE }}/zluda-windows-${{ env.SHORT_SHA }}.zip
         latest_tag=$(git tag -l "v*" | grep -E "^v[0-9]+$" | sort -V | tail -n 1)
         next_version="$((${latest_tag:1} + 1))"
         offset=$(git rev-list $latest_tag..HEAD --count)
@@ -138,7 +142,12 @@ jobs:
           --exclude cuda_macros \
           --exclude ptx_parser_macros \
           --exclude zluda_inject \
-          --exclude zluda_redirect
+          --exclude zluda_redirect \
+          --exclude zluda32 \
+          --exclude zluda64_server \
+          --exclude zluda_server_common \
+          --exclude nvapi \
+          --exclude nvapi_trace
         mkdir -p target/amdgpu
         bash .github/workflows/move_tests.sh target/tests amdgpu
         strip target/amdgpu/*

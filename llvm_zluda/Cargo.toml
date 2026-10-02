@@ -12,7 +12,7 @@ kernel_metadata = { path = "../kernel_metadata" }
 tempfile = "3"
 
 [dependencies.llvm-sys]
-version = "191"
+version = "211"
 features = ["disable-alltargets-init", "no-llvm-linking"]
 
 [build-dependencies]

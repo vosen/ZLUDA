@@ -3,8 +3,11 @@ use std::io::Read;
 
 fn main() {
     let bc_path = "lib/zluda_ptx_impl.bc";
+    let bc_constrained_path = "lib/zluda_ptx_impl_constrained.bc";
     println!("cargo:rerun-if-changed={}", bc_path);
+    println!("cargo:rerun-if-changed={}", bc_constrained_path);
     check_lfs_file(bc_path);
+    check_lfs_file(bc_constrained_path);
 }
 
 fn check_lfs_file(bc_path: &str) {

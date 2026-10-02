@@ -35,6 +35,7 @@ macro_rules! unimplemented {
                 });
                 ReprUsize::from_usize(export_table.logged_call(
                     cglue::slice::CSliceRef::from_str(stringify!($fn_name)),
+                    0,
                     cglue::trait_obj!(&format_args as dark_api::FnFfi),
                     cglue::trait_obj!(&underlying_fn as dark_api::FnFfi),
                     internal_error_untyped,

@@ -21,8 +21,8 @@ impl Library {
         let module_lock = self.modules.get(device).ok_or(CUerror::INVALID_DEVICE)?;
         *module_lock.get_or_init(|| match self.data {
             LibraryData::Lazy(lib) => {
-                let (module, sm_version) = module::load_hip_module(lib)?;
-                Ok(Module::new(module, sm_version).wrap())
+                let (module, sm_version, meta32) = module::load_hip_module(lib)?;
+                Ok(Module::new(module, sm_version, meta32).wrap())
             }
             LibraryData::Eager(()) => Err(CUerror::NOT_SUPPORTED),
         })

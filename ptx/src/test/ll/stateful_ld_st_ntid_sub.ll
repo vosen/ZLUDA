@@ -22,35 +22,37 @@ define amdgpu_kernel void @stateful_ld_st_ntid_sub(ptr addrspace(4) byref(i64) %
   store i64 %3, ptr addrspace(5) %"57", align 8
   %4 = load i64, ptr addrspace(5) %"54", align 8
   %5 = inttoptr i64 %4 to ptr
-  %"65" = addrspacecast ptr %5 to ptr addrspace(1)
-  store ptr addrspace(1) %"65", ptr addrspace(5) %"55", align 8
-  %6 = load i64, ptr addrspace(5) %"57", align 8
-  %7 = inttoptr i64 %6 to ptr
-  %"67" = addrspacecast ptr %7 to ptr addrspace(1)
-  store ptr addrspace(1) %"67", ptr addrspace(5) %"58", align 8
+  %6 = addrspacecast ptr %5 to ptr addrspace(1)
+  %"65" = ptrtoint ptr addrspace(1) %6 to i64
+  store i64 %"65", ptr addrspace(5) %"55", align 8
+  %7 = load i64, ptr addrspace(5) %"57", align 8
+  %8 = inttoptr i64 %7 to ptr
+  %9 = addrspacecast ptr %8 to ptr addrspace(1)
+  %"67" = ptrtoint ptr addrspace(1) %9 to i64
+  store i64 %"67", ptr addrspace(5) %"58", align 8
   %"45" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
   store i32 %"45", ptr addrspace(5) %"60", align 4
-  %8 = load i32, ptr addrspace(5) %"60", align 4
-  %9 = zext i32 %8 to i64
-  store i64 %9, ptr addrspace(5) %"61", align 8
-  %10 = load i64, ptr addrspace(5) %"55", align 8
-  %11 = load i64, ptr addrspace(5) %"61", align 8
-  %"84" = sub i64 %10, %11
+  %10 = load i32, ptr addrspace(5) %"60", align 4
+  %"70" = zext i32 %10 to i64
+  store i64 %"70", ptr addrspace(5) %"61", align 8
+  %11 = load i64, ptr addrspace(5) %"55", align 8
+  %12 = load i64, ptr addrspace(5) %"61", align 8
+  %"84" = sub i64 %11, %12
   store i64 %"84", ptr addrspace(5) %"56", align 8
-  %12 = load i64, ptr addrspace(5) %"58", align 8
-  %13 = load i64, ptr addrspace(5) %"61", align 8
-  %"87" = sub i64 %12, %13
+  %13 = load i64, ptr addrspace(5) %"58", align 8
+  %14 = load i64, ptr addrspace(5) %"61", align 8
+  %"87" = sub i64 %13, %14
   store i64 %"87", ptr addrspace(5) %"59", align 8
-  %14 = load i64, ptr addrspace(5) %"56", align 8
-  %"90" = inttoptr i64 %14 to ptr addrspace(1)
+  %15 = load i64, ptr addrspace(5) %"56", align 8
+  %"90" = inttoptr i64 %15 to ptr addrspace(1)
   %"47" = getelementptr inbounds i8, ptr addrspace(1) %"90", i64 0
-  %15 = load i64, ptr addrspace(1) %"47", align 8
-  store i64 %15, ptr addrspace(5) %"62", align 8
-  %16 = load i64, ptr addrspace(5) %"59", align 8
-  %"91" = inttoptr i64 %16 to ptr addrspace(1)
+  %16 = load i64, ptr addrspace(1) %"47", align 8
+  store i64 %16, ptr addrspace(5) %"62", align 8
+  %17 = load i64, ptr addrspace(5) %"59", align 8
+  %"91" = inttoptr i64 %17 to ptr addrspace(1)
   %"49" = getelementptr inbounds i8, ptr addrspace(1) %"91", i64 0
-  %17 = load i64, ptr addrspace(5) %"62", align 8
-  store i64 %17, ptr addrspace(1) %"49", align 8
+  %18 = load i64, ptr addrspace(5) %"62", align 8
+  store i64 %18, ptr addrspace(1) %"49", align 8
   ret void
 }
 

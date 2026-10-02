@@ -12,6 +12,9 @@ Periodically, we mark a pre-release version as stable, you can download it from 
 ## Usage
 
 ### Windows
+
+[If you want to run PhysX check here](physx32.html). Instructions below apply to non-PhysX applications. You don't need HIP SDK for PhysX.
+
 You should have a recent AMD GPU driver ("AMD Software: Adrenalin Edition") and [HIP SDK](hip_sdk.html) installed.\
 To run your application either:
 * (_Recommended_) Use ZLUDA launcher:

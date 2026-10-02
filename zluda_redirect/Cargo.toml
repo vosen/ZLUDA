@@ -36,3 +36,4 @@ rustc-hash = "2.0.0"
 
 [package.metadata.zluda]
 windows_only = true
+32bit = true

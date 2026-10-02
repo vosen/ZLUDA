@@ -20,7 +20,6 @@ use std::{fs, ptr};
 use tempfile::NamedTempFile;
 
 const OCKL_MODULE: &[u8] = include_bytes!("device-libs/ockl.bc");
-const OCML_MODULE: &[u8] = include_bytes!("device-libs/ocml.bc");
 
 // https://llvm.org/docs/AMDGPUUsage.html#address-spaces
 const CONSTANT_ADDRESS_SPACE: u32 = 4;
@@ -104,7 +103,6 @@ pub fn compile(
 
     let ptx_impl = load_module(ctx, ptx_impl, c"ptx_impl.bc")?;
     let ockl = load_module(ctx, OCKL_MODULE, c"ockl.bc")?;
-    let ocml = load_module(ctx, OCML_MODULE, c"ocml.bc")?;
 
     let oclc_constants = create_oclc_constants(ctx, gcn_arch)?;
 
@@ -113,7 +111,6 @@ pub fn compile(
     linked.link(oclc_constants)?;
     linked.link(ptx_impl)?;
     linked.link(ockl)?;
-    linked.link(ocml)?;
 
     linked.verify()?;
 
@@ -272,6 +269,7 @@ fn init_globals() -> Result<(), String> {
                 // Uncomment to save passes
                 // c"-print-before-all",
                 c"llvm_zluda",
+                //c"-debug-only=isel",
                 c"-ignore-tti-inline-compatible",
                 // c"-amdgpu-early-inline-all=true",
                 c"-amdgpu-internalize-symbols",
@@ -279,6 +277,7 @@ fn init_globals() -> Result<(), String> {
                 //c"--pass-remarks-missed=.*inlin.*",
             ]
             .into_iter();
+            /* Does not provide as much performance improvement on ROCm 7.2
             let opt_options = if cfg!(debug_assertions) {
                 vec![]
             } else {
@@ -288,8 +287,9 @@ fn init_globals() -> Result<(), String> {
                     c"-inlinehint-threshold=3250",
                 ]
             };
+            */
             let llvm_args_ptrs: Vec<*const i8> = common_options
-                .chain(opt_options)
+                //.chain(opt_options)
                 .map(|s| s.as_ptr())
                 .collect();
             let mut err_msg = std::ptr::null_mut();

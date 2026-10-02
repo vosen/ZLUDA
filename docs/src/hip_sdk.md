@@ -5,7 +5,7 @@ On Windows, in addition to installing the GPU driver, you need to install the HI
 <table width="100%">
 <tr >
 <th> Official HIP SDK </th>
-<th> Unofficial HIP SDK builds </th>
+<th> Nightly HIP SDK builds </th>
 </tr>
 <tr/>
 <tr>
@@ -26,7 +26,7 @@ On Windows, in addition to installing the GPU driver, you need to install the HI
 <td style="width: 50%;border:none;vertical-align: top">
 
 ❌ Manual installation\
-❌ Unstable and unsupported by AMD\
+❌ Nightly builds by AMD - no stability guarantees\
 ✅ Newer code\
 ✅ Machine Learning support (required for PyTorch, TensorFlow, etc.)
 

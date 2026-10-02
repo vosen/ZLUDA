@@ -27,7 +27,8 @@ impl ModuleCache {
         // We ensure that the cache directory exists
         std::fs::create_dir_all(&cache_dir).ok()?;
         // No need to create the file, it will be created by SQLite on first access
-        cache_dir.push("zluda.db");
+        // zluda.db might be in use by older versions of ZLUDA
+        cache_dir.push("zluda2.db");
         Some(cache_dir.to_string_lossy().into())
     }
 

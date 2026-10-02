@@ -14,21 +14,21 @@ define amdgpu_kernel void @tid(ptr addrspace(4) byref(i64) %"42") #1 {
   %"39" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
   store i32 %"39", ptr addrspace(5) %"44", align 4
   %2 = load i32, ptr addrspace(5) %"44", align 4
-  %3 = zext i32 %2 to i64
-  store i64 %3, ptr addrspace(5) %"45", align 8
-  %4 = load i32, ptr addrspace(5) %"44", align 4
-  %5 = trunc i32 %4 to i8
-  store i8 %5, ptr addrspace(5) %"46", align 1
-  %6 = load i64, ptr addrspace(4) %"42", align 8
-  store i64 %6, ptr addrspace(5) %"43", align 8
-  %7 = load i64, ptr addrspace(5) %"43", align 8
-  %8 = load i64, ptr addrspace(5) %"45", align 8
-  %"53" = add i64 %7, %8
+  %"48" = zext i32 %2 to i64
+  store i64 %"48", ptr addrspace(5) %"45", align 8
+  %3 = load i32, ptr addrspace(5) %"44", align 4
+  %"50" = trunc i32 %3 to i8
+  store i8 %"50", ptr addrspace(5) %"46", align 1
+  %4 = load i64, ptr addrspace(4) %"42", align 8
+  store i64 %4, ptr addrspace(5) %"43", align 8
+  %5 = load i64, ptr addrspace(5) %"43", align 8
+  %6 = load i64, ptr addrspace(5) %"45", align 8
+  %"53" = add i64 %5, %6
   store i64 %"53", ptr addrspace(5) %"43", align 8
-  %9 = load i64, ptr addrspace(5) %"43", align 8
-  %10 = load i8, ptr addrspace(5) %"46", align 1
-  %"58" = inttoptr i64 %9 to ptr
-  store i8 %10, ptr %"58", align 1
+  %7 = load i64, ptr addrspace(5) %"43", align 8
+  %8 = load i8, ptr addrspace(5) %"46", align 1
+  %"58" = inttoptr i64 %7 to ptr
+  store i8 %8, ptr %"58", align 1
   ret void
 }
 

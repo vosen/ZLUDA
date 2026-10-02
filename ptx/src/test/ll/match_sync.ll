@@ -25,19 +25,19 @@ define amdgpu_kernel void @match_sync(ptr addrspace(4) byref(i64) %"46") #1 {
   %"69" = call i32 @__zluda_ptx_impl_match_any_sync_b32(i32 %4, i32 -1)
   store i32 %"69", ptr addrspace(5) %"51", align 4
   %5 = load i32, ptr addrspace(5) %"49", align 4
-  %6 = zext i32 %5 to i64
-  store i64 %6, ptr addrspace(5) %"48", align 8
-  %7 = load i64, ptr addrspace(5) %"48", align 8
-  %"60" = mul i64 %7, 4
+  %"58" = zext i32 %5 to i64
+  store i64 %"58", ptr addrspace(5) %"48", align 8
+  %6 = load i64, ptr addrspace(5) %"48", align 8
+  %"60" = mul i64 %6, 4
   store i64 %"60", ptr addrspace(5) %"48", align 8
-  %8 = load i64, ptr addrspace(5) %"47", align 8
-  %9 = load i64, ptr addrspace(5) %"48", align 8
-  %"62" = add i64 %8, %9
+  %7 = load i64, ptr addrspace(5) %"47", align 8
+  %8 = load i64, ptr addrspace(5) %"48", align 8
+  %"62" = add i64 %7, %8
   store i64 %"62", ptr addrspace(5) %"47", align 8
-  %10 = load i64, ptr addrspace(5) %"47", align 8
-  %11 = load i32, ptr addrspace(5) %"51", align 4
-  %"71" = inttoptr i64 %10 to ptr
-  store i32 %11, ptr %"71", align 4
+  %9 = load i64, ptr addrspace(5) %"47", align 8
+  %10 = load i32, ptr addrspace(5) %"51", align 4
+  %"71" = inttoptr i64 %9 to ptr
+  store i32 %10, ptr %"71", align 4
   ret void
 }
 

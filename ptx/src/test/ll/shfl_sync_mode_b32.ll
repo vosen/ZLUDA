@@ -51,19 +51,19 @@ define amdgpu_kernel void @shfl_sync_mode_b32(ptr addrspace(4) byref(i64) %"56")
   %"80" = add i32 %12, %13
   store i32 %"80", ptr addrspace(5) %"61", align 4
   %14 = load i32, ptr addrspace(5) %"59", align 4
-  %15 = zext i32 %14 to i64
-  store i64 %15, ptr addrspace(5) %"58", align 8
-  %16 = load i64, ptr addrspace(5) %"58", align 8
-  %"85" = mul i64 %16, 4
+  %"83" = zext i32 %14 to i64
+  store i64 %"83", ptr addrspace(5) %"58", align 8
+  %15 = load i64, ptr addrspace(5) %"58", align 8
+  %"85" = mul i64 %15, 4
   store i64 %"85", ptr addrspace(5) %"58", align 8
-  %17 = load i64, ptr addrspace(5) %"57", align 8
-  %18 = load i64, ptr addrspace(5) %"58", align 8
-  %"87" = add i64 %17, %18
+  %16 = load i64, ptr addrspace(5) %"57", align 8
+  %17 = load i64, ptr addrspace(5) %"58", align 8
+  %"87" = add i64 %16, %17
   store i64 %"87", ptr addrspace(5) %"57", align 8
-  %19 = load i64, ptr addrspace(5) %"57", align 8
-  %20 = load i32, ptr addrspace(5) %"61", align 4
-  %"100" = inttoptr i64 %19 to ptr
-  store i32 %20, ptr %"100", align 4
+  %18 = load i64, ptr addrspace(5) %"57", align 8
+  %19 = load i32, ptr addrspace(5) %"61", align 4
+  %"100" = inttoptr i64 %18 to ptr
+  store i32 %19, ptr %"100", align 4
   ret void
 }
 

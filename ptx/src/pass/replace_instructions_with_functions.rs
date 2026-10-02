@@ -103,10 +103,10 @@ fn run_statements<'input>(
         .into_iter()
         .map(|statement| {
             Ok::<SmallVec<[_; 3]>, _>(match statement {
-                Statement::Instruction(ast::Instruction::ShflSync {
+                Statement::Instruction(ast::Instruction::Shfl {
                     data,
                     arguments:
-                        ast::ShflSyncArgs {
+                        ast::ShflArgs {
                             dst_pred: Some(dst_pred),
                             dst,
                             src,
@@ -159,40 +159,99 @@ fn run_statements<'input>(
                         &return_arguments,
                         &input_arguments,
                     );
-                    smallvec![
-                        Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
-                            data: ptx_parser::CallDetails {
-                                uniform: false,
-                                return_arguments,
-                                input_arguments
-                            },
-                            arguments: ptx_parser::CallArgs {
-                                return_arguments: vec![packed_var],
-                                func,
-                                input_arguments: vec![src, src_lane, src_opts, src_membermask],
-                                is_external: true
-                            },
-                        }),
-                        Statement::RepackVector(RepackVectorDetails {
-                            is_extract: true,
-                            typ: ast::ScalarType::U32,
-                            packed: packed_var,
-                            unpacked: vec![dst, dst_pred_wide],
-                            relaxed_type_check: false,
-                        }),
-                        Statement::Instruction(ast::Instruction::Cvt {
-                            data: ast::CvtDetails {
-                                from: ast::ScalarType::U32,
-                                to: ast::ScalarType::Pred,
-                                mode: ast::CvtMode::Truncate
-                            },
-                            arguments: ast::CvtArgs {
-                                dst: dst_pred,
-                                src: dst_pred_wide,
-                                src2: None,
-                            },
-                        })
-                    ]
+                    match src_membermask {
+                        Some(src_membermask) => {
+                            smallvec![
+                                Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
+                                    data: ptx_parser::CallDetails {
+                                        uniform: false,
+                                        return_arguments,
+                                        input_arguments
+                                    },
+                                    arguments: ptx_parser::CallArgs {
+                                        return_arguments: vec![packed_var],
+                                        func,
+                                        input_arguments: vec![
+                                            src,
+                                            src_lane,
+                                            src_opts,
+                                            src_membermask
+                                        ],
+                                        is_external: true
+                                    },
+                                }),
+                                Statement::RepackVector(RepackVectorDetails {
+                                    is_extract: true,
+                                    typ: ast::ScalarType::U32,
+                                    packed: packed_var,
+                                    unpacked: vec![dst, dst_pred_wide],
+                                    relaxed_type_check: false,
+                                }),
+                                Statement::Instruction(ast::Instruction::Cvt {
+                                    data: ast::CvtDetails {
+                                        from: ast::ScalarType::U32,
+                                        to: ast::ScalarType::Pred,
+                                        mode: ast::CvtMode::Truncate
+                                    },
+                                    arguments: ast::CvtArgs {
+                                        dst: dst_pred,
+                                        src: dst_pred_wide,
+                                        src2: None,
+                                    },
+                                })
+                            ]
+                        }
+                        None => {
+                            let src_membermask = resolver.register_unnamed(Some((
+                                ast::Type::Scalar(ast::ScalarType::U32),
+                                ast::StateSpace::Reg,
+                            )));
+                            smallvec![
+                                Statement::Constant(ConstantDefinition {
+                                    dst: src_membermask,
+                                    typ: ast::ScalarType::U32,
+                                    value: ptx_parser::ImmediateValue::U64(u64::MAX),
+                                }),
+                                Statement::Instruction::<_, SpirvWord>(ast::Instruction::Call {
+                                    data: ptx_parser::CallDetails {
+                                        uniform: false,
+                                        return_arguments,
+                                        input_arguments
+                                    },
+                                    arguments: ptx_parser::CallArgs {
+                                        return_arguments: vec![packed_var],
+                                        func,
+                                        input_arguments: vec![
+                                            src,
+                                            src_lane,
+                                            src_opts,
+                                            src_membermask
+                                        ],
+                                        is_external: true
+                                    },
+                                }),
+                                Statement::RepackVector(RepackVectorDetails {
+                                    is_extract: true,
+                                    typ: ast::ScalarType::U32,
+                                    packed: packed_var,
+                                    unpacked: vec![dst, dst_pred_wide],
+                                    relaxed_type_check: false,
+                                }),
+                                Statement::Instruction(ast::Instruction::Cvt {
+                                    data: ast::CvtDetails {
+                                        from: ast::ScalarType::U32,
+                                        to: ast::ScalarType::Pred,
+                                        mode: ast::CvtMode::Truncate
+                                    },
+                                    arguments: ast::CvtArgs {
+                                        dst: dst_pred,
+                                        src: dst_pred_wide,
+                                        src2: None,
+                                    },
+                                })
+                            ]
+                        }
+                    }
                 }
                 Statement::Instruction(ast::Instruction::Cvt {
                     data:
@@ -291,6 +350,18 @@ fn run_instruction<'input>(
     instruction: ptx_parser::Instruction<SpirvWord>,
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     Ok(match instruction {
+        i @ ast::Instruction::Div {
+            data:
+                ast::DivDetails::Float(ast::DivFloatDetails {
+                    kind: ast::DivFloatKind::ApproxFull,
+                    type_: ast::ScalarType::F32,
+                    ..
+                }),
+            ..
+        } => {
+            let name = "div_full_f32";
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Tex {
             data:
                 ast::TexData {
@@ -301,6 +372,11 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
+            let dtype = match dtype {
+                // For 32 bit
+                ast::ScalarType::U32 => ast::ScalarType::S32,
+                t => t,
+            };
             let prefix = match type_ {
                 ast::TexType::Texref => "texref",
                 ast::TexType::Texobj => "texobj",
@@ -464,7 +540,12 @@ fn run_instruction<'input>(
                 ptx_parser::VoteMode::Ballot => "ballot_b32",
             };
             let negate = if data.negate { "_negate" } else { "" };
-            let name = format!("vote_sync_{mode}{negate}");
+            let sync = if arguments.src2.is_some() {
+                "_sync"
+            } else {
+                ""
+            };
+            let name = format!("vote{sync}_{mode}{negate}");
             to_call(
                 resolver,
                 fn_declarations,
@@ -491,9 +572,9 @@ fn run_instruction<'input>(
                 ptx_parser::Instruction::ReduxSync { data, arguments },
             )?
         }
-        ptx_parser::Instruction::ShflSync {
+        ptx_parser::Instruction::Shfl {
             data,
-            arguments: orig_arguments @ ast::ShflSyncArgs { dst_pred: None, .. },
+            arguments: orig_arguments @ ast::ShflArgs { dst_pred: None, .. },
         } => {
             let mode = match data.mode {
                 ptx_parser::ShuffleMode::Up => "up",
@@ -505,7 +586,7 @@ fn run_instruction<'input>(
                 resolver,
                 fn_declarations,
                 format!("shfl_sync_{}_b32", mode).into(),
-                ptx_parser::Instruction::ShflSync {
+                ptx_parser::Instruction::Shfl {
                     data,
                     arguments: orig_arguments,
                 },
@@ -567,6 +648,15 @@ fn run_instruction<'input>(
         i @ ast::Instruction::MatchSync { data, .. } => {
             let name = format!("match_any_sync_{}", scalar_to_ptx_name(data));
             to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        ast::Instruction::Tanh { data, arguments } => {
+            let name = format!("tanh_{}", scalar_to_ptx_name(data));
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ast::Instruction::Tanh { data, arguments },
+            )?
         }
         i => i,
     })

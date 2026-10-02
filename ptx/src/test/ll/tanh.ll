@@ -1,4 +1,6 @@
-define amdgpu_kernel void @tanh(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #0 {
+declare hidden float @__zluda_ptx_impl_tanh_f32(float) #0
+
+define amdgpu_kernel void @tanh(ptr addrspace(4) byref(i64) %"39", ptr addrspace(4) byref(i64) %"40") #1 {
   %"41" = alloca i64, align 8, addrspace(5)
   %"42" = alloca i64, align 8, addrspace(5)
   %"43" = alloca float, align 4, addrspace(5)
@@ -17,7 +19,7 @@ define amdgpu_kernel void @tanh(ptr addrspace(4) byref(i64) %"39", ptr addrspace
   %5 = load float, ptr %"52", align 4
   store float %5, ptr addrspace(5) %"43", align 4
   %6 = load float, ptr addrspace(5) %"43", align 4
-  %"48" = call afn float @__ocml_tanh_f32(float %6)
+  %"48" = call float @__zluda_ptx_impl_tanh_f32(float %6)
   store float %"48", ptr addrspace(5) %"43", align 4
   %7 = load i64, ptr addrspace(5) %"42", align 8
   %8 = load float, ptr addrspace(5) %"43", align 4
@@ -26,6 +28,5 @@ define amdgpu_kernel void @tanh(ptr addrspace(4) byref(i64) %"39", ptr addrspace
   ret void
 }
 
-declare float @__ocml_tanh_f32(float)
-
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }

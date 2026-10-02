@@ -153,6 +153,17 @@ pub(crate) fn set_limit(limit: hipLimit_t, value: usize) -> hipError_t {
     unsafe { hipDeviceSetLimit(limit, value) }
 }
 
+pub(crate) fn set_cache_config(config: CUfunc_cache) -> CUresult {
+    get_current_context()?;
+    match config {
+        CUfunc_cache::CU_FUNC_CACHE_PREFER_NONE
+        | CUfunc_cache::CU_FUNC_CACHE_PREFER_SHARED
+        | CUfunc_cache::CU_FUNC_CACHE_PREFER_L1
+        | CUfunc_cache::CU_FUNC_CACHE_PREFER_EQUAL => Ok(()),
+        _ => Err(CUerror::INVALID_VALUE),
+    }
+}
+
 pub(crate) fn synchronize() -> hipError_t {
     unsafe { hipDeviceSynchronize() }
 }
@@ -343,5 +354,38 @@ mod tests {
         api.cuInit(0);
         api.cuCtxCreate_v2(&mut unsafe { mem::zeroed() }, 0, 0);
         api.cuCtxPopCurrent_v2(ptr::null_mut());
+    }
+
+    #[test_cuda]
+    fn set_cache_config_accepts_known_values(api: impl CudaApi) {
+        api.cuInit(0);
+        api.cuCtxCreate_v2(&mut unsafe { mem::zeroed() }, 0, 0);
+        for config in [
+            CUfunc_cache::CU_FUNC_CACHE_PREFER_NONE,
+            CUfunc_cache::CU_FUNC_CACHE_PREFER_SHARED,
+            CUfunc_cache::CU_FUNC_CACHE_PREFER_L1,
+            CUfunc_cache::CU_FUNC_CACHE_PREFER_EQUAL,
+        ] {
+            api.cuCtxSetCacheConfig(config);
+        }
+    }
+
+    #[test_cuda]
+    fn set_cache_config_rejects_unknown_value(api: impl CudaApi) {
+        api.cuInit(0);
+        api.cuCtxCreate_v2(&mut unsafe { mem::zeroed() }, 0, 0);
+        assert_eq!(
+            api.cuCtxSetCacheConfig_unchecked(CUfunc_cache(4)),
+            CUresult::ERROR_INVALID_VALUE
+        );
+    }
+
+    #[test_cuda]
+    fn set_cache_config_requires_current_context(api: impl CudaApi) {
+        api.cuInit(0);
+        assert_eq!(
+            api.cuCtxSetCacheConfig_unchecked(CUfunc_cache::CU_FUNC_CACHE_PREFER_NONE),
+            CUresult::ERROR_INVALID_CONTEXT
+        );
     }
 }

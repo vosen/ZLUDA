@@ -3,6 +3,7 @@ use cuda_types::{
     cublaslt::*,
     cuda::*,
     cudnn9,
+    cufft::*,
     cusparse::*,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
@@ -25,6 +26,7 @@ use constants::*;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 pub mod os;
+pub mod test;
 
 pub fn append_suffix(name: *mut ::core::ffi::c_char, len: usize) {
     let buffer = unsafe { std::slice::from_raw_parts(name, len) };
@@ -88,6 +90,11 @@ impl CudaErrorType for rocsparse_error {
     const NOT_SUPPORTED: Self = Self::not_implemented;
 }
 
+impl CudaErrorType for cufftError_t {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
+}
+
 /// Used to try to convert CUDA API values into our internal representation.
 ///
 /// Similar to [`TryFrom`], but we can implement this for primitive types. We also provide conversions from pointers to references.
@@ -135,6 +142,7 @@ macro_rules! from_cuda_nop {
 macro_rules! from_cuda_transmute {
     ($($from:ty => $to:ty),*) => {
         $(
+            #[cfg(target_pointer_width = "64")]
             impl<'a, E: CudaErrorType> FromCuda<'a, $from, E> for $to {
                 fn from_cuda(x: &'a $from) -> Result<Self, E> {
                     Ok(unsafe { std::mem::transmute(*x) })
@@ -196,10 +204,14 @@ from_cuda_nop!(
     *mut i8,
     *mut i32,
     *const i32,
+    *mut i64,
     *mut u64,
     *mut usize,
     *const f32,
     *mut f32,
+    *mut f64,
+    *mut float2,
+    *mut double2,
     *const ::core::ffi::c_void,
     *const *const ::core::ffi::c_void,
     *const *mut ::core::ffi::c_void,
@@ -257,6 +269,8 @@ from_cuda_nop!(
     cublasLtMatmulPreferenceAttributes_t,
     CUfunc_cache,
     CUctxCreateParams,
+    cufftHandle,
+    cuda_types::cufft::libraryPropertyType,
     cudnn9::libraryPropertyType
 );
 from_cuda_transmute!(
@@ -296,9 +310,11 @@ from_cuda_transmute!(
     CUDA_ARRAY_DESCRIPTOR => HIP_ARRAY_DESCRIPTOR,
     CUDA_ARRAY3D_DESCRIPTOR => HIP_ARRAY3D_DESCRIPTOR,
     CUtexref => *mut textureReference,
+    CUsurfref => *mut textureReference,
     CUarray_format => hipArray_Format,
     CUaddress_mode => hipTextureAddressMode,
-    CUfilter_mode => hipTextureFilterMode
+    CUfilter_mode => hipTextureFilterMode,
+    cufftType_t => hipfft_sys::hipfftType
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY3D, E> for HIP_MEMCPY3D {

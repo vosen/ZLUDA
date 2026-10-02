@@ -18,6 +18,9 @@ const HIP_TRSA_OVERRIDE_FORMAT: u32 = 1;
 pub(crate) unsafe fn refresh_texref(raw_texref: *mut textureReference) -> hipError_t {
     let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
     let mut res_desc = std::mem::zeroed();
+    if texref.textureObject.is_null() {
+        return Ok(());
+    }
     hipTexObjectGetResourceDesc(&mut res_desc, texref.textureObject)?;
     match res_desc.resType {
         HIPresourcetype::HIP_RESOURCE_TYPE_ARRAY => hipTexRefSetArray(

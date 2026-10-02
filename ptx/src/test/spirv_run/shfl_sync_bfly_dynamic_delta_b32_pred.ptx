@@ -1,0 +1,41 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+.visible .entry shfl_sync_bfly_dynamic_delta_b32_pred(
+    .param .u64 output
+)
+{
+    .reg .u64 out_addr;
+    .reg .u64 out_index;
+    .reg .u32 thread_id;
+    .reg .u32 delta0;
+    .reg .u32 delta1;
+    .reg .u32 delta2;
+    .reg .u32 result;
+    .reg .pred in_range;
+
+    ld.param.u64 out_addr, [output];
+    mov.u32 delta0, 32;
+    mov.u32 delta1, 33;
+    mov.u32 delta2, 63;
+    mov.u32 thread_id, %tid.x;
+    cvt.u64.u32 out_index, thread_id;
+    mul.lo.u64 out_index, out_index, 4;
+    add.u64 out_addr, out_addr, out_index;
+
+    shfl.sync.bfly.b32 result|in_range, thread_id, delta0, 31, 0xFFFFFFFF;
+    @!in_range add.u32 result, result, 1000;
+    st.u32 [out_addr], result;
+    add.u64 out_addr, out_addr, 256;
+
+    shfl.sync.bfly.b32 result|in_range, thread_id, delta1, 31, 0xFFFFFFFF;
+    @!in_range add.u32 result, result, 1000;
+    st.u32 [out_addr], result;
+    add.u64 out_addr, out_addr, 256;
+
+    shfl.sync.bfly.b32 result|in_range, thread_id, delta2, 31, 0xFFFFFFFF;
+    @!in_range add.u32 result, result, 1000;
+    st.u32 [out_addr], result;
+    ret;
+}

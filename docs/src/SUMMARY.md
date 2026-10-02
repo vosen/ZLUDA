@@ -10,6 +10,7 @@
 - [Precompiling (slow start)](./precompiling.md)
 
 # Applications
+  - [PhysX (32 bit)](./physx32.md)
   - [llama.cpp](./llama_cpp.md)
 
 # For developers

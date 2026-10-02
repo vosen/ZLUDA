@@ -1,6 +1,7 @@
-use std::ffi::c_void;
-
 use cuda_types::cuda::CUuuid;
+use format::CudaDisplay;
+use rkyv::traits::{Archive, Deserialize, Serialize};
+use std::ffi::c_void;
 
 pub mod fatbin;
 
@@ -354,11 +355,60 @@ dark_api! {
         #[noformat]
         [0] = logged_call(
             fn_name: cglue::slice::CSliceRef<'static, u8>,
+            nvapi_interface: u32,
             args: crate::FnFfiRef<crate::ByteVecFfi>,
             fn_: crate::FnFfiRef<usize>,
             internal_error: usize,
             format_status: extern "C" fn(usize) -> crate::ByteVecFfi
         ) -> usize
+    }
+}
+
+#[repr(C)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Clone, Copy)]
+pub struct FunctionArgInfo {
+    pub size: u32,
+    pub align: u32,
+}
+
+impl FunctionArgInfo {
+    pub fn to_layout(self) -> Option<std::alloc::Layout> {
+        std::alloc::Layout::from_size_align(self.size as usize, self.align as usize).ok()
+    }
+}
+
+impl CudaDisplay for FunctionArgInfo {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        writer.write_all(b"{ size: ")?;
+        CudaDisplay::write(&self.size, "", 0, writer)?;
+        writer.write_all(b", align: ")?;
+        CudaDisplay::write(&self.align, "", 0, writer)?;
+        writer.write_all(b" }")
+    }
+}
+
+// Purely for internal use by ZLUDA32
+dark_api! {
+    zluda32;
+    "{EE376A1B-B858-42EB-A52D-9A106D50D914}" => ZLUDA32_INTERNAL[2] {
+        [0] = get_module_globals(
+            names: *mut *mut u8,
+            initializers: *mut *const u8,
+            sizes: *mut u32,
+            alignments: *mut u32,
+            count: *mut u32,
+            module: cuda_types::cuda::CUmodule
+        ) -> cuda_types::cuda::CUresult,
+        [1] = get_function_info(
+            explicit_arguments: *mut crate::FunctionArgInfo,
+            explicit_argument_count: *mut u32,
+            func: cuda_types::cuda::CUfunction
+        ) -> cuda_types::cuda::CUresult
     }
 }
 

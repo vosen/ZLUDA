@@ -40,6 +40,7 @@ fn main() {
         &crate_root,
         &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
     );
+    generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"]);
     let cuda_functions = generate_cuda(&crate_root);
     generate_process_address_table(&crate_root, cuda_functions);
     generate_ml(&crate_root);
@@ -89,6 +90,53 @@ fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
         .collect();
     converter.flush(&mut module.items);
     add_send_sync(&mut module.items, &["rocsparse_handle"]);
+    let mut output = output.clone();
+    output.extend(path);
+    let text = &prettyplease::unparse(&module)
+        .replace("hipStream_t", "hip_runtime_sys::hipStream_t")
+        .replace("hipEvent_t", "hip_runtime_sys::hipEvent_t");
+    write_rust_to_file(output, text)
+}
+
+fn generate_hipfft(output: &PathBuf, path: &[&str]) {
+    let rocfft_header = new_builder()
+        .header("/opt/rocm/include/hipfft/hipfft.h")
+        .allowlist_type("^hipfft.*")
+        .allowlist_function("^hipfft.*")
+        .allowlist_var("^hipfft.*")
+        .must_use_type("hipfftResult_t")
+        .constified_enum("hipfftResult_t")
+        .new_type_alias("^hipfftHandle$")
+        .clang_args(["-I/opt/rocm/include", "-D__HIP_PLATFORM_AMD__", "-x", "c++"])
+        .generate()
+        .unwrap()
+        .to_string();
+    let mut module: syn::File = syn::parse_str(&rocfft_header).unwrap();
+    remove_type(&mut module, "hipStream_t");
+    remove_type(&mut module, "ihipStream_t");
+    remove_type(&mut module, "hipEvent_t");
+    remove_type(&mut module, "ihipEvent_t");
+    let result_options = ConvertIntoRustResultOptions {
+        type_: "hipfftResult",
+        underlying_type: "hipfftResult_t",
+        new_error_type: "hipfftError",
+        error_prefix: ("HIPFFT_", "ERROR_"),
+        success: ("HIPFFT_SUCCESS", "SUCCESS"),
+        hip_types: vec![],
+    };
+    let mut converter = ConvertIntoRustResult::new(result_options);
+    module.items = converter
+        .convert(module.items)
+        .map(|item| match item {
+            Item::ForeignMod(mut extern_) => {
+                extern_.attrs.push(parse_quote!(#[cfg(not(windows))]));
+                Item::ForeignMod(extern_)
+            }
+            item => item,
+        })
+        .collect();
+    converter.flush(&mut module.items);
+    add_send_sync(&mut module.items, &["hipfftHandle"]);
     let mut output = output.clone();
     output.extend(path);
     let text = &prettyplease::unparse(&module)
@@ -299,6 +347,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         .allowlist_var("^CUFFT_.*")
         .must_use_type("cufftResult_t")
         .constified_enum("cufftResult_t")
+        .new_type_alias("^cufftHandle$")
         .allowlist_recursively(false)
         .clang_args(["-I/usr/local/cuda/include"])
         .generate()
@@ -319,13 +368,19 @@ fn generate_cufft(crate_root: &PathBuf) {
         success: ("CUFFT_SUCCESS", "SUCCESS"),
         hip_types: vec![],
     };
+    let suffix = "
+impl From<hipfft_sys::hipfftError> for cufftError_t {
+    fn from(error: hipfft_sys::hipfftError) -> Self {
+        Self(error.0)
+    }
+}";
     generate_types_library(
         Some(&result_options),
         Some(LibraryOverride::CuFft),
         &crate_root,
         &["..", "cuda_types", "src", "cufft.rs"],
         &module,
-        None,
+        Some(suffix),
     );
     generate_display_perflib(
         Some(&result_options),
@@ -388,7 +443,7 @@ fn generate_cusparse(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix =
-"#impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
+"impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
     fn from(error: rocsparse_sys::rocsparse_error) -> Self {
         match error {
             rocsparse_sys::rocsparse_error::invalid_handle => cusparseError_t::INVALID_VALUE,
@@ -1873,6 +1928,7 @@ fn generate_display_perflib(
         "nvmlVgpuSchedulerLogInfo_v1_t",
         "nvmlUUID_v1_t",
         "nvmlPRMTLV_v1_t",
+        "cufftHandle",
     ];
     let ignore_functions = ["cudnnBackendGetAttribute", "cudnnBackendSetAttribute"];
     let count_selectors = [];

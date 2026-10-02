@@ -21,13 +21,13 @@ define amdgpu_kernel void @cvt_rn_f16x2_e5m2x2(ptr addrspace(4) byref(i64) %"40"
   store i16 %5, ptr addrspace(5) %"44", align 2
   %6 = load i16, ptr addrspace(5) %"44", align 2
   %"58" = call i32 @__zluda_ptx_impl_cvt_rn_f16x2_e5m2x2(i16 %6)
-  %7 = bitcast i32 %"58" to <2 x half>
-  %"50" = bitcast <2 x half> %7 to i32
+  %"55" = bitcast i32 %"58" to <2 x half>
+  %"50" = bitcast <2 x half> %"55" to i32
   store i32 %"50", ptr addrspace(5) %"45", align 4
-  %8 = load i64, ptr addrspace(5) %"43", align 8
-  %9 = load i32, ptr addrspace(5) %"45", align 4
-  %"57" = inttoptr i64 %8 to ptr
-  store i32 %9, ptr %"57", align 4
+  %7 = load i64, ptr addrspace(5) %"43", align 8
+  %8 = load i32, ptr addrspace(5) %"45", align 4
+  %"57" = inttoptr i64 %7 to ptr
+  store i32 %8, ptr %"57", align 4
   ret void
 }
 

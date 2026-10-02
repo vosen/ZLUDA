@@ -1,5 +1,5 @@
 /*
-Every time this file changes it must be rebuilt.
+Every time this file (or any other file in this directory) changes it must be rebuilt.
 You must use LLVM from ZLUDA submodule dir ext/llvm-project:
 
 cd ext/llvm-project && \
@@ -28,7 +28,8 @@ then cd to the directory with this file and run this simple command:
     -o zluda_ptx_impl.bc \
     -emit-llvm \
     -c \
-    --offload-device-only --offload-arch=gfx1030 && \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
 ../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc -o - \
     | sed '/@llvm.used/d' \
     | sed '/wchar_size/d' \
@@ -39,7 +40,34 @@ then cd to the directory with this file and run this simple command:
     | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
     | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
 ../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl.bc && \
-../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl.bc && \
+../../ext/llvm-project/build/bin/clang \
+    -ffp-model=strict -ffp-exception-behavior=ignore \
+    -DHIP_ENABLE_WARP_SYNC_BUILTINS \
+    -std=c++20 \
+    -Xclang -fdenormal-fp-math=dynamic \
+    -Wall -Wextra -Wsign-compare -Wconversion \
+    -x hip \
+    zluda_ptx_impl.cpp \
+    -nogpulib \
+    -O3 \
+    -mno-wavefrontsize64 \
+    -o zluda_ptx_impl_constrained.bc \
+    -emit-llvm \
+    -c \
+    --offload-device-only --offload-arch=gfx1030 \
+    -Xclang -mlink-bitcode-file -Xclang /opt/rocm/amdgcn/bitcode/ocml.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_constrained.bc -o - \
+    | sed '/@llvm.used/d' \
+    | sed '/wchar_size/d' \
+    | sed '/llvm.module.flags/d' \
+    | sed '/__hip_cuid/d' \
+    | sed 's/optnone//g' \
+    | sed 's/define hidden/define linkonce_odr/g' \
+    | sed 's/\"target-cpu\"=\"gfx1030\"//g' \
+    | sed -E 's/\"target-features\"=\"[^\"]+\"//g'| \
+../../ext/llvm-project/build/bin/llvm-as - -o  zluda_ptx_impl_constrained.bc && \
+../../ext/llvm-project/build/bin/llvm-dis zluda_ptx_impl_constrained.bc
 */
 
 #include <cstddef>
@@ -52,6 +80,7 @@ then cd to the directory with this file and run this simple command:
 #include <hip/amd_detail/amd_warp_sync_functions.h>
 #include <hip/hip_fp8.h>
 
+#define GLOBAL_SPACE __attribute__((address_space(1)))
 #define SHARED_SPACE __attribute__((address_space(3)))
 #define CONSTANT_SPACE __attribute__((address_space(4)))
 
@@ -80,13 +109,13 @@ typedef char s8x4 __attribute__((ext_vector_type(4)));
 #define FUNC(NAME) __device__ __attribute__((retain)) __zluda_ptx_impl_##NAME
 #define FUNC_CALL(NAME) __zluda_ptx_impl_##NAME
 #define ATTR(NAME) __ZLUDA_PTX_IMPL_ATTRIBUTE_##NAME
-#define DECLARE_ATTR(TYPE, NAME)                                        \
-    extern "C" __attribute__((constant)) CONSTANT_SPACE TYPE ATTR(NAME) \
+#define DECLARE_ATTR(TYPE, NAME)                         \
+    extern "C" __attribute__((constant)) TYPE ATTR(NAME) \
     __device__
 
 extern "C"
 {
-    extern "C" __attribute__((constant)) CONSTANT_SPACE uint32_t __oclc_ISA_version __device__;
+    extern "C" __attribute__((constant)) uint32_t __oclc_ISA_version __device__;
 
     uint32_t FUNC(activemask)()
     {
@@ -282,6 +311,7 @@ extern "C"
     {                                                                                                                                           \
         int32_t section_mask = (opts >> 8) & 0b11111;                                                                                           \
         int32_t warp_end = opts & 0b11111;                                                                                                      \
+        delta &= 0b11111;                                                                                                                       \
         int32_t self = (int32_t)__lane_id();                                                                                                    \
         int32_t subsection = section_mask & self;                                                                                               \
         int32_t subsection_end = subsection | (~section_mask & warp_end);                                                                       \
@@ -574,6 +604,58 @@ extern "C"
         return div_f32_part2(x, y, {fma_4, fma_1, fma_3, numerator_scaled_flag});
     }
 
+    struct DivRnFtzF64Part1Result
+    {
+        double fma4;
+        double fma3;
+        double mul;
+        uint8_t num_scaled;
+    };
+
+    DivRnFtzF64Part1Result FUNC(div_f64_part1)(double x, double y)
+    {
+        bool den_scaled, num_scaled;
+        double div_scale0 = __builtin_amdgcn_div_scale(x, y, false, &den_scaled);
+        double div_scale1 = __builtin_amdgcn_div_scale(x, y, true, &num_scaled);
+
+        double neg_div_scale0 = -div_scale0;
+        double rcp = __builtin_amdgcn_rcp(div_scale0);
+        double fma0 = __builtin_fma(neg_div_scale0, rcp, 1.0);
+        double fma1 = __builtin_fma(rcp, fma0, rcp);
+        double fma2 = __builtin_fma(neg_div_scale0, fma1, 1.0);
+        double fma3 = __builtin_fma(fma1, fma2, fma1);
+
+        double mul = div_scale1 * fma3;
+        double fma4 = __builtin_fma(neg_div_scale0, mul, div_scale1);
+        return {fma4, fma3, mul, num_scaled};
+    }
+
+    __device__ static double div_f64_part2(double x, double y, DivRnFtzF64Part1Result part1)
+    {
+        double fmas = __builtin_amdgcn_div_fmas(part1.fma4, part1.fma3, part1.mul, part1.num_scaled);
+        return __builtin_amdgcn_div_fixup(fmas, y, x);
+    }
+
+    double FUNC(div_f64_part2)(double x, double y,
+                               double fma4,
+                               double fma3,
+                               double mul,
+                               uint8_t num_scaled)
+    {
+        return div_f64_part2(x, y, {fma4, fma3, mul, num_scaled});
+    }
+
+    // Taken from LLVM, pasted here because LLVM doesn't support constrained fdiv
+    __device__ float FUNC(div_full_f32)(float a, float b)
+    {
+        float mb = __builtin_amdgcn_frexp_mantf(b);
+        int eb = __builtin_amdgcn_frexp_expf(b);
+        float r = __builtin_amdgcn_rcpf(mb);
+        float ma = __builtin_amdgcn_frexp_mantf(a);
+        int ea = __builtin_amdgcn_frexp_expf(a);
+        return __builtin_ldexpf(ma * r, ea - eb);
+    }
+
     __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
     {
         const uint32_t bits = reinterpret_cast<uint32_t &>(f);
@@ -650,6 +732,16 @@ extern "C"
     }
 
     uint32_t FUNC(vote_sync_ballot_b32_negate)(bool value, uint32_t membermask __attribute__((unused)))
+    {
+        return ballot(value, true);
+    }
+
+    uint32_t FUNC(vote_ballot_b32)(bool value)
+    {
+        return ballot(value, false);
+    }
+
+    uint32_t FUNC(vote_ballot_b32_negate)(bool value)
     {
         return ballot(value, true);
     }
@@ -787,7 +879,7 @@ extern "C"
     }
 
     [[clang::noinline]]
-    int FUNC(vprintf)(const char *format , void *vlist __attribute__((unused)))
+    int FUNC(vprintf)(const char *format, void *vlist __attribute__((unused)))
     {
         // TODO: replace calls to vprintf with a raising pass to printf when we have a mechanism
         // to write SSA passes
@@ -884,7 +976,7 @@ __device__ static void mma_load_col(T upper_row[16], T lower_row[16], T left_col
 }
 
 template <typename Acc, typename T>
-__device__ HIP_vector_base<Acc, 4> fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
+__device__ HIP_vector_base<Acc, 4>::Native_vec_ fallback_mma_sync_aligned(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, HIP_vector_base<Acc, 4> c_reg)
 {
     uint8_t laneid = uint8_t(FUNC_CALL(sreg_laneid)());
     uint8_t quad_index = laneid % 4;
@@ -946,7 +1038,7 @@ extern "C"
 {
     float4::Native_vec_ FUNC(mma_sync_aligned_m16n8k16_row_col_f32_f16_f16_f32)(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
-        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+        return fallback_mma_sync_aligned<float, f16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w));
     }
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
@@ -965,7 +1057,7 @@ extern "C"
         }
         else
         {
-            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w)).data;
+            return fallback_mma_sync_aligned<float, bf16x2>(a_reg, b_reg, HIP_vector_base<float, 4>(c_reg.x, c_reg.y, c_reg.z, c_reg.w));
         }
     }
 
@@ -1047,25 +1139,25 @@ extern "C"
                c;
     }
 
-    static std::pair<CONSTANT_SPACE void *, CONSTANT_SPACE void *> get_image_and_sampler(uint64_t texobj) __device__
+    static std::pair<GLOBAL_SPACE void *, GLOBAL_SPACE void *> get_image_and_sampler(uint64_t texobj) __device__
     {
-        unsigned int CONSTANT_SPACE *image = (unsigned int CONSTANT_SPACE *)texobj;
-        unsigned int ADDRESS_SPACE_CONSTANT *sampler = image + HIP_SAMPLER_OBJECT_OFFSET_DWORD;
+        unsigned int GLOBAL_SPACE *image = (unsigned int GLOBAL_SPACE *)texobj;
+        unsigned int GLOBAL_SPACE *sampler = image + HIP_SAMPLER_OBJECT_OFFSET_DWORD;
         return {image, sampler};
     }
 
-    static v4f32 sample_1D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, float coord) __device__
+    static v4f32 sample_1D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, float coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_1d_v4f32_f32(uint32_t, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.1d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_1d_v4f32_f32(0xf, coord, *image_typed, *sampler_typed, false, 0, 0);
     }
 
-    static v4f32 sample_1Db(CONSTANT_SPACE void *image, s32 coord) __device__
+    static v4f32 sample_1Db(GLOBAL_SPACE void *image, s32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_struct_buffer_load_format_v4f32(v4s32, int, int, int, int) __asm("llvm.amdgcn.struct.buffer.load.format.v4f32");
-        CONSTANT_SPACE v4s32 *image_typed = (CONSTANT_SPACE v4s32 *)image;
+        GLOBAL_SPACE v4s32 *image_typed = (GLOBAL_SPACE v4s32 *)image;
         return __llvm_amdgcn_struct_buffer_load_format_v4f32(*image_typed, coord, 0, 0, 0);
     }
 #define tex_1d(RETURN_TYPE)                                                                                                                                                             \
@@ -1075,7 +1167,7 @@ extern "C"
         auto result = sample_1D(i, s, coord.x);                                                                                                                                         \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference CONSTANT_SPACE * texref, v1f32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_f32)(struct textureReference GLOBAL_SPACE * texref, v1f32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_f32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1086,7 +1178,7 @@ extern "C"
         auto result = sample_1Db(i, coord.x);                                                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference CONSTANT_SPACE * texref, v1s32 coord)                                                                \
+    v4##RETURN_TYPE FUNC(texref_1d_v4_##RETURN_TYPE##_s32)(struct textureReference GLOBAL_SPACE * texref, v1s32 coord)                                                                  \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_1d_v4_##RETURN_TYPE##_s32)(uint64_t(texref->textureObject), coord);                                                                                     \
     }
@@ -1096,11 +1188,11 @@ extern "C"
     tex_1db(s32);
     tex_1db(f32);
 
-    static v4f32 sample_2D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v2f32 coord) __device__
+    static v4f32 sample_2D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, v2f32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_2d_v4f32_f32(uint32_t, float, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.2d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_2d_v4f32_f32(0xf, coord.x, coord.y, *image_typed, *sampler_typed, false, 0, 0);
     }
 #define tex_2d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
@@ -1110,7 +1202,7 @@ extern "C"
         auto result = sample_2D(i, s, v2f32{float(coord.x), float(coord.y)});                                                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v2##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v2##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_2d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1120,21 +1212,21 @@ extern "C"
     tex_2d(f32, s32);
     tex_2d(s32, f32);
 
-    static v4f32 sample_3D(CONSTANT_SPACE void *image, CONSTANT_SPACE void *sampler, v4f32 coord) __device__
+    static v4f32 sample_3D(GLOBAL_SPACE void *image, GLOBAL_SPACE void *sampler, v4f32 coord) __device__
     {
         __device__ v4f32 __llvm_amdgcn_image_sample_lz_3d_v4f32_f32(uint32_t, float, float, float, v8s32, v4s32, bool, int, int) __asm("llvm.amdgcn.image.sample.lz.3d.v4f32.f32");
-        CONSTANT_SPACE v8s32 *image_typed = (CONSTANT_SPACE v8s32 *)image;
-        CONSTANT_SPACE v4s32 *sampler_typed = (CONSTANT_SPACE v4s32 *)sampler;
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        GLOBAL_SPACE v4s32 *sampler_typed = (GLOBAL_SPACE v4s32 *)sampler;
         return __llvm_amdgcn_image_sample_lz_3d_v4f32_f32(0xf, coord.x, coord.y, coord.z, *image_typed, *sampler_typed, false, 0, 0);
     }
 #define tex_3d(RETURN_TYPE, COORD_TYPE)                                                                                                                                                 \
     v4##RETURN_TYPE FUNC(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t texobj, v4##COORD_TYPE coord)                                                                              \
     {                                                                                                                                                                                   \
         auto [i, s] = get_image_and_sampler(texobj);                                                                                                                                    \
-        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                              \
+        auto result = sample_3D(i, s, v4f32{float(coord.x), float(coord.y), float(coord.z), float(coord.w)});                                                                           \
         return v4##RETURN_TYPE{std::bit_cast<RETURN_TYPE>(result.x), std::bit_cast<RETURN_TYPE>(result.y), std::bit_cast<RETURN_TYPE>(result.z), std::bit_cast<RETURN_TYPE>(result.w)}; \
     }                                                                                                                                                                                   \
-    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference CONSTANT_SPACE * texref, v4##COORD_TYPE coord)                                              \
+    v4##RETURN_TYPE FUNC(texref_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(struct textureReference GLOBAL_SPACE * texref, v4##COORD_TYPE coord)                                                \
     {                                                                                                                                                                                   \
         return FUNC_CALL(texobj_3d_v4_##RETURN_TYPE##_##COORD_TYPE)(uint64_t(texref->textureObject), coord);                                                                            \
     }
@@ -1143,4 +1235,16 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+
+    __device__ half __ocml_tanh_f16(half);
+    half FUNC(tanh_f16)(half a)
+    {
+        return __ocml_tanh_f16(a);
+    }
+
+    __device__ float __ocml_tanh_f32(float);
+    float FUNC(tanh_f32)(float a)
+    {
+        return __ocml_tanh_f32(a);
+    }
 }
