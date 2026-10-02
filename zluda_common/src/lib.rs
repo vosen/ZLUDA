@@ -270,8 +270,7 @@ from_cuda_nop!(
     CUfunc_cache,
     CUctxCreateParams,
     cufftHandle,
-    cuda_types::cufft::libraryPropertyType,
-    cudnn9::libraryPropertyType
+    cuda_types::cuda::libraryPropertyType
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
