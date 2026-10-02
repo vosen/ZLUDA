@@ -1364,12 +1364,12 @@ pub(crate) unsafe fn set_dropout_descriptor(
 }
 
 pub(crate) unsafe fn restore_dropout_descriptor(
-        dropout_desc: miopenDropoutDescriptor_t,
-        handle: &Context,
-        dropout: f32,
-        states: *mut ::core::ffi::c_void,
-        state_size_in_bytes: usize,
-        seed: ::core::ffi::c_ulonglong,
+    dropout_desc: miopenDropoutDescriptor_t,
+    handle: &Context,
+    dropout: f32,
+    states: *mut ::core::ffi::c_void,
+    state_size_in_bytes: usize,
+    seed: ::core::ffi::c_ulonglong,
 ) -> miopenStatus_t {
     miopen()?.miopenRestoreDropoutDescriptor(
         dropout_desc,
