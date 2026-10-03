@@ -19,6 +19,7 @@ mod insert_explicit_load_store;
 mod insert_implicit_conversions;
 mod insert_post_saturation;
 mod instruction_mode_to_global_mode;
+mod kernel_dependencies;
 pub mod llvm;
 mod normalize_basic_blocks;
 mod normalize_identifiers;
@@ -59,6 +60,41 @@ quick_error! {
 pub struct Attributes {
     /// Clock frequency in kHz.
     pub clock_rate: u32,
+}
+
+fn emit_compilation_plan<'input>(
+    context: &llvm_zluda::utils::Context,
+    id_defs: &GlobalStringIdentResolver2<'input>,
+    plan: kernel_dependencies::KernelCompilationPlan,
+    fp_mode: llvm::emit::FloatingPointMode,
+) -> Result<llvm_zluda::utils::Module, TranslateError> {
+    let kernel_dependencies::KernelCompilationPlan { common, kernels } = plan;
+    let llvm_ir = llvm::emit::run(context, id_defs, common, fp_mode)?;
+
+    for kernel_dependencies::KernelModulePlan {
+        kernel,
+        global_declarations,
+        declarations,
+    } in kernels
+    {
+        let mut directives = Vec::with_capacity(global_declarations.len() + declarations.len() + 1);
+
+        directives.extend(
+            global_declarations
+                .into_iter()
+                .map(|(linking, variable)| Directive2::Variable(linking, variable)),
+        );
+        directives.extend(declarations.into_iter().map(Directive2::Method));
+        directives.push(Directive2::Method(kernel));
+
+        let kernel_ir = llvm::emit::run(context, id_defs, directives, fp_mode)?;
+
+        llvm_ir
+            .link(kernel_ir)
+            .map_err(|error| TranslateError::Todo(error.to_string()))?;
+    }
+
+    Ok(llvm_ir)
 }
 
 pub fn to_llvm_module<'input>(
@@ -118,8 +154,11 @@ pub fn to_llvm_module<'input>(
     on_pass_end("hoist_globals");
     let fp_mode = get_fp_mode(&directives[..]);
     on_pass_end("get_fp_mode");
+
+    let compilation_plan = kernel_dependencies::build_compilation_plan(directives);
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode)?;
+    let llvm_ir =
+        emit_compilation_plan(&context, &flat_resolver, compilation_plan, fp_mode)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
