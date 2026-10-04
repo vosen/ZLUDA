@@ -15,6 +15,7 @@ windows = { version = "0.62.2", features = [
     "Win32_Security",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_LibraryLoader",
+    "Win32_UI_Controls_Dialogs",
 ] }
 windows-core = { version = "0.62.2" }
 zluda_windows = { path = "../zluda_windows" }
