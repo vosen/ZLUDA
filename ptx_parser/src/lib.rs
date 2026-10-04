@@ -975,7 +975,8 @@ fn method_parameter<'a, 'input: 'a>(
                 ident,
             ),
         )
-        .map(|(vector, type_, _, align, name)| ((align, vector, type_), name))
+        // The alignment after .ptr is that of the data pointed to, not of the parameter.
+        .map(|(vector, type_, _, _, name)| ((None, vector, type_), name))
         .parse_next(stream)
     }
     trace(
@@ -4572,6 +4573,17 @@ mod tests {
         };
         assert!(target.parse(stream).is_err());
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn ptr_param_alignment_is_the_pointees() {
+        let text = ".version 7.0\n.target sm_80\n.address_size 64\n.visible .entry k(.param .u8 a, .param .u64 .ptr .global .align 1 p)\n{\n\tret;\n}\n";
+        let module = super::parse_module_checked(text).unwrap();
+        let [super::ast::Directive::Method(_, method)] = &module.directives[..] else {
+            panic!()
+        };
+        let params = &method.func_directive.input_arguments;
+        assert_eq!((params[1].name, params[1].info.align), ("p", None));
     }
 
     #[test]
