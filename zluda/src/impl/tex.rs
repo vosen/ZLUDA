@@ -1941,12 +1941,9 @@ mod tests {
             fmt
         );
 
-        // A block covers a row with one access per thread, so only accesses
-        // that divide the row are usable. Widths and pixel sizes are powers
-        // of two, so this is every access no wider than the row
         let accesses = SurfAccess::ALL
             .into_iter()
-            .filter(|access| row_bytes % access.byte_size() == 0)
+            .filter(|access| access.byte_size() <= pixel_size)
             .collect::<Vec<_>>();
 
         let zeros = vec![0u8; total_bytes];
