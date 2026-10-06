@@ -200,6 +200,8 @@ cuda_macros::cuda_function_declarations!(
             cuStreamQuery,
             cuStreamSynchronize,
             cuStreamWaitEvent,
+            cuSurfObjectCreate,
+            cuSurfObjectDestroy,
             cuTexObjectCreate,
             cuTexObjectDestroy,
             cuTexRefSetAddress_v2,

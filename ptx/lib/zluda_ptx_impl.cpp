@@ -1043,7 +1043,7 @@ extern "C"
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
     // passes from optimizing away the intrinsic call
-    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]](uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
         __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k16.f32.bf16.bf16.f32");
         return std::bit_cast<float4::Native_vec_>(__llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(a_reg, b_reg, std::bit_cast<uint4::Native_vec_>(c_reg)));
@@ -1063,7 +1063,7 @@ extern "C"
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
     // passes from optimizing away the intrinsic call
-    static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
+    static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]](uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
         __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k32.s32.s8.s8.s32");
         return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(a_reg, b_reg, c_reg);
@@ -1235,6 +1235,23 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+
+    static v4s32 load_2d_v4i32(GLOBAL_SPACE void *image, v2s32 coord) __device__
+    {
+        __device__ v4f32 __llvm_amdgcn_image_load_2d_v4f32_i32(uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.2d.v4f32.i32");
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
+        return std::bit_cast<v4s32>(__llvm_amdgcn_image_load_2d_v4f32_i32(0x3, coord.x, coord.y, *image_typed, 0, 0));
+    }
+
+    v4s32 FUNC(suldobj_b_2d_v4_b32)(uint64_t surfobj, v2s32 coord)
+    {
+        return load_2d_v4i32((GLOBAL_SPACE void *)surfobj, coord);
+    }
+
+    v4s32 FUNC(suldref_b_2d_v4_b32)(GLOBAL_SPACE void *image, v2s32 coord)
+    {
+        return load_2d_v4i32(image, coord);
+    }
 
     __device__ half __ocml_tanh_f16(half);
     half FUNC(tanh_f16)(half a)

@@ -378,8 +378,8 @@ fn run_instruction<'input>(
                 t => t,
             };
             let prefix = match type_ {
-                ast::TexType::Texref => "texref",
-                ast::TexType::Texobj => "texobj",
+                ast::TexType::Ref => "texref",
+                ast::TexType::Obj => "texobj",
             };
             let name = format!(
                 "{prefix}_{dims}_v4_{dtype}_{coord}",
@@ -392,6 +392,36 @@ fn run_instruction<'input>(
                 coord = scalar_to_ptx_name(ctype)
             );
             to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        ptx_parser::Instruction::Suld { data, arguments } => {
+            let prefix = match data.type_ {
+                ast::TexType::Ref => "suldref",
+                ast::TexType::Obj => "suldobj",
+            };
+            let (vec, type_) = match data.dst_type {
+                ast::Type::Scalar(t) => (None, t),
+                ast::Type::Vector(x, t) => (Some(x), t),
+                _ => return Err(error_unreachable()),
+            };
+            let name = format!(
+                "{prefix}_b_{geom}_{vec}{dtype}",
+                geom = match data.dims {
+                    ast::TexDimensions::D1 => "1d",
+                    ast::TexDimensions::D2 => "2d",
+                    ast::TexDimensions::D3 => "3d",
+                },
+                dtype = scalar_to_ptx_name(type_),
+                vec = match vec {
+                    Some(x) => format!("v{x}_"),
+                    None => "".to_string(),
+                }
+            );
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ptx_parser::Instruction::Suld { data, arguments },
+            )?
         }
         i @ ptx_parser::Instruction::Sqrt {
             data:

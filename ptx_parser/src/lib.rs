@@ -1012,6 +1012,7 @@ fn method_parameter<'a, 'input: 'a>(
 
 enum ParsedType {
     Texref,
+    Surfref,
     Type {
         align: Option<u32>,
         vector: Option<NonZeroU8>,
@@ -1019,10 +1020,13 @@ enum ParsedType {
     },
 }
 
-fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
+fn texref_or_surfref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
     trace(
-        "texref",
-        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+        "texref_or_surfref",
+        alt((
+            Token::DotTexref.map(|_| ParsedType::Texref),
+            Token::DotSurfref.map(|_| ParsedType::Surfref),
+        )),
     )
     .parse_next(stream)
 }
@@ -1052,7 +1056,7 @@ fn variable_info<'a, 'input: 'a>(
         "variable_info",
         move |stream: &mut PtxParser<'a, 'input>| {
             alt((
-                parse_if(state_space == StateSpace::Global, texref),
+                parse_if(state_space == StateSpace::Global, texref_or_surfref),
                 variable_info_non_texref.map(|(align, vector, scalar)| ParsedType::Type {
                     align,
                     vector,
@@ -1102,6 +1106,20 @@ fn multi_variable<'a, 'input: 'a>(
                         info: VariableInfo {
                             align: None,
                             v_type: Type::Texref,
+                            state_space,
+                            array_init: Vec::new(),
+                        },
+                        names,
+                    });
+                }
+                ParsedType::Surfref => {
+                    if count.is_some() {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    }
+                    return Ok(MultiVariable::Names {
+                        info: VariableInfo {
+                            align: None,
+                            v_type: Type::Surfref,
                             state_space,
                             array_init: Vec::new(),
                         },
@@ -4412,7 +4430,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D1,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4423,7 +4441,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D2,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4434,7 +4452,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D3,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4442,6 +4460,48 @@ derive_parser!(
 
     .dtype: ScalarType = { .u32, .s32, .f32 };
     .ctype: ScalarType = { .s32, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#surface-instructions-suld
+    suld.b.1d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D1,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    suld.b.2d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D2,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    suld.b.3d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D3,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    // .cop   = { .ca, .cg, .cs, .cv };
+    .vec: VectorPrefix = { .v2, .v4 };
+    .dtype: ScalarType = { .b8 , .b16, .b32, .b64 };
+    .clamp: ClampMode = { .trap, .clamp, .zero };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/
     match.any.sync.type  d, a, membermask => {

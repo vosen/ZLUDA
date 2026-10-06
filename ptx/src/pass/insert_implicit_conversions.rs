@@ -79,7 +79,7 @@ fn insert_implicit_conversions_impl<'input>(
                 ast::StateSpace::Reg
             )
         ) {
-            data.type_ = ast::TexType::Texobj;
+            data.type_ = ast::TexType::Obj;
         }
     }
     let statement = stmt.visit_map::<SpirvWord, TranslateError>(

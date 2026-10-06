@@ -464,7 +464,9 @@ fn get_input_argument_type(
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
         ast::StateSpace::Reg => get_type(context, v_type),
-        ast::StateSpace::Global | ast::StateSpace::Const if matches!(v_type, ast::Type::Texref) => {
+        ast::StateSpace::Global | ast::StateSpace::Const
+            if matches!(v_type, ast::Type::Texref | ast::Type::Surfref) =>
+        {
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
         _ => return Err(error_unreachable()),
@@ -703,7 +705,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Mma { .. }
             | ast::Instruction::Dp2a { .. }
             | ast::Instruction::Tanh { .. }
-            | ast::Instruction::Tex { .. } => return Err(error_unreachable()),
+            | ast::Instruction::Tex { .. }
+            | ast::Instruction::Suld { .. } => return Err(error_unreachable()),
         }
     }
 
@@ -3899,6 +3902,7 @@ fn get_type(context: LLVMContextRef, type_: &ast::Type) -> Result<LLVMTypeRef, T
             };
             texture
         }
+        ast::Type::Surfref => get_scalar_type(context, ast::ScalarType::B64),
     })
 }
 
