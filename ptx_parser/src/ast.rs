@@ -1071,25 +1071,21 @@ where
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
                 index,
             ),
-            ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
-                vec.into_iter()
-                    .map(|reg_or_immediate| {
-                        reg_or_immediate
-                            .map(|reg_or_immediate| {
-                                Ok(match reg_or_immediate {
-                                    RegOrImmediate::Reg(ident) => RegOrImmediate::Reg((self)(
-                                        ident,
-                                        type_space,
-                                        is_dst,
-                                        relaxed_type_check,
-                                    )?),
-                                    RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
-                                })
+            ParsedOperand::VecPack(vec) => {
+                ParsedOperand::VecPack(
+                    vec.into_iter()
+                        .map(|element| {
+                            Ok(match element {
+                                Some(RegOrImmediate::Reg(ident)) => Some(RegOrImmediate::Reg(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                )),
+                                Some(RegOrImmediate::Imm(imm)) => Some(RegOrImmediate::Imm(imm)),
+                                None => None,
                             })
-                            .transpose()
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
         })
     }
 
