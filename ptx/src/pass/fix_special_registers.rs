@@ -199,11 +199,15 @@ pub fn map_operand<T: Copy, Err>(
         ast::ParsedOperand::VecPack(elements) => ast::ParsedOperand::VecPack(
             elements
                 .into_iter()
-                .map(|element| match element {
-                    ast::RegOrImmediate::Reg(ident) => {
-                        Ok(ast::RegOrImmediate::Reg(fn_(ident, None)?.unwrap_or(ident)))
-                    }
-                    ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(imm)),
+                .map(|element| {
+                    element
+                        .map(|element| match element {
+                            ast::RegOrImmediate::Reg(ident) => {
+                                Ok(ast::RegOrImmediate::Reg(fn_(ident, None)?.unwrap_or(ident)))
+                            }
+                            ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(imm)),
+                        })
+                        .transpose()
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         ),

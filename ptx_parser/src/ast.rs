@@ -1071,36 +1071,25 @@ where
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
                 index,
             ),
-            ParsedOperand::VecPack(vec) => {
-                // Elements have the vector's scalar type or, when a .b type is split (mov), an
-                // equal share of its bits
-                let element_type = type_space.and_then(|(type_, space)| {
-                    let scalar = match type_ {
-                        Type::Vector(_, scalar) => *scalar,
-                        Type::Scalar(scalar) if scalar.kind() == ScalarKind::Bit => {
-                            ScalarType::from_size(scalar.size_of() / vec.len() as u8)?
-                        }
-                        _ => return None,
-                    };
-                    Some((Type::Scalar(scalar), space))
-                });
-                let type_space = element_type.as_ref().map(|(t, s)| (t, *s)).or(type_space);
-                ParsedOperand::VecPack(
-                    vec.into_iter()
-                        .map(|reg_or_immediate| {
-                            Ok(match reg_or_immediate {
-                                RegOrImmediate::Reg(ident) => RegOrImmediate::Reg((self)(
-                                    ident,
-                                    type_space,
-                                    is_dst,
-                                    relaxed_type_check,
-                                )?),
-                                RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
+            ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
+                vec.into_iter()
+                    .map(|reg_or_immediate| {
+                        reg_or_immediate
+                            .map(|reg_or_immediate| {
+                                Ok(match reg_or_immediate {
+                                    RegOrImmediate::Reg(ident) => RegOrImmediate::Reg((self)(
+                                        ident,
+                                        type_space,
+                                        is_dst,
+                                        relaxed_type_check,
+                                    )?),
+                                    RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
+                                })
                             })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            }
+                            .transpose()
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
         })
     }
 
@@ -1576,7 +1565,8 @@ pub enum ParsedOperand<Ident> {
     RegOffset(Ident, i32),
     Imm(ImmediateValue),
     VecMember(Ident, u8),
-    VecPack(Vec<RegOrImmediate<Ident>>),
+    // None denotes a sink; retain its position in the vector.
+    VecPack(Vec<Option<RegOrImmediate<Ident>>>),
 }
 
 impl<Ident> ParsedOperand<Ident> {
@@ -1613,7 +1603,10 @@ where
                     if idx != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    match item {
+                        Some(item) => write!(f, "{}", item)?,
+                        None => f.write_char('_')?,
+                    }
                 }
                 f.write_char('}')?
             }

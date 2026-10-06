@@ -569,12 +569,16 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     let unpacked = unpacked
                         .into_iter()
                         .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                true,
-                                relaxed_type_check,
-                            )
+                            ident
+                                .map(|ident| {
+                                    visitor.visit_ident(
+                                        ident,
+                                        Some((&typ.into(), ast::StateSpace::Reg)),
+                                        true,
+                                        relaxed_type_check,
+                                    )
+                                })
+                                .transpose()
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     let packed = visitor.visit_ident(
@@ -600,12 +604,16 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     let unpacked = unpacked
                         .into_iter()
                         .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                false,
-                                relaxed_type_check,
-                            )
+                            ident
+                                .map(|ident| {
+                                    visitor.visit_ident(
+                                        ident,
+                                        Some((&typ.into(), ast::StateSpace::Reg)),
+                                        false,
+                                        relaxed_type_check,
+                                    )
+                                })
+                                .transpose()
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     (packed, unpacked)
@@ -730,7 +738,8 @@ struct RepackVectorDetails {
     is_extract: bool,
     typ: ast::ScalarType,
     packed: SpirvWord,
-    unpacked: Vec<SpirvWord>,
+    // None discards an extracted lane without allocating a destination register.
+    unpacked: Vec<Option<SpirvWord>>,
     relaxed_type_check: bool,
 }
 
