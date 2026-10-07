@@ -399,22 +399,18 @@ fn run_instruction<'input>(
                 ast::TexType::Obj => "suldobj",
             };
             let (vec, type_) = match data.dst_type {
-                ast::Type::Scalar(t) => (None, t),
-                ast::Type::Vector(x, t) => (Some(x), t),
+                ast::Type::Scalar(t) => (1, t),
+                ast::Type::Vector(x, t) => (x, t),
                 _ => return Err(error_unreachable()),
             };
             let name = format!(
-                "{prefix}_b_{geom}_{vec}{dtype}",
+                "{prefix}_b_{geom}_v{vec}_{dtype}",
                 geom = match data.dims {
                     ast::TexDimensions::D1 => "1d",
                     ast::TexDimensions::D2 => "2d",
                     ast::TexDimensions::D3 => "3d",
                 },
-                dtype = scalar_to_ptx_name(type_),
-                vec = match vec {
-                    Some(x) => format!("v{x}_"),
-                    None => "".to_string(),
-                }
+                dtype = scalar_to_ptx_name(type_)
             );
             to_call(
                 resolver,

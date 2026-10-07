@@ -1235,23 +1235,160 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+}
 
-    static v4s32 load_2d_v4i32(GLOBAL_SPACE void *image, v2s32 coord) __device__
-    {
-        __device__ v4f32 __llvm_amdgcn_image_load_2d_v4f32_i32(uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.2d.v4f32.i32");
-        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;
-        return std::bit_cast<v4s32>(__llvm_amdgcn_image_load_2d_v4f32_i32(0x3, coord.x, coord.y, *image_typed, 0, 0));
+template <typename T1, typename T2>
+concept same_length = (sizeof(T1) == sizeof(T2));
+
+template <typename T>
+concept is_compiler_vector = requires {
+    typename std::integral_constant<size_t, __builtin_vectorelements(T)>;
+};
+
+template <typename T, typename U>
+concept vector_length_2 = is_compiler_vector<T> && is_compiler_vector<U> &&
+                          (__builtin_vectorelements(T) == 2 && __builtin_vectorelements(U) == 2);
+
+template <typename T, typename U>
+concept vector_length_4 = is_compiler_vector<T> && is_compiler_vector<U> &&
+                          (__builtin_vectorelements(T) == 4 && __builtin_vectorelements(U) == 4);
+
+template <typename To, typename From>
+[[nodiscard]] constexpr To bit_truncate(const From &from) noexcept
+{
+    // 1. Enforce safety checks identical to std::bit_cast
+    static_assert(sizeof(To) <= sizeof(From),
+                  "bit_truncate destination type must be smaller than or equal to the source type.");
+    static_assert(std::is_trivially_copyable_v<From>,
+                  "bit_truncate source type must be trivially copyable.");
+    static_assert(std::is_trivially_copyable_v<To>,
+                  "bit_truncate destination type must be trivially copyable.");
+    std::remove_cv_t<To> to{};
+    memcpy(&to, &from, sizeof(To));
+    return to;
+}
+
+template <typename Dst, typename Src>
+static Dst convert_pixels(Src p) __device__
+{
+    return bit_truncate<Dst>(p);
+}
+
+template <typename Dst, typename Src>
+    requires vector_length_2<Dst, Src>
+static Dst convert_pixels(Src p) __device__
+{
+    using ScalarType = std::remove_cvref_t<decltype((*(Dst *)nullptr)[0])>;
+    return Dst{bit_truncate<ScalarType>(p.x), bit_truncate<ScalarType>(p.y)};
+}
+
+template <typename Dst, typename Src>
+    requires vector_length_4<Dst, Src>
+static Dst convert_pixels(Src p) __device__
+{
+    using ScalarType = std::remove_cvref_t<decltype((*(Dst *)nullptr)[0])>;
+    return Dst{bit_truncate<ScalarType>(p.x), bit_truncate<ScalarType>(p.y), bit_truncate<ScalarType>(p.z), bit_truncate<ScalarType>(p.w)};
+}
+
+extern "C"
+{
+#define SULD_ARGS_1d int32_t
+#define SULD_ARGS_2d int32_t, int32_t
+#define SULD_ARGS_3d int32_t, int32_t, int32_t
+
+#define SULD_COORD_1d int32_t
+#define SULD_COORD_2d v2s32
+#define SULD_COORD_3d v4s32
+
+#define SULD_PIXEL_v1 f32
+#define SULD_PIXEL_v2 v2f32
+#define SULD_PIXEL_v4 v4f32
+
+#define SULD_DMASK_v1 0x1
+#define SULD_DMASK_v2 0x3
+#define SULD_DMASK_v4 0xf
+
+#define SULD_UNPACK_ARGS_1d coord
+#define SULD_UNPACK_ARGS_2d coord.x, coord.y
+#define SULD_UNPACK_ARGS_3d coord.x, coord.y, coord.z
+
+#define STRINGIFY2(X) #X
+#define STRINGIFY(X) STRINGIFY2(X)
+
+    using b8 = uint8_t;
+    using v1_b8 = uint8_t;
+    typedef uint8_t v2_b8 __attribute__((ext_vector_type(2)));
+    typedef uint8_t v4_b8 __attribute__((ext_vector_type(4)));
+
+    using b16 = uint16_t;
+    using v1_b16 = uint16_t;
+    typedef uint16_t v2_b16 __attribute__((ext_vector_type(2)));
+    typedef uint16_t v4_b16 __attribute__((ext_vector_type(4)));
+
+    using b32 = uint32_t;
+    using v1_b32 = uint32_t;
+    typedef uint32_t v2_b32 __attribute__((ext_vector_type(2)));
+    typedef uint32_t v4_b32 __attribute__((ext_vector_type(4)));
+
+    using b64 = uint64_t;
+    using v1_b64 = uint64_t;
+    typedef uint64_t v2_b64 __attribute__((ext_vector_type(2)));
+    typedef uint64_t v4_b64 __attribute__((ext_vector_type(4)));
+
+#define suld(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                                                                                                                                            \
+    static RETURN_VEC##_##RETURN_TYPE suld_impl_##COORD##_##RETURN_VEC##_##RETURN_TYPE(GLOBAL_SPACE void *image, SULD_COORD_##COORD coord) __device__                                                                                                                   \
+    {                                                                                                                                                                                                                                                                   \
+        __device__ SULD_PIXEL_##RETURN_VEC __llvm_amdgcn_image_load_##RETURN_VEC##_##RETURN_TYPE##_##COORD##_i32(uint32_t, SULD_ARGS_##COORD, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load." STRINGIFY(COORD) "." STRINGIFY(SULD_PIXEL_##RETURN_VEC) ".i32"); \
+        GLOBAL_SPACE v8s32 *image_typed = (GLOBAL_SPACE v8s32 *)image;                                                                                                                                                                                                  \
+        return convert_pixels<RETURN_VEC##_##RETURN_TYPE>(__llvm_amdgcn_image_load_##RETURN_VEC##_##RETURN_TYPE##_##COORD##_i32(SULD_DMASK_##RETURN_VEC, SULD_UNPACK_ARGS_##COORD, *image_typed, 0, 0));                                                                \
+    }                                                                                                                                                                                                                                                                   \
+                                                                                                                                                                                                                                                                        \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord)                                                                                                                                       \
+    {                                                                                                                                                                                                                                                                   \
+        return suld_impl_##COORD##_##RETURN_VEC##_##RETURN_TYPE((GLOBAL_SPACE void *)surfobj, coord);                                                                                                                                                                   \
+    }                                                                                                                                                                                                                                                                   \
+                                                                                                                                                                                                                                                                        \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(GLOBAL_SPACE void *image, SULD_COORD_##COORD coord)                                                                                                                               \
+    {                                                                                                                                                                                                                                                                   \
+        return suld_impl_##COORD##_##RETURN_VEC##_##RETURN_TYPE(image, coord);                                                                                                                                                                                          \
     }
 
-    v4s32 FUNC(suldobj_b_2d_v4_b32)(uint64_t surfobj, v2s32 coord)
-    {
-        return load_2d_v4i32((GLOBAL_SPACE void *)surfobj, coord);
-    }
-
-    v4s32 FUNC(suldref_b_2d_v4_b32)(GLOBAL_SPACE void *image, v2s32 coord)
-    {
-        return load_2d_v4i32(image, coord);
-    }
+    suld(v1, b8, 1d);
+    suld(v1, b8, 2d);
+    suld(v1, b8, 3d);
+    suld(v2, b8, 1d);
+    suld(v2, b8, 2d);
+    suld(v2, b8, 3d);
+    suld(v4, b8, 1d);
+    suld(v4, b8, 2d);
+    suld(v4, b8, 3d);
+    suld(v1, b16, 1d);
+    suld(v1, b16, 2d);
+    suld(v1, b16, 3d);
+    suld(v2, b16, 1d);
+    suld(v2, b16, 2d);
+    suld(v2, b16, 3d);
+    suld(v4, b16, 1d);
+    suld(v4, b16, 2d);
+    suld(v4, b16, 3d);
+    suld(v1, b32, 1d);
+    suld(v1, b32, 2d);
+    suld(v1, b32, 3d);
+    suld(v2, b32, 1d);
+    suld(v2, b32, 2d);
+    suld(v2, b32, 3d);
+    suld(v4, b32, 1d);
+    suld(v4, b32, 2d);
+    suld(v4, b32, 3d);
+    // suld(b64, 1d);
+    // suld(b64, 2d);
+    // suld(b64, 3d);
+    // suld(v2_b64, 1d);
+    // suld(v2_b64, 2d);
+    // suld(v2_b64, 3d);
+    // suld(v4_b64, 1d);
+    // suld(v4_b64, 2d);
+    // suld(v4_b64, 3d);
 
     __device__ half __ocml_tanh_f16(half);
     half FUNC(tanh_f16)(half a)
