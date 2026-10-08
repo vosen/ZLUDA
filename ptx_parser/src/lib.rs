@@ -1517,10 +1517,14 @@ impl<Ident> ast::ParsedOperand<Ident> {
         }
         fn vector_operand<'a, 'input>(
             stream: &mut PtxParser<'a, 'input>,
-        ) -> PResult<Vec<ast::RegOrImmediate<&'input str>>> {
+        ) -> PResult<Vec<Option<ast::RegOrImmediate<&'input str>>>> {
             delimited(
                 Token::LBrace,
-                separated(1..=8, reg_or_immediate, Token::Comma),
+                separated(
+                    1..=8,
+                    alt((Token::Sink.value(None), reg_or_immediate.map(Some))),
+                    Token::Comma,
+                ),
                 Token::RBrace,
             )
             .parse_next(stream)
@@ -1944,6 +1948,8 @@ derive_parser!(
         At,
         #[regex(r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+", |lex| lex.slice(), priority = 0)]
         Ident(&'input str),
+        #[token("_")]
+        Sink,
         #[regex(r"\.[a-zA-Z][a-zA-Z0-9_$]*|\.[_$%][a-zA-Z0-9_$]+", |lex| lex.slice(), priority = 0)]
         DotIdent(&'input str),
         #[regex(r#""[^"]*""#)]
@@ -4477,6 +4483,51 @@ mod tests {
     use logos::Logos;
     use logos::Span;
     use winnow::prelude::*;
+
+    #[test]
+    fn sink_is_not_an_identifier() {
+        let tokens = Token::lexer("_ _reg __ %r1")
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Sink,
+                Token::Ident("_reg"),
+                Token::Ident("__"),
+                Token::Ident("%r1")
+            ]
+        );
+    }
+
+    #[test]
+    fn vector_operand_preserves_sink_positions() {
+        let text = "{_, %r1, _, 7}";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let operand = crate::ParsedOperand::<&str>::parse.parse(stream).unwrap();
+        let crate::ParsedOperand::VecPack(ref elements) = operand else {
+            panic!("expected a vector operand");
+        };
+        assert_eq!(
+            elements,
+            &vec![
+                None,
+                Some(crate::RegOrImmediate::Reg("%r1")),
+                None,
+                Some(crate::RegOrImmediate::Imm(crate::ImmediateValue::S64(7))),
+            ]
+        );
+        assert_eq!(operand.to_string(), text);
+        assert!(errors.is_empty());
+    }
 
     #[test]
     fn first_optional_present() {

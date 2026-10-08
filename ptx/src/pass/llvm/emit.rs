@@ -1624,6 +1624,7 @@ impl<'a> MethodEmitContext<'a> {
         if repack.is_extract {
             let src = self.resolver.value(repack.packed)?;
             for (index, dst) in repack.unpacked.iter().enumerate() {
+                let Some(dst) = dst else { continue };
                 let index: *mut LLVMValue = unsafe { LLVMConstInt(i8_type, index as _, 0) };
                 self.resolver.with_result(*dst, |dst| unsafe {
                     LLVMBuildExtractElement(self.builder, src, index, dst)
@@ -1641,7 +1642,9 @@ impl<'a> MethodEmitContext<'a> {
                 } else {
                     None
                 };
-                let scalar_src = self.resolver.value(*src_id)?;
+                let scalar_src = self
+                    .resolver
+                    .value(src_id.ok_or_else(error_mismatched_type)?)?;
                 let index = unsafe { LLVMConstInt(i8_type, index as _, 0) };
                 temp_vec = self.resolver.with_result_option(dst, |dst| unsafe {
                     LLVMBuildInsertElement(self.builder, temp_vec, scalar_src, index, dst)

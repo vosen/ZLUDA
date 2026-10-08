@@ -562,21 +562,18 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 is_extract,
                 typ,
                 packed,
-                unpacked,
+                mut unpacked,
                 relaxed_type_check,
             }) => {
                 let (packed, unpacked) = if is_extract {
-                    let unpacked = unpacked
-                        .into_iter()
-                        .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                true,
-                                relaxed_type_check,
-                            )
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    for ident in unpacked.iter_mut().flatten() {
+                        *ident = visitor.visit_ident(
+                            *ident,
+                            Some((&typ.into(), ast::StateSpace::Reg)),
+                            true,
+                            relaxed_type_check,
+                        )?;
+                    }
                     let packed = visitor.visit_ident(
                         packed,
                         Some((
@@ -597,17 +594,14 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                         true,
                         false,
                     )?;
-                    let unpacked = unpacked
-                        .into_iter()
-                        .map(|ident| {
-                            visitor.visit_ident(
-                                ident,
-                                Some((&typ.into(), ast::StateSpace::Reg)),
-                                false,
-                                relaxed_type_check,
-                            )
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    for ident in unpacked.iter_mut().flatten() {
+                        *ident = visitor.visit_ident(
+                            *ident,
+                            Some((&typ.into(), ast::StateSpace::Reg)),
+                            false,
+                            relaxed_type_check,
+                        )?;
+                    }
                     (packed, unpacked)
                 };
                 Statement::RepackVector(RepackVectorDetails {
@@ -730,7 +724,8 @@ struct RepackVectorDetails {
     is_extract: bool,
     typ: ast::ScalarType,
     packed: SpirvWord,
-    unpacked: Vec<SpirvWord>,
+    // None discards an extracted lane without allocating a destination register.
+    unpacked: Vec<Option<SpirvWord>>,
     relaxed_type_check: bool,
 }
 
