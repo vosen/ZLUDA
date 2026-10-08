@@ -64,23 +64,22 @@ fn insert_implicit_conversions_impl<'input>(
     mut stmt: ExpandedStatement,
 ) -> Result<(), TranslateError> {
     let mut post_conv = Vec::new();
-    if let ExpandedStatement::Instruction(ast::Instruction::Tex {
-        ref mut data,
-        ref arguments,
-    }) = stmt
-    {
-        let (type_, space) = resolver.get_typed(arguments.src_ptr)?;
-        if matches!(
-            (type_, space),
-            (
-                ast::Type::Scalar(
-                    ast::ScalarType::B64 | ast::ScalarType::U64 | ast::ScalarType::S64
-                ),
-                ast::StateSpace::Reg
-            )
-        ) {
-            data.type_ = ast::TexType::Obj;
+    if let ExpandedStatement::Instruction(
+        ast::Instruction::Tex {
+            data: ast::TexData { ref mut type_, .. },
+            arguments: ast::TexArgs { src_ptr, .. },
         }
+        | ast::Instruction::Suld {
+            data: ast::SuldData { ref mut type_, .. },
+            arguments: ast::SuldArgs { src_ptr, .. },
+        }
+        | ast::Instruction::Sust {
+            data: ast::SuldData { ref mut type_, .. },
+            arguments: ast::SustArgs { src_ptr, .. },
+        },
+    ) = stmt
+    {
+        convert_to_texobj(resolver, type_, src_ptr)?;
     }
     let statement = stmt.visit_map::<SpirvWord, TranslateError>(
         &mut |operand,
@@ -139,6 +138,27 @@ fn insert_implicit_conversions_impl<'input>(
     func.push(statement);
     func.append(&mut post_conv);
     Ok(())
+}
+
+fn convert_to_texobj(
+    resolver: &mut GlobalStringIdentResolver2<'_>,
+    tex_type_: &mut ptx_parser::TexType,
+    arg: SpirvWord,
+) -> Result<(), TranslateError> {
+    let (type_, space) = resolver.get_typed(arg)?;
+    Ok(
+        if matches!(
+            (type_, space),
+            (
+                ast::Type::Scalar(
+                    ast::ScalarType::B64 | ast::ScalarType::U64 | ast::ScalarType::S64
+                ),
+                ast::StateSpace::Reg
+            )
+        ) {
+            *tex_type_ = ast::TexType::Obj;
+        },
+    )
 }
 
 fn valid_vector_scalar_bitcast(operand_type: &ast::Type, instruction_type: &ast::Type) -> bool {

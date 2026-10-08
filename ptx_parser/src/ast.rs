@@ -952,9 +952,9 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: {
                     repr: T,
                     type: { &data.dst_type },
-
+                    relaxed_type_check: true,
                 },
-                src_ptr:  {
+                src_ptr: {
                     repr: T,
                     type: {
                         if data.type_ == TexType::Ref {
@@ -970,12 +970,43 @@ ptx_parser_macros::generate_instruction_type!(
                             StateSpace::Reg
                         }
                     },
-
+                },
+                src_coord:  {
+                    repr: T,
+                    type: { data.coord_type() },
+                },
+            }
+        },
+        Sust {
+            type: !,
+            data: SuldData,
+            arguments<T>: {
+                src_ptr: {
+                    repr: T,
+                    type: {
+                        if data.type_ == TexType::Ref {
+                            Type::Surfref
+                        } else {
+                            Type::Scalar(ScalarType::U64)
+                        }
+                    },
+                    space: {
+                        if data.type_ == TexType::Ref {
+                            StateSpace::Global
+                        } else {
+                            StateSpace::Reg
+                        }
+                    },
                 },
                 src_coord:  {
                     repr: T,
                     type: { data.coord_type() },
 
+                },
+                src_data:  {
+                    repr: T,
+                    type: { &data.dst_type },
+                    relaxed_type_check: true,
                 },
             }
         },

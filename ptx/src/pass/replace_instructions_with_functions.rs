@@ -419,6 +419,32 @@ fn run_instruction<'input>(
                 ptx_parser::Instruction::Suld { data, arguments },
             )?
         }
+        ptx_parser::Instruction::Sust { data, arguments } => {
+            let prefix = match data.type_ {
+                ast::TexType::Ref => "sustref",
+                ast::TexType::Obj => "sustobj",
+            };
+            let (vec, type_) = match data.dst_type {
+                ast::Type::Scalar(t) => (1, t),
+                ast::Type::Vector(x, t) => (x, t),
+                _ => return Err(error_unreachable()),
+            };
+            let name = format!(
+                "{prefix}_b_{geom}_v{vec}_{ctype}",
+                geom = match data.dims {
+                    ast::TexDimensions::D1 => "1d",
+                    ast::TexDimensions::D2 => "2d",
+                    ast::TexDimensions::D3 => "3d",
+                },
+                ctype = scalar_to_ptx_name(type_)
+            );
+            to_call(
+                resolver,
+                fn_declarations,
+                name.into(),
+                ptx_parser::Instruction::Sust { data, arguments },
+            )?
+        }
         i @ ptx_parser::Instruction::Sqrt {
             data:
                 ast::RcpData {

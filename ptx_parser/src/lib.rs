@@ -4503,6 +4503,48 @@ derive_parser!(
     .dtype: ScalarType = { .b8 , .b16, .b32, .b64 };
     .clamp: ClampMode = { .trap, .clamp, .zero };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#surface-instructions-sust
+
+    sust.b.1d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D1,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    sust.b.2d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D2,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    sust.b.3d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D3,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    .vec: VectorPrefix   = { .v2, .v4 };
+    .ctype: ScalarType = { .b8 , .b16, .b32, .b64 };
+    .clamp: ClampMode = { .trap, .clamp, .zero };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/
     match.any.sync.type  d, a, membermask => {
         Instruction::MatchSync {
