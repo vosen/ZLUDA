@@ -323,8 +323,7 @@ from_cuda_transmute!(
     CUarray_format => hipArray_Format,
     CUaddress_mode => hipTextureAddressMode,
     CUfilter_mode => hipTextureFilterMode,
-    cufftType_t => hipfft_sys::hipfftType,
-    CUsurfObject => hipSurfaceObject_t
+    cufftType_t => hipfft_sys::hipfftType
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY3D, E> for HIP_MEMCPY3D {

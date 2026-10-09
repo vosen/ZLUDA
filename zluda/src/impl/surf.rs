@@ -1,3 +1,4 @@
+use cuda_types::cuda::CUsurfObject;
 use hip_runtime_sys::*;
 
 fn convert_resource_desc(desc: &HIP_RESOURCE_DESC) -> Result<hipResourceDesc, hipErrorCode_t> {
@@ -130,14 +131,90 @@ fn channel_bits(format: hipArray_Format) -> Result<i32, hipErrorCode_t> {
     })
 }
 
-pub(crate) unsafe fn object_create(
-    p_tex_object: *mut hipSurfaceObject_t,
-    p_res_desc: &HIP_RESOURCE_DESC,
-) -> hipError_t {
-    let converted = convert_resource_desc(p_res_desc)?;
-    hipCreateSurfaceObject(p_tex_object, &converted)
+fn num_channels_for_array(array: hipArray_t) -> Result<(hipArray_Format, u32), hipErrorCode_t> {
+    unsafe {
+        let mut desc = std::mem::zeroed();
+        hipArrayGetDescriptor(&mut desc, array)?;
+        Ok((desc.Format, desc.NumChannels))
+    }
 }
 
-pub(crate) unsafe fn object_destroy(tex_object: hipSurfaceObject_t) -> hipError_t {
-    hipDestroySurfaceObject(tex_object)
+fn num_channels_for_mipmapped_array(
+    array: hipMipmappedArray_t,
+) -> Result<(hipArray_Format, u32), hipErrorCode_t> {
+    unsafe {
+        let mut level_array = std::ptr::null_mut();
+        hipGetMipmappedArrayLevel(&mut level_array, array, 0)?;
+        num_channels_for_array(level_array)
+    }
+}
+
+fn num_channels_for_resource_desc(
+    desc: &HIP_RESOURCE_DESC,
+) -> Result<(hipArray_Format, u32), hipErrorCode_t> {
+    match desc.resType {
+        hipResourcetype::HIP_RESOURCE_TYPE_ARRAY => unsafe {
+            num_channels_for_array(desc.res.array.hArray)
+        },
+        hipResourcetype::HIP_RESOURCE_TYPE_MIPMAPPED_ARRAY => unsafe {
+            num_channels_for_mipmapped_array(desc.res.mipmap.hMipmappedArray)
+        },
+        hipResourcetype::HIP_RESOURCE_TYPE_LINEAR => {
+            Ok(unsafe { (desc.res.linear.format, desc.res.linear.numChannels) })
+        }
+        hipResourcetype::HIP_RESOURCE_TYPE_PITCH2D => {
+            Ok(unsafe { (desc.res.pitch2D.format, desc.res.pitch2D.numChannels) })
+        }
+        _ => Err(hipErrorCode_t::InvalidValue),
+    }
+}
+
+fn pixel_size_from_format_channels(
+    format: hipArray_Format,
+    num_channels: u32,
+) -> Result<u32, hipErrorCode_t> {
+    let bits_per_channel = channel_bits(format)? as u32;
+    Ok((bits_per_channel * num_channels) / 8)
+}
+
+pub(crate) unsafe fn object_create(
+    p_tex_object: &mut CUsurfObject,
+    p_res_desc: &HIP_RESOURCE_DESC,
+) -> hipError_t {
+    let resource_desc = convert_resource_desc(p_res_desc)?;
+    let (format, num_channels) = num_channels_for_resource_desc(p_res_desc)?;
+    let pixel_size = pixel_size_from_format_channels(format, num_channels)?;
+    let mut hip_surfobj = std::mem::zeroed();
+    hipCreateSurfaceObject(&mut hip_surfobj, &resource_desc)?;
+    *p_tex_object = to_cuda(hip_surfobj, pixel_size)?;
+    Ok(())
+}
+
+pub(crate) unsafe fn object_destroy(tex_object: CUsurfObject) -> hipError_t {
+    hipDestroySurfaceObject(to_hip(tex_object))
+}
+
+const RESERVED_SURFACE_TOP_BITS: u32 = 3;
+
+fn to_cuda(hip: hipSurfaceObject_t, pixel_size: u32) -> Result<CUsurfObject, hipErrorCode_t> {
+    let hip = hip as u64;
+    let top_bits = get_top_bits::<RESERVED_SURFACE_TOP_BITS>(hip);
+    if top_bits != 0 {
+        return Err(hipErrorCode_t::Unknown);
+    }
+    let shift_size = pixel_size.ilog2() as u64;
+    Ok(set_top_bits::<RESERVED_SURFACE_TOP_BITS>(hip, shift_size))
+}
+
+fn to_hip(cuda: CUsurfObject) -> hipSurfaceObject_t {
+    ((cuda << RESERVED_SURFACE_TOP_BITS) >> RESERVED_SURFACE_TOP_BITS) as _
+}
+
+fn get_top_bits<const N: u32>(x: u64) -> u64 {
+    x >> (u64::BITS - N)
+}
+
+fn set_top_bits<const N: u32>(x: u64, bits: u64) -> u64 {
+    let shift = u64::BITS - N;
+    (bits << shift) | x
 }
