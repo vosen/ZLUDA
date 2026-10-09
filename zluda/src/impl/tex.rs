@@ -1535,11 +1535,11 @@ mod tests {
         dim: TexDim,
         access: SurfAccess,
         binding: SurfBinding,
+        pixel_size: usize,
     ) -> String {
         let kernel_name = surf_kernel_name(op, access);
         let suffix = access.ptx_suffix();
         let regs = access.data_regs();
-        let access_size = access.byte_size();
         let (surfref_decl, surfobj_param, surfobj_load, surf_operand) = match binding {
             SurfBinding::Reference => (".global .surfref surf;\n", "", "", "surf"),
             SurfBinding::Object => (
@@ -1587,7 +1587,7 @@ mod tests {
              {surfobj_load}    \
                  ld.param.u32 %r6, [row_bytes];\n    \
                  mov.u32 %r1, %tid.x;\n    \
-                 mul.lo.u32 %r1, %r1, {access_size};\n    \
+                 mul.lo.u32 %r1, %r1, {pixel_size};\n    \
                  mov.u32 %r2, %ctaid.y;\n    \
                  mov.u32 %r3, %ctaid.z;\n    \
                  mov.u32 %r4, %nctaid.y;\n    \
@@ -1604,7 +1604,7 @@ mod tests {
     /// Surface kernels loaded on first use, one module per (op, dim, access)
     struct SurfKernels {
         binding: SurfBinding,
-        modules: HashMap<(SurfOp, TexDim, SurfAccess), (CUmodule, CUfunction)>,
+        modules: HashMap<(SurfOp, TexDim, SurfAccess, usize), (CUmodule, CUfunction)>,
     }
 
     impl SurfKernels {
@@ -1621,10 +1621,11 @@ mod tests {
             op: SurfOp,
             dim: TexDim,
             access: SurfAccess,
+            pixel_size: usize,
         ) -> (CUmodule, CUfunction) {
             let binding = self.binding;
-            *self.modules.entry((op, dim, access)).or_insert_with(|| {
-                let ptx = surf_kernel_ptx(op, dim, access, binding);
+            *self.modules.entry((op, dim, access, pixel_size)).or_insert_with(|| {
+                let ptx = surf_kernel_ptx(op, dim, access, binding, pixel_size);
                 let mut module = std::mem::zeroed();
                 api.cuModuleLoadData(&mut module, ptx.as_ptr() as *const c_void);
                 let kernel_name = CString::new(surf_kernel_name(op, access)).unwrap();
@@ -1655,6 +1656,11 @@ mod tests {
         } else {
             byte
         }
+    }
+
+    // Filler for bytes not touched by a surface access: 00, 01, 02, ...
+    fn filler_byte(offset: usize) -> u8 {
+        offset as u8
     }
 
     unsafe fn surf_upload(
@@ -1714,7 +1720,7 @@ mod tests {
                     dstArray: array,
                     reserved1: std::ptr::null_mut(),
                     dstPitch: 0,
-                    dstHeight: 0,
+                    dstHeight: height,
                     WidthInBytes: row_bytes,
                     Height: height,
                     Depth: depth,
@@ -1815,7 +1821,7 @@ mod tests {
         surfobj: CUsurfObject,
         d_buf: CUdeviceptr,
         row_bytes: usize,
-        access_size: usize,
+        pixel_size: usize,
         height: usize,
         depth: usize,
     ) {
@@ -1830,7 +1836,7 @@ mod tests {
             1,
             height as u32,
             depth as u32,
-            (row_bytes / access_size) as u32,
+            (row_bytes / pixel_size) as u32,
             1,
             1,
             0,
@@ -1848,18 +1854,21 @@ mod tests {
         expected: &[u8],
         row_bytes: usize,
         slice_bytes: usize,
+        pixel_size: usize,
         context: &str,
     ) {
         if let Some(first) = actual.iter().zip(expected).position(|(a, e)| a != e) {
             let z = first / slice_bytes;
             let y = first % slice_bytes / row_bytes;
             let x = first % row_bytes;
-            let window = first..(first + 16).min(expected.len());
+            let pixel_start = (first / pixel_size) * pixel_size;
+            let pixel = pixel_start..(pixel_start + pixel_size).min(expected.len());
+            let pixel_end = pixel.end;
             panic!(
                 "{context}: first mismatch at byte {first} (x={x}, y={y}, z={z}), \
-                 expected {:02x?}, got {:02x?}",
-                &expected[window.clone()],
-                &actual[window]
+                 pixel bytes {pixel_start}..{pixel_end}: expected {:02x?}, got {:02x?}",
+                &expected[pixel.clone()],
+                &actual[pixel]
             );
         }
     }
@@ -1946,24 +1955,48 @@ mod tests {
             .filter(|access| access.byte_size() <= pixel_size)
             .collect::<Vec<_>>();
 
-        let zeros = vec![0u8; total_bytes];
+        let filler = (0..total_bytes).map(filler_byte).collect::<Vec<_>>();
         let mut actual = vec![0u8; total_bytes];
         for (round, &write) in accesses.iter().enumerate() {
-            // Fill the zeroed surface through sust and check it with a copy
-            let pattern = (0..total_bytes)
-                .map(|offset| pattern_byte(offset, round as u32))
-                .collect::<Vec<_>>();
+            fn surface_pattern(total_bytes: usize, pixel_size: usize, salt: u32) -> Vec<u8> {
+                (0..total_bytes)
+                    .map(|offset| {
+                        if offset % pixel_size == 0 {
+                            pattern_byte(offset, salt)
+                        } else {
+                            filler_byte(offset)
+                        }
+                    })
+                    .collect()
+            }
+
+            fn load_pattern(surface: &[u8], total_bytes: usize, pixel_size: usize, access_size: usize) -> Vec<u8> {
+                (0..total_bytes)
+                    .map(|offset| {
+                        let base = (offset / pixel_size) * pixel_size;
+                        if offset >= base && offset < base + access_size {
+                            surface[offset]
+                        } else {
+                            filler_byte(offset)
+                        }
+                    })
+                    .collect()
+            }
+
+            // Surface accesses are valid only at pixel starts: for a 2-channel
+            // u8 pixel, byte 1 is not a valid read/write location.
+            let store_pattern = surface_pattern(total_bytes, pixel_size, round as u32);
             surf_upload(
                 api,
                 dim,
                 array,
-                &zeros,
+                &filler,
                 row_bytes,
                 effective_height,
                 effective_depth,
             );
-            api.cuMemcpyHtoD_v2(d_buf, pattern.as_ptr() as *const c_void, total_bytes);
-            let (module, func) = kernels.get(api, SurfOp::Store, dim, write);
+            api.cuMemcpyHtoD_v2(d_buf, store_pattern.as_ptr() as *const c_void, total_bytes);
+            let (module, func) = kernels.get(api, SurfOp::Store, dim, write, pixel_size);
             surf_bind(api, binding, module, array);
             surf_launch(
                 api,
@@ -1972,7 +2005,7 @@ mod tests {
                 surfobj,
                 d_buf,
                 row_bytes,
-                write.byte_size(),
+                pixel_size,
                 effective_height,
                 effective_depth,
             );
@@ -1987,16 +2020,17 @@ mod tests {
             );
             check_surface_bytes(
                 &actual,
-                &pattern,
+                &store_pattern,
                 row_bytes,
                 slice_bytes,
+                pixel_size,
                 &format!("sust.b{} mismatch for {surface_name}", write.ptx_suffix()),
             );
 
             // Read the surface back through suld with every access type
             for &read in &accesses {
-                api.cuMemsetD8_v2(d_buf, 0, total_bytes);
-                let (module, func) = kernels.get(api, SurfOp::Load, dim, read);
+                api.cuMemcpyHtoD_v2(d_buf, filler.as_ptr() as *const c_void, total_bytes);
+                let (module, func) = kernels.get(api, SurfOp::Load, dim, read, pixel_size);
                 surf_bind(api, binding, module, array);
                 surf_launch(
                     api,
@@ -2005,16 +2039,18 @@ mod tests {
                     surfobj,
                     d_buf,
                     row_bytes,
-                    read.byte_size(),
+                    pixel_size,
                     effective_height,
                     effective_depth,
                 );
                 api.cuMemcpyDtoH_v2(actual.as_mut_ptr() as *mut c_void, d_buf, total_bytes);
+                let load_pattern = load_pattern(&store_pattern, total_bytes, pixel_size, read.byte_size());
                 check_surface_bytes(
                     &actual,
-                    &pattern,
+                    &load_pattern,
                     row_bytes,
                     slice_bytes,
+                    pixel_size,
                     &format!(
                         "suld.b{} after sust.b{} mismatch for {surface_name}",
                         read.ptx_suffix(),
