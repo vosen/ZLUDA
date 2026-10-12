@@ -1,6 +1,6 @@
 use super::driver;
-use crate::r#impl::function;
 use crate::r#impl::{driver::GlobalState, function::Function};
+use crate::r#impl::{function, surf};
 use cuda_types::{cuda::*, dark_api::FatbinFileHeader};
 use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
@@ -24,6 +24,7 @@ pub(crate) struct Module {
 
 struct ModuleMutable {
     functions: FxHashMap<CString, Box<Function>>,
+    surfrefs: FxHashMap<CString, Box<surf::SurfRefData>>,
 }
 
 impl ModuleMutable {
@@ -144,6 +145,7 @@ impl Module {
             sm_version,
             mutable: Mutex::new(ModuleMutable {
                 functions: FxHashMap::default(),
+                surfrefs: FxHashMap::default(),
             }),
             bit32,
         }
@@ -433,9 +435,28 @@ pub(crate) unsafe fn get_tex_ref(
 }
 
 pub(crate) unsafe fn get_surf_ref(
-    surfref: *mut *mut textureReference,
+    surfref: &mut &surf::SurfRefData,
     hmod: &Module,
     name: *const ::core::ffi::c_char,
 ) -> hipError_t {
-    hipModuleGetTexRef(surfref, hmod.base, name)
+    let name = CStr::from_ptr(name).to_owned();
+    let result: *const surf::SurfRefData = {
+        let mut module_mutable = hmod.mutable.lock().map_err(|_| hipErrorCode_t::Unknown)?;
+        match module_mutable.surfrefs.entry(name) {
+            hash_map::Entry::Occupied(entry) => std::ptr::from_ref(entry.get().as_ref()),
+            hash_map::Entry::Vacant(entry) => {
+                let mut texref = std::ptr::null_mut();
+                hipModuleGetTexRef(&mut texref, hmod.base, entry.key().as_ptr())?;
+                let mut devptr = mem::zeroed();
+                let mut bytes = mem::zeroed();
+                hipModuleGetGlobal(&mut devptr, &mut bytes, hmod.base, entry.key().as_ptr())?;
+                std::ptr::from_ref(entry.insert(Box::new(surf::SurfRefData {
+                    base: texref,
+                    devptr,
+                })))
+            }
+        }
+    };
+    *surfref = &*result;
+    Ok(())
 }

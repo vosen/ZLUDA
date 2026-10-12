@@ -1495,17 +1495,15 @@ extern "C"
     typedef uint64_t v2_b64 __attribute__((ext_vector_type(2)));
     typedef uint64_t v4_b64 __attribute__((ext_vector_type(4)));
 
-#define suld(RETURN_VEC, RETURN_TYPE, COORD)                                                                                              \
-    RETURN_VEC##_##RETURN_TYPE FUNC(suldobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord)         \
-    {                                                                                                                                     \
-        return surface_load<RETURN_VEC##_##RETURN_TYPE>(surfobj, coord);                                                                  \
-    }                                                                                                                                     \
-                                                                                                                                          \
-    RETURN_VEC##_##RETURN_TYPE FUNC(suldref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(GLOBAL_SPACE void *image, SULD_COORD_##COORD coord) \
-    {                                                                                                                                     \
-        (void)image;                                                                                                                      \
-        (void)coord;                                                                                                                      \
-        return 0;                                                                                                                         \
+#define suld(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                                   \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord)                              \
+    {                                                                                                                                                          \
+        return surface_load<RETURN_VEC##_##RETURN_TYPE>(surfobj, coord);                                                                                       \
+    }                                                                                                                                                          \
+                                                                                                                                                               \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(struct textureReference GLOBAL_SPACE * texref, SULD_COORD_##COORD coord) \
+    {                                                                                                                                                          \
+        return surface_load<RETURN_VEC##_##RETURN_TYPE>(uint64_t(texref->textureObject), coord);                                                               \
     }
 
     suld(v1, b8, 1d);
@@ -1545,17 +1543,15 @@ extern "C"
     // suld(v4_b64, 2d);
     // suld(v4_b64, 3d);
 
-#define sust(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                          \
-    void FUNC(sustobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value)         \
-    {                                                                                                                                                 \
-        surface_store(surfobj, coord, value);                                                                                                         \
-    }                                                                                                                                                 \
-                                                                                                                                                      \
-    void FUNC(sustref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(GLOBAL_SPACE void *image, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value) \
-    {                                                                                                                                                 \
-        (void)image;                                                                                                                                  \
-        (void)coord;                                                                                                                                  \
-        (void)value;                                                                                                                                  \
+#define sust(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                                               \
+    void FUNC(sustobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value)                              \
+    {                                                                                                                                                                      \
+        surface_store(surfobj, coord, value);                                                                                                                              \
+    }                                                                                                                                                                      \
+                                                                                                                                                                           \
+    void FUNC(sustref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(struct textureReference GLOBAL_SPACE * texref, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value) \
+    {                                                                                                                                                                      \
+        surface_store(uint64_t(texref->textureObject), coord, value);                                                                                                      \
     }
 
     sust(v1, b8, 1d);

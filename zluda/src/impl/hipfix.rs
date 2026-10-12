@@ -13,7 +13,7 @@ pub(crate) fn get_attributes(
     }
 }
 
-const HIP_TRSA_OVERRIDE_FORMAT: u32 = 1;
+pub(crate) const HIP_TRSA_OVERRIDE_FORMAT: u32 = 1;
 
 pub(crate) unsafe fn refresh_texref(raw_texref: *mut textureReference) -> hipError_t {
     let texref = raw_texref.as_ref().ok_or(hipErrorCode_t::InvalidValue)?;
