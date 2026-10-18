@@ -17,6 +17,9 @@ impl<'a, E: zluda_common::CudaErrorType> zluda_common::FromCuda<'a, CUsurfref, E
     for &'a SurfRefData
 {
     fn from_cuda(surf_ref: &'a CUsurfref) -> Result<Self, E> {
+        if surf_ref.is_null() {
+            return Err(E::INVALID_VALUE);
+        }
         Ok(unsafe { mem::transmute(*surf_ref) })
     }
 }
