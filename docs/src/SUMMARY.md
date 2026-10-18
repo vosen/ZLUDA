@@ -15,3 +15,4 @@
 
 # For developers
 - [Building from source](./building.md)
+- [Apple GPUs (AGX, experimental)](./agx.md)
