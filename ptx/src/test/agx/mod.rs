@@ -16,7 +16,7 @@ fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilati
     let module = pass::to_llvm_module_for_target(ast, attributes, Target::Agx, |_| {})
         .map_err(|e| format!("translate: {e}"))?;
     let impl_ir = module.linked_bitcode();
-    llvm_zluda::compile_agx(&module.context, cpu, module.llvm_ir, impl_ir, None)
+    llvm_zluda::compile_agx(&module.context, cpu, module.strict_fp, module.llvm_ir, impl_ir, None)
 }
 
 fn spirv_run_dir() -> PathBuf {

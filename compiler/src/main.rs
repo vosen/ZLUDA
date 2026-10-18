@@ -36,6 +36,12 @@ pub struct Options {
     /// parsing errors (e.g. an unimplemented instruction)
     ignore_errors: bool,
 
+    #[bpaf(long("strict-fp"))]
+    /// AGX: follow the floating point semantics of PTX exactly (denormals,
+    /// correctly rounded division and square root, canonical NaNs), emulated
+    /// in software where the hardware differs. Slower
+    strict_fp: bool,
+
     #[bpaf(positional("filename"))]
     /// PTX file
     ptx_path: String,
@@ -83,7 +89,13 @@ fn main_core() -> Result<(), CompilerError> {
         None => ptx::Target::Amdgpu,
     };
     if target == ptx::Target::Agx {
-        return compile_agx(&ptx_path, &output_path, opts.arch, opts.ignore_errors);
+        return compile_agx(
+            &ptx_path,
+            &output_path,
+            opts.arch,
+            opts.ignore_errors,
+            opts.strict_fp,
+        );
     }
 
     let arch: String = match opts.arch {
@@ -98,7 +110,14 @@ fn main_core() -> Result<(), CompilerError> {
 
     let ptx = fs::read(&ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
-    let llvm = ptx_to_llvm(opts.ignore_errors, ptx, target)?;
+    let llvm = ptx_to_llvm(
+        opts.ignore_errors,
+        ptx,
+        ptx::Options {
+            target,
+            strict_fp: false,
+        },
+    )?;
 
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
 
@@ -152,11 +171,19 @@ fn compile_agx(
     output_path: &Path,
     arch: Option<String>,
     ignore_errors: bool,
+    strict_fp: bool,
 ) -> Result<(), CompilerError> {
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
-    let llvm = ptx_to_llvm(ignore_errors, ptx, ptx::Target::Agx)?;
+    let llvm = ptx_to_llvm(
+        ignore_errors,
+        ptx,
+        ptx::Options {
+            target: ptx::Target::Agx,
+            strict_fp,
+        },
+    )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
     let compiler_hook = |bytes: &Vec<u8>, extension: String| {
         let output_path = output_path.with_extension(extension);
@@ -166,6 +193,7 @@ fn compile_agx(
     llvm_zluda::compile_agx(
         &llvm.context,
         &arch,
+        strict_fp,
         llvm.main,
         llvm.linked_bitcode,
         Some(&compiler_hook),
@@ -184,6 +212,7 @@ fn compile_agx(
     _output_path: &Path,
     _arch: Option<String>,
     _ignore_errors: bool,
+    _strict_fp: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,
@@ -194,7 +223,7 @@ fn compile_agx(
 fn ptx_to_llvm(
     ignore_errors: bool,
     ptx: &str,
-    target: ptx::Target,
+    options: ptx::Options,
 ) -> Result<LLVMArtifacts, CompilerError> {
     let ast = if ignore_errors {
         ptx_parser::parse_module_unchecked(ptx)
@@ -202,12 +231,12 @@ fn ptx_to_llvm(
         ptx_parser::parse_module_checked(ptx)?
     };
     let mut start = Instant::now();
-    let module = ptx::to_llvm_module_for_target(
+    let module = ptx::to_llvm_module_with_options(
         ast,
         ptx::Attributes {
             clock_rate: 2124000,
         },
-        target,
+        options,
         |pass| {
             report_pass_time(pass, &mut start);
         },

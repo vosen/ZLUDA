@@ -35,6 +35,11 @@ pub const AGX_TRIPLE: &CStr = c"agx-apple-macosx";
 /// is based on.
 pub const AGX_DEFAULT_CPU: &str = "agx-g14g";
 
+/// Target features of the strict floating point mode: IEEE 754 binary32
+/// arithmetic and canonical NaNs, implemented in software where the hardware
+/// differs.
+pub const AGX_STRICT_FP_FEATURES: &CStr = c"+ieee-fp32,+canonical-nan";
+
 /// The outputs of an AGX compilation.
 pub struct AgxCompilation {
     /// Relocatable ELF object with the kernels' machine code.
@@ -121,10 +126,12 @@ fn internalize_helpers(module: &Module) {
 /// Link `main` with the AGX implementation of ZLUDA's PTX helper functions
 /// (`ptx_impl`, textual IR or bitcode),
 /// optimize, and generate code for the AGX processor `cpu` (for example
-/// `agx-g13g` or `agx-g14c`).
+/// `agx-g13g` or `agx-g14c`). With `strict_fp`, the strict floating point
+/// features are enabled (see `AGX_STRICT_FP_FEATURES`).
 pub fn compile_agx(
     ctx: &Context,
     cpu: &str,
+    strict_fp: bool,
     main: Module,
     ptx_impl: &[u8],
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
@@ -157,7 +164,7 @@ pub fn compile_agx(
         target,
         AGX_TRIPLE,
         &cpu,
-        c"",
+        if strict_fp { AGX_STRICT_FP_FEATURES } else { c"" },
         LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
         LLVMRelocMode::LLVMRelocDefault,
         LLVMCodeModel::LLVMCodeModelDefault,

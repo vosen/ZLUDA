@@ -304,6 +304,8 @@ def run_test(path, args):
         with open(src, 'w') as f:
             f.write(module)
         def zoc(*extra):
+            if args.strict_fp:
+                extra = extra + ('--strict-fp',)
             return subprocess.run([args.zoc, *extra, '--target', 'agx', '--arch', args.arch,
                                    '--output-dir', tmp, src],
                                   capture_output=True, text=True, timeout=args.timeout)
@@ -501,6 +503,8 @@ def main():
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
     ap.add_argument('--arch', default='agx-g14g')
+    ap.add_argument('--strict-fp', action='store_true',
+                    help='compile with zoc --strict-fp (software IEEE binary32, canonical NaNs)')
     ap.add_argument('--timeout', type=int, default=120)
     ap.add_argument('-j', type=int, default=os.cpu_count())
     ap.add_argument('--json', help='write the results to this file')

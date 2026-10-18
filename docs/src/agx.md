@@ -88,12 +88,51 @@ an error.
 * NaN results have the hardware's bit pattern (for example `0x7e00` for
   `f16`), not PTX's canonical NaN (`0x7fff`, `0x7fffffff`), and saturation
   (`.sat`) turns `-0.0` into `+0.0`.
-* `%clock` reads as zero. `nanosleep` does not sleep.
 * `sqrt.rn` and `div.rn` are not correctly rounded.
+
+The [strict floating point mode](#strict-floating-point-mode) removes these
+three differences.
+* `%clock` reads as zero. `nanosleep` does not sleep.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
 features above.
+
+## Strict floating point mode
+
+`zoc --strict-fp` (`ptx::Options::strict_fp` with
+`llvm_zluda::compile_agx(.., strict_fp: true, ..)`) follows the floating
+point semantics of PTX where the hardware differs, by emulating them in
+software. It enables the `ieee-fp32` and `canonical-nan` features of the AGX
+backend (see `llvm/docs/AGXUsage.rst` in the LLVM fork) and lowers `.sat`
+exactly:
+
+* 32-bit denormals are kept in kernels without `.ftz`: additions,
+  multiplications and fused multiply-adds use the hardware and recompute the
+  result with integer arithmetic only where the hardware result can be wrong;
+  comparisons, `min`/`max` and rounding handle denormals explicitly.
+* `div.rn.f32` and `sqrt.rn.f32` are correctly rounded (refined hardware
+  estimates corrected with exact remainders, integer arithmetic outside the
+  normal range).
+* NaN results are PTX's canonical NaN (`0x7fffffff`, `0x7fff` for `f16` and
+  `bf16`).
+* `.sat` keeps `-0.0`.
+
+The cost depends on the operation: an addition gets about 10 more
+instructions, a fused multiply-add about 24, a division about 67 (see the
+AGX backend documentation). The denormal mode is per kernel: in a kernel
+that mixes `.ftz` and other `f32` instructions, all of them follow the mode
+needed at the kernel's entry. Directed rounding modes and `f64` remain unsupported, and
+approximate instructions (`ex2.approx`, `rcp.approx`, ...) keep the
+hardware's approximations.
+
+`ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
+one kernel per operation, runs it on the functional simulator over generated
+inputs (denormals, boundaries, cancellations, ties, quotients and roots next
+to rounding midpoints, specials) and compares with an exact IEEE 754
+reference. All 20 operations it covers (add, sub, mul, fma, div, sqrt,
+comparisons, minimum and maximum variants, floor, ceil, trunc, rint) are
+bit-exact.
 
 ## Checking against PTX-formalization
 
@@ -117,4 +156,5 @@ clusters and `mbarrier`) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
 1075 checks of the 217 programs that compile, 172 run: 158 match the formal
 semantics and the other 14 are the floating point differences listed above
-(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`).
+(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`). With
+`--strict-fp` (the `--strict-fp` option of the script), all 172 match.

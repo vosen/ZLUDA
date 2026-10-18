@@ -87,12 +87,43 @@ pub fn to_llvm_module<'input>(
     to_llvm_module_for_target(ast, attributes, Target::Amdgpu, on_pass_end)
 }
 
+/// Options of the translation.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Options {
+    pub target: Target,
+    /// Follow the floating point semantics of PTX exactly where the AGX
+    /// hardware differs: the generated code implements IEEE 754 binary32
+    /// arithmetic (denormals, correctly rounded division and square root) and
+    /// canonical NaNs in software, and `.sat` keeps `-0.0`. Slower; ignored
+    /// for AMDGPU.
+    pub strict_fp: bool,
+}
+
 pub fn to_llvm_module_for_target<'input>(
     ast: ast::Module<'input>,
     attributes: Attributes,
     target: Target,
+    on_pass_end: impl FnMut(&str),
+) -> Result<Module, TranslateError> {
+    to_llvm_module_with_options(
+        ast,
+        attributes,
+        Options {
+            target,
+            strict_fp: false,
+        },
+        on_pass_end,
+    )
+}
+
+pub fn to_llvm_module_with_options<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+    options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
+    let Options { target, strict_fp } = options;
+    let strict_fp = strict_fp && target == Target::Agx;
     let sm_version = ast.sm_version;
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
@@ -147,7 +178,8 @@ pub fn to_llvm_module_for_target<'input>(
     let fp_mode = get_fp_mode(&directives[..]);
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode, target)?;
+    let llvm_ir =
+        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -158,6 +190,7 @@ pub fn to_llvm_module_for_target<'input>(
         metadata32,
         constrained_fp: fp_mode == llvm::emit::FloatingPointMode::Constrained,
         target,
+        strict_fp,
     })
 }
 
@@ -184,6 +217,9 @@ pub struct Module {
     pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
     pub constrained_fp: bool,
     pub target: Target,
+    /// The code must be compiled with the strict floating point features of
+    /// the AGX backend (see `Options::strict_fp`).
+    pub strict_fp: bool,
 }
 
 impl Module {

@@ -68,9 +68,11 @@ pub(crate) fn run<'input>(
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
     fp_mode: FloatingPointMode,
     target: Target,
+    strict_fp: bool,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, fp_mode, target);
+    let mut emit_ctx =
+        ModuleEmitContext::new(context, &module, &id_defs, fp_mode, target, strict_fp);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -93,6 +95,7 @@ struct ModuleEmitContext<'a, 'input> {
     resolver: ResolveIdent,
     fp_mode: FloatingPointMode,
     target: Target,
+    strict_fp: bool,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -102,6 +105,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         id_defs: &'a GlobalStringIdentResolver2<'input>,
         fp_mode: FloatingPointMode,
         target: Target,
+        strict_fp: bool,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -111,6 +115,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             resolver: ResolveIdent::new(&id_defs),
             fp_mode,
             target,
+            strict_fp,
         }
     }
 
@@ -508,6 +513,7 @@ struct MethodEmitContext<'a> {
     is_kernel: bool,
     fp: FloatingPoint,
     target: Target,
+    strict_fp: bool,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -536,6 +542,7 @@ impl<'a> MethodEmitContext<'a> {
             is_kernel,
             fp,
             target: parent.target,
+            strict_fp: parent.strict_fp,
         }
     }
 
@@ -3352,6 +3359,31 @@ impl<'a> MethodEmitContext<'a> {
         let maxnum_intrinsic = format!("llvm.maximumnum.{}\0", LLVMTypeDisplay(type_));
         let minnum_intrinsic = format!("llvm.minimumnum.{}\0", LLVMTypeDisplay(type_));
         let src = self.resolver.value(src)?;
+        if self.strict_fp {
+            // PTX: NaN and values below 0 become +0.0, values above 1 become
+            // 1.0, and -0.0 stays (maximumnum(-0.0, 0.0) would be +0.0).
+            unsafe {
+                let below = LLVMBuildFCmp(
+                    self.builder,
+                    LLVMRealPredicate::LLVMRealULT,
+                    src,
+                    zero,
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                let above = LLVMBuildFCmp(
+                    self.builder,
+                    LLVMRealPredicate::LLVMRealOGT,
+                    src,
+                    one,
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                let clamped = LLVMBuildSelect(self.builder, above, one, src, LLVM_UNNAMED.as_ptr());
+                self.resolver.with_result(dst, |dst| {
+                    LLVMBuildSelect(self.builder, below, zero, clamped, dst)
+                });
+            }
+            return Ok(());
+        }
         let maxnum = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(maxnum_intrinsic.as_bytes()) },
             None,
