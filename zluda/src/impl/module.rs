@@ -439,6 +439,9 @@ pub(crate) unsafe fn get_surf_ref(
     hmod: &Module,
     name: *const ::core::ffi::c_char,
 ) -> hipError_t {
+    if name.is_null() {
+        return Err(hipErrorCode_t::InvalidValue);
+    }
     let name = CStr::from_ptr(name).to_owned();
     let result: *const surf::SurfRefData = {
         let mut module_mutable = hmod.mutable.lock().map_err(|_| hipErrorCode_t::Unknown)?;
