@@ -1,0 +1,200 @@
+//! Compilation of ZLUDA's LLVM modules for Apple GPUs with the experimental
+//! AGX backend.
+//!
+//! Unlike AMDGPU there is no code object format or loader yet: the result is
+//! the relocatable ELF object produced by the backend, with the machine code
+//! of each kernel in `.text`. See docs/src/agx.md for the kernel ABI.
+
+use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
+use crate::{
+    LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
+    LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
+};
+use llvm_sys::core::{
+    LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
+    LLVMGetDiagInfoSeverity,
+};
+use llvm_sys::prelude::LLVMDiagnosticInfoRef;
+use llvm_sys::LLVMDiagnosticSeverity;
+use llvm_sys::{
+    target_machine::{
+        LLVMCodeGenFileType, LLVMCodeGenOptLevel, LLVMCodeModel, LLVMGetTargetFromTriple,
+        LLVMRelocMode,
+    },
+    transforms::pass_builder::LLVMRunPasses,
+};
+use std::ffi::{c_void, CStr, CString};
+use std::sync::OnceLock;
+
+pub const AGX_TRIPLE: &CStr = c"agx-apple-macosx";
+
+/// The default processor: the M2 family, whose latencies the scheduling model
+/// is based on.
+pub const AGX_DEFAULT_CPU: &str = "agx-g14g";
+
+/// The outputs of an AGX compilation.
+pub struct AgxCompilation {
+    /// Relocatable ELF object with the kernels' machine code.
+    pub object: Vec<u8>,
+    /// The same code as assembly, with the per-kernel resource comments.
+    pub assembly: Vec<u8>,
+}
+
+/// Collects the errors the backend reports through the context's diagnostic
+/// handler (unsupported operations, missing encodings ...), which would
+/// otherwise only be printed.
+struct Diagnostics<'a> {
+    ctx: &'a Context,
+    errors: Box<Vec<String>>,
+}
+
+extern "C" fn collect_diagnostic(info: LLVMDiagnosticInfoRef, errors: *mut c_void) {
+    let severity = unsafe { LLVMGetDiagInfoSeverity(info) };
+    if severity != LLVMDiagnosticSeverity::LLVMDSError {
+        return;
+    }
+    let description = unsafe { LLVMGetDiagInfoDescription(info) };
+    let message = unsafe { CStr::from_ptr(description) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { LLVMDisposeMessage(description) };
+    unsafe { (*(errors as *mut Vec<String>)).push(message) };
+}
+
+impl<'a> Diagnostics<'a> {
+    fn new(ctx: &'a Context) -> Self {
+        let mut errors = Box::new(Vec::new());
+        unsafe {
+            LLVMContextSetDiagnosticHandler(
+                ctx.get(),
+                Some(collect_diagnostic),
+                (&mut *errors as *mut Vec<String>).cast(),
+            )
+        };
+        Self { ctx, errors }
+    }
+
+    fn check(&self) -> Result<(), String> {
+        if self.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(self.errors.join("\n"))
+        }
+    }
+}
+
+impl Drop for Diagnostics<'_> {
+    fn drop(&mut self) {
+        unsafe { LLVMContextSetDiagnosticHandler(self.ctx.get(), None, std::ptr::null_mut()) };
+    }
+}
+
+fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> {
+    let module = Module::try_from_ir(ctx, ir, name)?;
+    module.verify()?;
+    Ok(module)
+}
+
+/// Link `main` with the AGX implementation of ZLUDA's PTX helper functions
+/// (`ptx_impl`, textual IR or bitcode),
+/// optimize, and generate code for the AGX processor `cpu` (for example
+/// `agx-g13g` or `agx-g14c`).
+pub fn compile_agx(
+    ctx: &Context,
+    cpu: &str,
+    main: Module,
+    ptx_impl: &[u8],
+    compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
+) -> Result<AgxCompilation, String> {
+    init_globals()?;
+    let diagnostics = Diagnostics::new(ctx);
+
+    let linked = Module::new(ctx, c"llvm-link");
+    let ptx_impl = load_module(ctx, ptx_impl, c"zluda_ptx_impl_agx.ll")?;
+    linked.link(main)?;
+    linked.link(ptx_impl)?;
+    linked.verify()?;
+
+    if let Some(hook) = compiler_hook {
+        let message = linked.print_module_to_string();
+        hook(&message.to_bytes().to_vec(), String::from("linked.ll"));
+    }
+
+    let cpu = CString::new(cpu).map_err(|_| ("invalid AGX processor").to_string())?;
+    let mut target = unsafe { std::mem::zeroed() };
+    let mut err = std::ptr::null_mut();
+    let status = unsafe { LLVMGetTargetFromTriple(AGX_TRIPLE.as_ptr(), &mut target, &mut err) };
+    if status != 0 {
+        let message = Message::new(unsafe { CStr::from_ptr(err) });
+        return Err(message.to_str().to_string());
+    }
+    let target_machine = TargetMachine::new(
+        target,
+        AGX_TRIPLE,
+        &cpu,
+        c"",
+        LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
+        LLVMRelocMode::LLVMRelocDefault,
+        LLVMCodeModel::LLVMCodeModelDefault,
+    );
+
+    let pb_options = PassBuilderOptions::new();
+    let error = unsafe {
+        LLVMRunPasses(
+            linked.get(),
+            c"default<O3>".as_ptr(),
+            target_machine.get(),
+            pb_options.get(),
+        )
+    };
+    if !error.is_null() {
+        let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
+        let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
+        return Err(message.to_str().to_string());
+    }
+
+    if let Some(hook) = compiler_hook {
+        let message = linked.print_module_to_string();
+        hook(&message.to_bytes().to_vec(), String::from("opt.ll"));
+    }
+
+    let assembly = target_machine
+        .emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?
+        .to_vec();
+    diagnostics.check()?;
+    if let Some(hook) = compiler_hook {
+        hook(&assembly, String::from("asm"));
+    }
+    let object = target_machine
+        .emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?
+        .to_vec();
+    diagnostics.check()?;
+    if let Some(hook) = compiler_hook {
+        hook(&object, String::from("o"));
+    }
+    Ok(AgxCompilation { object, assembly })
+}
+
+fn init_globals() -> Result<(), String> {
+    static INIT_AGX: OnceLock<Result<(), Message>> = OnceLock::new();
+    INIT_AGX
+        .get_or_init(|| {
+            let options = [c"llvm_zluda"];
+            let ptrs: Vec<*const i8> = options.iter().map(|s| s.as_ptr()).collect();
+            let mut err_msg = std::ptr::null_mut();
+            let success = unsafe {
+                LLVMZludaParseCommandLineOptions(ptrs.len() as i32, ptrs.as_ptr(), &mut err_msg)
+            };
+            if !success {
+                return Err(Message::new(unsafe { CStr::from_ptr(err_msg) }));
+            }
+            unsafe { LLVMInitializeAGXTargetInfo() };
+            unsafe { LLVMInitializeAGXTarget() };
+            unsafe { LLVMInitializeAGXTargetMC() };
+            unsafe { LLVMInitializeAGXAsmPrinter() };
+            Ok(())
+        })
+        .as_ref()
+        .map(|()| ())
+        .map_err(|e| e.to_str().to_string())
+}

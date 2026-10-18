@@ -18,3 +18,11 @@ features = ["disable-alltargets-init", "no-llvm-linking"]
 [build-dependencies]
 cmake = "0.1"
 cc = "1.0.69"
+
+[features]
+default = ["amdgpu"]
+# The AMDGPU backend, used by the ZLUDA runtime.
+amdgpu = []
+# The experimental AGX (Apple GPU) backend. Requires an LLVM tree with the
+# AGX target, see docs/src/agx.md.
+agx = []

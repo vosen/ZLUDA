@@ -4,8 +4,10 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Instructions.h>
+#ifdef ZLUDA_WITH_LLD
 #include <lld/Common/Driver.h>
 #include <lld/Common/CommonLinkerContext.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
@@ -13,8 +15,10 @@
 
 #include <mutex>
 
+#ifdef ZLUDA_WITH_LLD
 // Declare that we want to use the ELF driver
 LLD_HAS_DRIVER(elf)
+#endif
 
 using namespace llvm;
 
@@ -210,6 +214,7 @@ void LLVMZludaSetAtomic(
     }
 }
 
+#ifdef ZLUDA_WITH_LLD
 std::mutex lld_mutex;
 
 int LLVMZludaLinkWithLLD(uint32_t inputs, const char **input_paths, const char *output_path, char **ErrorMessage)
@@ -254,6 +259,7 @@ int LLVMZludaLinkWithLLD(uint32_t inputs, const char **input_paths, const char *
 
     return 0;
 }
+#endif
 
 bool LLVMZludaParseCommandLineOptions(int argc, const char *const *argv,
                                       char **ErrorMessage)

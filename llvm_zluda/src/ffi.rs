@@ -83,6 +83,7 @@ extern "C" {
         SSID: *const i8,
     );
 
+    #[cfg(feature = "amdgpu")]
     pub fn LLVMZludaLinkWithLLD(
         inputs: u32,
         input_paths: *const *const i8,
@@ -95,4 +96,14 @@ extern "C" {
         argv: *const *const i8,
         error_message: *mut *mut i8,
     ) -> bool;
+}
+
+// The AGX target is not part of upstream LLVM, so llvm-sys has no bindings
+// for its initialization functions.
+#[cfg(feature = "agx")]
+extern "C" {
+    pub fn LLVMInitializeAGXTargetInfo();
+    pub fn LLVMInitializeAGXTarget();
+    pub fn LLVMInitializeAGXTargetMC();
+    pub fn LLVMInitializeAGXAsmPrinter();
 }

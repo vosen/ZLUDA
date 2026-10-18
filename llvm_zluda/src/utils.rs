@@ -68,6 +68,30 @@ impl Module {
         }
     }
 
+    /// Parse a module from textual IR or bitcode.
+    pub fn try_from_ir(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Self, String> {
+        let memory_buffer: LLVMMemoryBufferRef = unsafe {
+            LLVMCreateMemoryBufferWithMemoryRangeCopy(ir.as_ptr().cast(), ir.len(), name.as_ptr())
+        };
+        let mut module: LLVMModuleRef = unsafe { mem::zeroed() };
+        let mut message = ptr::null_mut();
+        // Takes ownership of the memory buffer.
+        let status = unsafe {
+            llvm_sys::ir_reader::LLVMParseIRInContext(
+                ctx.get(),
+                memory_buffer,
+                &mut module,
+                &mut message,
+            )
+        };
+        if status != 0 {
+            let message = Message::new(unsafe { CStr::from_ptr(message) });
+            Err(message.to_str().to_string())
+        } else {
+            Ok(Self(module))
+        }
+    }
+
     pub fn clone(&self) -> Self {
         Self(unsafe { LLVMCloneModule(self.0) })
     }
