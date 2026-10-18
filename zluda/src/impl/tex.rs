@@ -1624,15 +1624,18 @@ mod tests {
             pixel_size: usize,
         ) -> (CUmodule, CUfunction) {
             let binding = self.binding;
-            *self.modules.entry((op, dim, access, pixel_size)).or_insert_with(|| {
-                let ptx = surf_kernel_ptx(op, dim, access, binding, pixel_size);
-                let mut module = std::mem::zeroed();
-                api.cuModuleLoadData(&mut module, ptx.as_ptr() as *const c_void);
-                let kernel_name = CString::new(surf_kernel_name(op, access)).unwrap();
-                let mut func = std::mem::zeroed();
-                api.cuModuleGetFunction(&mut func, module, kernel_name.as_ptr());
-                (module, func)
-            })
+            *self
+                .modules
+                .entry((op, dim, access, pixel_size))
+                .or_insert_with(|| {
+                    let ptx = surf_kernel_ptx(op, dim, access, binding, pixel_size);
+                    let mut module = std::mem::zeroed();
+                    api.cuModuleLoadData(&mut module, ptx.as_ptr() as *const c_void);
+                    let kernel_name = CString::new(surf_kernel_name(op, access)).unwrap();
+                    let mut func = std::mem::zeroed();
+                    api.cuModuleGetFunction(&mut func, module, kernel_name.as_ptr());
+                    (module, func)
+                })
         }
 
         unsafe fn unload(self, api: &impl CudaApi) {
@@ -1970,7 +1973,12 @@ mod tests {
                     .collect()
             }
 
-            fn load_pattern(surface: &[u8], total_bytes: usize, pixel_size: usize, access_size: usize) -> Vec<u8> {
+            fn load_pattern(
+                surface: &[u8],
+                total_bytes: usize,
+                pixel_size: usize,
+                access_size: usize,
+            ) -> Vec<u8> {
                 (0..total_bytes)
                     .map(|offset| {
                         let base = (offset / pixel_size) * pixel_size;
@@ -2044,7 +2052,8 @@ mod tests {
                     effective_depth,
                 );
                 api.cuMemcpyDtoH_v2(actual.as_mut_ptr() as *mut c_void, d_buf, total_bytes);
-                let load_pattern = load_pattern(&store_pattern, total_bytes, pixel_size, read.byte_size());
+                let load_pattern =
+                    load_pattern(&store_pattern, total_bytes, pixel_size, read.byte_size());
                 check_surface_bytes(
                     &actual,
                     &load_pattern,
