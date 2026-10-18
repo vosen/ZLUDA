@@ -37,6 +37,8 @@ mod test;
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
     include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
+// Textual LLVM IR, see the comment at its top.
+static ZLUDA_PTX_IMPL_AGX: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl_agx.ll");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
@@ -54,6 +56,18 @@ quick_error! {
     }
 }
 
+/// The GPU architecture that code is generated for.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum Target {
+    /// AMD GPUs, with the AMDGPU LLVM backend.
+    #[default]
+    Amdgpu,
+    /// Apple GPUs, with the experimental AGX LLVM backend. Kernels use the
+    /// agx_kernel calling convention and the helper functions are linked
+    /// from lib/zluda_ptx_impl_agx.bc.
+    Agx,
+}
+
 /// GPU attributes needed at compile time.
 #[derive(Copy, Clone)]
 pub struct Attributes {
@@ -64,6 +78,15 @@ pub struct Attributes {
 pub fn to_llvm_module<'input>(
     ast: ast::Module<'input>,
     attributes: Attributes,
+    on_pass_end: impl FnMut(&str),
+) -> Result<Module, TranslateError> {
+    to_llvm_module_for_target(ast, attributes, Target::Amdgpu, on_pass_end)
+}
+
+pub fn to_llvm_module_for_target<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+    target: Target,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
     let sm_version = ast.sm_version;
@@ -119,7 +142,7 @@ pub fn to_llvm_module<'input>(
     let fp_mode = get_fp_mode(&directives[..]);
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode)?;
+    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode, target)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -129,6 +152,7 @@ pub fn to_llvm_module<'input>(
         metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
         metadata32,
         constrained_fp: fp_mode == llvm::emit::FloatingPointMode::Constrained,
+        target,
     })
 }
 
@@ -154,11 +178,16 @@ pub struct Module {
     pub metadata: kernel_metadata::ModuleMetadataV1,
     pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
     pub constrained_fp: bool,
+    pub target: Target,
 }
 
 impl Module {
+    /// The module of helper functions to link with: bitcode for AMDGPU,
+    /// textual IR for AGX.
     pub fn linked_bitcode(&self) -> &'static [u8] {
-        if self.constrained_fp {
+        if self.target == Target::Agx {
+            ZLUDA_PTX_IMPL_AGX
+        } else if self.constrained_fp {
             ZLUDA_PTX_IMPL_CONSTRAINED
         } else {
             ZLUDA_PTX_IMPL

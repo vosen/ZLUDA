@@ -1,0 +1,821 @@
+; Implementation of ZLUDA's PTX helper functions (__zluda_ptx_impl_*) for
+; Apple GPUs, linked into every module compiled with the AGX backend.
+;
+; The AMDGPU implementation (zluda_ptx_impl.cpp) is compiled with clang, which
+; has no AGX target, so this one is written directly in LLVM IR on top of the
+; llvm.agx.* intrinsics. It is embedded as text and parsed at compile time.
+;
+; Functions missing here are reported as undefined when linking a module
+; that uses them.
+
+target triple = "agx-apple-macosx"
+
+; Special registers. The member index selects x (0), y (1) or z (2).
+define i32 @__zluda_ptx_impl_sreg_tid(i8 zeroext %member) #0 {
+  switch i8 %member, label %x [i8 1, label %y
+                                i8 2, label %z]
+x:
+  %vx = call i32 @llvm.agx.thread.position.in.threadgroup.x()
+  ret i32 %vx
+y:
+  %vy = call i32 @llvm.agx.thread.position.in.threadgroup.y()
+  ret i32 %vy
+z:
+  %vz = call i32 @llvm.agx.thread.position.in.threadgroup.z()
+  ret i32 %vz
+}
+define i32 @__zluda_ptx_impl_sreg_ntid(i8 zeroext %member) #0 {
+  switch i8 %member, label %x [i8 1, label %y
+                                i8 2, label %z]
+x:
+  %vx = call i32 @llvm.agx.threads.per.threadgroup.x()
+  ret i32 %vx
+y:
+  %vy = call i32 @llvm.agx.threads.per.threadgroup.y()
+  ret i32 %vy
+z:
+  %vz = call i32 @llvm.agx.threads.per.threadgroup.z()
+  ret i32 %vz
+}
+define i32 @__zluda_ptx_impl_sreg_ctaid(i8 zeroext %member) #0 {
+  switch i8 %member, label %x [i8 1, label %y
+                                i8 2, label %z]
+x:
+  %vx = call i32 @llvm.agx.threadgroup.position.in.grid.x()
+  ret i32 %vx
+y:
+  %vy = call i32 @llvm.agx.threadgroup.position.in.grid.y()
+  ret i32 %vy
+z:
+  %vz = call i32 @llvm.agx.threadgroup.position.in.grid.z()
+  ret i32 %vz
+}
+define i32 @__zluda_ptx_impl_sreg_nctaid(i8 zeroext %member) #0 {
+  switch i8 %member, label %x [i8 1, label %y
+                                i8 2, label %z]
+x:
+  %vx = call i32 @llvm.agx.threadgroups.per.grid.x()
+  ret i32 %vx
+y:
+  %vy = call i32 @llvm.agx.threadgroups.per.grid.y()
+  ret i32 %vy
+z:
+  %vz = call i32 @llvm.agx.threadgroups.per.grid.z()
+  ret i32 %vz
+}
+define i32 @__zluda_ptx_impl_sreg_laneid() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  ret i32 %l
+}
+
+define i32 @__zluda_ptx_impl_sreg_lanemask_le() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %s = shl i32 2, %l
+  %m = sub i32 %s, 1
+  ret i32 %m
+}
+
+define i32 @__zluda_ptx_impl_sreg_lanemask_lt() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %s = shl i32 1, %l
+  %m = sub i32 %s, 1
+  ret i32 %m
+}
+
+define i32 @__zluda_ptx_impl_sreg_lanemask_ge() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %m = shl i32 -1, %l
+  ret i32 %m
+}
+
+; There is no known cycle counter readable by shaders.
+define i32 @__zluda_ptx_impl_sreg_clock() #0 {
+  ret i32 0
+}
+
+define i32 @__zluda_ptx_impl_activemask() #0 {
+  %m = call i32 @llvm.agx.simd.ballot(i1 true)
+  ret i32 %m
+}
+
+; Bit field extract and insert, with PTX's clamping of position and length.
+define i32 @__zluda_ptx_impl_bfe_u32(i32 %base, i32 %pos32, i32 %len32) #0 {
+  %pos = and i32 %pos32, 255
+  %len = and i32 %len32, 255
+  %pos.big = icmp uge i32 %pos, 32
+  %shifted = lshr i32 %base, %pos
+  %len.big = icmp uge i32 %len, 32
+  %mask.s = shl i32 1, %len
+  %mask = sub i32 %mask.s, 1
+  %masked = and i32 %shifted, %mask
+  %r0 = select i1 %len.big, i32 %shifted, i32 %masked
+  %r = select i1 %pos.big, i32 0, i32 %r0
+  ret i32 %r
+}
+
+define i64 @__zluda_ptx_impl_bfe_u64(i64 %base, i32 %pos, i32 %len) #0 {
+  %pos64 = zext i32 %pos to i64
+  %len64 = zext i32 %len to i64
+  %pos.big = icmp uge i32 %pos, 64
+  %shifted = lshr i64 %base, %pos64
+  %len.big = icmp uge i32 %len, 64
+  %mask.s = shl i64 1, %len64
+  %mask = sub i64 %mask.s, 1
+  %masked = and i64 %shifted, %mask
+  %r0 = select i1 %len.big, i64 %shifted, i64 %masked
+  %r = select i1 %pos.big, i64 0, i64 %r0
+  ret i64 %r
+}
+
+define i32 @__zluda_ptx_impl_bfe_s32(i32 %base, i32 %pos32, i32 %len32) #0 {
+  %pos = and i32 %pos32, 255
+  %len = and i32 %len32, 255
+  %len.zero = icmp eq i32 %len, 0
+  %pos.big = icmp uge i32 %pos, 32
+  %sign = ashr i32 %base, 31
+  ; Clamp pos + len to 32, then shift the field to the top and back.
+  %end = add i32 %pos, %len
+  %end.big = icmp ugt i32 %end, 32
+  %len.c = sub i32 32, %pos
+  %len.f = select i1 %end.big, i32 %len.c, i32 %len
+  %up = sub i32 32, %pos
+  %up2 = sub i32 %up, %len.f
+  %top = shl i32 %base, %up2
+  %down = sub i32 32, %len.f
+  %field = ashr i32 %top, %down
+  %r0 = select i1 %pos.big, i32 %sign, i32 %field
+  %r = select i1 %len.zero, i32 0, i32 %r0
+  ret i32 %r
+}
+
+define i64 @__zluda_ptx_impl_bfe_s64(i64 %base, i32 %pos, i32 %len) #0 {
+  %len.zero = icmp eq i32 %len, 0
+  %pos.big = icmp uge i32 %pos, 64
+  %sign = ashr i64 %base, 63
+  %sum = call {i32, i1} @llvm.uadd.with.overflow.i32(i32 %pos, i32 %len)
+  %end = extractvalue {i32, i1} %sum, 0
+  %ovf = extractvalue {i32, i1} %sum, 1
+  %end.big0 = icmp uge i32 %end, 64
+  %end.big = or i1 %end.big0, %ovf
+  %len.c = sub i32 64, %pos
+  %len.f = select i1 %end.big, i32 %len.c, i32 %len
+  %pos64 = zext i32 %pos to i64
+  %len64 = zext i32 %len.f to i64
+  %up0 = sub i64 64, %pos64
+  %up = sub i64 %up0, %len64
+  %top = shl i64 %base, %up
+  %down = sub i64 64, %len64
+  %field = ashr i64 %top, %down
+  %r0 = select i1 %pos.big, i64 %sign, i64 %field
+  %r = select i1 %len.zero, i64 0, i64 %r0
+  ret i64 %r
+}
+
+define i32 @__zluda_ptx_impl_bfi_b32(i32 %insert, i32 %base, i32 %pos32, i32 %len32) #0 {
+  %pos = and i32 %pos32, 255
+  %len = and i32 %len32, 255
+  %pos.big = icmp uge i32 %pos, 32
+  %len.big = icmp uge i32 %len, 32
+  %bits.s = shl i32 1, %len
+  %bits = sub i32 %bits.s, 1
+  %bits.f = select i1 %len.big, i32 -1, i32 %bits
+  %mask = shl i32 %bits.f, %pos
+  %ins = shl i32 %insert, %pos
+  %nmask = xor i32 %mask, -1
+  %keep = and i32 %base, %nmask
+  %put = and i32 %ins, %mask
+  %merged = or i32 %keep, %put
+  %r = select i1 %pos.big, i32 %base, i32 %merged
+  ret i32 %r
+}
+
+define i64 @__zluda_ptx_impl_bfi_b64(i64 %insert, i64 %base, i32 %pos, i32 %len) #0 {
+  %pos.big = icmp uge i32 %pos, 64
+  %len.big = icmp uge i32 %len, 64
+  %pos64 = zext i32 %pos to i64
+  %len64 = zext i32 %len to i64
+  %bits.s = shl i64 1, %len64
+  %bits = sub i64 %bits.s, 1
+  %bits.f = select i1 %len.big, i64 -1, i64 %bits
+  %mask = shl i64 %bits.f, %pos64
+  %ins = shl i64 %insert, %pos64
+  %nmask = xor i64 %mask, -1
+  %keep = and i64 %base, %nmask
+  %put = and i64 %ins, %mask
+  %merged = or i64 %keep, %put
+  %r = select i1 %pos.big, i64 %base, i64 %merged
+  ret i64 %r
+}
+
+define i32 @__zluda_ptx_impl_bmsk_clamp_b32(i32 %position, i32 %width) #0 {
+  %p = and i32 %position, 31
+  %wd = and i32 %width, 31
+  %bits.s = shl i32 1, %wd
+  %bits = sub i32 %bits.s, 1
+  %m = shl i32 %bits, %p
+  ret i32 %m
+}
+
+; Barriers. bar.sync orders threadgroup memory as well.
+define void @__zluda_ptx_impl_bar_sync(i32 %barrier) #1 {
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  ret void
+}
+
+; Threadgroup-wide reductions of a predicate, through a threadgroup variable.
+@__zluda_ptx_impl_agx_bar_red = internal addrspace(3) global i32 undef
+
+define zeroext i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %barrier, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %value = xor i1 %pred, %invert
+  %v32 = zext i1 %value to i32
+  call void @llvm.agx.threadgroup.barrier()
+  %tid = call i32 @llvm.agx.thread.index.in.threadgroup()
+  %first = icmp eq i32 %tid, 0
+  br i1 %first, label %init, label %reduce
+init:
+  store i32 1, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  br label %reduce
+reduce:
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %old = atomicrmw and ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red, i32 %v32 monotonic
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %all = load i32, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  call void @llvm.agx.threadgroup.barrier()
+  %r = icmp ne i32 %all, 0
+  ret i1 %r
+}
+define zeroext i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %barrier, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %value = xor i1 %pred, %invert
+  %v32 = zext i1 %value to i32
+  call void @llvm.agx.threadgroup.barrier()
+  %tid = call i32 @llvm.agx.thread.index.in.threadgroup()
+  %first = icmp eq i32 %tid, 0
+  br i1 %first, label %init, label %reduce
+init:
+  store i32 0, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  br label %reduce
+reduce:
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %old = atomicrmw or ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red, i32 %v32 monotonic
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %all = load i32, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  call void @llvm.agx.threadgroup.barrier()
+  %r = icmp ne i32 %all, 0
+  ret i1 %r
+}
+; shfl.sync: opts holds the subsection mask in bits 12..8 and the end lane
+; in bits 4..0. Out of range lanes read their own value and clear the
+; predicate.
+define <2 x i32> @__zluda_ptx_impl_shfl_sync_up_b32_pred(i32 %input, i32 %delta0, i32 %opts, i32 %membermask) #2 {
+  %sm0 = lshr i32 %opts, 8
+  %section_mask = and i32 %sm0, 31
+  %warp_end = and i32 %opts, 31
+  %delta = and i32 %delta0, 31
+  %self = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %subsection = and i32 %section_mask, %self
+  %nsec = xor i32 %section_mask, -1
+  %endbits = and i32 %nsec, %warp_end
+  %subsection_end = or i32 %subsection, %endbits
+  %idx = sub i32 %self, %delta
+  %oob = icmp slt i32 %idx, %subsection_end
+  %lane = select i1 %oob, i32 %self, i32 %idx
+  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %inb = xor i1 %oob, true
+  %p = zext i1 %inb to i32
+  %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
+  %r = insertelement <2 x i32> %r0, i32 %p, i32 1
+  ret <2 x i32> %r
+}
+
+define i32 @__zluda_ptx_impl_shfl_sync_up_b32(i32 %input, i32 %delta, i32 %opts, i32 %membermask) #2 {
+  %r = call <2 x i32> @__zluda_ptx_impl_shfl_sync_up_b32_pred(i32 %input, i32 %delta, i32 %opts, i32 %membermask)
+  %v = extractelement <2 x i32> %r, i32 0
+  ret i32 %v
+}
+define <2 x i32> @__zluda_ptx_impl_shfl_sync_down_b32_pred(i32 %input, i32 %delta0, i32 %opts, i32 %membermask) #2 {
+  %sm0 = lshr i32 %opts, 8
+  %section_mask = and i32 %sm0, 31
+  %warp_end = and i32 %opts, 31
+  %delta = and i32 %delta0, 31
+  %self = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %subsection = and i32 %section_mask, %self
+  %nsec = xor i32 %section_mask, -1
+  %endbits = and i32 %nsec, %warp_end
+  %subsection_end = or i32 %subsection, %endbits
+  %idx = add i32 %self, %delta
+  %oob = icmp sgt i32 %idx, %subsection_end
+  %lane = select i1 %oob, i32 %self, i32 %idx
+  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %inb = xor i1 %oob, true
+  %p = zext i1 %inb to i32
+  %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
+  %r = insertelement <2 x i32> %r0, i32 %p, i32 1
+  ret <2 x i32> %r
+}
+
+define i32 @__zluda_ptx_impl_shfl_sync_down_b32(i32 %input, i32 %delta, i32 %opts, i32 %membermask) #2 {
+  %r = call <2 x i32> @__zluda_ptx_impl_shfl_sync_down_b32_pred(i32 %input, i32 %delta, i32 %opts, i32 %membermask)
+  %v = extractelement <2 x i32> %r, i32 0
+  ret i32 %v
+}
+define <2 x i32> @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32 %input, i32 %delta0, i32 %opts, i32 %membermask) #2 {
+  %sm0 = lshr i32 %opts, 8
+  %section_mask = and i32 %sm0, 31
+  %warp_end = and i32 %opts, 31
+  %delta = and i32 %delta0, 31
+  %self = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %subsection = and i32 %section_mask, %self
+  %nsec = xor i32 %section_mask, -1
+  %endbits = and i32 %nsec, %warp_end
+  %subsection_end = or i32 %subsection, %endbits
+  %idx = xor i32 %self, %delta
+  %oob = icmp sgt i32 %idx, %subsection_end
+  %lane = select i1 %oob, i32 %self, i32 %idx
+  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %inb = xor i1 %oob, true
+  %p = zext i1 %inb to i32
+  %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
+  %r = insertelement <2 x i32> %r0, i32 %p, i32 1
+  ret <2 x i32> %r
+}
+
+define i32 @__zluda_ptx_impl_shfl_sync_bfly_b32(i32 %input, i32 %delta, i32 %opts, i32 %membermask) #2 {
+  %r = call <2 x i32> @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32 %input, i32 %delta, i32 %opts, i32 %membermask)
+  %v = extractelement <2 x i32> %r, i32 0
+  ret i32 %v
+}
+define <2 x i32> @__zluda_ptx_impl_shfl_sync_idx_b32_pred(i32 %input, i32 %delta0, i32 %opts, i32 %membermask) #2 {
+  %sm0 = lshr i32 %opts, 8
+  %section_mask = and i32 %sm0, 31
+  %warp_end = and i32 %opts, 31
+  %delta = and i32 %delta0, 31
+  %self = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %subsection = and i32 %section_mask, %self
+  %nsec = xor i32 %section_mask, -1
+  %endbits = and i32 %nsec, %warp_end
+  %subsection_end = or i32 %subsection, %endbits
+  %nmask = xor i32 %section_mask, -1
+  %inside = and i32 %delta, %nmask
+  %idx = or i32 %inside, %subsection
+  %oob = icmp sgt i32 %idx, %subsection_end
+  %lane = select i1 %oob, i32 %self, i32 %idx
+  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %inb = xor i1 %oob, true
+  %p = zext i1 %inb to i32
+  %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
+  %r = insertelement <2 x i32> %r0, i32 %p, i32 1
+  ret <2 x i32> %r
+}
+
+define i32 @__zluda_ptx_impl_shfl_sync_idx_b32(i32 %input, i32 %delta, i32 %opts, i32 %membermask) #2 {
+  %r = call <2 x i32> @__zluda_ptx_impl_shfl_sync_idx_b32_pred(i32 %input, i32 %delta, i32 %opts, i32 %membermask)
+  %v = extractelement <2 x i32> %r, i32 0
+  ret i32 %v
+}
+; Warp votes. The member mask is ignored: all active threads take part.
+define zeroext i1 @__zluda_ptx_impl_vote_sync_any_pred(i1 zeroext %value, i32 %membermask) #2 {
+  %b = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %r = icmp ne i32 %b, 0
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_sync_any_pred_negate(i1 zeroext %value, i32 %membermask) #2 {
+  %n = xor i1 %value, true
+  %b = call i32 @llvm.agx.simd.ballot(i1 %n)
+  %r = icmp ne i32 %b, 0
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_sync_all_pred(i1 zeroext %value, i32 %membermask) #2 {
+  %n = xor i1 %value, true
+  %b = call i32 @llvm.agx.simd.ballot(i1 %n)
+  %r = icmp eq i32 %b, 0
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_sync_all_pred_negate(i1 zeroext %value, i32 %membermask) #2 {
+  %b = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %r = icmp eq i32 %b, 0
+  ret i1 %r
+}
+
+define i32 @__zluda_ptx_impl_vote_sync_ballot_b32(i1 zeroext %value, i32 %membermask) #2 {
+  %b = call i32 @llvm.agx.simd.ballot(i1 %value)
+  ret i32 %b
+}
+
+define i32 @__zluda_ptx_impl_vote_sync_ballot_b32_negate(i1 zeroext %value, i32 %membermask) #2 {
+  %n = xor i1 %value, true
+  %b = call i32 @llvm.agx.simd.ballot(i1 %n)
+  ret i32 %b
+}
+
+define i32 @__zluda_ptx_impl_vote_ballot_b32(i1 zeroext %value) #2 {
+  %b = call i32 @llvm.agx.simd.ballot(i1 %value)
+  ret i32 %b
+}
+
+define i32 @__zluda_ptx_impl_vote_ballot_b32_negate(i1 zeroext %value) #2 {
+  %n = xor i1 %value, true
+  %b = call i32 @llvm.agx.simd.ballot(i1 %n)
+  ret i32 %b
+}
+
+; redux.sync over the SIMD-group (the member mask is ignored). The reduction
+; operation numbers are those of llvm.agx.simd.reduce.
+define i32 @__zluda_ptx_impl_redux_sync_add_u32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 16)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_add_s32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 16)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_min_u32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 28)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_max_u32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 30)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_min_s32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 20)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_max_s32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 22)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_and_b32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 0)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_or_b32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 2)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_redux_sync_xor_b32(i32 %src, i32 %membermask) #2 {
+  %r = call i32 @llvm.agx.simd.reduce.i32(i32 %src, i32 4)
+  ret i32 %r
+}
+; Approximate math maps to the hardware functions.
+define float @__zluda_ptx_impl_sqrt_approx_f32(float %x) #0 {
+  %r = call float @llvm.sqrt.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_rsqrt_approx_f32(float %x) #0 {
+  %r = call float @llvm.agx.rsqrt.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_rcp_approx_f32(float %x) #0 {
+  %r = call float @llvm.agx.rcp.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_ex2_approx_f32(float %x) #0 {
+  %r = call float @llvm.exp2.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_lg2_approx_f32(float %x) #0 {
+  %r = call float @llvm.log2.f32(float %x)
+  ret float %r
+}
+
+; Not correctly rounded: AGX has no correctly rounded square root.
+define float @__zluda_ptx_impl_sqrt_rn_f32(float %x) #0 {
+  %r = call float @llvm.sqrt.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_sqrt_rn_ftz_f32(float %x) #0 {
+  %r = call float @llvm.sqrt.f32(float %x)
+  ret float %r
+}
+
+define float @__zluda_ptx_impl_div_full_f32(float %a, float %b) #0 {
+  %r = fdiv float %a, %b
+  ret float %r
+}
+
+; prmt: each selector nibble picks a byte of {b, a}; bit 3 replicates its
+; sign bit.
+define i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %s) #0 {
+  %x64 = zext i32 %x to i64
+  %y64 = zext i32 %y to i64
+  %yh = shl i64 %y64, 32
+  %src = or i64 %x64, %yh
+  %sel0.s = lshr i32 %s, 0
+  %sel0 = and i32 %sel0.s, 15
+  %idx0 = and i32 %sel0, 7
+  %sh0.b = shl i32 %idx0, 3
+  %sh0 = zext i32 %sh0.b to i64
+  %byte0.w = lshr i64 %src, %sh0
+  %byte0.t = trunc i64 %byte0.w to i32
+  %byte0 = and i32 %byte0.t, 255
+  %rep0.f = and i32 %sel0, 8
+  %rep0 = icmp ne i32 %rep0.f, 0
+  %sgn0.s = shl i32 %byte0, 24
+  %sgn0.a = ashr i32 %sgn0.s, 31
+  %sgn0 = and i32 %sgn0.a, 255
+  %b0 = select i1 %rep0, i32 %sgn0, i32 %byte0
+  %p0 = shl i32 %b0, 0
+  %sel1.s = lshr i32 %s, 4
+  %sel1 = and i32 %sel1.s, 15
+  %idx1 = and i32 %sel1, 7
+  %sh1.b = shl i32 %idx1, 3
+  %sh1 = zext i32 %sh1.b to i64
+  %byte1.w = lshr i64 %src, %sh1
+  %byte1.t = trunc i64 %byte1.w to i32
+  %byte1 = and i32 %byte1.t, 255
+  %rep1.f = and i32 %sel1, 8
+  %rep1 = icmp ne i32 %rep1.f, 0
+  %sgn1.s = shl i32 %byte1, 24
+  %sgn1.a = ashr i32 %sgn1.s, 31
+  %sgn1 = and i32 %sgn1.a, 255
+  %b1 = select i1 %rep1, i32 %sgn1, i32 %byte1
+  %p1 = shl i32 %b1, 8
+  %sel2.s = lshr i32 %s, 8
+  %sel2 = and i32 %sel2.s, 15
+  %idx2 = and i32 %sel2, 7
+  %sh2.b = shl i32 %idx2, 3
+  %sh2 = zext i32 %sh2.b to i64
+  %byte2.w = lshr i64 %src, %sh2
+  %byte2.t = trunc i64 %byte2.w to i32
+  %byte2 = and i32 %byte2.t, 255
+  %rep2.f = and i32 %sel2, 8
+  %rep2 = icmp ne i32 %rep2.f, 0
+  %sgn2.s = shl i32 %byte2, 24
+  %sgn2.a = ashr i32 %sgn2.s, 31
+  %sgn2 = and i32 %sgn2.a, 255
+  %b2 = select i1 %rep2, i32 %sgn2, i32 %byte2
+  %p2 = shl i32 %b2, 16
+  %sel3.s = lshr i32 %s, 12
+  %sel3 = and i32 %sel3.s, 15
+  %idx3 = and i32 %sel3, 7
+  %sh3.b = shl i32 %idx3, 3
+  %sh3 = zext i32 %sh3.b to i64
+  %byte3.w = lshr i64 %src, %sh3
+  %byte3.t = trunc i64 %byte3.w to i32
+  %byte3 = and i32 %byte3.t, 255
+  %rep3.f = and i32 %sel3, 8
+  %rep3 = icmp ne i32 %rep3.f, 0
+  %sgn3.s = shl i32 %byte3, 24
+  %sgn3.a = ashr i32 %sgn3.s, 31
+  %sgn3 = and i32 %sgn3.a, 255
+  %b3 = select i1 %rep3, i32 %sgn3, i32 %byte3
+  %p3 = shl i32 %b3, 24
+  %o01 = or i32 %p0, %p1
+  %o012 = or i32 %o01, %p2
+  %r = or i32 %o012, %p3
+  ret i32 %r
+}
+
+define void @__zluda_ptx_impl_nanosleep_u32(i32 %nanoseconds) #0 {
+  ret void
+}
+
+define void @__zluda_ptx_impl___assertfail(i64 %message, i64 %file, i32 %line, i64 %function, i64 %char_size) #1 {
+  call void @llvm.trap()
+  unreachable
+}
+
+
+; div.rn: the AMDGPU implementation splits the division into a scaled
+; approximation and a fixup. Here the first part does the whole division
+; (a reciprocal refined with a Newton-Raphson step) and the second returns it.
+%struct.f32.f32.f32.i8 = type { float, float, float, i8 }
+
+define %struct.f32.f32.f32.i8 @__zluda_ptx_impl_div_f32_part1(float %a, float %b) #0 {
+  %q = fdiv float %a, %b
+  %r = insertvalue %struct.f32.f32.f32.i8 zeroinitializer, float %q, 2
+  ret %struct.f32.f32.f32.i8 %r
+}
+
+define float @__zluda_ptx_impl_div_f32_part2(float %x, float %y, float %fma4, float %fma1, float %fma3, i8 %flag) #0 {
+  ret float %fma3
+}
+
+; tanh(x) = sign(x) * (1 - e) / (1 + e) with e = exp(-2|x|), which cannot
+; overflow.
+define float @__zluda_ptx_impl_tanh_f32(float %x) #0 {
+  %ax = call float @llvm.fabs.f32(float %x)
+  %s = fmul float %ax, 0xC007154760000000
+  %e = call float @llvm.exp2.f32(float %s)
+  %num = fsub float 1.0, %e
+  %den = fadd float 1.0, %e
+  %t = fdiv float %num, %den
+  %r = call float @llvm.copysign.f32(float %t, float %x)
+  ret float %r
+}
+
+define half @__zluda_ptx_impl_tanh_f16(half %x) #0 {
+  %f = fpext half %x to float
+  %t = call float @__zluda_ptx_impl_tanh_f32(float %f)
+  %r = fptrunc float %t to half
+  ret half %r
+}
+
+; dp2a: the two 16-bit halves of a times two bytes of b (bytes 0-1 for lo,
+; 2-3 for hi), plus c.
+define i32 @__zluda_ptx_impl_dp2a_lo_u32_u32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = lshr i32 %a0.t, 16
+  %a1 = lshr i32 %a, 16
+  %b0.t = shl i32 %b, 24
+  %b0 = lshr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 16
+  %b1 = lshr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_lo_s32_s32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = ashr i32 %a0.t, 16
+  %a1 = ashr i32 %a, 16
+  %b0.t = shl i32 %b, 24
+  %b0 = ashr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 16
+  %b1 = ashr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_lo_s32_u32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = ashr i32 %a0.t, 16
+  %a1 = ashr i32 %a, 16
+  %b0.t = shl i32 %b, 24
+  %b0 = lshr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 16
+  %b1 = lshr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_lo_u32_s32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = lshr i32 %a0.t, 16
+  %a1 = lshr i32 %a, 16
+  %b0.t = shl i32 %b, 24
+  %b0 = ashr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 16
+  %b1 = ashr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_hi_u32_u32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = lshr i32 %a0.t, 16
+  %a1 = lshr i32 %a, 16
+  %b0.t = shl i32 %b, 8
+  %b0 = lshr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 0
+  %b1 = lshr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_hi_s32_s32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = ashr i32 %a0.t, 16
+  %a1 = ashr i32 %a, 16
+  %b0.t = shl i32 %b, 8
+  %b0 = ashr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 0
+  %b1 = ashr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_hi_s32_u32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = ashr i32 %a0.t, 16
+  %a1 = ashr i32 %a, 16
+  %b0.t = shl i32 %b, 8
+  %b0 = lshr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 0
+  %b1 = lshr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_dp2a_hi_u32_s32(i32 %a, i32 %b, i32 %c) #0 {
+  %a0.t = shl i32 %a, 16
+  %a0 = lshr i32 %a0.t, 16
+  %a1 = lshr i32 %a, 16
+  %b0.t = shl i32 %b, 8
+  %b0 = ashr i32 %b0.t, 24
+  %b1.t = shl i32 %b, 0
+  %b1 = ashr i32 %b1.t, 24
+  %p0 = mul i32 %a0, %b0
+  %p1 = mul i32 %a1, %b1
+  %s = add i32 %p0, %p1
+  %r = add i32 %s, %c
+  ret i32 %r
+}
+; match.any.sync: the active lanes holding the same value.
+define i32 @__zluda_ptx_impl_match_any_sync_b32(i32 %value, i32 %membermask) #2 {
+entry:
+  %active = call i32 @llvm.agx.simd.ballot(i1 true)
+  br label %loop
+loop:
+  %i = phi i32 [0, %entry], [%i.next, %loop]
+  %mask = phi i32 [0, %entry], [%mask.next, %loop]
+  %other = call i32 @llvm.agx.simd.shuffle.i32(i32 %value, i32 %i)
+  %same = icmp eq i32 %other, %value
+  %bit = shl i32 1, %i
+  %set = or i32 %mask, %bit
+  %mask.next = select i1 %same, i32 %set, i32 %mask
+  %i.next = add i32 %i, 1
+  %done = icmp eq i32 %i.next, 32
+  br i1 %done, label %exit, label %loop
+exit:
+  %r = and i32 %mask.next, %active
+  ret i32 %r
+}
+
+define i32 @__zluda_ptx_impl_match_any_sync_b64(i64 %value, i32 %membermask) #2 {
+entry:
+  %active = call i32 @llvm.agx.simd.ballot(i1 true)
+  %lo = trunc i64 %value to i32
+  %hi.s = lshr i64 %value, 32
+  %hi = trunc i64 %hi.s to i32
+  br label %loop
+loop:
+  %i = phi i32 [0, %entry], [%i.next, %loop]
+  %mask = phi i32 [0, %entry], [%mask.next, %loop]
+  %olo = call i32 @llvm.agx.simd.shuffle.i32(i32 %lo, i32 %i)
+  %ohi = call i32 @llvm.agx.simd.shuffle.i32(i32 %hi, i32 %i)
+  %slo = icmp eq i32 %olo, %lo
+  %shi = icmp eq i32 %ohi, %hi
+  %same = and i1 %slo, %shi
+  %bit = shl i32 1, %i
+  %set = or i32 %mask, %bit
+  %mask.next = select i1 %same, i32 %set, i32 %mask
+  %i.next = add i32 %i, 1
+  %done = icmp eq i32 %i.next, 32
+  br i1 %done, label %exit, label %loop
+exit:
+  %r = and i32 %mask.next, %active
+  ret i32 %r
+}
+
+declare float @llvm.fabs.f32(float)
+declare float @llvm.copysign.f32(float, float)
+
+declare i32 @llvm.agx.thread.position.in.threadgroup.x()
+declare i32 @llvm.agx.thread.position.in.threadgroup.y()
+declare i32 @llvm.agx.thread.position.in.threadgroup.z()
+declare i32 @llvm.agx.threads.per.threadgroup.x()
+declare i32 @llvm.agx.threads.per.threadgroup.y()
+declare i32 @llvm.agx.threads.per.threadgroup.z()
+declare i32 @llvm.agx.threadgroup.position.in.grid.x()
+declare i32 @llvm.agx.threadgroup.position.in.grid.y()
+declare i32 @llvm.agx.threadgroup.position.in.grid.z()
+declare i32 @llvm.agx.threadgroups.per.grid.x()
+declare i32 @llvm.agx.threadgroups.per.grid.y()
+declare i32 @llvm.agx.threadgroups.per.grid.z()
+declare i32 @llvm.agx.thread.index.in.simdgroup()
+declare i32 @llvm.agx.thread.index.in.threadgroup()
+declare i32 @llvm.agx.simd.ballot(i1)
+declare i32 @llvm.agx.simd.shuffle.i32(i32, i32)
+declare i32 @llvm.agx.simd.reduce.i32(i32, i32 immarg)
+declare void @llvm.agx.threadgroup.barrier()
+declare float @llvm.agx.rsqrt.f32(float)
+declare float @llvm.agx.rcp.f32(float)
+declare float @llvm.sqrt.f32(float)
+declare float @llvm.exp2.f32(float)
+declare float @llvm.log2.f32(float)
+declare {i32, i1} @llvm.uadd.with.overflow.i32(i32, i32)
+declare void @llvm.trap()
+
+attributes #0 = { alwaysinline nounwind willreturn memory(none) }
+attributes #1 = { alwaysinline convergent nounwind }
+attributes #2 = { alwaysinline convergent nounwind willreturn memory(none) }

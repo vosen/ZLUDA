@@ -67,9 +67,10 @@ pub(crate) fn run<'input>(
     id_defs: GlobalStringIdentResolver2<'input>,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
     fp_mode: FloatingPointMode,
+    target: Target,
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
-    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, fp_mode);
+    let mut emit_ctx = ModuleEmitContext::new(context, &module, &id_defs, fp_mode, target);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -91,6 +92,7 @@ struct ModuleEmitContext<'a, 'input> {
     id_defs: &'a GlobalStringIdentResolver2<'input>,
     resolver: ResolveIdent,
     fp_mode: FloatingPointMode,
+    target: Target,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -99,6 +101,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         module: &llvm::Module,
         id_defs: &'a GlobalStringIdentResolver2<'input>,
         fp_mode: FloatingPointMode,
+        target: Target,
     ) -> Self {
         ModuleEmitContext {
             context: context.get(),
@@ -107,11 +110,16 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             id_defs,
             resolver: ResolveIdent::new(&id_defs),
             fp_mode,
+            target,
         }
     }
 
-    fn kernel_call_convention() -> u32 {
-        LLVMCallConv::LLVMAMDGPUKERNELCallConv as u32
+    fn kernel_call_convention(&self) -> u32 {
+        match self.target {
+            Target::Amdgpu => LLVMCallConv::LLVMAMDGPUKERNELCallConv as u32,
+            // CallingConv::AGX_KERNEL, which llvm-sys does not know.
+            Target::Agx => 128,
+        }
     }
 
     fn func_call_convention() -> u32 {
@@ -196,7 +204,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             }
         }
         let call_conv = if is_kernel {
-            Self::kernel_call_convention()
+            self.kernel_call_convention()
         } else {
             Self::func_call_convention()
         };
@@ -333,6 +341,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 
     fn emit_fn_attribute_string(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
+        // AMDGPU tuning attributes mean nothing to other backends.
+        if self.target != Target::Amdgpu && key.starts_with("amdgpu-") {
+            return;
+        }
         let attribute = unsafe {
             LLVMCreateStringAttribute(
                 self.context,
@@ -379,6 +391,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 
     fn emit_target_features(&mut self, fn_: LLVMValueRef) {
+        // The AGX processor and its features are chosen when compiling.
+        if self.target == Target::Agx {
+            return;
+        }
         let value = format!(
             "+wavefrontsize32,-wavefrontsize64,+cumode{}",
             if cfg!(debug_assertions) {
@@ -438,9 +454,18 @@ fn get_immediate_value(
     imm: &ast::ImmediateValue,
 ) -> *mut LLVMValue {
     let type_ = get_scalar_type(context, *scalar_type);
+    // PTX immediates are 64-bit; LLVM requires them to fit the type.
+    let truncate = |x: u64| {
+        let width = unsafe { LLVMGetIntTypeWidth(type_) };
+        if width < 64 {
+            x & ((1u64 << width) - 1)
+        } else {
+            x
+        }
+    };
     match imm {
-        ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, *x, 0) },
-        ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, *x as u64, 0) },
+        ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, truncate(*x), 0) },
+        ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, truncate(*x as u64), 0) },
         ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, *x as f64) },
         ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, *x) },
     }
@@ -482,6 +507,7 @@ struct MethodEmitContext<'a> {
     base_32bit_memory: Option<SpirvWord>,
     is_kernel: bool,
     fp: FloatingPoint,
+    target: Target,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -509,6 +535,7 @@ impl<'a> MethodEmitContext<'a> {
             base_32bit_memory,
             is_kernel,
             fp,
+            target: parent.target,
         }
     }
 
@@ -546,7 +573,7 @@ impl<'a> MethodEmitContext<'a> {
         // On Windows, with 32 bit ZLUDA on kernel _Z29KernelDeformableUberCollisionPi in
         // SampleCloth.exe scalar memory accesses read stale memory. This might also affect
         // Linux. Until I have a repro that's the best I can do
-        if cfg!(windows) {
+        if cfg!(windows) && self.target == Target::Amdgpu {
             self.emit_intrinsic(c"llvm.amdgcn.s.dcache.inv", None, Vec::new(), Vec::new())?;
         }
         if let Some(KernelAttributes {
@@ -1898,7 +1925,7 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     fn emit_not_impl(&mut self, type_: LLVMTypeRef, src: LLVMValueRef) -> LLVMValueRef {
-        let constant = unsafe { LLVMConstInt(type_, u64::MAX, 0) };
+        let constant = unsafe { LLVMConstInt(type_, u64::MAX, 1) };
         unsafe { LLVMBuildXor(self.builder, src, constant, LLVM_UNNAMED.as_ptr()) }
     }
 
@@ -2511,13 +2538,17 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::RsqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        let intrinsic = match (data.type_, self.fp.mode) {
-            (ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
-            (ast::ScalarType::F32, FloatingPointMode::Constrained) => {
+        let intrinsic = match (self.target, data.type_, self.fp.mode) {
+            (Target::Agx, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
+            (Target::Agx, _, _) => {
+                return Err(error_todo_msg("rsqrt.approx.f64 is not supported on AGX"))
+            }
+            (_, ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
+            (_, ast::ScalarType::F32, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.rsq.f32"
             }
-            (ast::ScalarType::F64, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f64",
-            (ast::ScalarType::F64, FloatingPointMode::Constrained) => {
+            (_, ast::ScalarType::F64, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f64",
+            (_, ast::ScalarType::F64, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.rsq.f64"
             }
             _ => return Err(error_unreachable()),
@@ -2537,7 +2568,16 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, self.fp.mode) {
+        // AGX has no rounding mode control: everything uses the default
+        // floating point environment.
+        let mode = match self.target {
+            Target::Agx => FloatingPointMode::Normal,
+            Target::Amdgpu => self.fp.mode,
+        };
+        let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, mode) {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
+                (c"llvm.sqrt.f32", &[])
+            }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
                 (c"llvm.amdgcn.sqrt.f32", &[])
             }
@@ -2581,6 +2621,12 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let intrinsic = match (data.type_, data.kind, self.fp.mode) {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
+                c"llvm.agx.rcp.f32"
+            }
+            (_, _, _) if self.target == Target::Agx => {
+                return Err(error_todo_msg("rcp.approx.f64 is not supported on AGX"))
+            }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
                 c"llvm.amdgcn.rcp.f32"
             }
@@ -2773,6 +2819,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::Ex2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let intrinsic = match (data.type_, self.fp.mode) {
+            (ast::ScalarType::F16, _) if self.target == Target::Agx => c"llvm.exp2.f16",
+            (ast::ScalarType::F32, _) if self.target == Target::Agx => c"llvm.exp2.f32",
             (ast::ScalarType::F16, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f16",
             (ast::ScalarType::F16, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.exp2.f16"
@@ -2801,6 +2849,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::Lg2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let intrinsic = match self.fp.mode {
+            _ if self.target == Target::Agx => c"llvm.log2.f32",
             FloatingPointMode::Normal => c"llvm.amdgcn.log.f32",
             FloatingPointMode::Constrained => c"llvm.amdgcn.constrained.log.f32",
         };
@@ -2849,6 +2898,10 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     fn emit_bar_warp(&mut self) -> Result<(), TranslateError> {
+        // SIMD-groups execute in lockstep on AGX.
+        if self.target == Target::Agx {
+            return Ok(());
+        }
         self.emit_intrinsic(c"llvm.amdgcn.wave.barrier", None, vec![], vec![])?;
         Ok(())
     }
@@ -3070,6 +3123,9 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::Mul24Details,
         arguments: ast::Mul24Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        if self.target == Target::Agx {
+            return self.emit_mul24_expanded(data, arguments);
+        }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
         let name_lo = match data.type_ {
@@ -3123,7 +3179,67 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    /// mul24 without 24-bit multiply instructions: a 64-bit product of the
+    /// extended low 24 bits, of which .lo returns bits 31..0 and .hi bits
+    /// 47..16.
+    fn emit_mul24_expanded(
+        &mut self,
+        data: ast::Mul24Details,
+        arguments: ast::Mul24Args<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let signed = match data.type_ {
+            ast::ScalarType::U32 => false,
+            ast::ScalarType::S32 => true,
+            _ => return Err(error_unreachable()),
+        };
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let builder = self.builder;
+        let extend = |value: LLVMValueRef| unsafe {
+            let low24 = if signed {
+                let eight = LLVMConstInt(i32_type, 8, 0);
+                let shifted = LLVMBuildShl(builder, value, eight, LLVM_UNNAMED.as_ptr());
+                LLVMBuildAShr(builder, shifted, eight, LLVM_UNNAMED.as_ptr())
+            } else {
+                let mask = LLVMConstInt(i32_type, 0xff_ffff, 0);
+                LLVMBuildAnd(builder, value, mask, LLVM_UNNAMED.as_ptr())
+            };
+            if signed {
+                LLVMBuildSExt(builder, low24, i64_type, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildZExt(builder, low24, i64_type, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        let src1 = extend(self.resolver.value(arguments.src1)?);
+        let src2 = extend(self.resolver.value(arguments.src2)?);
+        let product = unsafe { LLVMBuildMul(builder, src1, src2, LLVM_UNNAMED.as_ptr()) };
+        let product = if data.control == Mul24Control::Hi {
+            let sixteen = unsafe { LLVMConstInt(i64_type, 16, 0) };
+            unsafe { LLVMBuildLShr(builder, product, sixteen, LLVM_UNNAMED.as_ptr()) }
+        } else {
+            product
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildTrunc(builder, product, i32_type, dst)
+        });
+        Ok(())
+    }
+
     fn emit_set_mode(&mut self, mode_reg: ModeRegister) -> Result<(), TranslateError> {
+        if self.target == Target::Agx {
+            // There is no floating point mode register: denormal handling is
+            // fixed, and only round to nearest even is available.
+            return match mode_reg {
+                ModeRegister::Denormal { .. } => Ok(()),
+                ModeRegister::Rounding {
+                    f32: ast::RoundingMode::NearestEven,
+                    f16f64: ast::RoundingMode::NearestEven,
+                } => Ok(()),
+                ModeRegister::Rounding { .. } => Err(error_todo_msg(
+                    "rounding modes other than round to nearest even are not supported on AGX",
+                )),
+            };
+        }
         fn hwreg(reg: u32, offset: u32, size: u32) -> u32 {
             reg | (offset << 6) | ((size - 1) << 11)
         }
@@ -3442,7 +3558,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src3 = if data.negate_src3 {
             let constant =
-                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
+                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 1) };
             unsafe { LLVMBuildXor(self.builder, src3, constant, LLVM_UNNAMED.as_ptr()) }
         } else {
             src3
@@ -3466,7 +3582,7 @@ impl<'a> MethodEmitContext<'a> {
         let one = if dtype.kind() == ast::ScalarKind::Float {
             unsafe { LLVMConstReal(llvm_dtype, 1.0) }
         } else {
-            unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 0) }
+            unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 1) }
         };
         Ok(unsafe { LLVMBuildSelect(self.builder, setp_result, one, zero, LLVM_UNNAMED.as_ptr()) })
     }
@@ -3476,6 +3592,9 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::Dp4aDetails,
         arguments: ast::Dp4aArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        if self.target == Target::Agx {
+            return self.emit_dp4a_expanded(data, arguments);
+        }
         let intrinsic = match (data.atype, data.btype) {
             (ast::ScalarType::U32, ast::ScalarType::U32) => c"llvm.amdgcn.udot4",
             (ast::ScalarType::S32, ast::ScalarType::S32) => c"llvm.amdgcn.sdot4",
@@ -3507,6 +3626,51 @@ impl<'a> MethodEmitContext<'a> {
                 (zero, pred),
             ],
         )?;
+        Ok(())
+    }
+
+    /// dp4a as four byte multiplies: c + sum(a[i] * b[i]), each byte extended
+    /// according to the signedness of its operand.
+    fn emit_dp4a_expanded(
+        &mut self,
+        data: ast::Dp4aDetails,
+        arguments: ast::Dp4aArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let signed = |t: ast::ScalarType| match t {
+            ast::ScalarType::U32 => Ok(false),
+            ast::ScalarType::S32 => Ok(true),
+            _ => Err(error_unreachable()),
+        };
+        let a_signed = signed(data.atype)?;
+        let b_signed = signed(data.btype)?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let builder = self.builder;
+        let byte = |value: LLVMValueRef, index: u64, is_signed: bool| unsafe {
+            // Move byte `index` to the top, then shift it back down.
+            let up = LLVMConstInt(i32_type, 24 - 8 * index, 0);
+            let down = LLVMConstInt(i32_type, 24, 0);
+            let top = LLVMBuildShl(builder, value, up, LLVM_UNNAMED.as_ptr());
+            if is_signed {
+                LLVMBuildAShr(builder, top, down, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildLShr(builder, top, down, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let mut sum = self.resolver.value(arguments.src3)?;
+        for i in 0..4 {
+            let product = unsafe {
+                LLVMBuildMul(
+                    builder,
+                    byte(a, i, a_signed),
+                    byte(b, i, b_signed),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            sum = unsafe { LLVMBuildAdd(builder, sum, product, LLVM_UNNAMED.as_ptr()) };
+        }
+        self.resolver.register(arguments.dst, sum);
         Ok(())
     }
 
@@ -3630,7 +3794,7 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
         let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
-        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 0) };
+        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 1) };
         let src_is_zero = unsafe {
             LLVMBuildICmp(
                 self.builder,
