@@ -1695,9 +1695,55 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        if self.target == Target::Agx {
+            let signed = matches!(data, ptx_parser::DivDetails::Signed(_));
+            return self.emit_defined_int_div(arguments.dst, signed, false, src1, src2);
+        }
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             integer_div(self.builder, src1, src2, dst)
         });
+        Ok(())
+    }
+
+    /// Integer division and remainder with the results NVIDIA GPUs produce
+    /// where PTX leaves them unspecified (and LLVM's instructions are
+    /// undefined): division by zero gives all ones, the remainder of a
+    /// division by zero is the dividend, and signed division of the minimum
+    /// value by -1 wraps. The divisor is replaced by 1 in those cases.
+    fn emit_defined_int_div(
+        &mut self,
+        dst: SpirvWord,
+        signed: bool,
+        rem: bool,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
+    ) -> Result<(), TranslateError> {
+        unsafe {
+            let ty = LLVMTypeOf(src2);
+            let zero = LLVMConstNull(ty);
+            let one = LLVMConstInt(ty, 1, 0);
+            let by_zero = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, zero, LLVM_UNNAMED.as_ptr());
+            let mut unsafe_divisor = by_zero;
+            if signed {
+                let width = LLVMGetIntTypeWidth(ty);
+                let min = LLVMConstInt(ty, 1u64 << (width - 1), 0);
+                let is_min = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src1, min, LLVM_UNNAMED.as_ptr());
+                let is_minus_one = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, LLVMConstAllOnes(ty), LLVM_UNNAMED.as_ptr());
+                let overflow = LLVMBuildAnd(self.builder, is_min, is_minus_one, LLVM_UNNAMED.as_ptr());
+                unsafe_divisor = LLVMBuildOr(self.builder, by_zero, overflow, LLVM_UNNAMED.as_ptr());
+            }
+            let divisor = LLVMBuildSelect(self.builder, unsafe_divisor, one, src2, LLVM_UNNAMED.as_ptr());
+            let result = match (signed, rem) {
+                (false, false) => LLVMBuildUDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
+                (true, false) => LLVMBuildSDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
+                (false, true) => LLVMBuildURem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
+                (true, true) => LLVMBuildSRem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
+            };
+            let by_zero_result = if rem { src1 } else { LLVMConstAllOnes(ty) };
+            self.resolver.with_result(dst, |dst| {
+                LLVMBuildSelect(self.builder, by_zero, by_zero_result, result, dst)
+            });
+        }
         Ok(())
     }
 
@@ -2541,7 +2587,7 @@ impl<'a> MethodEmitContext<'a> {
         let intrinsic = match (self.target, data.type_, self.fp.mode) {
             (Target::Agx, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
             (Target::Agx, _, _) => {
-                return Err(error_todo_msg("rsqrt.approx.f64 is not supported on AGX"))
+                return Err(TranslateError::Unsupported("rsqrt.approx.f64 is not supported on AGX".into()))
             }
             (_, ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
             (_, ast::ScalarType::F32, FloatingPointMode::Constrained) => {
@@ -2625,7 +2671,7 @@ impl<'a> MethodEmitContext<'a> {
                 c"llvm.agx.rcp.f32"
             }
             (_, _, _) if self.target == Target::Agx => {
-                return Err(error_todo_msg("rcp.approx.f64 is not supported on AGX"))
+                return Err(TranslateError::Unsupported("rcp.approx.f64 is not supported on AGX".into()))
             }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
                 c"llvm.amdgcn.rcp.f32"
@@ -2891,6 +2937,10 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        if self.target == Target::Agx {
+            let signed = data.kind() == ptx_parser::ScalarKind::Signed;
+            return self.emit_defined_int_div(arguments.dst, signed, true, src1, src2);
+        }
         self.resolver.with_result(arguments.dst, |dst_name| unsafe {
             llvm_fn(self.builder, src1, src2, dst_name)
         });
@@ -3235,8 +3285,8 @@ impl<'a> MethodEmitContext<'a> {
                     f32: ast::RoundingMode::NearestEven,
                     f16f64: ast::RoundingMode::NearestEven,
                 } => Ok(()),
-                ModeRegister::Rounding { .. } => Err(error_todo_msg(
-                    "rounding modes other than round to nearest even are not supported on AGX",
+                ModeRegister::Rounding { .. } => Err(TranslateError::Unsupported(
+                    "rounding modes other than round to nearest even are not supported on AGX".into(),
                 )),
             };
         }

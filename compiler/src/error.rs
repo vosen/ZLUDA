@@ -47,7 +47,10 @@ impl From<Vec<PtxError<'_>>> for CompilerError {
 
 impl From<TranslateError> for CompilerError {
     fn from(cause: TranslateError) -> Self {
-        let message = format!("PTX TranslateError::{}", cause.as_ref());
+        let message = match &cause {
+            TranslateError::Unsupported(msg) => format!("PTX TranslateError::Unsupported: {}", msg),
+            _ => format!("PTX TranslateError::{}", cause.as_ref()),
+        };
         let cause = Some(Box::new(cause) as Box<dyn std::error::Error>);
         CompilerError::GenericError { cause, message }
     }

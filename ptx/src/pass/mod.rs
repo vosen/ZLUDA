@@ -53,6 +53,10 @@ quick_error! {
         Todo(msg: String) {
             display("TODO: {}", msg)
         }
+        /// A feature the target hardware does not have.
+        Unsupported(msg: String) {
+            display("{}", msg)
+        }
     }
 }
 
@@ -109,6 +113,7 @@ pub fn to_llvm_module_for_target<'input>(
     on_pass_end("expand_operands");
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_post_saturation");
+    let directives = append_implicit_ret(directives);
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("deparamize_functions");
     let directives = rcp_f64_into_div::run(&mut flat_resolver, directives)?;
@@ -274,6 +279,35 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Laneid => "sreg_laneid",
         }
     }
+}
+
+/// Execution that reaches the end of a function body returns, as if the body
+/// ended with `ret;`.
+fn append_implicit_ret(
+    mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>> {
+    for directive in directives.iter_mut() {
+        if let Directive2::Method(Function {
+            body: Some(body), ..
+        }) = directive
+        {
+            let falls_through = !matches!(
+                body.last(),
+                Some(Statement::Instruction(
+                    ast::Instruction::Ret { .. }
+                        | ast::Instruction::Exit { .. }
+                        | ast::Instruction::Trap { .. }
+                        | ast::Instruction::Bra { .. }
+                ))
+            );
+            if falls_through {
+                body.push(Statement::Instruction(ast::Instruction::Ret {
+                    data: ast::RetData { uniform: false },
+                }));
+            }
+        }
+    }
+    directives
 }
 
 #[cfg(debug_assertions)]
