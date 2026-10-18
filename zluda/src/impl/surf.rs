@@ -223,29 +223,30 @@ pub(crate) unsafe fn object_destroy(tex_object: CUsurfObject) -> hipError_t {
     hipDestroySurfaceObject(to_hip(tex_object))
 }
 
-const RESERVED_SURFACE_TOP_BITS: u32 = 3;
+const RESERVED_SURFACE_BOTTOM_BITS: u32 = 3;
 
 fn to_cuda(hip: hipSurfaceObject_t, pixel_size: u32) -> Result<CUsurfObject, hipErrorCode_t> {
     let hip = hip as u64;
-    let top_bits = get_top_bits::<RESERVED_SURFACE_TOP_BITS>(hip);
-    if top_bits != 0 {
+    let bottom_bits = extract_bottom_bits::<RESERVED_SURFACE_BOTTOM_BITS>(hip);
+    if bottom_bits != 0 {
         return Err(hipErrorCode_t::Unknown);
     }
     let shift_size = pixel_size.ilog2() as u64;
-    Ok(set_top_bits::<RESERVED_SURFACE_TOP_BITS>(hip, shift_size))
+    Ok(set_bottom_bits::<RESERVED_SURFACE_BOTTOM_BITS>(
+        hip, shift_size,
+    ))
 }
 
 fn to_hip(cuda: CUsurfObject) -> hipSurfaceObject_t {
-    ((cuda << RESERVED_SURFACE_TOP_BITS) >> RESERVED_SURFACE_TOP_BITS) as _
+    ((cuda >> RESERVED_SURFACE_BOTTOM_BITS) << RESERVED_SURFACE_BOTTOM_BITS) as _
 }
 
-fn get_top_bits<const N: u32>(x: u64) -> u64 {
-    x >> (u64::BITS - N)
+fn extract_bottom_bits<const N: u32>(x: u64) -> u64 {
+    x & ((1 << N) - 1)
 }
 
-fn set_top_bits<const N: u32>(x: u64, bits: u64) -> u64 {
-    let shift = u64::BITS - N;
-    (bits << shift) | x
+fn set_bottom_bits<const N: u32>(x: u64, bits: u64) -> u64 {
+    x | bits
 }
 
 pub(crate) unsafe fn ref_set_array(

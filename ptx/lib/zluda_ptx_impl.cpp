@@ -1255,11 +1255,11 @@ constexpr To zext_or_trunc(From from) noexcept
     return std::bit_cast<To>(buffer);
 }
 
-const uint32_t RESERVED_SURFACE_TOP_BITS = 3;
+const uint32_t RESERVED_SURFACE_BOTTOM_BITS = 3;
 
 static uint64_t adjust_surfobj(uint64_t surfobj) __device__
 {
-    return (surfobj << RESERVED_SURFACE_TOP_BITS) >> RESERVED_SURFACE_TOP_BITS;
+    return (surfobj >> RESERVED_SURFACE_BOTTOM_BITS) << RESERVED_SURFACE_BOTTOM_BITS;
 }
 
 template <typename T>
@@ -1272,7 +1272,8 @@ struct UnpackedCoord
 
 static UnpackedCoord<int32_t> unpack_coord(uint64_t surfobj, int32_t x) __device__
 {
-    uint64_t shift = surfobj >> (64 - RESERVED_SURFACE_TOP_BITS);
+    uint64_t mask = (1ULL << RESERVED_SURFACE_BOTTOM_BITS) - 1ULL;
+    uint64_t shift = surfobj & mask;
     return {adjust_surfobj(surfobj), static_cast<uint32_t>(shift), x >> shift};
 }
 
