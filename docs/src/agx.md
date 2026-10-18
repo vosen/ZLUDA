@@ -66,8 +66,13 @@ an error.
 * The `__zluda_ptx_impl_*` helper functions are implemented in LLVM IR in
   `ptx/lib/zluda_ptx_impl_agx.ll` on top of the `llvm.agx.*` intrinsics
   (clang has no AGX target, so the C++ implementation cannot be reused).
-* `llvm_zluda::compile_agx` links the helpers, optimizes and generates code;
-  backend errors are returned as compilation errors.
+* `llvm_zluda::compile_agx` links the helpers (internal to the module, so
+  unused ones are removed), optimizes and generates code; backend errors are
+  returned as compilation errors.
+* Integer division and remainder give the results of NVIDIA GPUs where PTX
+  leaves them unspecified: division by zero gives all ones, the remainder of
+  a division by zero is the dividend, and the minimum signed value divided by
+  -1 wraps.
 
 ## Limitations
 
@@ -75,11 +80,41 @@ an error.
   tensor core instructions (`mma`, `ldmatrix`), no fp8 conversions, no calls
   to external functions and no function pointers.
 * Only round to nearest even: other rounding modes of `.rz`/`.rm`/`.rp`
-  instructions that need a mode change are rejected. Denormal modes are
-  ignored.
+  instructions that need a mode change are rejected.
+* 32-bit floating point operations always flush denormal inputs and results
+  to zero (the hardware has no other mode), with or without `.ftz`. 16-bit
+  operations keep denormals in hardware; `.ftz` 16-bit operations flush them
+  in software.
+* NaN results have the hardware's bit pattern (for example `0x7e00` for
+  `f16`), not PTX's canonical NaN (`0x7fff`, `0x7fffffff`), and saturation
+  (`.sat`) turns `-0.0` into `+0.0`.
 * `%clock` reads as zero. `nanosleep` does not sleep.
 * `sqrt.rn` and `div.rn` are not correctly rounded.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
 features above.
+
+## Checking against PTX-formalization
+
+`ptx/tools/agx_ptx_formalization_check.py` runs the test programs of
+[PTX-formalization](https://github.com/Jianwen-Ding/PTX-formalization), whose
+expected values are those of its K semantics of PTX, through `zoc --target
+agx` and the functional simulator `agx_run` of
+[AGX-Performance-Simulator](https://github.com/Jianwen-Ding/AGX-Performance-Simulator),
+and compares the results bit by bit:
+
+```
+python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
+    --agx-run AGX-Performance-Simulator/rust/target/release/agx_run \
+    --readelf $LLVM/bin/llvm-readelf --objcopy $LLVM/bin/llvm-objcopy \
+    PTX-formalization/tests/*.ptx
+```
+
+Kernels with statements that ZLUDA's front end does not support (many of the
+tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA,
+clusters and `mbarrier`) are skipped, together with the checks that follow
+their launch, and programs ZLUDA rejects as a whole are not counted. Of the
+1075 checks of the 217 programs that compile, 172 run: 158 match the formal
+semantics and the other 14 are the floating point differences listed above
+(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`).
