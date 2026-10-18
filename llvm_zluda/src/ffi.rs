@@ -96,6 +96,8 @@ extern "C" {
         argv: *const *const i8,
         error_message: *mut *mut i8,
     ) -> bool;
+
+    pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

@@ -9,11 +9,14 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
+    LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
-    LLVMGetDiagInfoSeverity,
+    LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
+    LLVMIsDeclaration, LLVMSetLinkage, LLVMSetVisibility,
 };
+use llvm_sys::{LLVMLinkage, LLVMVisibility};
 use llvm_sys::prelude::LLVMDiagnosticInfoRef;
 use llvm_sys::LLVMDiagnosticSeverity;
 use llvm_sys::{
@@ -95,6 +98,26 @@ fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> 
     Ok(module)
 }
 
+/// The helper functions are an implementation detail of the module: make
+/// them internal, so that the unused ones are removed instead of being
+/// compiled as entry points (for example when every kernel of the module was
+/// dropped by `--ignore-errors`).
+fn internalize_helpers(module: &Module) {
+    unsafe {
+        let mut function = LLVMGetFirstFunction(module.get());
+        while !function.is_null() {
+            let mut len = 0;
+            let name = LLVMGetValueName2(function, &mut len);
+            let name = std::slice::from_raw_parts(name as *const u8, len);
+            if LLVMIsDeclaration(function) == 0 && name.starts_with(b"__zluda_ptx_impl_") {
+                LLVMSetLinkage(function, LLVMLinkage::LLVMInternalLinkage);
+                LLVMSetVisibility(function, LLVMVisibility::LLVMDefaultVisibility);
+            }
+            function = LLVMGetNextFunction(function);
+        }
+    }
+}
+
 /// Link `main` with the AGX implementation of ZLUDA's PTX helper functions
 /// (`ptx_impl`, textual IR or bitcode),
 /// optimize, and generate code for the AGX processor `cpu` (for example
@@ -113,6 +136,8 @@ pub fn compile_agx(
     let ptx_impl = load_module(ctx, ptx_impl, c"zluda_ptx_impl_agx.ll")?;
     linked.link(main)?;
     linked.link(ptx_impl)?;
+    internalize_helpers(&linked);
+    unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
     linked.verify()?;
 
     if let Some(hook) = compiler_hook {
@@ -137,6 +162,9 @@ pub fn compile_agx(
         LLVMRelocMode::LLVMRelocDefault,
         LLVMCodeModel::LLVMCodeModelDefault,
     );
+    // The assembly lists the resources of each kernel (uniform register
+    // layout, register count, threadgroup memory) as comments.
+    unsafe { llvm_sys::target_machine::LLVMSetTargetMachineAsmVerbosity(target_machine.get(), 1) };
 
     let pb_options = PassBuilderOptions::new();
     let error = unsafe {

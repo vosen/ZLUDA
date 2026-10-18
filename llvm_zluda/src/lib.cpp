@@ -4,6 +4,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/AutoUpgrade.h>
+#include <llvm/IR/Module.h>
 #ifdef ZLUDA_WITH_LLD
 #include <lld/Common/Driver.h>
 #include <lld/Common/CommonLinkerContext.h>
@@ -272,6 +274,15 @@ bool LLVMZludaParseCommandLineOptions(int argc, const char *const *argv,
         *ErrorMessage = strdup(log_out_str.c_str());
     }
     return result;
+}
+
+// Function attributes are emitted in their textual form, which newer LLVM
+// versions only understand after upgrading them (for example
+// "denormal-fp-math" to denormal_fpenv).
+void LLVMZludaUpgradeFunctionAttributes(LLVMModuleRef M)
+{
+    for (llvm::Function &F : *llvm::unwrap(M))
+        llvm::UpgradeFunctionAttributes(F);
 }
 
 LLVM_C_EXTERN_C_END
