@@ -519,13 +519,16 @@ impl ResolvedControlFlowGraph {
     }
 }
 
-fn resolve_fast<T: Copy + VariantArray + Into<usize>>(
+fn resolve_fast<T: Copy + Default + VariantArray + Into<usize>>(
     modes: &MandatoryModeInsertions<T>,
     value: &Option<T>,
     kernels: &FixedBitSet,
 ) -> Result<Resolved<T>, TranslateError> {
-    Ok(if kernels.is_empty() {
-        Resolved::Value(value.ok_or_else(error_unreachable)?)
+    // FixedBitSet::is_empty() is true only for a zero-length set. Code that
+    // no kernel reaches (for example an uncalled .weak function) never runs,
+    // so any mode will do.
+    Ok(if kernels.is_clear() {
+        Resolved::Value(value.unwrap_or_default())
     } else {
         match value {
             None => from_kernel_modes_overlap(kernels, modes)?,
