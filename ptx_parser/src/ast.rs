@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
-    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
+    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode, Tf32Rounding,
     VoteMode, VshOp,
 };
 use bitflags::bitflags;
@@ -286,6 +286,19 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: Option<T>,
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
+                },
+            }
+        },
+        CvtTf32 {
+            data: CvtTf32Details,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
                 },
             }
         },
@@ -2409,6 +2422,8 @@ pub enum CvtMode {
     FPExtend {
         flush_to_zero: Option<bool>,
         saturate: bool,
+        relu: bool,
+        satfinite: bool,
     },
     FPTruncate {
         // float rounding
@@ -2417,6 +2432,7 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
         saturate: bool,
         relu: bool,
+        satfinite: bool,
     },
     FPRound {
         integer_rounding: Option<RoundingMode>,
@@ -2450,9 +2466,16 @@ impl CvtDetails {
         ftz: bool,
         saturate: bool,
         relu: bool,
+        satfinite: bool,
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
+        if (relu || satfinite) && !(dst.kind() == ScalarKind::Float && src.kind() == ScalarKind::Float)
+        {
+            errors.push(PtxError::SyntaxError(
+                ".relu and .satfinite in cvt need floating point types".to_string(),
+            ));
+        }
         // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
@@ -2487,7 +2510,10 @@ impl CvtDetails {
         };
         let mode = match (dst.kind(), src.kind()) {
             (ScalarKind::Float, ScalarKind::Float) => match dst_size.cmp(&src.size_of()) {
-                Ordering::Less => {
+                // Conversions between f16 and bf16 round like truncations
+                Ordering::Less | Ordering::Equal
+                    if dst_size < src.size_of() || (dst != src && dst.packed_type().is_none()) =>
+                {
                     let (rounding, is_integer_rounding) = unwrap_rounding();
                     CvtMode::FPTruncate {
                         rounding,
@@ -2495,7 +2521,15 @@ impl CvtDetails {
                         flush_to_zero,
                         saturate,
                         relu,
+                        satfinite,
                     }
+                }
+                Ordering::Less => unreachable!(),
+                Ordering::Equal if relu || satfinite => {
+                    errors.push(PtxError::SyntaxError(
+                        ".relu and .satfinite in cvt need different types".to_string(),
+                    ));
+                    CvtMode::Bitcast
                 }
                 Ordering::Equal => CvtMode::FPRound {
                     integer_rounding: rounding.map(|(rnd, _)| rnd),
@@ -2514,6 +2548,8 @@ impl CvtDetails {
                     CvtMode::FPExtend {
                         flush_to_zero,
                         saturate,
+                        relu,
+                        satfinite,
                     }
                 }
             },
@@ -2918,6 +2954,15 @@ impl TexData {
 pub enum TexType {
     Texref,
     Texobj,
+}
+
+// cvt.rnd{.relu}{.satfinite}.tf32.f32: rounds an f32 to the 10 fraction bits
+// of tf32, the result keeps the binary32 layout with the low 13 bits clear
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CvtTf32Details {
+    pub rounding: Tf32Rounding,
+    pub relu: bool,
+    pub satfinite: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

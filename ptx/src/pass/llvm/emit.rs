@@ -675,6 +675,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Call { data, arguments } => self.emit_call(data, arguments),
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
             ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
+            ast::Instruction::CvtTf32 { data, arguments } => self.emit_cvt_tf32(data, arguments),
             ast::Instruction::Shf { data, arguments } => self.emit_shf(data, arguments),
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
@@ -1630,6 +1631,16 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    // The AGX backend rounds conversions to bf16 to nearest only. Directed
+    // rounding converts to f32 under the same rounding mode first, which
+    // instruction_mode_to_global_mode sets for both f32 and f16/f64
+    fn is_bf16_directed_rounding(&self, to: ast::ScalarType, rounding: ast::RoundingMode) -> bool {
+        self.target == Target::Agx
+            && self.fp.mode == FloatingPointMode::Constrained
+            && rounding != ast::RoundingMode::NearestEven
+            && to == ast::ScalarType::BF16
+    }
+
     // Rounds an f32 to bf16 towards zero or an infinity on the bit pattern:
     // bf16 is the upper half of f32. NaNs become the canonical NaN
     fn emit_f32_to_bf16_directed(
@@ -2347,11 +2358,32 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::CvtMode::IntSaturateToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
             }
-            ptx_parser::CvtMode::FPExtend { .. } => {
-                return self.emit_cvt_float_to_float(data.from, data.to, false, false, arguments)
+            ptx_parser::CvtMode::FPExtend {
+                relu, satfinite, ..
+            } => {
+                return self.emit_cvt_float_to_float(
+                    data.from,
+                    data.to,
+                    None,
+                    relu,
+                    satfinite,
+                    arguments,
+                )
             }
-            ptx_parser::CvtMode::FPTruncate { relu, .. } => {
-                return self.emit_cvt_float_to_float(data.from, data.to, true, relu, arguments)
+            ptx_parser::CvtMode::FPTruncate {
+                rounding,
+                relu,
+                satfinite,
+                ..
+            } => {
+                return self.emit_cvt_float_to_float(
+                    data.from,
+                    data.to,
+                    Some(rounding),
+                    relu,
+                    satfinite,
+                    arguments,
+                )
             }
             ptx_parser::CvtMode::FPRound {
                 integer_rounding: None,
@@ -2390,11 +2422,11 @@ impl<'a> MethodEmitContext<'a> {
                     Some(false),
                 )
             }
-            ptx_parser::CvtMode::FPFromSigned { .. } => {
-                return self.emit_cvt_int_to_float(data.from, data.to, arguments, true)
+            ptx_parser::CvtMode::FPFromSigned { rounding, .. } => {
+                return self.emit_cvt_int_to_float(data.from, data.to, rounding, arguments, true)
             }
-            ptx_parser::CvtMode::FPFromUnsigned { .. } => {
-                return self.emit_cvt_int_to_float(data.from, data.to, arguments, false)
+            ptx_parser::CvtMode::FPFromUnsigned { rounding, .. } => {
+                return self.emit_cvt_int_to_float(data.from, data.to, rounding, arguments, false)
             }
         };
         if arguments.src2.is_some() {
@@ -2411,8 +2443,10 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         from: ast::ScalarType,
         to: ast::ScalarType,
-        truncate: bool,
+        // Some for truncations
+        truncate: Option<ast::RoundingMode>,
         relu: bool,
+        satfinite: bool,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
@@ -2424,14 +2458,20 @@ impl<'a> MethodEmitContext<'a> {
                 to,
                 truncate,
                 relu,
+                satfinite,
                 arguments.dst,
                 src,
                 src2,
             );
         }
-        if relu {
-            let result = self.emit_cvt_float_to_float_impl(truncate, to, None, from, src)?;
-            let result = self.emit_relu(to, result)?;
+        if relu || satfinite {
+            let mut result = self.emit_cvt_float_to_float_impl(truncate, to, None, from, src)?;
+            if relu {
+                result = self.emit_relu(to, result)?;
+            }
+            if satfinite {
+                result = self.emit_satfinite(to, result)?;
+            }
             self.resolver.register(arguments.dst, result);
         } else {
             self.emit_cvt_float_to_float_impl(truncate, to, Some(arguments.dst), from, src)?;
@@ -2439,12 +2479,57 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    // .satfinite: infinities become the largest finite value of the same
+    // sign, NaN stays NaN
+    fn emit_satfinite(
+        &mut self,
+        type_: ast::ScalarType,
+        value: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let llvm_type = get_scalar_type(self.context, type_);
+        let max = match type_ {
+            ast::ScalarType::F16 => 65504.0,
+            ast::ScalarType::BF16 => f32::from_bits(0x7f7f0000) as f64,
+            ast::ScalarType::F32 => f32::MAX as f64,
+            ast::ScalarType::F64 => f64::MAX,
+            _ => return Err(error_unreachable()),
+        };
+        let fabs = format!("llvm.fabs.{}\0", LLVMTypeDisplay(type_));
+        let magnitude = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(fabs.as_bytes()) },
+            None,
+            vec![&type_.into()],
+            vec![(value, llvm_type)],
+        )?;
+        let is_inf = unsafe {
+            LLVMBuildFCmp(
+                self.builder,
+                LLVMRealPredicate::LLVMRealOEQ,
+                magnitude,
+                LLVMConstReal(llvm_type, f64::INFINITY),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let copysign = format!("llvm.copysign.{}\0", LLVMTypeDisplay(type_));
+        let max = self.emit_intrinsic(
+            unsafe { CStr::from_bytes_with_nul_unchecked(copysign.as_bytes()) },
+            None,
+            vec![&type_.into()],
+            vec![
+                (unsafe { LLVMConstReal(llvm_type, max) }, llvm_type),
+                (value, llvm_type),
+            ],
+        )?;
+        Ok(unsafe { LLVMBuildSelect(self.builder, is_inf, max, value, LLVM_UNNAMED.as_ptr()) })
+    }
+
     fn emit_cvt_float_to_packed_float(
         &mut self,
         from: ast::ScalarType,
         to: ast::ScalarType,
-        truncate: bool,
+        truncate: Option<ast::RoundingMode>,
         relu: bool,
+        satfinite: bool,
         dst: SpirvWord,
         src: LLVMValueRef,
         src2: LLVMValueRef,
@@ -2457,6 +2542,10 @@ impl<'a> MethodEmitContext<'a> {
         if relu {
             src_result = self.emit_relu(element_type, src_result)?;
             src2_result = self.emit_relu(element_type, src2_result)?;
+        }
+        if satfinite {
+            src_result = self.emit_satfinite(element_type, src_result)?;
+            src2_result = self.emit_satfinite(element_type, src2_result)?;
         }
         let dst_type = get_scalar_type(self.context, to);
         let vec = unsafe {
@@ -2482,13 +2571,39 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_cvt_float_to_float_impl(
         &mut self,
-        truncate: bool,
+        truncate: Option<ast::RoundingMode>,
         dst_type: ast::ScalarType,
         dst: Option<SpirvWord>,
         src_type: ast::ScalarType,
         src: LLVMValueRef,
     ) -> Result<LLVMValueRef, TranslateError> {
-        if truncate {
+        if let Some(rounding) = truncate {
+            if self.is_bf16_directed_rounding(dst_type, rounding) {
+                let wide = if src_type == ast::ScalarType::F32 {
+                    src
+                } else if src_type.size_of() < 4 {
+                    self.fp
+                        .fpext(self.resolver, ast::ScalarType::F32, None, src_type, src)?
+                } else {
+                    self.fp
+                        .fptrunc(self.resolver, ast::ScalarType::F32, None, src_type, src)?
+                };
+                let result = self.emit_f32_to_bf16_directed(rounding, wide);
+                if let Some(dst) = dst {
+                    self.resolver.register(dst, result);
+                }
+                return Ok(result);
+            }
+        }
+        let truncate = truncate.is_some();
+        if truncate && dst_type.size_of() == src_type.size_of() {
+            // f16 <-> bf16: through f32, which holds both exactly
+            let wide = self
+                .fp
+                .fpext(self.resolver, ast::ScalarType::F32, None, src_type, src)?;
+            self.fp
+                .fptrunc(self.resolver, dst_type, dst, ast::ScalarType::F32, wide)
+        } else if truncate {
             self.fp.fptrunc(self.resolver, dst_type, dst, src_type, src)
         } else {
             self.fp.fpext(self.resolver, dst_type, dst, src_type, src)
@@ -2509,6 +2624,90 @@ impl<'a> MethodEmitContext<'a> {
             vec![&type_.into()],
             vec![(src, llvm_type), (zero, llvm_type)],
         )
+    }
+
+    // Rounding on the bit pattern: tf32 is the f32 layout with 13 fraction
+    // bits fewer. Rounding up the magnitude carries into the exponent, which
+    // also gives the infinities on overflow
+    fn emit_cvt_tf32(
+        &mut self,
+        data: ast::CvtTf32Details,
+        arguments: ast::CvtTf32Args<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let b = self.builder;
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        let src = self.resolver.value(arguments.src)?;
+        unsafe {
+            let bits = LLVMBuildBitCast(b, src, i32_type, LLVM_UNNAMED.as_ptr());
+            let magnitude = LLVMBuildAnd(b, bits, c(0x7fff_ffff), LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildAnd(b, bits, c(0x8000_0000), LLVM_UNNAMED.as_ptr());
+            let negative = LLVMBuildICmp(
+                b,
+                LLVMIntPredicate::LLVMIntNE,
+                sign,
+                c(0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let inexact = LLVMBuildICmp(
+                b,
+                LLVMIntPredicate::LLVMIntNE,
+                LLVMBuildAnd(b, bits, c(0x1fff), LLVM_UNNAMED.as_ptr()),
+                c(0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let increment = match data.rounding {
+                ast::Tf32Rounding::Rz => c(0),
+                ast::Tf32Rounding::Rna => c(0x1000),
+                ast::Tf32Rounding::Rn => {
+                    let odd = LLVMBuildAnd(
+                        b,
+                        LLVMBuildLShr(b, bits, c(13), LLVM_UNNAMED.as_ptr()),
+                        c(1),
+                        LLVM_UNNAMED.as_ptr(),
+                    );
+                    LLVMBuildAdd(b, odd, c(0xfff), LLVM_UNNAMED.as_ptr())
+                }
+                ast::Tf32Rounding::Rm | ast::Tf32Rounding::Rp => {
+                    let away = if data.rounding == ast::Tf32Rounding::Rm {
+                        negative
+                    } else {
+                        LLVMBuildNot(b, negative, LLVM_UNNAMED.as_ptr())
+                    };
+                    let up = LLVMBuildAnd(b, away, inexact, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildSelect(b, up, c(0x1fff), c(0), LLVM_UNNAMED.as_ptr())
+                }
+            };
+            let rounded = LLVMBuildAdd(b, bits, increment, LLVM_UNNAMED.as_ptr());
+            let mut result = LLVMBuildAnd(b, rounded, c(0xffff_e000), LLVM_UNNAMED.as_ptr());
+            if data.satfinite {
+                let result_magnitude =
+                    LLVMBuildAnd(b, result, c(0x7fff_ffff), LLVM_UNNAMED.as_ptr());
+                let is_inf = LLVMBuildICmp(
+                    b,
+                    LLVMIntPredicate::LLVMIntEQ,
+                    result_magnitude,
+                    c(0x7f80_0000),
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                let max = LLVMBuildOr(b, sign, c(0x7f7f_e000), LLVM_UNNAMED.as_ptr());
+                result = LLVMBuildSelect(b, is_inf, max, result, LLVM_UNNAMED.as_ptr());
+            }
+            if data.relu {
+                result = LLVMBuildSelect(b, negative, c(0), result, LLVM_UNNAMED.as_ptr());
+            }
+            let is_nan = LLVMBuildICmp(
+                b,
+                LLVMIntPredicate::LLVMIntUGT,
+                magnitude,
+                c(0x7f80_0000),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            self.resolver.with_result(arguments.dst, |dst| {
+                LLVMBuildSelect(b, is_nan, c(0x7fff_ffff), result, dst)
+            });
+        }
+        Ok(())
     }
 
     fn emit_cvt_pack(
@@ -2804,10 +3003,23 @@ impl<'a> MethodEmitContext<'a> {
         &mut self,
         from: ptx_parser::ScalarType,
         to: ptx_parser::ScalarType,
+        rounding: ast::RoundingMode,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
         signed: bool,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        if self.is_bf16_directed_rounding(to, rounding) {
+            let wide = if signed {
+                self.fp
+                    .sitofp(self.resolver, ast::ScalarType::F32, None, from, src)?
+            } else {
+                self.fp
+                    .uitofp(self.resolver, ast::ScalarType::F32, None, from, src)?
+            };
+            let result = self.emit_f32_to_bf16_directed(rounding, wide);
+            self.resolver.register(arguments.dst, result);
+            return Ok(());
+        }
         let dst = Some(arguments.dst);
         if signed {
             self.fp.sitofp(self.resolver, to, dst, from, src)?;

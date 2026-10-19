@@ -2130,6 +2130,9 @@ derive_parser!(
     pub enum BmskMode { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum Tf32Rounding { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum VshOp {
         Add
     }
@@ -2725,32 +2728,44 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
     cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
-        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, dtype, atype);
+        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, false, dtype, atype);
         let arguments = ast::CvtArgs { dst: d, src: a, src2: None };
         ast::Instruction::Cvt {
             data, arguments
+        }
+    }
+    // Floating point conversions with .relu or .satfinite (at least one of them)
+    cvt{.frnd}.relu{.satfinite}.fdtype.fatype   d, a => {
+        let data = ast::CvtDetails::new(&mut state.errors, frnd, false, false, true, satfinite, fdtype, fatype);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
+        }
+    }
+    cvt{.frnd}.satfinite.fdtype.fatype          d, a => {
+        let data = ast::CvtDetails::new(&mut state.errors, frnd, false, false, false, true, fdtype, fatype);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
         }
     }
     // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
     cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
-        if satfinite {
-            state.errors.push(PtxError::Todo("cvt.frnd2 instruction with satfinite modifier".to_string()));
-        }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, x2_to_type, x2_from_type);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, satfinite, x2_to_type, x2_from_type);
         ast::Instruction::Cvt {
             data,
             arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
         }
     }
     // cvt.rna{.satfinite}.tf32.f32               d, a;
-    // cvt.frnd2{.relu}.tf32.f32                   d, a;
+    // cvt.frnd2{.relu}{.satfinite}.tf32.f32       d, a;
     cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b => {
         if relu {
             state.errors.push(PtxError::Todo("cvt.rn.satfinite.f8x2 instruction with relu modifier".to_string()));
         }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, f8x2type, ScalarType::F32);
+        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, false, f8x2type, ScalarType::F32);
         ast::Instruction::Cvt {
             data,
             arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
@@ -2772,6 +2787,9 @@ derive_parser!(
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
     .frnd2: RawRoundingMode =   { .rn,  .rz };
+    .frnd: RawRoundingMode =    { .rn,  .rz,  .rm,  .rp };
+    .fdtype: ScalarType =       { .bf16, .f16, .f32, .f64 };
+    .fatype: ScalarType =       { .bf16, .f16, .f32, .f64 };
     RawRoundingMode =           { .rn };
     .dtype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
@@ -2782,6 +2800,14 @@ derive_parser!(
     .f8x2type: ScalarType =         { .e4m3x2, .e5m2x2 };
     .x2_to_type: ScalarType =      { .f16x2, .bf16x2 };
     .x2_from_type: ScalarType =    { .e4m3x2, .e5m2x2, .f32 };
+
+    cvt.tfrnd{.relu}{.satfinite}.tf32.f32         d, a => {
+        ast::Instruction::CvtTf32 {
+            data: ast::CvtTf32Details { rounding: tfrnd, relu, satfinite },
+            arguments: CvtTf32Args { dst: d, src: a }
+        }
+    }
+    .tfrnd: Tf32Rounding = { .rn, .rz, .rm, .rp, .rna };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
     cvt.pack.sat.convertType.s32.b32        d, a, b, c => {

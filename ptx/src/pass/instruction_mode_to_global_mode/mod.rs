@@ -310,7 +310,13 @@ impl InstructionModes {
             ),
             ast::CvtMode::FPFromSigned { rounding, .. }
             | ast::CvtMode::FPFromUnsigned { rounding, .. } => {
-                Self::new(cvt.to, None, Some(RoundingMode::from_ast(rounding)))
+                let rounding = Some(RoundingMode::from_ast(rounding));
+                let mut modes = Self::new(cvt.to, None, rounding);
+                // Converted through f32 on AGX, see emit_cvt_int_to_float
+                if cvt.to == ast::ScalarType::BF16 {
+                    modes.rounding_f32 = rounding;
+                }
+                modes
             }
         }
     }
@@ -2187,6 +2193,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bar { .. }
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::CvtPack { .. }
+        | ast::Instruction::CvtTf32 { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
         | ast::Instruction::Mul24 { .. }

@@ -127,6 +127,7 @@ fn run_instruction<'input>(
             ..
         }
         | ast::Instruction::CvtPack { .. }
+        | ast::Instruction::CvtTf32 { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
         | ast::Instruction::Dp4a { .. }
