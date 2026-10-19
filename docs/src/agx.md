@@ -77,8 +77,9 @@ an error.
 ## Limitations
 
 * No `f64` (the hardware has no double precision), no 128-bit atomics, no
-  tensor core instructions (`mma`, `ldmatrix`), no fp8 conversions, no calls
-  to external functions and no function pointers.
+  fp8 conversions, no calls to external functions and no function pointers.
+  The tensor core instructions are emulated (see
+  [Warp-level matrix instructions](#warp-level-matrix-instructions)).
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
   kernels whose instructions all use one) are computed in software, since
   the hardware only rounds to nearest even: an emulated mode register
@@ -102,6 +103,75 @@ three differences.
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
 features above.
+
+## Warp-level matrix instructions
+
+AGX has no tensor cores (the SIMD-group matrix instructions of Apple GPUs are
+8x8 and round every step). `ldmatrix`, `stmatrix`, `movmatrix`, `mma.sync`,
+`mma.sp` and `wmma.load`/`store`/`mma` are computed by the 32 threads of the
+SIMD-group, which is the warp, with SIMD-group shuffles and integer
+arithmetic. Each variant becomes a call to a helper function named after it
+(`__zluda_ptx_impl_agx_mma_m16n8k16_f32_f16_f16_f32`, ...) whose LLVM IR is
+generated when the module is emitted (`ptx/src/pass/agx_matrix.rs`) and
+inlined.
+
+* Fragments have the layouts of the PTX ISA, as transcribed by the K
+  semantics of PTX-formalization: thread `lane` holds elements whose row and
+  column are linear in `g = lane / 4` and `t = lane % 4` (checked for all 32
+  threads when the helper is generated). The metadata of `mma.sp` and the
+  scale factor selectors of `.block_scale` follow PTX-formalization's
+  reading of the ISA's figures.
+* `ldmatrix` and `stmatrix` shuffle the row addresses of the matrices, and
+  each thread loads or stores its own elements (16-bit, or 32-bit when they
+  are adjacent); `stmatrix.m16n8` gathers each row and stores it whole.
+  `.b8x16.b6x16_p32`, `.b8x16.b4x16_p64` and `.s8.s4` expand the packed
+  elements of each 16-byte (8-byte) row into 8-bit containers.
+* `mma.sync` gathers the rows of A held by the thread's quad with quad
+  shuffles of constant index and the columns of B it needs with SIMD-group
+  shuffles, then computes its elements of D. Integer products are summed in
+  32 bits (64 bits and clamped with `.satfinite`), `.b1` with `popc` of the
+  `xor`/`and` of whole registers.
+* Floating point dot products are exact, rounded once to nearest even into
+  the type of D, like the model of PTX-formalization (tensor cores round in
+  implementation-defined ways, which PTX does not specify): the products and
+  C are decoded into integer significands and exponents, added in a fixed
+  point accumulator of 120 bits below the top of the largest term (248 bits,
+  in two 128-bit limbs, for `f64`), normalized and rounded with denormals,
+  overflow to infinity and canonical NaNs. Terms that fall below the window
+  only contribute a sticky bit, so a sum is exact unless its terms span more
+  than about 100 bits (200 for `f64`) and cancel. The products of `f16`,
+  fp8, fp6 and fp4 elements have bounded exponents and are first summed in
+  fixed point. An exact zero sum is -0 only if all terms are -0 (for `mma.sp`
+  the omitted zeros of A are not counted).
+* Block scaled `mma` (`kind::mxf8f6f4`, `mxf4`, `mxf4nvf4`) multiplies each
+  block's sum exactly by its `ue8m0` or `ue4m3` scale factors; the
+  `{byte-id, thread-id}` selectors must be immediates, and so must the
+  sparsity selector of `mma.sp`.
+* `wmma` fragments, whose layout PTX leaves unspecified, are tiles of
+  `mma.sync` fragments: A is made of the A fragments of its 16-row (8-row)
+  tiles, B of the B fragments of its 8-column tiles, C and D of the C
+  fragments of the tiles in row major order, repeated where the ISA gives a
+  fragment more registers than it needs (`f16` A and B). `wmma.mma` runs
+  `mma.sync` on each tile, `wmma.load` and `wmma.store` read and write each
+  element (whole registers when their elements are adjacent in memory). The
+  layouts are the same for row and column major memory, so fragments can be
+  combined freely.
+
+The emulation is large: in instructions per thread (whole test kernels),
+130 for `ldmatrix.x2` with `stmatrix.x2`, 170 to 570 for 8-bit and 4-bit integer
+`mma`, 80 for `m8n8k128.b1`, 3,000 for `m8n8k4.f64`, 4,300 for
+`m16n8k4.tf32`, 6,600 for `m16n8k8.f32.f16`, 12,000 for `m16n8k16.f32.f16`,
+11,000 for `m16n8k16.f64` (whose elements are computed in a loop, unrolled
+they need more registers than the hardware has), 7,000 to 15,000 for fp8,
+10,000 to 20,000 for block scaled fp8 and fp4, and 23,000 for a
+`wmma.load`/`mma`/`store` of `m16n16k16.f32.f16`.
+
+Not supported: `mma.m8n8k4` with `f16` A and B (its four quad-pair
+products), `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
+rounding mode other than `.rn`, register selectors of block scaled and
+sparse `mma`, and `wgmma`/`tcgen05`. `ldmatrix` and `stmatrix` need shared
+memory addresses: AGX has no generic addressing of threadgroup memory, so
+shared memory addresses converted with `cvta.shared` cannot be used.
 
 ## Strict floating point mode
 
@@ -184,3 +254,10 @@ semantics and the other 22 are the floating point differences listed above
 (denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`, `div`
 and `sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
 script), all 213 match.
+
+The script declares the registers that a function uses without declaring
+any register of their prefix: the K semantics creates registers when they are
+first written, and the generated `tests/mma-*.ptx` rely on it. All 74
+programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma` (`ldm-*`,
+`ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal semantics,
+with and without `--strict-fp`.
