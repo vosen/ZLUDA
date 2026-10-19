@@ -267,9 +267,87 @@ ptx_parser_macros::generate_instruction_type!(
                 src_from: {
                     repr: T,
                     space: StateSpace::Global
+                },
+                // src-size or ignore-src in a register (an immediate src-size is in data)
+                src_size: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(if data.ignore_src { ScalarType::Pred } else { ScalarType::U32 }) },
                 }
             }
         },
+        CpAsyncMbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: CpAsyncMbarrierArriveDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                }
+            }
+        },
+        CpAsyncBulk {
+            type: Type::Scalar(ScalarType::B8),
+            data: CpAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_byte_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+        CpReduceAsyncBulk {
+            type: { Type::Scalar(data.type_) },
+            data: CpReduceAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+
         CpAsyncCommitGroup { },
         CpAsyncWaitGroup {
             type: Type::Scalar(ScalarType::U64),
@@ -571,6 +649,97 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Membar {
             data: MemScope
+        },
+        MbarrierInit {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                },
+                src_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierInval {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                }
+            }
+        },
+        MbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierArriveDetails,
+            arguments<T>: {
+                dst_state: Option<T>,
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_tx_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierTx {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierTxDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_tx_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierWait {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierWaitDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(if data.parity { ScalarType::U32 } else { ScalarType::B64 }),
+                },
+                src_time_hint: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierPendingCount {
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
         },
         Min {
             type: { Type::from(data.type_()) },
@@ -1693,7 +1862,47 @@ pub struct CpAsyncDetails {
     pub caching: CpAsyncCacheOperator,
     pub space: StateSpace,
     pub cp_size: CpAsyncCpSize,
+    // immediate src-size
     pub src_size: Option<u64>,
+    // the src_size argument is the ignore-src predicate
+    pub ignore_src: bool,
+}
+
+pub struct CpAsyncMbarrierArriveDetails {
+    pub space: StateSpace,
+    pub noinc: bool,
+}
+
+pub struct CpAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub multicast: bool,
+}
+
+pub struct CpReduceAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub op: AtomicOp,
+    pub type_: ScalarType,
+}
+
+pub struct MbarrierArriveDetails {
+    pub space: StateSpace,
+    // arrive_drop: also decrements the expected arrival count
+    pub drop: bool,
+}
+
+pub struct MbarrierTxDetails {
+    pub space: StateSpace,
+    // complete_tx (decrements the transaction count) instead of expect_tx
+    pub complete: bool,
+}
+
+pub struct MbarrierWaitDetails {
+    pub space: StateSpace,
+    pub parity: bool,
+    // try_wait (potentially blocking) instead of test_wait
+    pub try_wait: bool,
 }
 
 pub struct ShfDetails {

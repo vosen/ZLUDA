@@ -95,6 +95,15 @@ fn run_instruction<'input>(
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }
         | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::CpAsyncMbarrierArrive { .. }
+        | ast::Instruction::CpAsyncBulk { .. }
+        | ast::Instruction::CpReduceAsyncBulk { .. }
+        | ast::Instruction::MbarrierInit { .. }
+        | ast::Instruction::MbarrierInval { .. }
+        | ast::Instruction::MbarrierArrive { .. }
+        | ast::Instruction::MbarrierTx { .. }
+        | ast::Instruction::MbarrierWait { .. }
+        | ast::Instruction::MbarrierPendingCount { .. }
         | ast::Instruction::CreatePolicyFractional { .. }
         | ast::Instruction::Cvt {
             data:

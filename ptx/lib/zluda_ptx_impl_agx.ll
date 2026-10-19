@@ -903,6 +903,442 @@ exit:
   ret i32 %r
 }
 
+; mbarrier objects (8 bytes of threadgroup memory), updated with 32-bit
+; atomics:
+;   word 0: bit 31 is the parity of the current phase; bits 0-30 hold, modulo
+;           2^31, pending arrivals * 2^19 + pending transaction bytes (a
+;           19-bit signed count). They are zero exactly when both counts are.
+;   word 1: the expected arrival count.
+; The update that brings the counts to zero completes the phase: it flips the
+; parity and reloads the pending arrivals with the expected count, in the same
+; compare-and-swap. The state an arrive returns is the parity of its phase
+; (bit 0) and the pending arrivals before it (bits 32-51).
+define void @__zluda_ptx_impl_agx_mbarrier_init(ptr addrspace(3) %mbar, i32 %count) #3 {
+  %expected.ptr = getelementptr inbounds i8, ptr addrspace(3) %mbar, i32 4
+  %arrivals = shl i32 %count, 19
+  %word0 = and i32 %arrivals, 2147483647
+  store i32 %word0, ptr addrspace(3) %mbar, align 4
+  store i32 %count, ptr addrspace(3) %expected.ptr, align 4
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_mbarrier_inval(ptr addrspace(3) %mbar) #3 {
+  store i64 0, ptr addrspace(3) %mbar, align 8
+  ret void
+}
+
+; Adds %delta to the counts of word 0 and returns its previous value.
+define i32 @__zluda_ptx_impl_agx_mbarrier_update(ptr addrspace(3) %mbar, i32 %delta) #3 {
+entry:
+  %expected.ptr = getelementptr inbounds i8, ptr addrspace(3) %mbar, i32 4
+  fence syncscope("workgroup") release
+  %first = load atomic i32, ptr addrspace(3) %mbar syncscope("workgroup") monotonic, align 4
+  br label %loop
+loop:
+  %old = phi i32 [ %first, %entry ], [ %seen, %loop ]
+  %sum = add i32 %old, %delta
+  %counts = and i32 %sum, 2147483647
+  %phase = and i32 %old, -2147483648
+  %stay = or i32 %phase, %counts
+  %expected = load atomic i32, ptr addrspace(3) %expected.ptr syncscope("workgroup") monotonic, align 4
+  %reload = shl i32 %expected, 19
+  %reload.counts = and i32 %reload, 2147483647
+  %next.phase = xor i32 %phase, -2147483648
+  %next = or i32 %next.phase, %reload.counts
+  %complete = icmp eq i32 %counts, 0
+  %new = select i1 %complete, i32 %next, i32 %stay
+  %pair = cmpxchg ptr addrspace(3) %mbar, i32 %old, i32 %new syncscope("workgroup") acq_rel monotonic, align 4
+  %seen = extractvalue { i32, i1 } %pair, 0
+  %ok = extractvalue { i32, i1 } %pair, 1
+  br i1 %ok, label %exit, label %loop
+exit:
+  fence syncscope("workgroup") acquire
+  ret i32 %old
+}
+
+define i64 @__zluda_ptx_impl_agx_mbarrier_arrive(ptr addrspace(3) %mbar, i32 %count, i32 %tx) #3 {
+  %arrivals = shl i32 %count, 19
+  %delta = sub i32 %tx, %arrivals
+  %old = call i32 @__zluda_ptx_impl_agx_mbarrier_update(ptr addrspace(3) %mbar, i32 %delta)
+  %phase = lshr i32 %old, 31
+  %counts = and i32 %old, 2147483647
+  %tx.shl = shl i32 %old, 13
+  %pending.tx = ashr i32 %tx.shl, 13
+  %pending.shl = sub i32 %counts, %pending.tx
+  %pending.arrivals = lshr i32 %pending.shl, 19
+  %pending = and i32 %pending.arrivals, 4095
+  %pending64 = zext i32 %pending to i64
+  %pending.state = shl i64 %pending64, 32
+  %phase64 = zext i32 %phase to i64
+  %state = or i64 %pending.state, %phase64
+  ret i64 %state
+}
+
+; arrive_drop also removes the arrivals from the expected count of the next phases
+define i64 @__zluda_ptx_impl_agx_mbarrier_arrive_drop(ptr addrspace(3) %mbar, i32 %count, i32 %tx) #3 {
+  %expected.ptr = getelementptr inbounds i8, ptr addrspace(3) %mbar, i32 4
+  %expected = atomicrmw sub ptr addrspace(3) %expected.ptr, i32 %count syncscope("workgroup") monotonic, align 4
+  %state = call i64 @__zluda_ptx_impl_agx_mbarrier_arrive(ptr addrspace(3) %mbar, i32 %count, i32 %tx)
+  ret i64 %state
+}
+
+define void @__zluda_ptx_impl_agx_mbarrier_expect_tx(ptr addrspace(3) %mbar, i32 %tx) #3 {
+  %old = call i32 @__zluda_ptx_impl_agx_mbarrier_update(ptr addrspace(3) %mbar, i32 %tx)
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %mbar, i32 %tx) #3 {
+  %delta = sub i32 0, %tx
+  %old = call i32 @__zluda_ptx_impl_agx_mbarrier_update(ptr addrspace(3) %mbar, i32 %delta)
+  ret void
+}
+
+; Whether the phase of the given parity has completed.
+define zeroext i1 @__zluda_ptx_impl_agx_mbarrier_test_wait(ptr addrspace(3) %mbar, i32 %parity) #3 {
+  %word0 = load atomic i32, ptr addrspace(3) %mbar syncscope("workgroup") monotonic, align 4
+  fence syncscope("workgroup") acquire
+  %phase = lshr i32 %word0, 31
+  %waited = and i32 %parity, 1
+  %done = icmp ne i32 %phase, %waited
+  ret i1 %done
+}
+
+; try_wait waits at a threadgroup barrier between polls, so that the other
+; SIMD-groups run until they wait or exit (the functional simulator only
+; switches SIMD-groups at barriers), for a bounded number of polls: PTX
+; programs retry while it returns false.
+define zeroext i1 @__zluda_ptx_impl_agx_mbarrier_try_wait(ptr addrspace(3) %mbar, i32 %parity) #1 {
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %wait ]
+  %done = call zeroext i1 @__zluda_ptx_impl_agx_mbarrier_test_wait(ptr addrspace(3) %mbar, i32 %parity)
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, 4096
+  %not.done = xor i1 %done, true
+  %again = and i1 %not.done, %more
+  br i1 %again, label %wait, label %exit
+wait:
+  call void @llvm.agx.threadgroup.barrier()
+  br label %loop
+exit:
+  ret i1 %done
+}
+
+; cp.async.bulk.global.shared::cta.cp_mask: bit i of the mask selects byte i
+; of every 16 bytes.
+define void @__zluda_ptx_impl_agx_cp_async_bulk_masked(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %mask) #3 {
+entry:
+  %empty = icmp eq i32 %size, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %lane = and i32 %i, 15
+  %bit = lshr i32 %mask, %lane
+  %selected = trunc i32 %bit to i1
+  br i1 %selected, label %copy, label %next
+copy:
+  %s = getelementptr inbounds i8, ptr addrspace(3) %src, i32 %i
+  %v = load i8, ptr addrspace(3) %s, align 1
+  %d = getelementptr inbounds i8, ptr addrspace(1) %dst, i32 %i
+  store i8 %v, ptr addrspace(1) %d, align 1
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %size
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+; cp.reduce.async.bulk: an atomic (relaxed) reduction per element. %op is the
+; operation: 0 add, 1 and, 2 or, 3 xor, 4 inc, 5 dec, 6 min, 7 min.u, 8 max,
+; 9 max.u, 10 add.f, 11 min.f, 12 max.f.
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_b32_global(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 2
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds i32, ptr addrspace(3) %src, i32 %i
+  %v = load i32, ptr addrspace(3) %s, align 4
+  %d = getelementptr inbounds i32, ptr addrspace(1) %dst, i32 %i
+  switch i32 %op, label %next [ i32 0, label %add i32 1, label %and i32 2, label %or i32 3, label %xor i32 4, label %inc i32 5, label %dec i32 6, label %min i32 7, label %umin i32 8, label %max i32 9, label %umax ]
+add:
+  %add.old = atomicrmw add ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+and:
+  %and.old = atomicrmw and ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+or:
+  %or.old = atomicrmw or ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+xor:
+  %xor.old = atomicrmw xor ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+inc:
+  %inc.old = atomicrmw uinc_wrap ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+dec:
+  %dec.old = atomicrmw udec_wrap ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+min:
+  %min.old = atomicrmw min ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+umin:
+  %umin.old = atomicrmw umin ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+max:
+  %max.old = atomicrmw max ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+umax:
+  %umax.old = atomicrmw umax ptr addrspace(1) %d, i32 %v monotonic, align 4
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_b32_shared(ptr addrspace(3) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 2
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds i32, ptr addrspace(3) %src, i32 %i
+  %v = load i32, ptr addrspace(3) %s, align 4
+  %d = getelementptr inbounds i32, ptr addrspace(3) %dst, i32 %i
+  switch i32 %op, label %next [ i32 0, label %add i32 1, label %and i32 2, label %or i32 3, label %xor i32 4, label %inc i32 5, label %dec i32 6, label %min i32 7, label %umin i32 8, label %max i32 9, label %umax ]
+add:
+  %add.old = atomicrmw add ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+and:
+  %and.old = atomicrmw and ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+or:
+  %or.old = atomicrmw or ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+xor:
+  %xor.old = atomicrmw xor ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+inc:
+  %inc.old = atomicrmw uinc_wrap ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+dec:
+  %dec.old = atomicrmw udec_wrap ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+min:
+  %min.old = atomicrmw min ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+umin:
+  %umin.old = atomicrmw umin ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+max:
+  %max.old = atomicrmw max ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+umax:
+  %umax.old = atomicrmw umax ptr addrspace(3) %d, i32 %v syncscope("workgroup") monotonic, align 4
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_b64_global(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 3
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds i64, ptr addrspace(3) %src, i32 %i
+  %v = load i64, ptr addrspace(3) %s, align 8
+  %d = getelementptr inbounds i64, ptr addrspace(1) %dst, i32 %i
+  switch i32 %op, label %next [ i32 0, label %add i32 1, label %and i32 2, label %or i32 3, label %xor i32 6, label %min i32 7, label %umin i32 8, label %max i32 9, label %umax ]
+add:
+  %add.old = atomicrmw add ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+and:
+  %and.old = atomicrmw and ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+or:
+  %or.old = atomicrmw or ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+xor:
+  %xor.old = atomicrmw xor ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+min:
+  %min.old = atomicrmw min ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+umin:
+  %umin.old = atomicrmw umin ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+max:
+  %max.old = atomicrmw max ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+umax:
+  %umax.old = atomicrmw umax ptr addrspace(1) %d, i64 %v monotonic, align 8
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_b64_shared(ptr addrspace(3) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 3
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds i64, ptr addrspace(3) %src, i32 %i
+  %v = load i64, ptr addrspace(3) %s, align 8
+  %d = getelementptr inbounds i64, ptr addrspace(3) %dst, i32 %i
+  switch i32 %op, label %next [ i32 0, label %add i32 1, label %and i32 2, label %or i32 3, label %xor i32 6, label %min i32 7, label %umin i32 8, label %max i32 9, label %umax ]
+add:
+  %add.old = atomicrmw add ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+and:
+  %and.old = atomicrmw and ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+or:
+  %or.old = atomicrmw or ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+xor:
+  %xor.old = atomicrmw xor ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+min:
+  %min.old = atomicrmw min ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+umin:
+  %umin.old = atomicrmw umin ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+max:
+  %max.old = atomicrmw max ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+umax:
+  %umax.old = atomicrmw umax ptr addrspace(3) %d, i64 %v syncscope("workgroup") monotonic, align 8
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_f32_global(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 2
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds float, ptr addrspace(3) %src, i32 %i
+  %v = load float, ptr addrspace(3) %s, align 4
+  %d = getelementptr inbounds float, ptr addrspace(1) %dst, i32 %i
+  switch i32 %op, label %next [ i32 10, label %fadd i32 11, label %fmin i32 12, label %fmax ]
+fadd:
+  %fadd.old = atomicrmw fadd ptr addrspace(1) %d, float %v monotonic, align 4
+  br label %next
+fmin:
+  %fmin.old = atomicrmw fmin ptr addrspace(1) %d, float %v monotonic, align 4
+  br label %next
+fmax:
+  %fmax.old = atomicrmw fmax ptr addrspace(1) %d, float %v monotonic, align 4
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_f32_shared(ptr addrspace(3) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 2
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds float, ptr addrspace(3) %src, i32 %i
+  %v = load float, ptr addrspace(3) %s, align 4
+  %d = getelementptr inbounds float, ptr addrspace(3) %dst, i32 %i
+  switch i32 %op, label %next [ i32 10, label %fadd i32 11, label %fmin i32 12, label %fmax ]
+fadd:
+  %fadd.old = atomicrmw fadd ptr addrspace(3) %d, float %v syncscope("workgroup") monotonic, align 4
+  br label %next
+fmin:
+  %fmin.old = atomicrmw fmin ptr addrspace(3) %d, float %v syncscope("workgroup") monotonic, align 4
+  br label %next
+fmax:
+  %fmax.old = atomicrmw fmax ptr addrspace(3) %d, float %v syncscope("workgroup") monotonic, align 4
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_f64_global(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 3
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds double, ptr addrspace(3) %src, i32 %i
+  %v = load double, ptr addrspace(3) %s, align 8
+  %d = getelementptr inbounds double, ptr addrspace(1) %dst, i32 %i
+  switch i32 %op, label %next [ i32 10, label %fadd ]
+fadd:
+  %fadd.old = atomicrmw fadd ptr addrspace(1) %d, double %v monotonic, align 8
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+define void @__zluda_ptx_impl_agx_cp_reduce_bulk_f64_shared(ptr addrspace(3) %dst, ptr addrspace(3) %src, i32 %size, i32 %op) #3 {
+entry:
+  %n = lshr i32 %size, 3
+  %empty = icmp eq i32 %n, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %next ]
+  %s = getelementptr inbounds double, ptr addrspace(3) %src, i32 %i
+  %v = load double, ptr addrspace(3) %s, align 8
+  %d = getelementptr inbounds double, ptr addrspace(3) %dst, i32 %i
+  switch i32 %op, label %next [ i32 10, label %fadd ]
+fadd:
+  %fadd.old = atomicrmw fadd ptr addrspace(3) %d, double %v syncscope("workgroup") monotonic, align 8
+  br label %next
+next:
+  %i.next = add i32 %i, 1
+  %more = icmp ult i32 %i.next, %n
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+
 declare float @llvm.fabs.f32(float)
 declare i32 @llvm.umin.i32(i32, i32)
 declare i32 @llvm.ctpop.i32(i32)

@@ -103,6 +103,53 @@ three differences.
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
 features above.
 
+## Asynchronous copies and mbarriers
+
+The hardware has no asynchronous copy engine and no transaction barriers, so
+these are emulated with ordinary instructions, and clusters have a single CTA
+(`.shared::cluster` addresses are those of `.shared::cta`, cluster scope
+fences are GPU scope ones):
+
+* `cp.async` (with `src-size` or `ignore-src` zero filling), `cp.async.bulk`
+  (global to shared, shared to shared, shared to global, also with
+  `.cp_mask`) and `cp.reduce.async.bulk` copy synchronously, with loads and
+  stores (atomic ones for the reductions) at the point of the instruction.
+  `commit_group`, `wait_group` and `wait_all` are no-ops: the copies of a
+  thread are complete when it waits, but waiting does not synchronize
+  threads, as in PTX. `.multicast::cluster` copies write to the issuing CTA
+  only, and cache hints and policies are ignored. `fence.proxy.async` is a
+  CTA fence; `fence.sc`/`fence.acq_rel` and `fence.mbarrier_init` are
+  ordinary fences.
+* An mbarrier is its 8 bytes of shared memory, updated with 32-bit
+  threadgroup atomics. Word 0 holds the parity of the current phase in bit 31
+  and, in bits 0-30, the pending arrivals times 2^19 plus the pending
+  transaction bytes (a 19-bit signed count), modulo 2^31, which is zero
+  exactly when the phase is complete. Word 1 holds the expected arrival
+  count. `arrive` (with a count, or once with `.expect_tx` bytes),
+  `expect_tx`, `complete_tx` and the copies completed on the object update
+  word 0 with a compare-and-swap; the update that brings the counts to zero
+  flips the parity and reloads the expected arrivals in the same operation.
+  `arrive_drop` also decrements the expected count. The state an arrive
+  returns is the parity of its phase (bit 0) and the pending arrivals before
+  it (bits 32-51, read by `pending_count`); `test_wait` and `try_wait`
+  compare that parity (or the given one) with the current one.
+  `cp.async.mbarrier.arrive.noinc` is an arrival; without `.noinc` the
+  increment and the arrival cancel out.
+* `try_wait` waits at a threadgroup barrier between polls, so that the other
+  SIMD-groups run until they wait or exit, and returns false after 4096 polls
+  (PTX programs retry). This is needed on the functional simulator, which
+  switches SIMD-groups only at barriers. On hardware the barriers of
+  waiting SIMD-groups meet each other and those of `bar.sync`, so a
+  `try_wait` can release a `bar.sync` of another SIMD-group early.
+  `test_wait` only polls.
+
+Limitations: an mbarrier counts at most 4095 pending arrivals and
+transaction counts between -2^18 and 2^18 - 1 bytes; phases are only
+distinguished by their parity; the `.multicast::cluster::32b` mbarrier
+operations, tensor copies (`cp.async.bulk.tensor`) and `elect.sync` are not
+supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
+reductions and the mbarrier operations with two SIMD-groups.
+
 ## Strict floating point mode
 
 `zoc --strict-fp` (`ptx::Options::strict_fp` with
@@ -176,8 +223,8 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
 ```
 
 Kernels with statements that ZLUDA's front end does not support (many of the
-tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA,
-clusters and `mbarrier`) are skipped, together with the checks that follow
+tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA and
+clusters of several CTAs) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
 1125 checks of the 220 programs that compile, 213 run: 191 match the formal
 semantics and the other 22 are the floating point differences listed above
