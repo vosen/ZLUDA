@@ -176,30 +176,49 @@ impl Rule {
     }
 }
 
+// One or more `::name` parts, as in `.shared::cta` or `.mbarrier::complete_tx::bytes`
 #[derive(PartialEq, Eq, Hash, Clone)]
-struct IdentOrTypeSuffix(IdentLike);
+struct IdentOrTypeSuffix(Vec<IdentLike>);
 
 impl IdentOrTypeSuffix {
     fn span(&self) -> Span {
-        self.0.span()
+        let first = self.0[0].span();
+        self.0[1..]
+            .iter()
+            .fold(first, |span, part| span.join(part.span()).unwrap_or(span))
     }
 
     fn peek(input: syn::parse::ParseStream) -> bool {
         input.peek(Token![::])
     }
+
+    fn write(&self, f: &mut impl std::fmt::Write, separator: &str) -> std::fmt::Result {
+        for (i, part) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(separator)?;
+            }
+            write!(f, "{}", part)?;
+        }
+        Ok(())
+    }
 }
 
 impl ToTokens for IdentOrTypeSuffix {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = &self.0;
-        quote! { :: #ident }.to_tokens(tokens)
+        for ident in self.0.iter() {
+            quote! { :: #ident }.to_tokens(tokens)
+        }
     }
 }
 
 impl Parse for IdentOrTypeSuffix {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        input.parse::<Token![::]>()?;
-        Ok(Self(input.parse::<IdentLike>()?))
+        let mut parts = Vec::new();
+        while Self::peek(input) {
+            input.parse::<Token![::]>()?;
+            parts.push(input.parse::<IdentLike>()?);
+        }
+        Ok(Self(parts))
     }
 }
 
@@ -304,7 +323,7 @@ impl std::fmt::Display for DotModifier {
         self.part1.fmt(f)?;
         if let Some(ref part2) = self.part2 {
             write!(f, "::")?;
-            part2.0.fmt(f)?;
+            part2.write(f, "::")?;
         }
         Ok(())
     }
@@ -330,7 +349,8 @@ impl DotModifier {
         let mut result = String::new();
         write!(&mut result, "{}", self.part1).unwrap();
         if let Some(ref part2) = self.part2 {
-            write!(&mut result, "_{}", part2.0).unwrap();
+            result.push('_');
+            part2.write(&mut result, "_").unwrap();
         } else {
             match self.part1 {
                 IdentLike::Match(_)
@@ -358,8 +378,9 @@ impl DotModifier {
     fn capitalized_impl(&self, prefix: String) -> Ident {
         let mut temp = String::new();
         write!(&mut temp, "{}", &self.part1).unwrap();
-        if let Some(IdentOrTypeSuffix(ref part2)) = self.part2 {
-            write!(&mut temp, "_{}", part2).unwrap();
+        if let Some(ref part2) = self.part2 {
+            temp.push('_');
+            part2.write(&mut temp, "_").unwrap();
         }
         let mut result = prefix;
         let mut capitalize = true;
@@ -531,6 +552,7 @@ impl Parse for Arguments {
             let mut optional = false;
             let mut can_be_negated = false;
             let mut pre_pipe = false;
+            let mut bracketed_optional = false;
             let ident;
             let lookahead = input.lookahead1();
             if lookahead.peek(token::Brace) {
@@ -544,7 +566,15 @@ impl Parse for Arguments {
                 } else if lookahead.peek(Token![,]) {
                     optional = true;
                     content.parse::<Token![,]>()?;
-                    ident = content.parse::<HyphenatedIdent>()?;
+                    if content.peek(token::Bracket) {
+                        // optional address operand: `{, [a]}`
+                        let bracketed;
+                        bracketed!(bracketed in content);
+                        bracketed_optional = true;
+                        ident = bracketed.parse::<HyphenatedIdent>()?;
+                    } else {
+                        ident = content.parse::<HyphenatedIdent>()?;
+                    }
                 } else {
                     return Err(lookahead.error());
                 }
@@ -591,9 +621,9 @@ impl Parse for Arguments {
                 optional,
                 pre_pipe,
                 can_be_negated,
-                pre_bracket: false,
+                pre_bracket: bracketed_optional,
                 ident,
-                post_bracket: false,
+                post_bracket: bracketed_optional,
                 unified: false,
             });
         }
