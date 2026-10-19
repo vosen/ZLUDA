@@ -1821,6 +1821,16 @@ fn empty_call<'input>(
     }
 }
 
+// .xorsign and .abs of min/max must come together
+fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
+    if xorsign != abs {
+        state
+            .errors
+            .push(PtxError::SyntaxError(".xorsign requires .abs".to_string()));
+    }
+    xorsign && abs
+}
+
 fn vshr<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
     ctor: impl FnOnce(
@@ -3259,24 +3269,26 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //min{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    min{.ftz}{.NaN}.f32   d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f32
                 }
             ),
             arguments: MinArgs { dst: d, src1: a, src2: b  }
         }
     }
-    min.f64         d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
-                    nan: false,
+                    nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f64
                 }
             ),
@@ -3289,48 +3301,52 @@ derive_parser!(
     //min{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    min{.ftz}{.NaN}.f16      d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16
                 }
             ),
             arguments: MinArgs { dst: d, src1: a, src2: b  }
         }
     }
-    min{.ftz}{.NaN}.f16x2    d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16x2
                 }
             ),
             arguments: MinArgs { dst: d, src1: a, src2: b  }
         }
     }
-    min{.NaN}.bf16           d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16
                 }
             ),
             arguments: MinArgs { dst: d, src1: a, src2: b  }
         }
     }
-    min{.NaN}.bf16x2         d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16x2
                 }
             ),
@@ -3364,24 +3380,26 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //max{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    max{.ftz}{.NaN}.f32   d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f32
                 }
             ),
             arguments: MaxArgs { dst: d, src1: a, src2: b  }
         }
     }
-    max.f64         d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
-                    nan: false,
+                    nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f64
                 }
             ),
@@ -3394,48 +3412,52 @@ derive_parser!(
     //max{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    max{.ftz}{.NaN}.f16      d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16
                 }
             ),
             arguments: MaxArgs { dst: d, src1: a, src2: b  }
         }
     }
-    max{.ftz}{.NaN}.f16x2    d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16x2
                 }
             ),
             arguments: MaxArgs { dst: d, src1: a, src2: b  }
         }
     }
-    max{.NaN}.bf16           d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16
                 }
             ),
             arguments: MaxArgs { dst: d, src1: a, src2: b  }
         }
     }
-    max{.NaN}.bf16x2         d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16x2
                 }
             ),

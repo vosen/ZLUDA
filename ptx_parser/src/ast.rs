@@ -2717,6 +2717,9 @@ impl MinMaxDetails {
 pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
+    // .xorsign.abs: compare the magnitudes, the result has the sign
+    // sign(a) xor sign(b)
+    pub xorsign_abs: bool,
     pub type_: ScalarType,
 }
 

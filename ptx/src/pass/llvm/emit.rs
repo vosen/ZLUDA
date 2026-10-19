@@ -3431,30 +3431,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::MinMaxDetails,
         arguments: ptx_parser::MinArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_prefix = match data {
-            ptx_parser::MinMaxDetails::Signed(..) => "llvm.smin",
-            ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umin",
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }) => {
-                "llvm.minimumnum"
-            }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
-                "llvm.minimum"
-            }
-        };
-        let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
-        let llvm_type = get_scalar_type(self.context, data.type_());
-
-        let a = self.resolver.value(arguments.src1)?;
-        let b = self.resolver.value(arguments.src2)?;
-
-        let min = self.emit_intrinsic(
-            unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
-            None,
-            vec![&data.type_().into()],
-            vec![(a, llvm_type), (b, llvm_type)],
-        )?;
-        self.resolver.register(arguments.dst, min);
-        Ok(())
+        self.emit_min_max(true, data, arguments.dst, arguments.src1, arguments.src2)
     }
 
     fn emit_max(
@@ -3462,30 +3439,116 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::MinMaxDetails,
         arguments: ptx_parser::MaxArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let llvm_prefix = match data {
-            ptx_parser::MinMaxDetails::Signed(..) => "llvm.smax",
-            ptx_parser::MinMaxDetails::Unsigned(..) => "llvm.umax",
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }) => {
+        self.emit_min_max(false, data, arguments.dst, arguments.src1, arguments.src2)
+    }
+
+    fn emit_min_max(
+        &mut self,
+        is_min: bool,
+        data: ptx_parser::MinMaxDetails,
+        dst: SpirvWord,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let llvm_prefix = match (data, is_min) {
+            (ptx_parser::MinMaxDetails::Signed(..), true) => "llvm.smin",
+            (ptx_parser::MinMaxDetails::Signed(..), false) => "llvm.smax",
+            (ptx_parser::MinMaxDetails::Unsigned(..), true) => "llvm.umin",
+            (ptx_parser::MinMaxDetails::Unsigned(..), false) => "llvm.umax",
+            (ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }), true) => {
+                "llvm.minimumnum"
+            }
+            (ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }), false) => {
                 "llvm.maximumnum"
             }
-            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }) => {
+            (ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }), true) => {
+                "llvm.minimum"
+            }
+            (ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: true, .. }), false) => {
                 "llvm.maximum"
             }
         };
-        let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(data.type_()));
-        let llvm_type = get_scalar_type(self.context, data.type_());
-
-        let a = self.resolver.value(arguments.src1)?;
-        let b = self.resolver.value(arguments.src2)?;
-
-        let max = self.emit_intrinsic(
+        let type_ = data.type_();
+        let intrinsic = format!("{}.{}\0", llvm_prefix, LLVMTypeDisplay(type_));
+        let llvm_type = get_scalar_type(self.context, type_);
+        let mut a = self.resolver.value(src1)?;
+        let mut b = self.resolver.value(src2)?;
+        let xorsign_abs = matches!(
+            data,
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat {
+                xorsign_abs: true,
+                ..
+            })
+        );
+        let (original_a, original_b) = (a, b);
+        if xorsign_abs {
+            let fabs = format!("llvm.fabs.{}\0", LLVMTypeDisplay(type_));
+            let fabs = unsafe { CStr::from_bytes_with_nul_unchecked(fabs.as_bytes()) };
+            a = self.emit_intrinsic(fabs, None, vec![&type_.into()], vec![(a, llvm_type)])?;
+            b = self.emit_intrinsic(fabs, None, vec![&type_.into()], vec![(b, llvm_type)])?;
+        }
+        let result = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             None,
-            vec![&data.type_().into()],
+            vec![&type_.into()],
             vec![(a, llvm_type), (b, llvm_type)],
         )?;
-        self.resolver.register(arguments.dst, max);
+        let result = if xorsign_abs {
+            self.emit_xor_sign(type_, result, original_a, original_b)?
+        } else {
+            result
+        };
+        self.resolver.register(dst, result);
         Ok(())
+    }
+
+    // Gives a non-NaN `value` the sign sign(a) xor sign(b)
+    fn emit_xor_sign(
+        &mut self,
+        type_: ast::ScalarType,
+        value: LLVMValueRef,
+        a: LLVMValueRef,
+        b: LLVMValueRef,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let element = type_.packed_type().unwrap_or(type_);
+        let element_bits = element.size_of() as u32 * 8;
+        let int_element = unsafe { LLVMIntTypeInContext(self.context, element_bits) };
+        let (int_type, sign_mask) = unsafe {
+            let sign = LLVMConstInt(int_element, 1u64 << (element_bits - 1), 0);
+            if element == type_ {
+                (int_element, sign)
+            } else {
+                let mut signs = [sign, sign];
+                (
+                    LLVMVectorType(int_element, 2),
+                    LLVMConstVector(signs.as_mut_ptr(), 2),
+                )
+            }
+        };
+        let b_ = self.builder;
+        unsafe {
+            let a_bits = LLVMBuildBitCast(b_, a, int_type, LLVM_UNNAMED.as_ptr());
+            let b_bits = LLVMBuildBitCast(b_, b, int_type, LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildXor(b_, a_bits, b_bits, LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildAnd(b_, sign, sign_mask, LLVM_UNNAMED.as_ptr());
+            let bits = LLVMBuildBitCast(b_, value, int_type, LLVM_UNNAMED.as_ptr());
+            let magnitude = LLVMBuildAnd(
+                b_,
+                bits,
+                LLVMBuildNot(b_, sign_mask, LLVM_UNNAMED.as_ptr()),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let signed = LLVMBuildOr(b_, magnitude, sign, LLVM_UNNAMED.as_ptr());
+            let signed = LLVMBuildBitCast(b_, signed, LLVMTypeOf(value), LLVM_UNNAMED.as_ptr());
+            let is_nan = LLVMBuildFCmp(
+                b_,
+                LLVMRealPredicate::LLVMRealUNO,
+                value,
+                value,
+                LLVM_UNNAMED.as_ptr(),
+            );
+            Ok(LLVMBuildSelect(b_, is_nan, value, signed, LLVM_UNNAMED.as_ptr()))
+        }
     }
 
     fn emit_fma(
