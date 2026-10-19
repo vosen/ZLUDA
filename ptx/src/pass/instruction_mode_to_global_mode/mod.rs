@@ -2204,6 +2204,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
         | ast::Instruction::StMatrix { .. }
+        | ast::Instruction::MmaSparse { .. }
         | ast::Instruction::MmaBlockScale { .. }
         | ast::Instruction::MovMatrix { .. }
         | ast::Instruction::WmmaLoad { .. }

@@ -857,6 +857,39 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        MmaSparse {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::D) },
+                },
+                src1: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::A) },
+                },
+                src2: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::B) },
+                },
+                src3: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::C) },
+                },
+                src_metadata: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_a: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_b: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
+            }
+        },
         MmaBlockScale {
             data: MmaDetails,
             arguments<T>: {
@@ -3143,6 +3176,11 @@ pub struct MmaDetails {
     pub satfinite: bool,
     pub b1_op: Option<MmaB1Op>,
     pub block_scale: Option<MmaBlockScale>,
+    /// Sparse `mma.sp`: A is 2:4 (1:2 for `tf32`, 4:8 for 4-bit elements)
+    /// structured sparse, its fragment holds the non-zero elements and the
+    /// metadata operand their positions; the value is the sparsity selector
+    /// (an immediate).
+    pub sparse: Option<u32>,
 }
 
 impl MmaDetails {
@@ -3211,6 +3249,36 @@ impl MmaDetails {
         }
     }
 
+    /// Whether this is a supported `mma.sp` (with the block scaling of
+    /// `scale` if any): m16n8 with the depths of the PTX ISA.
+    pub fn is_supported_sparse(
+        &self,
+        kind_f8f6f4: bool,
+        scale: Option<(&MmaBlockScale, bool)>,
+    ) -> bool {
+        use MmaType::*;
+        let (depths, dense_k): (&[u32], u32) = match self.atype {
+            F16 | Bf16 => (&[16, 32], 16),
+            Tf32 => (&[8, 16], 8),
+            S8 | U8 => (&[32, 64], 32),
+            S4 | U4 => (&[64, 128], 64),
+            E2m1x2 => (&[128], 64),
+            E4m3 | E5m2 | E3m2 | E2m3 | E2m1 => (&[64], 32),
+            _ => return false,
+        };
+        // the types are those of a dense mma
+        let dense = MmaDetails {
+            k: dense_k,
+            sparse: None,
+            ..*self
+        };
+        let types = match scale {
+            Some((scale, fp4)) => dense.is_supported_block_scale(scale, fp4),
+            None => dense.is_supported_mma(kind_f8f6f4),
+        };
+        self.m == 16 && self.n == 8 && depths.contains(&self.k) && types
+    }
+
     /// Whether this is a supported `wmma.mma`: all the shapes and types of
     /// the PTX ISA (`.rn` only for `f64`).
     pub fn is_supported_wmma(&self) -> bool {
@@ -3260,7 +3328,9 @@ impl MmaDetails {
         let (rows, cols) = self.matrix_size(matrix);
         let type_ = self.element_type(matrix);
         let register_bits = if type_ == MmaType::F64 { 64 } else { 32 };
-        (rows * cols / 32 * type_.bits()).div_ceil(register_bits) as u8
+        // half of the elements of a sparse A
+        let sparsity = if self.sparse.is_some() && matrix == MmaMatrix::A { 2 } else { 1 };
+        (rows * cols / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
     }
 
     /// Number of registers of a fragment of `wmma`, as given by the PTX ISA:
@@ -3284,6 +3354,7 @@ impl MmaDetails {
                 | (16, 8, 16, MmaType::F32, MmaType::Bf16, MmaType::Bf16, MmaType::F32)
                 | (16, 8, 32, MmaType::S32, MmaType::S8, MmaType::S8, MmaType::S32)
         ) && !self.satfinite
+            && self.sparse.is_none()
     }
 
     pub fn mma_type(&self, matrix: MmaMatrix) -> Type {
@@ -3345,6 +3416,7 @@ impl WmmaLoadStoreDetails {
             satfinite: false,
             b1_op: None,
             block_scale: None,
+            sparse: None,
         }
     }
 

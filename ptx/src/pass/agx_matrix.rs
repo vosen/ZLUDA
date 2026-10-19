@@ -53,9 +53,9 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::LdMatrix { data, .. } => Helper::LdMatrix(*data),
         ast::Instruction::StMatrix { data, .. } => Helper::StMatrix(*data),
         ast::Instruction::MovMatrix { .. } => Helper::MovMatrix,
-        ast::Instruction::Mma { data, .. } | ast::Instruction::MmaBlockScale { data, .. } => {
-            Helper::Mma(*data)
-        }
+        ast::Instruction::Mma { data, .. }
+        | ast::Instruction::MmaBlockScale { data, .. }
+        | ast::Instruction::MmaSparse { data, .. } => Helper::Mma(*data),
         ast::Instruction::WmmaLoad { data, .. } => Helper::WmmaLoad(*data),
         ast::Instruction::WmmaStore { data, .. } => Helper::WmmaStore(*data),
         ast::Instruction::WmmaMma { data, .. } => Helper::WmmaMma(*data),
@@ -125,6 +125,9 @@ fn mma_name(d: &ast::MmaDetails) -> String {
         Some(ast::MmaB1Op::And) => name.push_str("_and"),
         None => {}
     }
+    if let Some(selector) = d.sparse {
+        write!(name, "_sp{selector}").unwrap();
+    }
     if let Some(s) = d.block_scale {
         let stype = if s.ue4m3 { "ue4m3" } else { "ue8m0" };
         write!(
@@ -183,6 +186,9 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
             }
             _ => None,
         },
+        sparse: flags
+            .iter()
+            .find_map(|f| f.strip_prefix("sp").and_then(|s| s.parse().ok())),
     })
 }
 
@@ -377,12 +383,19 @@ fn define(
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
             let b = ir.unpack(&param(1)?.0, param(1)?.1)?;
             let c = ir.unpack(&param(2)?.0, param(2)?.1)?;
+            // the metadata, then the scale factors
+            let first = if d.sparse.is_some() { 4 } else { 3 };
             let scales = if d.block_scale.is_some() {
-                Some((param(3)?.0, param(4)?.0))
+                Some((param(first)?.0, param(first + 1)?.0))
             } else {
                 None
             };
-            Some(mma_tile(&mut ir, &lane, &d, &a, &b, &c, scales)?)
+            if d.sparse.is_some() {
+                let metadata = param(3)?.0;
+                Some(sparse_tile(&mut ir, &lane, &d, &a, &b, &c, &metadata, scales)?)
+            } else {
+                Some(mma_tile(&mut ir, &lane, &d, &a, &b, &c, scales)?)
+            }
         }
         Helper::WmmaMma(d) => {
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
@@ -862,13 +875,13 @@ fn position(matrix: ast::MmaMatrix, m: u32, k: u32, bits: u32, lane: u32, i: u32
             _ => return None,
         },
         ast::MmaMatrix::B => match (bits, k) {
-            (16, 16) => (2 * t + i % 2 + 8 * (i / 2), g),
+            (16, 16 | 32) => (2 * t + i % 2 + 8 * (i / 2), g),
             (16, 8) => (2 * t + i, g),
-            (32, 4 | 8) | (64, 4 | 8 | 16) => (t + 4 * i, g),
+            (32, 4 | 8 | 16) | (64, 4 | 8 | 16) => (t + 4 * i, g),
             (8, 16) => (4 * t + i, g),
-            (8, 32) => (4 * t + i % 4 + 16 * (i / 4), g),
+            (8, 32 | 64) => (4 * t + i % 4 + 16 * (i / 4), g),
             (4, 32) => (8 * t + i, g),
-            (4, 64) => (8 * t + i % 8 + 32 * (i / 8), g),
+            (4, 64 | 128) => (8 * t + i % 8 + 32 * (i / 8), g),
             (1, 128) => (32 * t + i, g),
             (1, 256) => (32 * t + i % 32 + 128 * (i / 32), g),
             _ => return None,
@@ -1049,49 +1062,68 @@ fn mma_tile(
     let a_vals = (0..m / 8).map(|h| gather(ir, 0, h)).collect::<Result<Vec<_>, _>>()?;
     let b_vals = (0..2).map(|e| gather(ir, 1, e)).collect::<Result<Vec<_>, _>>()?;
     let _ = ab_ty;
-    let c_bits = d.ctype.bits();
-    let d_bits = d.dtype.bits();
     let mut d_elements = Vec::new();
     if d.atype == ast::MmaType::F64 {
         d_elements = f64_elements_loop(ir, d, &lc, &a_vals, &b_vals, c)?;
-    }
-    for j in 0..nc {
-        if d.atype == ast::MmaType::F64 {
-            break;
+    } else {
+        let depths = (0..k).collect::<Vec<_>>();
+        for j in 0..nc {
+            let (h, e) = (lc.row[j as usize] / 8, lc.col[j as usize]);
+            let c_elem = fragment_element(ir, c, register_bits(d.ctype), d.ctype.bits(), j)?;
+            let (av, bv) = (&a_vals[h as usize], &b_vals[e as usize]);
+            let value = if word {
+                b1_dot(ir, d, av, bv, &c_elem)
+            } else {
+                dot(ir, lane, d, av, bv, &depths, &c_elem, &scales, h, e)?
+            };
+            d_elements.push(value);
         }
-        let (h, e) = (lc.row[j as usize] / 8, lc.col[j as usize]);
-        let c_elem = fragment_element(ir, c, register_bits(d.ctype), c_bits, j)?;
-        let av = &a_vals[h as usize];
-        let bv = &b_vals[e as usize];
-        let value = if let (Some(scale), Some((sa, sb))) = (d.block_scale, &scales) {
-            let factors = block_scales(ir, lane, &scale, sa, sb, h, e);
-            let (sa, sb) = (factors.0, factors.1);
-            let block = d.k / scale.chunks;
-            let mut terms = vec![decode(ir, d.ctype, &c_elem, "i32")?];
-            for (kk, (x, y)) in av.iter().zip(bv).enumerate() {
-                let x = decode(ir, d.atype, x, "i32")?;
-                let y = decode(ir, d.btype, y, "i32")?;
-                let p = product(ir, &x, &y);
-                let chunk = kk / block as usize;
-                let s = product(ir, &sa[chunk], &sb[chunk]);
-                terms.push(product(ir, &p, &s));
-            }
-            exact_sum(ir, &terms, d.dtype)?
-        } else if d.atype.is_float() {
-            float_dot(ir, d, av, bv, &c_elem)?
-        } else if word {
-            b1_dot(ir, d, av, bv, &c_elem)
-        } else {
-            integer_dot(ir, d, av, bv, &c_elem)
-        };
-        d_elements.push(value);
     }
-    // pack D
+    Ok(pack_d(ir, d, &d_elements))
+}
+
+// An element of D (row g + 8h, column 2t + e) from the elements of A and B
+// whose depths (k index in the dense matrices) are given, and C.
+fn dot(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    depths: &[u32],
+    c: &str,
+    scales: &Option<(String, String)>,
+    h: u32,
+    e: u32,
+) -> Result<String, TranslateError> {
+    if let (Some(scale), Some((sa, sb))) = (d.block_scale, scales) {
+        let (sa, sb) = block_scales(ir, lane, &scale, sa, sb, h, e);
+        let block = d.k / scale.chunks;
+        let mut terms = vec![decode(ir, d.ctype, c, "i32")?];
+        for ((x, y), kk) in a.iter().zip(b).zip(depths) {
+            let x = decode(ir, d.atype, x, "i32")?;
+            let y = decode(ir, d.btype, y, "i32")?;
+            let p = product(ir, &x, &y);
+            let chunk = (kk / block) as usize;
+            let s = product(ir, &sa[chunk], &sb[chunk]);
+            terms.push(product(ir, &p, &s));
+        }
+        exact_sum(ir, &terms, d.dtype)
+    } else if d.atype.is_float() {
+        float_dot(ir, d, a, b, c)
+    } else {
+        Ok(integer_dot(ir, d, a, b, c))
+    }
+}
+
+// The registers of D from its elements.
+fn pack_d(ir: &mut Ir, d: &ast::MmaDetails, elements: &[String]) -> Vec<String> {
+    let d_bits = d.dtype.bits();
     let d_reg_bits = register_bits(d.dtype);
     let d_ty = if d_reg_bits == 64 { "i64" } else { "i32" };
     let per_d = d_reg_bits / d_bits;
     let mut regs = Vec::new();
-    for chunk in d_elements.chunks(per_d as usize) {
+    for chunk in elements.chunks(per_d as usize) {
         let mut value = "0".to_string();
         for (s, x) in chunk.iter().enumerate() {
             let x = if per_d > 1 {
@@ -1104,7 +1136,138 @@ fn mma_tile(
         }
         regs.push(value);
     }
-    Ok(regs)
+    regs
+}
+
+/// One sparse `mma.sp` tile (m16 x 8 x k). Element i of the A fragment of
+/// thread (g, t) is non-zero element i % nz of chunk c of row g + 8 rh,
+/// with unit u = i / nz: rh = u % 2 and c = t + 4 (u / 2) for 16-bit and
+/// 32-bit elements, rh = (u / 2) % 2 and c = 2t + u % 2 + 8 (u / 4)
+/// otherwise. A chunk has cw columns of which nz are kept (2:4, 1:2 for
+/// tf32, 4:8 for 4-bit elements), at the positions of its 4-bit metadata
+/// nibble, taken from the metadata register of thread s (the sparsity
+/// selector) of the quad, rows g and g + 8 in its two halves, when a row has
+/// 4 chunks; of thread 2s + rh with 8 chunks; of thread 2 (c / 8) + rh with
+/// 16. These are the layouts of PTX-formalization (the ISA gives the
+/// metadata layout as figures).
+fn sparse_tile(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    c: &[String],
+    metadata: &str,
+    scales: Option<(String, String)>,
+) -> Result<Vec<String>, TranslateError> {
+    use ast::MmaMatrix::*;
+    let selector = d.sparse.ok_or_else(|| todo("mma.sp"))?;
+    let (m, k) = (d.m, d.k);
+    let bits = d.atype.bits();
+    let (nz, cw) = match bits {
+        32 => (1, 2),
+        4 => (4, 8),
+        _ => (2, 4),
+    };
+    let chunks = k / cw;
+    let per = 32 / bits;
+    let count = m * k / 64;
+    let lb = Layout::new(B, m, k, bits, k * 8 / 32)?;
+    let lc = Layout::new(C, m, k, bits, m * 8 / 32)?;
+    if (lb.rg, lb.cg, lb.ct) != (0, 1, 0) || (lc.rg, lc.rt, lc.cg, lc.ct) != (1, 0, 0, 2) {
+        return Err(todo("fragment layout"));
+    }
+    // the columns 2t + e of B, by depth
+    let mut b_cols: Vec<Vec<String>> = vec![vec![String::new(); k as usize]; 2];
+    let mut shuffled: HashMap<(u32, u32, u32), String> = HashMap::new();
+    for e in 0..2u32 {
+        for source in 0..4u32 {
+            for i in 0..lb.row.len() as u32 {
+                let kk = lb.rt * source + lb.row[i as usize];
+                let reg = i / per;
+                let key = (e, source, reg);
+                if !shuffled.contains_key(&key) {
+                    let r = b.get(reg as usize).ok_or_else(|| todo("fragment size"))?;
+                    let l = ir.linear(0, &lane.g, 8, &lane.t, 4 * e + source);
+                    let v = ir.shuffle(r, 32, &l, false);
+                    shuffled.insert(key, v);
+                }
+                let r = shuffled[&key].clone();
+                b_cols[e as usize][kk as usize] = fragment_element(ir, &[r], 32, bits, i % per)?;
+            }
+        }
+    }
+    // the non-zero elements of rows g + 8h, with their chunk and position
+    // in the chunk
+    let mut rows: Vec<Vec<(String, u32, String)>> = vec![Vec::new(), Vec::new()];
+    let mut a_shuffled: HashMap<(u32, u32), String> = HashMap::new();
+    let mut nibbles: HashMap<(u32, u32), String> = HashMap::new();
+    for source in 0..4u32 {
+        for i in 0..count {
+            let u = i / nz;
+            let (rh, chunk) = if bits >= 16 {
+                (u % 2, source + 4 * (u / 2))
+            } else {
+                ((u / 2) % 2, 2 * source + u % 2 + 8 * (u / 4))
+            };
+            let reg = i / per;
+            if !a_shuffled.contains_key(&(source, reg)) {
+                let r = a.get(reg as usize).ok_or_else(|| todo("fragment size"))?;
+                let v = ir.shuffle(r, 32, &source.to_string(), true);
+                a_shuffled.insert((source, reg), v);
+            }
+            let value = fragment_element(ir, &[a_shuffled[&(source, reg)].clone()], 32, bits, i % per)?;
+            if !nibbles.contains_key(&(rh, chunk)) {
+                let (thread, shift) = match chunks {
+                    4 => (selector, 16 * rh + 4 * chunk),
+                    8 => (2 * selector + rh, 4 * chunk),
+                    16 => (2 * (chunk / 8) + rh, 4 * (chunk % 8)),
+                    _ => return Err(todo("mma.sp shape")),
+                };
+                let x = ir.shuffle(metadata, 32, &thread.to_string(), true);
+                let x = ir.op("lshr", "i32", &x, &shift.to_string());
+                let nibble = ir.op("and", "i32", &x, "15");
+                nibbles.insert((rh, chunk), nibble);
+            }
+            let nibble = nibbles[&(rh, chunk)].clone();
+            let j = i % nz;
+            let position = if nz == 1 {
+                let x = ir.op("and", "i32", &nibble, "3");
+                ir.op("lshr", "i32", &x, "1")
+            } else if nz == 4 {
+                let x = ir.op("lshr", "i32", &nibble, &(2 * (j / 2)).to_string());
+                let x = ir.op("and", "i32", &x, "3");
+                let x = ir.op("shl", "i32", &x, "1");
+                ir.op("or", "i32", &x, &(j % 2).to_string())
+            } else {
+                let x = ir.op("lshr", "i32", &nibble, &(2 * j).to_string());
+                ir.op("and", "i32", &x, "3")
+            };
+            rows[rh as usize].push((value, chunk, position));
+        }
+    }
+    let mut d_elements = Vec::new();
+    for j in 0..m * 8 / 32 {
+        let (h, e) = (lc.row[j as usize] / 8, lc.col[j as usize]);
+        let c_elem = fragment_element(ir, c, 32, d.ctype.bits(), j)?;
+        let mut av = Vec::new();
+        let mut bv = Vec::new();
+        let mut depths = Vec::new();
+        for (value, chunk, position) in &rows[h as usize] {
+            // the element of B at the depth of the non-zero element of A
+            let column = &b_cols[e as usize];
+            let mut selected = column[(cw * chunk) as usize].clone();
+            for p in 1..cw {
+                let is = ir.icmp("eq", "i32", position, &p.to_string());
+                selected = ir.select(&is, "i32", &column[(cw * chunk + p) as usize], &selected);
+            }
+            av.push(value.clone());
+            bv.push(selected);
+            depths.push(cw * chunk);
+        }
+        d_elements.push(dot(ir, lane, d, &av, &bv, &depths, &c_elem, &scales, h, e)?);
+    }
+    Ok(pack_d(ir, d, &d_elements))
 }
 
 // The elements of D of an f64 mma, computed in a loop over the elements:

@@ -210,6 +210,7 @@ fn run_instruction<'input>(
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
         | ast::Instruction::StMatrix { .. }
+        | ast::Instruction::MmaSparse { .. }
         | ast::Instruction::MmaBlockScale { .. }
         | ast::Instruction::MovMatrix { .. }
         | ast::Instruction::WmmaLoad { .. }

@@ -2057,6 +2057,8 @@ fn mma<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
     let mut modifiers = matrix_modifiers(stream);
+    let sparse =
+        take_modifier(&mut modifiers, "sp::ordered_metadata") || take_modifier(&mut modifiers, "sp");
     if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
         return backtrack();
     }
@@ -2098,10 +2100,12 @@ fn mma<'a, 'input>(
         satfinite,
         b1_op,
         block_scale: None,
+        sparse: None,
     };
-    let supported = match block_scale {
-        None => data.is_supported_mma(kind_f8f6f4),
-        Some((scale, fp4)) => data.is_supported_block_scale(&scale, fp4),
+    let supported = match (sparse, block_scale) {
+        (true, block_scale) => data.is_supported_sparse(kind_f8f6f4, block_scale.as_ref().map(|(s, fp4)| (s, *fp4))),
+        (false, None) => data.is_supported_mma(kind_f8f6f4),
+        (false, Some((scale, fp4))) => data.is_supported_block_scale(&scale, fp4),
     };
     if !modifiers.is_empty()
         || alayout != ast::MatrixLayout::Row
@@ -2120,7 +2124,65 @@ fn mma<'a, 'input>(
         ParsedOperandStr::parse,
     )
         .parse_next(stream)?;
-    let Some((mut scale, _)) = block_scale else {
+    // , metadata, sparsity selector
+    let sparse = if sparse {
+        let (_, metadata, _, selector) =
+            (Token::Comma, ParsedOperandStr::parse, Token::Comma, ParsedOperandStr::parse)
+                .parse_next(stream)?;
+        let selector = match selector {
+            ast::ParsedOperand::Imm(value) => match value.as_u64() {
+                Some(selector) if selector < 4 => selector as u32,
+                _ => return backtrack(),
+            },
+            _ => return backtrack(),
+        };
+        Some((metadata, selector))
+    } else {
+        None
+    };
+    let mut scale_operands = None;
+    let mut scale = None;
+    if let Some((mut s, _)) = block_scale {
+        // , scale-a, {byte-id-a, thread-id-a}, scale-b, {byte-id-b, thread-id-b}
+        let (_, src_scale_a, _, (a_byte, a_thread), _, src_scale_b, _, (b_byte, b_thread)) = (
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            scale_selector,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            scale_selector,
+        )
+            .parse_next(stream)?;
+        (s.a_byte, s.a_thread, s.b_byte, s.b_thread) = (a_byte, a_thread, b_byte, b_thread);
+        scale = Some(s);
+        scale_operands = Some((src_scale_a, src_scale_b));
+    }
+    let data = ast::MmaDetails {
+        block_scale: scale,
+        sparse: sparse.as_ref().map(|(_, selector)| *selector),
+        ..data
+    };
+    if let Some((src_metadata, _)) = sparse {
+        let (src_scale_a, src_scale_b) = match scale_operands {
+            Some((a, b)) => (Some(a), Some(b)),
+            None => (None, None),
+        };
+        return Ok(ast::Instruction::MmaSparse {
+            data,
+            arguments: MmaSparseArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+                src_metadata,
+                src_scale_a,
+                src_scale_b,
+            },
+        });
+    }
+    let Some((src_scale_a, src_scale_b)) = scale_operands else {
         return Ok(ast::Instruction::Mma {
             data,
             arguments: MmaArgs {
@@ -2131,24 +2193,8 @@ fn mma<'a, 'input>(
             },
         });
     };
-    // , scale-a, {byte-id-a, thread-id-a}, scale-b, {byte-id-b, thread-id-b}
-    let (_, src_scale_a, _, (a_byte, a_thread), _, src_scale_b, _, (b_byte, b_thread)) = (
-        Token::Comma,
-        ParsedOperandStr::parse,
-        Token::Comma,
-        scale_selector,
-        Token::Comma,
-        ParsedOperandStr::parse,
-        Token::Comma,
-        scale_selector,
-    )
-        .parse_next(stream)?;
-    (scale.a_byte, scale.a_thread, scale.b_byte, scale.b_thread) = (a_byte, a_thread, b_byte, b_thread);
     Ok(ast::Instruction::MmaBlockScale {
-        data: ast::MmaDetails {
-            block_scale: Some(scale),
-            ..data
-        },
+        data,
         arguments: MmaBlockScaleArgs {
             dst,
             src1,
@@ -2261,6 +2307,7 @@ fn wmma<'a, 'input>(
             satfinite,
             b1_op,
             block_scale: None,
+            sparse: None,
         };
         if !modifiers.is_empty() || !data.is_supported_wmma() {
             return backtrack();
