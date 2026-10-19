@@ -1851,6 +1851,22 @@ impl<'a> MethodEmitContext<'a> {
         }
     }
 
+    // Replaces an f32 subnormal with a zero of the same sign
+    fn emit_flush_f32(&mut self, value: LLVMValueRef) -> LLVMValueRef {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
+        let b = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        unsafe {
+            let bits = LLVMBuildBitCast(b, value, i32_type, LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildAnd(b, bits, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+            let is_subnormal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, exponent, c(0), LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildAnd(b, bits, c(0x8000_0000), LLVM_UNNAMED.as_ptr());
+            let bits = LLVMBuildSelect(b, is_subnormal, sign, bits, LLVM_UNNAMED.as_ptr());
+            LLVMBuildBitCast(b, bits, f32_type, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
     // Replaces an f16 subnormal with a zero of the same sign
     fn emit_flush_f16(&mut self, value: LLVMValueRef) -> LLVMValueRef {
         let i16_type = get_scalar_type(self.context, ast::ScalarType::B16);
@@ -2541,6 +2557,19 @@ impl<'a> MethodEmitContext<'a> {
             }
             ptx_parser::CvtMode::IntSaturateToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
+            }
+            ptx_parser::CvtMode::FPExtend {
+                flush_to_zero: Some(true),
+                relu: false,
+                satfinite: false,
+                ..
+            } if self.target == Target::Agx && data.from == ast::ScalarType::F32 => {
+                // .ftz flushes subnormal f32 sources, which f64 represents
+                let src = self.resolver.value(arguments.src)?;
+                let flushed = self.emit_flush_f32(src);
+                self.fp
+                    .fpext(self.resolver, data.to, Some(arguments.dst), data.from, flushed)?;
+                return Ok(());
             }
             ptx_parser::CvtMode::FPExtend {
                 relu, satfinite, ..

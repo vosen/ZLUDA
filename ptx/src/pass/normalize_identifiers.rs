@@ -37,14 +37,26 @@ fn run_method<'input, 'b>(
     let name = resolver.add_or_get_in_current_scope_untyped(method.func_directive.name.text())?;
     resolver.start_scope();
     let (return_arguments, input_arguments) = run_function_decl(resolver, method.func_directive)?;
+    resolver.implicit_registers = Some((resolver.scopes.len() - 1, Vec::new()));
     let body = method
         .body
         .map(|statements| {
-            let mut result = Vec::with_capacity(statements.len());
-            run_statements(resolver, &mut result, statements)?;
+            let mut body = Vec::with_capacity(statements.len());
+            run_statements(resolver, &mut body, statements)?;
+            let implicit = resolver
+                .implicit_registers
+                .as_mut()
+                .map(|(_, registers)| std::mem::take(registers))
+                .unwrap_or_default();
+            let mut result = implicit
+                .into_iter()
+                .map(Statement::Variable)
+                .collect::<Vec<_>>();
+            result.extend(body);
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
+    resolver.implicit_registers = None;
     resolver.end_scope();
     Ok(Function {
         return_arguments,
@@ -196,8 +208,8 @@ impl<'a, 'input, 'b>
             )),
             operand => {
                 let resolver = &mut *self.resolver;
-                (&mut |name: &'input str, _: Option<(&ast::Type, ast::StateSpace)>, _, _| {
-                    resolver.get(&name)
+                (&mut |name: &'input str, type_space: Option<(&ast::Type, ast::StateSpace)>, _, _| {
+                    resolver.get_or_declare(name, type_space)
                 })
                     .visit(operand, type_space, is_dst, relaxed_type_check)
             }
