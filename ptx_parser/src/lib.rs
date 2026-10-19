@@ -1964,6 +1964,111 @@ fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
     xorsign && abs
 }
 
+fn packed_cvt<'input, 'e>(
+    errors: &mut Vec<PtxError<'e>>,
+    rounding: RawRoundingMode,
+    relu: bool,
+    satfinite: bool,
+    dst_type: PackedCvtType,
+    src_type: PackedCvtType,
+    dst: ParsedOperandStr<'input>,
+    src: ParsedOperandStr<'input>,
+    src2: Option<ParsedOperandStr<'input>>,
+) -> ast::Instruction<ParsedOperandStr<'input>> {
+    fn mini(t: PackedCvtType) -> Option<ast::MiniFormat> {
+        Some(match t {
+            PackedCvtType::E4m3x2 => ast::MiniFormat::E4m3x2,
+            PackedCvtType::E5m2x2 => ast::MiniFormat::E5m2x2,
+            PackedCvtType::E2m1x2 => ast::MiniFormat::E2m1x2,
+            PackedCvtType::E2m3x2 => ast::MiniFormat::E2m3x2,
+            PackedCvtType::E3m2x2 => ast::MiniFormat::E3m2x2,
+            PackedCvtType::Ue8m0x2 => ast::MiniFormat::Ue8m0x2,
+            _ => return None,
+        })
+    }
+    fn scalar(t: PackedCvtType) -> ScalarType {
+        match t {
+            PackedCvtType::F16x2 => ScalarType::F16x2,
+            PackedCvtType::BF16x2 => ScalarType::BF16x2,
+            PackedCvtType::E4m3x2 => ScalarType::E4m3x2,
+            PackedCvtType::E5m2x2 => ScalarType::E5m2x2,
+            _ => ScalarType::F32,
+        }
+    }
+    let is_half = |t| matches!(t, PackedCvtType::F16x2 | PackedCvtType::BF16x2);
+    let is_legacy_fp8 = |t| matches!(t, PackedCvtType::E4m3x2 | PackedCvtType::E5m2x2);
+    let mini_instruction = |format, direction, errors: &mut Vec<PtxError<'e>>| {
+        let rounding = ast::RoundingMode::from(rounding);
+        if (rounding == ast::RoundingMode::PositiveInf) != (format == ast::MiniFormat::Ue8m0x2 && direction != ast::MiniDirection::ToBf16x2)
+            && rounding != ast::RoundingMode::Zero
+        {
+            errors.push(PtxError::SyntaxError("invalid rounding of cvt".to_string()));
+        }
+        ast::Instruction::CvtMini {
+            data: ast::CvtMiniDetails {
+                format,
+                direction,
+                rounding,
+                relu,
+            },
+            arguments: CvtMiniArgs {
+                dst: dst.clone(),
+                src1: src.clone(),
+                src2: src2.clone(),
+            },
+        }
+    };
+    let pair = src2.is_some();
+    match (is_half(dst_type), mini(dst_type), src_type, mini(src_type)) {
+        // cvt.frnd2{.relu}{.satfinite}.{f16x2,bf16x2}.f32 d, a, b
+        (true, _, PackedCvtType::F32, _) if pair && rounding != RawRoundingMode::Rp => {
+            let data = ast::CvtDetails::new(errors, Some(rounding), false, false, relu, satfinite, scalar(dst_type), ScalarType::F32);
+            ast::Instruction::Cvt {
+                data,
+                arguments: ast::CvtArgs { dst, src, src2 }
+            }
+        }
+        // widening of the narrow formats
+        (true, _, _, Some(format)) if !pair && rounding == RawRoundingMode::Rn => {
+            if is_legacy_fp8(src_type) && !relu && !satfinite {
+                let data = ast::CvtDetails::new(errors, Some(rounding), false, false, false, false, scalar(dst_type), scalar(src_type));
+                ast::Instruction::Cvt {
+                    data,
+                    arguments: ast::CvtArgs { dst, src, src2: None }
+                }
+            } else {
+                let direction = if dst_type == PackedCvtType::F16x2 {
+                    ast::MiniDirection::ToF16x2
+                } else {
+                    ast::MiniDirection::ToBf16x2
+                };
+                mini_instruction(format, direction, errors)
+            }
+        }
+        // narrowing to them
+        (false, Some(format), _, None) if pair == (src_type == PackedCvtType::F32) => {
+            if is_legacy_fp8(dst_type) && pair && rounding == RawRoundingMode::Rn && !relu && satfinite {
+                let data = ast::CvtDetails::new(errors, Some(rounding), false, false, false, false, scalar(dst_type), ScalarType::F32);
+                ast::Instruction::Cvt {
+                    data,
+                    arguments: ast::CvtArgs { dst, src, src2 }
+                }
+            } else {
+                let direction = match src_type {
+                    PackedCvtType::F32 => ast::MiniDirection::FromF32,
+                    PackedCvtType::F16x2 => ast::MiniDirection::FromF16x2,
+                    _ => ast::MiniDirection::FromBf16x2,
+                };
+                mini_instruction(format, direction, errors)
+            }
+        }
+        _ => {
+            errors.push(PtxError::SyntaxError("invalid packed cvt".to_string()));
+            mini_instruction(ast::MiniFormat::E4m3x2, ast::MiniDirection::ToF16x2, errors)
+        }
+    }
+}
+
 // The source text of the next token
 fn next_token_text<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
     let (_, span) = token::any.parse_next(stream)?;
@@ -2485,7 +2590,12 @@ derive_parser!(
     pub enum MemScope { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum ScalarType { }
+    pub enum ScalarType {
+        #[display(".e4m3x2")]
+        E4m3x2,
+        #[display(".e5m2x2")]
+        E5m2x2
+    }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum SetpBoolPostOp { }
@@ -2543,6 +2653,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Packed8Type { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash, Debug)]
+    pub enum PackedCvtType { }
 
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
@@ -3181,25 +3294,8 @@ derive_parser!(
     // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
-    cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, satfinite, x2_to_type, x2_from_type);
-        ast::Instruction::Cvt {
-            data,
-            arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
-        }
-    }
     // cvt.rna{.satfinite}.tf32.f32               d, a;
     // cvt.frnd2{.relu}{.satfinite}.tf32.f32       d, a;
-    cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b => {
-        if relu {
-            state.errors.push(PtxError::Todo("cvt.rn.satfinite.f8x2 instruction with relu modifier".to_string()));
-        }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, false, f8x2type, ScalarType::F32);
-        ast::Instruction::Cvt {
-            data,
-            arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
-        }
-    }
     // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
     /*
     cvt.rn{.relu}.f16x2.f8x2type              d, a => {
@@ -3215,7 +3311,6 @@ derive_parser!(
     */
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
-    .frnd2: RawRoundingMode =   { .rn,  .rz };
     .frnd: RawRoundingMode =    { .rn,  .rz,  .rm,  .rp };
     .fdtype: ScalarType =       { .bf16, .f16, .f32, .f64 };
     .fatype: ScalarType =       { .bf16, .f16, .f32, .f64 };
@@ -3226,9 +3321,6 @@ derive_parser!(
     .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
-    .f8x2type: ScalarType =         { .e4m3x2, .e5m2x2 };
-    .x2_to_type: ScalarType =      { .f16x2, .bf16x2 };
-    .x2_from_type: ScalarType =    { .e4m3x2, .e5m2x2, .f32 };
 
     cvt.tfrnd{.relu}{.satfinite}.tf32.f32         d, a => {
         ast::Instruction::CvtTf32 {
@@ -3237,6 +3329,16 @@ derive_parser!(
         }
     }
     .tfrnd: Tf32Rounding = { .rn, .rz, .rm, .rp, .rna };
+
+    // Conversions with packed pairs: cvt.frnd2{.relu}{.satfinite}.{f16x2,bf16x2}.f32 d, a, b
+    // and the conversions to and from the narrow formats (fp8, fp6, fp4, ue8m0). One
+    // pattern, so that the parser can tell it from the others by the destination type
+    cvt.prnd{.relu}{.satfinite}.pdst.psrc      d, a {, b} => {
+        packed_cvt(&mut state.errors, prnd, relu, satfinite, pdst, psrc, d, a, b)
+    }
+    .prnd: RawRoundingMode =    { .rn, .rz, .rp };
+    .pdst: PackedCvtType =      { .f16x2, .bf16x2, .e4m3x2, .e5m2x2, .e2m1x2, .e2m3x2, .e3m2x2, .ue8m0x2 };
+    .psrc: PackedCvtType =      { .f32, .f16x2, .bf16x2, .e4m3x2, .e5m2x2, .e2m1x2, .e2m3x2, .e3m2x2, .ue8m0x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
     cvt.pack.sat.convertType.s32.b32        d, a, b, c => {

@@ -25,7 +25,7 @@ static POSTFIX_MODIFIERS: &[&str] = &[
     ".bf16", ".bf16x2", ".e4m3", ".e5m2", ".tf32",
 ];
 
-static POSTFIX_TYPES: &[&str] = &["ScalarType", "VectorPrefix"];
+static POSTFIX_TYPES: &[&str] = &["ScalarType", "VectorPrefix", "PackedCvtType"];
 
 struct OpcodeDefinitions {
     definitions: Vec<SingleOpcodeDefinition>,

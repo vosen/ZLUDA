@@ -395,6 +395,27 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T,
             }
         },
+        // Conversions to and from the narrow floating point formats
+        CvtMini {
+            data: CvtMiniDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.src_type() },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
         CvtTf32 {
             data: CvtTf32Details,
             arguments<T>: {
@@ -3065,6 +3086,51 @@ impl TexData {
 pub enum TexType {
     Texref,
     Texobj,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniFormat {
+    E4m3x2,
+    E5m2x2,
+    E2m1x2,
+    E2m3x2,
+    E3m2x2,
+    Ue8m0x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniDirection {
+    // two f32 (the first one into the high element)
+    FromF32,
+    FromF16x2,
+    FromBf16x2,
+    ToF16x2,
+    ToBf16x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct CvtMiniDetails {
+    pub format: MiniFormat,
+    pub direction: MiniDirection,
+    pub rounding: RoundingMode,
+    pub relu: bool,
+}
+
+impl CvtMiniDetails {
+    pub fn dst_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B32),
+            _ => Type::Scalar(ScalarType::B16),
+        }
+    }
+
+    pub fn src_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::FromF32 => Type::Scalar(ScalarType::F32),
+            MiniDirection::FromF16x2 | MiniDirection::FromBf16x2 => Type::Scalar(ScalarType::B32),
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B16),
+        }
+    }
 }
 
 // cvt.rnd{.relu}{.satfinite}.tf32.f32: rounds an f32 to the 10 fraction bits

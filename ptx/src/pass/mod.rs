@@ -171,7 +171,8 @@ pub fn to_llvm_module_with_options<'input>(
     let directives =
         insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
-    let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
+    let directives =
+        replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");

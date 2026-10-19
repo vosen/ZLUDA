@@ -4,13 +4,14 @@ use std::collections::{btree_map, BTreeMap};
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     // We use BTreeMap here to have deterministic ordering of function declarations.
     let mut fn_declarations = BTreeMap::default();
     let remapped_directives = directives
         .into_iter()
-        .map(|directive| run_directive(resolver, &mut fn_declarations, directive))
+        .map(|directive| run_directive(resolver, target, &mut fn_declarations, directive))
         .collect::<Result<Vec<_>, _>>()?;
     let mut result = fn_declarations
         .into_iter()
@@ -34,6 +35,7 @@ pub(super) fn run<'input>(
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -49,7 +51,7 @@ fn run_directive<'input>(
         Directive2::Method(mut method) => {
             method.body = method
                 .body
-                .map(|statements| run_statements(resolver, fn_declarations, statements))
+                .map(|statements| run_statements(resolver, target, fn_declarations, statements))
                 .transpose()?;
             Directive2::Method(method)
         }
@@ -89,6 +91,7 @@ fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
 
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -103,6 +106,21 @@ fn run_statements<'input>(
         .into_iter()
         .map(|statement| {
             Ok::<SmallVec<[_; 3]>, _>(match statement {
+                // On AGX conversions to and from fp8 are emitted inline
+                Statement::Instruction(
+                    cvt @ ast::Instruction::Cvt {
+                        data:
+                            ast::CvtDetails {
+                                from: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
+                                ..
+                            }
+                            | ast::CvtDetails {
+                                to: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
+                                ..
+                            },
+                        ..
+                    },
+                ) if target == Target::Agx => smallvec![Statement::Instruction(cvt)],
                 Statement::Instruction(ast::Instruction::Shfl {
                     data,
                     arguments:

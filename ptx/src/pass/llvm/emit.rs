@@ -754,6 +754,13 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
             ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
             ast::Instruction::CvtTf32 { data, arguments } => self.emit_cvt_tf32(data, arguments),
+            ast::Instruction::CvtMini { data, arguments } => {
+                let dst_type = data.dst_type();
+                let ast::Type::Scalar(dst_type) = dst_type else {
+                    return Err(error_unreachable());
+                };
+                self.emit_cvt_mini(data, dst_type, arguments.dst, arguments.src1, arguments.src2)
+            }
             ast::Instruction::Isspacep { data, arguments } => self.emit_isspacep(data, arguments),
             ast::Instruction::Packed8 { data, arguments } => self.emit_packed8(data, arguments),
             ast::Instruction::Clmad { data, arguments } => self.emit_clmad(data, arguments),
@@ -2443,6 +2450,39 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::CvtDetails,
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        // On AGX the conversions to and from fp8 are computed here, see
+        // emit_cvt_mini
+        if self.target == Target::Agx {
+            let mini = |t| match t {
+                ast::ScalarType::E4m3x2 => Some(ast::MiniFormat::E4m3x2),
+                ast::ScalarType::E5m2x2 => Some(ast::MiniFormat::E5m2x2),
+                _ => None,
+            };
+            let mini_data = match (mini(data.from), mini(data.to), data.to) {
+                (None, Some(format), _) => Some((format, ast::MiniDirection::FromF32)),
+                (Some(format), None, ast::ScalarType::F16x2) => {
+                    Some((format, ast::MiniDirection::ToF16x2))
+                }
+                (Some(format), None, ast::ScalarType::BF16x2) => {
+                    Some((format, ast::MiniDirection::ToBf16x2))
+                }
+                _ => None,
+            };
+            if let Some((format, direction)) = mini_data {
+                return self.emit_cvt_mini(
+                    ast::CvtMiniDetails {
+                        format,
+                        direction,
+                        rounding: ast::RoundingMode::NearestEven,
+                        relu: false,
+                    },
+                    data.to,
+                    arguments.dst,
+                    arguments.src,
+                    arguments.src2,
+                );
+            }
+        }
         // Truncating conversions to FP8 types should be replaced by a function call.
         match data {
             ptx_parser::CvtDetails {
@@ -2743,6 +2783,319 @@ impl<'a> MethodEmitContext<'a> {
         )
     }
 
+    // Conversions to and from the narrow formats (fp8 e4m3 and e5m2, fp6
+    // e2m3 and e3m2, fp4 e2m1, and the exponent-only ue8m0) with integer
+    // arithmetic on the bit patterns. Narrowing rounds to nearest even (or
+    // toward zero, or up for ue8m0) and saturates at the largest finite
+    // value; NaN becomes the format's NaN (the largest finite value for the
+    // formats without NaN); .relu turns negative values into +0. Widening
+    // is exact. The first source of a pair goes to the high element.
+    fn emit_cvt_mini(
+        &mut self,
+        data: ast::CvtMiniDetails,
+        dst_type: ast::ScalarType,
+        dst: SpirvWord,
+        src1: SpirvWord,
+        src2: Option<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let builder = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        let element_bits = mini_element_bits(data.format);
+        // container width of an element in the packed pair
+        let lane = if element_bits <= 4 { 4 } else { 8 };
+        let src1_value = self.resolver.value(src1)?;
+        // sources are f32, i32 or i16
+        let to_i32 = |this: &mut Self, value: LLVMValueRef| unsafe {
+            let type_ = LLVMTypeOf(value);
+            if LLVMGetTypeKind(type_) == LLVMTypeKind::LLVMFloatTypeKind {
+                LLVMBuildBitCast(this.builder, value, i32_type, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildZExtOrBitCast(this.builder, value, i32_type, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        let result = match data.direction {
+            ast::MiniDirection::FromF32 | ast::MiniDirection::FromF16x2 | ast::MiniDirection::FromBf16x2 => {
+                // f32 bit patterns of the high and low elements
+                let (high, low) = match data.direction {
+                    ast::MiniDirection::FromF32 => {
+                        let src2 = self.resolver.value(src2.ok_or_else(error_unreachable)?)?;
+                        (to_i32(self, src1_value), to_i32(self, src2))
+                    }
+                    ast::MiniDirection::FromBf16x2 => {
+                        let packed = to_i32(self, src1_value);
+                        unsafe {
+                            let high = LLVMBuildAnd(builder, packed, c(0xffff_0000), LLVM_UNNAMED.as_ptr());
+                            let low = LLVMBuildShl(builder, packed, c(16), LLVM_UNNAMED.as_ptr());
+                            (high, low)
+                        }
+                    }
+                    _ => {
+                        let packed = to_i32(self, src1_value);
+                        let half = |this: &mut Self, shift: u64| unsafe {
+                            let bits = LLVMBuildLShr(this.builder, packed, c(shift), LLVM_UNNAMED.as_ptr());
+                            let bits = LLVMBuildAnd(this.builder, bits, c(0xffff), LLVM_UNNAMED.as_ptr());
+                            this.emit_f16_bits_to_f32_bits(bits)
+                        };
+                        (half(self, 16), half(self, 0))
+                    }
+                };
+                let high = self.emit_mini_encode(data, high);
+                let low = self.emit_mini_encode(data, low);
+                unsafe {
+                    let high = LLVMBuildShl(builder, high, c(lane), LLVM_UNNAMED.as_ptr());
+                    let packed = LLVMBuildOr(builder, high, low, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildTrunc(builder, packed, LLVMInt16TypeInContext(self.context), LLVM_UNNAMED.as_ptr())
+                }
+            }
+            ast::MiniDirection::ToF16x2 | ast::MiniDirection::ToBf16x2 => {
+                let packed = to_i32(self, src1_value);
+                let mut halves = [ptr::null_mut(); 2];
+                for (i, half) in halves.iter_mut().enumerate() {
+                    let element = unsafe {
+                        let element = LLVMBuildLShr(builder, packed, c(lane * i as u64), LLVM_UNNAMED.as_ptr());
+                        LLVMBuildAnd(builder, element, c((1 << lane) - 1), LLVM_UNNAMED.as_ptr())
+                    };
+                    *half = if data.format == ast::MiniFormat::Ue8m0x2 {
+                        self.emit_ue8m0_decode(element)
+                    } else {
+                        let f16 = self.emit_mini_decode(data.format, element);
+                        if data.direction == ast::MiniDirection::ToBf16x2 {
+                            // exact: the narrow formats have few mantissa bits
+                            let wide = self.emit_f16_bits_to_f32_bits(f16);
+                            unsafe { LLVMBuildLShr(builder, wide, c(16), LLVM_UNNAMED.as_ptr()) }
+                        } else {
+                            f16
+                        }
+                    };
+                }
+                unsafe {
+                    let high = LLVMBuildShl(builder, halves[1], c(16), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildOr(builder, high, halves[0], LLVM_UNNAMED.as_ptr())
+                }
+            }
+        };
+        // i16 or i32, as the destination type (an integer or packed halves)
+        let result = unsafe {
+            LLVMBuildBitCast(builder, result, get_scalar_type(self.context, dst_type), LLVM_UNNAMED.as_ptr())
+        };
+        self.resolver.register(dst, result);
+        Ok(())
+    }
+
+    // Exact conversion of f16 bits to f32 bits (both in i32), with integer
+    // arithmetic so that subnormals are kept in any floating point mode
+    fn emit_f16_bits_to_f32_bits(&mut self, bits: LLVMValueRef) -> LLVMValueRef {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        unsafe {
+            let sign = LLVMBuildShl(b, LLVMBuildAnd(b, bits, c(0x8000), LLVM_UNNAMED.as_ptr()), c(16), LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildAnd(b, LLVMBuildLShr(b, bits, c(10), LLVM_UNNAMED.as_ptr()), c(0x1f), LLVM_UNNAMED.as_ptr());
+            let mantissa = LLVMBuildAnd(b, bits, c(0x3ff), LLVM_UNNAMED.as_ptr());
+            let normal = LLVMBuildOr(
+                b,
+                LLVMBuildShl(b, LLVMBuildAdd(b, exponent, c(127 - 15), LLVM_UNNAMED.as_ptr()), c(23), LLVM_UNNAMED.as_ptr()),
+                LLVMBuildShl(b, mantissa, c(13), LLVM_UNNAMED.as_ptr()),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let special = LLVMBuildOr(b, c(0x7f80_0000), LLVMBuildShl(b, mantissa, c(13), LLVM_UNNAMED.as_ptr()), LLVM_UNNAMED.as_ptr());
+            // subnormal: mantissa * 2^-24, top bit at position p
+            let false_ = LLVMConstInt(LLVMInt1TypeInContext(self.context), 0, 0);
+            let leading = self.emit_int_intrinsic("llvm.ctlz", i32_type, &[mantissa, false_]);
+            let position = LLVMBuildSub(b, c(31), leading, LLVM_UNNAMED.as_ptr());
+            let sub_exponent = LLVMBuildAdd(b, position, c(127 - 24), LLVM_UNNAMED.as_ptr());
+            let sub_mantissa = LLVMBuildShl(b, mantissa, LLVMBuildSub(b, c(23), position, LLVM_UNNAMED.as_ptr()), LLVM_UNNAMED.as_ptr());
+            let sub_mantissa = LLVMBuildAnd(b, sub_mantissa, c(0x7f_ffff), LLVM_UNNAMED.as_ptr());
+            let subnormal = LLVMBuildOr(b, LLVMBuildShl(b, sub_exponent, c(23), LLVM_UNNAMED.as_ptr()), sub_mantissa, LLVM_UNNAMED.as_ptr());
+            let is_zero = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, mantissa, c(0), LLVM_UNNAMED.as_ptr());
+            let subnormal = LLVMBuildSelect(b, is_zero, c(0), subnormal, LLVM_UNNAMED.as_ptr());
+            let is_subnormal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, exponent, c(0), LLVM_UNNAMED.as_ptr());
+            let is_special = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, exponent, c(0x1f), LLVM_UNNAMED.as_ptr());
+            let value = LLVMBuildSelect(b, is_subnormal, subnormal, normal, LLVM_UNNAMED.as_ptr());
+            let value = LLVMBuildSelect(b, is_special, special, value, LLVM_UNNAMED.as_ptr());
+            LLVMBuildOr(b, value, sign, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    // f32 bits -> element code (in the low bits of an i32)
+    fn emit_mini_encode(&mut self, data: ast::CvtMiniDetails, bits: LLVMValueRef) -> LLVMValueRef {
+        if data.format == ast::MiniFormat::Ue8m0x2 {
+            return self.emit_ue8m0_encode(data.rounding == ast::RoundingMode::PositiveInf, bits);
+        }
+        let (exponent_bits, mantissa_bits, top, nan) = mini_format(data.format);
+        let bias = (1u64 << (exponent_bits - 1)) - 1;
+        let element_bits = mini_element_bits(data.format) as u64;
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        let toward_zero = data.rounding == ast::RoundingMode::Zero;
+        unsafe {
+            // round value >> shift to nearest even (or toward zero)
+            let round = |this: &mut Self, value: LLVMValueRef, shift: LLVMValueRef| {
+                let q = LLVMBuildLShr(b, value, shift, LLVM_UNNAMED.as_ptr());
+                if toward_zero {
+                    return q;
+                }
+                let one = c(1);
+                let unit = LLVMBuildShl(b, one, shift, LLVM_UNNAMED.as_ptr());
+                let mask = LLVMBuildSub(b, unit, one, LLVM_UNNAMED.as_ptr());
+                let rest = LLVMBuildAnd(b, value, mask, LLVM_UNNAMED.as_ptr());
+                let half = LLVMBuildLShr(b, unit, one, LLVM_UNNAMED.as_ptr());
+                let above = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGT, rest, half, LLVM_UNNAMED.as_ptr());
+                let tie = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, rest, half, LLVM_UNNAMED.as_ptr());
+                let odd = LLVMBuildTrunc(b, q, LLVMInt1TypeInContext(this.context), LLVM_UNNAMED.as_ptr());
+                let tie_up = LLVMBuildAnd(b, tie, odd, LLVM_UNNAMED.as_ptr());
+                let up = LLVMBuildOr(b, above, tie_up, LLVM_UNNAMED.as_ptr());
+                let up = LLVMBuildZExt(b, up, i32_type, LLVM_UNNAMED.as_ptr());
+                LLVMBuildAdd(b, q, up, LLVM_UNNAMED.as_ptr())
+            };
+            let magnitude = LLVMBuildAnd(b, bits, c(0x7fff_ffff), LLVM_UNNAMED.as_ptr());
+            let negative = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntSLT, bits, c(0), LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildLShr(b, magnitude, c(23), LLVM_UNNAMED.as_ptr());
+            // normal in the narrow format: rebias the exponent and round
+            let min_exponent_field = 127 + 1 - bias;
+            let is_normal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGE, exponent, c(min_exponent_field), LLVM_UNNAMED.as_ptr());
+            let rebiased = LLVMBuildSub(b, magnitude, c((127 - bias) << 23), LLVM_UNNAMED.as_ptr());
+            let normal = round(self, rebiased, c(23 - mantissa_bits));
+            // subnormal: the significand shifted by the missing exponent
+            let significand = LLVMBuildOr(
+                b,
+                LLVMBuildAnd(b, magnitude, c(0x7f_ffff), LLVM_UNNAMED.as_ptr()),
+                c(0x80_0000),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let shift = LLVMBuildSub(b, c(min_exponent_field + 23 - mantissa_bits), exponent, LLVM_UNNAMED.as_ptr());
+            let shift = self.emit_int_intrinsic("llvm.umin", i32_type, &[shift, c(31)]);
+            let subnormal = round(self, significand, shift);
+            let code = LLVMBuildSelect(b, is_normal, normal, subnormal, LLVM_UNNAMED.as_ptr());
+            // saturation (also of infinities)
+            let code = self.emit_int_intrinsic("llvm.umin", i32_type, &[code, c(top)]);
+            let signed = LLVMBuildOr(b, code, c(1 << (element_bits - 1)), LLVM_UNNAMED.as_ptr());
+            let code = LLVMBuildSelect(b, negative, signed, code, LLVM_UNNAMED.as_ptr());
+            let code = if data.relu {
+                LLVMBuildSelect(b, negative, c(0), code, LLVM_UNNAMED.as_ptr())
+            } else {
+                code
+            };
+            let is_nan = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGT, magnitude, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+            LLVMBuildSelect(b, is_nan, c(nan), code, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    // ue8m0: the exponent of a positive value, rounded down (or up), biased
+    // by 127 and clamped to 0..254; zero and negative values give 0, NaN 255
+    fn emit_ue8m0_encode(&mut self, round_up: bool, bits: LLVMValueRef) -> LLVMValueRef {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let c = |v: i64| unsafe { LLVMConstInt(i32_type, v as u64, 1) };
+        unsafe {
+            let magnitude = LLVMBuildAnd(b, bits, c(0x7fff_ffff), LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildLShr(b, magnitude, c(23), LLVM_UNNAMED.as_ptr());
+            let mantissa = LLVMBuildAnd(b, magnitude, c(0x7f_ffff), LLVM_UNNAMED.as_ptr());
+            // log2 of a subnormal: -149 + the position of its top bit
+            let false_ = LLVMConstInt(LLVMInt1TypeInContext(self.context), 0, 0);
+            let leading = self.emit_int_intrinsic("llvm.ctlz", i32_type, &[magnitude, false_]);
+            let subnormal_log = LLVMBuildSub(b, c(-149 + 31), leading, LLVM_UNNAMED.as_ptr());
+            let is_normal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntNE, exponent, c(0), LLVM_UNNAMED.as_ptr());
+            let normal_log = LLVMBuildSub(b, exponent, c(127), LLVM_UNNAMED.as_ptr());
+            let log = LLVMBuildSelect(b, is_normal, normal_log, subnormal_log, LLVM_UNNAMED.as_ptr());
+            let log = if round_up {
+                let power_normal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, mantissa, c(0), LLVM_UNNAMED.as_ptr());
+                let below = LLVMBuildSub(b, magnitude, c(1), LLVM_UNNAMED.as_ptr());
+                let power_subnormal = LLVMBuildICmp(
+                    b,
+                    LLVMIntPredicate::LLVMIntEQ,
+                    LLVMBuildAnd(b, magnitude, below, LLVM_UNNAMED.as_ptr()),
+                    c(0),
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                let power = LLVMBuildSelect(b, is_normal, power_normal, power_subnormal, LLVM_UNNAMED.as_ptr());
+                let up = LLVMBuildZExt(b, LLVMBuildNot(b, power, LLVM_UNNAMED.as_ptr()), i32_type, LLVM_UNNAMED.as_ptr());
+                LLVMBuildAdd(b, log, up, LLVM_UNNAMED.as_ptr())
+            } else {
+                log
+            };
+            let code = LLVMBuildAdd(b, log, c(127), LLVM_UNNAMED.as_ptr());
+            let code = self.emit_int_intrinsic("llvm.smax", i32_type, &[code, c(0)]);
+            let code = self.emit_int_intrinsic("llvm.smin", i32_type, &[code, c(254)]);
+            let not_positive = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntSLE, bits, c(0), LLVM_UNNAMED.as_ptr());
+            let code = LLVMBuildSelect(b, not_positive, c(0), code, LLVM_UNNAMED.as_ptr());
+            let is_inf = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, bits, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+            let code = LLVMBuildSelect(b, is_inf, c(254), code, LLVM_UNNAMED.as_ptr());
+            let is_nan = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGT, magnitude, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+            LLVMBuildSelect(b, is_nan, c(255), code, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    // ue8m0 code -> bf16 bits: 2^(code - 127), 255 is NaN
+    fn emit_ue8m0_decode(&mut self, code: LLVMValueRef) -> LLVMValueRef {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        unsafe {
+            let value = LLVMBuildShl(b, code, c(7), LLVM_UNNAMED.as_ptr());
+            let is_zero = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, code, c(0), LLVM_UNNAMED.as_ptr());
+            let value = LLVMBuildSelect(b, is_zero, c(0x40), value, LLVM_UNNAMED.as_ptr());
+            let is_nan = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, code, c(255), LLVM_UNNAMED.as_ptr());
+            LLVMBuildSelect(b, is_nan, c(0x7fff), value, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    // element code -> f16 bits (exact)
+    fn emit_mini_decode(&mut self, format: ast::MiniFormat, code: LLVMValueRef) -> LLVMValueRef {
+        let (exponent_bits, mantissa_bits, _, _) = mini_format(format);
+        let bias = (1u64 << (exponent_bits - 1)) - 1;
+        let element_bits = mini_element_bits(format) as u64;
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let c = |v: u64| unsafe { LLVMConstInt(i32_type, v, 0) };
+        unsafe {
+            let magnitude = LLVMBuildAnd(b, code, c((1 << (element_bits - 1)) - 1), LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildLShr(b, code, c(element_bits - 1), LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildShl(b, sign, c(15), LLVM_UNNAMED.as_ptr());
+            let value = if format == ast::MiniFormat::E5m2x2 {
+                // the upper byte of an f16
+                LLVMBuildShl(b, magnitude, c(8), LLVM_UNNAMED.as_ptr())
+            } else {
+                let exponent = LLVMBuildLShr(b, magnitude, c(mantissa_bits), LLVM_UNNAMED.as_ptr());
+                let mantissa = LLVMBuildAnd(b, magnitude, c((1 << mantissa_bits) - 1), LLVM_UNNAMED.as_ptr());
+                let normal = LLVMBuildOr(
+                    b,
+                    LLVMBuildShl(b, LLVMBuildAdd(b, exponent, c(15 - bias), LLVM_UNNAMED.as_ptr()), c(10), LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildShl(b, mantissa, c(10 - mantissa_bits), LLVM_UNNAMED.as_ptr()),
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                // subnormal: normalized in f16, top bit at position p
+                let false_ = LLVMConstInt(LLVMInt1TypeInContext(self.context), 0, 0);
+                let leading = self.emit_int_intrinsic("llvm.ctlz", i32_type, &[mantissa, false_]);
+                let position = LLVMBuildSub(b, c(31), leading, LLVM_UNNAMED.as_ptr());
+                let f16_exponent = LLVMBuildAdd(b, position, c(1 + 15 - bias - mantissa_bits), LLVM_UNNAMED.as_ptr());
+                let f16_mantissa = LLVMBuildShl(b, mantissa, LLVMBuildSub(b, c(10), position, LLVM_UNNAMED.as_ptr()), LLVM_UNNAMED.as_ptr());
+                let f16_mantissa = LLVMBuildAnd(b, f16_mantissa, c(0x3ff), LLVM_UNNAMED.as_ptr());
+                let subnormal = LLVMBuildOr(b, LLVMBuildShl(b, f16_exponent, c(10), LLVM_UNNAMED.as_ptr()), f16_mantissa, LLVM_UNNAMED.as_ptr());
+                let is_zero = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, mantissa, c(0), LLVM_UNNAMED.as_ptr());
+                let subnormal = LLVMBuildSelect(b, is_zero, c(0), subnormal, LLVM_UNNAMED.as_ptr());
+                let is_normal = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntNE, exponent, c(0), LLVM_UNNAMED.as_ptr());
+                LLVMBuildSelect(b, is_normal, normal, subnormal, LLVM_UNNAMED.as_ptr())
+            };
+            let value = LLVMBuildOr(b, value, sign, LLVM_UNNAMED.as_ptr());
+            let is_nan = match format {
+                ast::MiniFormat::E4m3x2 => {
+                    Some(LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, magnitude, c(0x7f), LLVM_UNNAMED.as_ptr()))
+                }
+                ast::MiniFormat::E5m2x2 => {
+                    Some(LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGT, magnitude, c(0x7c), LLVM_UNNAMED.as_ptr()))
+                }
+                _ => None,
+            };
+            match is_nan {
+                Some(is_nan) => LLVMBuildSelect(b, is_nan, c(0x7fff), value, LLVM_UNNAMED.as_ptr()),
+                None => value,
+            }
+        }
+    }
+
     // Rounding on the bit pattern: tf32 is the f32 layout with 13 fraction
     // bits fewer. Rounding up the magnitude carries into the exponent, which
     // also gives the infinities on overflow
@@ -3040,7 +3393,7 @@ impl<'a> MethodEmitContext<'a> {
         let bits = unsafe { LLVMGetIntTypeWidth(type_) };
         let name = format!("{name}.i{bits}\0");
         let mut params = vec![type_; args.len()];
-        if name.starts_with("llvm.abs.") {
+        if name.starts_with("llvm.abs.") || name.starts_with("llvm.ctlz.") {
             params[1] = unsafe { LLVMInt1TypeInContext(self.context) };
         }
         unsafe {
@@ -5483,6 +5836,26 @@ impl<'a> MethodEmitContext<'a> {
         result
     }
      */
+}
+
+// (exponent bits, mantissa bits, largest finite magnitude code, NaN code)
+fn mini_format(format: ast::MiniFormat) -> (u64, u64, u64, u64) {
+    match format {
+        ast::MiniFormat::E4m3x2 => (4, 3, 0x7e, 0x7f),
+        ast::MiniFormat::E5m2x2 => (5, 2, 0x7b, 0x7f),
+        ast::MiniFormat::E2m3x2 => (2, 3, 31, 31),
+        ast::MiniFormat::E3m2x2 => (3, 2, 31, 31),
+        ast::MiniFormat::E2m1x2 => (2, 1, 7, 7),
+        ast::MiniFormat::Ue8m0x2 => (8, 0, 254, 255),
+    }
+}
+
+fn mini_element_bits(format: ast::MiniFormat) -> u32 {
+    match format {
+        ast::MiniFormat::E4m3x2 | ast::MiniFormat::E5m2x2 | ast::MiniFormat::Ue8m0x2 => 8,
+        ast::MiniFormat::E2m3x2 | ast::MiniFormat::E3m2x2 => 6,
+        ast::MiniFormat::E2m1x2 => 4,
+    }
 }
 
 fn not_supported_by_atomics(qualifier: ast::LdStQualifier, underlying_type: *mut LLVMType) -> bool {

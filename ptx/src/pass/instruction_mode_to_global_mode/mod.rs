@@ -2194,6 +2194,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::CvtMini { .. }
         | ast::Instruction::Isspacep { .. }
         | ast::Instruction::Packed8 { .. }
         | ast::Instruction::Clmad { .. }
