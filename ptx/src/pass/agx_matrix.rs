@@ -1096,7 +1096,40 @@ fn dot(
     h: u32,
     e: u32,
 ) -> Result<String, TranslateError> {
-    if let (Some(scale), Some((sa, sb))) = (d.block_scale, scales) {
+    if let (Some(ra), Some(rb)) = (exponent_range(d.atype), exponent_range(d.btype)) {
+        // the products of small formats are summed in fixed point first, by
+        // block of scale factors
+        let ab_ty = "i32";
+        let range = (ra.0 + rb.0, ra.1 + rb.1);
+        let block = d.block_scale.map_or(d.k, |scale| d.k / scale.chunks);
+        let mut groups: Vec<(u32, Vec<Term>)> = Vec::new();
+        for ((x, y), kk) in a.iter().zip(b).zip(depths) {
+            let x = decode(ir, d.atype, x, ab_ty)?;
+            let y = decode(ir, d.btype, y, ab_ty)?;
+            let p = product(ir, &x, &y);
+            let chunk = kk / block;
+            match groups.iter_mut().find(|(c, _)| *c == chunk) {
+                Some((_, products)) => products.push(p),
+                None => groups.push((chunk, vec![p])),
+            }
+        }
+        let factors = match (d.block_scale, scales) {
+            (Some(scale), Some((sa, sb))) => Some(block_scales(ir, lane, &scale, sa, sb, h, e)),
+            _ => None,
+        };
+        let mut terms = vec![decode(ir, d.ctype, c, "i32")?];
+        for (chunk, products) in &groups {
+            let sum = fixed_sum(ir, products, range);
+            terms.push(match &factors {
+                Some((sa, sb)) => {
+                    let s = product(ir, &sa[*chunk as usize], &sb[*chunk as usize]);
+                    product(ir, &sum, &s)
+                }
+                None => sum,
+            });
+        }
+        exact_sum(ir, &terms, d.dtype)
+    } else if let (Some(scale), Some((sa, sb))) = (d.block_scale, scales) {
         let (sa, sb) = block_scales(ir, lane, &scale, sa, sb, h, e);
         let block = d.k / scale.chunks;
         let mut terms = vec![decode(ir, d.ctype, c, "i32")?];
@@ -1560,8 +1593,8 @@ fn decode(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result
 fn product(ir: &mut Ir, a: &Term, b: &Term) -> Term {
     let width = a.width + b.width;
     let ty = if width <= 64 { "i64" } else { "i128" };
-    let x = ir.cast("zext", "i64", &a.mantissa, ty);
-    let y = ir.cast("zext", "i64", &b.mantissa, ty);
+    let x = ir.cast("zext", a.mantissa_type, &a.mantissa, ty);
+    let y = ir.cast("zext", b.mantissa_type, &b.mantissa, ty);
     let mantissa = ir.op("mul", ty, &x, &y);
     let sign = ir.op("xor", "i1", &a.sign, &b.sign);
     let exponent = ir.op("add", "i32", &a.exponent, &b.exponent);
@@ -1604,11 +1637,76 @@ fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &s
     exact_sum(ir, &terms, d.dtype)
 }
 
+// The exponents of the least significant bit of the non-zero finite values
+// of the formats whose products are summed in fixed point.
+fn exponent_range(type_: ast::MmaType) -> Option<(i32, i32)> {
+    use ast::MmaType::*;
+    let f = format(type_).ok()?;
+    if !matches!(type_, F16 | E4m3 | E5m2 | E3m2 | E2m3 | E2m1 | E2m1x2) {
+        return None;
+    }
+    let bias = (1i32 << (f.exponent - 1)) - 1;
+    let largest = (1i32 << f.exponent) - if f.specials == Specials::Ieee { 2 } else { 1 };
+    Some((1 - bias - f.mantissa as i32, largest - bias - f.mantissa as i32))
+}
+
+// The exact sum of products whose exponents are in `range`, as one term: a
+// fixed point sum with the least significant bit at 2^range.0.
+fn fixed_sum(ir: &mut Ir, products: &[Term], range: (i32, i32)) -> Term {
+    let width = products.iter().map(|p| p.width).max().unwrap_or(1);
+    let carries = 32 - (products.len() as u32).leading_zeros();
+    let bits = (range.1 - range.0) as u32 + width + carries + 1;
+    let ty = if bits <= 64 { "i64" } else { "i128" };
+    let mut sum = "0".to_string();
+    let mut nan = "false".to_string();
+    let (mut plus_inf, mut minus_inf) = ("false".to_string(), "false".to_string());
+    let (mut all_zero, mut all_negative) = ("true".to_string(), "true".to_string());
+    for p in products {
+        let shift = ir.op("sub", "i32", &p.exponent, &range.0.to_string());
+        let shift = ir.cast("zext", "i32", &shift, ty);
+        let m = ir.cast("zext", p.mantissa_type, &p.mantissa, ty);
+        let v = ir.op("shl", ty, &m, &shift);
+        let plus = ir.op("add", ty, &sum, &v);
+        let minus = ir.op("sub", ty, &sum, &v);
+        sum = ir.select(&p.sign, ty, &minus, &plus);
+        nan = ir.op("or", "i1", &nan, &p.nan);
+        let positive = ir.op("xor", "i1", &p.sign, "true");
+        let pi = ir.op("and", "i1", &p.inf, &positive);
+        let mi = ir.op("and", "i1", &p.inf, &p.sign);
+        plus_inf = ir.op("or", "i1", &plus_inf, &pi);
+        minus_inf = ir.op("or", "i1", &minus_inf, &mi);
+        all_zero = ir.op("and", "i1", &all_zero, &p.zero);
+        all_negative = ir.op("and", "i1", &all_negative, &p.sign);
+    }
+    let negative = ir.icmp("slt", ty, &sum, "0");
+    let negated = ir.op("sub", ty, "0", &sum);
+    let mantissa = ir.select(&negative, ty, &negated, &sum);
+    let both = ir.op("and", "i1", &plus_inf, &minus_inf);
+    let nan = ir.op("or", "i1", &nan, &both);
+    let inf = ir.op("or", "i1", &plus_inf, &minus_inf);
+    let not_nan = ir.op("xor", "i1", &nan, "true");
+    let inf = ir.op("and", "i1", &inf, &not_nan);
+    let special = ir.op("or", "i1", &nan, &inf);
+    let mantissa = ir.select(&special, ty, "0", &mantissa);
+    let sign = ir.select(&all_zero, "i1", &all_negative, &negative);
+    let sign = ir.select(&inf, "i1", &minus_inf, &sign);
+    Term {
+        sign,
+        mantissa,
+        mantissa_type: ty,
+        exponent: range.0.to_string(),
+        width: bits - 1,
+        nan,
+        inf,
+        zero: all_zero,
+    }
+}
+
 /// The sum of the terms, rounded once to nearest even into `type_`, as raw
 /// bits in an i32 (i64 for `f64`).
 fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType) -> Result<String, TranslateError> {
     let f = format(type_)?;
-    let wide = terms.iter().any(|t| t.mantissa_type == "i128");
+    let wide = terms.iter().any(|t| t.width > 100);
     // The accumulator is made of 128-bit limbs (least significant first).
     let n: u32 = if wide { 256 } else { 128 };
     let limbs = (n / 128) as usize;
