@@ -110,6 +110,11 @@ struct PtxParserState<'a, 'input> {
     errors: &'a mut Vec<PtxError<'input>>,
     function_declarations:
         FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .callprototype and .calltargets labels: the signature of indirect calls
+    call_prototypes:
+        FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .branchtargets labels
+    branch_targets: FxHashMap<&'input str, Vec<&'input str>>,
 }
 
 impl<'a, 'input> PtxParserState<'a, 'input> {
@@ -118,6 +123,8 @@ impl<'a, 'input> PtxParserState<'a, 'input> {
             text,
             errors,
             function_declarations: FxHashMap::default(),
+            call_prototypes: FxHashMap::default(),
+            branch_targets: FxHashMap::default(),
         }
     }
 
@@ -852,6 +859,7 @@ fn statement<'a, 'input>(
 ) -> PResult<Option<Statement<ParsedOperandStr<'input>>>> {
     with_recovery(
         alt((
+            call_target_directive.map(|_| None),
             label.map(Some),
             debug_directive.map(|_| None),
             terminated(
@@ -860,6 +868,7 @@ fn statement<'a, 'input>(
                     .map(|var| Some(Statement::Variable(var))),
                 Token::Semicolon,
             ),
+            brx_idx.map(Some),
             predicated_instruction.map(Some),
             pragma.map(|_| None),
             block_statement.map(Some),
@@ -1418,6 +1427,131 @@ fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredA
     .parse_next(stream)
 }
 
+// label: .callprototype {(ret)} _ (params); label: .calltargets f, ...;
+// label: .branchtargets l, ...;
+fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
+    fn prototype_parameter<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<(ast::Type, StateSpace)> {
+        let space = dispatch! { token::any;
+            (Token::DotParam, _) => empty.value(StateSpace::Param),
+            (Token::DotReg, _) => empty.value(StateSpace::Reg),
+            _ => fail
+        }
+        .parse_next(stream)?;
+        let (_, vector, type_) = variable_info_non_texref.parse_next(stream)?;
+        alt((Token::Sink.void(), ident.void())).parse_next(stream)?;
+        let dimensions = if space != StateSpace::Reg {
+            opt(array_dimensions).parse_next(stream)?
+        } else {
+            None
+        };
+        Ok((Type::maybe_array(vector, type_, dimensions), space))
+    }
+    fn prototype_parameters<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<Vec<(ast::Type, StateSpace)>> {
+        delimited(
+            Token::LParen,
+            separated(0.., prototype_parameter, Token::Comma),
+            Token::RParen,
+        )
+        .parse_next(stream)
+    }
+    let (name, _, directive) = (ident, Token::Colon, dot_ident).parse_next(stream)?;
+    match directive {
+        ".callprototype" => {
+            let (returns, _, inputs, _) = (
+                opt(prototype_parameters),
+                Token::Sink,
+                prototype_parameters,
+                Token::Semicolon,
+            )
+                .parse_next(stream)?;
+            stream
+                .state
+                .call_prototypes
+                .insert(name, (returns.unwrap_or_default(), inputs));
+        }
+        ".calltargets" | ".branchtargets" => {
+            let (targets, _): (Vec<_>, _) =
+                (separated(1.., ident, Token::Comma), Token::Semicolon).parse_next(stream)?;
+            if directive == ".branchtargets" {
+                stream.state.branch_targets.insert(name, targets);
+            } else {
+                match stream.state.function_declarations.get(targets[0]) {
+                    Some(signature) => {
+                        let signature = signature.clone();
+                        stream.state.call_prototypes.insert(name, signature);
+                    }
+                    None => stream.state.errors.push(PtxError::UnknownFunction),
+                }
+            }
+        }
+        _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+    }
+    Ok(())
+}
+
+// brx.idx{.uni} index, targets; becomes a branch to each target guarded
+// by a comparison of the index (an index out of range falls through)
+fn brx_idx<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
+    let (_, idx, _, index, _, table, _) = (
+        ident_literal("brx"),
+        Token::DotIdx,
+        opt(Token::DotUni),
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ident,
+        Token::Semicolon,
+    )
+        .parse_next(stream)?;
+    let _ = idx;
+    let Some(targets) = stream.state.branch_targets.get(table).cloned() else {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    };
+    const PREDICATE: &str = "%__zluda_brx_idx";
+    let mut statements = vec![ast::Statement::Variable(ast::MultiVariable::Names {
+        info: ast::VariableInfo {
+            align: None,
+            v_type: Type::Scalar(ScalarType::Pred),
+            state_space: StateSpace::Reg,
+            array_init: Vec::new(),
+        },
+        names: vec![PREDICATE],
+    })];
+    for (i, target) in targets.into_iter().enumerate() {
+        statements.push(ast::Statement::Instruction(
+            None,
+            ast::Instruction::Setp {
+                data: ast::SetpData {
+                    type_: ScalarType::U32,
+                    flush_to_zero: None,
+                    cmp_op: ast::SetpCompareOp::Integer(ast::SetpCompareInt::Eq),
+                },
+                arguments: SetpArgs {
+                    dst1: ParsedOperand::Reg(PREDICATE),
+                    dst2: None,
+                    src1: index.clone(),
+                    src2: ParsedOperand::Imm(ImmediateValue::U64(i as u64)),
+                },
+            },
+        ));
+        statements.push(ast::Statement::Instruction(
+            Some(ast::PredAt {
+                not: false,
+                label: PREDICATE,
+            }),
+            ast::Instruction::Bra {
+                arguments: BraArgs { src: target },
+            },
+        ));
+    }
+    Ok(ast::Statement::Block(statements))
+}
+
 fn label<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
@@ -1765,10 +1899,16 @@ fn call<'a, 'input>(
         ),
     )
     .parse_next(stream)?;
+    // call (ret), %fp, (args), prototype-or-targets;
+    let prototype = opt(preceded(Token::Comma, ident)).parse_next(stream)?;
     let uniform = uni.is_some();
-    let recorded_fn = match stream.state.function_declarations.get(name) {
-        Some(decl) => decl,
-        None => {
+    let (recorded_fn, is_indirect) = match (
+        stream.state.function_declarations.get(name),
+        prototype.and_then(|p| stream.state.call_prototypes.get(p)),
+    ) {
+        (_, Some(prototype)) => (prototype, true),
+        (Some(decl), None) => (decl, false),
+        (None, None) => {
             stream.state.errors.push(PtxError::UnknownFunction);
             return Ok(empty_call(uniform, name));
         }
@@ -1789,7 +1929,8 @@ fn call<'a, 'input>(
         return_arguments,
         func: name,
         input_arguments,
-        is_external: false,
+        // Indirect calls are not followed by instruction_mode_to_global_mode
+        is_external: is_indirect,
     };
     Ok(ast::Instruction::Call { data, arguments })
 }

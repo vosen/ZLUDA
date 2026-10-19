@@ -614,7 +614,13 @@ impl<'a> MethodEmitContext<'a> {
             Statement::RetValue(_, values) => self.emit_ret_value(values)?,
             Statement::PtrAccess(ptr_access) => self.emit_ptr_access(ptr_access)?,
             Statement::RepackVector(repack) => self.emit_vector_repack(repack)?,
-            Statement::FunctionPointer(_) => todo!(),
+            Statement::FunctionPointer(FunctionPointerDetails { dst, src }) => {
+                let function = self.resolver.value(src)?;
+                let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                self.resolver.with_result(dst, |dst| unsafe {
+                    LLVMBuildPtrToInt(self.builder, function, i64_type, dst)
+                });
+            }
             Statement::VectorRead(vector_read) => self.emit_vector_read(vector_read)?,
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
@@ -1376,11 +1382,18 @@ impl<'a> MethodEmitContext<'a> {
             .iter()
             .map(|arg| self.resolver.value(*arg))
             .collect::<Result<Vec<_>, _>>()?;
+        let mut callee = self.resolver.value(arguments.func)?;
+        // An indirect call, through a function address in a register
+        if unsafe { LLVMIsAFunction(callee) }.is_null() {
+            let generic = get_pointer_type(self.context, ast::StateSpace::Generic)?;
+            callee =
+                unsafe { LLVMBuildIntToPtr(self.builder, callee, generic, LLVM_UNNAMED.as_ptr()) };
+        }
         let llvm_call = unsafe {
             LLVMBuildCall2(
                 self.builder,
                 type_,
-                self.resolver.value(arguments.func)?,
+                callee,
                 input_arguments.as_mut_ptr(),
                 input_arguments.len() as u32,
                 name,
