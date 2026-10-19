@@ -2485,7 +2485,7 @@ derive_parser!(
             }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =        { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -2604,7 +2604,7 @@ derive_parser!(
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#comparison-and-selection-instructions-set
@@ -3064,7 +3064,7 @@ derive_parser!(
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =            { .f16 };
     //fma.rnd{.ftz}{.sat}.f16x2   d, a, b, c;
     //fma.rnd{.ftz}.relu.f16      d, a, b, c;
@@ -3085,7 +3085,7 @@ derive_parser!(
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     .type_x2: ScalarType =            { .bf16x2, .f16x2 };
     //fma.rnd.oob.{relu}.type     d, a, b, c;
 
@@ -3205,7 +3205,7 @@ derive_parser!(
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-min

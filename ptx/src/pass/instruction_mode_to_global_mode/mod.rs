@@ -208,7 +208,21 @@ impl InstructionModes {
     fn from_arith_float(arith: &ast::ArithFloat) -> InstructionModes {
         let denormal = arith.flush_to_zero.map(DenormalMode::from_ftz);
         let rounding = Some(RoundingMode::from_ast(arith.rounding));
-        InstructionModes::new(arith.type_, denormal, rounding)
+        let mut modes = InstructionModes::new(arith.type_, denormal, rounding);
+        // Directed rounding of 16-bit floats is computed in f32 on AGX (see
+        // emit_half_directed_rounding), so it needs both rounding modes
+        if arith.rounding != ast::RoundingMode::NearestEven
+            && matches!(
+                arith.type_,
+                ast::ScalarType::F16
+                    | ast::ScalarType::F16x2
+                    | ast::ScalarType::BF16
+                    | ast::ScalarType::BF16x2
+            )
+        {
+            modes.rounding_f32 = rounding;
+        }
+        modes
     }
 
     fn from_ftz(type_: ast::ScalarType, ftz: Option<bool>) -> Self {

@@ -1015,7 +1015,15 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildAdd(builder, src1, src2, dst)
                 });
             }
-            ast::ArithDetails::Float(..) => {
+            ast::ArithDetails::Float(arith) => {
+                if self.is_half_directed_rounding(&arith) {
+                    return self.emit_half_directed_rounding(
+                        "llvm.experimental.constrained.fadd",
+                        arith,
+                        arguments.dst,
+                        vec![src1, src2],
+                    );
+                }
                 self.fp
                     .fadd(self.resolver, data.type_(), arguments.dst, src1, src2)?;
             }
@@ -1510,8 +1518,210 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::MulDetails,
         arguments: ast::MulArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        if let ast::MulDetails::Float(arith) = data {
+            if self.is_half_directed_rounding(&arith) {
+                let src1 = self.resolver.value(arguments.src1)?;
+                let src2 = self.resolver.value(arguments.src2)?;
+                return self.emit_half_directed_rounding(
+                    "llvm.experimental.constrained.fmul",
+                    arith,
+                    arguments.dst,
+                    vec![src1, src2],
+                );
+            }
+        }
         self.emit_mul_impl(data, Some(arguments.dst), arguments.src1, arguments.src2)?;
         Ok(())
+    }
+
+    // AGX rounds 16-bit float arithmetic to nearest only. With a directed
+    // rounding mode the operation is computed in f32 (exactly for mul and
+    // fma, correctly rounded in the same direction otherwise) and then
+    // rounded to the 16-bit type, which gives the same result as rounding
+    // once. Both rounding modes are set by instruction_mode_to_global_mode.
+    fn is_half_directed_rounding(&self, arith: &ast::ArithFloat) -> bool {
+        self.target == Target::Agx
+            && self.fp.mode == FloatingPointMode::Constrained
+            && arith.rounding != ast::RoundingMode::NearestEven
+            && matches!(
+                arith.type_,
+                ast::ScalarType::F16
+                    | ast::ScalarType::F16x2
+                    | ast::ScalarType::BF16
+                    | ast::ScalarType::BF16x2
+            )
+    }
+
+    fn emit_half_directed_rounding(
+        &mut self,
+        intrinsic: &'static str,
+        arith: ast::ArithFloat,
+        dst: SpirvWord,
+        srcs: Vec<LLVMValueRef>,
+    ) -> Result<(), TranslateError> {
+        let element = arith.type_.packed_type().unwrap_or(arith.type_);
+        let lanes = if element == arith.type_ { 1 } else { 2 };
+        let ftz = arith.flush_to_zero == Some(true) && element == ast::ScalarType::F16;
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let mut result = unsafe { LLVMGetPoison(get_scalar_type(self.context, arith.type_)) };
+        for lane in 0..lanes {
+            let index = unsafe { LLVMConstInt(i32_type, lane, 0) };
+            let mut wide = Vec::with_capacity(srcs.len());
+            for &src in srcs.iter() {
+                let mut value = if lanes == 1 {
+                    src
+                } else {
+                    unsafe { LLVMBuildExtractElement(self.builder, src, index, LLVM_UNNAMED.as_ptr()) }
+                };
+                if ftz {
+                    value = self.emit_flush_f16(value);
+                }
+                wide.push(self.fp.fpext(
+                    self.resolver,
+                    ast::ScalarType::F32,
+                    None,
+                    element,
+                    value,
+                )?);
+            }
+            let wide_result = match wide.len() {
+                2 => self.fp.emit_constrained(
+                    self.resolver,
+                    intrinsic,
+                    ast::ScalarType::F32,
+                    None,
+                    [wide[0], wide[1]],
+                    ["round.dynamic", "fpexcept.ignore"],
+                )?,
+                3 => self.fp.emit_constrained(
+                    self.resolver,
+                    intrinsic,
+                    ast::ScalarType::F32,
+                    None,
+                    [wide[0], wide[1], wide[2]],
+                    ["round.dynamic", "fpexcept.ignore"],
+                )?,
+                _ => return Err(error_unreachable()),
+            };
+            let mut narrow = if element == ast::ScalarType::BF16 {
+                self.emit_f32_to_bf16_directed(arith.rounding, wide_result)
+            } else {
+                self.fp
+                    .fptrunc(self.resolver, element, None, ast::ScalarType::F32, wide_result)?
+            };
+            if ftz {
+                narrow = self.emit_flush_f16(narrow);
+            }
+            result = if lanes == 1 {
+                narrow
+            } else {
+                unsafe {
+                    LLVMBuildInsertElement(
+                        self.builder,
+                        result,
+                        narrow,
+                        index,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                }
+            };
+        }
+        self.resolver.register(dst, result);
+        Ok(())
+    }
+
+    // Rounds an f32 to bf16 towards zero or an infinity on the bit pattern:
+    // bf16 is the upper half of f32. NaNs become the canonical NaN
+    fn emit_f32_to_bf16_directed(
+        &mut self,
+        rounding: ast::RoundingMode,
+        value: LLVMValueRef,
+    ) -> LLVMValueRef {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i16_type = get_scalar_type(self.context, ast::ScalarType::B16);
+        let bf16_type = get_scalar_type(self.context, ast::ScalarType::BF16);
+        let b = self.builder;
+        unsafe {
+            let bits = LLVMBuildBitCast(b, value, i32_type, LLVM_UNNAMED.as_ptr());
+            let truncated = LLVMBuildLShr(b, bits, LLVMConstInt(i32_type, 16, 0), LLVM_UNNAMED.as_ptr());
+            let low = LLVMBuildAnd(b, bits, LLVMConstInt(i32_type, 0xffff, 0), LLVM_UNNAMED.as_ptr());
+            let inexact = LLVMBuildICmp(
+                b,
+                LLVMIntPredicate::LLVMIntNE,
+                low,
+                LLVMConstInt(i32_type, 0, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let negative = LLVMBuildICmp(
+                b,
+                LLVMIntPredicate::LLVMIntSLT,
+                bits,
+                LLVMConstInt(i32_type, 0, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            // Rounding away from zero increments the magnitude
+            let away = match rounding {
+                ast::RoundingMode::NegativeInf => Some(negative),
+                ast::RoundingMode::PositiveInf => {
+                    Some(LLVMBuildNot(b, negative, LLVM_UNNAMED.as_ptr()))
+                }
+                _ => None,
+            };
+            let rounded = match away {
+                Some(away) => {
+                    let up = LLVMBuildAnd(b, away, inexact, LLVM_UNNAMED.as_ptr());
+                    let up = LLVMBuildZExt(b, up, i32_type, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildAdd(b, truncated, up, LLVM_UNNAMED.as_ptr())
+                }
+                None => truncated,
+            };
+            let is_nan = LLVMBuildFCmp(
+                b,
+                LLVMRealPredicate::LLVMRealUNO,
+                value,
+                value,
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let rounded = LLVMBuildSelect(
+                b,
+                is_nan,
+                LLVMConstInt(i32_type, 0x7fff, 0),
+                rounded,
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let rounded = LLVMBuildTrunc(b, rounded, i16_type, LLVM_UNNAMED.as_ptr());
+            LLVMBuildBitCast(b, rounded, bf16_type, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    // Replaces an f16 subnormal with a zero of the same sign
+    fn emit_flush_f16(&mut self, value: LLVMValueRef) -> LLVMValueRef {
+        let i16_type = get_scalar_type(self.context, ast::ScalarType::B16);
+        let f16_type = get_scalar_type(self.context, ast::ScalarType::F16);
+        unsafe {
+            let bits = LLVMBuildBitCast(self.builder, value, i16_type, LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildAnd(
+                self.builder,
+                bits,
+                LLVMConstInt(i16_type, 0x7c00, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let is_subnormal = LLVMBuildICmp(
+                self.builder,
+                LLVMIntPredicate::LLVMIntEQ,
+                exponent,
+                LLVMConstInt(i16_type, 0, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let sign = LLVMBuildAnd(
+                self.builder,
+                bits,
+                LLVMConstInt(i16_type, 0x8000, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let bits = LLVMBuildSelect(self.builder, is_subnormal, sign, bits, LLVM_UNNAMED.as_ptr());
+            LLVMBuildBitCast(self.builder, bits, f16_type, LLVM_UNNAMED.as_ptr())
+        }
     }
 
     fn emit_mul_impl(
@@ -1881,6 +2091,14 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        if self.is_half_directed_rounding(&arith_float) {
+            return self.emit_half_directed_rounding(
+                "llvm.experimental.constrained.fsub",
+                arith_float,
+                arguments.dst,
+                vec![src1, src2],
+            );
+        }
         self.fp
             .fsub(self.resolver, arith_float.type_, arguments.dst, src1, src2)?;
         Ok(())
@@ -3063,6 +3281,19 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::ArithFloat,
         arguments: ptx_parser::FmaArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        if self.is_half_directed_rounding(&data) {
+            let srcs = vec![
+                self.resolver.value(arguments.src1)?,
+                self.resolver.value(arguments.src2)?,
+                self.resolver.value(arguments.src3)?,
+            ];
+            return self.emit_half_directed_rounding(
+                "llvm.experimental.constrained.fma",
+                data,
+                arguments.dst,
+                srcs,
+            );
+        }
         let (prefix, metadata): (_, &[&str]) = match self.fp.mode {
             FloatingPointMode::Normal => ("llvm.fma", &[]),
             FloatingPointMode::Constrained => (
