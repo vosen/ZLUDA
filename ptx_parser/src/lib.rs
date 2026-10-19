@@ -2069,10 +2069,22 @@ fn mma<'a, 'input>(
     };
     let satfinite = take_modifier(&mut modifiers, "satfinite");
     let kind_f8f6f4 = take_modifier(&mut modifiers, "kind::f8f6f4");
+    let block_scale = match take_block_scale(&mut modifiers) {
+        Ok(block_scale) => block_scale,
+        Err(()) => return backtrack(),
+    };
     let b1_op = take_b1_op(&mut modifiers);
-    let Some([dtype, atype, btype, ctype]) = take_mma_types(&mut modifiers) else {
+    let Some([dtype, mut atype, mut btype, ctype]) = take_mma_types(&mut modifiers) else {
         return backtrack();
     };
+    // fp4 elements are packed two per byte with kind::mxf4 and kind::mxf4nvf4
+    if let Some((_, true)) = block_scale {
+        for t in [&mut atype, &mut btype] {
+            if *t == ast::MmaType::E2m1 {
+                *t = ast::MmaType::E2m1x2;
+            }
+        }
+    }
     let data = ast::MmaDetails {
         m,
         n,
@@ -2085,11 +2097,16 @@ fn mma<'a, 'input>(
         ctype,
         satfinite,
         b1_op,
+        block_scale: None,
+    };
+    let supported = match block_scale {
+        None => data.is_supported_mma(kind_f8f6f4),
+        Some((scale, fp4)) => data.is_supported_block_scale(&scale, fp4),
     };
     if !modifiers.is_empty()
         || alayout != ast::MatrixLayout::Row
         || blayout != ast::MatrixLayout::Col
-        || !data.is_supported_mma(kind_f8f6f4)
+        || !supported
     {
         return backtrack();
     }
@@ -2103,15 +2120,101 @@ fn mma<'a, 'input>(
         ParsedOperandStr::parse,
     )
         .parse_next(stream)?;
-    Ok(ast::Instruction::Mma {
-        data,
-        arguments: MmaArgs {
+    let Some((mut scale, _)) = block_scale else {
+        return Ok(ast::Instruction::Mma {
+            data,
+            arguments: MmaArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        });
+    };
+    // , scale-a, {byte-id-a, thread-id-a}, scale-b, {byte-id-b, thread-id-b}
+    let (_, src_scale_a, _, (a_byte, a_thread), _, src_scale_b, _, (b_byte, b_thread)) = (
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        scale_selector,
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        scale_selector,
+    )
+        .parse_next(stream)?;
+    (scale.a_byte, scale.a_thread, scale.b_byte, scale.b_thread) = (a_byte, a_thread, b_byte, b_thread);
+    Ok(ast::Instruction::MmaBlockScale {
+        data: ast::MmaDetails {
+            block_scale: Some(scale),
+            ..data
+        },
+        arguments: MmaBlockScaleArgs {
             dst,
             src1,
             src2,
             src3,
+            src_scale_a,
+            src_scale_b,
         },
     })
+}
+
+// .kind::{mxf8f6f4, mxf4, mxf4nvf4}.block_scale{.scale_vec::NX} ... .stype:
+// the scale factors (with selectors to fill in) and whether the elements are
+// packed fp4.
+fn take_block_scale(modifiers: &mut Vec<&str>) -> Result<Option<(ast::MmaBlockScale, bool)>, ()> {
+    let kinds = [("kind::mxf8f6f4", 1, false), ("kind::mxf4", 2, true), ("kind::mxf4nvf4", 0, true)];
+    let Some((_, default_chunks, fp4)) = kinds
+        .into_iter()
+        .find(|(name, _, _)| take_modifier(modifiers, name))
+    else {
+        return Ok(None);
+    };
+    if !take_modifier(modifiers, "block_scale") {
+        return Err(());
+    }
+    let chunks = [("scale_vec::1X", 1), ("scale_vec::2X", 2), ("scale_vec::4X", 4)]
+        .into_iter()
+        .find_map(|(name, chunks)| take_modifier(modifiers, name).then_some(chunks))
+        .unwrap_or(default_chunks);
+    let ue4m3 = take_modifier(modifiers, "ue4m3");
+    if !ue4m3 && !take_modifier(modifiers, "ue8m0") {
+        return Err(());
+    }
+    if chunks == 0 {
+        return Err(());
+    }
+    Ok(Some((
+        ast::MmaBlockScale {
+            chunks,
+            ue4m3,
+            a_byte: 0,
+            a_thread: 0,
+            b_byte: 0,
+            b_thread: 0,
+        },
+        fp4,
+    )))
+}
+
+// {byte-id, thread-id}, as immediates
+fn scale_selector<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, u32)> {
+    let selector = ParsedOperandStr::parse.parse_next(stream)?;
+    let ast::ParsedOperand::VecPack(items) = selector else {
+        return backtrack();
+    };
+    let value = |item: &Option<ast::RegOrImmediate<&str>>| match item {
+        Some(ast::RegOrImmediate::Imm(value)) => value.as_u64().map(|v| v as u32),
+        _ => None,
+    };
+    match &items[..] {
+        [byte, thread] => match (value(byte), value(thread)) {
+            (Some(byte), Some(thread)) if byte < 4 && thread < 4 => Ok((byte, thread)),
+            _ => backtrack(),
+        },
+        _ => backtrack(),
+    }
 }
 
 // wmma.load.{a,b,c}.sync.aligned.layout.shape{.ss}.type r, [p]{, stride};
@@ -2157,6 +2260,7 @@ fn wmma<'a, 'input>(
             ctype,
             satfinite,
             b1_op,
+            block_scale: None,
         };
         if !modifiers.is_empty() || !data.is_supported_wmma() {
             return backtrack();

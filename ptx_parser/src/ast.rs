@@ -857,6 +857,35 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        MmaBlockScale {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::D) },
+                },
+                src1: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::A) },
+                },
+                src2: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::B) },
+                },
+                src3: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::C) },
+                },
+                src_scale_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_b: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
+            }
+        },
         WmmaLoad {
             type: data.fragment_type(),
             data: WmmaLoadStoreDetails,
@@ -2995,6 +3024,8 @@ pub enum MmaType {
     E3m2,
     E2m3,
     E2m1,
+    /// e2m1 packed two per byte (block scaled `kind::mxf4`, `kind::mxf4nvf4`)
+    E2m1x2,
 }
 
 impl MmaType {
@@ -3016,6 +3047,7 @@ impl MmaType {
             "e3m2" => MmaType::E3m2,
             "e2m3" => MmaType::E2m3,
             "e2m1" => MmaType::E2m1,
+            "e2m1x2" => MmaType::E2m1x2,
             _ => return None,
         })
     }
@@ -3038,6 +3070,7 @@ impl MmaType {
             MmaType::E3m2 => "e3m2",
             MmaType::E2m3 => "e2m3",
             MmaType::E2m1 => "e2m1",
+            MmaType::E2m1x2 => "e2m1x2",
         }
     }
 
@@ -3056,7 +3089,7 @@ impl MmaType {
             MmaType::F64 => 64,
             MmaType::Tf32 | MmaType::F32 | MmaType::S32 => 32,
             MmaType::F16 | MmaType::Bf16 => 16,
-            MmaType::S4 | MmaType::U4 => 4,
+            MmaType::S4 | MmaType::U4 | MmaType::E2m1x2 => 4,
             MmaType::B1 => 1,
             _ => 8,
         }
@@ -3079,6 +3112,22 @@ pub enum MmaB1Op {
     And,
 }
 
+/// The scale factors of block scaled `mma.sync` (`.block_scale`): every row
+/// of A and column of B is cut into `chunks` blocks (`.scale_vec::NX`), each
+/// multiplied by a scale factor (`.ue8m0`, or `.ue4m3` with `ue4m3`). The
+/// factors of A are byte `a_byte + j` of the scale register of the thread
+/// `a_thread` of the selector (the `{byte-id, thread-id}` operands, which
+/// must be immediates), and likewise for B.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct MmaBlockScale {
+    pub chunks: u32,
+    pub ue4m3: bool,
+    pub a_byte: u32,
+    pub a_thread: u32,
+    pub b_byte: u32,
+    pub b_thread: u32,
+}
+
 /// `mma.sync` and `wmma.mma`: D (m x n) = A (m x k) * B (k x n) + C.
 #[derive(Copy, Clone)]
 pub struct MmaDetails {
@@ -3093,6 +3142,7 @@ pub struct MmaDetails {
     pub ctype: MmaType,
     pub satfinite: bool,
     pub b1_op: Option<MmaB1Op>,
+    pub block_scale: Option<MmaBlockScale>,
 }
 
 impl MmaDetails {
@@ -3135,6 +3185,29 @@ impl MmaDetails {
                 matches!(shape, (16, 8, 16) | (16, 8, 32)) && float_accumulator
             }
             _ => false,
+        }
+    }
+
+    /// Whether this is a supported block scaled `mma.sync` (`fp4`: of kind
+    /// `mxf4` or `mxf4nvf4`).
+    pub fn is_supported_block_scale(&self, scale: &MmaBlockScale, fp4: bool) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        if self.ctype != F32 || self.dtype != F32 || self.satfinite || self.b1_op.is_some() {
+            return false;
+        }
+        if fp4 {
+            shape == (16, 8, 64)
+                && self.atype == E2m1x2
+                && self.btype == E2m1x2
+                && matches!(scale.chunks, 2 | 4)
+        } else {
+            let f8f6f4 = |t| matches!(t, E4m3 | E5m2 | E3m2 | E2m3 | E2m1);
+            shape == (16, 8, 32)
+                && f8f6f4(self.atype)
+                && f8f6f4(self.btype)
+                && scale.chunks == 1
+                && !scale.ue4m3
         }
     }
 
@@ -3271,6 +3344,7 @@ impl WmmaLoadStoreDetails {
             ctype: self.type_,
             satfinite: false,
             b1_op: None,
+            block_scale: None,
         }
     }
 

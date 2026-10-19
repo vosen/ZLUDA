@@ -749,6 +749,7 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
             | ast::Instruction::StMatrix { .. }
+            | ast::Instruction::MmaBlockScale { .. }
             | ast::Instruction::MovMatrix { .. }
             | ast::Instruction::WmmaLoad { .. }
             | ast::Instruction::WmmaStore { .. }

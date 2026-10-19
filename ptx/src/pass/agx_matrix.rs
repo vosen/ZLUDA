@@ -53,7 +53,9 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::LdMatrix { data, .. } => Helper::LdMatrix(*data),
         ast::Instruction::StMatrix { data, .. } => Helper::StMatrix(*data),
         ast::Instruction::MovMatrix { .. } => Helper::MovMatrix,
-        ast::Instruction::Mma { data, .. } => Helper::Mma(*data),
+        ast::Instruction::Mma { data, .. } | ast::Instruction::MmaBlockScale { data, .. } => {
+            Helper::Mma(*data)
+        }
         ast::Instruction::WmmaLoad { data, .. } => Helper::WmmaLoad(*data),
         ast::Instruction::WmmaStore { data, .. } => Helper::WmmaStore(*data),
         ast::Instruction::WmmaMma { data, .. } => Helper::WmmaMma(*data),
@@ -123,6 +125,15 @@ fn mma_name(d: &ast::MmaDetails) -> String {
         Some(ast::MmaB1Op::And) => name.push_str("_and"),
         None => {}
     }
+    if let Some(s) = d.block_scale {
+        let stype = if s.ue4m3 { "ue4m3" } else { "ue8m0" };
+        write!(
+            name,
+            "_bs{}{stype}_a{}{}_b{}{}",
+            s.chunks, s.a_byte, s.a_thread, s.b_byte, s.b_thread
+        )
+        .unwrap();
+    }
     name
 }
 
@@ -157,6 +168,20 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
             Some(ast::MmaB1Op::And)
         } else {
             None
+        },
+        block_scale: match flags {
+            [.., bs, a, b] if bs.starts_with("bs") => {
+                let digit = |s: &str, i: usize| s[i..i + 1].parse::<u32>().ok();
+                Some(ast::MmaBlockScale {
+                    chunks: digit(bs, 2)?,
+                    ue4m3: bs.ends_with("ue4m3"),
+                    a_byte: digit(a, 1)?,
+                    a_thread: digit(a, 2)?,
+                    b_byte: digit(b, 1)?,
+                    b_thread: digit(b, 2)?,
+                })
+            }
+            _ => None,
         },
     })
 }
@@ -352,7 +377,12 @@ fn define(
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
             let b = ir.unpack(&param(1)?.0, param(1)?.1)?;
             let c = ir.unpack(&param(2)?.0, param(2)?.1)?;
-            Some(mma_tile(&mut ir, &lane, &d, &a, &b, &c)?)
+            let scales = if d.block_scale.is_some() {
+                Some((param(3)?.0, param(4)?.0))
+            } else {
+                None
+            };
+            Some(mma_tile(&mut ir, &lane, &d, &a, &b, &c, scales)?)
         }
         Helper::WmmaMma(d) => {
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
@@ -936,6 +966,7 @@ fn mma_tile(
     a: &[String],
     b: &[String],
     c: &[String],
+    scales: Option<(String, String)>,
 ) -> Result<Vec<String>, TranslateError> {
     use ast::MmaMatrix::*;
     let (m, k) = (d.m, d.k);
@@ -1032,7 +1063,21 @@ fn mma_tile(
         let c_elem = fragment_element(ir, c, register_bits(d.ctype), c_bits, j)?;
         let av = &a_vals[h as usize];
         let bv = &b_vals[e as usize];
-        let value = if d.atype.is_float() {
+        let value = if let (Some(scale), Some((sa, sb))) = (d.block_scale, &scales) {
+            let factors = block_scales(ir, lane, &scale, sa, sb, h, e);
+            let (sa, sb) = (factors.0, factors.1);
+            let block = d.k / scale.chunks;
+            let mut terms = vec![decode(ir, d.ctype, &c_elem, "i32")?];
+            for (kk, (x, y)) in av.iter().zip(bv).enumerate() {
+                let x = decode(ir, d.atype, x, "i32")?;
+                let y = decode(ir, d.btype, y, "i32")?;
+                let p = product(ir, &x, &y);
+                let chunk = kk / block as usize;
+                let s = product(ir, &sa[chunk], &sb[chunk]);
+                terms.push(product(ir, &p, &s));
+            }
+            exact_sum(ir, &terms, d.dtype)?
+        } else if d.atype.is_float() {
             float_dot(ir, d, av, bv, &c_elem)?
         } else if word {
             b1_dot(ir, d, av, bv, &c_elem)
@@ -1131,6 +1176,60 @@ fn f64_elements_loop(
     Ok(results)
 }
 
+// The scale factors of block scaled mma for row g + 8h of A and column
+// 2t + e of B: those of A are in the scale register of thread 2 * a_thread +
+// h of the quad, those of B of thread 4 * (2t + e) + b_thread.
+fn block_scales(
+    ir: &mut Ir,
+    lane: &Lane,
+    scale: &ast::MmaBlockScale,
+    sa: &str,
+    sb: &str,
+    h: u32,
+    e: u32,
+) -> (Vec<Term>, Vec<Term>) {
+    let ra = ir.shuffle(sa, 32, &(2 * scale.a_thread + h).to_string(), true);
+    let l = ir.linear(0, &lane.g, 8, &lane.t, 4 * e + scale.b_thread);
+    let rb = ir.shuffle(sb, 32, &l, false);
+    let factors = |ir: &mut Ir, r: &str, byte: u32| {
+        (0..scale.chunks)
+            .map(|j| {
+                let x = ir.op("lshr", "i32", r, &(8 * (byte + j)).to_string());
+                let x = ir.op("and", "i32", &x, "255");
+                scale_factor(ir, &x, scale.ue4m3)
+            })
+            .collect::<Vec<_>>()
+    };
+    (factors(ir, &ra, scale.a_byte), factors(ir, &rb, scale.b_byte))
+}
+
+// A scale factor: ue8m0 is 2^(x - 127); ue4m3 an unsigned e4m3 (as in
+// PTX-formalization, the NaN encodings are not special).
+fn scale_factor(ir: &mut Ir, x: &str, ue4m3: bool) -> Term {
+    let (mantissa, exponent, width) = if ue4m3 {
+        let m = ir.op("and", "i32", x, "7");
+        let e = ir.op("lshr", "i32", x, "3");
+        let e_zero = ir.icmp("eq", "i32", &e, "0");
+        let hidden = ir.op("or", "i32", &m, "8");
+        let m = ir.select(&e_zero, "i32", &m, &hidden);
+        let e = ir.select(&e_zero, "i32", "1", &e);
+        (ir.cast("zext", "i32", &m, "i64"), ir.op("sub", "i32", &e, "10"), 4)
+    } else {
+        ("1".to_string(), ir.op("sub", "i32", x, "127"), 1)
+    };
+    let zero = ir.icmp("eq", "i64", &mantissa, "0");
+    Term {
+        sign: "false".to_string(),
+        mantissa,
+        mantissa_type: "i64",
+        exponent,
+        width,
+        nan: "false".to_string(),
+        inf: "false".to_string(),
+        zero,
+    }
+}
+
 // Sign or zero extension of a `bits`-bit integer element to i32.
 fn extend(ir: &mut Ir, x: &str, bits: u32, signed: bool) -> String {
     if !signed || bits == 32 {
@@ -1210,7 +1309,7 @@ fn format(type_: ast::MmaType) -> Result<Format, TranslateError> {
         E5m2 => (2, 5, Specials::Ieee),
         E3m2 => (2, 3, Specials::None),
         E2m3 => (3, 2, Specials::None),
-        E2m1 => (1, 2, Specials::None),
+        E2m1 | E2m1x2 => (1, 2, Specials::None),
         _ => return Err(todo("floating point type")),
     };
     Ok(Format {
@@ -1246,6 +1345,7 @@ fn decode(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result
             let x = ir.op("lshr", "i64", &x, "2");
             ir.op("and", "i64", &x, "15")
         }
+        ast::MmaType::E2m1x2 => ir.op("and", "i64", &x, "15"),
         _ => x,
     };
     let frac = ir.op("and", "i64", &x, &((1u64 << f.mantissa) - 1).to_string());
@@ -1584,7 +1684,15 @@ fn wmma_mma(
                     .map(|r| r.to_vec())
                     .ok_or_else(|| todo("wmma fragment size"))
             };
-            let tile_d = mma_tile(ir, lane, tile, &part(a, ra, i)?, &part(b, rb, j)?, &part(c, rc, index)?)?;
+            let tile_d = mma_tile(
+                ir,
+                lane,
+                tile,
+                &part(a, ra, i)?,
+                &part(b, rb, j)?,
+                &part(c, rc, index)?,
+                None,
+            )?;
             result.extend(tile_d);
         }
     }

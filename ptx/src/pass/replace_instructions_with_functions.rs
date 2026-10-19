@@ -651,12 +651,13 @@ fn run_instruction<'input>(
             )?
         }
         ptx_parser::Instruction::StMatrix { .. }
+        | ptx_parser::Instruction::MmaBlockScale { .. }
         | ptx_parser::Instruction::MovMatrix { .. }
         | ptx_parser::Instruction::WmmaLoad { .. }
         | ptx_parser::Instruction::WmmaStore { .. }
         | ptx_parser::Instruction::WmmaMma { .. } => {
             return Err(TranslateError::Todo(
-                "stmatrix, movmatrix and wmma on AMD GPUs".to_string(),
+                "stmatrix, movmatrix, block scaled mma and wmma on AMD GPUs".to_string(),
             ))
         }
         i @ ptx_parser::Instruction::Prmt { .. } => {
