@@ -1254,7 +1254,9 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .iter()
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
-            .ok_or_else(|| error_unknown_symbol(name))
+            // An undeclared identifier is an error in the input, not in the
+            // compiler
+            .ok_or_else(|| TranslateError::UnknownSymbol(name.to_string()))
     }
 
     // The innermost variable of this name that is a vector, or else the

@@ -12,6 +12,14 @@ pub(crate) fn run(
     let mut reachable_funcs = FxHashSet::default();
     for directive in directives.iter_mut() {
         match directive {
+            // Functions whose addresses initialize variables
+            Directive2::Variable(_, var) => {
+                for init in var.info.array_init.iter() {
+                    if let ast::RegOrImmediate::Reg(name) = init {
+                        reachable_funcs.insert(*name);
+                    }
+                }
+            }
             Directive2::Method(Function {
                 body: Some(body), ..
             }) => {
@@ -37,10 +45,8 @@ pub(crate) fn run(
                         }) => {
                             cfg.add_branch(current_bb, *src);
                         }
-                        Statement::FunctionPointer(FunctionPointerDetails {
-                            src: _func, ..
-                        }) => {
-                            return Err(error_todo());
+                        Statement::FunctionPointer(FunctionPointerDetails { src, .. }) => {
+                            reachable_funcs.insert(*src);
                         }
                         Statement::Instruction(ast::Instruction::Call {
                             arguments: ast::CallArgs { func, .. },

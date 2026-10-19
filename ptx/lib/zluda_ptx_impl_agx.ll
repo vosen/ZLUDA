@@ -316,6 +316,76 @@ reduce:
   %r = icmp ne i32 %all, 0
   ret i1 %r
 }
+; bar.red.popc.u32: the number of threads whose predicate is true
+define i32 @__zluda_ptx_impl_bar_red_popc_u32(i32 %barrier, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %value = xor i1 %pred, %invert
+  %v32 = zext i1 %value to i32
+  call void @llvm.agx.threadgroup.barrier()
+  %tid = call i32 @llvm.agx.thread.index.in.threadgroup()
+  %first = icmp eq i32 %tid, 0
+  br i1 %first, label %init, label %reduce
+init:
+  store i32 0, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  br label %reduce
+reduce:
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %old = atomicrmw add ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red, i32 %v32 monotonic
+  fence syncscope("workgroup") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  %all = load i32, ptr addrspace(3) @__zluda_ptx_impl_agx_bar_red
+  call void @llvm.agx.threadgroup.barrier()
+  ret i32 %all
+}
+
+; bar.red with a thread count. Threads arrive at barriers in whole warps, so
+; a count of 32 means that the barrier is the warp's only: the reduction
+; is over the SIMD-group. Other counts are taken as the whole threadgroup.
+define i32 @__zluda_ptx_impl_bar_red_popc_u32_count(i32 %barrier, i32 %count, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %warp = icmp eq i32 %count, 32
+  br i1 %warp, label %simd, label %cta
+simd:
+  %value = xor i1 %pred, %invert
+  fence syncscope("workgroup") seq_cst
+  %ballot = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %n = call i32 @llvm.ctpop.i32(i32 %ballot)
+  ret i32 %n
+cta:
+  %r = call i32 @__zluda_ptx_impl_bar_red_popc_u32(i32 %barrier, i1 %pred, i1 %invert)
+  ret i32 %r
+}
+define zeroext i1 @__zluda_ptx_impl_bar_red_and_pred_count(i32 %barrier, i32 %count, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %warp = icmp eq i32 %count, 32
+  br i1 %warp, label %simd, label %cta
+simd:
+  %value = xor i1 %pred, %invert
+  fence syncscope("workgroup") seq_cst
+  %ballot = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %active = call i32 @llvm.agx.simd.ballot(i1 true)
+  %all = icmp eq i32 %ballot, %active
+  ret i1 %all
+cta:
+  %r = call i1 @__zluda_ptx_impl_bar_red_and_pred(i32 %barrier, i1 %pred, i1 %invert)
+  ret i1 %r
+}
+define zeroext i1 @__zluda_ptx_impl_bar_red_or_pred_count(i32 %barrier, i32 %count, i1 zeroext %pred, i1 zeroext %invert) #1 {
+entry:
+  %warp = icmp eq i32 %count, 32
+  br i1 %warp, label %simd, label %cta
+simd:
+  %value = xor i1 %pred, %invert
+  fence syncscope("workgroup") seq_cst
+  %ballot = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %any = icmp ne i32 %ballot, 0
+  ret i1 %any
+cta:
+  %r = call i1 @__zluda_ptx_impl_bar_red_or_pred(i32 %barrier, i1 %pred, i1 %invert)
+  ret i1 %r
+}
+
 ; shfl.sync: opts holds the subsection mask in bits 12..8 and the end lane
 ; in bits 4..0. Out of range lanes read their own value and clear the
 ; predicate.
@@ -1271,6 +1341,7 @@ exit:
 
 declare float @llvm.fabs.f32(float)
 declare i32 @llvm.umin.i32(i32, i32)
+declare i32 @llvm.ctpop.i32(i32)
 declare float @llvm.copysign.f32(float, float)
 
 declare i32 @llvm.agx.thread.position.in.threadgroup.x()

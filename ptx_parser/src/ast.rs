@@ -108,6 +108,17 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        Red {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
         AtomCas {
             type: Type::Scalar(data.type_),
             data: AtomCasDetails,
@@ -142,7 +153,13 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: Type::from(ScalarType::Pred)
+                    type: {
+                        if data.pred_reduction == Reduction::Popc {
+                            Type::from(ScalarType::U32)
+                        } else {
+                            Type::from(ScalarType::Pred)
+                        }
+                    }
                 },
                 src_barrier: T,
                 src_threadcount: Option<T>,
@@ -365,6 +382,95 @@ ptx_parser_macros::generate_instruction_type!(
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
                 },
+            }
+        },
+        Alloca {
+            type: Type::Scalar(data.type_),
+            data: AllocaDetails,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        StackSave {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+            }
+        },
+        StackRestore {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                src: T,
+            }
+        },
+        // clmad: carry-less multiply of a and b, the low (data false) or
+        // high (true) 64 bits xor c
+        // Scalar video instructions: vadd, vsub, vabsdiff, vmin, vmax, vshl,
+        // vshr and vset. src3 is the operand of the secondary operation or
+        // of the merge
+        VideoScalar {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoScalarDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: Option<T>,
+            }
+        },
+        // SIMD video instructions: vadd2, vsub2, vavrg2, vabsdiff2, vmin2,
+        // vmax2, vset2 and their 4-way versions
+        VideoSimd {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoSimdDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Vmad {
+            type: Type::Scalar(ScalarType::B32),
+            data: VmadDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Clmad {
+            type: Type::Scalar(ScalarType::U64),
+            data: bool,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Packed8 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Packed8Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: Option<T>,
+            }
+        },
+        Isspacep {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: T,
             }
         },
         CvtTf32 {
@@ -1087,6 +1193,8 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        // vshr.u32.u32.u32.clamp.add, kept apart from VideoScalar so that its
+        // code does not change
         Vshr {
             type: Type::Scalar(ScalarType::U32),
             data: VshData,
@@ -3178,13 +3286,143 @@ pub struct CvtTf32Details {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VshData {
+    pub mode: FunnelShiftMode,
+    pub op2: VshOp,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoOp {
+    Add,
+    Sub,
+    Absdiff,
+    Min,
+    Max,
+    Shl,
+    Shr,
+    Avrg,
+    Set(VideoCompare),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoCompare {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoSecondaryOp {
+    Add,
+    Min,
+    Max,
+}
+
+// A byte (.b) or half-word (.h) selector of a video instruction operand:
+// one digit for scalar instructions, one per lane (most significant lane
+// first, like in the source) for SIMD instructions and their masks
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct VideoSelector {
+    pub half: bool,
+    pub digits: [u8; 4],
+    pub len: u8,
+}
+
+impl VideoSelector {
+    pub fn width(&self) -> u32 {
+        if self.half {
+            16
+        } else {
+            8
+        }
+    }
+
+    pub fn digits(&self) -> &[u8] {
+        &self.digits[..self.len as usize]
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoScalarDetails {
+    pub op: VideoOp,
+    // .u32 for vset, which has no destination type
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // shift amount mode of vshl and vshr: .clamp (default) or .wrap
+    pub clamp: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+    // merge of the result into src3
+    pub dsel: Option<VideoSelector>,
+    pub secondary: Option<VideoSecondaryOp>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoSimdDetails {
+    pub op: VideoOp,
+    // 2 or 4
+    pub lanes: u8,
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .add: the sum of the lanes plus src3, otherwise the lanes merged
+    // with src3
+    pub add: bool,
+    pub mask: Option<VideoSelector>,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VmadDetails {
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .shr7 or .shr15
+    pub shift: u8,
+    pub plus_one: bool,
+    pub negate_a: bool,
+    pub negate_b: bool,
+    pub negate_c: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+// Operations on four byte lanes of a .b32 (.u8x4 and .s8x4 types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Packed8Details {
+    pub op: Packed8Op,
+    pub signed: bool,
+    pub saturate: bool,
+    pub relu: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Packed8Op {
+    Add,
+    Sub,
+    Min,
+    Max,
+    Neg,
+    Abs,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AllocaDetails {
+    pub type_: ScalarType,
+    pub align: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BfindDetails {
     pub type_: ScalarType,
     pub shift_amount: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct VshData {
-    pub mode: FunnelShiftMode,
-    pub op2: VshOp,
-}

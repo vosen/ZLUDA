@@ -110,6 +110,11 @@ struct PtxParserState<'a, 'input> {
     errors: &'a mut Vec<PtxError<'input>>,
     function_declarations:
         FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .callprototype and .calltargets labels: the signature of indirect calls
+    call_prototypes:
+        FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .branchtargets labels
+    branch_targets: FxHashMap<&'input str, Vec<&'input str>>,
 }
 
 impl<'a, 'input> PtxParserState<'a, 'input> {
@@ -118,6 +123,8 @@ impl<'a, 'input> PtxParserState<'a, 'input> {
             text,
             errors,
             function_declarations: FxHashMap::default(),
+            call_prototypes: FxHashMap::default(),
+            branch_targets: FxHashMap::default(),
         }
     }
 
@@ -695,28 +702,20 @@ fn function<'a, 'input>(
     ast::LinkingDirective,
     ast::Function<'input, &'input str, ast::Statement<ParsedOperand<&'input str>>>,
 )> {
-    let (linking, function) = trace(
-        "function",
-        (
-            linking_directives,
-            method_declaration,
-            repeat(0.., tuning_directive),
-            function_body,
-        )
-            .map(|(linking, func_directive, tuning, body)| {
-                (
-                    linking,
-                    ast::Function {
-                        func_directive,
-                        tuning,
-                        body,
-                    },
-                )
-            }),
-    )
-    .parse_next(stream)?;
-    stream.state.record_function(&function.func_directive);
-    Ok((linking, function))
+    let (linking, func_directive) =
+        trace("function", (linking_directives, method_declaration)).parse_next(stream)?;
+    // Recorded before the body, which can call the function recursively
+    stream.state.record_function(&func_directive);
+    let (tuning, body) =
+        (repeat(0.., tuning_directive), function_body).parse_next(stream)?;
+    Ok((
+        linking,
+        ast::Function {
+            func_directive,
+            tuning,
+            body,
+        },
+    ))
 }
 
 fn linking_directives<'a, 'input>(
@@ -860,6 +859,7 @@ fn statement<'a, 'input>(
 ) -> PResult<Option<Statement<ParsedOperandStr<'input>>>> {
     with_recovery(
         alt((
+            call_target_directive.map(|_| None),
             label.map(Some),
             debug_directive.map(|_| None),
             terminated(
@@ -868,6 +868,7 @@ fn statement<'a, 'input>(
                     .map(|var| Some(Statement::Variable(var))),
                 Token::Semicolon,
             ),
+            brx_idx.map(Some),
             predicated_instruction.map(Some),
             pragma.map(|_| None),
             block_statement.map(Some),
@@ -1426,6 +1427,131 @@ fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredA
     .parse_next(stream)
 }
 
+// label: .callprototype {(ret)} _ (params); label: .calltargets f, ...;
+// label: .branchtargets l, ...;
+fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
+    fn prototype_parameter<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<(ast::Type, StateSpace)> {
+        let space = dispatch! { token::any;
+            (Token::DotParam, _) => empty.value(StateSpace::Param),
+            (Token::DotReg, _) => empty.value(StateSpace::Reg),
+            _ => fail
+        }
+        .parse_next(stream)?;
+        let (_, vector, type_) = variable_info_non_texref.parse_next(stream)?;
+        alt((Token::Sink.void(), ident.void())).parse_next(stream)?;
+        let dimensions = if space != StateSpace::Reg {
+            opt(array_dimensions).parse_next(stream)?
+        } else {
+            None
+        };
+        Ok((Type::maybe_array(vector, type_, dimensions), space))
+    }
+    fn prototype_parameters<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<Vec<(ast::Type, StateSpace)>> {
+        delimited(
+            Token::LParen,
+            separated(0.., prototype_parameter, Token::Comma),
+            Token::RParen,
+        )
+        .parse_next(stream)
+    }
+    let (name, _, directive) = (ident, Token::Colon, dot_ident).parse_next(stream)?;
+    match directive {
+        ".callprototype" => {
+            let (returns, _, inputs, _) = (
+                opt(prototype_parameters),
+                Token::Sink,
+                prototype_parameters,
+                Token::Semicolon,
+            )
+                .parse_next(stream)?;
+            stream
+                .state
+                .call_prototypes
+                .insert(name, (returns.unwrap_or_default(), inputs));
+        }
+        ".calltargets" | ".branchtargets" => {
+            let (targets, _): (Vec<_>, _) =
+                (separated(1.., ident, Token::Comma), Token::Semicolon).parse_next(stream)?;
+            if directive == ".branchtargets" {
+                stream.state.branch_targets.insert(name, targets);
+            } else {
+                match stream.state.function_declarations.get(targets[0]) {
+                    Some(signature) => {
+                        let signature = signature.clone();
+                        stream.state.call_prototypes.insert(name, signature);
+                    }
+                    None => stream.state.errors.push(PtxError::UnknownFunction),
+                }
+            }
+        }
+        _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+    }
+    Ok(())
+}
+
+// brx.idx{.uni} index, targets; becomes a branch to each target guarded
+// by a comparison of the index (an index out of range falls through)
+fn brx_idx<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
+    let (_, idx, _, index, _, table, _) = (
+        ident_literal("brx"),
+        Token::DotIdx,
+        opt(Token::DotUni),
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ident,
+        Token::Semicolon,
+    )
+        .parse_next(stream)?;
+    let _ = idx;
+    let Some(targets) = stream.state.branch_targets.get(table).cloned() else {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    };
+    const PREDICATE: &str = "%__zluda_brx_idx";
+    let mut statements = vec![ast::Statement::Variable(ast::MultiVariable::Names {
+        info: ast::VariableInfo {
+            align: None,
+            v_type: Type::Scalar(ScalarType::Pred),
+            state_space: StateSpace::Reg,
+            array_init: Vec::new(),
+        },
+        names: vec![PREDICATE],
+    })];
+    for (i, target) in targets.into_iter().enumerate() {
+        statements.push(ast::Statement::Instruction(
+            None,
+            ast::Instruction::Setp {
+                data: ast::SetpData {
+                    type_: ScalarType::U32,
+                    flush_to_zero: None,
+                    cmp_op: ast::SetpCompareOp::Integer(ast::SetpCompareInt::Eq),
+                },
+                arguments: SetpArgs {
+                    dst1: ParsedOperand::Reg(PREDICATE),
+                    dst2: None,
+                    src1: index.clone(),
+                    src2: ParsedOperand::Imm(ImmediateValue::U64(i as u64)),
+                },
+            },
+        ));
+        statements.push(ast::Statement::Instruction(
+            Some(ast::PredAt {
+                not: false,
+                label: PREDICATE,
+            }),
+            ast::Instruction::Bra {
+                arguments: BraArgs { src: target },
+            },
+        ));
+    }
+    Ok(ast::Statement::Block(statements))
+}
+
 fn label<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
@@ -1775,10 +1901,16 @@ fn call<'a, 'input>(
         ),
     )
     .parse_next(stream)?;
+    // call (ret), %fp, (args), prototype-or-targets;
+    let prototype = opt(preceded(Token::Comma, ident)).parse_next(stream)?;
     let uniform = uni.is_some();
-    let recorded_fn = match stream.state.function_declarations.get(name) {
-        Some(decl) => decl,
-        None => {
+    let (recorded_fn, is_indirect) = match (
+        stream.state.function_declarations.get(name),
+        prototype.and_then(|p| stream.state.call_prototypes.get(p)),
+    ) {
+        (_, Some(prototype)) => (prototype, true),
+        (Some(decl), None) => (decl, false),
+        (None, None) => {
             stream.state.errors.push(PtxError::UnknownFunction);
             return Ok(empty_call(uniform, name));
         }
@@ -1799,7 +1931,8 @@ fn call<'a, 'input>(
         return_arguments,
         func: name,
         input_arguments,
-        is_external: false,
+        // Indirect calls are not followed by instruction_mode_to_global_mode
+        is_external: is_indirect,
     };
     Ok(ast::Instruction::Call { data, arguments })
 }
@@ -1880,40 +2013,299 @@ fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
     xorsign && abs
 }
 
-fn vshr<'a, 'input>(
+// The source text of the next token
+fn next_token_text<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
+    let (_, span) = token::any.parse_next(stream)?;
+    Ok(&stream.state.text[span])
+}
+
+fn video_selector(text: &str) -> Option<ast::VideoSelector> {
+    let half = match text.get(..2)? {
+        ".h" => true,
+        ".b" => false,
+        _ => return None,
+    };
+    let digits = &text[2..];
+    if digits.is_empty() || digits.len() > 4 || !digits.bytes().all(|d| d.is_ascii_digit()) {
+        return None;
+    }
+    let mut result = ast::VideoSelector {
+        half,
+        digits: [0; 4],
+        len: digits.len() as u8,
+    };
+    for (i, d) in digits.bytes().enumerate() {
+        result.digits[i] = d - b'0';
+    }
+    Some(result)
+}
+
+// A video instruction operand: {-}register{.selector} or an immediate
+fn video_operand<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-    ctor: impl FnOnce(
-        FunnelShiftMode,
-        VshOp,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-    ) -> ast::Instruction<ParsedOperandStr<'input>>,
+) -> PResult<(
+    bool,
+    ast::ParsedOperand<&'input str>,
+    Option<ast::VideoSelector>,
+)> {
+    let negate = opt(Token::Minus).parse_next(stream)?.is_some();
+    if let Ok(imm) = immediate_value.parse_next(stream) {
+        return Ok((negate, ast::ParsedOperand::Imm(imm), None));
+    }
+    let name = ident.parse_next(stream)?;
+    let checkpoint = stream.checkpoint();
+    let selector = match next_token_text(stream).map(video_selector) {
+        Ok(Some(selector)) => Some(selector),
+        _ => {
+            stream.reset(&checkpoint);
+            None
+        }
+    };
+    Ok((negate, ast::ParsedOperand::Reg(name), selector))
+}
+
+// Video instructions: the modifiers start with the operand types, and the
+// operands carry selectors (%r1.b0, %r2.h10, ...), so they are parsed here
+fn video<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &'static str,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
-    // vshr.u32.u32.u32.mode.op2 d, a, b, c
-    let ((), (), (), mode, op2, d, (), a, (), b, (), c) = trace(
-        "vshr",
-        (
-            Token::DotU32.void(),
-            Token::DotU32.void(),
-            Token::DotU32.void(),
-            alt((
-                Token::DotClamp.map(|_| FunnelShiftMode::Clamp),
-                Token::DotWrap.map(|_| FunnelShiftMode::Wrap),
-            )),
-            Token::DotAdd.map(|_| VshOp::Add),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-        ),
-    )
-    .parse_next(stream)?;
-    Ok(ctor(mode, op2, d, a, b, c))
+    let mut modifiers = Vec::new();
+    loop {
+        let checkpoint = stream.checkpoint();
+        match next_token_text(stream) {
+            Ok(text) if text.starts_with('.') => modifiers.push(text),
+            _ => {
+                stream.reset(&checkpoint);
+                break;
+            }
+        }
+    }
+    let operands: Vec<_> = separated(3..=4, video_operand, Token::Comma).parse_next(stream)?;
+    let mut errors = Vec::new();
+    let types = modifiers
+        .iter()
+        .take_while(|m| matches!(**m, ".u32" | ".s32"))
+        .map(|m| {
+            if *m == ".u32" {
+                ScalarType::U32
+            } else {
+                ScalarType::S32
+            }
+        })
+        .collect::<Vec<_>>();
+    let is_set = opcode.starts_with("vset");
+    let type_count = if is_set { 2 } else { 3 };
+    if types.len() != type_count {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    let (dtype, atype, btype) = if is_set {
+        (ScalarType::U32, types[0], types[1])
+    } else {
+        (types[0], types[1], types[2])
+    };
+    let mut saturate = false;
+    let mut secondary = None;
+    let mut clamp = None;
+    let mut shift = 0;
+    let mut plus_one = false;
+    let mut compare = None;
+    for m in &modifiers[type_count..] {
+        match *m {
+            ".sat" => saturate = true,
+            ".add" => secondary = Some(ast::VideoSecondaryOp::Add),
+            ".min" => secondary = Some(ast::VideoSecondaryOp::Min),
+            ".max" => secondary = Some(ast::VideoSecondaryOp::Max),
+            ".clamp" => clamp = Some(true),
+            ".wrap" => clamp = Some(false),
+            ".shr7" => shift = 7,
+            ".shr15" => shift = 15,
+            ".po" => plus_one = true,
+            ".eq" => compare = Some(ast::VideoCompare::Eq),
+            ".ne" => compare = Some(ast::VideoCompare::Ne),
+            ".lt" => compare = Some(ast::VideoCompare::Lt),
+            ".le" => compare = Some(ast::VideoCompare::Le),
+            ".gt" => compare = Some(ast::VideoCompare::Gt),
+            ".ge" => compare = Some(ast::VideoCompare::Ge),
+            _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+        }
+    }
+    let base = opcode.trim_end_matches(['2', '4']);
+    let lanes = match opcode.as_bytes()[opcode.len() - 1] {
+        b'2' => 2,
+        b'4' => 4,
+        _ => 1,
+    };
+    let op = match base {
+        "vadd" => ast::VideoOp::Add,
+        "vsub" => ast::VideoOp::Sub,
+        "vabsdiff" => ast::VideoOp::Absdiff,
+        "vmin" => ast::VideoOp::Min,
+        "vmax" => ast::VideoOp::Max,
+        "vshl" => ast::VideoOp::Shl,
+        "vshr" => ast::VideoOp::Shr,
+        "vavrg" => ast::VideoOp::Avrg,
+        "vset" => match compare {
+            Some(cmp) => ast::VideoOp::Set(cmp),
+            None => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+        },
+        "vmad" => ast::VideoOp::Add,
+        _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+    };
+    if compare.is_some() && !is_set
+        || clamp.is_some() && !matches!(op, ast::VideoOp::Shl | ast::VideoOp::Shr)
+        || (shift != 0 || plus_one) && base != "vmad"
+    {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    let mut operands = operands.into_iter();
+    let (dst_neg, dst, dsel) = operands.next().unwrap();
+    let (neg_a, src1, asel) = operands.next().unwrap();
+    let (neg_b, src2, bsel) = operands.next().unwrap();
+    let src3 = operands.next();
+    let any_negation = dst_neg || neg_a || neg_b || src3.as_ref().map_or(false, |c| c.0);
+    if src3.as_ref().map_or(false, |c| c.2.is_some()) || (any_negation && base != "vmad") {
+        errors.push(PtxError::SyntaxError(format!("invalid operands of {opcode}")));
+    }
+    let check_scalar = |sel: &Option<ast::VideoSelector>, errors: &mut Vec<PtxError>| {
+        if let Some(sel) = sel {
+            if sel.len != 1 || sel.digits[0] >= if sel.half { 2 } else { 4 } {
+                errors.push(PtxError::SyntaxError(format!("invalid selector of {opcode}")));
+            }
+        }
+    };
+    let instruction = if base == "vmad" {
+        check_scalar(&asel, &mut errors);
+        check_scalar(&bsel, &mut errors);
+        let Some((neg_c, src3, _)) = src3 else {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        };
+        if dsel.is_some() || secondary.is_some() || (plus_one && (neg_a || neg_b || neg_c)) {
+            errors.push(PtxError::SyntaxError("invalid vmad".to_string()));
+        }
+        ast::Instruction::Vmad {
+            data: ast::VmadDetails {
+                dtype,
+                atype,
+                btype,
+                saturate,
+                shift,
+                plus_one,
+                negate_a: neg_a,
+                negate_b: neg_b,
+                negate_c: neg_c,
+                asel,
+                bsel,
+            },
+            arguments: VmadArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    } else if base == "vshr"
+        && types == [ScalarType::U32; 3]
+        && clamp != Some(false)
+        && !saturate
+        && secondary == Some(ast::VideoSecondaryOp::Add)
+        && asel.is_none()
+        && bsel.is_none()
+        && dsel.is_none()
+        && src3.is_some()
+    {
+        ast::Instruction::Vshr {
+            data: ast::VshData {
+                mode: FunnelShiftMode::Clamp,
+                op2: VshOp::Add,
+            },
+            arguments: VshrArgs {
+                dst,
+                src1,
+                src2,
+                src3: src3.unwrap().1,
+            },
+        }
+    } else if lanes == 1 {
+        check_scalar(&asel, &mut errors);
+        check_scalar(&bsel, &mut errors);
+        check_scalar(&dsel, &mut errors);
+        let src3 = src3.map(|c| c.1);
+        if (dsel.is_some() || secondary.is_some()) != src3.is_some()
+            || (dsel.is_some() && secondary.is_some())
+        {
+            errors.push(PtxError::SyntaxError(format!("invalid operands of {opcode}")));
+        }
+        if matches!(op, ast::VideoOp::Shl | ast::VideoOp::Shr) && btype != ScalarType::U32 {
+            errors.push(PtxError::SyntaxError(format!("{opcode} needs .u32 b")));
+        }
+        ast::Instruction::VideoScalar {
+            data: ast::VideoScalarDetails {
+                op,
+                dtype,
+                atype,
+                btype,
+                saturate: saturate && !is_set,
+                clamp: clamp.unwrap_or(true),
+                asel,
+                bsel,
+                dsel,
+                secondary,
+            },
+            arguments: VideoScalarArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    } else {
+        let Some((_, src3, _)) = src3 else {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        };
+        let element_count = if lanes == 2 { 4 } else { 8 };
+        let check = |sel: &Option<ast::VideoSelector>, is_mask: bool, errors: &mut Vec<PtxError>| {
+            if let Some(sel) = sel {
+                let valid = sel.half == (lanes == 2)
+                    && if is_mask {
+                        sel.digits().iter().all(|d| *d < lanes)
+                    } else {
+                        sel.len == lanes && sel.digits().iter().all(|d| *d < element_count)
+                    };
+                if !valid {
+                    errors.push(PtxError::SyntaxError(format!("invalid selector of {opcode}")));
+                }
+            }
+        };
+        check(&asel, false, &mut errors);
+        check(&bsel, false, &mut errors);
+        check(&dsel, true, &mut errors);
+        if matches!(secondary, Some(ast::VideoSecondaryOp::Min | ast::VideoSecondaryOp::Max)) {
+            errors.push(PtxError::SyntaxError(format!("invalid secondary operation of {opcode}")));
+        }
+        ast::Instruction::VideoSimd {
+            data: ast::VideoSimdDetails {
+                op,
+                lanes,
+                dtype,
+                atype,
+                btype,
+                saturate: saturate && !is_set,
+                add: secondary.is_some(),
+                mask: dsel,
+                asel,
+                bsel,
+            },
+            arguments: VideoSimdArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    };
+    stream.state.errors.extend(errors);
+    Ok(instruction)
 }
 
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
@@ -2154,7 +2546,9 @@ derive_parser!(
     pub enum Mul24Control { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum Reduction { }
+    pub enum Reduction {
+        Popc
+    }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
@@ -2186,15 +2580,19 @@ derive_parser!(
     pub enum EvictionPriority { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum VshOp {
+        Add
+    }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum BmskMode { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Tf32Rounding { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum VshOp {
-        Add
-    }
+    pub enum Packed8Type { }
+
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
@@ -2379,6 +2777,27 @@ derive_parser!(
                                               .f32, .f64 };
     RawLdStQualifier =                      { .weak, .volatile };
     StateSpace =                            { .global };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ldu
+    // A load of data that is the same for all threads; read as a normal load
+    ldu{.ss}{.vec}.type  d, [a] => {
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
+    }
+    .ss: StateSpace =                       { .global };
+    .vec: VectorPrefix  =                   { .v2, .v4 };
+    .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
+                                              .u8, .u16, .u32, .u64,
+                                              .s8, .s16, .s32, .s64,
+                                              .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
     ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
@@ -2896,6 +3315,49 @@ derive_parser!(
                           .u16, .u32, .u64,
                           .s16, .s32, .s64 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-alloca
+    alloca.type  ptr, size{, align} => {
+        let align = match align.map(|a| a.as_immediate()) {
+            None => 8,
+            Some(Some(ImmediateValue::U64(a))) if a.is_power_of_two() => a as u32,
+            Some(Some(ImmediateValue::S64(a))) if a > 0 && (a as u64).is_power_of_two() => a as u32,
+            Some(_) => {
+                state.errors.push(PtxError::SyntaxError("alloca alignment must be a power of two".to_string()));
+                8
+            }
+        };
+        ast::Instruction::Alloca {
+            data: ast::AllocaDetails { type_, align },
+            arguments: AllocaArgs { dst: ptr, src: size }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stacksave
+    stacksave.type  d => {
+        ast::Instruction::StackSave {
+            data: type_,
+            arguments: StackSaveArgs { dst: d }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stackrestore
+    stackrestore.type  a => {
+        ast::Instruction::StackRestore {
+            data: type_,
+            arguments: StackRestoreArgs { src: a }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-isspacep
+    isspacep.space  p, a => {
+        ast::Instruction::Isspacep {
+            data: space,
+            arguments: IsspacepArgs { dst: p, src: a }
+        }
+    }
+    .space: StateSpace = { .const, .global, .local, .shared, .param };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
     cvta.space.size     p, a => {
         let size = match size {
@@ -3163,7 +3625,9 @@ derive_parser!(
             data: ast::ArithFloat {
                 type_: type_x2,
                 rounding: rnd.into(),
-                flush_to_zero: None,
+                // f16x2 keeps denormals, the bf16x2 denormal mode is not
+                // the f16 one
+                flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(false) } else { None },
                 saturate: false,
                 is_fusable: false
             },
@@ -3651,7 +4115,23 @@ derive_parser!(
         }
     }
     //bar{.cta}.arrive    a, b;
-    //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
+    bar{.cta}.red.popc.u32  d, a{, b}, {!}c => {
+        let _ = cta;
+        let (negate_src3, c) = c;
+        ast::Instruction::BarRed {
+            data: ast::BarRedData {
+                aligned: true,
+                pred_reduction: Reduction::Popc,
+            },
+            arguments: BarRedArgs {
+                dst1: d,
+                src_barrier: a,
+                src_threadcount: b,
+                src_predicate: c,
+                src_negate_predicate: ParsedOperand::Imm(ImmediateValue::U64(negate_src3 as u64))
+            }
+        }
+    }
     bar{.cta}.red.op.pred   p, a{, b}, {!}c => {
         let _ = cta;
         let (negate_src3, c) = c;
@@ -3735,7 +4215,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on f16/bf16 with cache policy/cache hints".to_string()));
         }
@@ -3750,7 +4231,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on packed types with cache policy/cache hints".to_string()));
         }
@@ -3783,6 +4265,85 @@ derive_parser!(
     ScalarType =                    { .b16, .b128, .f32 };
     StateSpace =                    { .global };
     RawAtomicOp =                   { .exch };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-red
+    red{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red instruction with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: space.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(op, type_.kind()),
+                type_: type_.into()
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.level::cache_hint}.vec_32_bit.f32                     [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f32 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, f32.kind()),
+                type_: ast::Type::Vector(vec_32_bit.len().get(), f32)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f16/bf16 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, half_word_type.kind()),
+                type_: ast::Type::maybe_vector(vec_16_bit, half_word_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on packed types with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, packed_type.kind()),
+                type_: ast::Type::maybe_vector(vec_32_bit, packed_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    .space: StateSpace =            { .global, .shared{::cta, ::cluster} };
+    .sem: AtomSemantics =           { .relaxed, .release };
+    .scope: MemScope =              { .cta, .cluster, .gpu, .sys };
+    .op: RawAtomicOp =              { .and, .or, .xor,
+                                      .add, .inc, .dec,
+                                      .min, .max };
+    .level::cache_hint =            { .L2::cache_hint };
+    .type: ScalarType =             { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+    .half_word_type: ScalarType =   { .f16, .bf16 };
+    .packed_type: ScalarType =      { .f16x2, .bf16x2 };
+    .vec_16_bit: VectorPrefix =     { .v2, .v4, .v8 };
+    .vec_32_bit:  VectorPrefix =    { .v2, .v4 };
+    .float_op: RawAtomicOp =        { .add, .min, .max };
+    ScalarType =                    { .f32 };
+    StateSpace =                    { .global };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-div
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
@@ -4037,6 +4598,59 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
+
+    // Packed bytes (PTX ISA 9.2): add, sub, min, max, neg and abs on four byte lanes
+    add{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Add, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    sub{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Sub, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    min{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Min, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    max{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Max, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    neg.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Neg, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    abs.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Abs, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-clmad
+    clmad.mode.u64  d, a, b, c => {
+        ast::Instruction::Clmad {
+            data: mode == RawMulIntControl::Hi,
+            arguments: ClmadArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .mode: RawMulIntControl = { .lo, .hi };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfe
     bfe.type  d, a, b, c => {
@@ -4719,20 +5333,32 @@ derive_parser!(
     .mode: RawMulIntControl = { .lo, .hi };
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
 
-    // https://docs.nvidia.com/cuda/parallel-thread-execution/#scalar-video-instructions-vshl-vshr
-    // This one gets custom handling because the type modifiers are at the start
-    // of the instruction instead of all being before the registers
-    vshr <= {
-        vshr(stream, |mode, op2, d, a, b, c| {
-            Instruction::Vshr {
-                data: VshData {
-                    mode: mode,
-                    op2: op2,
-                },
-                arguments: VshrArgs { dst: d, src1: a, src2: b, src3: c }
-            }
-        })
-    }
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#video-instructions
+    // These get custom handling because the type modifiers are at the start
+    // of the instruction and the operands have selectors
+    vadd <= { video(stream, "vadd") }
+    vsub <= { video(stream, "vsub") }
+    vabsdiff <= { video(stream, "vabsdiff") }
+    vmin <= { video(stream, "vmin") }
+    vmax <= { video(stream, "vmax") }
+    vshl <= { video(stream, "vshl") }
+    vshr <= { video(stream, "vshr") }
+    vset <= { video(stream, "vset") }
+    vmad <= { video(stream, "vmad") }
+    vadd2 <= { video(stream, "vadd2") }
+    vsub2 <= { video(stream, "vsub2") }
+    vavrg2 <= { video(stream, "vavrg2") }
+    vabsdiff2 <= { video(stream, "vabsdiff2") }
+    vmin2 <= { video(stream, "vmin2") }
+    vmax2 <= { video(stream, "vmax2") }
+    vset2 <= { video(stream, "vset2") }
+    vadd4 <= { video(stream, "vadd4") }
+    vsub4 <= { video(stream, "vsub4") }
+    vavrg4 <= { video(stream, "vavrg4") }
+    vabsdiff4 <= { video(stream, "vabsdiff4") }
+    vmin4 <= { video(stream, "vmin4") }
+    vmax4 <= { video(stream, "vmax4") }
+    vset4 <= { video(stream, "vset4") }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#texture-instructions-tex
     tex.1d.v4.dtype.ctype  d, [a, c] => {

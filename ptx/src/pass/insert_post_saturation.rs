@@ -76,6 +76,7 @@ fn run_instruction<'input>(
         | ast::Instruction::MadExtended { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
+        | ast::Instruction::Red { .. }
         | ast::Instruction::AtomCas { .. }
         | ast::Instruction::BarWarp { .. }
         | ast::Instruction::Bar { .. }
@@ -137,6 +138,15 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::Isspacep { .. }
+        | ast::Instruction::Packed8 { .. }
+        | ast::Instruction::Clmad { .. }
+        | ast::Instruction::VideoScalar { .. }
+        | ast::Instruction::VideoSimd { .. }
+        | ast::Instruction::Vmad { .. }
+        | ast::Instruction::Alloca { .. }
+        | ast::Instruction::StackSave { .. }
+        | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
         | ast::Instruction::Dp4a { .. }
