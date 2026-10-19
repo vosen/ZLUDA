@@ -76,9 +76,22 @@ an error.
 
 ## Limitations
 
-* No `f64` (the hardware has no double precision), no 128-bit atomics, no
-  tensor core instructions (`mma`, `ldmatrix`), no fp8 conversions, no calls
-  to external functions and no function pointers.
+* No tensor core instructions (`mma`, `ldmatrix`) and no calls to external
+  functions. `f64` is emulated in software by the backend (the hardware has
+  no double precision): correctly rounded IEEE 754 with denormals, in all
+  rounding modes, checked by `ptx/tools/agx_f64_check.py`; it is slow
+  (hundreds of instructions per operation). 64- and 128-bit atomics are
+  emulated with locks by the backend, and indirect calls are dispatched over
+  the module's address-taken functions.
+* `alloca` takes a constant size (the AGX stack has a fixed size).
+  `bar.red` with a thread count reduces over the SIMD-group when the count
+  is 32 (threads arrive at barriers in whole warps) and over the whole
+  threadgroup otherwise. `isspacep` is decided at compile time (see below).
+* Not supported yet: `fma.relu` of `f16x2`/`bf16x2`, `add.f32x2` and the
+  other `f32x2` instructions, `set` of packed integer types, `prmt` modes,
+  `szext`, `fns`, the 3-input `min`/`max`, `cvt` with `.pzo`, `.scaled`,
+  `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
+  does not have).
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
   kernels whose instructions all use one) are computed in software, since
   the hardware only rounds to nearest even: an emulated mode register
@@ -98,6 +111,50 @@ an error.
 The [strict floating point mode](#strict-floating-point-mode) removes these
 three differences.
 * `%clock` reads as zero. `nanosleep` does not sleep.
+
+### Instructions
+
+* `add`, `sub`, `mul` and `fma` of `f16`, `f16x2`, `bf16` and `bf16x2` with
+  `.rz`, `.rm` or `.rp` are computed in `f32` in the same rounding mode and
+  rounded to the 16-bit type (rounding twice in the same direction is
+  exact); conversions to `bf16` with a directed rounding mode round the
+  `f32` bit pattern, since the backend rounds them to nearest only.
+* The video instructions (`vadd`, `vsub`, `vabsdiff`, `vmin`, `vmax`,
+  `vshl`, `vshr`, `vset`, `vmad` and the SIMD `vadd2` ... `vset4`) follow the
+  PTX ISA: the selected byte or half-word parts are extended and computed in
+  64 bits (32 bits per SIMD lane), with saturation, secondary operations and
+  merges.
+* The conversions to and from `e4m3x2`, `e5m2x2`, `e2m3x2`, `e3m2x2`,
+  `e2m1x2` and `ue8m0x2`, `cvt` to `tf32`, `.relu`/`.satfinite`, `bfind`,
+  `bmsk`, `clmad`, the packed byte arithmetic (`.u8x4`, `.s8x4`) and
+  `min`/`max` `.xorsign.abs` are integer arithmetic on the bit patterns.
+* `isspacep`: AGX has no generic addressing of threadgroup and private
+  memory, so a generic address of them must be resolved at compile time.
+  The front end emits calls to `@__zluda_agx_isspacep_<space>`, which
+  `llvm_zluda` replaces after optimization by whether the address comes from
+  that space (addresses of unknown origin are device memory). The same step
+  rewrites generic addresses of those memories that went through integer
+  arithmetic into pointer arithmetic, and turns those only used as integers
+  (compared, masked) into their 32-bit offsets.
+* `alloca`, `stacksave` and `stackrestore` use a per-function stack (a
+  private array and the offset of its top), so that allocations made after
+  a `stackrestore` reuse the freed addresses as in PTX.
+* Registers start as zero, and a register used without a declaration is
+  declared with the type of its first use (ptxas rejects such code, the K
+  semantics of PTX accept it); `.ftz` in a `cvt` without an `f32` type is
+  ignored.
+* `printf` (`vprintf`) appends a record to the device buffer
+  `__zluda_agx_printf_buffer` (64 KiB, in the global data buffer), for a
+  host runtime to print. Its first 32-bit word counts the bytes of records
+  written (updated atomically; a record that would not fit is dropped, but
+  still counted); the records start at byte 8. A record is a `u32` with its
+  size (a multiple of 8), a `u32` with the size of its arguments, the `u64`
+  device address of the format string and the argument bytes as the caller
+  laid them out (each argument aligned to its size: 4 bytes for `%c`, `%d`,
+  `%i`, `%o`, `%u`, `%x`, `%X` and `*`, 8 bytes for their `l`/`ll`/`z`/`j`/`t`
+  forms, `%p`, `%s` and the floating point conversions). The argument size is
+  found by scanning the format string; `vprintf` returns the number of
+  conversions.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
@@ -177,9 +234,9 @@ kernel that mixes `.ftz` and other `f32` instructions, the instructions
 whose mode differs from the kernel's flush their operands and results
 explicitly, or keep denormals with the software paths
 (`ptx/tools/agx_tests/mixed-ftz.ptx`, run with
-`agx_ptx_formalization_check.py --strict-fp`, checks this). `f64` remains unsupported, and
-approximate instructions (`ex2.approx`, `rcp.approx`, ...) keep the
-hardware's approximations.
+`agx_ptx_formalization_check.py --strict-fp`, checks this). Approximate
+instructions (`ex2.approx`, `rcp.approx`, ...) keep the hardware's
+approximations.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated
@@ -226,8 +283,9 @@ Kernels with statements that ZLUDA's front end does not support (many of the
 tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA and
 clusters of several CTAs) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
-1125 checks of the 220 programs that compile, 213 run: 191 match the formal
-semantics and the other 22 are the floating point differences listed above
-(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`, `div`
-and `sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
-script), all 213 match.
+1349 checks of the 285 programs, 664 run: 560 match the formal semantics and
+the other 104 are the floating point differences listed above (denormal
+`f32` operands and results, NaN bit patterns, `-0.0` under `.sat`, `div` and
+`sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
+script), all 664 match. Nine of the `cvt-*.ptx` programs do not compile
+because of a backend error on conversions of sign-extended bytes.
