@@ -1,3 +1,4 @@
+use bpaf::{construct, pure, Bpaf, Parser};
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -23,32 +24,155 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
     "2.0", "1.1", "1.0",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Project {
+    HipRuntime,
+    Rocblas,
+    HipblasLt,
+    RocmSmi,
+    Miopen,
+    RocSparse,
+    HipFft,
+    Cuda,
+    Ml,
+    Cublas,
+    CublasLt,
+    CuFft,
+    CuSparse,
+    CuDnn,
+}
+
+static PROJECTS: &[(&str, Project, &str)] = &[
+    (
+        "hip-runtime",
+        Project::HipRuntime,
+        "Generate bindings for hip_runtime-sys",
+    ),
+    (
+        "rocblas",
+        Project::Rocblas,
+        "Generate bindings for rocblas-sys",
+    ),
+    (
+        "hipblaslt",
+        Project::HipblasLt,
+        "Generate bindings for hipblaslt-sys",
+    ),
+    (
+        "rocm-smi",
+        Project::RocmSmi,
+        "Generate bindings for rocm_smi-sys",
+    ),
+    (
+        "miopen",
+        Project::Miopen,
+        "Generate bindings for miopen-sys",
+    ),
+    (
+        "rocsparse",
+        Project::RocSparse,
+        "Generate bindings for rocsparse-sys",
+    ),
+    (
+        "hipfft",
+        Project::HipFft,
+        "Generate bindings for hipfft-sys",
+    ),
+    (
+        "cuda",
+        Project::Cuda,
+        "Generate bindings for cuda-sys and the process address table",
+    ),
+    ("ml", Project::Ml, "Generate bindings for nvml"),
+    (
+        "cublas",
+        Project::Cublas,
+        "Generate bindings for cublas-sys",
+    ),
+    (
+        "cublaslt",
+        Project::CublasLt,
+        "Generate bindings for cublaslt-sys",
+    ),
+    ("cufft", Project::CuFft, "Generate bindings for cufft-sys"),
+    (
+        "cusparse",
+        Project::CuSparse,
+        "Generate bindings for cusparse-sys",
+    ),
+    ("cudnn", Project::CuDnn, "Generate bindings for cudnn-sys"),
+];
+
+fn projects() -> impl Parser<Vec<Project>> {
+    PROJECTS.iter().fold(
+        Parser::boxed(pure(Vec::with_capacity(PROJECTS.len()))),
+        |parser, (name, project, help)| {
+            let arg = bpaf::long(name).help(*help).switch();
+            construct!(parser, arg)
+                .map(move |(mut acc, cur)| {
+                    if cur {
+                        acc.push(*project);
+                    }
+                    acc
+                })
+                .boxed()
+        },
+    )
+}
+
+#[derive(Debug, Bpaf)]
+#[bpaf(options)]
+struct Options {
+    #[bpaf(external)]
+    projects: Vec<Project>,
+}
+
 fn main() {
+    let options = options().run();
+    let projects: Vec<Project> = if options.projects.is_empty() {
+        PROJECTS.iter().map(|(_, project, _)| *project).collect()
+    } else {
+        options.projects
+    };
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
-    generate_hip_runtime(
-        &crate_root,
-        &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
-    );
-    generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
-    generate_hiplaslt(
-        &crate_root,
-        &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
-    );
-    generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
-    generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"]);
-    generate_rocsparse(
-        &crate_root,
-        &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
-    );
-    generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"]);
-    let cuda_functions = generate_cuda(&crate_root);
-    generate_process_address_table(&crate_root, cuda_functions);
-    generate_ml(&crate_root);
-    generate_cublas(&crate_root);
-    generate_cublaslt(&crate_root);
-    generate_cufft(&crate_root);
-    generate_cusparse(&crate_root);
-    generate_cudnn(&crate_root);
+    for project in projects {
+        match project {
+            Project::HipRuntime => generate_hip_runtime(
+                &crate_root,
+                &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
+            ),
+            Project::Rocblas => {
+                generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"])
+            }
+            Project::HipblasLt => generate_hiplaslt(
+                &crate_root,
+                &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
+            ),
+            Project::RocmSmi => {
+                generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"])
+            }
+            Project::Miopen => {
+                generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"])
+            }
+            Project::RocSparse => generate_rocsparse(
+                &crate_root,
+                &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
+            ),
+            Project::HipFft => {
+                generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"])
+            }
+            Project::Cuda => {
+                let cuda_functions = generate_cuda(&crate_root);
+                generate_process_address_table(&crate_root, cuda_functions);
+            }
+            Project::Ml => generate_ml(&crate_root),
+            Project::Cublas => generate_cublas(&crate_root),
+            Project::CublasLt => generate_cublaslt(&crate_root),
+            Project::CuFft => generate_cufft(&crate_root),
+            Project::CuSparse => generate_cusparse(&crate_root),
+            Project::CuDnn => generate_cudnn(&crate_root),
+        }
+    }
 }
 
 fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
