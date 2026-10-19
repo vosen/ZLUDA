@@ -9,7 +9,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
-    LLVMZludaUpgradeFunctionAttributes,
+    LLVMZludaAgxResolveIsspacep, LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
@@ -186,6 +186,23 @@ pub fn compile_agx(
         let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
         let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
         return Err(message.to_str().to_string());
+    }
+
+    // isspacep is decided on the optimized code, then optimized again
+    if unsafe { LLVMZludaAgxResolveIsspacep(linked.get()) } {
+        let error = unsafe {
+            LLVMRunPasses(
+                linked.get(),
+                c"default<O3>".as_ptr(),
+                target_machine.get(),
+                pb_options.get(),
+            )
+        };
+        if !error.is_null() {
+            let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
+            let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
+            return Err(message.to_str().to_string());
+        }
     }
 
     if let Some(hook) = compiler_hook {

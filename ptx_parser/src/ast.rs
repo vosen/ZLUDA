@@ -289,6 +289,39 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Alloca {
+            type: Type::Scalar(data.type_),
+            data: AllocaDetails,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        StackSave {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+            }
+        },
+        StackRestore {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                src: T,
+            }
+        },
+        Isspacep {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: T,
+            }
+        },
         CvtTf32 {
             data: CvtTf32Details,
             arguments<T>: {
@@ -2966,6 +2999,12 @@ pub struct CvtTf32Details {
     pub rounding: Tf32Rounding,
     pub relu: bool,
     pub satfinite: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AllocaDetails {
+    pub type_: ScalarType,
+    pub align: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

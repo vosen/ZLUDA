@@ -33,7 +33,7 @@ use llvm_zluda::utils as llvm;
 use llvm_zluda::utils::Context;
 use llvm_zluda::{core::*, *};
 use llvm_zluda::{prelude::*, LLVMZludaBuildAtomicRMW};
-use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca};
+use llvm_zluda::{LLVMCallConv, LLVMZludaBuildAlloca, LLVMZludaBuildArrayAlloca};
 use ptx_parser::{
     CpAsyncArgs, CpAsyncDetails, FunnelShiftMode, Mul24Control, ShfArgs, VariableInfo,
 };
@@ -253,6 +253,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             for statement in statements {
                 method_emitter.emit_statement(statement)?;
             }
+            method_emitter.finish();
             unsafe { LLVMBuildBr(method_emitter.variables_builder.get(), real_bb) };
         }
         Ok(())
@@ -514,6 +515,18 @@ struct MethodEmitContext<'a> {
     fp: FloatingPoint,
     target: Target,
     strict_fp: bool,
+    stack: Option<PtxStack>,
+}
+
+// The stack of alloca, stacksave and stackrestore: a private array (sized
+// when the function is complete) and the offset of its top. Restoring the
+// offset frees the allocations made since it was saved, so later
+// allocations reuse their addresses, as in PTX.
+struct PtxStack {
+    base: LLVMValueRef,
+    top: LLVMValueRef,
+    size: u64,
+    align: u32,
 }
 
 impl<'a> MethodEmitContext<'a> {
@@ -543,7 +556,48 @@ impl<'a> MethodEmitContext<'a> {
             fp,
             target: parent.target,
             strict_fp: parent.strict_fp,
+            stack: None,
         }
+    }
+
+    fn finish(&mut self) {
+        if let Some(stack) = self.stack.take() {
+            let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+            unsafe {
+                LLVMSetOperand(stack.base, 0, LLVMConstInt(i32_type, stack.size.max(1), 0));
+                LLVMSetAlignment(stack.base, stack.align);
+            }
+        }
+    }
+
+    fn get_or_create_stack(&mut self) -> Result<(LLVMValueRef, LLVMValueRef), TranslateError> {
+        if let Some(stack) = &self.stack {
+            return Ok((stack.base, stack.top));
+        }
+        let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let space = get_state_space(ast::StateSpace::Local)?;
+        let base = unsafe {
+            LLVMZludaBuildArrayAlloca(
+                self.variables_builder.get(),
+                i8_type,
+                space,
+                LLVMConstInt(i32_type, 1, 0),
+                16,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let top = unsafe {
+            LLVMZludaBuildAlloca(self.variables_builder.get(), i32_type, space, LLVM_UNNAMED.as_ptr())
+        };
+        unsafe { LLVMBuildStore(self.variables_builder.get(), LLVMConstInt(i32_type, 0, 0), top) };
+        self.stack = Some(PtxStack {
+            base,
+            top,
+            size: 0,
+            align: 16,
+        });
+        Ok((base, top))
     }
 
     fn emit_statement(
@@ -676,6 +730,12 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Cvt { data, arguments } => self.emit_cvt(data, arguments),
             ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
             ast::Instruction::CvtTf32 { data, arguments } => self.emit_cvt_tf32(data, arguments),
+            ast::Instruction::Isspacep { data, arguments } => self.emit_isspacep(data, arguments),
+            ast::Instruction::Alloca { data, arguments } => self.emit_alloca(data, arguments),
+            ast::Instruction::StackSave { data, arguments } => self.emit_stacksave(data, arguments),
+            ast::Instruction::StackRestore { data, arguments } => {
+                self.emit_stackrestore(data, arguments)
+            }
             ast::Instruction::Shf { data, arguments } => self.emit_shf(data, arguments),
             ast::Instruction::Shr { data, arguments } => self.emit_shr(data, arguments),
             ast::Instruction::Shl { data, arguments } => self.emit_shl(data, arguments),
@@ -2200,6 +2260,26 @@ impl<'a> MethodEmitContext<'a> {
                 vec![&data.type_.into()],
                 vec![(negated, get_scalar_type(self.context, data.type_))],
             )?;
+        } else if is_floating_point && self.target == Target::Agx {
+            // Flip the sign bit as an integer: the backend may canonicalize
+            // the NaNs of floating point negations
+            let element = data.type_.packed_type().unwrap_or(data.type_);
+            let element_bits = element.size_of() as u32 * 8;
+            unsafe {
+                let int_element = LLVMIntTypeInContext(self.context, element_bits);
+                let sign = LLVMConstInt(int_element, 1u64 << (element_bits - 1), 0);
+                let (int_type, sign) = if element == data.type_ {
+                    (int_element, sign)
+                } else {
+                    let mut signs = [sign, sign];
+                    (LLVMVectorType(int_element, 2), LLVMConstVector(signs.as_mut_ptr(), 2))
+                };
+                let bits = LLVMBuildBitCast(self.builder, src, int_type, LLVM_UNNAMED.as_ptr());
+                let flipped = LLVMBuildXor(self.builder, bits, sign, LLVM_UNNAMED.as_ptr());
+                self.resolver.with_result(arguments.dst, |dst| {
+                    LLVMBuildBitCast(self.builder, flipped, LLVMTypeOf(src), dst)
+                });
+            }
         } else {
             self.resolver.with_result(arguments.dst, |dst| unsafe {
                 llvm_fn(self.builder, src, dst)
@@ -2707,6 +2787,213 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuildSelect(b, is_nan, c(0x7fff_ffff), result, dst)
             });
         }
+        Ok(())
+    }
+
+    // alloca, stacksave and stackrestore work on the stack of private memory
+    // (see PtxStack); their results are generic addresses
+    fn emit_alloca(
+        &mut self,
+        data: ast::AllocaDetails,
+        arguments: ast::AllocaArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let size = self.resolver.value(arguments.src)?;
+        let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let constant_size = unsafe {
+            if LLVMIsAConstantInt(size) != ptr::null_mut() {
+                Some(LLVMConstIntGetZExtValue(size))
+            } else {
+                None
+            }
+        };
+        let Some(constant_size) = constant_size.filter(|s| *s < (1 << 24)) else {
+            // Allocations of a dynamic size are not freed by stackrestore
+            if self.target == Target::Agx {
+                return Err(TranslateError::Unsupported(
+                    "alloca of a dynamic size (the AGX stack has a fixed size)".to_string(),
+                ));
+            }
+            let alloca = unsafe {
+                LLVMZludaBuildArrayAlloca(
+                    self.builder,
+                    i8_type,
+                    get_state_space(ast::StateSpace::Local)?,
+                    size,
+                    data.align,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let address = self.emit_private_to_generic_int(alloca, data.type_)?;
+            self.resolver.register(arguments.dst, address);
+            return Ok(());
+        };
+        let (base, top) = self.get_or_create_stack()?;
+        let stack = self.stack.as_mut().ok_or_else(error_unreachable)?;
+        stack.size += constant_size + data.align as u64 - 1;
+        stack.align = stack.align.max(data.align);
+        let align_mask = data.align as u64 - 1;
+        let address = unsafe {
+            let offset = LLVMBuildLoad2(self.builder, i32_type, top, LLVM_UNNAMED.as_ptr());
+            let offset = LLVMBuildAdd(
+                self.builder,
+                offset,
+                LLVMConstInt(i32_type, align_mask, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let offset = LLVMBuildAnd(
+                self.builder,
+                offset,
+                LLVMConstInt(i32_type, !align_mask & 0xffff_ffff, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let new_top = LLVMBuildAdd(
+                self.builder,
+                offset,
+                LLVMConstInt(i32_type, constant_size, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            LLVMBuildStore(self.builder, new_top, top);
+            let mut indices = [offset];
+            LLVMBuildInBoundsGEP2(
+                self.builder,
+                i8_type,
+                base,
+                indices.as_mut_ptr(),
+                1,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let address = self.emit_private_to_generic_int(address, data.type_)?;
+        self.resolver.register(arguments.dst, address);
+        Ok(())
+    }
+
+    fn emit_private_to_generic_int(
+        &mut self,
+        ptr: LLVMValueRef,
+        type_: ast::ScalarType,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let generic = get_pointer_type(self.context, ast::StateSpace::Generic)?;
+        unsafe {
+            let generic_ptr =
+                LLVMBuildAddrSpaceCast(self.builder, ptr, generic, LLVM_UNNAMED.as_ptr());
+            Ok(LLVMBuildPtrToInt(
+                self.builder,
+                generic_ptr,
+                get_scalar_type(self.context, type_),
+                LLVM_UNNAMED.as_ptr(),
+            ))
+        }
+    }
+
+    fn emit_stacksave(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::StackSaveArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let (base, top) = self.get_or_create_stack()?;
+        let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let address = unsafe {
+            let offset = LLVMBuildLoad2(self.builder, i32_type, top, LLVM_UNNAMED.as_ptr());
+            let mut indices = [offset];
+            LLVMBuildInBoundsGEP2(
+                self.builder,
+                i8_type,
+                base,
+                indices.as_mut_ptr(),
+                1,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let address = self.emit_private_to_generic_int(address, type_)?;
+        self.resolver.register(arguments.dst, address);
+        Ok(())
+    }
+
+    fn emit_stackrestore(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::StackRestoreArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let (base, top) = self.get_or_create_stack()?;
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let base_address = self.emit_private_to_generic_int(base, type_)?;
+        unsafe {
+            let offset = LLVMBuildSub(self.builder, src, base_address, LLVM_UNNAMED.as_ptr());
+            let offset = LLVMBuildTruncOrBitCast(self.builder, offset, i32_type, LLVM_UNNAMED.as_ptr());
+            LLVMBuildStore(self.builder, offset, top);
+        }
+        Ok(())
+    }
+
+    fn emit_isspacep(
+        &mut self,
+        space: ast::StateSpace,
+        arguments: ast::IsspacepArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let i1_type = get_scalar_type(self.context, ast::ScalarType::Pred);
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+        let name = match space {
+            ast::StateSpace::Global => "global",
+            ast::StateSpace::Shared => "shared",
+            ast::StateSpace::Local => "local",
+            ast::StateSpace::Const => "const",
+            ast::StateSpace::Param => "param",
+            _ => return Err(error_unreachable()),
+        };
+        if self.target == Target::Agx {
+            // Decided after optimization by llvm_zluda, from the address
+            // space the address comes from (AGX has no generic addressing
+            // of threadgroup and private memory)
+            let fn_name = CString::new(format!("__zluda_agx_isspacep_{name}"))
+                .map_err(|_| error_unreachable())?;
+            let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, fn_name.as_ptr()) };
+            let mut arg_type = i64_type;
+            let fn_type = unsafe { LLVMFunctionType(i1_type, &mut arg_type, 1, 0) };
+            if fn_ == ptr::null_mut() {
+                fn_ = unsafe { LLVMAddFunction(self.module, fn_name.as_ptr(), fn_type) };
+                for (attr, value) in [("nounwind", 0), ("willreturn", 0), ("memory", 0)] {
+                    unsafe {
+                        let kind = LLVMGetEnumAttributeKindForName(attr.as_ptr().cast(), attr.len());
+                        let attr = LLVMCreateEnumAttribute(self.context, kind, value);
+                        LLVMAddAttributeAtIndex(fn_, LLVMAttributeFunctionIndex, attr);
+                    }
+                }
+            }
+            let mut args = [src];
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, dst)
+            });
+            return Ok(());
+        }
+        let generic = get_pointer_type(self.context, ast::StateSpace::Generic)?;
+        let ptr = unsafe { LLVMBuildIntToPtr(self.builder, src, generic, LLVM_UNNAMED.as_ptr()) };
+        let test = |this: &mut Self, intrinsic: &CStr| {
+            this.emit_intrinsic(
+                intrinsic,
+                None,
+                vec![&ast::ScalarType::Pred.into()],
+                vec![(ptr, generic)],
+            )
+        };
+        let result = match space {
+            ast::StateSpace::Shared => test(self, c"llvm.amdgcn.is.shared")?,
+            ast::StateSpace::Local => test(self, c"llvm.amdgcn.is.private")?,
+            ast::StateSpace::Global => {
+                let shared = test(self, c"llvm.amdgcn.is.shared")?;
+                let private = test(self, c"llvm.amdgcn.is.private")?;
+                unsafe {
+                    let either = LLVMBuildOr(self.builder, shared, private, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildNot(self.builder, either, LLVM_UNNAMED.as_ptr())
+                }
+            }
+            _ => unsafe { LLVMConstInt(i1_type, 0, 0) },
+        };
+        self.resolver.register(arguments.dst, result);
         Ok(())
     }
 

@@ -2331,6 +2331,27 @@ derive_parser!(
     RawLdStQualifier =                      { .weak, .volatile };
     StateSpace =                            { .global };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ldu
+    // A load of data that is the same for all threads; read as a normal load
+    ldu{.ss}{.vec}.type  d, [a] => {
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: ss.unwrap_or(StateSpace::Generic),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
+    }
+    .ss: StateSpace =                       { .global };
+    .vec: VectorPrefix  =                   { .v2, .v4 };
+    .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
+                                              .u8, .u16, .u32, .u64,
+                                              .s8, .s16, .s32, .s64,
+                                              .f32, .f64 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
     ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
         if let Some(cop) = cop {
@@ -2846,6 +2867,49 @@ derive_parser!(
     .type: ScalarType = { .b16, .b32, .b64,
                           .u16, .u32, .u64,
                           .s16, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-alloca
+    alloca.type  ptr, size{, align} => {
+        let align = match align.map(|a| a.as_immediate()) {
+            None => 8,
+            Some(Some(ImmediateValue::U64(a))) if a.is_power_of_two() => a as u32,
+            Some(Some(ImmediateValue::S64(a))) if a > 0 && (a as u64).is_power_of_two() => a as u32,
+            Some(_) => {
+                state.errors.push(PtxError::SyntaxError("alloca alignment must be a power of two".to_string()));
+                8
+            }
+        };
+        ast::Instruction::Alloca {
+            data: ast::AllocaDetails { type_, align },
+            arguments: AllocaArgs { dst: ptr, src: size }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stacksave
+    stacksave.type  d => {
+        ast::Instruction::StackSave {
+            data: type_,
+            arguments: StackSaveArgs { dst: d }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stackrestore
+    stackrestore.type  a => {
+        ast::Instruction::StackRestore {
+            data: type_,
+            arguments: StackRestoreArgs { src: a }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-isspacep
+    isspacep.space  p, a => {
+        ast::Instruction::Isspacep {
+            data: space,
+            arguments: IsspacepArgs { dst: p, src: a }
+        }
+    }
+    .space: StateSpace = { .const, .global, .local, .shared, .param };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
     cvta.space.size     p, a => {

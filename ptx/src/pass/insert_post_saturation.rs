@@ -128,6 +128,10 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::Isspacep { .. }
+        | ast::Instruction::Alloca { .. }
+        | ast::Instruction::StackSave { .. }
+        | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
         | ast::Instruction::Dp4a { .. }

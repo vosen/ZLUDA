@@ -6,6 +6,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/AutoUpgrade.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Operator.h>
+#include <llvm/IR/Constants.h>
 #ifdef ZLUDA_WITH_LLD
 #include <lld/Common/Driver.h>
 #include <lld/Common/CommonLinkerContext.h>
@@ -151,6 +153,15 @@ LLVMValueRef LLVMZludaBuildAlloca(LLVMBuilderRef B, LLVMTypeRef Ty, unsigned Add
     return llvm::wrap(llvm::unwrap(B)->CreateAlloca(llvm::unwrap(Ty), AddrSpace, nullptr, Name));
 }
 
+LLVMValueRef LLVMZludaBuildArrayAlloca(LLVMBuilderRef B, LLVMTypeRef Ty, unsigned AddrSpace,
+                                       LLVMValueRef ArraySize, unsigned Align, const char *Name)
+{
+    llvm::AllocaInst *Alloca = llvm::unwrap(B)->CreateAlloca(llvm::unwrap(Ty), AddrSpace,
+                                                             llvm::unwrap(ArraySize), Name);
+    Alloca->setAlignment(llvm::Align(Align));
+    return llvm::wrap(Alloca);
+}
+
 LLVMValueRef LLVMZludaBuildAtomicRMW(LLVMBuilderRef B, LLVMZludaAtomicRMWBinOp op,
                                      LLVMValueRef PTR, LLVMValueRef Val,
                                      char *scope,
@@ -283,6 +294,116 @@ void LLVMZludaUpgradeFunctionAttributes(LLVMModuleRef M)
 {
     for (llvm::Function &F : *llvm::unwrap(M))
         llvm::UpgradeFunctionAttributes(F);
+}
+
+// The address space a generic address comes from: looks through integer
+// casts, constant offsets, address space casts and pointer arithmetic.
+// Addresses of unknown origin are device (global) addresses.
+static unsigned zludaAgxSourceAddressSpace(Value *V)
+{
+    for (unsigned depth = 0; depth < 64; depth++)
+    {
+        if (V->getType()->isPointerTy() && V->getType()->getPointerAddressSpace() != 0)
+            return V->getType()->getPointerAddressSpace();
+        if (auto *Op = dyn_cast<Operator>(V))
+        {
+            switch (Op->getOpcode())
+            {
+            case Instruction::PtrToInt:
+            case Instruction::IntToPtr:
+            case Instruction::AddrSpaceCast:
+            case Instruction::BitCast:
+            case Instruction::ZExt:
+            case Instruction::SExt:
+            case Instruction::Trunc:
+            case Instruction::GetElementPtr:
+                V = Op->getOperand(0);
+                continue;
+            case Instruction::Add:
+            case Instruction::Sub:
+            case Instruction::Or:
+            case Instruction::Xor:
+                if (isa<Constant>(Op->getOperand(1)))
+                {
+                    V = Op->getOperand(0);
+                    continue;
+                }
+                if (Op->getOpcode() == Instruction::Add && isa<Constant>(Op->getOperand(0)))
+                {
+                    V = Op->getOperand(1);
+                    continue;
+                }
+                return 0;
+            default:
+                return 0;
+            }
+        }
+        return 0;
+    }
+    return 0;
+}
+
+// AGX has no generic addressing of threadgroup or private memory, so
+// isspacep is decided at compile time, after optimization: calls to
+// i1 @__zluda_agx_isspacep_<space>(i64) become constants. Returns whether
+// there were any.
+bool LLVMZludaAgxResolveIsspacep(LLVMModuleRef M)
+{
+    struct Space
+    {
+        const char *name;
+        bool (*test)(unsigned);
+    };
+    static const Space spaces[] = {
+        {"__zluda_agx_isspacep_global", [](unsigned as) { return as == 0 || as == 1; }},
+        {"__zluda_agx_isspacep_shared", [](unsigned as) { return as == 3; }},
+        {"__zluda_agx_isspacep_local", [](unsigned as) { return as == 5; }},
+        {"__zluda_agx_isspacep_const", [](unsigned as) { return as == 4; }},
+        {"__zluda_agx_isspacep_param", [](unsigned) { return false; }},
+    };
+    Module *Mod = unwrap(M);
+    bool found = false;
+    // Generic addresses of threadgroup or private memory that are only used
+    // as integers (compared, masked, stored) are their 32-bit offsets
+    for (Function &F : *Mod)
+        for (BasicBlock &BB : F)
+            for (Instruction &I : make_early_inc_range(BB))
+            {
+                auto *P2I = dyn_cast<PtrToIntInst>(&I);
+                if (!P2I)
+                    continue;
+                auto *Cast = dyn_cast<AddrSpaceCastOperator>(P2I->getPointerOperand());
+                if (!Cast || Cast->getDestAddressSpace() != 0 ||
+                    (Cast->getSrcAddressSpace() != 3 && Cast->getSrcAddressSpace() != 5))
+                    continue;
+                IRBuilder<> Builder(P2I);
+                Value *Offset = Builder.CreatePtrToInt(Cast->getPointerOperand(), Builder.getInt32Ty());
+                P2I->replaceAllUsesWith(Builder.CreateZExtOrTrunc(Offset, P2I->getType()));
+                P2I->eraseFromParent();
+                if (auto *CastInst = dyn_cast<Instruction>(Cast))
+                    if (CastInst->use_empty())
+                        CastInst->eraseFromParent();
+                found = true;
+            }
+    for (const Space &space : spaces)
+    {
+        Function *F = Mod->getFunction(space.name);
+        if (!F)
+            continue;
+        for (User *U : make_early_inc_range(F->users()))
+        {
+            auto *Call = dyn_cast<CallInst>(U);
+            if (!Call)
+                continue;
+            unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0));
+            Call->replaceAllUsesWith(ConstantInt::getBool(Call->getContext(), space.test(as)));
+            Call->eraseFromParent();
+            found = true;
+        }
+        if (F->use_empty())
+            F->eraseFromParent();
+    }
+    return found;
 }
 
 LLVM_C_EXTERN_C_END
