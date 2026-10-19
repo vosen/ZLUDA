@@ -101,7 +101,7 @@ pub(super) fn collect_globals<'a, 'input>(
 
 fn pass_through_variable(variable: &Variable<SpirvWord>) -> bool {
     matches!(variable.info.state_space, ast::StateSpace::Shared)
-        || matches!(variable.info.v_type, ast::Type::Texref)
+        || matches!(variable.info.v_type, ast::Type::Texref | ast::Type::Surfref)
 }
 
 fn get_global_details<'input>(

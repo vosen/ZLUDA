@@ -2185,6 +2185,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Dp2a { .. }
         | ast::Instruction::Sad { .. }
         | ast::Instruction::Tex { .. }
+        | ast::Instruction::Suld { .. }
+        | ast::Instruction::Sust { .. }
         | ast::Instruction::Copysign { .. } => InstructionModes::none(),
         ast::Instruction::Add {
             data: ast::ArithDetails::Integer(_),

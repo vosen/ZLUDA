@@ -212,6 +212,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Sad { .. }
         | ast::Instruction::Dp2a { .. }
         | ast::Instruction::Tex { .. }
+        | ast::Instruction::Suld { .. }
+        | ast::Instruction::Sust { .. }
         | ast::Instruction::Mma { .. }
         | ast::Instruction::Vshr { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
