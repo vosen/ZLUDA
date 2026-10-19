@@ -668,6 +668,24 @@ impl<'a> MethodEmitContext<'a> {
         if let Some(align) = var.info.align {
             unsafe { LLVMSetAlignment(alloca, align) };
         }
+        // On AGX registers (scalar variables) start as zero, so that reading
+        // one that was never written is deterministic (stores that are
+        // always overwritten are removed by the optimizer)
+        if self.target == Target::Agx
+            && matches!(
+                var.info.state_space,
+                ast::StateSpace::Reg | ast::StateSpace::Local
+            )
+            && matches!(var.info.v_type, ast::Type::Scalar(_) | ast::Type::Vector(..))
+        {
+            unsafe {
+                LLVMBuildStore(
+                    self.variables_builder.get(),
+                    LLVMConstNull(get_type(self.context, &var.info.v_type)?),
+                    alloca,
+                )
+            };
+        }
         if !var.info.array_init.is_empty() {
             return Err(error_unreachable());
         }
@@ -731,6 +749,8 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CvtPack { data, arguments } => self.emit_cvt_pack(data, arguments),
             ast::Instruction::CvtTf32 { data, arguments } => self.emit_cvt_tf32(data, arguments),
             ast::Instruction::Isspacep { data, arguments } => self.emit_isspacep(data, arguments),
+            ast::Instruction::Packed8 { data, arguments } => self.emit_packed8(data, arguments),
+            ast::Instruction::Clmad { data, arguments } => self.emit_clmad(data, arguments),
             ast::Instruction::Alloca { data, arguments } => self.emit_alloca(data, arguments),
             ast::Instruction::StackSave { data, arguments } => self.emit_stacksave(data, arguments),
             ast::Instruction::StackRestore { data, arguments } => {
@@ -2925,6 +2945,134 @@ impl<'a> MethodEmitContext<'a> {
             let offset = LLVMBuildTruncOrBitCast(self.builder, offset, i32_type, LLVM_UNNAMED.as_ptr());
             LLVMBuildStore(self.builder, offset, top);
         }
+        Ok(())
+    }
+
+    // The product is the xor of b << i for each bit i set in a; the high
+    // half gets b >> (64 - i)
+    fn emit_clmad(
+        &mut self,
+        high: bool,
+        arguments: ast::ClmadArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+        let k = |v: u64| unsafe { LLVMConstInt(i64_type, v, 0) };
+        let mut result = c;
+        for i in 0..64u64 {
+            if high && i == 0 {
+                continue;
+            }
+            unsafe {
+                let bit = LLVMBuildAnd(
+                    self.builder,
+                    LLVMBuildLShr(self.builder, a, k(i), LLVM_UNNAMED.as_ptr()),
+                    k(1),
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                // all ones when the bit is set
+                let mask = LLVMBuildSub(self.builder, k(0), bit, LLVM_UNNAMED.as_ptr());
+                let shifted = if high {
+                    LLVMBuildLShr(self.builder, b, k(64 - i), LLVM_UNNAMED.as_ptr())
+                } else {
+                    LLVMBuildShl(self.builder, b, k(i), LLVM_UNNAMED.as_ptr())
+                };
+                let term = LLVMBuildAnd(self.builder, shifted, mask, LLVM_UNNAMED.as_ptr());
+                result = LLVMBuildXor(self.builder, result, term, LLVM_UNNAMED.as_ptr());
+            }
+        }
+        self.resolver.register(arguments.dst, result);
+        Ok(())
+    }
+
+    fn emit_packed8(
+        &mut self,
+        data: ast::Packed8Details,
+        arguments: ast::Packed8Args<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let vec_type = unsafe { LLVMVectorType(LLVMInt8TypeInContext(self.context), 4) };
+        let to_vec = |this: &mut Self, word: SpirvWord| -> Result<LLVMValueRef, TranslateError> {
+            let value = this.resolver.value(word)?;
+            Ok(unsafe { LLVMBuildBitCast(this.builder, value, vec_type, LLVM_UNNAMED.as_ptr()) })
+        };
+        let a = to_vec(self, arguments.src1)?;
+        let b = match arguments.src2 {
+            Some(src2) => Some(to_vec(self, src2)?),
+            None => None,
+        };
+        let zero = unsafe { LLVMConstNull(vec_type) };
+        let intrinsic = |this: &mut Self, name: &str, args: Vec<LLVMValueRef>| {
+            let name = format!("{name}.v4i8\0");
+            let fn_type = unsafe {
+                let mut params = vec![vec_type; args.len()];
+                LLVMFunctionType(vec_type, params.as_mut_ptr(), params.len() as u32, 0)
+            };
+            let mut fn_ = unsafe { LLVMGetNamedFunction(this.module, name.as_ptr().cast()) };
+            if fn_ == ptr::null_mut() {
+                fn_ = unsafe { LLVMAddFunction(this.module, name.as_ptr().cast(), fn_type) };
+            }
+            let mut args = args;
+            unsafe {
+                LLVMBuildCall2(
+                    this.builder,
+                    fn_type,
+                    fn_,
+                    args.as_mut_ptr(),
+                    args.len() as u32,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            }
+        };
+        let signed = data.signed;
+        let b_or = |b: Option<LLVMValueRef>| b.ok_or_else(error_unreachable);
+        let result = match data.op {
+            ast::Packed8Op::Add if data.saturate => {
+                let name = if signed { "llvm.sadd.sat" } else { "llvm.uadd.sat" };
+                intrinsic(self, name, vec![a, b_or(b)?])
+            }
+            ast::Packed8Op::Sub if data.saturate => {
+                let name = if signed { "llvm.ssub.sat" } else { "llvm.usub.sat" };
+                intrinsic(self, name, vec![a, b_or(b)?])
+            }
+            ast::Packed8Op::Add => unsafe {
+                LLVMBuildAdd(self.builder, a, b_or(b)?, LLVM_UNNAMED.as_ptr())
+            },
+            ast::Packed8Op::Sub => unsafe {
+                LLVMBuildSub(self.builder, a, b_or(b)?, LLVM_UNNAMED.as_ptr())
+            },
+            ast::Packed8Op::Min => {
+                let name = if signed { "llvm.smin" } else { "llvm.umin" };
+                intrinsic(self, name, vec![a, b_or(b)?])
+            }
+            ast::Packed8Op::Max => {
+                let name = if signed { "llvm.smax" } else { "llvm.umax" };
+                intrinsic(self, name, vec![a, b_or(b)?])
+            }
+            ast::Packed8Op::Neg => unsafe { LLVMBuildSub(self.builder, zero, a, LLVM_UNNAMED.as_ptr()) },
+            ast::Packed8Op::Abs => unsafe {
+                // |-128| wraps to -128
+                let negated = LLVMBuildSub(self.builder, zero, a, LLVM_UNNAMED.as_ptr());
+                let negative = LLVMBuildICmp(
+                    self.builder,
+                    LLVMIntPredicate::LLVMIntSLT,
+                    a,
+                    zero,
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                LLVMBuildSelect(self.builder, negative, negated, a, LLVM_UNNAMED.as_ptr())
+            },
+        };
+        let result = if data.relu && signed {
+            intrinsic(self, "llvm.smax", vec![result, zero])
+        } else {
+            result
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildBitCast(self.builder, result, i32_type, dst)
+        });
         Ok(())
     }
 

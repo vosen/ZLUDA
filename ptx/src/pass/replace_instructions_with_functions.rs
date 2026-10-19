@@ -519,18 +519,21 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, "bar_sync".into(), i)?
         }
         ptx_parser::Instruction::BarRed { data, arguments } => {
-            if arguments.src_threadcount.is_some() {
-                return Err(error_todo());
-            }
             let name = match data.pred_reduction {
                 ptx_parser::Reduction::And => "bar_red_and_pred",
                 ptx_parser::Reduction::Or => "bar_red_or_pred",
+                ptx_parser::Reduction::Popc => "bar_red_popc_u32",
                 _ => return Err(error_unreachable()),
+            };
+            let count = if arguments.src_threadcount.is_some() {
+                "_count"
+            } else {
+                ""
             };
             to_call(
                 resolver,
                 fn_declarations,
-                name.into(),
+                format!("{name}{count}").into(),
                 ptx_parser::Instruction::BarRed { data, arguments },
             )?
         }

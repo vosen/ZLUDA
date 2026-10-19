@@ -2105,7 +2105,9 @@ derive_parser!(
     pub enum Mul24Control { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum Reduction { }
+    pub enum Reduction {
+        Popc
+    }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
@@ -2141,6 +2143,9 @@ derive_parser!(
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Tf32Rounding { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum Packed8Type { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum VshOp {
@@ -3668,7 +3673,23 @@ derive_parser!(
         }
     }
     //bar{.cta}.arrive    a, b;
-    //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
+    bar{.cta}.red.popc.u32  d, a{, b}, {!}c => {
+        let _ = cta;
+        let (negate_src3, c) = c;
+        ast::Instruction::BarRed {
+            data: ast::BarRedData {
+                aligned: true,
+                pred_reduction: Reduction::Popc,
+            },
+            arguments: BarRedArgs {
+                dst1: d,
+                src_barrier: a,
+                src_threadcount: b,
+                src_predicate: c,
+                src_negate_predicate: ParsedOperand::Imm(ImmediateValue::U64(negate_src3 as u64))
+            }
+        }
+    }
     bar{.cta}.red.op.pred   p, a{, b}, {!}c => {
         let _ = cta;
         let (negate_src3, c) = c;
@@ -4135,6 +4156,59 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
+
+    // Packed bytes (PTX ISA 9.2): add, sub, min, max, neg and abs on four byte lanes
+    add{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Add, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    sub{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Sub, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    min{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Min, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    max{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Max, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    neg.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Neg, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    abs.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Abs, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-clmad
+    clmad.mode.u64  d, a, b, c => {
+        ast::Instruction::Clmad {
+            data: mode == RawMulIntControl::Hi,
+            arguments: ClmadArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .mode: RawMulIntControl = { .lo, .hi };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfe
     bfe.type  d, a, b, c => {

@@ -153,7 +153,13 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: Type::from(ScalarType::Pred)
+                    type: {
+                        if data.pred_reduction == Reduction::Popc {
+                            Type::from(ScalarType::U32)
+                        } else {
+                            Type::from(ScalarType::Pred)
+                        }
+                    }
                 },
                 src_barrier: T,
                 src_threadcount: Option<T>,
@@ -320,6 +326,27 @@ ptx_parser_macros::generate_instruction_type!(
             data: ScalarType,
             arguments<T>: {
                 src: T,
+            }
+        },
+        // clmad: carry-less multiply of a and b, the low (data false) or
+        // high (true) 64 bits xor c
+        Clmad {
+            type: Type::Scalar(ScalarType::U64),
+            data: bool,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Packed8 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Packed8Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: Option<T>,
             }
         },
         Isspacep {
@@ -3010,6 +3037,25 @@ pub struct CvtTf32Details {
     pub rounding: Tf32Rounding,
     pub relu: bool,
     pub satfinite: bool,
+}
+
+// Operations on four byte lanes of a .b32 (.u8x4 and .s8x4 types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Packed8Details {
+    pub op: Packed8Op,
+    pub signed: bool,
+    pub saturate: bool,
+    pub relu: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Packed8Op {
+    Add,
+    Sub,
+    Min,
+    Max,
+    Neg,
+    Abs,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
