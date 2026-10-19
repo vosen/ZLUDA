@@ -1573,6 +1573,8 @@ impl<Ident> ast::ParsedOperand<Ident> {
                     "vector_operand",
                     vector_operand.map(ast::ParsedOperand::VecPack),
                 ),
+                // a lone sink (`mbarrier.arrive.b64 _, [addr]`), see sink_to_none
+                Token::Sink.value(ast::ParsedOperand::VecPack(vec![None])),
             )),
         )
         .parse_next(stream)
@@ -1817,6 +1819,53 @@ fn empty_call<'input>(
             func: name,
             input_arguments: Vec::new(),
             is_external: false,
+        },
+    }
+}
+
+// `_` in place of an optional destination
+fn sink_to_none<'input>(operand: ParsedOperandStr<'input>) -> Option<ParsedOperandStr<'input>> {
+    match operand {
+        ast::ParsedOperand::VecPack(ref elements) if elements.len() == 1 && elements[0].is_none() => {
+            None
+        }
+        operand => Some(operand),
+    }
+}
+
+// Clusters have a single CTA, so .shared::cluster addresses are .shared::cta addresses
+fn shared_space(space: Option<StateSpace>) -> StateSpace {
+    match space {
+        Some(StateSpace::Shared | StateSpace::SharedCta | StateSpace::SharedCluster) => {
+            StateSpace::Shared
+        }
+        Some(space) => space,
+        None => StateSpace::Generic,
+    }
+}
+
+fn mbarrier_arrive<'input>(
+    mbstate: ParsedOperandStr<'input>,
+    drop: bool,
+    expect_tx: bool,
+    no_complete: bool,
+    space: Option<StateSpace>,
+    addr: ParsedOperandStr<'input>,
+    count: Option<ParsedOperandStr<'input>>,
+) -> ast::Instruction<ParsedOperandStr<'input>> {
+    // .noComplete takes a count (it only marks that the arrival must not complete the phase)
+    let _ = no_complete;
+    let (count, tx_count) = if expect_tx { (None, count) } else { (count, None) };
+    ast::Instruction::MbarrierArrive {
+        data: ast::MbarrierArriveDetails {
+            space: shared_space(space),
+            drop,
+        },
+        arguments: ast::MbarrierArriveArgs {
+            dst_state: sink_to_none(mbstate),
+            src_mbarrier: addr,
+            src_count: count,
+            src_tx_count: tx_count,
         },
     }
 }
@@ -4055,6 +4104,26 @@ derive_parser!(
     }
     .level: MemScope      = { .cta, .sys };
 
+    // Clusters have a single CTA: cluster scope is treated as GPU scope.
+    fence{.sem}.scope => {
+        let _ = sem;
+        ast::Instruction::Membar {
+            data: if scope == MemScope::Cluster { MemScope::Gpu } else { scope }
+        }
+    }
+    // Orders a CTA's mbarrier.init before the other CTAs of the cluster use the object
+    fence.mbarrier_init.release.cluster => {
+        ast::Instruction::Membar { data: MemScope::Cta }
+    }
+    // Asynchronous copies are emulated with ordinary loads and stores (the generic proxy)
+    fence.proxy.async{.space} => {
+        let _ = space;
+        ast::Instruction::Membar { data: MemScope::Cta }
+    }
+    .sem: RawFenceSemantics = { .sc, .acq_rel, .acquire, .release };
+    .scope: MemScope = { .cta, .cluster, .gpu, .sys };
+    .space: StateSpace = { .global, .shared{::cta, ::cluster} };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
@@ -4122,9 +4191,15 @@ derive_parser!(
                 CpAsyncCpSize::Bytes4
             });
 
-        let src_size = src_size
-            .and_then(|op| op.as_immediate())
-            .and_then(|imm| imm.as_u64());
+        // with .L2::cache_hint, a single optional operand is the cache policy
+        let src_size = if level_cache_hint && cache_policy.is_none() { None } else { src_size };
+        let (src_size, src_size_reg) = match src_size {
+            Some(op) => match op.as_immediate() {
+                Some(imm) => (imm.as_u64(), None),
+                None => (None, Some(op)),
+            },
+            None => (None, None),
+        };
 
         Instruction::CpAsync {
             data: CpAsyncDetails {
@@ -4132,10 +4207,12 @@ derive_parser!(
                 space,
                 cp_size,
                 src_size,
+                ignore_src: false,
             },
             arguments: CpAsyncArgs {
                 src_to: dst,
                 src_from: src,
+                src_size: src_size_reg,
             }
         }
     }
@@ -4152,12 +4229,18 @@ derive_parser!(
     .cop: RawCpAsyncCacheOperator = { .ca, .cg };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-commit-group
-    cp.async.commit_group => {
+    // cp.async.bulk.commit_group too: copies complete when they are issued
+    cp.async{.bulk}.commit_group => {
+        let _ = bulk;
         Instruction::CpAsyncCommitGroup {}
     }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-wait-group
-    cp.async.wait_group n => {
+    // cp.async.bulk.wait_group{.read} too
+    cp.async{.bulk}.wait_group{.read} n => {
+        if read && !bulk {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.async.wait_group in {:?}", state.text)));
+        }
         Instruction::CpAsyncWaitGroup {
             arguments: CpAsyncWaitGroupArgs { src_group: n },
         }
@@ -4165,6 +4248,160 @@ derive_parser!(
     cp.async.wait_all => {
         Instruction::CpAsyncWaitAll {}
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive
+    cp.async.mbarrier.arrive{.noinc}{.space}.b64 [addr] => {
+        Instruction::CpAsyncMbarrierArrive {
+            data: CpAsyncMbarrierArriveDetails { space: shared_space(space), noinc },
+            arguments: CpAsyncMbarrierArriveArgs { src_mbarrier: addr }
+        }
+    }
+    .space: StateSpace = { .shared{::cta} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-bulk
+    // cp.async.bulk.{shared::cta, shared::cluster}.global.mbarrier::complete_tx::bytes{.multicast::cluster}{.level::cache_hint}
+    //                                      [dstmem], [srcmem], size, [mbar]{, ctamask}{, cache-policy}
+    // cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes [dstmem], [srcmem], size, [mbar]
+    // cp.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}{.cp_mask}
+    //                                      [dstmem], [srcmem], size{, cache-policy}{, bytemask}
+    // The modifiers are unordered, so the direction follows from the completion mechanism.
+    cp.async.bulk{.shared::cluster}{.shared::cta}{.global}{.completion_mechanism}{.bulk_group}{.multicast}{.level::cache_hint}{.cp_mask}
+                                            [dstmem], [srcmem], size{, [mbar]}{, extra1}{, extra2} => {
+        let mut extra = [extra1, extra2].into_iter().flatten();
+        let to_shared = completion_mechanism && !bulk_group && global as u8 + shared_cta as u8 + shared_cluster as u8 == 2;
+        let to_global = bulk_group && !completion_mechanism && global && shared_cta && !shared_cluster;
+        let (dst_space, src_space) = if to_global {
+            (StateSpace::Global, StateSpace::Shared)
+        } else {
+            (StateSpace::Shared, if global { StateSpace::Global } else { StateSpace::Shared })
+        };
+        let cta_mask = if multicast { extra.next() } else { None };
+        let cache_policy = if level_cache_hint { extra.next() } else { None };
+        let byte_mask = if cp_mask { extra.next() } else { None };
+        let valid = (to_shared && mbar.is_some() && !cp_mask && (global || !(multicast || level_cache_hint)))
+            || (to_global && mbar.is_none() && !multicast && cp_mask == byte_mask.is_some());
+        if !valid || extra.next().is_some() || (multicast && cta_mask.is_none()) || (level_cache_hint && cache_policy.is_none()) {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.async.bulk in {:?}", state.text)));
+        }
+        Instruction::CpAsyncBulk {
+            data: CpAsyncBulkDetails {
+                dst_space,
+                src_space,
+                multicast,
+            },
+            arguments: CpAsyncBulkArgs {
+                src_to: dstmem,
+                src_from: srcmem,
+                src_size: size,
+                src_mbarrier: mbar,
+                src_cta_mask: cta_mask,
+                src_byte_mask: byte_mask,
+                src_cache_policy: cache_policy,
+            }
+        }
+    }
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .multicast = { .multicast::cluster };
+    .level::cache_hint = { .L2::cache_hint };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier
+    // Clusters have a single CTA, so .shared::cluster addresses are those of .shared::cta.
+    mbarrier.init{.space}.b64 [addr], count => {
+        Instruction::MbarrierInit {
+            data: shared_space(space),
+            arguments: MbarrierInitArgs { src_mbarrier: addr, src_count: count }
+        }
+    }
+    mbarrier.inval{.space}.b64 [addr] => {
+        Instruction::MbarrierInval {
+            data: shared_space(space),
+            arguments: MbarrierInvalArgs { src_mbarrier: addr }
+        }
+    }
+    mbarrier.expect_tx{.sem}{.scope}{.space}.b64 [addr], txcount => {
+        let _ = (sem, scope);
+        Instruction::MbarrierTx {
+            data: MbarrierTxDetails { space: shared_space(space), complete: false },
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount }
+        }
+    }
+    mbarrier.complete_tx{.sem}{.scope}{.space}.b64 [addr], txcount => {
+        let _ = (sem, scope);
+        Instruction::MbarrierTx {
+            data: MbarrierTxDetails { space: shared_space(space), complete: true },
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount }
+        }
+    }
+    // mbarrier.arrive{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr]{, count};
+    // mbarrier.arrive{.sem}{.scope}{.shared::cluster}.b64 _, [addr]{, count};
+    // mbarrier.arrive.expect_tx{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr], txCount;
+    // mbarrier.arrive.noComplete{.release}{.cta}{.shared{::cta}}.b64 mbstate, [addr], count;
+    mbarrier.arrive{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}.b64 mbstate, [addr]{, count} => {
+        let _ = (sem, scope);
+        mbarrier_arrive(mbstate, false, expect_tx, nocomplete, space, addr, count)
+    }
+    mbarrier.arrive_drop{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}.b64 mbstate, [addr]{, count} => {
+        let _ = (sem, scope);
+        mbarrier_arrive(mbstate, true, expect_tx, nocomplete, space, addr, count)
+    }
+    // mbarrier.test_wait{.parity}{.sem}{.scope}{.shared{::cta}}.b64 waitcomplete, [addr], mbstate|phaseParity;
+    mbarrier.test_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate => {
+        let _ = (sem, scope);
+        Instruction::MbarrierWait {
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: false },
+            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: None }
+        }
+    }
+    mbarrier.try_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate{, timehint} => {
+        let _ = (sem, scope);
+        Instruction::MbarrierWait {
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: true },
+            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: timehint }
+        }
+    }
+    mbarrier.pending_count.b64 count, mbstate => {
+        Instruction::MbarrierPendingCount {
+            arguments: MbarrierPendingCountArgs { dst: count, src_state: mbstate }
+        }
+    }
+    .nocomplete = { .noComplete };
+    .sem: RawMbarrierSemantics = { .release, .acquire, .relaxed };
+    .scope: MemScope = { .cta, .cluster };
+    .space: StateSpace = { .shared{::cta, ::cluster} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-reduce-async-bulk
+    // cp.reduce.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes.redOp.type [dstmem], [srcmem], size, [mbar]
+    // cp.reduce.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}.redOp.type [dstmem], [srcmem], size{, cache-policy}
+    cp.reduce.async.bulk{.shared::cluster}{.global}.shared::cta{.completion_mechanism}{.bulk_group}{.level::cache_hint}.redOp.type
+                                            [dstmem], [srcmem], size{, [mbar]}{, cache_policy} => {
+        let valid = if shared_cluster {
+            !global && completion_mechanism && !bulk_group && !level_cache_hint && mbar.is_some() && cache_policy.is_none()
+        } else {
+            global && bulk_group && !completion_mechanism && mbar.is_none() && level_cache_hint == cache_policy.is_some()
+        };
+        if !valid {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.reduce.async.bulk in {:?}", state.text)));
+        }
+        Instruction::CpReduceAsyncBulk {
+            data: CpReduceAsyncBulkDetails {
+                dst_space: if global { StateSpace::Global } else { StateSpace::Shared },
+                src_space: StateSpace::Shared,
+                op: ast::AtomicOp::new(redop, type_.kind()),
+                type_
+            },
+            arguments: CpReduceAsyncBulkArgs {
+                src_to: dstmem,
+                src_from: srcmem,
+                src_size: size,
+                src_mbarrier: mbar,
+                src_cache_policy: cache_policy,
+            }
+        }
+    }
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .level::cache_hint = { .L2::cache_hint };
+    .redOp: RawAtomicOp = { .and, .or, .xor, .add, .inc, .dec, .min, .max };
+    .type: ScalarType = { .b32, .u32, .s32, .b64, .u64, .s64, .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#logic-and-shift-instructions-shf
     shf.dir.mode.b32  d, a, b, c => {

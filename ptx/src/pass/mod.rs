@@ -1273,6 +1273,14 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
         }
     }
 
+    fn get_type(&self, name: &str) -> Option<&ast::Type> {
+        self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            let entry = scope.ident_map.get(ident)?;
+            entry.type_space.as_ref().map(|(type_, _)| type_)
+        })
+    }
+
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {
         let current_scope = self.scopes.last().unwrap();
         current_scope

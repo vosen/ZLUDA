@@ -1,0 +1,70 @@
+// Emulated asynchronous copies and mbarriers on AGX (single-CTA clusters):
+// cp.async.bulk to shared memory completed on an mbarrier and waited for with
+// a try_wait loop by two SIMD-groups, shared-to-shared bulk copies, bulk
+// reductions and masked bulk copies to global memory, arrive_drop and
+// pending_count.
+.version 8.6
+.target sm_90
+.address_size 64
+
+.visible .entry k(.param .u64 pi, .param .u64 po, .param .u64 pg, .param .u64 pg2)
+{
+    .reg .b64 %i, %o, %g, %g2, %st, %t, %a; .reg .b32 %tid, %x, %cnt, %r<4>; .reg .pred %q, %p;
+    .shared .align 128 .b8 buf[256];
+    .shared .align 16 .b8 buf2[32];
+    .shared .align 8 .b64 bar[3];
+    ld.param.u64 %i, [pi]; ld.param.u64 %o, [po]; ld.param.u64 %g, [pg]; ld.param.u64 %g2, [pg2];
+    mov.u32 %tid, %tid.x;
+    setp.eq.u32 %q, %tid, 0;
+    @%q mbarrier.init.shared::cta.b64 [bar], 1;
+    @%q mbarrier.init.shared::cta.b64 [bar+8], 3;
+    @%q mbarrier.init.shared::cta.b64 [bar+16], 1;
+    fence.mbarrier_init.release.cluster;
+    bar.sync 0;
+    @%q mbarrier.arrive.expect_tx.shared::cta.b64 %st, [bar], 256;
+    @%q cp.async.bulk.shared::cluster.global.mbarrier::complete_tx::bytes [buf], [%i], 256, [bar];
+WAIT:
+    mbarrier.try_wait.parity.shared::cta.b64 %p, [bar], 0;
+    @!%p bra WAIT;
+    fence.proxy.async.shared::cta;
+    mul.wide.u32 %t, %tid, 4;
+    mov.u64 %a, buf; add.u64 %a, %a, %t;
+    ld.shared.u32 %x, [%a];
+    add.u64 %a, %o, %t;
+    st.global.u32 [%a], %x;
+    @!%q bra END;
+    cp.reduce.async.bulk.global.shared::cta.bulk_group.add.u32 [%g], [buf], 64;
+    cp.async.bulk.global.shared::cta.bulk_group.cp_mask [%g2], [buf], 32, 3855;
+    cp.async.bulk.commit_group;
+    cp.async.bulk.wait_group.read 0;
+    // arrive_drop: expected 3 -> 2; the state of the next arrive holds 2 pending arrivals
+    mbarrier.arrive_drop.shared.b64 _, [bar+8];
+    mbarrier.arrive.noComplete.shared.b64 %st, [bar+8], 1;
+    mbarrier.pending_count.b64 %cnt, %st;
+    mbarrier.arrive.shared.b64 %st, [bar+8];
+    mbarrier.test_wait.shared.b64 %p, [bar+8], %st;
+    selp.u32 %r0, 1, 0, %p;
+    // shared-to-shared copy, complete only after the transaction bytes arrive
+    mbarrier.arrive.expect_tx.shared.b64 %st, [bar+16], 32;
+    mbarrier.test_wait.shared.b64 %p, [bar+16], %st;
+    selp.u32 %r1, 1, 0, %p;
+    cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes [buf2], [buf+64], 32, [bar+16];
+    mbarrier.test_wait.shared.b64 %p, [bar+16], %st;
+    selp.u32 %r2, 1, 0, %p;
+    ld.shared.u32 %r3, [buf2+28];
+    st.global.u32 [%o+256], %cnt;
+    st.global.u32 [%o+260], %r0;
+    st.global.u32 [%o+264], %r1;
+    st.global.u32 [%o+268], %r2;
+    st.global.u32 [%o+272], %r3;
+END:
+    ret;
+}
+.buffer I .u32 = { 5, 12, 19, 26, 33, 40, 47, 54, 61, 68, 75, 82, 89, 96, 103, 110, 117, 124, 131, 138, 145, 152, 159, 166, 173, 180, 187, 194, 201, 208, 215, 222, 229, 236, 243, 250, 257, 264, 271, 278, 285, 292, 299, 306, 313, 320, 327, 334, 341, 348, 355, 362, 369, 376, 383, 390, 397, 404, 411, 418, 425, 432, 439, 446 };
+.buffer O .u32 [72];
+.buffer G .u32 = { 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015 };
+.buffer G2 .u32 = { 2863311530, 2863311530, 2863311530, 2863311530, 2863311530, 2863311530, 2863311530, 2863311530 };
+.launch k <<< 1, 64 >>> (I, O, G, G2);
+.expect O .u32 = { 5, 12, 19, 26, 33, 40, 47, 54, 61, 68, 75, 82, 89, 96, 103, 110, 117, 124, 131, 138, 145, 152, 159, 166, 173, 180, 187, 194, 201, 208, 215, 222, 229, 236, 243, 250, 257, 264, 271, 278, 285, 292, 299, 306, 313, 320, 327, 334, 341, 348, 355, 362, 369, 376, 383, 390, 397, 404, 411, 418, 425, 432, 439, 446, 2, 1, 0, 1, 166 };
+.expect G .u32 = { 1005, 1013, 1021, 1029, 1037, 1045, 1053, 1061, 1069, 1077, 1085, 1093, 1101, 1109, 1117, 1125 };
+.expect G2 .u32 = { 5, 2863311530, 19, 2863311530, 33, 2863311530, 47, 2863311530 };

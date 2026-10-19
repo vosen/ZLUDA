@@ -151,8 +151,24 @@ fn run_statements<'input, 'b>(
 
 fn run_instruction<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
-    instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
+    mut instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
 ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
+    // The optional operand of cp.async after cp-size is src-size or, for a
+    // predicate, ignore-src
+    if let ast::Instruction::CpAsync {
+        data,
+        arguments:
+            ast::CpAsyncArgs {
+                src_size: Some(ast::ParsedOperand::Reg(name)),
+                ..
+            },
+    } = &mut instruction
+    {
+        data.ignore_src = matches!(
+            resolver.get_type(name),
+            Some(ast::Type::Scalar(ast::ScalarType::Pred))
+        );
+    }
     ast::visit_map(instruction, &mut Normalize { resolver })
 }
 

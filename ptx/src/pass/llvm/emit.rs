@@ -714,6 +714,33 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Membar { data } => self.emit_membar(data),
             ast::Instruction::Trap {} => self.emit_trap(),
             ast::Instruction::CpAsync { data, arguments } => self.emit_cp_async(data, arguments),
+            ast::Instruction::CpAsyncMbarrierArrive { data, arguments } => {
+                self.emit_cp_async_mbarrier_arrive(data, arguments)
+            }
+            ast::Instruction::CpAsyncBulk { data, arguments } => {
+                self.emit_cp_async_bulk(data, arguments)
+            }
+            ast::Instruction::CpReduceAsyncBulk { data, arguments } => {
+                self.emit_cp_reduce_async_bulk(data, arguments)
+            }
+            ast::Instruction::MbarrierInit { data, arguments } => {
+                self.emit_mbarrier_init(data, arguments)
+            }
+            ast::Instruction::MbarrierInval { data, arguments } => {
+                self.emit_mbarrier_inval(data, arguments)
+            }
+            ast::Instruction::MbarrierArrive { data, arguments } => {
+                self.emit_mbarrier_arrive(data, arguments)
+            }
+            ast::Instruction::MbarrierTx { data, arguments } => {
+                self.emit_mbarrier_tx(data, arguments)
+            }
+            ast::Instruction::MbarrierWait { data, arguments } => {
+                self.emit_mbarrier_wait(data, arguments)
+            }
+            ast::Instruction::MbarrierPendingCount { arguments } => {
+                self.emit_mbarrier_pending_count(arguments)
+            }
             ast::Instruction::Copysign { data, arguments } => self.emit_copysign(data, arguments),
             ast::Instruction::CreatePolicyFractional { data, arguments } => {
                 self.emit_createpolicy_fractional(data, arguments)
@@ -3979,10 +4006,70 @@ impl<'a> MethodEmitContext<'a> {
         data: CpAsyncDetails,
         arguments: CpAsyncArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        // Asynchronous copies are not supported by all AMD hardware, so we just do a synchronous copy for now
         let to = self.resolver.value(arguments.src_to)?;
         let from = self.resolver.value(arguments.src_from)?;
         let cp_size = data.cp_size;
+        if self.target == Target::Agx || arguments.src_size.is_some() {
+            // Copy the first src-size bytes (none with a true ignore-src) and
+            // zero the rest
+            let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+            let cp_size_value = unsafe { LLVMConstInt(i32_type, cp_size.as_u64(), 0) };
+            let src_size = match (arguments.src_size, data.src_size) {
+                (Some(src_size), _) => {
+                    let src_size = self.resolver.value(src_size)?;
+                    if data.ignore_src {
+                        unsafe {
+                            LLVMBuildSelect(
+                                self.builder,
+                                src_size,
+                                LLVMConstInt(i32_type, 0, 0),
+                                cp_size_value,
+                                LLVM_UNNAMED.as_ptr(),
+                            )
+                        }
+                    } else {
+                        self.emit_intrinsic(
+                            c"llvm.umin.i32",
+                            None,
+                            vec![&ast::ScalarType::U32.into()],
+                            vec![(src_size, i32_type), (cp_size_value, i32_type)],
+                        )?
+                    }
+                }
+                (None, Some(src_size)) => unsafe {
+                    LLVMConstInt(i32_type, src_size.min(cp_size.as_u64()), 0)
+                },
+                (None, None) => cp_size_value,
+            };
+            let align = cp_size.as_u64() as u32;
+            unsafe { LLVMBuildMemCpy(self.builder, to, align, from, align, src_size) };
+            let i8_type = unsafe { LLVMInt8TypeInContext(self.context) };
+            let mut offset = [src_size];
+            let rest = unsafe {
+                LLVMBuildInBoundsGEP2(
+                    self.builder,
+                    i8_type,
+                    to,
+                    offset.as_mut_ptr(),
+                    1,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let rest_size = unsafe {
+                LLVMBuildSub(self.builder, cp_size_value, src_size, LLVM_UNNAMED.as_ptr())
+            };
+            unsafe {
+                LLVMBuildMemSet(
+                    self.builder,
+                    rest,
+                    LLVMConstInt(i8_type, 0, 0),
+                    rest_size,
+                    1,
+                )
+            };
+            return Ok(());
+        }
+        // Asynchronous copies are not supported by all AMD hardware, so we just do a synchronous copy for now
         let src_size = data.src_size.unwrap_or(cp_size.as_u64());
 
         let from_type = unsafe { LLVMIntTypeInContext(self.context, (src_size as u32) * 8) };
@@ -4004,6 +4091,320 @@ impl<'a> MethodEmitContext<'a> {
         unsafe {
             LLVMSetAlignment(store, cp_size.as_u64() as u32);
         }
+        Ok(())
+    }
+
+    // mbarrier objects and the copies completed on them are emulated by the
+    // helper functions of zluda_ptx_impl_agx.ll, which also describes the
+    // layout of the objects
+    fn emit_agx_helper(
+        &mut self,
+        name: &CStr,
+        dst: Option<SpirvWord>,
+        return_type: Option<ast::ScalarType>,
+        arguments: &[LLVMValueRef],
+    ) -> Result<LLVMValueRef, TranslateError> {
+        if self.target != Target::Agx {
+            return Err(error_todo_msg(
+                "mbarrier objects are only supported on AGX",
+            ));
+        }
+        let return_type = return_type.map(ast::Type::Scalar);
+        self.emit_intrinsic(
+            name,
+            dst,
+            return_type.iter().collect(),
+            arguments
+                .iter()
+                .map(|arg| (*arg, unsafe { LLVMTypeOf(*arg) }))
+                .collect(),
+        )
+    }
+
+    // A pointer to an mbarrier object in shared memory
+    fn mbarrier_pointer(
+        &mut self,
+        space: ast::StateSpace,
+        mbarrier: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let mbarrier = self.resolver.value(mbarrier)?;
+        Ok(match space {
+            ast::StateSpace::Shared => mbarrier,
+            _ => unsafe {
+                LLVMBuildAddrSpaceCast(
+                    self.builder,
+                    mbarrier,
+                    get_pointer_type(self.context, ast::StateSpace::Shared)?,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            },
+        })
+    }
+
+    fn const_u32(&self, value: u64) -> LLVMValueRef {
+        unsafe { LLVMConstInt(LLVMInt32TypeInContext(self.context), value, 0) }
+    }
+
+    fn emit_cp_async_mbarrier_arrive(
+        &mut self,
+        data: ast::CpAsyncMbarrierArriveDetails,
+        arguments: ast::CpAsyncMbarrierArriveArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // The copies are complete: without .noinc, the arrive-on increment of
+        // the pending count and the arrival cancel out
+        if !data.noinc {
+            return Ok(());
+        }
+        let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
+        let (one, zero) = (self.const_u32(1), self.const_u32(0));
+        self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_mbarrier_arrive",
+            None,
+            Some(ast::ScalarType::B64),
+            &[mbarrier, one, zero],
+        )?;
+        Ok(())
+    }
+
+    fn emit_cp_async_bulk(
+        &mut self,
+        data: ast::CpAsyncBulkDetails,
+        arguments: ast::CpAsyncBulkArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // Clusters have a single CTA: a multicast copy writes to the issuing CTA
+        let _ = (data.multicast, arguments.src_cta_mask, arguments.src_cache_policy);
+        let to = self.resolver.value(arguments.src_to)?;
+        let from = self.resolver.value(arguments.src_from)?;
+        let size = self.resolver.value(arguments.src_size)?;
+        match arguments.src_byte_mask {
+            Some(byte_mask) => {
+                let byte_mask = self.resolver.value(byte_mask)?;
+                let byte_mask = unsafe {
+                    LLVMBuildZExt(
+                        self.builder,
+                        byte_mask,
+                        LLVMInt32TypeInContext(self.context),
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_cp_async_bulk_masked",
+                    None,
+                    None,
+                    &[to, from, size, byte_mask],
+                )?;
+            }
+            None => unsafe {
+                LLVMBuildMemCpy(self.builder, to, 16, from, 16, size);
+            },
+        }
+        if let Some(mbarrier) = arguments.src_mbarrier {
+            let mbarrier = self.mbarrier_pointer(data.dst_space, mbarrier)?;
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_mbarrier_complete_tx",
+                None,
+                None,
+                &[mbarrier, size],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn emit_cp_reduce_async_bulk(
+        &mut self,
+        data: ast::CpReduceAsyncBulkDetails,
+        arguments: ast::CpReduceAsyncBulkArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let _ = arguments.src_cache_policy;
+        let to = self.resolver.value(arguments.src_to)?;
+        let from = self.resolver.value(arguments.src_from)?;
+        let size = self.resolver.value(arguments.src_size)?;
+        let op = match data.op {
+            ast::AtomicOp::Add => 0,
+            ast::AtomicOp::And => 1,
+            ast::AtomicOp::Or => 2,
+            ast::AtomicOp::Xor => 3,
+            ast::AtomicOp::IncrementWrap => 4,
+            ast::AtomicOp::DecrementWrap => 5,
+            ast::AtomicOp::SignedMin => 6,
+            ast::AtomicOp::UnsignedMin => 7,
+            ast::AtomicOp::SignedMax => 8,
+            ast::AtomicOp::UnsignedMax => 9,
+            ast::AtomicOp::FloatAdd => 10,
+            ast::AtomicOp::FloatMin => 11,
+            ast::AtomicOp::FloatMax => 12,
+            ast::AtomicOp::Exchange => return Err(error_unreachable()),
+        };
+        let name = match (data.type_, data.dst_space) {
+            (ast::ScalarType::F32, ast::StateSpace::Global) => {
+                c"__zluda_ptx_impl_agx_cp_reduce_bulk_f32_global"
+            }
+            (ast::ScalarType::F32, _) => c"__zluda_ptx_impl_agx_cp_reduce_bulk_f32_shared",
+            (ast::ScalarType::F64, ast::StateSpace::Global) => {
+                c"__zluda_ptx_impl_agx_cp_reduce_bulk_f64_global"
+            }
+            (ast::ScalarType::F64, _) => c"__zluda_ptx_impl_agx_cp_reduce_bulk_f64_shared",
+            (type_, ast::StateSpace::Global) if type_.size_of() == 8 => {
+                c"__zluda_ptx_impl_agx_cp_reduce_bulk_b64_global"
+            }
+            (type_, _) if type_.size_of() == 8 => {
+                c"__zluda_ptx_impl_agx_cp_reduce_bulk_b64_shared"
+            }
+            (_, ast::StateSpace::Global) => c"__zluda_ptx_impl_agx_cp_reduce_bulk_b32_global",
+            (_, _) => c"__zluda_ptx_impl_agx_cp_reduce_bulk_b32_shared",
+        };
+        let op = self.const_u32(op);
+        self.emit_agx_helper(name, None, None, &[to, from, size, op])?;
+        if let Some(mbarrier) = arguments.src_mbarrier {
+            let mbarrier = self.mbarrier_pointer(data.dst_space, mbarrier)?;
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_mbarrier_complete_tx",
+                None,
+                None,
+                &[mbarrier, size],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn emit_mbarrier_init(
+        &mut self,
+        space: ast::StateSpace,
+        arguments: ast::MbarrierInitArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mbarrier = self.mbarrier_pointer(space, arguments.src_mbarrier)?;
+        let count = self.resolver.value(arguments.src_count)?;
+        self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_mbarrier_init",
+            None,
+            None,
+            &[mbarrier, count],
+        )?;
+        Ok(())
+    }
+
+    fn emit_mbarrier_inval(
+        &mut self,
+        space: ast::StateSpace,
+        arguments: ast::MbarrierInvalArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mbarrier = self.mbarrier_pointer(space, arguments.src_mbarrier)?;
+        self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_mbarrier_inval",
+            None,
+            None,
+            &[mbarrier],
+        )?;
+        Ok(())
+    }
+
+    fn emit_mbarrier_arrive(
+        &mut self,
+        data: ast::MbarrierArriveDetails,
+        arguments: ast::MbarrierArriveArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
+        // .expect_tx arrives once
+        let count = match arguments.src_count {
+            Some(count) => self.resolver.value(count)?,
+            None => self.const_u32(1),
+        };
+        let tx_count = match arguments.src_tx_count {
+            Some(tx_count) => self.resolver.value(tx_count)?,
+            None => self.const_u32(0),
+        };
+        let name = if data.drop {
+            c"__zluda_ptx_impl_agx_mbarrier_arrive_drop"
+        } else {
+            c"__zluda_ptx_impl_agx_mbarrier_arrive"
+        };
+        self.emit_agx_helper(
+            name,
+            arguments.dst_state,
+            Some(ast::ScalarType::B64),
+            &[mbarrier, count, tx_count],
+        )?;
+        Ok(())
+    }
+
+    fn emit_mbarrier_tx(
+        &mut self,
+        data: ast::MbarrierTxDetails,
+        arguments: ast::MbarrierTxArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
+        let tx_count = self.resolver.value(arguments.src_tx_count)?;
+        let name = if data.complete {
+            c"__zluda_ptx_impl_agx_mbarrier_complete_tx"
+        } else {
+            c"__zluda_ptx_impl_agx_mbarrier_expect_tx"
+        };
+        self.emit_agx_helper(name, None, None, &[mbarrier, tx_count])?;
+        Ok(())
+    }
+
+    fn emit_mbarrier_wait(
+        &mut self,
+        data: ast::MbarrierWaitDetails,
+        arguments: ast::MbarrierWaitArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let _ = arguments.src_time_hint;
+        let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
+        let state = self.resolver.value(arguments.src_state)?;
+        // The state of an arrive holds the parity of its phase in bit 0
+        let parity = if data.parity {
+            state
+        } else {
+            unsafe {
+                LLVMBuildTrunc(
+                    self.builder,
+                    state,
+                    LLVMInt32TypeInContext(self.context),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            }
+        };
+        let name = if data.try_wait {
+            c"__zluda_ptx_impl_agx_mbarrier_try_wait"
+        } else {
+            c"__zluda_ptx_impl_agx_mbarrier_test_wait"
+        };
+        self.emit_agx_helper(
+            name,
+            Some(arguments.dst),
+            Some(ast::ScalarType::Pred),
+            &[mbarrier, parity],
+        )?;
+        Ok(())
+    }
+
+    fn emit_mbarrier_pending_count(
+        &mut self,
+        arguments: ast::MbarrierPendingCountArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        // bits 32-51 of the state of an arrive
+        let state = self.resolver.value(arguments.src_state)?;
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let shifted = unsafe {
+            LLVMBuildLShr(
+                self.builder,
+                state,
+                LLVMConstInt(i64_type, 32, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let count = unsafe {
+            LLVMBuildTrunc(
+                self.builder,
+                shifted,
+                LLVMInt32TypeInContext(self.context),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let mask = self.const_u32(0xfffff);
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildAnd(self.builder, count, mask, dst)
+        });
         Ok(())
     }
 
