@@ -76,10 +76,22 @@ an error.
 
 ## Limitations
 
-* No `f64` (the hardware has no double precision), no 128-bit atomics, no
-  fp8 conversions, no calls to external functions and no function pointers.
-  The tensor core instructions are emulated (see
-  [Warp-level matrix instructions](#warp-level-matrix-instructions)).
+* No calls to external functions (the tensor core instructions are emulated,
+  see [Warp-level matrix instructions](#warp-level-matrix-instructions)). `f64` is emulated in software by the backend (the hardware has
+  no double precision): correctly rounded IEEE 754 with denormals, in all
+  rounding modes, checked by `ptx/tools/agx_f64_check.py`; it is slow
+  (hundreds of instructions per operation). 64- and 128-bit atomics are
+  emulated with locks by the backend, and indirect calls are dispatched over
+  the module's address-taken functions.
+* `alloca` takes a constant size (the AGX stack has a fixed size).
+  `bar.red` with a thread count reduces over the SIMD-group when the count
+  is 32 (threads arrive at barriers in whole warps) and over the whole
+  threadgroup otherwise. `isspacep` is decided at compile time (see below).
+* Not supported yet: `fma.relu` of `f16x2`/`bf16x2`, `add.f32x2` and the
+  other `f32x2` instructions, `set` of packed integer types, `prmt` modes,
+  `szext`, `fns`, the 3-input `min`/`max`, `cvt` with `.pzo`, `.scaled`,
+  `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
+  does not have).
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
   kernels whose instructions all use one) are computed in software, since
   the hardware only rounds to nearest even: an emulated mode register
@@ -99,6 +111,50 @@ an error.
 The [strict floating point mode](#strict-floating-point-mode) removes these
 three differences.
 * `%clock` reads as zero. `nanosleep` does not sleep.
+
+### Instructions
+
+* `add`, `sub`, `mul` and `fma` of `f16`, `f16x2`, `bf16` and `bf16x2` with
+  `.rz`, `.rm` or `.rp` are computed in `f32` in the same rounding mode and
+  rounded to the 16-bit type (rounding twice in the same direction is
+  exact); conversions to `bf16` with a directed rounding mode round the
+  `f32` bit pattern, since the backend rounds them to nearest only.
+* The video instructions (`vadd`, `vsub`, `vabsdiff`, `vmin`, `vmax`,
+  `vshl`, `vshr`, `vset`, `vmad` and the SIMD `vadd2` ... `vset4`) follow the
+  PTX ISA: the selected byte or half-word parts are extended and computed in
+  64 bits (32 bits per SIMD lane), with saturation, secondary operations and
+  merges.
+* The conversions to and from `e4m3x2`, `e5m2x2`, `e2m3x2`, `e3m2x2`,
+  `e2m1x2` and `ue8m0x2`, `cvt` to `tf32`, `.relu`/`.satfinite`, `bfind`,
+  `bmsk`, `clmad`, the packed byte arithmetic (`.u8x4`, `.s8x4`) and
+  `min`/`max` `.xorsign.abs` are integer arithmetic on the bit patterns.
+* `isspacep`: AGX has no generic addressing of threadgroup and private
+  memory, so a generic address of them must be resolved at compile time.
+  The front end emits calls to `@__zluda_agx_isspacep_<space>`, which
+  `llvm_zluda` replaces after optimization by whether the address comes from
+  that space (addresses of unknown origin are device memory). The same step
+  rewrites generic addresses of those memories that went through integer
+  arithmetic into pointer arithmetic, and turns those only used as integers
+  (compared, masked) into their 32-bit offsets.
+* `alloca`, `stacksave` and `stackrestore` use a per-function stack (a
+  private array and the offset of its top), so that allocations made after
+  a `stackrestore` reuse the freed addresses as in PTX.
+* Registers start as zero, and a register used without a declaration is
+  declared with the type of its first use (ptxas rejects such code, the K
+  semantics of PTX accept it); `.ftz` in a `cvt` without an `f32` type is
+  ignored.
+* `printf` (`vprintf`) appends a record to the device buffer
+  `__zluda_agx_printf_buffer` (64 KiB, in the global data buffer), for a
+  host runtime to print. Its first 32-bit word counts the bytes of records
+  written (updated atomically; a record that would not fit is dropped, but
+  still counted); the records start at byte 8. A record is a `u32` with its
+  size (a multiple of 8), a `u32` with the size of its arguments, the `u64`
+  device address of the format string and the argument bytes as the caller
+  laid them out (each argument aligned to its size: 4 bytes for `%c`, `%d`,
+  `%i`, `%o`, `%u`, `%x`, `%X` and `*`, 8 bytes for their `l`/`ll`/`z`/`j`/`t`
+  forms, `%p`, `%s` and the floating point conversions). The argument size is
+  found by scanning the format string; `vprintf` returns the number of
+  conversions.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the
@@ -173,6 +229,53 @@ sparse `mma`, and `wgmma`/`tcgen05`. `ldmatrix` and `stmatrix` need shared
 memory addresses: AGX has no generic addressing of threadgroup memory, so
 shared memory addresses converted with `cvta.shared` cannot be used.
 
+## Asynchronous copies and mbarriers
+
+The hardware has no asynchronous copy engine and no transaction barriers, so
+these are emulated with ordinary instructions, and clusters have a single CTA
+(`.shared::cluster` addresses are those of `.shared::cta`, cluster scope
+fences are GPU scope ones):
+
+* `cp.async` (with `src-size` or `ignore-src` zero filling), `cp.async.bulk`
+  (global to shared, shared to shared, shared to global, also with
+  `.cp_mask`) and `cp.reduce.async.bulk` copy synchronously, with loads and
+  stores (atomic ones for the reductions) at the point of the instruction.
+  `commit_group`, `wait_group` and `wait_all` are no-ops: the copies of a
+  thread are complete when it waits, but waiting does not synchronize
+  threads, as in PTX. `.multicast::cluster` copies write to the issuing CTA
+  only, and cache hints and policies are ignored. `fence.proxy.async` is a
+  CTA fence; `fence.sc`/`fence.acq_rel` and `fence.mbarrier_init` are
+  ordinary fences.
+* An mbarrier is its 8 bytes of shared memory, updated with 32-bit
+  threadgroup atomics. Word 0 holds the parity of the current phase in bit 31
+  and, in bits 0-30, the pending arrivals times 2^19 plus the pending
+  transaction bytes (a 19-bit signed count), modulo 2^31, which is zero
+  exactly when the phase is complete. Word 1 holds the expected arrival
+  count. `arrive` (with a count, or once with `.expect_tx` bytes),
+  `expect_tx`, `complete_tx` and the copies completed on the object update
+  word 0 with a compare-and-swap; the update that brings the counts to zero
+  flips the parity and reloads the expected arrivals in the same operation.
+  `arrive_drop` also decrements the expected count. The state an arrive
+  returns is the parity of its phase (bit 0) and the pending arrivals before
+  it (bits 32-51, read by `pending_count`); `test_wait` and `try_wait`
+  compare that parity (or the given one) with the current one.
+  `cp.async.mbarrier.arrive.noinc` is an arrival; without `.noinc` the
+  increment and the arrival cancel out.
+* `try_wait` waits at a threadgroup barrier between polls, so that the other
+  SIMD-groups run until they wait or exit, and returns false after 4096 polls
+  (PTX programs retry). This is needed on the functional simulator, which
+  switches SIMD-groups only at barriers. On hardware the barriers of
+  waiting SIMD-groups meet each other and those of `bar.sync`, so a
+  `try_wait` can release a `bar.sync` of another SIMD-group early.
+  `test_wait` only polls.
+
+Limitations: an mbarrier counts at most 4095 pending arrivals and
+transaction counts between -2^18 and 2^18 - 1 bytes; phases are only
+distinguished by their parity; the `.multicast::cluster::32b` mbarrier
+operations, tensor copies (`cp.async.bulk.tensor`) and `elect.sync` are not
+supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
+reductions and the mbarrier operations with two SIMD-groups.
+
 ## Strict floating point mode
 
 `zoc --strict-fp` (`ptx::Options::strict_fp` with
@@ -200,9 +303,9 @@ kernel that mixes `.ftz` and other `f32` instructions, the instructions
 whose mode differs from the kernel's flush their operands and results
 explicitly, or keep denormals with the software paths
 (`ptx/tools/agx_tests/mixed-ftz.ptx`, run with
-`agx_ptx_formalization_check.py --strict-fp`, checks this). `f64` remains unsupported, and
-approximate instructions (`ex2.approx`, `rcp.approx`, ...) keep the
-hardware's approximations.
+`agx_ptx_formalization_check.py --strict-fp`, checks this). Approximate
+instructions (`ex2.approx`, `rcp.approx`, ...) keep the hardware's
+approximations.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated
@@ -246,18 +349,16 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
 ```
 
 Kernels with statements that ZLUDA's front end does not support (many of the
-tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA,
-clusters and `mbarrier`) are skipped, together with the checks that follow
+tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA and
+clusters of several CTAs) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
-1125 checks of the 220 programs that compile, 213 run: 191 match the formal
-semantics and the other 22 are the floating point differences listed above
-(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`, `div`
-and `sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
-script), all 213 match.
+1349 checks of the 285 programs, 664 run: 560 match the formal semantics and
+the other 104 are the floating point differences listed above (denormal
+`f32` operands and results, NaN bit patterns, `-0.0` under `.sat`, `div` and
+`sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
+script), all 664 match. Nine of the `cvt-*.ptx` programs do not compile
+because of a backend error on conversions of sign-extended bytes.
 
-The script declares the registers that a function uses without declaring
-any register of their prefix: the K semantics creates registers when they are
-first written, and the generated `tests/mma-*.ptx` rely on it. All 74
-programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma` (`ldm-*`,
-`ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal semantics,
-with and without `--strict-fp`.
+All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`
+(`ldm-*`, `ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal
+semantics, with and without `--strict-fp`.

@@ -82,57 +82,6 @@ def split_program(text):
     return ''.join(module), dirs
 
 
-SPECIAL_REGISTERS = re.compile(
-    r'%(tid|ntid|laneid|warpid|nwarpid|ctaid|nctaid|smid|nsmid|gridid|lanemask_\w+|clock|clock64|'
-    r'globaltimer\w*|envreg\d+|pm\d+\w*|dynamic_smem_size|total_smem_size|aggr_smem_size|'
-    r'reserved_smem_\w+|cluster\w*|is_explicit_cluster|current_graph_exec|nclusterid|clusterid)$')
-
-
-def declare_implicit_registers(module):
-    """Declare the registers %<prefix><n> that a function uses without
-    declaring any register of that prefix.
-
-    The K semantics creates registers when they are first written, and some
-    generated tests (tests/mma-*.ptx) rely on it; PTX requires declarations.
-    The size is that of the loads or stores of the register, 32 bits by
-    default."""
-    out, pos = [], 0
-    for m in re.finditer(r'\.(?:entry|func)\b[^{;]*\{', module):
-        start = m.end()
-        depth, i = 1, start
-        while i < len(module) and depth:
-            depth += {'{': 1, '}': -1}.get(module[i], 0)
-            i += 1
-        body = module[start:i - 1]
-        declared, families = set(), set()
-        for decl in re.finditer(r'\.reg\s+(?:\.v\d\s+)?\.\w+\s+([^;]*);', body):
-            for name in decl.group(1).split(','):
-                name = name.strip()
-                r = re.fullmatch(r'(%?[\w$]+)\s*<\s*(\d+)\s*>', name)
-                if r:
-                    families.add(r.group(1))
-                else:
-                    declared.add(re.split(r'[\s\[]', name)[0])
-        declared.update(re.findall(r'(%[\w$]+)', module[m.start():start]))
-        for statement in body.split(';'):
-            if statement.strip().startswith('.'):
-                declared.update(re.findall(r'(%[\w$]+)', statement))
-        uses = re.sub(r'\.reg\b[^;]*;', ' ', body)
-        missing = []
-        for name in sorted(set(re.findall(r'%[A-Za-z_][\w$]*', uses))):
-            r = re.fullmatch(r'(%[A-Za-z_]+)\d+', name)
-            if not r or r.group(1) in families or name in declared or SPECIAL_REGISTERS.match(name):
-                continue
-            size = re.search(r'\b(?:ld|st)\.[\w.]*[bsuf](8|16|32|64)\b[^;]*' + re.escape(name) + r'\b', uses)
-            bits = {'8': 16, '16': 16, '64': 64}.get(size.group(1) if size else '', 32)
-            missing.append('.reg .b%d %s;' % (bits, name))
-        out.append(module[pos:start])
-        if missing:
-            out.append(' ' + ' '.join(missing))
-        pos = start
-    out.append(module[pos:])
-    return ''.join(out)
-
 def split_vals(s):
     """Flatten a (possibly nested) brace initializer list."""
     s = s.replace('{', ' ').replace('}', ' ')
@@ -347,7 +296,6 @@ class Memory:
 def run_test(path, args):
     with open(path) as f:
         module, dirs = split_program(f.read())
-    module = declare_implicit_registers(module)
     for d in dirs:
         if d.split()[0] in UNSUPPORTED:
             return 'UNSUPPORTED', 'harness directive ' + d.split()[0]

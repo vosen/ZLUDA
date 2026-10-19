@@ -107,6 +107,17 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        Red {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
         AtomCas {
             type: Type::Scalar(data.type_),
             data: AtomCasDetails,
@@ -141,7 +152,13 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: Type::from(ScalarType::Pred)
+                    type: {
+                        if data.pred_reduction == Reduction::Popc {
+                            Type::from(ScalarType::U32)
+                        } else {
+                            Type::from(ScalarType::Pred)
+                        }
+                    }
                 },
                 src_barrier: T,
                 src_threadcount: Option<T>,
@@ -249,9 +266,87 @@ ptx_parser_macros::generate_instruction_type!(
                 src_from: {
                     repr: T,
                     space: StateSpace::Global
+                },
+                // src-size or ignore-src in a register (an immediate src-size is in data)
+                src_size: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(if data.ignore_src { ScalarType::Pred } else { ScalarType::U32 }) },
                 }
             }
         },
+        CpAsyncMbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: CpAsyncMbarrierArriveDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                }
+            }
+        },
+        CpAsyncBulk {
+            type: Type::Scalar(ScalarType::B8),
+            data: CpAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_byte_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+        CpReduceAsyncBulk {
+            type: { Type::Scalar(data.type_) },
+            data: CpReduceAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+
         CpAsyncCommitGroup { },
         CpAsyncWaitGroup {
             type: Type::Scalar(ScalarType::U64),
@@ -284,6 +379,116 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: {
                     repr: Option<T>,
                     type: { Type::Scalar(data.from) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        Alloca {
+            type: Type::Scalar(data.type_),
+            data: AllocaDetails,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        StackSave {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+            }
+        },
+        StackRestore {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                src: T,
+            }
+        },
+        // clmad: carry-less multiply of a and b, the low (data false) or
+        // high (true) 64 bits xor c
+        // Scalar video instructions: vadd, vsub, vabsdiff, vmin, vmax, vshl,
+        // vshr and vset. src3 is the operand of the secondary operation or
+        // of the merge
+        VideoScalar {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoScalarDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: Option<T>,
+            }
+        },
+        // SIMD video instructions: vadd2, vsub2, vavrg2, vabsdiff2, vmin2,
+        // vmax2, vset2 and their 4-way versions
+        VideoSimd {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoSimdDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Vmad {
+            type: Type::Scalar(ScalarType::B32),
+            data: VmadDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Clmad {
+            type: Type::Scalar(ScalarType::U64),
+            data: bool,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Packed8 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Packed8Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: Option<T>,
+            }
+        },
+        Isspacep {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: T,
+            }
+        },
+        // Conversions to and from the narrow floating point formats
+        CvtMini {
+            data: CvtMiniDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.src_type() },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
                     relaxed_type_check: true,
                 },
             }
@@ -443,6 +648,97 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Membar {
             data: MemScope
+        },
+        MbarrierInit {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                },
+                src_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierInval {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                }
+            }
+        },
+        MbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierArriveDetails,
+            arguments<T>: {
+                dst_state: Option<T>,
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_tx_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierTx {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierTxDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_tx_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierWait {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierWaitDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(if data.parity { ScalarType::U32 } else { ScalarType::B64 }),
+                },
+                src_time_hint: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierPendingCount {
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
         },
         Min {
             type: { Type::from(data.type_()) },
@@ -1061,6 +1357,8 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        // vshr.u32.u32.u32.clamp.add, kept apart from VideoScalar so that its
+        // code does not change
         Vshr {
             type: Type::Scalar(ScalarType::U32),
             data: VshData,
@@ -1707,7 +2005,47 @@ pub struct CpAsyncDetails {
     pub caching: CpAsyncCacheOperator,
     pub space: StateSpace,
     pub cp_size: CpAsyncCpSize,
+    // immediate src-size
     pub src_size: Option<u64>,
+    // the src_size argument is the ignore-src predicate
+    pub ignore_src: bool,
+}
+
+pub struct CpAsyncMbarrierArriveDetails {
+    pub space: StateSpace,
+    pub noinc: bool,
+}
+
+pub struct CpAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub multicast: bool,
+}
+
+pub struct CpReduceAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub op: AtomicOp,
+    pub type_: ScalarType,
+}
+
+pub struct MbarrierArriveDetails {
+    pub space: StateSpace,
+    // arrive_drop: also decrements the expected arrival count
+    pub drop: bool,
+}
+
+pub struct MbarrierTxDetails {
+    pub space: StateSpace,
+    // complete_tx (decrements the transaction count) instead of expect_tx
+    pub complete: bool,
+}
+
+pub struct MbarrierWaitDetails {
+    pub space: StateSpace,
+    pub parity: bool,
+    // try_wait (potentially blocking) instead of test_wait
+    pub try_wait: bool,
 }
 
 pub struct ShfDetails {
@@ -2647,9 +2985,10 @@ impl CvtDetails {
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
             _ => {
-                if ftz {
-                    errors.push(PtxError::NonF32Ftz);
-                }
+                // .ftz needs an f32 source or destination; ptxas rejects it
+                // elsewhere, PTX-formalization accepts it and flushes f16
+                // and f64 subnormals too. It is ignored here
+                let _ = ftz;
                 None
             }
         };
@@ -3503,6 +3842,51 @@ pub enum TexType {
     Texobj,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniFormat {
+    E4m3x2,
+    E5m2x2,
+    E2m1x2,
+    E2m3x2,
+    E3m2x2,
+    Ue8m0x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniDirection {
+    // two f32 (the first one into the high element)
+    FromF32,
+    FromF16x2,
+    FromBf16x2,
+    ToF16x2,
+    ToBf16x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct CvtMiniDetails {
+    pub format: MiniFormat,
+    pub direction: MiniDirection,
+    pub rounding: RoundingMode,
+    pub relu: bool,
+}
+
+impl CvtMiniDetails {
+    pub fn dst_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B32),
+            _ => Type::Scalar(ScalarType::B16),
+        }
+    }
+
+    pub fn src_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::FromF32 => Type::Scalar(ScalarType::F32),
+            MiniDirection::FromF16x2 | MiniDirection::FromBf16x2 => Type::Scalar(ScalarType::B32),
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B16),
+        }
+    }
+}
+
 // cvt.rnd{.relu}{.satfinite}.tf32.f32: rounds an f32 to the 10 fraction bits
 // of tf32, the result keeps the binary32 layout with the low 13 bits clear
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -3513,13 +3897,143 @@ pub struct CvtTf32Details {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VshData {
+    pub mode: FunnelShiftMode,
+    pub op2: VshOp,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoOp {
+    Add,
+    Sub,
+    Absdiff,
+    Min,
+    Max,
+    Shl,
+    Shr,
+    Avrg,
+    Set(VideoCompare),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoCompare {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoSecondaryOp {
+    Add,
+    Min,
+    Max,
+}
+
+// A byte (.b) or half-word (.h) selector of a video instruction operand:
+// one digit for scalar instructions, one per lane (most significant lane
+// first, like in the source) for SIMD instructions and their masks
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct VideoSelector {
+    pub half: bool,
+    pub digits: [u8; 4],
+    pub len: u8,
+}
+
+impl VideoSelector {
+    pub fn width(&self) -> u32 {
+        if self.half {
+            16
+        } else {
+            8
+        }
+    }
+
+    pub fn digits(&self) -> &[u8] {
+        &self.digits[..self.len as usize]
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoScalarDetails {
+    pub op: VideoOp,
+    // .u32 for vset, which has no destination type
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // shift amount mode of vshl and vshr: .clamp (default) or .wrap
+    pub clamp: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+    // merge of the result into src3
+    pub dsel: Option<VideoSelector>,
+    pub secondary: Option<VideoSecondaryOp>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoSimdDetails {
+    pub op: VideoOp,
+    // 2 or 4
+    pub lanes: u8,
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .add: the sum of the lanes plus src3, otherwise the lanes merged
+    // with src3
+    pub add: bool,
+    pub mask: Option<VideoSelector>,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VmadDetails {
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .shr7 or .shr15
+    pub shift: u8,
+    pub plus_one: bool,
+    pub negate_a: bool,
+    pub negate_b: bool,
+    pub negate_c: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+// Operations on four byte lanes of a .b32 (.u8x4 and .s8x4 types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Packed8Details {
+    pub op: Packed8Op,
+    pub signed: bool,
+    pub saturate: bool,
+    pub relu: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Packed8Op {
+    Add,
+    Sub,
+    Min,
+    Max,
+    Neg,
+    Abs,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AllocaDetails {
+    pub type_: ScalarType,
+    pub align: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BfindDetails {
     pub type_: ScalarType,
     pub shift_amount: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct VshData {
-    pub mode: FunnelShiftMode,
-    pub op2: VshOp,
-}

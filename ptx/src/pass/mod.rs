@@ -172,7 +172,8 @@ pub fn to_llvm_module_with_options<'input>(
     let directives =
         insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
-    let directives = replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
+    let directives =
+        replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
@@ -1171,6 +1172,9 @@ struct IdentEntry<'input> {
 struct ScopedResolver<'input, 'b> {
     flat_resolver: &'b mut GlobalStringIdentResolver2<'input>,
     scopes: Vec<ScopeMarker<'input>>,
+    // The scope of the function being normalized and the registers used in
+    // it without a declaration (see get_or_declare)
+    implicit_registers: Option<(usize, Vec<ast::Variable<SpirvWord>>)>,
 }
 
 impl<'input, 'b> ScopedResolver<'input, 'b> {
@@ -1178,7 +1182,53 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
         Self {
             flat_resolver,
             scopes: vec![ScopeMarker::new()],
+            implicit_registers: None,
         }
+    }
+
+    // Like get, but a register (%name) that was never declared is declared
+    // in the function with the type of its first use. ptxas rejects such
+    // code; the K semantics of PTX (PTX-formalization) accept it.
+    fn get_or_declare(
+        &mut self,
+        name: &'input str,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+    ) -> Result<SpirvWord, TranslateError> {
+        let error = match self.get(name) {
+            Ok(word) => return Ok(word),
+            Err(error) => error,
+        };
+        let (Some((scope, _)), Some((type_ @ ast::Type::Scalar(_), _)), true) =
+            (&self.implicit_registers, type_space, name.starts_with('%'))
+        else {
+            return Err(error);
+        };
+        let scope = *scope;
+        let result = self.flat_resolver.current_id;
+        self.flat_resolver.current_id.0 += 1;
+        let type_space = (type_.clone(), ast::StateSpace::Reg);
+        self.scopes[scope]
+            .name_to_ident
+            .insert(Cow::Borrowed(name), result);
+        self.scopes[scope].ident_map.insert(
+            result,
+            IdentEntry {
+                name: Some(Cow::Borrowed(name)),
+                type_space: Some(type_space),
+            },
+        );
+        if let Some((_, registers)) = &mut self.implicit_registers {
+            registers.push(ast::Variable {
+                info: ast::VariableInfo {
+                    align: None,
+                    v_type: type_.clone(),
+                    state_space: ast::StateSpace::Reg,
+                    array_init: Vec::new(),
+                },
+                name: result,
+            });
+        }
+        Ok(result)
     }
 
     fn start_scope(&mut self) {
@@ -1255,23 +1305,33 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .iter()
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
-            .ok_or_else(|| error_unknown_symbol(name))
+            // An undeclared identifier is an error in the input, not in the
+            // compiler
+            .ok_or_else(|| TranslateError::UnknownSymbol(name.to_string()))
     }
 
-    // The innermost declaration of `name` that is not a scalar.
+    // The innermost variable of this name that is a vector, or else the
+    // innermost variable
     fn get_vector(&mut self, name: &str) -> Result<SpirvWord, TranslateError> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(id) = scope.name_to_ident.get(name) {
-                let scalar = matches!(
-                    scope.ident_map.get(id).and_then(|e| e.type_space.as_ref()),
-                    Some((ast::Type::Scalar(_), _))
-                );
-                if !scalar {
-                    return Ok(*id);
-                }
+        let vector = self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            match scope.ident_map.get(ident)?.type_space {
+                Some((ast::Type::Vector(..), _)) => Some(*ident),
+                _ => None,
             }
+        });
+        match vector {
+            Some(ident) => Ok(ident),
+            None => self.get(name),
         }
-        self.get(name)
+    }
+
+    fn get_type(&self, name: &str) -> Option<&ast::Type> {
+        self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            let entry = scope.ident_map.get(ident)?;
+            entry.type_space.as_ref().map(|(type_, _)| type_)
+        })
     }
 
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {

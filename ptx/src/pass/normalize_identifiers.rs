@@ -37,14 +37,26 @@ fn run_method<'input, 'b>(
     let name = resolver.add_or_get_in_current_scope_untyped(method.func_directive.name.text())?;
     resolver.start_scope();
     let (return_arguments, input_arguments) = run_function_decl(resolver, method.func_directive)?;
+    resolver.implicit_registers = Some((resolver.scopes.len() - 1, Vec::new()));
     let body = method
         .body
         .map(|statements| {
-            let mut result = Vec::with_capacity(statements.len());
-            run_statements(resolver, &mut result, statements)?;
+            let mut body = Vec::with_capacity(statements.len());
+            run_statements(resolver, &mut body, statements)?;
+            let implicit = resolver
+                .implicit_registers
+                .as_mut()
+                .map(|(_, registers)| std::mem::take(registers))
+                .unwrap_or_default();
+            let mut result = implicit
+                .into_iter()
+                .map(Statement::Variable)
+                .collect::<Vec<_>>();
+            result.extend(body);
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
+    resolver.implicit_registers = None;
     resolver.end_scope();
     Ok(Function {
         return_arguments,
@@ -151,34 +163,57 @@ fn run_statements<'input, 'b>(
 
 fn run_instruction<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
-    instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
+    mut instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
 ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
-    ast::visit_map(instruction, &mut ResolveNames(resolver))
+    // The optional operand of cp.async after cp-size is src-size or, for a
+    // predicate, ignore-src
+    if let ast::Instruction::CpAsync {
+        data,
+        arguments:
+            ast::CpAsyncArgs {
+                src_size: Some(ast::ParsedOperand::Reg(name)),
+                ..
+            },
+    } = &mut instruction
+    {
+        data.ignore_src = matches!(
+            resolver.get_type(name),
+            Some(ast::Type::Scalar(ast::ScalarType::Pred))
+        );
+    }
+    ast::visit_map(instruction, &mut Normalize { resolver })
 }
 
-struct ResolveNames<'r, 'input, 'b>(&'r mut ScopedResolver<'input, 'b>);
+struct Normalize<'a, 'input, 'b> {
+    resolver: &'a mut ScopedResolver<'input, 'b>,
+}
 
-impl<'r, 'input, 'b>
+impl<'a, 'input, 'b>
     ast::VisitorMap<ast::ParsedOperand<&'input str>, ast::ParsedOperand<SpirvWord>, TranslateError>
-    for ResolveNames<'r, 'input, 'b>
+    for Normalize<'a, 'input, 'b>
 {
     fn visit(
         &mut self,
-        args: ast::ParsedOperand<&'input str>,
+        operand: ast::ParsedOperand<&'input str>,
         type_space: Option<(&ast::Type, ast::StateSpace)>,
         is_dst: bool,
         relaxed_type_check: bool,
     ) -> Result<ast::ParsedOperand<SpirvWord>, TranslateError> {
-        // `%tid.x` is the special register even in a function that declares
-        // a scalar register `%tid`.
-        if let ast::ParsedOperand::VecMember(name, index) = args {
-            return Ok(ast::ParsedOperand::VecMember(self.0.get_vector(name)?, index));
+        match operand {
+            // A register may shadow a special register that is still used
+            // as a vector: `.reg .b32 %tid; mov.u32 %tid, %tid.x;`
+            ast::ParsedOperand::VecMember(name, index) => Ok(ast::ParsedOperand::VecMember(
+                self.resolver.get_vector(name)?,
+                index,
+            )),
+            operand => {
+                let resolver = &mut *self.resolver;
+                (&mut |name: &'input str, type_space: Option<(&ast::Type, ast::StateSpace)>, _, _| {
+                    resolver.get_or_declare(name, type_space)
+                })
+                    .visit(operand, type_space, is_dst, relaxed_type_check)
+            }
         }
-        let resolver = &mut *self.0;
-        let mut resolve = |name: &'input str, _: Option<(&ast::Type, ast::StateSpace)>, _, _| {
-            resolver.get(name)
-        };
-        ast::VisitorMap::visit(&mut resolve, args, type_space, is_dst, relaxed_type_check)
     }
 
     fn visit_ident(
@@ -188,7 +223,7 @@ impl<'r, 'input, 'b>
         _: bool,
         _: bool,
     ) -> Result<SpirvWord, TranslateError> {
-        self.0.get(name)
+        self.resolver.get(&name)
     }
 }
 

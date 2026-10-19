@@ -76,6 +76,7 @@ fn run_instruction<'input>(
         | ast::Instruction::MadExtended { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Atom { .. }
+        | ast::Instruction::Red { .. }
         | ast::Instruction::AtomCas { .. }
         | ast::Instruction::BarWarp { .. }
         | ast::Instruction::Bar { .. }
@@ -94,6 +95,15 @@ fn run_instruction<'input>(
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }
         | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::CpAsyncMbarrierArrive { .. }
+        | ast::Instruction::CpAsyncBulk { .. }
+        | ast::Instruction::CpReduceAsyncBulk { .. }
+        | ast::Instruction::MbarrierInit { .. }
+        | ast::Instruction::MbarrierInval { .. }
+        | ast::Instruction::MbarrierArrive { .. }
+        | ast::Instruction::MbarrierTx { .. }
+        | ast::Instruction::MbarrierWait { .. }
+        | ast::Instruction::MbarrierPendingCount { .. }
         | ast::Instruction::CreatePolicyFractional { .. }
         | ast::Instruction::Cvt {
             data:
@@ -128,6 +138,16 @@ fn run_instruction<'input>(
         }
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::CvtMini { .. }
+        | ast::Instruction::Isspacep { .. }
+        | ast::Instruction::Packed8 { .. }
+        | ast::Instruction::Clmad { .. }
+        | ast::Instruction::VideoScalar { .. }
+        | ast::Instruction::VideoSimd { .. }
+        | ast::Instruction::Vmad { .. }
+        | ast::Instruction::Alloca { .. }
+        | ast::Instruction::StackSave { .. }
+        | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Div { .. }
         | ast::Instruction::Dp4a { .. }

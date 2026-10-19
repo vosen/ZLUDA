@@ -49,6 +49,15 @@ extern "C" {
         Name: *const i8,
     ) -> LLVMValueRef;
 
+    pub fn LLVMZludaBuildArrayAlloca(
+        B: LLVMBuilderRef,
+        Ty: LLVMTypeRef,
+        AddrSpace: u32,
+        ArraySize: LLVMValueRef,
+        Align: u32,
+        Name: *const i8,
+    ) -> LLVMValueRef;
+
     pub fn LLVMZludaBuildAtomicRMW(
         B: LLVMBuilderRef,
         op: LLVMZludaAtomicRMWBinOp,
@@ -98,6 +107,8 @@ extern "C" {
     ) -> bool;
 
     pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
+
+    pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

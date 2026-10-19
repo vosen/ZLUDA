@@ -2185,6 +2185,15 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }
         | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::CpAsyncMbarrierArrive { .. }
+        | ast::Instruction::CpAsyncBulk { .. }
+        | ast::Instruction::CpReduceAsyncBulk { .. }
+        | ast::Instruction::MbarrierInit { .. }
+        | ast::Instruction::MbarrierInval { .. }
+        | ast::Instruction::MbarrierArrive { .. }
+        | ast::Instruction::MbarrierTx { .. }
+        | ast::Instruction::MbarrierWait { .. }
+        | ast::Instruction::MbarrierPendingCount { .. }
         | ast::Instruction::Shf { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Selp { .. }
@@ -2194,8 +2203,19 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::CvtMini { .. }
+        | ast::Instruction::Isspacep { .. }
+        | ast::Instruction::Packed8 { .. }
+        | ast::Instruction::Clmad { .. }
+        | ast::Instruction::VideoScalar { .. }
+        | ast::Instruction::VideoSimd { .. }
+        | ast::Instruction::Vmad { .. }
+        | ast::Instruction::Alloca { .. }
+        | ast::Instruction::StackSave { .. }
+        | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
+        | ast::Instruction::Red { .. }
         | ast::Instruction::Mul24 { .. }
         | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::AtomCas { .. }
