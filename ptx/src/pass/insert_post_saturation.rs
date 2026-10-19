@@ -132,6 +132,9 @@ fn run_instruction<'input>(
         | ast::Instruction::Isspacep { .. }
         | ast::Instruction::Packed8 { .. }
         | ast::Instruction::Clmad { .. }
+        | ast::Instruction::VideoScalar { .. }
+        | ast::Instruction::VideoSimd { .. }
+        | ast::Instruction::Vmad { .. }
         | ast::Instruction::Alloca { .. }
         | ast::Instruction::StackSave { .. }
         | ast::Instruction::StackRestore { .. }

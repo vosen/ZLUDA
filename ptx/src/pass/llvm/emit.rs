@@ -751,6 +751,11 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Isspacep { data, arguments } => self.emit_isspacep(data, arguments),
             ast::Instruction::Packed8 { data, arguments } => self.emit_packed8(data, arguments),
             ast::Instruction::Clmad { data, arguments } => self.emit_clmad(data, arguments),
+            ast::Instruction::VideoScalar { data, arguments } => {
+                self.emit_video_scalar(data, arguments)
+            }
+            ast::Instruction::VideoSimd { data, arguments } => self.emit_video_simd(data, arguments),
+            ast::Instruction::Vmad { data, arguments } => self.emit_vmad(data, arguments),
             ast::Instruction::Alloca { data, arguments } => self.emit_alloca(data, arguments),
             ast::Instruction::StackSave { data, arguments } => self.emit_stacksave(data, arguments),
             ast::Instruction::StackRestore { data, arguments } => {
@@ -2944,6 +2949,413 @@ impl<'a> MethodEmitContext<'a> {
             let offset = LLVMBuildSub(self.builder, src, base_address, LLVM_UNNAMED.as_ptr());
             let offset = LLVMBuildTruncOrBitCast(self.builder, offset, i32_type, LLVM_UNNAMED.as_ptr());
             LLVMBuildStore(self.builder, offset, top);
+        }
+        Ok(())
+    }
+
+    // Video instructions follow the semantics of the PTX ISA: the operand
+    // parts are sign- or zero-extended and computed in a wider type
+
+    // Bits offset..offset+width of an i32, extended to `to` by `type_`
+    fn emit_video_extract(
+        &mut self,
+        value: LLVMValueRef,
+        type_: ast::ScalarType,
+        offset: u32,
+        width: u32,
+        to: LLVMTypeRef,
+    ) -> LLVMValueRef {
+        let b = self.builder;
+        unsafe {
+            let i32_type = LLVMInt32TypeInContext(self.context);
+            let shifted = if offset == 0 {
+                value
+            } else {
+                LLVMBuildLShr(b, value, LLVMConstInt(i32_type, offset as u64, 0), LLVM_UNNAMED.as_ptr())
+            };
+            let part = if width == 32 {
+                shifted
+            } else {
+                LLVMBuildTrunc(
+                    b,
+                    shifted,
+                    LLVMIntTypeInContext(self.context, width),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            if LLVMGetIntTypeWidth(to) == width {
+                part
+            } else if type_.kind() == ast::ScalarKind::Signed {
+                // Extended in two steps, separated by a freeze: the AGX
+                // backend cannot select the sign extension of a loaded byte
+                // to 64 bits that instruction selection combines them into
+                let part = if width < 32 && LLVMGetIntTypeWidth(to) > 32 {
+                    let part = LLVMBuildSExt(b, part, i32_type, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildFreeze(b, part, LLVM_UNNAMED.as_ptr())
+                } else {
+                    part
+                };
+                LLVMBuildSExt(b, part, to, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildZExt(b, part, to, LLVM_UNNAMED.as_ptr())
+            }
+        }
+    }
+
+    fn emit_video_scalar_operand(
+        &mut self,
+        value: LLVMValueRef,
+        type_: ast::ScalarType,
+        selector: Option<ast::VideoSelector>,
+        to: LLVMTypeRef,
+    ) -> LLVMValueRef {
+        match selector {
+            Some(sel) => {
+                let width = sel.width();
+                self.emit_video_extract(value, type_, sel.digits[0] as u32 * width, width, to)
+            }
+            None => self.emit_video_extract(value, type_, 0, 32, to),
+        }
+    }
+
+    fn emit_int_intrinsic(
+        &mut self,
+        name: &str,
+        type_: LLVMTypeRef,
+        args: &[LLVMValueRef],
+    ) -> LLVMValueRef {
+        let bits = unsafe { LLVMGetIntTypeWidth(type_) };
+        let name = format!("{name}.i{bits}\0");
+        let mut params = vec![type_; args.len()];
+        if name.starts_with("llvm.abs.") {
+            params[1] = unsafe { LLVMInt1TypeInContext(self.context) };
+        }
+        unsafe {
+            let fn_type = LLVMFunctionType(type_, params.as_mut_ptr(), params.len() as u32, 0);
+            let mut fn_ = LLVMGetNamedFunction(self.module, name.as_ptr().cast());
+            if fn_ == ptr::null_mut() {
+                fn_ = LLVMAddFunction(self.module, name.as_ptr().cast(), fn_type);
+            }
+            let mut args = args.to_vec();
+            LLVMBuildCall2(
+                self.builder,
+                fn_type,
+                fn_,
+                args.as_mut_ptr(),
+                args.len() as u32,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        }
+    }
+
+    // Clamps to the range of a `width`-bit integer, signed or unsigned
+    fn emit_video_saturate(
+        &mut self,
+        value: LLVMValueRef,
+        width: u32,
+        signed: bool,
+    ) -> LLVMValueRef {
+        let type_ = unsafe { LLVMTypeOf(value) };
+        let (low, high) = if signed {
+            (-(1i64 << (width - 1)), (1i64 << (width - 1)) - 1)
+        } else {
+            (0, ((1u64 << width) - 1) as i64)
+        };
+        let low = unsafe { LLVMConstInt(type_, low as u64, 1) };
+        let high = unsafe { LLVMConstInt(type_, high as u64, 1) };
+        let value = self.emit_int_intrinsic("llvm.smax", type_, &[value, low]);
+        self.emit_int_intrinsic("llvm.smin", type_, &[value, high])
+    }
+
+    // The primary operation on extended operands
+    fn emit_video_op(
+        &mut self,
+        op: ast::VideoOp,
+        clamp: bool,
+        a: LLVMValueRef,
+        b: LLVMValueRef,
+    ) -> LLVMValueRef {
+        let builder = self.builder;
+        let type_ = unsafe { LLVMTypeOf(a) };
+        let k = |v: i64| unsafe { LLVMConstInt(type_, v as u64, 1) };
+        unsafe {
+            match op {
+                ast::VideoOp::Add => LLVMBuildAdd(builder, a, b, LLVM_UNNAMED.as_ptr()),
+                ast::VideoOp::Sub => LLVMBuildSub(builder, a, b, LLVM_UNNAMED.as_ptr()),
+                ast::VideoOp::Absdiff => {
+                    let diff = LLVMBuildSub(builder, a, b, LLVM_UNNAMED.as_ptr());
+                    let false_ = LLVMConstInt(LLVMInt1TypeInContext(self.context), 0, 0);
+                    self.emit_int_intrinsic("llvm.abs", type_, &[diff, false_])
+                }
+                ast::VideoOp::Min => self.emit_int_intrinsic("llvm.smin", type_, &[a, b]),
+                ast::VideoOp::Max => self.emit_int_intrinsic("llvm.smax", type_, &[a, b]),
+                ast::VideoOp::Shl | ast::VideoOp::Shr => {
+                    // The shift amount is the low 32 bits of b, unsigned:
+                    // clamped to 32 or taken modulo 32
+                    let i32_type = LLVMInt32TypeInContext(self.context);
+                    let amount = LLVMBuildTrunc(builder, b, i32_type, LLVM_UNNAMED.as_ptr());
+                    let amount = if clamp {
+                        self.emit_int_intrinsic(
+                            "llvm.umin",
+                            i32_type,
+                            &[amount, LLVMConstInt(i32_type, 32, 0)],
+                        )
+                    } else {
+                        LLVMBuildAnd(builder, amount, LLVMConstInt(i32_type, 31, 0), LLVM_UNNAMED.as_ptr())
+                    };
+                    let amount = LLVMBuildZExt(builder, amount, type_, LLVM_UNNAMED.as_ptr());
+                    if op == ast::VideoOp::Shl {
+                        LLVMBuildShl(builder, a, amount, LLVM_UNNAMED.as_ptr())
+                    } else {
+                        LLVMBuildAShr(builder, a, amount, LLVM_UNNAMED.as_ptr())
+                    }
+                }
+                ast::VideoOp::Avrg => {
+                    // (a + b + 1) >> 1 for non-negative sums, (a + b) >> 1 otherwise
+                    let sum = LLVMBuildAdd(builder, a, b, LLVM_UNNAMED.as_ptr());
+                    let non_negative = LLVMBuildICmp(
+                        builder,
+                        LLVMIntPredicate::LLVMIntSGE,
+                        sum,
+                        k(0),
+                        LLVM_UNNAMED.as_ptr(),
+                    );
+                    let round = LLVMBuildZExt(builder, non_negative, type_, LLVM_UNNAMED.as_ptr());
+                    let sum = LLVMBuildAdd(builder, sum, round, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildAShr(builder, sum, k(1), LLVM_UNNAMED.as_ptr())
+                }
+                ast::VideoOp::Set(cmp) => {
+                    let predicate = match cmp {
+                        ast::VideoCompare::Eq => LLVMIntPredicate::LLVMIntEQ,
+                        ast::VideoCompare::Ne => LLVMIntPredicate::LLVMIntNE,
+                        ast::VideoCompare::Lt => LLVMIntPredicate::LLVMIntSLT,
+                        ast::VideoCompare::Le => LLVMIntPredicate::LLVMIntSLE,
+                        ast::VideoCompare::Gt => LLVMIntPredicate::LLVMIntSGT,
+                        ast::VideoCompare::Ge => LLVMIntPredicate::LLVMIntSGE,
+                    };
+                    let result = LLVMBuildICmp(builder, predicate, a, b, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildZExt(builder, result, type_, LLVM_UNNAMED.as_ptr())
+                }
+            }
+        }
+    }
+
+    // Replaces bits position..position+width of `into` with the low bits of
+    // `value` (both i32)
+    fn emit_video_merge(
+        &mut self,
+        into: LLVMValueRef,
+        value: LLVMValueRef,
+        position: u32,
+        width: u32,
+    ) -> LLVMValueRef {
+        let b = self.builder;
+        unsafe {
+            let i32_type = LLVMInt32TypeInContext(self.context);
+            let mask = (((1u64 << width) - 1) << position) & 0xffff_ffff;
+            let kept = LLVMBuildAnd(b, into, LLVMConstInt(i32_type, !mask & 0xffff_ffff, 0), LLVM_UNNAMED.as_ptr());
+            let part = LLVMBuildShl(b, value, LLVMConstInt(i32_type, position as u64, 0), LLVM_UNNAMED.as_ptr());
+            let part = LLVMBuildAnd(b, part, LLVMConstInt(i32_type, mask, 0), LLVM_UNNAMED.as_ptr());
+            LLVMBuildOr(b, kept, part, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    fn emit_video_scalar(
+        &mut self,
+        data: ast::VideoScalarDetails,
+        arguments: ast::VideoScalarArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = match arguments.src3 {
+            Some(src3) => Some(self.resolver.value(src3)?),
+            None => None,
+        };
+        let a = self.emit_video_scalar_operand(a, data.atype, data.asel, i64_type);
+        let b = self.emit_video_scalar_operand(b, data.btype, data.bsel, i64_type);
+        let mut result = self.emit_video_op(data.op, data.clamp, a, b);
+        let dtype_signed = data.dtype.kind() == ast::ScalarKind::Signed;
+        let result = if let Some(dsel) = data.dsel {
+            // Merge into a byte or half-word of c
+            let width = dsel.width();
+            if data.saturate {
+                result = self.emit_video_saturate(result, width, dtype_signed);
+            }
+            let result = unsafe { LLVMBuildTrunc(self.builder, result, i32_type, LLVM_UNNAMED.as_ptr()) };
+            let c = c.ok_or_else(error_unreachable)?;
+            self.emit_video_merge(c, result, dsel.digits[0] as u32 * width, width)
+        } else {
+            if data.saturate {
+                result = self.emit_video_saturate(result, 32, dtype_signed);
+            }
+            if let (Some(op), Some(c)) = (data.secondary, c) {
+                let c = self.emit_video_extract(c, data.dtype, 0, 32, i64_type);
+                result = match op {
+                    ast::VideoSecondaryOp::Add => unsafe {
+                        LLVMBuildAdd(self.builder, result, c, LLVM_UNNAMED.as_ptr())
+                    },
+                    ast::VideoSecondaryOp::Min => {
+                        self.emit_int_intrinsic("llvm.smin", i64_type, &[result, c])
+                    }
+                    ast::VideoSecondaryOp::Max => {
+                        self.emit_int_intrinsic("llvm.smax", i64_type, &[result, c])
+                    }
+                };
+            }
+            unsafe { LLVMBuildTrunc(self.builder, result, i32_type, LLVM_UNNAMED.as_ptr()) }
+        };
+        self.resolver.register(arguments.dst, result);
+        Ok(())
+    }
+
+    fn emit_video_simd(
+        &mut self,
+        data: ast::VideoSimdDetails,
+        arguments: ast::VideoSimdArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+        let lanes = data.lanes as u32;
+        let width = 32 / lanes;
+        // Selector digits are written from the most significant lane down
+        let element = |sel: Option<ast::VideoSelector>, lane: u32, default_base: u32| match sel {
+            Some(sel) => sel.digits[(lanes - 1 - lane) as usize] as u32,
+            None => default_base + lane,
+        };
+        let in_mask = |lane: u32| match data.mask {
+            Some(mask) => mask.digits().contains(&(lane as u8)),
+            None => true,
+        };
+        let mut result = if data.add {
+            c
+        } else {
+            unsafe { LLVMConstInt(i32_type, 0, 0) }
+        };
+        for lane in 0..lanes {
+            let operand = |this: &mut Self, sel, base, type_| {
+                let index = element(sel, lane, base);
+                let (source, index) = if index < lanes { (a, index) } else { (b, index - lanes) };
+                this.emit_video_extract(source, type_, index * width, width, i32_type)
+            };
+            let va = operand(self, data.asel, 0, data.atype);
+            let vb = operand(self, data.bsel, lanes, data.btype);
+            if in_mask(lane) {
+                let mut t = self.emit_video_op(data.op, true, va, vb);
+                if data.saturate {
+                    t = self.emit_video_saturate(
+                        t,
+                        width,
+                        data.dtype.kind() == ast::ScalarKind::Signed,
+                    );
+                }
+                result = if data.add {
+                    unsafe { LLVMBuildAdd(self.builder, result, t, LLVM_UNNAMED.as_ptr()) }
+                } else {
+                    self.emit_video_merge(result, t, lane * width, width)
+                };
+            } else if !data.add {
+                let kept = unsafe {
+                    LLVMBuildLShr(
+                        self.builder,
+                        c,
+                        LLVMConstInt(i32_type, (lane * width) as u64, 0),
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                result = self.emit_video_merge(result, kept, lane * width, width);
+            }
+        }
+        self.resolver.register(arguments.dst, result);
+        Ok(())
+    }
+
+    // vmad: (a * b + c) >> shift, where negated operands are complemented
+    // and one is added (PTX ISA, also .po)
+    fn emit_vmad(
+        &mut self,
+        data: ast::VmadDetails,
+        arguments: ast::VmadArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+        let builder = self.builder;
+        let k = |v: i64| unsafe { LLVMConstInt(i64_type, v as u64, 1) };
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+        let a = self.emit_video_scalar_operand(a, data.atype, data.asel, i64_type);
+        let b = self.emit_video_scalar_operand(b, data.btype, data.bsel, i64_type);
+        let product_negated = !data.plus_one && data.negate_a != data.negate_b;
+        let signed = data.atype.kind() == ast::ScalarKind::Signed
+            || data.btype.kind() == ast::ScalarKind::Signed
+            || data.negate_a != data.negate_b
+            || data.negate_c;
+        let complement_c = !data.plus_one && data.negate_a == data.negate_b && data.negate_c;
+        let plus_one = data.plus_one || data.negate_a != data.negate_b || data.negate_c;
+        unsafe {
+            // Exact in 64 bits, except for the product of two .u32: it can
+            // reach 2^64, which only matters when it is negated and saturated
+            let product = LLVMBuildMul(builder, a, b, LLVM_UNNAMED.as_ptr());
+            let product_too_big = LLVMBuildICmp(
+                builder,
+                LLVMIntPredicate::LLVMIntSLT,
+                product,
+                k(0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let product = if product_negated {
+                LLVMBuildXor(builder, product, k(-1), LLVM_UNNAMED.as_ptr())
+            } else {
+                product
+            };
+            let c = if complement_c {
+                LLVMBuildXor(builder, c, LLVMConstInt(i32_type, u32::MAX as u64, 0), LLVM_UNNAMED.as_ptr())
+            } else {
+                c
+            };
+            let c = if signed {
+                LLVMBuildSExt(builder, c, i64_type, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildZExt(builder, c, i64_type, LLVM_UNNAMED.as_ptr())
+            };
+            let one = k(plus_one as i64);
+            let sum = if data.saturate {
+                let add = if signed { "llvm.sadd.sat" } else { "llvm.uadd.sat" };
+                let sum = self.emit_int_intrinsic(add, i64_type, &[product, c]);
+                self.emit_int_intrinsic(add, i64_type, &[sum, one])
+            } else {
+                let sum = LLVMBuildAdd(builder, product, c, LLVM_UNNAMED.as_ptr());
+                LLVMBuildAdd(builder, sum, one, LLVM_UNNAMED.as_ptr())
+            };
+            let sum = if data.shift == 0 {
+                sum
+            } else if signed {
+                LLVMBuildAShr(builder, sum, k(data.shift as i64), LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildLShr(builder, sum, k(data.shift as i64), LLVM_UNNAMED.as_ptr())
+            };
+            let result = if data.saturate {
+                let mut result = if signed {
+                    self.emit_video_saturate(sum, 32, true)
+                } else {
+                    self.emit_int_intrinsic("llvm.umin", i64_type, &[sum, k(u32::MAX as i64)])
+                };
+                let both_unsigned = data.atype.kind() != ast::ScalarKind::Signed
+                    && data.btype.kind() != ast::ScalarKind::Signed;
+                if product_negated && both_unsigned {
+                    result = LLVMBuildSelect(builder, product_too_big, k(i32::MIN as i64), result, LLVM_UNNAMED.as_ptr());
+                }
+                result
+            } else {
+                sum
+            };
+            self.resolver.with_result(arguments.dst, |dst| {
+                LLVMBuildTrunc(builder, result, i32_type, dst)
+            });
         }
         Ok(())
     }
