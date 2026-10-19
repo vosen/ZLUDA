@@ -125,9 +125,12 @@ exactly:
 
 The cost depends on the operation: an addition gets about 10 more
 instructions, a fused multiply-add about 24, a division about 67 (see the
-AGX backend documentation). The denormal mode is per kernel: in a kernel
-that mixes `.ftz` and other `f32` instructions, all of them follow the mode
-needed at the kernel's entry. `f64` remains unsupported, and
+AGX backend documentation). The denormal mode is per instruction: in a
+kernel that mixes `.ftz` and other `f32` instructions, the instructions
+whose mode differs from the kernel's flush their operands and results
+explicitly, or keep denormals with the software paths
+(`ptx/tools/agx_tests/mixed-ftz.ptx`, run with
+`agx_ptx_formalization_check.py --strict-fp`, checks this). `f64` remains unsupported, and
 approximate instructions (`ex2.approx`, `rcp.approx`, ...) keep the
 hardware's approximations.
 

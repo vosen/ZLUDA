@@ -1,0 +1,43 @@
+.version 7.0
+.target sm_70
+.address_size 64
+
+// One thread, f32 instructions with and without .ftz interleaved.
+.visible .entry mixed(.param .u64 pin, .param .u64 pout)
+{
+    .reg .f32 %f<20>;
+    .reg .b64 %rd<3>;
+    ld.param.u64 %rd1, [pin];
+    ld.param.u64 %rd2, [pout];
+    ld.global.f32 %f1, [%rd1];      // 0x00000003
+    ld.global.f32 %f2, [%rd1+4];    // 0x00000005
+    ld.global.f32 %f3, [%rd1+8];    // 0x00400000
+    ld.global.f32 %f4, [%rd1+12];   // 1.0
+    ld.global.f32 %f5, [%rd1+16];   // 2.0
+    add.f32 %f10, %f1, %f2;
+    add.ftz.f32 %f11, %f1, %f2;
+    mul.f32 %f12, %f3, %f4;
+    mul.ftz.f32 %f13, %f3, %f4;
+    add.f32 %f14, %f3, %f1;
+    fma.rn.ftz.f32 %f15, %f3, %f4, %f1;
+    div.rn.f32 %f16, %f3, %f5;
+    div.rn.ftz.f32 %f17, %f3, %f5;
+    sub.rz.f32 %f18, %f3, %f1;
+    sub.rz.ftz.f32 %f19, %f4, %f3;
+    st.global.f32 [%rd2], %f10;
+    st.global.f32 [%rd2+4], %f11;
+    st.global.f32 [%rd2+8], %f12;
+    st.global.f32 [%rd2+12], %f13;
+    st.global.f32 [%rd2+16], %f14;
+    st.global.f32 [%rd2+20], %f15;
+    st.global.f32 [%rd2+24], %f16;
+    st.global.f32 [%rd2+28], %f17;
+    st.global.f32 [%rd2+32], %f18;
+    st.global.f32 [%rd2+36], %f19;
+    ret;
+}
+
+.buffer IN .u32 = { 3, 5, 4194304, 1065353216, 1073741824 };
+.buffer OUT .u32 [10];
+.launch mixed <<< 1, 1 >>> (IN, OUT);
+.expect OUT .u32 = { 8, 0, 4194304, 0, 4194307, 0, 2097152, 0, 4194301, 1065353216 };
