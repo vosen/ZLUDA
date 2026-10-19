@@ -180,6 +180,24 @@ fn run_multivariable<'input, 'b>(
                 }));
             }
         }
+        ptx_parser::MultiVariable::List { info, names } => {
+            for (name, count) in names {
+                let names = match count {
+                    Some(count) => (0..count)
+                        .map(|i| Cow::Owned(format!("{}{}", name, i)))
+                        .collect::<Vec<_>>(),
+                    None => vec![Cow::Borrowed(name)],
+                };
+                for name in names {
+                    let ident =
+                        resolver.add(name, Some((info.v_type.clone(), info.state_space)))?;
+                    result.push(Statement::Variable(ast::Variable {
+                        info: run_variable_info(resolver, info.clone())?,
+                        name: ident,
+                    }));
+                }
+            }
+        }
         ptx_parser::MultiVariable::Names { info, names } => {
             for name in names {
                 let name = Cow::Borrowed(name);

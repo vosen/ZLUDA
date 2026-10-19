@@ -1086,13 +1086,48 @@ fn multi_variable<'a, 'input: 'a>(
     trace(
         "multi_variable",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let (parsed_type, names, count): (_, Vec<_>, _) = (
+            let (parsed_type, entries): (_, Vec<(_, Option<u32>)>) = (
                 variable_info(state_space),
-                separated(1.., ident, Token::Comma),
-                // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
-                opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
+                separated(
+                    1..,
+                    (
+                        ident,
+                        // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
+                        opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
+                    ),
+                    Token::Comma,
+                ),
             )
                 .parse_next(stream)?;
+            let count = match &entries[..] {
+                [(_, count)] => *count,
+                _ if entries.iter().all(|(_, count)| count.is_none()) => None,
+                _ => {
+                    // ptxas accepts parameterized names in a list of
+                    // register names.
+                    let ParsedType::Type {
+                        align,
+                        vector,
+                        scalar,
+                    } = parsed_type
+                    else {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    };
+                    if state_space != StateSpace::Reg {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    }
+                    return Ok(MultiVariable::List {
+                        info: VariableInfo {
+                            align,
+                            v_type: Type::maybe_vector_parsed(vector, scalar),
+                            state_space,
+                            array_init: Vec::new(),
+                        },
+                        names: entries,
+                    });
+                }
+            };
+            let names = entries.into_iter().map(|(name, _)| name).collect::<Vec<_>>();
             let (align, vector, type_) = match parsed_type {
                 ParsedType::Texref => {
                     if count.is_some() {

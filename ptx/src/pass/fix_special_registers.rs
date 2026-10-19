@@ -120,63 +120,119 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
             if is_dst {
                 return Err(error_mismatched_type());
             }
-            let input_arguments = match (vector_index, sreg.get_function_input_type()) {
-                (Some(idx), Some(inp_type)) => {
-                    if inp_type != ast::ScalarType::U8 {
-                        return Err(TranslateError::Unreachable);
-                    }
-                    let constant = self.resolver.register_unnamed(Some((
-                        ast::Type::Scalar(inp_type),
-                        ast::StateSpace::Reg,
-                    )));
-                    self.result.push(Statement::Constant(ConstantDefinition {
-                        dst: constant,
-                        typ: inp_type,
-                        value: ast::ImmediateValue::U64(idx as u64),
-                    }));
-                    vec![(constant, ast::Type::Scalar(inp_type), ast::StateSpace::Reg)]
-                }
-                (None, None) => Vec::new(),
-                _ => return Err(error_mismatched_type()),
-            };
-            let return_type = sreg.get_function_return_type();
-            let fn_result = self
-                .resolver
-                .register_unnamed(Some((ast::Type::Scalar(return_type), ast::StateSpace::Reg)));
-            let return_arguments = vec![(
-                fn_result,
-                ast::Type::Scalar(return_type),
-                ast::StateSpace::Reg,
-            )];
-            let data = ast::CallDetails {
-                uniform: false,
-                return_arguments: return_arguments
-                    .iter()
-                    .map(|(_, typ, space)| (typ.clone(), *space))
-                    .collect(),
-                input_arguments: input_arguments
-                    .iter()
-                    .map(|(_, typ, space)| (typ.clone(), *space))
-                    .collect(),
-            };
-            let arguments = ast::CallArgs::<ast::ParsedOperand<SpirvWord>> {
-                return_arguments: return_arguments.iter().map(|(name, _, _)| *name).collect(),
-                func: self.sreg_to_function[&sreg],
-                input_arguments: input_arguments
-                    .iter()
-                    .map(|(name, _, _)| ast::ParsedOperand::Reg(*name))
-                    .collect(),
-                is_external: true,
-            };
-            self.result
-                .push(Statement::Instruction(ast::Instruction::Call {
-                    data,
-                    arguments,
+            if vector_index.is_none() && sreg.is_vector() {
+                // The whole vector, as in mov.v4.u32 {..}, %tid.
+                let typ = sreg.get_function_return_type();
+                let unpacked = (0..4u8)
+                    .map(|idx| self.component(sreg, Some(idx)).map(Some))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let packed = self.resolver.register_unnamed(Some((
+                    ast::Type::Vector(4, typ),
+                    ast::StateSpace::Reg,
+                )));
+                self.result.push(Statement::RepackVector(RepackVectorDetails {
+                    is_extract: false,
+                    typ,
+                    packed,
+                    unpacked,
+                    relaxed_type_check: false,
                 }));
-            Ok(Some(fn_result))
+                return Ok(Some(packed));
+            }
+            Ok(Some(self.component(sreg, vector_index)?))
         } else {
             Ok(None)
         }
+    }
+
+    /// The register's value, or the value of one member of a vector
+    /// register. The w member of the vector registers is 0.
+    fn component(
+        &mut self,
+        sreg: PtxSpecialRegister,
+        member: Option<u8>,
+    ) -> Result<SpirvWord, TranslateError> {
+        let constant = match (sreg.constant(member), member) {
+            (Some(value), _) => Some(value),
+            (None, Some(3)) => Some(0),
+            _ => None,
+        };
+        match constant {
+            Some(value) => {
+                let typ = sreg.get_function_return_type();
+                let dst = self
+                    .resolver
+                    .register_unnamed(Some((ast::Type::Scalar(typ), ast::StateSpace::Reg)));
+                self.result.push(Statement::Constant(ConstantDefinition {
+                    dst,
+                    typ,
+                    value: ast::ImmediateValue::U64(value),
+                }));
+                Ok(dst)
+            }
+            None => self.emit_call(sreg.canonical(), member),
+        }
+    }
+
+    fn emit_call(
+        &mut self,
+        sreg: PtxSpecialRegister,
+        vector_index: Option<u8>,
+    ) -> Result<SpirvWord, TranslateError> {
+        let input_arguments = match (vector_index, sreg.get_function_input_type()) {
+            (Some(idx), Some(inp_type)) => {
+                if inp_type != ast::ScalarType::U8 {
+                    return Err(TranslateError::Unreachable);
+                }
+                let constant = self.resolver.register_unnamed(Some((
+                    ast::Type::Scalar(inp_type),
+                    ast::StateSpace::Reg,
+                )));
+                self.result.push(Statement::Constant(ConstantDefinition {
+                    dst: constant,
+                    typ: inp_type,
+                    value: ast::ImmediateValue::U64(idx as u64),
+                }));
+                vec![(constant, ast::Type::Scalar(inp_type), ast::StateSpace::Reg)]
+            }
+            (None, None) => Vec::new(),
+            _ => return Err(error_mismatched_type()),
+        };
+        let return_type = sreg.get_function_return_type();
+        let fn_result = self
+            .resolver
+            .register_unnamed(Some((ast::Type::Scalar(return_type), ast::StateSpace::Reg)));
+        let return_arguments = vec![(
+            fn_result,
+            ast::Type::Scalar(return_type),
+            ast::StateSpace::Reg,
+        )];
+        let data = ast::CallDetails {
+            uniform: false,
+            return_arguments: return_arguments
+                .iter()
+                .map(|(_, typ, space)| (typ.clone(), *space))
+                .collect(),
+            input_arguments: input_arguments
+                .iter()
+                .map(|(_, typ, space)| (typ.clone(), *space))
+                .collect(),
+        };
+        let arguments = ast::CallArgs::<ast::ParsedOperand<SpirvWord>> {
+            return_arguments: return_arguments.iter().map(|(name, _, _)| *name).collect(),
+            func: self.sreg_to_function[&sreg],
+            input_arguments: input_arguments
+                .iter()
+                .map(|(name, _, _)| ast::ParsedOperand::Reg(*name))
+                .collect(),
+            is_external: true,
+        };
+        self.result
+            .push(Statement::Instruction(ast::Instruction::Call {
+                data,
+                arguments,
+            }));
+        Ok(fn_result)
     }
 }
 

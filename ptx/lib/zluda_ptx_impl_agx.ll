@@ -88,9 +88,49 @@ define i32 @__zluda_ptx_impl_sreg_lanemask_ge() #0 {
   ret i32 %m
 }
 
-; There is no known cycle counter readable by shaders.
-define i32 @__zluda_ptx_impl_sreg_clock() #0 {
-  ret i32 0
+; There is no known cycle counter readable by shaders. The clocks count reads
+; of a device-wide counter instead: each read of a thread is later than its
+; previous one, as PTX requires, but the values do not measure time.
+@__zluda_ptx_impl_agx_clock = internal addrspace(1) global i32 0
+
+define i32 @__zluda_ptx_impl_sreg_clock() #3 {
+  %c = atomicrmw add ptr addrspace(1) @__zluda_ptx_impl_agx_clock, i32 1 monotonic
+  %r = add i32 %c, 1
+  ret i32 %r
+}
+
+define i64 @__zluda_ptx_impl_sreg_clock64() #3 {
+  %c = call i32 @__zluda_ptx_impl_sreg_clock()
+  %r = zext i32 %c to i64
+  ret i64 %r
+}
+
+define i64 @__zluda_ptx_impl_sreg_globaltimer() #3 {
+  %c = call i64 @__zluda_ptx_impl_sreg_clock64()
+  %r = mul i64 %c, 1000
+  ret i64 %r
+}
+
+define i32 @__zluda_ptx_impl_sreg_warpid() #0 {
+  %w = call i32 @llvm.agx.simdgroup.index.in.threadgroup()
+  ret i32 %w
+}
+
+; The number of SIMD-groups of the threadgroup.
+define i32 @__zluda_ptx_impl_sreg_nwarpid() #0 {
+  %x = call i32 @llvm.agx.threads.per.threadgroup.x()
+  %y = call i32 @llvm.agx.threads.per.threadgroup.y()
+  %z = call i32 @llvm.agx.threads.per.threadgroup.z()
+  %xy = mul i32 %x, %y
+  %n = mul i32 %xy, %z
+  %n31 = add i32 %n, 31
+  %r = lshr i32 %n31, 5
+  ret i32 %r
+}
+
+define i32 @__zluda_ptx_impl_sreg_smid() #0 {
+  %c = call i32 @llvm.agx.core.id()
+  ret i32 %c
 }
 
 define i32 @__zluda_ptx_impl_activemask() #0 {
@@ -819,3 +859,8 @@ declare void @llvm.trap()
 attributes #0 = { alwaysinline nounwind willreturn memory(none) }
 attributes #1 = { alwaysinline convergent nounwind }
 attributes #2 = { alwaysinline convergent nounwind willreturn memory(none) }
+attributes #3 = { alwaysinline nounwind }
+
+declare i32 @llvm.agx.simdgroup.index.in.threadgroup()
+
+declare i32 @llvm.agx.core.id()

@@ -1227,6 +1227,12 @@ pub enum MultiVariable<ID> {
         info: VariableInfo<ID>,
         names: Vec<ID>,
     },
+    /// A list of register names of which some are parameterized, as in
+    /// `.reg .b32 %r<8>, %q<4>, %x;`.
+    List {
+        info: VariableInfo<ID>,
+        names: Vec<(ID, Option<u32>)>,
+    },
 }
 
 #[derive(Clone)]

@@ -419,6 +419,15 @@ def run_test(path, args):
                     pmem.extend(lit_bits(o, t, syms).to_bytes(SIZES[t], 'little'))
                     addr = PARAM_BASE + off
                     uniforms += [(2 * i, addr & 0xffffffff), (2 * i + 1, addr >> 32)]
+                if re.search(r'^\s*\.address_size\s+32\b', module, re.M):
+                    # 32-bit modules take the 64-bit base of their 32-bit
+                    # addresses as a last parameter; the harness buffers are
+                    # below 4 GiB, so it is 0.
+                    off = (len(pmem) + 15) & ~15
+                    pmem.extend(b'\0' * (off + 8 - len(pmem)))
+                    addr = PARAM_BASE + off
+                    i = len(ps)
+                    uniforms += [(2 * i, addr & 0xffffffff), (2 * i + 1, addr >> 32)]
                 if k['grid_uniform'] is not None:
                     for j in range(3):
                         uniforms.append((k['grid_uniform'] + j, grid[j]))

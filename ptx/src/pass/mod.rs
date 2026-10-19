@@ -328,62 +328,133 @@ enum PtxSpecialRegister {
     Ctaid,
     Nctaid,
     Clock,
+    Clock64,
+    Globaltimer,
     LanemaskLe,
     LanemaskLt,
     LanemaskGe,
     Laneid,
+    Warpid,
+    Nwarpid,
+    Smid,
+    Nsmid,
+    Warpsize,
+    Clusterid,
+    Nclusterid,
+    ClusterCtaid,
+    ClusterNctaid,
+    ClusterCtarank,
+    ClusterNctarank,
+    IsExplicitCluster,
+    #[strum(disabled)]
+    Envreg(u8),
+    #[strum(disabled)]
+    Pm(u8),
 }
 
 impl PtxSpecialRegister {
-    fn as_str(self) -> &'static str {
-        match self {
+    fn all() -> impl Iterator<Item = Self> {
+        Self::iter()
+            .chain((0..32).map(Self::Envreg))
+            .chain((0..8).map(Self::Pm))
+    }
+
+    fn name(self) -> Cow<'static, str> {
+        Cow::Borrowed(match self {
             Self::Tid => "%tid",
             Self::Ntid => "%ntid",
             Self::Ctaid => "%ctaid",
             Self::Nctaid => "%nctaid",
             Self::Clock => "%clock",
+            Self::Clock64 => "%clock64",
+            Self::Globaltimer => "%globaltimer",
             Self::LanemaskLe => "%lanemask_le",
             Self::LanemaskLt => "%lanemask_lt",
             Self::LanemaskGe => "%lanemask_ge",
             Self::Laneid => "%laneid",
-        }
+            Self::Warpid => "%warpid",
+            Self::Nwarpid => "%nwarpid",
+            Self::Smid => "%smid",
+            Self::Nsmid => "%nsmid",
+            Self::Warpsize => "%warpsize",
+            Self::Clusterid => "%clusterid",
+            Self::Nclusterid => "%nclusterid",
+            Self::ClusterCtaid => "%cluster_ctaid",
+            Self::ClusterNctaid => "%cluster_nctaid",
+            Self::ClusterCtarank => "%cluster_ctarank",
+            Self::ClusterNctarank => "%cluster_nctarank",
+            Self::IsExplicitCluster => "%is_explicit_cluster",
+            Self::Envreg(n) => return Cow::Owned(format!("%envreg{}", n)),
+            Self::Pm(n) => return Cow::Owned(format!("%pm{}", n)),
+        })
+    }
+
+    fn is_vector(self) -> bool {
+        matches!(
+            self,
+            Self::Tid
+                | Self::Ntid
+                | Self::Ctaid
+                | Self::Nctaid
+                | Self::Clusterid
+                | Self::Nclusterid
+                | Self::ClusterCtaid
+                | Self::ClusterNctaid
+        )
     }
 
     fn get_type(self) -> ast::Type {
-        match self {
-            PtxSpecialRegister::Tid
-            | PtxSpecialRegister::Ntid
-            | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => ast::Type::Vector(4, self.get_function_return_type()),
-            _ => ast::Type::Scalar(self.get_function_return_type()),
+        if self.is_vector() {
+            ast::Type::Vector(4, self.get_function_return_type())
+        } else {
+            ast::Type::Scalar(self.get_function_return_type())
         }
+    }
+
+    /// The register that this one reads, if it is the same: without
+    /// clusters, a cluster is a single CTA.
+    fn canonical(self) -> Self {
+        match self {
+            Self::Clusterid => Self::Ctaid,
+            Self::Nclusterid => Self::Nctaid,
+            other => other,
+        }
+    }
+
+    /// The value of registers that are constant (outside of a cluster
+    /// launch), for the vector member if any.
+    fn constant(self, member: Option<u8>) -> Option<u64> {
+        match self {
+            Self::Warpsize => Some(32),
+            // An upper bound of %smid: the number of cores is not known when
+            // compiling.
+            Self::Nsmid => Some(128),
+            Self::ClusterCtaid | Self::ClusterCtarank | Self::IsExplicitCluster => Some(0),
+            Self::ClusterNctaid => Some((member.unwrap_or(0) < 3) as u64),
+            Self::ClusterNctarank => Some(1),
+            Self::Envreg(_) | Self::Pm(_) => Some(0),
+            _ => None,
+        }
+    }
+
+    fn needs_function(self) -> bool {
+        self.canonical() == self && self.constant(None).is_none()
     }
 
     fn get_function_return_type(self) -> ast::ScalarType {
         match self {
-            PtxSpecialRegister::Tid => ast::ScalarType::U32,
-            PtxSpecialRegister::Ntid => ast::ScalarType::U32,
-            PtxSpecialRegister::Ctaid => ast::ScalarType::U32,
-            PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
-            PtxSpecialRegister::Clock => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskLe => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskGe => ast::ScalarType::U32,
-            PtxSpecialRegister::Laneid => ast::ScalarType::U32,
+            PtxSpecialRegister::Clock64 | PtxSpecialRegister::Globaltimer => {
+                ast::ScalarType::U64
+            }
+            _ => ast::ScalarType::U32,
         }
     }
 
     fn get_function_input_type(self) -> Option<ast::ScalarType> {
-        match self {
-            PtxSpecialRegister::Tid
-            | PtxSpecialRegister::Ntid
-            | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => Some(ast::ScalarType::U8),
-            PtxSpecialRegister::Clock
-            | PtxSpecialRegister::LanemaskLe
-            | PtxSpecialRegister::LanemaskLt
-            | PtxSpecialRegister::LanemaskGe
-            | PtxSpecialRegister::Laneid => None,
+        if self.is_vector() {
+            Some(ast::ScalarType::U8)
+        } else {
+            None
         }
     }
 
@@ -394,10 +465,16 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Ctaid => "sreg_ctaid",
             PtxSpecialRegister::Nctaid => "sreg_nctaid",
             PtxSpecialRegister::Clock => "sreg_clock",
+            PtxSpecialRegister::Clock64 => "sreg_clock64",
+            PtxSpecialRegister::Globaltimer => "sreg_globaltimer",
             PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
             PtxSpecialRegister::LanemaskLe => "sreg_lanemask_le",
             PtxSpecialRegister::LanemaskGe => "sreg_lanemask_ge",
             PtxSpecialRegister::Laneid => "sreg_laneid",
+            PtxSpecialRegister::Warpid => "sreg_warpid",
+            PtxSpecialRegister::Nwarpid => "sreg_nwarpid",
+            PtxSpecialRegister::Smid => "sreg_smid",
+            _ => "",
         }
     }
 }
@@ -1219,10 +1296,9 @@ impl SpecialRegistersMap {
             reg_to_id: FxHashMap::default(),
             id_to_reg: FxHashMap::default(),
         };
-        for sreg in PtxSpecialRegister::iter() {
-            let text = sreg.as_str();
+        for sreg in PtxSpecialRegister::all() {
             let id = resolver.add(
-                Cow::Borrowed(text),
+                sreg.name(),
                 Some((sreg.get_type(), ast::StateSpace::Reg)),
             )?;
             result.reg_to_id.insert(sreg, id);
@@ -1236,7 +1312,7 @@ impl SpecialRegistersMap {
     }
 
     fn len() -> usize {
-        PtxSpecialRegister::iter().len()
+        PtxSpecialRegister::all().count()
     }
 
     fn foreach_declaration<'a, 'input>(
@@ -1250,7 +1326,7 @@ impl SpecialRegistersMap {
             ),
         ),
     ) {
-        for sreg in PtxSpecialRegister::iter() {
+        for sreg in PtxSpecialRegister::all().filter(|sreg| sreg.needs_function()) {
             let external_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
             let name = resolver.register_named(Cow::Owned(external_fn_name), None);
             let return_type = sreg.get_function_return_type();
