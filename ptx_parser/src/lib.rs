@@ -2127,6 +2127,9 @@ derive_parser!(
     pub enum EvictionPriority { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum BmskMode { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum VshOp {
         Add
     }
@@ -3963,7 +3966,7 @@ derive_parser!(
             arguments: BmskArgs { dst: d, src_a: a, src_b: b },
         }
     }
-    .mode: BmskMode = { .clamp };
+    .mode: BmskMode = { .clamp, .wrap };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
     // prmt.b32{.mode}  d, a, b, c;
@@ -4494,13 +4497,14 @@ derive_parser!(
 
     .type: ScalarType = { .b32, .b64 };
 
-    // https://docs.nvidia.com/cuda/parallel-thread-execution/
-    bfind.shiftamt.u32  d, a => {
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-bfind
+    bfind{.shiftamt}.type  d, a => {
         Instruction::Bfind {
-            data: (),
+            data: BfindDetails { type_, shift_amount: shiftamt },
             arguments: BfindArgs { dst: d, src: a }
         }
     }
+    .type: ScalarType = { .u32, .u64, .s32, .s64 };
 );
 
 #[cfg(test)]

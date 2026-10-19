@@ -701,6 +701,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Ex2 { data, arguments } => self.emit_ex2(data, arguments),
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
             ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
+            ast::Instruction::Bmsk {
+                data: ast::BmskMode::Wrap,
+                arguments,
+            } => self.emit_bmsk_wrap(arguments),
             ast::Instruction::Brev { data, arguments } => self.emit_brev(data, arguments),
             ast::Instruction::Popc { data, arguments } => self.emit_popc(data, arguments),
             ast::Instruction::Xor { data, arguments } => self.emit_xor(data, arguments),
@@ -725,7 +729,10 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Bar { .. }
             | ast::Instruction::BarRed { .. }
             | ast::Instruction::Bfi { .. }
-            | ast::Instruction::Bmsk { .. }
+            | ast::Instruction::Bmsk {
+                data: ast::BmskMode::Clamp,
+                ..
+            }
             | ast::Instruction::Activemask { .. }
             | ast::Instruction::Shfl { .. }
             | ast::Instruction::MatchSync { .. }
@@ -3913,26 +3920,87 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_bfind(
         &mut self,
-        _data: (),
+        data: ast::BfindDetails,
         arguments: ast::BfindArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        let llvm_type = get_scalar_type(self.context, data.type_);
+        let width = data.type_.size_of() as u64 * 8;
+        // For signed types look for the most significant bit that differs
+        // from the sign bit
+        let value = if data.type_.kind() == ast::ScalarKind::Signed {
+            let sign = unsafe {
+                LLVMBuildAShr(
+                    self.builder,
+                    src,
+                    LLVMConstInt(llvm_type, width - 1, 0),
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            unsafe { LLVMBuildXor(self.builder, src, sign, LLVM_UNNAMED.as_ptr()) }
+        } else {
+            src
+        };
+        let llvm_fn = if width == 64 {
+            c"llvm.ctlz.i64"
+        } else {
+            c"llvm.ctlz.i32"
+        };
+        let pred = get_scalar_type(self.context, ast::ScalarType::Pred);
+        let leading_zeros = self.emit_intrinsic(
+            llvm_fn,
+            None,
+            vec![&data.type_.into()],
+            vec![(value, llvm_type), (unsafe { LLVMConstInt(pred, 0, 0) }, pred)],
+        )?;
         let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
-        let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
-        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 1) };
-        let src_is_zero = unsafe {
+        let leading_zeros = unsafe {
+            LLVMBuildTruncOrBitCast(self.builder, leading_zeros, llvm_i32, LLVM_UNNAMED.as_ptr())
+        };
+        let result = if data.shift_amount {
+            leading_zeros
+        } else {
+            unsafe {
+                LLVMBuildSub(
+                    self.builder,
+                    LLVMConstInt(llvm_i32, width - 1, 0),
+                    leading_zeros,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            }
+        };
+        let not_found = unsafe {
             LLVMBuildICmp(
                 self.builder,
                 LLVMIntPredicate::LLVMIntEQ,
-                src,
-                const_0,
+                value,
+                LLVMConstInt(llvm_type, 0, 0),
                 LLVM_UNNAMED.as_ptr(),
             )
         };
-        let clz_result = self.emit_clz_impl(ast::ScalarType::B32, arguments.src)?;
+        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 1) };
         self.resolver.with_result(arguments.dst, |dst_name| unsafe {
-            LLVMBuildSelect(self.builder, src_is_zero, const_max, clz_result, dst_name)
+            LLVMBuildSelect(self.builder, not_found, const_max, result, dst_name)
         });
+        Ok(())
+    }
+
+    // bmsk.wrap.b32 d, a, b: b one bits starting at bit a, both taken modulo 32
+    fn emit_bmsk_wrap(&mut self, arguments: ast::BmskArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
+        let position = self.resolver.value(arguments.src_a)?;
+        let width = self.resolver.value(arguments.src_b)?;
+        let const_31 = unsafe { LLVMConstInt(llvm_i32, 31, 0) };
+        let const_1 = unsafe { LLVMConstInt(llvm_i32, 1, 0) };
+        unsafe {
+            let position = LLVMBuildAnd(self.builder, position, const_31, LLVM_UNNAMED.as_ptr());
+            let width = LLVMBuildAnd(self.builder, width, const_31, LLVM_UNNAMED.as_ptr());
+            let bits = LLVMBuildShl(self.builder, const_1, width, LLVM_UNNAMED.as_ptr());
+            let bits = LLVMBuildSub(self.builder, bits, const_1, LLVM_UNNAMED.as_ptr());
+            self.resolver.with_result(arguments.dst, |dst| {
+                LLVMBuildShl(self.builder, bits, position, dst)
+            });
+        }
         Ok(())
     }
 

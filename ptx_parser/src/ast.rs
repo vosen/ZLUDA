@@ -951,7 +951,7 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Bfind {
             type: !,
-            data: (),
+            data: BfindDetails,
             arguments<T>: {
                 dst: {
                     repr: T,
@@ -960,7 +960,7 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src:  {
                     repr: T,
-                    type: { Type::Scalar(ScalarType::U32) }
+                    type: { Type::Scalar(data.type_) }
 
                 }
             }
@@ -2918,6 +2918,12 @@ impl TexData {
 pub enum TexType {
     Texref,
     Texobj,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BfindDetails {
+    pub type_: ScalarType,
+    pub shift_amount: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

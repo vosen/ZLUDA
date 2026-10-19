@@ -247,12 +247,18 @@ define i64 @__zluda_ptx_impl_bfi_b64(i64 %insert, i64 %base, i32 %pos, i32 %len)
   ret i64 %r
 }
 
+; bmsk.clamp.b32: the low bytes of position and width, clamped to 32.
 define i32 @__zluda_ptx_impl_bmsk_clamp_b32(i32 %position, i32 %width) #0 {
-  %p = and i32 %position, 31
-  %wd = and i32 %width, 31
-  %bits.s = shl i32 1, %wd
-  %bits = sub i32 %bits.s, 1
-  %m = shl i32 %bits, %p
+  %p8 = and i32 %position, 255
+  %wd8 = and i32 %width, 255
+  %p32 = call i32 @llvm.umin.i32(i32 %p8, i32 32)
+  %wd32 = call i32 @llvm.umin.i32(i32 %wd8, i32 32)
+  %p = zext i32 %p32 to i64
+  %wd = zext i32 %wd32 to i64
+  %bits.s = shl i64 1, %wd
+  %bits = sub i64 %bits.s, 1
+  %m64 = shl i64 %bits, %p
+  %m = trunc i64 %m64 to i32
   ret i32 %m
 }
 
@@ -828,6 +834,7 @@ exit:
 }
 
 declare float @llvm.fabs.f32(float)
+declare i32 @llvm.umin.i32(i32, i32)
 declare float @llvm.copysign.f32(float, float)
 
 declare i32 @llvm.agx.thread.position.in.threadgroup.x()
