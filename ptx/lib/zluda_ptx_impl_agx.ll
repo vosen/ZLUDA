@@ -837,6 +837,66 @@ declare float @llvm.fabs.f32(float)
 declare i32 @llvm.umin.i32(i32, i32)
 declare float @llvm.copysign.f32(float, float)
 
+; Rounding of the exact sums of the emulated matrix instructions (see
+; ptx/src/pass/agx_matrix.rs): m * 2^e, with m normalized (bit 63 set) or
+; zero and the sticky bit of the bits below m, rounded to nearest even into
+; the floating point format with %mbits mantissa and %ebits exponent bits
+; (denormals kept, overflow to infinity). Returns the bits of the result.
+define i64 @__zluda_ptx_impl_agx_round_pack(i1 %neg, i64 %m, i1 %sticky, i32 %e, i32 %mbits, i32 %ebits) #0 {
+  %sign_pos = add i32 %mbits, %ebits
+  %sign_pos64 = zext i32 %sign_pos to i64
+  %neg64 = zext i1 %neg to i64
+  %sign = shl i64 %neg64, %sign_pos64
+  %is_zero = icmp eq i64 %m, 0
+  %ebits1 = sub i32 %ebits, 1
+  %bias1 = shl i32 1, %ebits1
+  %bias = sub i32 %bias1, 1
+  ; biased exponent of the leading bit
+  %lead = add i32 %e, 63
+  %be = add i32 %lead, %bias
+  %normal = icmp sgt i32 %be, 0
+  ; bits below the mantissa
+  %drop_normal = sub i32 63, %mbits
+  %den = sub i32 1, %be
+  %drop_den0 = add i32 %drop_normal, %den
+  %drop_den = call i32 @llvm.umin.i32(i32 %drop_den0, i32 100)
+  %drop = select i1 %normal, i32 %drop_normal, i32 %drop_den
+  %mm = zext i64 %m to i128
+  %drop128 = zext i32 %drop to i128
+  %q = lshr i128 %mm, %drop128
+  %unit = shl i128 1, %drop128
+  %rmask = sub i128 %unit, 1
+  %r = and i128 %mm, %rmask
+  %half = lshr i128 %unit, 1
+  %above = icmp ugt i128 %r, %half
+  %tie = icmp eq i128 %r, %half
+  %q64 = trunc i128 %q to i64
+  %odd = trunc i64 %q64 to i1
+  %tie_up0 = or i1 %sticky, %odd
+  %tie_up = and i1 %tie, %tie_up0
+  %up = or i1 %above, %tie_up
+  %up64 = zext i1 %up to i64
+  %qr = add i64 %q64, %up64
+  ; ((be - 1) << mbits) + q: a carry out of the mantissa increments the exponent
+  %be1 = sub i32 %be, 1
+  %field = select i1 %normal, i32 %be1, i32 0
+  %field64 = zext i32 %field to i64
+  %mbits64 = zext i32 %mbits to i64
+  %efield = shl i64 %field64, %mbits64
+  %mag0 = add i64 %efield, %qr
+  %emax1 = shl i32 1, %ebits
+  %emax = sub i32 %emax1, 1
+  %emax64 = zext i32 %emax to i64
+  %inf = shl i64 %emax64, %mbits64
+  %ovf0 = icmp uge i64 %mag0, %inf
+  %ovf1 = icmp sge i32 %be, %emax
+  %ovf = or i1 %ovf0, %ovf1
+  %mag1 = select i1 %ovf, i64 %inf, i64 %mag0
+  %mag = select i1 %is_zero, i64 0, i64 %mag1
+  %res = or i64 %mag, %sign
+  ret i64 %res
+}
+
 declare i32 @llvm.agx.thread.position.in.threadgroup.x()
 declare i32 @llvm.agx.thread.position.in.threadgroup.y()
 declare i32 @llvm.agx.thread.position.in.threadgroup.z()

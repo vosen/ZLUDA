@@ -79,6 +79,9 @@ pub(crate) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
+    if target == Target::Agx {
+        super::super::agx_matrix::define_helpers(context, &module)?;
+    }
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
             panic!("{}\n{:?}", module.print_module_to_string(), err);
@@ -497,6 +500,10 @@ fn get_input_argument_type(
         ast::StateSpace::Global | ast::StateSpace::Const if matches!(v_type, ast::Type::Texref) => {
             Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
         }
+        // memory operands of the AGX matrix helpers (wmma.load, wmma.store)
+        ast::StateSpace::Global | ast::StateSpace::Generic => {
+            Ok(unsafe { LLVMPointerTypeInContext(context, get_state_space(state_space)?) })
+        }
         _ => return Err(error_unreachable()),
     }
 }
@@ -741,6 +748,11 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::Nanosleep { .. }
             | ast::Instruction::ReduxSync { .. }
             | ast::Instruction::LdMatrix { .. }
+            | ast::Instruction::StMatrix { .. }
+            | ast::Instruction::MovMatrix { .. }
+            | ast::Instruction::WmmaLoad { .. }
+            | ast::Instruction::WmmaStore { .. }
+            | ast::Instruction::WmmaMma { .. }
             | ast::Instruction::Prmt { .. }
             | ast::Instruction::Mma { .. }
             | ast::Instruction::Dp2a { .. }

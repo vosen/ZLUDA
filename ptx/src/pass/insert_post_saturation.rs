@@ -209,6 +209,11 @@ fn run_instruction<'input>(
         | ast::Instruction::ReduxSync { .. }
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
+        | ast::Instruction::StMatrix { .. }
+        | ast::Instruction::MovMatrix { .. }
+        | ast::Instruction::WmmaLoad { .. }
+        | ast::Instruction::WmmaStore { .. }
+        | ast::Instruction::WmmaMma { .. }
         | ast::Instruction::Prefetch { .. }
         | ast::Instruction::Sad { .. }
         | ast::Instruction::Dp2a { .. }

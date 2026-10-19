@@ -3,9 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
-    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode, Tf32Rounding,
-    VoteMode, VshOp,
+    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, Mul24Control, PtxError,
+    PtxParserState, Reduction, ShiftDirection, ShuffleMode, Tf32Rounding, VoteMode, VshOp,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -837,6 +836,88 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        StMatrix {
+            type: data.get_loaded_type(),
+            data: LdMatrixDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src2: {
+                    repr: T,
+                    relaxed_type_check: true,
+                }
+            }
+        },
+        MovMatrix {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        WmmaLoad {
+            type: data.fragment_type(),
+            data: WmmaLoadStoreDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src_stride: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+        },
+        WmmaStore {
+            type: data.fragment_type(),
+            data: WmmaLoadStoreDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src2: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src_stride: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+        },
+        WmmaMma {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::D) },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::A) },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::B) },
+                    relaxed_type_check: true,
+                },
+                src3: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::C) },
+                    relaxed_type_check: true,
+                }
+            }
+        },
         GridDepControl {
             data: crate::GridDepControlAction,
         },
@@ -845,19 +926,19 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst: {
                     repr: T,
-                    type: { data.dtype() },
+                    type: { data.mma_type(MmaMatrix::D) },
                 },
                 src1: {
                     repr: T,
-                    type: { data.atype() },
+                    type: { data.mma_type(MmaMatrix::A) },
                 },
                 src2: {
                     repr: T,
-                    type: { data.btype() },
+                    type: { data.mma_type(MmaMatrix::B) },
                 },
                 src3: {
                     repr: T,
-                    type: { data.ctype() },
+                    type: { data.mma_type(MmaMatrix::C) },
                 }
             }
         },
@@ -1884,8 +1965,24 @@ pub struct LdDetails {
     pub non_coherent: bool,
 }
 
+/// Shapes of `ldmatrix` and `stmatrix`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixShape {
+    M8n8,
+    M16n16,
+    M8n16,
+    M16n8,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixNumber {
+    X1,
+    X2,
+    X4,
+}
+
 impl MatrixNumber {
-    fn get(&self) -> u8 {
+    pub fn get(&self) -> u8 {
         match self {
             MatrixNumber::X1 => 1,
             MatrixNumber::X2 => 2,
@@ -1894,34 +1991,42 @@ impl MatrixNumber {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixLayout {
+    Row,
+    Col,
+}
+
+/// Element format of `ldmatrix` and `stmatrix`: 16-bit or 8-bit elements, or
+/// (sm_100) packed 6-bit, 4-bit and signed 4-bit elements expanded to 8-bit
+/// containers (`.b8x16.b6x16_p32`, `.b8x16.b4x16_p64`, `.s8.s4`).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum LdMatrixFormat {
+    B16,
+    B8,
+    B6x16P32,
+    B4x16P64,
+    S4,
+}
+
 #[derive(Copy, Clone)]
 pub struct LdMatrixDetails {
     pub shape: MatrixShape,
     pub number: MatrixNumber,
     pub transpose: bool,
     pub state_space: StateSpace,
-    pub type_: ScalarType,
+    pub format: LdMatrixFormat,
 }
 
 impl LdMatrixDetails {
-    pub fn new(
-        shape: MatrixShape,
-        number: MatrixNumber,
-        transpose: bool,
-        ss: Option<StateSpace>,
-        type_: ScalarType,
-    ) -> Self {
-        Self {
-            shape,
-            number,
-            transpose,
-            state_space: ss.unwrap_or(StateSpace::Shared),
-            type_,
-        }
+    /// Number of 32-bit registers of the destination (or source) vector.
+    pub fn registers(&self) -> u8 {
+        let per_matrix = if self.shape == MatrixShape::M16n16 { 2 } else { 1 };
+        self.number.get() * per_matrix
     }
+
     pub fn get_loaded_type(&self) -> Type {
-        let count = self.number.get();
-        Type::Vector(count, ScalarType::B32)
+        Type::Vector(self.registers(), ScalarType::B32)
     }
 }
 
@@ -2871,32 +2976,325 @@ pub struct ReduxSyncData {
     pub reduction: Reduction,
 }
 
+/// Element types of the warp-level matrix instructions (`mma`, `wmma`).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaType {
+    F16,
+    Bf16,
+    Tf32,
+    F32,
+    F64,
+    S8,
+    U8,
+    S4,
+    U4,
+    B1,
+    S32,
+    E4m3,
+    E5m2,
+    E3m2,
+    E2m3,
+    E2m1,
+}
+
+impl MmaType {
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "f16" => MmaType::F16,
+            "bf16" => MmaType::Bf16,
+            "tf32" => MmaType::Tf32,
+            "f32" => MmaType::F32,
+            "f64" => MmaType::F64,
+            "s8" => MmaType::S8,
+            "u8" => MmaType::U8,
+            "s4" => MmaType::S4,
+            "u4" => MmaType::U4,
+            "b1" => MmaType::B1,
+            "s32" => MmaType::S32,
+            "e4m3" => MmaType::E4m3,
+            "e5m2" => MmaType::E5m2,
+            "e3m2" => MmaType::E3m2,
+            "e2m3" => MmaType::E2m3,
+            "e2m1" => MmaType::E2m1,
+            _ => return None,
+        })
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            MmaType::F16 => "f16",
+            MmaType::Bf16 => "bf16",
+            MmaType::Tf32 => "tf32",
+            MmaType::F32 => "f32",
+            MmaType::F64 => "f64",
+            MmaType::S8 => "s8",
+            MmaType::U8 => "u8",
+            MmaType::S4 => "s4",
+            MmaType::U4 => "u4",
+            MmaType::B1 => "b1",
+            MmaType::S32 => "s32",
+            MmaType::E4m3 => "e4m3",
+            MmaType::E5m2 => "e5m2",
+            MmaType::E3m2 => "e3m2",
+            MmaType::E2m3 => "e2m3",
+            MmaType::E2m1 => "e2m1",
+        }
+    }
+
+    pub fn is_float(self) -> bool {
+        !matches!(
+            self,
+            MmaType::S8 | MmaType::U8 | MmaType::S4 | MmaType::U4 | MmaType::B1 | MmaType::S32
+        )
+    }
+
+    /// Width of an element in a fragment register, in bits. The 6-bit and
+    /// 4-bit floating point elements of `mma .kind::f8f6f4` are in 8-bit
+    /// containers.
+    pub fn bits(self) -> u32 {
+        match self {
+            MmaType::F64 => 64,
+            MmaType::Tf32 | MmaType::F32 | MmaType::S32 => 32,
+            MmaType::F16 | MmaType::Bf16 => 16,
+            MmaType::S4 | MmaType::U4 => 4,
+            MmaType::B1 => 1,
+            _ => 8,
+        }
+    }
+}
+
+/// The matrices of `D = A * B + C`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaMatrix {
+    A,
+    B,
+    C,
+    D,
+}
+
+/// The operation of single-bit `mma`: `.xor.popc` or `.and.popc`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaB1Op {
+    Xor,
+    And,
+}
+
+/// `mma.sync` and `wmma.mma`: D (m x n) = A (m x k) * B (k x n) + C.
+#[derive(Copy, Clone)]
 pub struct MmaDetails {
+    pub m: u32,
+    pub n: u32,
+    pub k: u32,
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
-    pub cd_type_scalar: ScalarType,
-    pub ab_type_scalar: ScalarType,
+    pub dtype: MmaType,
+    pub atype: MmaType,
+    pub btype: MmaType,
+    pub ctype: MmaType,
+    pub satfinite: bool,
+    pub b1_op: Option<MmaB1Op>,
 }
 
 impl MmaDetails {
-    pub fn dtype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
-        } else {
-            Type::Vector(4, ScalarType::U32)
+    /// Whether this is one of the `mma.sync` variants that are supported:
+    /// the PTX shapes of the `f16`, `bf16`, `tf32`, `f64`, integer, single
+    /// bit and 8-bit floating point (`kind::f8f6f4` included) types.
+    pub fn is_supported_mma(&self, kind_f8f6f4: bool) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let (a, b, c, d) = (self.atype, self.btype, self.ctype, self.dtype);
+        let float_accumulator = matches!(c, F16 | F32) && matches!(d, F16 | F32);
+        let integer_accumulator = c == S32 && d == S32;
+        let integer = matches!(a, S8 | U8 | S4 | U4);
+        if (self.b1_op.is_some() != (a == B1)) || (self.satfinite && !integer) {
+            return false;
+        }
+        if kind_f8f6f4 {
+            let f8f6f4 = |t| matches!(t, E4m3 | E5m2 | E3m2 | E2m3 | E2m1);
+            return shape == (16, 8, 32) && f8f6f4(a) && f8f6f4(b) && float_accumulator;
+        }
+        match (a, b) {
+            (F16, F16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && float_accumulator,
+            (Bf16, Bf16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && c == F32 && d == F32,
+            (Tf32, Tf32) => matches!(shape, (16, 8, 4) | (16, 8, 8)) && c == F32 && d == F32,
+            (F64, F64) => {
+                matches!(shape, (8, 8, 4) | (16, 8, 4) | (16, 8, 8) | (16, 8, 16))
+                    && c == F64
+                    && d == F64
+            }
+            (S8 | U8, S8 | U8) => {
+                matches!(shape, (8, 8, 16) | (16, 8, 16) | (16, 8, 32)) && integer_accumulator
+            }
+            (S4 | U4, S4 | U4) => {
+                matches!(shape, (8, 8, 32) | (16, 8, 32) | (16, 8, 64)) && integer_accumulator
+            }
+            (B1, B1) => {
+                matches!(shape, (8, 8, 128) | (16, 8, 128) | (16, 8, 256)) && integer_accumulator
+            }
+            (E4m3 | E5m2, E4m3 | E5m2) => {
+                matches!(shape, (16, 8, 16) | (16, 8, 32)) && float_accumulator
+            }
+            _ => false,
         }
     }
-    pub fn atype(&self) -> Type {
-        Type::Vector(4, ScalarType::U32)
+
+    /// Whether this is a supported `wmma.mma`: all the shapes and types of
+    /// the PTX ISA (`.rn` only for `f64`).
+    pub fn is_supported_wmma(&self) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let (a, c, d) = (self.atype, self.ctype, self.dtype);
+        let integer = matches!(a, S8 | U8 | S4 | U4);
+        if self.btype != a || (self.b1_op.is_some() != (a == B1)) || (self.satfinite && !integer)
+        {
+            return false;
+        }
+        let k16 = matches!(shape, (16, 16, 16) | (32, 8, 16) | (8, 32, 16));
+        match a {
+            F16 => k16 && matches!(c, F16 | F32) && matches!(d, F16 | F32),
+            Bf16 => k16 && c == F32 && d == F32,
+            S8 | U8 => k16 && c == S32 && d == S32,
+            Tf32 => shape == (16, 16, 8) && c == F32 && d == F32,
+            F64 => shape == (8, 8, 4) && c == F64 && d == F64,
+            S4 | U4 => shape == (8, 8, 32) && c == S32 && d == S32,
+            B1 => shape == (8, 8, 128) && c == S32 && d == S32,
+            _ => false,
+        }
     }
-    pub fn btype(&self) -> Type {
-        Type::Vector(2, ScalarType::U32)
+
+    pub fn element_type(&self, matrix: MmaMatrix) -> MmaType {
+        match matrix {
+            MmaMatrix::A => self.atype,
+            MmaMatrix::B => self.btype,
+            MmaMatrix::C => self.ctype,
+            MmaMatrix::D => self.dtype,
+        }
     }
-    pub fn ctype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
+
+    /// Rows and columns of a matrix.
+    pub fn matrix_size(&self, matrix: MmaMatrix) -> (u32, u32) {
+        match matrix {
+            MmaMatrix::A => (self.m, self.k),
+            MmaMatrix::B => (self.k, self.n),
+            MmaMatrix::C | MmaMatrix::D => (self.m, self.n),
+        }
+    }
+
+    /// Number of registers of a fragment of `mma.sync`: each thread of the
+    /// warp holds 1/32 of the matrix, packed in 32-bit registers (64-bit for
+    /// `f64`).
+    pub fn mma_registers(&self, matrix: MmaMatrix) -> u8 {
+        let (rows, cols) = self.matrix_size(matrix);
+        let type_ = self.element_type(matrix);
+        let register_bits = if type_ == MmaType::F64 { 64 } else { 32 };
+        (rows * cols / 32 * type_.bits()).div_ceil(register_bits) as u8
+    }
+
+    /// Number of registers of a fragment of `wmma`, as given by the PTX ISA:
+    /// like `mma.sync`, except that `f16` A and B fragments have 8 registers
+    /// (every element is held by two threads).
+    pub fn wmma_registers(&self, matrix: MmaMatrix) -> u8 {
+        let type_ = self.element_type(matrix);
+        if type_ == MmaType::F16 && matches!(matrix, MmaMatrix::A | MmaMatrix::B) {
+            8
         } else {
-            Type::Vector(4, ScalarType::U32)
+            self.mma_registers(matrix)
+        }
+    }
+
+    // The variants of the original AMD GPU implementation keep its operand
+    // types: m16n8k16 f32.{f16,bf16} and m16n8k32 s32.s8.s8.
+    fn is_legacy(&self) -> bool {
+        matches!(
+            (self.m, self.n, self.k, self.dtype, self.atype, self.btype, self.ctype),
+            (16, 8, 16, MmaType::F32, MmaType::F16, MmaType::F16, MmaType::F32)
+                | (16, 8, 16, MmaType::F32, MmaType::Bf16, MmaType::Bf16, MmaType::F32)
+                | (16, 8, 32, MmaType::S32, MmaType::S8, MmaType::S8, MmaType::S32)
+        ) && !self.satfinite
+    }
+
+    pub fn mma_type(&self, matrix: MmaMatrix) -> Type {
+        let registers = self.mma_registers(matrix);
+        if self.is_legacy() {
+            let scalar = match matrix {
+                MmaMatrix::A | MmaMatrix::B => ScalarType::U32,
+                MmaMatrix::C | MmaMatrix::D if self.dtype == MmaType::F32 => ScalarType::F32,
+                MmaMatrix::C | MmaMatrix::D => ScalarType::U32,
+            };
+            return Type::Vector(registers, scalar);
+        }
+        Type::Vector(registers, fragment_scalar(self.element_type(matrix)))
+    }
+
+    pub fn wmma_type(&self, matrix: MmaMatrix) -> Type {
+        Type::Vector(
+            self.wmma_registers(matrix),
+            fragment_scalar(self.element_type(matrix)),
+        )
+    }
+}
+
+fn fragment_scalar(type_: MmaType) -> ScalarType {
+    if type_ == MmaType::F64 {
+        ScalarType::B64
+    } else {
+        ScalarType::B32
+    }
+}
+
+/// `wmma.load` and `wmma.store`: one fragment of a `wmma.mma` of shape
+/// m x n x k, in row or column major order in memory.
+#[derive(Copy, Clone)]
+pub struct WmmaLoadStoreDetails {
+    pub matrix: MmaMatrix,
+    pub layout: MatrixLayout,
+    pub m: u32,
+    pub n: u32,
+    pub k: u32,
+    pub state_space: StateSpace,
+    pub type_: MmaType,
+}
+
+impl WmmaLoadStoreDetails {
+    /// The `wmma.mma` whose fragment this is (only the shape and the element
+    /// type of the matrix matter).
+    pub fn mma(&self) -> MmaDetails {
+        MmaDetails {
+            m: self.m,
+            n: self.n,
+            k: self.k,
+            alayout: self.layout,
+            blayout: self.layout,
+            dtype: self.type_,
+            atype: self.type_,
+            btype: self.type_,
+            ctype: self.type_,
+            satfinite: false,
+            b1_op: None,
+        }
+    }
+
+    pub fn fragment_type(&self) -> Type {
+        self.mma().wmma_type(self.matrix)
+    }
+
+    /// Whether the fragment belongs to a supported `wmma.mma`.
+    pub fn is_supported(&self) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let k16 = matches!(shape, (16, 16, 16) | (32, 8, 16) | (8, 32, 16));
+        match (self.matrix, self.type_) {
+            (MmaMatrix::A | MmaMatrix::B, F16 | Bf16 | S8 | U8) => k16,
+            (MmaMatrix::A | MmaMatrix::B, Tf32) => shape == (16, 16, 8),
+            (MmaMatrix::A | MmaMatrix::B, S4 | U4) => shape == (8, 8, 32),
+            (MmaMatrix::A | MmaMatrix::B, B1) => shape == (8, 8, 128),
+            (_, F64) => shape == (8, 8, 4),
+            (MmaMatrix::C | MmaMatrix::D, F16) => k16,
+            (MmaMatrix::C | MmaMatrix::D, F32) => k16 || shape == (16, 16, 8),
+            (MmaMatrix::C | MmaMatrix::D, S32) => {
+                k16 || matches!(shape, (8, 8, 32) | (8, 8, 128))
+            }
+            _ => false,
         }
     }
 }

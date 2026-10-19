@@ -1821,6 +1821,442 @@ fn empty_call<'input>(
     }
 }
 
+// The modifiers of an instruction parsed by hand, without their dots, for
+// example `["sync", "aligned", "m16n8k16", "shared::cta"]`. A modifier ends
+// at the next dot or at the first token that does not follow it immediately.
+fn matrix_modifiers<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> Vec<&'input str> {
+    let text = stream.state.text;
+    let mut modifiers = Vec::new();
+    let mut current: Option<(usize, usize)> = None;
+    while let Some((_, span)) = stream.input.first() {
+        let piece = &text[span.clone()];
+        match current {
+            _ if piece.starts_with('.') && piece.len() > 1 => {
+                if let Some((start, end)) = current {
+                    modifiers.push(&text[start + 1..end]);
+                }
+                current = Some((span.start, span.end));
+            }
+            Some((start, end)) if span.start == end => current = Some((start, span.end)),
+            _ => break,
+        }
+        stream.input = &stream.input[1..];
+    }
+    if let Some((start, end)) = current {
+        modifiers.push(&text[start + 1..end]);
+    }
+    modifiers
+}
+
+fn backtrack<T>() -> PResult<T> {
+    Err(ErrMode::Backtrack(ContextError::new()))
+}
+
+// Removes `name` from the modifiers, returns whether it was there.
+fn take_modifier(modifiers: &mut Vec<&str>, name: &str) -> bool {
+    match modifiers.iter().position(|m| *m == name) {
+        Some(i) => {
+            modifiers.remove(i);
+            true
+        }
+        None => false,
+    }
+}
+
+fn take_state_space(modifiers: &mut Vec<&str>) -> Option<StateSpace> {
+    for (name, space) in [
+        ("global", StateSpace::Global),
+        ("shared", StateSpace::Shared),
+        ("shared::cta", StateSpace::Shared),
+    ] {
+        if take_modifier(modifiers, name) {
+            return Some(space);
+        }
+    }
+    None
+}
+
+fn take_matrix_number(modifiers: &mut Vec<&str>) -> Option<ast::MatrixNumber> {
+    for (name, number) in [
+        ("x1", ast::MatrixNumber::X1),
+        ("x2", ast::MatrixNumber::X2),
+        ("x4", ast::MatrixNumber::X4),
+    ] {
+        if take_modifier(modifiers, name) {
+            return Some(number);
+        }
+    }
+    None
+}
+
+// `mMnNkK` -> (M, N, K)
+fn take_mma_shape(modifiers: &mut Vec<&str>) -> Option<(u32, u32, u32)> {
+    let position = modifiers.iter().position(|m| {
+        m.starts_with('m') && m.contains('n') && m.contains('k') && m.len() > 5
+    })?;
+    let shape = modifiers.remove(position);
+    let (m, rest) = shape[1..].split_once('n')?;
+    let (n, k) = rest.split_once('k')?;
+    Some((m.parse().ok()?, n.parse().ok()?, k.parse().ok()?))
+}
+
+fn take_layout(modifiers: &mut Vec<&str>) -> Option<ast::MatrixLayout> {
+    let position = modifiers.iter().position(|m| *m == "row" || *m == "col")?;
+    Some(if modifiers.remove(position) == "row" {
+        ast::MatrixLayout::Row
+    } else {
+        ast::MatrixLayout::Col
+    })
+}
+
+fn bracketed_operand<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ParsedOperandStr<'input>> {
+    delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+}
+
+// ldmatrix.sync.aligned.m8n8.num{.trans}{.ss}.b16                       r, [p];
+// ldmatrix.sync.aligned.m16n16.num.trans{.ss}.{b8, b8x16.b6x16_p32, b8x16.b4x16_p64} r, [p];
+// ldmatrix.sync.aligned.m8n16.num{.ss}.{b8x16.b6x16_p32, b8x16.b4x16_p64, s8.s4}  r, [p];
+fn ldmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let data = matrix_move_details(stream, false)?;
+    let (dst, _, src) =
+        (ParsedOperandStr::parse, Token::Comma, bracketed_operand).parse_next(stream)?;
+    Ok(ast::Instruction::LdMatrix {
+        data,
+        arguments: LdMatrixArgs { dst, src },
+    })
+}
+
+// stmatrix.sync.aligned.m8n8.num{.trans}{.ss}.b16       [p], r;
+// stmatrix.sync.aligned.m16n8.num.trans{.ss}.b8         [p], r;
+fn stmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let data = matrix_move_details(stream, true)?;
+    let (src1, _, src2) =
+        (bracketed_operand, Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    Ok(ast::Instruction::StMatrix {
+        data,
+        arguments: StMatrixArgs { src1, src2 },
+    })
+}
+
+fn matrix_move_details<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    store: bool,
+) -> PResult<ast::LdMatrixDetails> {
+    let mut modifiers = matrix_modifiers(stream);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let shapes: &[_] = if store {
+        &[("m8n8", ast::MatrixShape::M8n8), ("m16n8", ast::MatrixShape::M16n8)]
+    } else {
+        &[
+            ("m8n8", ast::MatrixShape::M8n8),
+            ("m16n16", ast::MatrixShape::M16n16),
+            ("m8n16", ast::MatrixShape::M8n16),
+        ]
+    };
+    let Some(shape) = shapes
+        .iter()
+        .find_map(|(name, shape)| take_modifier(&mut modifiers, name).then_some(*shape))
+    else {
+        return backtrack();
+    };
+    let Some(number) = take_matrix_number(&mut modifiers) else {
+        return backtrack();
+    };
+    let transpose = take_modifier(&mut modifiers, "trans");
+    let state_space = take_state_space(&mut modifiers).unwrap_or(StateSpace::Shared);
+    if state_space != StateSpace::Shared {
+        return backtrack();
+    }
+    let format = match &modifiers[..] {
+        ["b16"] => ast::LdMatrixFormat::B16,
+        ["b8"] => ast::LdMatrixFormat::B8,
+        ["b8x16", "b6x16_p32"] => ast::LdMatrixFormat::B6x16P32,
+        ["b8x16", "b4x16_p64"] => ast::LdMatrixFormat::B4x16P64,
+        ["s8", "s4"] => ast::LdMatrixFormat::S4,
+        _ => return backtrack(),
+    };
+    use ast::LdMatrixFormat as F;
+    let valid = match shape {
+        ast::MatrixShape::M8n8 => format == F::B16,
+        ast::MatrixShape::M16n8 => format == F::B8 && transpose,
+        ast::MatrixShape::M16n16 => {
+            transpose
+                && number != ast::MatrixNumber::X4
+                && matches!(format, F::B8 | F::B6x16P32 | F::B4x16P64)
+        }
+        ast::MatrixShape::M8n16 => {
+            !transpose && matches!(format, F::B6x16P32 | F::B4x16P64 | F::S4)
+        }
+    };
+    if !valid {
+        return backtrack();
+    }
+    Ok(ast::LdMatrixDetails {
+        shape,
+        number,
+        transpose,
+        state_space,
+        format,
+    })
+}
+
+// movmatrix.sync.aligned.m8n8.trans.b16 d, a;
+fn movmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let modifiers = matrix_modifiers(stream);
+    if modifiers != ["sync", "aligned", "m8n8", "trans", "b16"] {
+        return backtrack();
+    }
+    let (dst, _, src) =
+        (ParsedOperandStr::parse, Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    Ok(ast::Instruction::MovMatrix {
+        arguments: MovMatrixArgs { dst, src },
+    })
+}
+
+// The element types at the end of an mma or wmma.mma: dtype.atype.btype.ctype
+// or (f16 wmma.mma) dtype.ctype.
+fn take_mma_types(modifiers: &mut Vec<&str>) -> Option<[ast::MmaType; 4]> {
+    let types = modifiers
+        .iter()
+        .filter_map(|m| ast::MmaType::from_name(m))
+        .collect::<Vec<_>>();
+    modifiers.retain(|m| ast::MmaType::from_name(m).is_none());
+    match types[..] {
+        [d, a, b, c] => Some([d, a, b, c]),
+        [d, c] => Some([d, ast::MmaType::F16, ast::MmaType::F16, c]),
+        _ => None,
+    }
+}
+
+fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
+    if !take_modifier(modifiers, "popc") {
+        return None;
+    }
+    if take_modifier(modifiers, "xor") {
+        Some(ast::MmaB1Op::Xor)
+    } else if take_modifier(modifiers, "and") {
+        Some(ast::MmaB1Op::And)
+    } else {
+        None
+    }
+}
+
+// mma.sync.aligned.shape.row.col{.satfinite}{.kind::f8f6f4}{.bop.popc}.dtype.atype.btype.ctype d, a, b, c;
+// Block scaling (.block_scale) and sparse mma (mma.sp) are not supported.
+fn mma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    let (Some(alayout), Some(blayout)) = (take_layout(&mut modifiers), take_layout(&mut modifiers))
+    else {
+        return backtrack();
+    };
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let kind_f8f6f4 = take_modifier(&mut modifiers, "kind::f8f6f4");
+    let b1_op = take_b1_op(&mut modifiers);
+    let Some([dtype, atype, btype, ctype]) = take_mma_types(&mut modifiers) else {
+        return backtrack();
+    };
+    let data = ast::MmaDetails {
+        m,
+        n,
+        k,
+        alayout,
+        blayout,
+        dtype,
+        atype,
+        btype,
+        ctype,
+        satfinite,
+        b1_op,
+    };
+    if !modifiers.is_empty()
+        || alayout != ast::MatrixLayout::Row
+        || blayout != ast::MatrixLayout::Col
+        || !data.is_supported_mma(kind_f8f6f4)
+    {
+        return backtrack();
+    }
+    let (dst, _, src1, _, src2, _, src3) = (
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
+    )
+        .parse_next(stream)?;
+    Ok(ast::Instruction::Mma {
+        data,
+        arguments: MmaArgs {
+            dst,
+            src1,
+            src2,
+            src3,
+        },
+    })
+}
+
+// wmma.load.{a,b,c}.sync.aligned.layout.shape{.ss}.type r, [p]{, stride};
+// wmma.store.d.sync.aligned.layout.shape{.ss}.type    [p], r{, stride};
+// wmma.mma.sync.aligned.alayout.blayout.shape.dtype.ctype d, a, b, c;                (f16)
+// wmma.mma{.bop.popc}.sync.aligned.alayout.blayout.shape{.rnd}.dtype.atype.btype.ctype{.satfinite} d, a, b, c;
+fn wmma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    let operation = if modifiers.is_empty() {
+        return backtrack();
+    } else {
+        modifiers.remove(0)
+    };
+    let b1_op = take_b1_op(&mut modifiers);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    if operation == "mma" {
+        let (Some(alayout), Some(blayout)) =
+            (take_layout(&mut modifiers), take_layout(&mut modifiers))
+        else {
+            return backtrack();
+        };
+        let satfinite = take_modifier(&mut modifiers, "satfinite");
+        take_modifier(&mut modifiers, "rn");
+        let Some([dtype, atype, btype, ctype]) = take_mma_types(&mut modifiers) else {
+            return backtrack();
+        };
+        let data = ast::MmaDetails {
+            m,
+            n,
+            k,
+            alayout,
+            blayout,
+            dtype,
+            atype,
+            btype,
+            ctype,
+            satfinite,
+            b1_op,
+        };
+        if !modifiers.is_empty() || !data.is_supported_wmma() {
+            return backtrack();
+        }
+        let (dst, _, src1, _, src2, _, src3) = (
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+        )
+            .parse_next(stream)?;
+        return Ok(ast::Instruction::WmmaMma {
+            data,
+            arguments: WmmaMmaArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        });
+    }
+    if b1_op.is_some() || modifiers.is_empty() {
+        return backtrack();
+    }
+    let matrix = match (operation, modifiers.remove(0)) {
+        ("load", "a") => ast::MmaMatrix::A,
+        ("load", "b") => ast::MmaMatrix::B,
+        ("load", "c") => ast::MmaMatrix::C,
+        ("store", "d") => ast::MmaMatrix::D,
+        _ => return backtrack(),
+    };
+    let Some(layout) = take_layout(&mut modifiers) else {
+        return backtrack();
+    };
+    let state_space = take_state_space(&mut modifiers).unwrap_or(StateSpace::Generic);
+    let type_ = match &modifiers[..] {
+        [name] => match ast::MmaType::from_name(name) {
+            Some(type_) => type_,
+            None => return backtrack(),
+        },
+        _ => return backtrack(),
+    };
+    let data = ast::WmmaLoadStoreDetails {
+        matrix,
+        layout,
+        m,
+        n,
+        k,
+        state_space,
+        type_,
+    };
+    if !data.is_supported() {
+        return backtrack();
+    }
+    // Without a stride, the matrix is packed: the stride is its number of
+    // columns (row major) or rows (column major).
+    let (rows, columns) = data.mma().matrix_size(matrix);
+    let default_stride = match layout {
+        ast::MatrixLayout::Row => columns,
+        ast::MatrixLayout::Col => rows,
+    };
+    let stride = |stream: &mut PtxParser<'a, 'input>| {
+        opt(preceded(Token::Comma, ParsedOperandStr::parse))
+            .map(|stride| {
+                stride.unwrap_or(ast::ParsedOperand::Imm(ast::ImmediateValue::U64(
+                    default_stride as u64,
+                )))
+            })
+            .parse_next(stream)
+    };
+    if matrix == ast::MmaMatrix::D {
+        let (src1, _, src2, src_stride) =
+            (bracketed_operand, Token::Comma, ParsedOperandStr::parse, stride)
+                .parse_next(stream)?;
+        Ok(ast::Instruction::WmmaStore {
+            data,
+            arguments: WmmaStoreArgs {
+                src1,
+                src2,
+                src_stride,
+            },
+        })
+    } else {
+        let (dst, _, src, src_stride) =
+            (ParsedOperandStr::parse, Token::Comma, bracketed_operand, stride)
+                .parse_next(stream)?;
+        Ok(ast::Instruction::WmmaLoad {
+            data,
+            arguments: WmmaLoadArgs {
+                dst,
+                src,
+                src_stride,
+            },
+        })
+    }
+}
+
 // .xorsign and .abs of min/max must come together
 fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
     if xorsign != abs {
@@ -2120,15 +2556,6 @@ derive_parser!(
     pub enum VoteMode {
         Ballot
     }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixShape { }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixNumber { }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixLayout { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum CacheLevel { }
@@ -4256,26 +4683,13 @@ derive_parser!(
     // .op   = { .min, .max }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
-    ldmatrix.sync.aligned.shape.num{.trans}{.ss}.type r, [p] => {
-        let data = LdMatrixDetails::new(shape, num, trans, ss, type_);
-        Instruction::LdMatrix {
-            data,
-            arguments: LdMatrixArgs {
-                dst: r,
-                src: p
-            }
-        }
-    }
-
-    // ldmatrix.sync.aligned.m8n16.num{.ss}.dst_fmt.src_fmt        r, [p];
-    // ldmatrix.sync.aligned.m16n16.num.trans{.ss}.dst_fmt.src_fmt r, [p];
-
-    .shape: MatrixShape = {.m8n8, .m16n16};
-    .num: MatrixNumber = {.x1, .x2, .x4};
-    .ss: StateSpace = {.shared{::cta}};
-    .type: ScalarType = {.b16, .b8};
-    // .dst_fmt = { .b8x16 };
-    // .src_fmt = { .b6x16_p32, .b4x16_p64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-stmatrix
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-movmatrix
+    // The many combinations of shapes and element types of the warp-level
+    // matrix instructions are parsed by hand.
+    ldmatrix <= { ldmatrix(stream) }
+    stmatrix <= { stmatrix(stream) }
+    movmatrix <= { movmatrix(stream) }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol
     griddepcontrol.action => {
@@ -4286,44 +4700,9 @@ derive_parser!(
     .action: GridDepControlAction  = { .launch_dependents, .wait };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
-    mma.sync.aligned.m16n8k16.alayout.blayout.f32.bf16.bf16.f32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::F32,
-                ab_type_scalar: ScalarType::BF16,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    mma.sync.aligned.m16n8k16.alayout.blayout.f32.f16.f16.f32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::F32,
-                ab_type_scalar: ScalarType::F16,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    mma.sync.aligned.m16n8k32.alayout.blayout.s32.s8.s8.s32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::S32,
-                ab_type_scalar: ScalarType::S8,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    .alayout: MatrixLayout = {.row};
-    .blayout: MatrixLayout = {.col};
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-wmma
+    mma <= { mma(stream) }
+    wmma <= { wmma(stream) }
 
     copysign.type  d, a, b => {
         ast::Instruction::Copysign {

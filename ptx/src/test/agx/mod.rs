@@ -70,7 +70,15 @@ const REQUIRED: &[&str] = &[
     "div_noftz",
     "prmt",
     "dp4a",
+    "mma_m16n8k16_f32_f16_f16_f32",
+    "mma_m16n8k16_f32_bf16_bf16_f32",
+    "mma_m16n8k32_s32_s8_s8_s32",
 ];
+
+/// Kernels that are not compiled because the backend aborts on them: they
+/// convert shared memory addresses to generic ones (`cvta.shared`), and AGX
+/// has no generic addressing of threadgroup memory.
+const SKIPPED: &[&str] = &["ldmatrix", "ldmatrix_trans"];
 
 #[test]
 fn spirv_run_kernels_compile() {
@@ -84,6 +92,10 @@ fn spirv_run_kernels_compile() {
     entries.sort();
     for path in &entries {
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        if SKIPPED.contains(&name.as_str()) {
+            failures.push((name, "skipped".to_string()));
+            continue;
+        }
         let ptx = std::fs::read_to_string(path).unwrap();
         let result = std::panic::catch_unwind(|| compile(&ptx, "agx-g14g"));
         match result {

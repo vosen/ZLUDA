@@ -10,6 +10,7 @@ use std::{
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+mod agx_matrix;
 mod convert_32bit_to_64bit;
 mod deparamize_functions;
 mod expand_operands;
@@ -171,7 +172,7 @@ pub fn to_llvm_module_with_options<'input>(
     let directives =
         insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
-    let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
+    let directives = replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
@@ -1255,6 +1256,22 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
             .ok_or_else(|| error_unknown_symbol(name))
+    }
+
+    // The innermost declaration of `name` that is not a scalar.
+    fn get_vector(&mut self, name: &str) -> Result<SpirvWord, TranslateError> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(id) = scope.name_to_ident.get(name) {
+                let scalar = matches!(
+                    scope.ident_map.get(id).and_then(|e| e.type_space.as_ref()),
+                    Some((ast::Type::Scalar(_), _))
+                );
+                if !scalar {
+                    return Ok(*id);
+                }
+            }
+        }
+        self.get(name)
     }
 
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {

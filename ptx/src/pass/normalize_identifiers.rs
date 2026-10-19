@@ -153,15 +153,43 @@ fn run_instruction<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
 ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
-    ast::visit_map(instruction, &mut |name: &'input str,
-                                      _: Option<(
-        &ast::Type,
-        ast::StateSpace,
-    )>,
-                                      _,
-                                      _| {
-        resolver.get(&name)
-    })
+    ast::visit_map(instruction, &mut ResolveNames(resolver))
+}
+
+struct ResolveNames<'r, 'input, 'b>(&'r mut ScopedResolver<'input, 'b>);
+
+impl<'r, 'input, 'b>
+    ast::VisitorMap<ast::ParsedOperand<&'input str>, ast::ParsedOperand<SpirvWord>, TranslateError>
+    for ResolveNames<'r, 'input, 'b>
+{
+    fn visit(
+        &mut self,
+        args: ast::ParsedOperand<&'input str>,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+        relaxed_type_check: bool,
+    ) -> Result<ast::ParsedOperand<SpirvWord>, TranslateError> {
+        // `%tid.x` is the special register even in a function that declares
+        // a scalar register `%tid`.
+        if let ast::ParsedOperand::VecMember(name, index) = args {
+            return Ok(ast::ParsedOperand::VecMember(self.0.get_vector(name)?, index));
+        }
+        let resolver = &mut *self.0;
+        let mut resolve = |name: &'input str, _: Option<(&ast::Type, ast::StateSpace)>, _, _| {
+            resolver.get(name)
+        };
+        ast::VisitorMap::visit(&mut resolve, args, type_space, is_dst, relaxed_type_check)
+    }
+
+    fn visit_ident(
+        &mut self,
+        name: &'input str,
+        _: Option<(&ast::Type, ast::StateSpace)>,
+        _: bool,
+        _: bool,
+    ) -> Result<SpirvWord, TranslateError> {
+        self.0.get(name)
+    }
 }
 
 fn run_multivariable<'input, 'b>(

@@ -2203,6 +2203,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::ReduxSync { .. }
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
+        | ast::Instruction::StMatrix { .. }
+        | ast::Instruction::MovMatrix { .. }
+        | ast::Instruction::WmmaLoad { .. }
+        | ast::Instruction::WmmaStore { .. }
+        | ast::Instruction::WmmaMma { .. }
         | ast::Instruction::Mma { .. }
         | ast::Instruction::Prefetch { .. }
         | ast::Instruction::CreatePolicyFractional { .. }
