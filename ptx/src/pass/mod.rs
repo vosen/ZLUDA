@@ -150,7 +150,7 @@ pub fn to_llvm_module_with_options<'input>(
     let directives = rcp_f64_into_div::run(&mut flat_resolver, directives)?;
     on_pass_end("rcp_f64_into_div");
     let directives =
-        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
+        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions_fp_required");
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     on_pass_end("normalize_basic_blocks");
@@ -175,7 +175,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
-    let fp_mode = get_fp_mode(&directives[..]);
+    let fp_mode = get_fp_mode(target, &directives[..]);
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
     let llvm_ir =
@@ -195,10 +195,23 @@ pub fn to_llvm_module_with_options<'input>(
 }
 
 fn get_fp_mode(
+    target: Target,
     directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> llvm::emit::FloatingPointMode {
     for d in directives {
         if let Directive2::Method(method) = d {
+            // AMDGPU applies a kernel's initial rounding mode to every
+            // instruction through the hardware mode register. On AGX only
+            // constrained instructions read the emulated mode register.
+            if target == Target::Agx {
+                if let Some(attrs) = &method.kernel_attributes {
+                    if attrs.rounding_mode_f32 != ast::RoundingMode::NearestEven
+                        || attrs.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
+                    {
+                        return llvm::emit::FloatingPointMode::Constrained;
+                    }
+                }
+            }
             for s in method.body.iter().flatten() {
                 if let Statement::SetMode(_) = s {
                     return llvm::emit::FloatingPointMode::Constrained;

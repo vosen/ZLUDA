@@ -1761,6 +1761,13 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        if self.target == Target::Agx
+            && matches!(float_div.kind, ptx_parser::DivFloatKind::Rounding(_))
+        {
+            self.fp
+                .fdiv(self.resolver, float_div.type_, arguments.dst, src1, src2)?;
+            return Ok(());
+        }
         if matches!(
             float_div.kind,
             ptx_parser::DivFloatKind::ApproxFull | ptx_parser::DivFloatKind::Rounding(_)
@@ -2621,12 +2628,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        // AGX has no rounding mode control: everything uses the default
-        // floating point environment.
-        let mode = match self.target {
-            Target::Agx => FloatingPointMode::Normal,
-            Target::Amdgpu => self.fp.mode,
-        };
+        let mode = self.fp.mode;
         let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, mode) {
             (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
                 (c"llvm.sqrt.f32", &[])
@@ -3282,20 +3284,61 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    /// AGX has no floating point mode register: the backend models one with
+    /// llvm.agx.get.fpmode / llvm.agx.set.fpmode (bits 0-1 f32 rounding and
+    /// 2-3 f16/f64 rounding, numbered like llvm.get.rounding; bit 4 f32 and
+    /// bit 5 f16/f64 flush denormals) and implements the directed rounding
+    /// modes in software.
+    fn emit_set_mode_agx(&mut self, mode_reg: ModeRegister) -> Result<(), TranslateError> {
+        fn rounding(mode: ast::RoundingMode) -> u64 {
+            match mode {
+                ast::RoundingMode::Zero => 0,
+                ast::RoundingMode::NearestEven => 1,
+                ast::RoundingMode::PositiveInf => 2,
+                ast::RoundingMode::NegativeInf => 3,
+            }
+        }
+        let (mask, value) = match mode_reg {
+            ModeRegister::Denormal { f32, f16f64 } => {
+                (0x30, (f32 as u64) << 4 | (f16f64 as u64) << 5)
+            }
+            ModeRegister::Rounding { f32, f16f64 } => {
+                (0xf, rounding(f32) | rounding(f16f64) << 2)
+            }
+        };
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let current = self.emit_intrinsic(
+            c"llvm.agx.get.fpmode",
+            None,
+            vec![&ast::ScalarType::B32.into()],
+            vec![],
+        )?;
+        let mode = unsafe {
+            let kept = LLVMBuildAnd(
+                self.builder,
+                current,
+                LLVMConstInt(i32_type, !mask & 0xffff_ffff, 0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            LLVMBuildOr(
+                self.builder,
+                kept,
+                LLVMConstInt(i32_type, value, 0),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        self.emit_intrinsic(
+            c"llvm.agx.set.fpmode",
+            None,
+            vec![],
+            vec![(mode, i32_type)],
+        )?;
+        Ok(())
+    }
+
     fn emit_set_mode(&mut self, mode_reg: ModeRegister) -> Result<(), TranslateError> {
         if self.target == Target::Agx {
-            // There is no floating point mode register: denormal handling is
-            // fixed, and only round to nearest even is available.
-            return match mode_reg {
-                ModeRegister::Denormal { .. } => Ok(()),
-                ModeRegister::Rounding {
-                    f32: ast::RoundingMode::NearestEven,
-                    f16f64: ast::RoundingMode::NearestEven,
-                } => Ok(()),
-                ModeRegister::Rounding { .. } => Err(TranslateError::Unsupported(
-                    "rounding modes other than round to nearest even are not supported on AGX".into(),
-                )),
-            };
+            return self.emit_set_mode_agx(mode_reg);
         }
         fn hwreg(reg: u32, offset: u32, size: u32) -> u32 {
             reg | (offset << 6) | ((size - 1) << 11)

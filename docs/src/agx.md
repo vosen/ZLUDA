@@ -79,8 +79,13 @@ an error.
 * No `f64` (the hardware has no double precision), no 128-bit atomics, no
   tensor core instructions (`mma`, `ldmatrix`), no fp8 conversions, no calls
   to external functions and no function pointers.
-* Only round to nearest even: other rounding modes of `.rz`/`.rm`/`.rp`
-  instructions that need a mode change are rejected.
+* The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
+  kernels whose instructions all use one) are computed in software, since
+  the hardware only rounds to nearest even: an emulated mode register
+  (`llvm.agx.set.fpmode`/`llvm.agx.get.fpmode`, see below) holds ZLUDA's
+  global modes, and the backend rounds each operation in that mode with
+  integer arithmetic. `add`, `sub`, `mul`, `fma`, `div`, `sqrt`, conversions
+  from integers and `cvt.f16.f32` are correctly rounded in all four modes.
 * 32-bit floating point operations always flush denormal inputs and results
   to zero (the hardware has no other mode), with or without `.ftz`. 16-bit
   operations keep denormals in hardware; `.ftz` 16-bit operations flush them
@@ -122,7 +127,7 @@ The cost depends on the operation: an addition gets about 10 more
 instructions, a fused multiply-add about 24, a division about 67 (see the
 AGX backend documentation). The denormal mode is per kernel: in a kernel
 that mixes `.ftz` and other `f32` instructions, all of them follow the mode
-needed at the kernel's entry. Directed rounding modes and `f64` remain unsupported, and
+needed at the kernel's entry. `f64` remains unsupported, and
 approximate instructions (`ex2.approx`, `rcp.approx`, ...) keep the
 hardware's approximations.
 
@@ -132,7 +137,24 @@ inputs (denormals, boundaries, cancellations, ties, quotients and roots next
 to rounding midpoints, specials) and compares with an exact IEEE 754
 reference. All 20 operations it covers (add, sub, mul, fma, div, sqrt,
 comparisons, minimum and maximum variants, floor, ceil, trunc, rint) are
-bit-exact.
+bit-exact. `ptx/tools/agx_rounding_check.py` does the same for the directed
+rounding modes: `add`, `sub`, `mul`, `div`, `fma`, `sqrt`, `cvt.rn.f32.s32`,
+`cvt.rn.f32.u32` and `cvt.f16.f32` in `.rz`, `.rp` and `.rm`, with a static
+rounding mode and with the mode set at run time, are bit-exact, with and
+without the strict mode.
+
+### The emulated mode register
+
+ZLUDA's mode statements become `llvm.agx.set.fpmode(i32)`, read and written
+with `llvm.agx.get.fpmode()` so that a denormal mode change keeps the
+rounding modes and the other way round. Bits 0-1 hold the `f32` rounding
+mode and bits 2-3 the `f16`/`f64` one (0 toward zero, 1 to nearest even, 2
+up, 3 down); bit 4 is set when `f32` denormals are flushed and bit 5 when
+`f16`/`f64` ones are. The kernel's modes are its initial value. In a module
+with mode changes, or whose kernels use a directed rounding mode, the
+floating point operations are constrained intrinsics with dynamic rounding,
+which the backend's `agx-lower-fp-env` pass lowers with the register's value
+at each operation.
 
 ## Checking against PTX-formalization
 
@@ -154,7 +176,8 @@ Kernels with statements that ZLUDA's front end does not support (many of the
 tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA,
 clusters and `mbarrier`) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
-1075 checks of the 217 programs that compile, 172 run: 158 match the formal
-semantics and the other 14 are the floating point differences listed above
-(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`). With
-`--strict-fp` (the `--strict-fp` option of the script), all 172 match.
+1123 checks of the 218 programs that compile, 211 run: 189 match the formal
+semantics and the other 22 are the floating point differences listed above
+(denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`, `div`
+and `sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
+script), all 211 match.
