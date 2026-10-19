@@ -207,9 +207,20 @@ impl<'a, 'input, 'b>
                 index,
             )),
             operand => {
+                // The elements of a vector operand ({%a, %b}) have the scalar
+                // type of the vector
+                let element_type = match (&operand, type_space) {
+                    (ast::ParsedOperand::VecPack(_), Some((ast::Type::Vector(_, scalar), space))) => {
+                        Some((ast::Type::Scalar(*scalar), space))
+                    }
+                    _ => None,
+                };
                 let resolver = &mut *self.resolver;
                 (&mut |name: &'input str, type_space: Option<(&ast::Type, ast::StateSpace)>, _, _| {
-                    resolver.get_or_declare(name, type_space)
+                    match &element_type {
+                        Some((type_, space)) => resolver.get_or_declare(name, Some((type_, *space))),
+                        None => resolver.get_or_declare(name, type_space),
+                    }
                 })
                     .visit(operand, type_space, is_dst, relaxed_type_check)
             }
