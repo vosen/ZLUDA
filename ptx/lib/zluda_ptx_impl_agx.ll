@@ -701,6 +701,137 @@ define void @__zluda_ptx_impl_nanosleep_u32(i32 %nanoseconds) #0 {
   ret void
 }
 
+; vprintf: appends a record to @__zluda_agx_printf_buffer for the host to
+; print. The buffer starts with the number of bytes of records (updated
+; atomically; records whose end would pass the end of the buffer are not
+; written), followed by the records from byte 8 on. A record is
+;   u32 size     (of the whole record, a multiple of 8)
+;   u32 argsize  (bytes of arguments)
+;   u64 format   (device address of the format string)
+;   argsize bytes of arguments, as laid out by the caller (each argument
+;   aligned to its size: 4 bytes for %c, %d, %i, %o, %u, %x, %X without l,
+;   8 bytes for the l and ll versions, %p, %s and the floating point ones)
+; The argument size is found by scanning the format string.
+@__zluda_agx_printf_buffer = internal addrspace(1) global [65536 x i8] zeroinitializer, align 8
+
+define i32 @__zluda_ptx_impl_vprintf(i64 %format, i64 %args) #3 {
+entry:
+  br label %scan
+scan:
+  %i = phi i64 [ 0, %entry ], [ %i.next, %next ]
+  %in.spec = phi i1 [ false, %entry ], [ %in.spec.next, %next ]
+  %long = phi i1 [ false, %entry ], [ %long.next, %next ]
+  %size = phi i32 [ 0, %entry ], [ %size.next, %next ]
+  %count = phi i32 [ 0, %entry ], [ %count.next, %next ]
+  %p = add i64 %format, %i
+  %pp = inttoptr i64 %p to ptr
+  %ch = load i8, ptr %pp, align 1
+  %done = icmp eq i8 %ch, 0
+  br i1 %done, label %write, label %char
+char:
+  %is.percent = icmp eq i8 %ch, 37
+  br i1 %in.spec, label %spec, label %plain
+plain:
+  br label %next
+spec:
+  ; the argument size of a conversion character, 0 for other characters
+  %is.l = icmp eq i8 %ch, 108
+  %is.z = icmp eq i8 %ch, 122
+  %is.j = icmp eq i8 %ch, 106
+  %is.t = icmp eq i8 %ch, 116
+  %is.L = icmp eq i8 %ch, 76
+  %l1 = or i1 %is.l, %is.z
+  %l2 = or i1 %l1, %is.j
+  %l3 = or i1 %l2, %is.t
+  %is.length8 = or i1 %l3, %is.L
+  %c.lower = or i8 %ch, 32
+  %is.d = icmp eq i8 %ch, 100
+  %is.i = icmp eq i8 %ch, 105
+  %is.o = icmp eq i8 %ch, 111
+  %is.u = icmp eq i8 %ch, 117
+  %is.x = icmp eq i8 %c.lower, 120
+  %is.c = icmp eq i8 %ch, 99
+  %n1 = or i1 %is.d, %is.i
+  %n2 = or i1 %n1, %is.o
+  %n3 = or i1 %n2, %is.u
+  %n4 = or i1 %n3, %is.x
+  %is.integer = or i1 %n4, %is.c
+  %is.f = icmp eq i8 %c.lower, 102
+  %is.e = icmp eq i8 %c.lower, 101
+  %is.g = icmp eq i8 %c.lower, 103
+  %is.a = icmp eq i8 %c.lower, 97
+  %is.s = icmp eq i8 %ch, 115
+  %is.p = icmp eq i8 %ch, 112
+  %f1 = or i1 %is.f, %is.e
+  %f2 = or i1 %f1, %is.g
+  %f3 = or i1 %f2, %is.a
+  %f4 = or i1 %f3, %is.s
+  %is.wide = or i1 %f4, %is.p
+  %is.star = icmp eq i8 %ch, 42
+  %integer.size = select i1 %long, i32 8, i32 4
+  %s1 = select i1 %is.integer, i32 %integer.size, i32 0
+  %s2 = select i1 %is.wide, i32 8, i32 %s1
+  %arg.size = select i1 %is.star, i32 4, i32 %s2
+  %is.conversion0 = or i1 %is.integer, %is.wide
+  %is.conversion = or i1 %is.conversion0, %is.percent
+  ; align the arguments to their size
+  %align.mask = sub i32 %arg.size, 1
+  %size.up = add i32 %size, %align.mask
+  %align.not = xor i32 %align.mask, -1
+  %aligned = and i32 %size.up, %align.not
+  %has.arg = icmp ne i32 %arg.size, 0
+  %aligned.size = select i1 %has.arg, i32 %aligned, i32 %size
+  %spec.size = add i32 %aligned.size, %arg.size
+  %spec.count.inc = zext i1 %is.conversion0 to i32
+  %spec.count = add i32 %count, %spec.count.inc
+  %spec.long = or i1 %long, %is.length8
+  %spec.continues = xor i1 %is.conversion, true
+  br label %next
+next:
+  %in.spec.next = phi i1 [ %is.percent, %plain ], [ %spec.continues, %spec ]
+  %long.next = phi i1 [ false, %plain ], [ %spec.long, %spec ]
+  %size.next = phi i32 [ %size, %plain ], [ %spec.size, %spec ]
+  %count.next = phi i32 [ %count, %plain ], [ %spec.count, %spec ]
+  %i.next = add i64 %i, 1
+  br label %scan
+write:
+  ; record: 16 bytes of header and the arguments, rounded up to 8
+  %record.args = add i32 %size, 23
+  %record.size = and i32 %record.args, -8
+  %start = atomicrmw add ptr addrspace(1) @__zluda_agx_printf_buffer, i32 %record.size monotonic
+  %end = add i32 %start, %record.size
+  %fits = icmp ule i32 %end, 65528
+  br i1 %fits, label %header, label %exit
+header:
+  %start64 = zext i32 %start to i64
+  %offset = add i64 %start64, 8
+  %record = getelementptr inbounds i8, ptr addrspace(1) @__zluda_agx_printf_buffer, i64 %offset
+  store i32 %record.size, ptr addrspace(1) %record, align 8
+  %argsize.p = getelementptr inbounds i8, ptr addrspace(1) %record, i64 4
+  store i32 %size, ptr addrspace(1) %argsize.p, align 4
+  %format.p = getelementptr inbounds i8, ptr addrspace(1) %record, i64 8
+  store i64 %format, ptr addrspace(1) %format.p, align 8
+  %data = getelementptr inbounds i8, ptr addrspace(1) %record, i64 16
+  %words = lshr i32 %size, 2
+  br label %copy
+copy:
+  %w = phi i32 [ 0, %header ], [ %w.next, %copy.word ]
+  %copy.done = icmp uge i32 %w, %words
+  br i1 %copy.done, label %exit, label %copy.word
+copy.word:
+  %w64 = zext i32 %w to i64
+  %byte = shl i64 %w64, 2
+  %src.int = add i64 %args, %byte
+  %src = inttoptr i64 %src.int to ptr
+  %word = load i32, ptr %src, align 4
+  %dst = getelementptr inbounds i8, ptr addrspace(1) %data, i64 %byte
+  store i32 %word, ptr addrspace(1) %dst, align 4
+  %w.next = add i32 %w, 1
+  br label %copy
+exit:
+  ret i32 %count
+}
+
 define void @__zluda_ptx_impl___assertfail(i64 %message, i64 %file, i32 %line, i64 %function, i64 %char_size) #1 {
   call void @llvm.trap()
   unreachable
