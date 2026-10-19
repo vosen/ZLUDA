@@ -9,7 +9,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
-    LLVMZludaAgxResolveIsspacep, LLVMZludaUpgradeFunctionAttributes,
+    LLVMZludaAgxLowerAddressSpaces, LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
@@ -188,8 +188,12 @@ pub fn compile_agx(
         return Err(message.to_str().to_string());
     }
 
-    // isspacep is decided on the optimized code, then optimized again
-    if unsafe { LLVMZludaAgxResolveIsspacep(linked.get()) } {
+    // isspacep and the generic addresses of threadgroup and private memory
+    // are resolved on the optimized code, which is then optimized again
+    for _ in 0..4 {
+        if !unsafe { LLVMZludaAgxLowerAddressSpaces(linked.get()) } {
+            break;
+        }
         let error = unsafe {
             LLVMRunPasses(
                 linked.get(),

@@ -695,28 +695,20 @@ fn function<'a, 'input>(
     ast::LinkingDirective,
     ast::Function<'input, &'input str, ast::Statement<ParsedOperand<&'input str>>>,
 )> {
-    let (linking, function) = trace(
-        "function",
-        (
-            linking_directives,
-            method_declaration,
-            repeat(0.., tuning_directive),
-            function_body,
-        )
-            .map(|(linking, func_directive, tuning, body)| {
-                (
-                    linking,
-                    ast::Function {
-                        func_directive,
-                        tuning,
-                        body,
-                    },
-                )
-            }),
-    )
-    .parse_next(stream)?;
-    stream.state.record_function(&function.func_directive);
-    Ok((linking, function))
+    let (linking, func_directive) =
+        trace("function", (linking_directives, method_declaration)).parse_next(stream)?;
+    // Recorded before the body, which can call the function recursively
+    stream.state.record_function(&func_directive);
+    let (tuning, body) =
+        (repeat(0.., tuning_directive), function_body).parse_next(stream)?;
+    Ok((
+        linking,
+        ast::Function {
+            func_directive,
+            tuning,
+            body,
+        },
+    ))
 }
 
 fn linking_directives<'a, 'input>(

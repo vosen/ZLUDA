@@ -108,7 +108,7 @@ extern "C" {
 
     pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
 
-    pub fn LLVMZludaAgxResolveIsspacep(module: LLVMModuleRef) -> bool;
+    pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings
