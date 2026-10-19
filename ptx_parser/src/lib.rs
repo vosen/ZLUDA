@@ -306,6 +306,13 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 }
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
+    // A negative decimal literal: -1.5
+    let negative = opt(Token::Minus).parse_next(stream)?.is_some();
+    let value = f64_unsigned.parse_next(stream)?;
+    Ok(if negative { -value } else { value })
+}
+
+fn f64_unsigned<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     take_error(token::any.verify_map(|(t, _)| match t {
         Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f64::from_bits(x)),
@@ -2716,7 +2723,7 @@ derive_parser!(
     }
     .vec: VectorPrefix = { .v2, .v4, .v8 };
     .type: ScalarType =  { .pred,
-                           .b16, .b32, .b64,
+                           .b16, .b32, .b64, .b128,
                            .u16, .u32, .u64,
                            .s16, .s32, .s64,
                                  .f32, .f64 };
