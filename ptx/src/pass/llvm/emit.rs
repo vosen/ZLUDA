@@ -4203,10 +4203,14 @@ fn get_or_create_struct_type<'a>(
         ("struct".to_string(), Vec::new()),
         |(mut name, mut types), t| {
             name.push('.');
-            if let ast::Type::Scalar(scalar) = t {
-                write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
-            } else {
-                return Err(error_unreachable());
+            match t {
+                ast::Type::Scalar(scalar) => {
+                    write!(name, "{}", LLVMTypeDisplay(*scalar)).ok();
+                }
+                ast::Type::Vector(len, scalar) => {
+                    write!(name, "v{}{}", len, LLVMTypeDisplay(*scalar)).ok();
+                }
+                _ => return Err(error_unreachable()),
             }
             types.push(get_type(context, t)?);
             Ok((name, types))

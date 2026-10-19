@@ -128,7 +128,7 @@ pub fn to_llvm_module_with_options<'input>(
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
-    let directives = normalize_identifiers::run(&mut scoped_resolver, ast.directives)?;
+    let directives = normalize_identifiers::run(&mut scoped_resolver, merge_symbols(ast.directives))?;
     on_pass_end("normalize_identifiers");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
@@ -192,6 +192,78 @@ pub fn to_llvm_module_with_options<'input>(
         target,
         strict_fp,
     })
+}
+
+/// Keeps one module-level definition per name, like a PTX linker: the first
+/// definition that is not `.weak`, or else the first `.weak` one. Extern
+/// declarations of a defined variable and the other definitions are dropped;
+/// the kept variable takes the place of the first declaration, so that it
+/// still precedes its uses. Function declarations without a body are kept.
+fn merge_symbols<'input>(
+    directives: Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>>,
+) -> Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>> {
+    fn name<'a>(d: &ast::Directive<'a, ast::ParsedOperand<&'a str>>) -> &'a str {
+        match d {
+            ast::Directive::Variable(_, v) => v.name,
+            ast::Directive::Method(_, f) => f.func_directive.name(),
+        }
+    }
+    fn is_definition(d: &ast::Directive<'_, ast::ParsedOperand<&str>>) -> bool {
+        match d {
+            ast::Directive::Variable(linking, _) => !linking.contains(ast::LinkingDirective::EXTERN),
+            ast::Directive::Method(_, f) => f.body.is_some(),
+        }
+    }
+    fn is_weak(d: &ast::Directive<'_, ast::ParsedOperand<&str>>) -> bool {
+        match d {
+            ast::Directive::Variable(linking, _) | ast::Directive::Method(linking, _) => {
+                linking.contains(ast::LinkingDirective::WEAK)
+            }
+        }
+    }
+    let mut winner = FxHashMap::<&str, usize>::default();
+    let mut first = FxHashMap::<&str, usize>::default();
+    for (i, d) in directives.iter().enumerate() {
+        let n = name(d);
+        first.entry(n).or_insert(i);
+        if !is_definition(d) {
+            continue;
+        }
+        match winner.get(n) {
+            Some(&w) if !(is_weak(&directives[w]) && !is_weak(d)) => {}
+            _ => {
+                winner.insert(n, i);
+            }
+        }
+    }
+    let duplicated = |n: &str| directives.iter().filter(|d| name(d) == n).count() > 1;
+    let duplicated = winner
+        .keys()
+        .copied()
+        .filter(|n| duplicated(n))
+        .collect::<Vec<_>>();
+    if duplicated.is_empty() {
+        return directives;
+    }
+    let mut slots = directives.into_iter().map(Some).collect::<Vec<_>>();
+    for n in duplicated {
+        let w = winner[n];
+        let is_variable = matches!(slots[w], Some(ast::Directive::Variable(..)));
+        for i in 0..slots.len() {
+            let drop = match &slots[i] {
+                Some(d) if i != w && name(d) == n => is_variable || is_definition(d),
+                _ => false,
+            };
+            if drop {
+                slots[i] = None;
+            }
+        }
+        let f = first[n];
+        if is_variable && f != w {
+            slots.swap(f, w);
+        }
+    }
+    slots.into_iter().flatten().collect()
 }
 
 fn get_fp_mode(

@@ -445,7 +445,11 @@ ptx_parser_macros::generate_instruction_type!(
             type: { &data.typ },
             data: MovDetails,
             arguments<T>: {
-                dst: T,
+                dst: {
+                    repr: T,
+                    type: { &data.typ },
+                    relaxed_type_check: true,
+                },
                 src: T
             },
             display: write!(f, "mov{}", data.typ)?

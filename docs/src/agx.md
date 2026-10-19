@@ -179,8 +179,8 @@ Kernels with statements that ZLUDA's front end does not support (many of the
 tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA,
 clusters and `mbarrier`) are skipped, together with the checks that follow
 their launch, and programs ZLUDA rejects as a whole are not counted. Of the
-1123 checks of the 218 programs that compile, 211 run: 189 match the formal
+1125 checks of the 220 programs that compile, 213 run: 191 match the formal
 semantics and the other 22 are the floating point differences listed above
 (denormal `f32` comparisons, NaN bit patterns, `-0.0` under `.sat`, `div`
 and `sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
-script), all 211 match.
+script), all 213 match.
