@@ -22053,4 +22053,1740 @@ Returns ::CUDA_ERROR_PEER_ACCESS_NOT_ENABLED if direct peer access has
         vdpDevice: cuda_types::cuda::VdpDevice,
         vdpGetProcAddress: cuda_types::cuda::VdpGetProcAddress,
     ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA device corresponding to a display adapter.
+
+ Returns in \p *pCudaDevice the CUDA-compatible device corresponding to the
+ adapter name \p pszAdapterName obtained from ::EnumDisplayDevices() or
+ ::IDirect3D9::GetAdapterIdentifier().
+
+ If no device on the adapter with name \p pszAdapterName is CUDA-compatible,
+ then the call will fail.
+
+ \param pCudaDevice    - Returned CUDA device corresponding to pszAdapterName
+ \param pszAdapterName - Adapter name to query for device
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D9CtxCreate,
+ ::cudaD3D9GetDevice*/
+    fn cuD3D9GetDevice(
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        pszAdapterName: *const ::core::ffi::c_char,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA devices corresponding to a Direct3D 9 device
+
+ Returns in \p *pCudaDeviceCount the number of CUDA-compatible device corresponding
+ to the Direct3D 9 device \p pD3D9Device.
+ Also returns in \p *pCudaDevices at most \p cudaDeviceCount of the CUDA-compatible devices
+ corresponding to the Direct3D 9 device \p pD3D9Device.
+
+ If any of the GPUs being used to render \p pDevice are not CUDA capable then the
+ call will return ::CUDA_ERROR_NO_DEVICE.
+
+ \param pCudaDeviceCount - Returned number of CUDA devices corresponding to \p pD3D9Device
+ \param pCudaDevices     - Returned CUDA devices corresponding to \p pD3D9Device
+ \param cudaDeviceCount  - The size of the output device array \p pCudaDevices
+ \param pD3D9Device      - Direct3D 9 device to query for CUDA devices
+ \param deviceList       - The set of devices to return.  This set may be
+                           ::CU_D3D9_DEVICE_LIST_ALL for all devices,
+                           ::CU_D3D9_DEVICE_LIST_CURRENT_FRAME for the devices used to
+                           render the current frame (in SLI), or
+                           ::CU_D3D9_DEVICE_LIST_NEXT_FRAME for the devices used to
+                           render the next frame (in SLI).
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_NO_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D9CtxCreate,
+ ::cudaD3D9GetDevices*/
+    fn cuD3D9GetDevices(
+        pCudaDeviceCount: *mut ::core::ffi::c_uint,
+        pCudaDevices: *mut cuda_types::cuda::CUdevice,
+        cudaDeviceCount: ::core::ffi::c_uint,
+        pD3D9Device: *mut cuda_types::cuda::IDirect3DDevice9,
+        deviceList: cuda_types::cuda::CUd3d9DeviceList,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 9
+
+ Creates a new CUDA context, enables interoperability for that context with
+ the Direct3D device \p pD3DDevice, and associates the created CUDA context
+ with the calling thread.
+ The created ::CUcontext will be returned in \p *pCtx.
+ Direct3D resources from this device may be registered and mapped through the
+ lifetime of this CUDA context.
+ If \p pCudaDevice is non-NULL then the ::CUdevice on which this CUDA context was
+ created will be returned in \p *pCudaDevice.
+
+ On success, this call will increase the internal reference count on
+ \p pD3DDevice. This reference count will be decremented upon destruction of
+ this context through ::cuCtxDestroy().
+ This context will cease to function if \p pD3DDevice is destroyed or encounters
+ an error.
+
+ Note that this function is never required for correct functionality.  Use of
+ this function will result in accelerated interoperability only when the
+ operating system is Windows Vista or Windows 7, and the device \p pD3DDdevice
+ is not an IDirect3DDevice9Ex.  In all other circumstances, this function is
+ not necessary.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param pCudaDevice - Returned pointer to the device on which the context was created
+ \param Flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D9GetDevice,
+ ::cuGraphicsD3D9RegisterResource*/
+    fn cuD3D9CtxCreate_v2(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 9
+
+ Creates a new CUDA context, enables interoperability for that context with
+ the Direct3D device \p pD3DDevice, and associates the created CUDA context
+ with the calling thread.
+ The created ::CUcontext will be returned in \p *pCtx.
+ Direct3D resources from this device may be registered and mapped through the
+ lifetime of this CUDA context.
+
+ On success, this call will increase the internal reference count on
+ \p pD3DDevice. This reference count will be decremented upon destruction of
+ this context through ::cuCtxDestroy().
+ This context will cease to function if \p pD3DDevice is destroyed or encounters
+ an error.
+
+ Note that this function is never required for correct functionality.  Use of
+ this function will result in accelerated interoperability only when the
+ operating system is Windows Vista or Windows 7, and the device \p pD3DDdevice
+ is not an IDirect3DDevice9Ex.  In all other circumstances, this function is
+ not necessary.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+ \param cudaDevice  - The CUDA device on which to create the context.  This device
+                      must be among the devices returned when querying
+                      ::CU_D3D9_DEVICES_ALL from  ::cuD3D9GetDevices.
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D9GetDevices,
+ ::cuGraphicsD3D9RegisterResource*/
+    fn cuD3D9CtxCreateOnDevice(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+        cudaDevice: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the Direct3D 9 device against which the current CUDA context was
+ created
+
+ Returns in \p *ppD3DDevice the Direct3D device against which this CUDA context
+ was created in ::cuD3D9CtxCreate().
+
+ \param ppD3DDevice - Returned Direct3D device corresponding to CUDA context
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT
+ ::CUDA_ERROR_INVALID_GRAPHICS_CONTEXT
+ \notefnerr
+
+ \sa
+ ::cuD3D9GetDevice,
+ ::cudaD3D9GetDirect3DDevice*/
+    fn cuD3D9GetDirect3DDevice(
+        ppD3DDevice: *mut *mut cuda_types::cuda::IDirect3DDevice9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a Direct3D 9 resource for access by CUDA
+
+ Registers the Direct3D 9 resource \p pD3DResource for access by CUDA and
+ returns a CUDA handle to \p pD3Dresource in \p pCudaResource.
+ The handle returned in \p pCudaResource may be used to map and unmap this
+ resource until it is unregistered.
+ On success this call will increase the internal reference count on
+ \p pD3DResource. This reference count will be decremented when this
+ resource is unregistered through ::cuGraphicsUnregisterResource().
+
+ This call is potentially high-overhead and should not be called every frame
+ in interactive applications.
+
+ The type of \p pD3DResource must be one of the following.
+ - ::IDirect3DVertexBuffer9: may be accessed through a device pointer
+ - ::IDirect3DIndexBuffer9: may be accessed through a device pointer
+ - ::IDirect3DSurface9: may be accessed through an array.
+     Only stand-alone objects of type ::IDirect3DSurface9
+     may be explicitly shared. In particular, individual mipmap levels and faces
+     of cube maps may not be registered directly. To access individual surfaces
+     associated with a texture, one must register the base texture object.
+ - ::IDirect3DBaseTexture9: individual surfaces on this texture may be accessed
+     through an array.
+
+ The \p Flags argument may be used to specify additional parameters at register
+ time.  The valid values for this parameter are
+ - ::CU_GRAPHICS_REGISTER_FLAGS_NONE: Specifies no hints about how this
+   resource will be used.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST: Specifies that CUDA will
+   bind this resource to a surface reference.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_TEXTURE_GATHER: Specifies that CUDA will perform
+   texture gather operations on this resource.
+
+ Not all Direct3D resources of the above types may be used for
+ interoperability with CUDA.  The following are some limitations.
+ - The primary rendertarget may not be registered with CUDA.
+ - Resources allocated as shared may not be registered with CUDA.
+ - Textures which are not of a format which is 1, 2, or 4 channels of 8, 16,
+   or 32-bit integer or floating-point data cannot be shared.
+ - Surfaces of depth or stencil formats cannot be shared.
+
+ A complete list of supported formats is as follows:
+ - D3DFMT_L8
+ - D3DFMT_L16
+ - D3DFMT_A8R8G8B8
+ - D3DFMT_X8R8G8B8
+ - D3DFMT_G16R16
+ - D3DFMT_A8B8G8R8
+ - D3DFMT_A8
+ - D3DFMT_A8L8
+ - D3DFMT_Q8W8V8U8
+ - D3DFMT_V16U16
+ - D3DFMT_A16B16G16R16F
+ - D3DFMT_A16B16G16R16
+ - D3DFMT_R32F
+ - D3DFMT_G16R16F
+ - D3DFMT_A32B32G32R32F
+ - D3DFMT_G32R32F
+ - D3DFMT_R16F
+
+ If Direct3D interoperability is not initialized for this context using
+ ::cuD3D9CtxCreate then ::CUDA_ERROR_INVALID_CONTEXT is returned.
+ If \p pD3DResource is of incorrect type or is already registered then
+ ::CUDA_ERROR_INVALID_HANDLE is returned.
+ If \p pD3DResource cannot be registered then ::CUDA_ERROR_UNKNOWN is returned.
+ If \p Flags is not one of the above specified value then ::CUDA_ERROR_INVALID_VALUE
+ is returned.
+
+ \param pCudaResource - Returned graphics resource handle
+ \param pD3DResource  - Direct3D resource to register
+ \param Flags         - Parameters for resource registration
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D9CtxCreate,
+ ::cuGraphicsUnregisterResource,
+ ::cuGraphicsMapResources,
+ ::cuGraphicsSubResourceGetMappedArray,
+ ::cuGraphicsResourceGetMappedPointer,
+ ::cudaGraphicsD3D9RegisterResource*/
+    fn cuGraphicsD3D9RegisterResource(
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        pD3DResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a Direct3D resource for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Registers the Direct3D resource \p pResource for access by CUDA.
+
+ If this call is successful, then the application will be able to map and
+ unmap this resource until it is unregistered through
+ ::cuD3D9UnregisterResource(). Also on success, this call will increase the
+ internal reference count on \p pResource. This reference count will be
+ decremented when this resource is unregistered through
+ ::cuD3D9UnregisterResource().
+
+ This call is potentially high-overhead and should not be called every frame
+ in interactive applications.
+
+ The type of \p pResource must be one of the following.
+
+ - ::IDirect3DVertexBuffer9: Cannot be used with \p Flags set to
+   ::CU_D3D9_REGISTER_FLAGS_ARRAY.
+ - ::IDirect3DIndexBuffer9: Cannot be used with \p Flags set to
+   ::CU_D3D9_REGISTER_FLAGS_ARRAY.
+ - ::IDirect3DSurface9: Only stand-alone objects of type ::IDirect3DSurface9
+   may be explicitly shared. In particular, individual mipmap levels and
+   faces of cube maps may not be registered directly. To access individual
+   surfaces associated with a texture, one must register the base texture
+   object. For restrictions on the \p Flags parameter, see type
+   ::IDirect3DBaseTexture9.
+ - ::IDirect3DBaseTexture9: When a texture is registered, all surfaces
+   associated with the all mipmap levels of all faces of the texture will be
+   accessible to CUDA.
+
+ The \p Flags argument specifies the mechanism through which CUDA will access
+ the Direct3D resource. The following values are allowed.
+
+ - CU_D3D9_REGISTER_FLAGS_NONE: Specifies that CUDA will access this resource
+   through a ::CUdeviceptr. The pointer, size, and (for textures), pitch for
+   each subresource of this allocation may be queried through
+   ::cuD3D9ResourceGetMappedPointer(), ::cuD3D9ResourceGetMappedSize(), and
+   ::cuD3D9ResourceGetMappedPitch() respectively. This option is valid for
+   all resource types.
+ - ::CU_D3D9_REGISTER_FLAGS_ARRAY: Specifies that CUDA will access this
+   resource through a ::CUarray queried on a sub-resource basis through
+   ::cuD3D9ResourceGetMappedArray(). This option is only valid for resources
+   of type ::IDirect3DSurface9 and subtypes of ::IDirect3DBaseTexture9.
+
+ Not all Direct3D resources of the above types may be used for
+ interoperability with CUDA. The following are some limitations.
+
+ - The primary rendertarget may not be registered with CUDA.
+ - Resources allocated as shared may not be registered with CUDA.
+ - Any resources allocated in ::D3DPOOL_SYSTEMMEM or ::D3DPOOL_MANAGED may
+   not be registered with CUDA.
+ - Textures which are not of a format which is 1, 2, or 4 channels of 8, 16,
+   or 32-bit integer or floating-point data cannot be shared.
+ - Surfaces of depth or stencil formats cannot be shared.
+
+ If Direct3D interoperability is not initialized on this context, then
+ ::CUDA_ERROR_INVALID_CONTEXT is returned. If \p pResource is of incorrect
+ type (e.g. is a non-stand-alone ::IDirect3DSurface9) or is already
+ registered, then ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource
+ cannot be registered then ::CUDA_ERROR_UNKNOWN is returned.
+
+ \param pResource - Resource to register for CUDA access
+ \param Flags     - Flags for resource registration
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsD3D9RegisterResource*/
+    fn cuD3D9RegisterResource(
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Unregister a Direct3D resource
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Unregisters the Direct3D resource \p pResource so it is not accessible by
+ CUDA unless registered again.
+
+ If \p pResource is not registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned.
+
+ \param pResource - Resource to unregister
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsUnregisterResource*/
+    fn cuD3D9UnregisterResource(
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Map Direct3D resources for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Maps the \p count Direct3D resources in \p ppResource for access by CUDA.
+
+ The resources in \p ppResource may be accessed in CUDA kernels until they
+ are unmapped. Direct3D should not access any resources while they are mapped
+ by CUDA. If an application does so the results are undefined.
+
+ This function provides the synchronization guarantee that any Direct3D calls
+ issued before ::cuD3D9MapResources() will complete before any CUDA kernels
+ issued after ::cuD3D9MapResources() begin.
+
+ If any of \p ppResource have not been registered for use with CUDA or if
+ \p ppResource contains any duplicate entries, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned.  If any of \p ppResource are
+ presently mapped for access by CUDA, then ::CUDA_ERROR_ALREADY_MAPPED is
+ returned.
+
+ \param count      - Number of resources in ppResource
+ \param ppResource - Resources to map for CUDA usage
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_ALREADY_MAPPED,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsMapResources*/
+    fn cuD3D9MapResources(
+        count: ::core::ffi::c_uint,
+        ppResource: *mut *mut cuda_types::cuda::IDirect3DResource9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Unmaps Direct3D resources
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Unmaps the \p count Direct3D resources in \p ppResource.
+
+ This function provides the synchronization guarantee that any CUDA kernels
+ issued before ::cuD3D9UnmapResources() will complete before any Direct3D
+ calls issued after ::cuD3D9UnmapResources() begin.
+
+ If any of \p ppResource have not been registered for use with CUDA or if
+ \p ppResource contains any duplicate entries, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If any of \p ppResource are not
+ presently mapped for access by CUDA, then ::CUDA_ERROR_NOT_MAPPED is
+ returned.
+
+ \param count      - Number of resources to unmap for CUDA
+ \param ppResource - Resources to unmap for CUDA
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsUnmapResources*/
+    fn cuD3D9UnmapResources(
+        count: ::core::ffi::c_uint,
+        ppResource: *mut *mut cuda_types::cuda::IDirect3DResource9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Set usage flags for mapping a Direct3D resource
+
+ \deprecated This function is deprecated as of Cuda 3.0.
+
+ Set \p Flags for mapping the Direct3D resource \p pResource.
+
+ Changes to \p Flags will take effect the next time \p pResource is mapped.
+ The \p Flags argument may be any of the following:
+ - ::CU_D3D9_MAPRESOURCE_FLAGS_NONE: Specifies no hints about how this
+   resource will be used. It is therefore assumed that this resource will be
+   read from and written to by CUDA kernels. This is the default value.
+ - ::CU_D3D9_MAPRESOURCE_FLAGS_READONLY: Specifies that CUDA kernels which
+   access this resource will not write to this resource.
+ - ::CU_D3D9_MAPRESOURCE_FLAGS_WRITEDISCARD: Specifies that CUDA kernels
+   which access this resource will not read from this resource and will
+   write over the entire contents of the resource, so none of the data
+   previously stored in the resource will be preserved.
+
+ If \p pResource has not been registered for use with CUDA, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is presently
+ mapped for access by CUDA, then ::CUDA_ERROR_ALREADY_MAPPED is returned.
+
+ \param pResource - Registered resource to set flags for
+ \param Flags     - Parameters for resource mapping
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_ALREADY_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceSetMapFlags*/
+    fn cuD3D9ResourceSetMapFlags(
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the dimensions of a registered surface
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pWidth, \p *pHeight, and \p *pDepth the dimensions of the
+ subresource of the mapped Direct3D resource \p pResource, which corresponds
+ to \p Face and \p Level.
+
+ Because anti-aliased surfaces may have multiple samples per pixel, it is
+ possible that the dimensions of a resource will be an integer factor larger
+ than the dimensions reported by the Direct3D runtime.
+
+ The parameters \p pWidth, \p pHeight, and \p pDepth are optional. For 2D
+ surfaces, the value returned in \p *pDepth will be 0.
+
+ If \p pResource is not of type ::IDirect3DBaseTexture9 or
+ ::IDirect3DSurface9 or if \p pResource has not been registered for use with
+ CUDA, then ::CUDA_ERROR_INVALID_HANDLE is returned.
+
+ For usage requirements of \p Face and \p Level parameters, see
+ ::cuD3D9ResourceGetMappedPointer().
+
+ \param pWidth    - Returned width of surface
+ \param pHeight   - Returned height of surface
+ \param pDepth    - Returned depth of surface
+ \param pResource - Registered resource to access
+ \param Face      - Face of resource to access
+ \param Level     - Level of resource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D9ResourceGetSurfaceDimensions_v2(
+        pWidth: *mut usize,
+        pHeight: *mut usize,
+        pDepth: *mut usize,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get an array through which to access a subresource of a Direct3D
+ resource which has been mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pArray an array through which the subresource of the mapped
+ Direct3D resource \p pResource which corresponds to \p Face and \p Level may
+ be accessed. The value set in \p pArray may change every time that
+ \p pResource is mapped.
+
+ If \p pResource is not registered then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource was not registered with usage flags
+ ::CU_D3D9_REGISTER_FLAGS_ARRAY then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource is not mapped then ::CUDA_ERROR_NOT_MAPPED is
+ returned.
+
+ For usage requirements of \p Face and \p Level parameters, see
+ ::cuD3D9ResourceGetMappedPointer().
+
+ \param pArray    - Returned array corresponding to subresource
+ \param pResource - Mapped resource to access
+ \param Face      - Face of resource to access
+ \param Level     - Level of resource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D9ResourceGetMappedArray(
+        pArray: *mut cuda_types::cuda::CUarray,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the pointer through which to access a subresource of a Direct3D
+ resource which has been mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pDevPtr the base pointer of the subresource of the mapped
+ Direct3D resource \p pResource, which corresponds to \p Face and \p Level.
+ The value set in \p pDevPtr may change every time that \p pResource is
+ mapped.
+
+ If \p pResource is not registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource was not registered with usage flags
+ ::CU_D3D9_REGISTER_FLAGS_NONE, then ::CUDA_ERROR_INVALID_HANDLE is returned.
+ If \p pResource is not mapped, then ::CUDA_ERROR_NOT_MAPPED is returned.
+
+ If \p pResource is of type ::IDirect3DCubeTexture9, then \p Face must one
+ of the values enumerated by type ::D3DCUBEMAP_FACES.  For all other types
+ \p Face must be 0. If \p Face is invalid, then ::CUDA_ERROR_INVALID_VALUE
+ is returned.
+
+ If \p pResource is of type ::IDirect3DBaseTexture9, then \p Level must
+ correspond to a valid mipmap level. At present only mipmap level 0 is
+ supported. For all other types \p Level must be 0. If \p Level is invalid,
+ then ::CUDA_ERROR_INVALID_VALUE is returned.
+
+ \param pDevPtr     - Returned pointer corresponding to subresource
+ \param pResource   - Mapped resource to access
+ \param Face        - Face of resource to access
+ \param Level       - Level of resource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceGetMappedPointer*/
+    fn cuD3D9ResourceGetMappedPointer_v2(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the size of a subresource of a Direct3D resource which has been
+ mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pSize the size of the subresource of the mapped Direct3D
+ resource \p pResource, which corresponds to \p Face and \p Level. The value
+ set in \p pSize may change every time that \p pResource is mapped.
+
+ If \p pResource has not been registered for use with CUDA, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource was not registered
+ with usage flags ::CU_D3D9_REGISTER_FLAGS_NONE, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is not mapped for
+ access by CUDA, then ::CUDA_ERROR_NOT_MAPPED is returned.
+
+ For usage requirements of \p Face and \p Level parameters, see
+ ::cuD3D9ResourceGetMappedPointer.
+
+ \param pSize       - Returned size of subresource
+ \param pResource   - Mapped resource to access
+ \param Face        - Face of resource to access
+ \param Level       - Level of resource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceGetMappedPointer*/
+    fn cuD3D9ResourceGetMappedSize_v2(
+        pSize: *mut usize,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the pitch of a subresource of a Direct3D resource which has been
+ mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pPitch and \p *pPitchSlice the pitch and Z-slice pitch of
+ the subresource of the mapped Direct3D resource \p pResource, which
+ corresponds to \p Face and \p Level. The values set in \p pPitch and
+ \p pPitchSlice may change every time that \p pResource is mapped.
+
+ The pitch and Z-slice pitch values may be used to compute the location of a
+ sample on a surface as follows.
+
+ For a 2D surface, the byte offset of the sample at position \b x, \b y from
+ the base pointer of the surface is:
+
+ \b y * \b pitch + (<b>bytes per pixel</b>) * \b x
+
+ For a 3D surface, the byte offset of the sample at position \b x, \b y,
+ \b z from the base pointer of the surface is:
+
+ \b z* \b slicePitch + \b y * \b pitch + (<b>bytes per pixel</b>) * \b x
+
+ Both parameters \p pPitch and \p pPitchSlice are optional and may be set to
+ NULL.
+
+ If \p pResource is not of type ::IDirect3DBaseTexture9 or one of its
+ sub-types or if \p pResource has not been registered for use with CUDA,
+ then ::cudaErrorInvalidResourceHandle is returned. If \p pResource was not
+ registered with usage flags ::CU_D3D9_REGISTER_FLAGS_NONE, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is not mapped
+ for access by CUDA then ::CUDA_ERROR_NOT_MAPPED is returned.
+
+ For usage requirements of \p Face and \p Level parameters, see
+ ::cuD3D9ResourceGetMappedPointer().
+
+ \param pPitch      - Returned pitch of subresource
+ \param pPitchSlice - Returned Z-slice pitch of subresource
+ \param pResource   - Mapped resource to access
+ \param Face        - Face of resource to access
+ \param Level       - Level of resource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D9ResourceGetMappedPitch_v2(
+        pPitch: *mut usize,
+        pPitchSlice: *mut usize,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9Begin(
+        pDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9End() -> cuda_types::cuda::CUresult;
+    fn cuD3D9RegisterVertexBuffer(
+        pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9MapVertexBuffer_v2(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+        pSize: *mut usize,
+        pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9UnmapVertexBuffer(
+        pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9UnregisterVertexBuffer(
+        pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9CtxCreate(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9ResourceGetSurfaceDimensions(
+        pWidth: *mut ::core::ffi::c_uint,
+        pHeight: *mut ::core::ffi::c_uint,
+        pDepth: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9ResourceGetMappedPointer(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9ResourceGetMappedSize(
+        pSize: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9ResourceGetMappedPitch(
+        pPitch: *mut ::core::ffi::c_uint,
+        pPitchSlice: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::IDirect3DResource9,
+        Face: ::core::ffi::c_uint,
+        Level: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D9MapVertexBuffer(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+        pSize: *mut ::core::ffi::c_uint,
+        pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA device corresponding to a display adapter.
+
+ Returns in \p *pCudaDevice the CUDA-compatible device corresponding to the
+ adapter \p pAdapter obtained from ::IDXGIFactory::EnumAdapters.
+
+ If no device on \p pAdapter is CUDA-compatible then the call will fail.
+
+ \param pCudaDevice - Returned CUDA device corresponding to \p pAdapter
+ \param pAdapter    - Adapter to query for CUDA device
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D10GetDevices,
+ ::cudaD3D10GetDevice*/
+    fn cuD3D10GetDevice(
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        pAdapter: *mut cuda_types::cuda::IDXGIAdapter,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA devices corresponding to a Direct3D 10 device
+
+ Returns in \p *pCudaDeviceCount the number of CUDA-compatible device corresponding
+ to the Direct3D 10 device \p pD3D10Device.
+ Also returns in \p *pCudaDevices at most \p cudaDeviceCount of the CUDA-compatible devices
+ corresponding to the Direct3D 10 device \p pD3D10Device.
+
+ If any of the GPUs being used to render \p pDevice are not CUDA capable then the
+ call will return ::CUDA_ERROR_NO_DEVICE.
+
+ \param pCudaDeviceCount - Returned number of CUDA devices corresponding to \p pD3D10Device
+ \param pCudaDevices     - Returned CUDA devices corresponding to \p pD3D10Device
+ \param cudaDeviceCount  - The size of the output device array \p pCudaDevices
+ \param pD3D10Device     - Direct3D 10 device to query for CUDA devices
+ \param deviceList       - The set of devices to return.  This set may be
+                           ::CU_D3D10_DEVICE_LIST_ALL for all devices,
+                           ::CU_D3D10_DEVICE_LIST_CURRENT_FRAME for the devices used to
+                           render the current frame (in SLI), or
+                           ::CU_D3D10_DEVICE_LIST_NEXT_FRAME for the devices used to
+                           render the next frame (in SLI).
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_NO_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D10GetDevice,
+ ::cudaD3D10GetDevices*/
+    fn cuD3D10GetDevices(
+        pCudaDeviceCount: *mut ::core::ffi::c_uint,
+        pCudaDevices: *mut cuda_types::cuda::CUdevice,
+        cudaDeviceCount: ::core::ffi::c_uint,
+        pD3D10Device: *mut cuda_types::cuda::ID3D10Device,
+        deviceList: cuda_types::cuda::CUd3d10DeviceList,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a Direct3D 10 resource for access by CUDA
+
+ Registers the Direct3D 10 resource \p pD3DResource for access by CUDA and
+ returns a CUDA handle to \p pD3Dresource in \p pCudaResource.
+ The handle returned in \p pCudaResource may be used to map and unmap this
+ resource until it is unregistered.
+ On success this call will increase the internal reference count on
+ \p pD3DResource. This reference count will be decremented when this
+ resource is unregistered through ::cuGraphicsUnregisterResource().
+
+ This call is potentially high-overhead and should not be called every frame
+ in interactive applications.
+
+ The type of \p pD3DResource must be one of the following.
+ - ::ID3D10Buffer: may be accessed through a device pointer.
+ - ::ID3D10Texture1D: individual subresources of the texture may be accessed via arrays
+ - ::ID3D10Texture2D: individual subresources of the texture may be accessed via arrays
+ - ::ID3D10Texture3D: individual subresources of the texture may be accessed via arrays
+
+ The \p Flags argument may be used to specify additional parameters at register
+ time.  The valid values for this parameter are
+ - ::CU_GRAPHICS_REGISTER_FLAGS_NONE: Specifies no hints about how this
+   resource will be used.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST: Specifies that CUDA will
+   bind this resource to a surface reference.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_TEXTURE_GATHER: Specifies that CUDA will perform
+   texture gather operations on this resource.
+
+ Not all Direct3D resources of the above types may be used for
+ interoperability with CUDA.  The following are some limitations.
+ - The primary rendertarget may not be registered with CUDA.
+ - Textures which are not of a format which is 1, 2, or 4 channels of 8, 16,
+   or 32-bit integer or floating-point data cannot be shared.
+ - Surfaces of depth or stencil formats cannot be shared.
+
+ A complete list of supported DXGI formats is as follows. For compactness the
+ notation A_{B,C,D} represents A_B, A_C, and A_D.
+ - DXGI_FORMAT_A8_UNORM
+ - DXGI_FORMAT_B8G8R8A8_UNORM
+ - DXGI_FORMAT_B8G8R8X8_UNORM
+ - DXGI_FORMAT_R16_FLOAT
+ - DXGI_FORMAT_R16G16B16A16_{FLOAT,SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R16G16_{FLOAT,SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R16_{SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R32_FLOAT
+ - DXGI_FORMAT_R32G32B32A32_{FLOAT,SINT,UINT}
+ - DXGI_FORMAT_R32G32_{FLOAT,SINT,UINT}
+ - DXGI_FORMAT_R32_{SINT,UINT}
+ - DXGI_FORMAT_R8G8B8A8_{SINT,SNORM,UINT,UNORM,UNORM_SRGB}
+ - DXGI_FORMAT_R8G8_{SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R8_{SINT,SNORM,UINT,UNORM}
+
+ If \p pD3DResource is of incorrect type or is already registered then
+ ::CUDA_ERROR_INVALID_HANDLE is returned.
+ If \p pD3DResource cannot be registered then ::CUDA_ERROR_UNKNOWN is returned.
+ If \p Flags is not one of the above specified value then ::CUDA_ERROR_INVALID_VALUE
+ is returned.
+
+ \param pCudaResource - Returned graphics resource handle
+ \param pD3DResource  - Direct3D resource to register
+ \param Flags         - Parameters for resource registration
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsUnregisterResource,
+ ::cuGraphicsMapResources,
+ ::cuGraphicsSubResourceGetMappedArray,
+ ::cuGraphicsResourceGetMappedPointer,
+ ::cudaGraphicsD3D10RegisterResource*/
+    fn cuGraphicsD3D10RegisterResource(
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        pD3DResource: *mut cuda_types::cuda::ID3D10Resource,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 10
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D10
+ device in order to achieve maximum interoperability performance.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param pCudaDevice - Returned pointer to the device on which the context was created
+ \param Flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D10GetDevice,
+ ::cuGraphicsD3D10RegisterResource*/
+    fn cuD3D10CtxCreate_v2(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 10
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D10
+ device in order to achieve maximum interoperability performance.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+ \param cudaDevice  - The CUDA device on which to create the context.  This device
+                      must be among the devices returned when querying
+                      ::CU_D3D10_DEVICES_ALL from  ::cuD3D10GetDevices.
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D10GetDevices,
+ ::cuGraphicsD3D10RegisterResource*/
+    fn cuD3D10CtxCreateOnDevice(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+        cudaDevice: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the Direct3D 10 device against which the current CUDA context was
+ created
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D10
+ device in order to achieve maximum interoperability performance.
+
+ \param ppD3DDevice - Returned Direct3D device corresponding to CUDA context
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT
+ \notefnerr
+
+ \sa
+ ::cuD3D10GetDevice*/
+    fn cuD3D10GetDirect3DDevice(
+        ppD3DDevice: *mut *mut cuda_types::cuda::ID3D10Device,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a Direct3D resource for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Registers the Direct3D resource \p pResource for access by CUDA.
+
+ If this call is successful, then the application will be able to map and
+ unmap this resource until it is unregistered through
+ ::cuD3D10UnregisterResource(). Also on success, this call will increase the
+ internal reference count on \p pResource. This reference count will be
+ decremented when this resource is unregistered through
+ ::cuD3D10UnregisterResource().
+
+ This call is potentially high-overhead and should not be called every frame
+ in interactive applications.
+
+ The type of \p pResource must be one of the following.
+
+ - ::ID3D10Buffer: Cannot be used with \p Flags set to
+   ::CU_D3D10_REGISTER_FLAGS_ARRAY.
+ - ::ID3D10Texture1D: No restrictions.
+ - ::ID3D10Texture2D: No restrictions.
+ - ::ID3D10Texture3D: No restrictions.
+
+ The \p Flags argument specifies the mechanism through which CUDA will
+ access the Direct3D resource.  The following values are allowed.
+
+ - ::CU_D3D10_REGISTER_FLAGS_NONE: Specifies that CUDA will access this
+   resource through a ::CUdeviceptr. The pointer, size, and (for textures),
+   pitch for each subresource of this allocation may be queried through
+   ::cuD3D10ResourceGetMappedPointer(), ::cuD3D10ResourceGetMappedSize(),
+   and ::cuD3D10ResourceGetMappedPitch() respectively. This option is valid
+   for all resource types.
+ - ::CU_D3D10_REGISTER_FLAGS_ARRAY: Specifies that CUDA will access this
+   resource through a ::CUarray queried on a sub-resource basis through
+   ::cuD3D10ResourceGetMappedArray(). This option is only valid for
+   resources of type ::ID3D10Texture1D, ::ID3D10Texture2D, and
+   ::ID3D10Texture3D.
+
+ Not all Direct3D resources of the above types may be used for
+ interoperability with CUDA.  The following are some limitations.
+
+ - The primary rendertarget may not be registered with CUDA.
+ - Resources allocated as shared may not be registered with CUDA.
+ - Textures which are not of a format which is 1, 2, or 4 channels of 8, 16,
+   or 32-bit integer or floating-point data cannot be shared.
+ - Surfaces of depth or stencil formats cannot be shared.
+
+ If Direct3D interoperability is not initialized on this context then
+ ::CUDA_ERROR_INVALID_CONTEXT is returned. If \p pResource is of incorrect
+ type or is already registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource cannot be registered, then ::CUDA_ERROR_UNKNOWN
+ is returned.
+
+ \param pResource - Resource to register
+ \param Flags     - Parameters for resource registration
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa ::cuGraphicsD3D10RegisterResource*/
+    fn cuD3D10RegisterResource(
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Unregister a Direct3D resource
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Unregisters the Direct3D resource \p pResource so it is not accessible by
+ CUDA unless registered again.
+
+ If \p pResource is not registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned.
+
+ \param pResource - Resources to unregister
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa ::cuGraphicsUnregisterResource*/
+    fn cuD3D10UnregisterResource(
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Map Direct3D resources for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Maps the \p count Direct3D resources in \p ppResources for access by CUDA.
+
+ The resources in \p ppResources may be accessed in CUDA kernels until they
+ are unmapped. Direct3D should not access any resources while they are mapped
+ by CUDA. If an application does so, the results are undefined.
+
+ This function provides the synchronization guarantee that any Direct3D calls
+ issued before ::cuD3D10MapResources() will complete before any CUDA kernels
+ issued after ::cuD3D10MapResources() begin.
+
+ If any of \p ppResources have not been registered for use with CUDA or if
+ \p ppResources contains any duplicate entries, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If any of \p ppResources are
+ presently mapped for access by CUDA, then ::CUDA_ERROR_ALREADY_MAPPED is
+ returned.
+
+ \param count       - Number of resources to map for CUDA
+ \param ppResources - Resources to map for CUDA
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_ALREADY_MAPPED,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa ::cuGraphicsMapResources*/
+    fn cuD3D10MapResources(
+        count: ::core::ffi::c_uint,
+        ppResources: *mut *mut cuda_types::cuda::ID3D10Resource,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Unmap Direct3D resources
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Unmaps the \p count Direct3D resources in \p ppResources.
+
+ This function provides the synchronization guarantee that any CUDA kernels
+ issued before ::cuD3D10UnmapResources() will complete before any Direct3D
+ calls issued after ::cuD3D10UnmapResources() begin.
+
+ If any of \p ppResources have not been registered for use with CUDA or if
+ \p ppResources contains any duplicate entries, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If any of \p ppResources are not
+ presently mapped for access by CUDA, then ::CUDA_ERROR_NOT_MAPPED is
+ returned.
+
+ \param count       - Number of resources to unmap for CUDA
+ \param ppResources - Resources to unmap for CUDA
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa ::cuGraphicsUnmapResources*/
+    fn cuD3D10UnmapResources(
+        count: ::core::ffi::c_uint,
+        ppResources: *mut *mut cuda_types::cuda::ID3D10Resource,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Set usage flags for mapping a Direct3D resource
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Set flags for mapping the Direct3D resource \p pResource.
+
+ Changes to flags will take effect the next time \p pResource is mapped. The
+ \p Flags argument may be any of the following.
+
+ - ::CU_D3D10_MAPRESOURCE_FLAGS_NONE: Specifies no hints about how this
+   resource will be used. It is therefore assumed that this resource will be
+   read from and written to by CUDA kernels. This is the default value.
+ - ::CU_D3D10_MAPRESOURCE_FLAGS_READONLY: Specifies that CUDA kernels which
+   access this resource will not write to this resource.
+ - ::CU_D3D10_MAPRESOURCE_FLAGS_WRITEDISCARD: Specifies that CUDA kernels
+   which access this resource will not read from this resource and will
+   write over the entire contents of the resource, so none of the data
+   previously stored in the resource will be preserved.
+
+ If \p pResource has not been registered for use with CUDA, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is presently
+ mapped for access by CUDA then ::CUDA_ERROR_ALREADY_MAPPED is returned.
+
+ \param pResource - Registered resource to set flags for
+ \param Flags     - Parameters for resource mapping
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_ALREADY_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceSetMapFlags*/
+    fn cuD3D10ResourceSetMapFlags(
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get an array through which to access a subresource of a Direct3D
+ resource which has been mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pArray an array through which the subresource of the mapped
+ Direct3D resource \p pResource, which corresponds to \p SubResource may be
+ accessed. The value set in \p pArray may change every time that \p pResource
+ is mapped.
+
+ If \p pResource is not registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource was not registered with usage flags
+ ::CU_D3D10_REGISTER_FLAGS_ARRAY, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource is not mapped, then ::CUDA_ERROR_NOT_MAPPED is
+ returned.
+
+ For usage requirements of the \p SubResource parameter, see
+ ::cuD3D10ResourceGetMappedPointer().
+
+ \param pArray       - Returned array corresponding to subresource
+ \param pResource    - Mapped resource to access
+ \param SubResource  - Subresource of pResource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D10ResourceGetMappedArray(
+        pArray: *mut cuda_types::cuda::CUarray,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get a pointer through which to access a subresource of a Direct3D
+ resource which has been mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pDevPtr the base pointer of the subresource of the mapped
+ Direct3D resource \p pResource, which corresponds to \p SubResource. The
+ value set in \p pDevPtr may change every time that \p pResource is mapped.
+
+ If \p pResource is not registered, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource was not registered with usage flags
+ ::CU_D3D10_REGISTER_FLAGS_NONE, then ::CUDA_ERROR_INVALID_HANDLE is
+ returned. If \p pResource is not mapped, then ::CUDA_ERROR_NOT_MAPPED is
+ returned.
+
+ If \p pResource is of type ::ID3D10Buffer, then \p SubResource must be 0.
+ If \p pResource is of any other type, then the value of \p SubResource must
+ come from the subresource calculation in ::D3D10CalcSubResource().
+
+ \param pDevPtr      - Returned pointer corresponding to subresource
+ \param pResource    - Mapped resource to access
+ \param SubResource  - Subresource of pResource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceGetMappedPointer*/
+    fn cuD3D10ResourceGetMappedPointer_v2(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the size of a subresource of a Direct3D resource which has been
+ mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pSize the size of the subresource of the mapped Direct3D
+ resource \p pResource, which corresponds to \p SubResource. The value set
+ in \p pSize may change every time that \p pResource is mapped.
+
+ If \p pResource has not been registered for use with CUDA, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource was not registered
+ with usage flags ::CU_D3D10_REGISTER_FLAGS_NONE, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is not mapped for
+ access by CUDA, then ::CUDA_ERROR_NOT_MAPPED is returned.
+
+ For usage requirements of the \p SubResource parameter, see
+ ::cuD3D10ResourceGetMappedPointer().
+
+ \param pSize        - Returned size of subresource
+ \param pResource    - Mapped resource to access
+ \param SubResource  - Subresource of pResource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsResourceGetMappedPointer*/
+    fn cuD3D10ResourceGetMappedSize_v2(
+        pSize: *mut usize,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the pitch of a subresource of a Direct3D resource which has been
+ mapped for access by CUDA
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pPitch and \p *pPitchSlice the pitch and Z-slice pitch of the
+ subresource of the mapped Direct3D resource \p pResource, which corresponds
+ to \p SubResource. The values set in \p pPitch and \p pPitchSlice may
+ change every time that \p pResource is mapped.
+
+ The pitch and Z-slice pitch values may be used to compute the location of a
+ sample on a surface as follows.
+
+ For a 2D surface, the byte offset of the sample at position \b x, \b y from
+ the base pointer of the surface is:
+
+ \b y * \b pitch + (<b>bytes per pixel</b>) * \b x
+
+ For a 3D surface, the byte offset of the sample at position \b x, \b y,
+ \b z from the base pointer of the surface is:
+
+ \b z* \b slicePitch + \b y * \b pitch + (<b>bytes per pixel</b>) * \b x
+
+ Both parameters \p pPitch and \p pPitchSlice are optional and may be set to
+ NULL.
+
+ If \p pResource is not of type ::IDirect3DBaseTexture10 or one of its
+ sub-types or if \p pResource has not been registered for use with CUDA, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource was not registered
+ with usage flags ::CU_D3D10_REGISTER_FLAGS_NONE, then
+ ::CUDA_ERROR_INVALID_HANDLE is returned. If \p pResource is not mapped for
+ access by CUDA, then ::CUDA_ERROR_NOT_MAPPED is returned.
+
+ For usage requirements of the \p SubResource parameter, see
+ ::cuD3D10ResourceGetMappedPointer().
+
+ \param pPitch       - Returned pitch of subresource
+ \param pPitchSlice  - Returned Z-slice pitch of subresource
+ \param pResource    - Mapped resource to access
+ \param SubResource  - Subresource of pResource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_NOT_MAPPED
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D10ResourceGetMappedPitch_v2(
+        pPitch: *mut usize,
+        pPitchSlice: *mut usize,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the dimensions of a registered surface
+
+ \deprecated This function is deprecated as of CUDA 3.0.
+
+ Returns in \p *pWidth, \p *pHeight, and \p *pDepth the dimensions of the
+ subresource of the mapped Direct3D resource \p pResource, which corresponds
+ to \p SubResource.
+
+ Because anti-aliased surfaces may have multiple samples per pixel, it is
+ possible that the dimensions of a resource will be an integer factor larger
+ than the dimensions reported by the Direct3D runtime.
+
+ The parameters \p pWidth, \p pHeight, and \p pDepth are optional. For 2D
+ surfaces, the value returned in \p *pDepth will be 0.
+
+ If \p pResource is not of type ::IDirect3DBaseTexture10 or
+ ::IDirect3DSurface10 or if \p pResource has not been registered for use
+ with CUDA, then ::CUDA_ERROR_INVALID_HANDLE is returned.
+
+ For usage requirements of the \p SubResource parameter, see
+ ::cuD3D10ResourceGetMappedPointer().
+
+ \param pWidth       - Returned width of surface
+ \param pHeight      - Returned height of surface
+ \param pDepth       - Returned depth of surface
+ \param pResource    - Registered resource to access
+ \param SubResource  - Subresource of pResource to access
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE
+ \notefnerr
+
+ \sa ::cuGraphicsSubResourceGetMappedArray*/
+    fn cuD3D10ResourceGetSurfaceDimensions_v2(
+        pWidth: *mut usize,
+        pHeight: *mut usize,
+        pDepth: *mut usize,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D10CtxCreate(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D10ResourceGetMappedPitch(
+        pPitch: *mut ::core::ffi::c_uint,
+        pPitchSlice: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D10ResourceGetMappedPointer(
+        pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D10ResourceGetMappedSize(
+        pSize: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D10ResourceGetSurfaceDimensions(
+        pWidth: *mut ::core::ffi::c_uint,
+        pHeight: *mut ::core::ffi::c_uint,
+        pDepth: *mut ::core::ffi::c_uint,
+        pResource: *mut cuda_types::cuda::ID3D10Resource,
+        SubResource: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA device corresponding to a display adapter.
+
+ Returns in \p *pCudaDevice the CUDA-compatible device corresponding to the
+ adapter \p pAdapter obtained from ::IDXGIFactory::EnumAdapters.
+
+ If no device on \p pAdapter is CUDA-compatible the call will return
+ ::CUDA_ERROR_NO_DEVICE.
+
+ \param pCudaDevice - Returned CUDA device corresponding to \p pAdapter
+ \param pAdapter    - Adapter to query for CUDA device
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_NO_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D11GetDevices,
+ ::cudaD3D11GetDevice*/
+    fn cuD3D11GetDevice(
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        pAdapter: *mut cuda_types::cuda::IDXGIAdapter,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Gets the CUDA devices corresponding to a Direct3D 11 device
+
+ Returns in \p *pCudaDeviceCount the number of CUDA-compatible device corresponding
+ to the Direct3D 11 device \p pD3D11Device.
+ Also returns in \p *pCudaDevices at most \p cudaDeviceCount of the CUDA-compatible devices
+ corresponding to the Direct3D 11 device \p pD3D11Device.
+
+ If any of the GPUs being used to render \p pDevice are not CUDA capable then the
+ call will return ::CUDA_ERROR_NO_DEVICE.
+
+ \param pCudaDeviceCount - Returned number of CUDA devices corresponding to \p pD3D11Device
+ \param pCudaDevices     - Returned CUDA devices corresponding to \p pD3D11Device
+ \param cudaDeviceCount  - The size of the output device array \p pCudaDevices
+ \param pD3D11Device     - Direct3D 11 device to query for CUDA devices
+ \param deviceList       - The set of devices to return.  This set may be
+                           ::CU_D3D11_DEVICE_LIST_ALL for all devices,
+                           ::CU_D3D11_DEVICE_LIST_CURRENT_FRAME for the devices used to
+                           render the current frame (in SLI), or
+                           ::CU_D3D11_DEVICE_LIST_NEXT_FRAME for the devices used to
+                           render the next frame (in SLI).
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_NO_DEVICE,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_NOT_FOUND,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D11GetDevice,
+ ::cudaD3D11GetDevices*/
+    fn cuD3D11GetDevices(
+        pCudaDeviceCount: *mut ::core::ffi::c_uint,
+        pCudaDevices: *mut cuda_types::cuda::CUdevice,
+        cudaDeviceCount: ::core::ffi::c_uint,
+        pD3D11Device: *mut cuda_types::cuda::ID3D11Device,
+        deviceList: cuda_types::cuda::CUd3d11DeviceList,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Register a Direct3D 11 resource for access by CUDA
+
+ Registers the Direct3D 11 resource \p pD3DResource for access by CUDA and
+ returns a CUDA handle to \p pD3Dresource in \p pCudaResource.
+ The handle returned in \p pCudaResource may be used to map and unmap this
+ resource until it is unregistered.
+ On success this call will increase the internal reference count on
+ \p pD3DResource. This reference count will be decremented when this
+ resource is unregistered through ::cuGraphicsUnregisterResource().
+
+ This call is potentially high-overhead and should not be called every frame
+ in interactive applications.
+
+ The type of \p pD3DResource must be one of the following.
+ - ::ID3D11Buffer: may be accessed through a device pointer.
+ - ::ID3D11Texture1D: individual subresources of the texture may be accessed via arrays
+ - ::ID3D11Texture2D: individual subresources of the texture may be accessed via arrays
+ - ::ID3D11Texture3D: individual subresources of the texture may be accessed via arrays
+
+ The \p Flags argument may be used to specify additional parameters at register
+ time.  The valid values for this parameter are
+ - ::CU_GRAPHICS_REGISTER_FLAGS_NONE: Specifies no hints about how this
+   resource will be used.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_SURFACE_LDST: Specifies that CUDA will
+   bind this resource to a surface reference.
+ - ::CU_GRAPHICS_REGISTER_FLAGS_TEXTURE_GATHER: Specifies that CUDA will perform
+   texture gather operations on this resource.
+
+ Not all Direct3D resources of the above types may be used for
+ interoperability with CUDA.  The following are some limitations.
+ - The primary rendertarget may not be registered with CUDA.
+ - Textures which are not of a format which is 1, 2, or 4 channels of 8, 16,
+   or 32-bit integer or floating-point data cannot be shared.
+ - Surfaces of depth or stencil formats cannot be shared.
+
+ A complete list of supported DXGI formats is as follows. For compactness the
+ notation A_{B,C,D} represents A_B, A_C, and A_D.
+ - DXGI_FORMAT_A8_UNORM
+ - DXGI_FORMAT_B8G8R8A8_UNORM
+ - DXGI_FORMAT_B8G8R8X8_UNORM
+ - DXGI_FORMAT_R16_FLOAT
+ - DXGI_FORMAT_R16G16B16A16_{FLOAT,SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R16G16_{FLOAT,SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R16_{SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R32_FLOAT
+ - DXGI_FORMAT_R32G32B32A32_{FLOAT,SINT,UINT}
+ - DXGI_FORMAT_R32G32_{FLOAT,SINT,UINT}
+ - DXGI_FORMAT_R32_{SINT,UINT}
+ - DXGI_FORMAT_R8G8B8A8_{SINT,SNORM,UINT,UNORM,UNORM_SRGB}
+ - DXGI_FORMAT_R8G8_{SINT,SNORM,UINT,UNORM}
+ - DXGI_FORMAT_R8_{SINT,SNORM,UINT,UNORM}
+
+ If \p pD3DResource is of incorrect type or is already registered then
+ ::CUDA_ERROR_INVALID_HANDLE is returned.
+ If \p pD3DResource cannot be registered then ::CUDA_ERROR_UNKNOWN is returned.
+ If \p Flags is not one of the above specified value then ::CUDA_ERROR_INVALID_VALUE
+ is returned.
+
+ \param pCudaResource - Returned graphics resource handle
+ \param pD3DResource  - Direct3D resource to register
+ \param Flags         - Parameters for resource registration
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_INVALID_HANDLE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuGraphicsUnregisterResource,
+ ::cuGraphicsMapResources,
+ ::cuGraphicsSubResourceGetMappedArray,
+ ::cuGraphicsResourceGetMappedPointer,
+ ::cudaGraphicsD3D11RegisterResource*/
+    fn cuGraphicsD3D11RegisterResource(
+        pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+        pD3DResource: *mut cuda_types::cuda::ID3D11Resource,
+        Flags: ::core::ffi::c_uint,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 11
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D11
+ device in order to achieve maximum interoperability performance.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param pCudaDevice - Returned pointer to the device on which the context was created
+ \param Flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D11GetDevice,
+ ::cuGraphicsD3D11RegisterResource*/
+    fn cuD3D11CtxCreate_v2(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Create a CUDA context for interoperability with Direct3D 11
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D11
+ device in order to achieve maximum interoperability performance.
+
+ \param pCtx        - Returned newly created CUDA context
+ \param flags       - Context creation flags (see ::cuCtxCreate() for details)
+ \param pD3DDevice  - Direct3D device to create interoperability context with
+ \param cudaDevice  - The CUDA device on which to create the context.  This device
+                      must be among the devices returned when querying
+                      ::CU_D3D11_DEVICES_ALL from  ::cuD3D11GetDevices.
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_VALUE,
+ ::CUDA_ERROR_OUT_OF_MEMORY,
+ ::CUDA_ERROR_UNKNOWN
+ \notefnerr
+
+ \sa
+ ::cuD3D11GetDevices,
+ ::cuGraphicsD3D11RegisterResource*/
+    fn cuD3D11CtxCreateOnDevice(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+        cudaDevice: cuda_types::cuda::CUdevice,
+    ) -> cuda_types::cuda::CUresult;
+    /** \brief Get the Direct3D 11 device against which the current CUDA context was
+ created
+
+ \deprecated This function is deprecated as of CUDA 5.0.
+
+ This function is deprecated and should no longer be used.  It is
+ no longer necessary to associate a CUDA context with a D3D11
+ device in order to achieve maximum interoperability performance.
+
+ \param ppD3DDevice - Returned Direct3D device corresponding to CUDA context
+
+ \return
+ ::CUDA_SUCCESS,
+ ::CUDA_ERROR_DEINITIALIZED,
+ ::CUDA_ERROR_NOT_INITIALIZED,
+ ::CUDA_ERROR_INVALID_CONTEXT
+ \notefnerr
+
+ \sa
+ ::cuD3D11GetDevice*/
+    fn cuD3D11GetDirect3DDevice(
+        ppD3DDevice: *mut *mut cuda_types::cuda::ID3D11Device,
+    ) -> cuda_types::cuda::CUresult;
+    fn cuD3D11CtxCreate(
+        pCtx: *mut cuda_types::cuda::CUcontext,
+        pCudaDevice: *mut cuda_types::cuda::CUdevice,
+        Flags: ::core::ffi::c_uint,
+        pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+    ) -> cuda_types::cuda::CUresult;
 }
