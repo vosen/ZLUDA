@@ -1257,6 +1257,22 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .ok_or_else(|| error_unknown_symbol(name))
     }
 
+    // The innermost variable of this name that is a vector, or else the
+    // innermost variable
+    fn get_vector(&mut self, name: &str) -> Result<SpirvWord, TranslateError> {
+        let vector = self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            match scope.ident_map.get(ident)?.type_space {
+                Some((ast::Type::Vector(..), _)) => Some(*ident),
+                _ => None,
+            }
+        });
+        match vector {
+            Some(ident) => Ok(ident),
+            None => self.get(name),
+        }
+    }
+
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {
         let current_scope = self.scopes.last().unwrap();
         current_scope

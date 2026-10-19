@@ -153,15 +153,50 @@ fn run_instruction<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
     instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
 ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
-    ast::visit_map(instruction, &mut |name: &'input str,
-                                      _: Option<(
-        &ast::Type,
-        ast::StateSpace,
-    )>,
-                                      _,
-                                      _| {
-        resolver.get(&name)
-    })
+    ast::visit_map(instruction, &mut Normalize { resolver })
+}
+
+struct Normalize<'a, 'input, 'b> {
+    resolver: &'a mut ScopedResolver<'input, 'b>,
+}
+
+impl<'a, 'input, 'b>
+    ast::VisitorMap<ast::ParsedOperand<&'input str>, ast::ParsedOperand<SpirvWord>, TranslateError>
+    for Normalize<'a, 'input, 'b>
+{
+    fn visit(
+        &mut self,
+        operand: ast::ParsedOperand<&'input str>,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+        relaxed_type_check: bool,
+    ) -> Result<ast::ParsedOperand<SpirvWord>, TranslateError> {
+        match operand {
+            // A register may shadow a special register that is still used
+            // as a vector: `.reg .b32 %tid; mov.u32 %tid, %tid.x;`
+            ast::ParsedOperand::VecMember(name, index) => Ok(ast::ParsedOperand::VecMember(
+                self.resolver.get_vector(name)?,
+                index,
+            )),
+            operand => {
+                let resolver = &mut *self.resolver;
+                (&mut |name: &'input str, _: Option<(&ast::Type, ast::StateSpace)>, _, _| {
+                    resolver.get(&name)
+                })
+                    .visit(operand, type_space, is_dst, relaxed_type_check)
+            }
+        }
+    }
+
+    fn visit_ident(
+        &mut self,
+        name: &'input str,
+        _: Option<(&ast::Type, ast::StateSpace)>,
+        _: bool,
+        _: bool,
+    ) -> Result<SpirvWord, TranslateError> {
+        self.resolver.get(&name)
+    }
 }
 
 fn run_multivariable<'input, 'b>(
