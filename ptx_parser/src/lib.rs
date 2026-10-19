@@ -3178,7 +3178,9 @@ derive_parser!(
             data: ast::ArithFloat {
                 type_: type_x2,
                 rounding: rnd.into(),
-                flush_to_zero: None,
+                // f16x2 keeps denormals, the bf16x2 denormal mode is not
+                // the f16 one
+                flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(false) } else { None },
                 saturate: false,
                 is_fusable: false
             },
@@ -3750,7 +3752,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on f16/bf16 with cache policy/cache hints".to_string()));
         }
@@ -3765,7 +3768,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on packed types with cache policy/cache hints".to_string()));
         }
@@ -3798,6 +3802,85 @@ derive_parser!(
     ScalarType =                    { .b16, .b128, .f32 };
     StateSpace =                    { .global };
     RawAtomicOp =                   { .exch };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-red
+    red{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red instruction with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: space.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(op, type_.kind()),
+                type_: type_.into()
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.level::cache_hint}.vec_32_bit.f32                     [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f32 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, f32.kind()),
+                type_: ast::Type::Vector(vec_32_bit.len().get(), f32)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f16/bf16 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, half_word_type.kind()),
+                type_: ast::Type::maybe_vector(vec_16_bit, half_word_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on packed types with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, packed_type.kind()),
+                type_: ast::Type::maybe_vector(vec_32_bit, packed_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    .space: StateSpace =            { .global, .shared{::cta, ::cluster} };
+    .sem: AtomSemantics =           { .relaxed, .release };
+    .scope: MemScope =              { .cta, .cluster, .gpu, .sys };
+    .op: RawAtomicOp =              { .and, .or, .xor,
+                                      .add, .inc, .dec,
+                                      .min, .max };
+    .level::cache_hint =            { .L2::cache_hint };
+    .type: ScalarType =             { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+    .half_word_type: ScalarType =   { .f16, .bf16 };
+    .packed_type: ScalarType =      { .f16x2, .bf16x2 };
+    .vec_16_bit: VectorPrefix =     { .v2, .v4, .v8 };
+    .vec_32_bit:  VectorPrefix =    { .v2, .v4 };
+    .float_op: RawAtomicOp =        { .add, .min, .max };
+    ScalarType =                    { .f32 };
+    StateSpace =                    { .global };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-div
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div

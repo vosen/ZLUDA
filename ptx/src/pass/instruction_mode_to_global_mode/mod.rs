@@ -2200,6 +2200,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
+        | ast::Instruction::Red { .. }
         | ast::Instruction::Mul24 { .. }
         | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::AtomCas { .. }

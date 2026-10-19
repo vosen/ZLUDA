@@ -753,6 +753,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Rsqrt { data, arguments } => self.emit_rsqrt(data, arguments),
             ast::Instruction::Selp { data, arguments } => self.emit_selp(data, arguments),
             ast::Instruction::Atom { data, arguments } => self.emit_atom(data, arguments),
+            ast::Instruction::Red { data, arguments } => {
+                self.emit_atom_impl(data, arguments.src1, arguments.src2)?;
+                Ok(())
+            }
             ast::Instruction::AtomCas { data, arguments } => self.emit_atom_cas(data, arguments),
             ast::Instruction::Div { data, arguments } => self.emit_div(data, arguments),
             ast::Instruction::Neg { data, arguments } => self.emit_neg(data, arguments),
@@ -1402,9 +1406,20 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::AtomDetails,
         arguments: ast::AtomArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        let result = self.emit_atom_impl(data, arguments.src1, arguments.src2)?;
+        self.resolver.register(arguments.dst, result);
+        Ok(())
+    }
+
+    fn emit_atom_impl(
+        &mut self,
+        data: ast::AtomDetails,
+        src1: SpirvWord,
+        src2: SpirvWord,
+    ) -> Result<LLVMValueRef, TranslateError> {
         let builder = self.builder;
-        let src1 = self.resolver.value(arguments.src1)?;
-        let src2 = self.resolver.value(arguments.src2)?;
+        let src1 = self.resolver.value(src1)?;
+        let src2 = self.resolver.value(src2)?;
         let op = match data.op {
             ast::AtomicOp::And => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpAnd,
             ast::AtomicOp::Or => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpOr,
@@ -1425,7 +1440,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::AtomicOp::FloatMin => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpFMin,
             ast::AtomicOp::FloatMax => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpFMax,
         };
-        self.resolver.register(arguments.dst, unsafe {
+        Ok(unsafe {
             LLVMZludaBuildAtomicRMW(
                 builder,
                 op,
@@ -1434,8 +1449,7 @@ impl<'a> MethodEmitContext<'a> {
                 get_scope(data.scope)?,
                 get_ordering(data.semantics),
             )
-        });
-        Ok(())
+        })
     }
 
     fn emit_atom_cas(
@@ -2261,25 +2275,10 @@ impl<'a> MethodEmitContext<'a> {
                 vec![(negated, get_scalar_type(self.context, data.type_))],
             )?;
         } else if is_floating_point && self.target == Target::Agx {
-            // Flip the sign bit as an integer: the backend may canonicalize
-            // the NaNs of floating point negations
-            let element = data.type_.packed_type().unwrap_or(data.type_);
-            let element_bits = element.size_of() as u32 * 8;
-            unsafe {
-                let int_element = LLVMIntTypeInContext(self.context, element_bits);
-                let sign = LLVMConstInt(int_element, 1u64 << (element_bits - 1), 0);
-                let (int_type, sign) = if element == data.type_ {
-                    (int_element, sign)
-                } else {
-                    let mut signs = [sign, sign];
-                    (LLVMVectorType(int_element, 2), LLVMConstVector(signs.as_mut_ptr(), 2))
-                };
-                let bits = LLVMBuildBitCast(self.builder, src, int_type, LLVM_UNNAMED.as_ptr());
-                let flipped = LLVMBuildXor(self.builder, bits, sign, LLVM_UNNAMED.as_ptr());
-                self.resolver.with_result(arguments.dst, |dst| {
-                    LLVMBuildBitCast(self.builder, flipped, LLVMTypeOf(src), dst)
-                });
-            }
+            // A bit operation: the backend may canonicalize the NaNs of
+            // floating point negations
+            let result = self.emit_sign_bit_op(data.type_, src, true);
+            self.resolver.register(arguments.dst, result);
         } else {
             self.resolver.with_result(arguments.dst, |dst| unsafe {
                 llvm_fn(self.builder, src, dst)
@@ -3949,6 +3948,12 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_type = get_scalar_type(self.context, data.type_);
         let src = self.resolver.value(arguments.src)?;
         let is_floating_point = data.type_.kind() == ast::ScalarKind::Float;
+        if is_floating_point && data.flush_to_zero != Some(true) && self.target == Target::Agx {
+            // A bit operation, which keeps NaN payloads
+            let result = self.emit_sign_bit_op(data.type_, src, false);
+            self.resolver.register(arguments.dst, result);
+            return Ok(());
+        }
         let (prefix, intrinsic_arguments) = if is_floating_point {
             ("llvm.fabs", vec![(src, llvm_type)])
         } else {
@@ -3975,6 +3980,39 @@ impl<'a> MethodEmitContext<'a> {
             self.resolver.register(arguments.dst, abs_result);
         }
         Ok(())
+    }
+
+    // Flips (negate) or clears the sign bit of a float or packed floats
+    fn emit_sign_bit_op(
+        &mut self,
+        type_: ast::ScalarType,
+        src: LLVMValueRef,
+        negate: bool,
+    ) -> LLVMValueRef {
+        let element = type_.packed_type().unwrap_or(type_);
+        let element_bits = element.size_of() as u32 * 8;
+        unsafe {
+            let int_element = LLVMIntTypeInContext(self.context, element_bits);
+            let mask = if negate {
+                1u64 << (element_bits - 1)
+            } else {
+                (1u64 << (element_bits - 1)) - 1
+            };
+            let mask = LLVMConstInt(int_element, mask, 0);
+            let (int_type, mask) = if element == type_ {
+                (int_element, mask)
+            } else {
+                let mut masks = [mask, mask];
+                (LLVMVectorType(int_element, 2), LLVMConstVector(masks.as_mut_ptr(), 2))
+            };
+            let bits = LLVMBuildBitCast(self.builder, src, int_type, LLVM_UNNAMED.as_ptr());
+            let result = if negate {
+                LLVMBuildXor(self.builder, bits, mask, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildAnd(self.builder, bits, mask, LLVM_UNNAMED.as_ptr())
+            };
+            LLVMBuildBitCast(self.builder, result, LLVMTypeOf(src), LLVM_UNNAMED.as_ptr())
+        }
     }
 
     fn emit_mul24(

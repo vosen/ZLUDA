@@ -108,6 +108,17 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        Red {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
         AtomCas {
             type: Type::Scalar(data.type_),
             data: AtomCasDetails,
