@@ -2818,9 +2818,10 @@ impl CvtDetails {
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
             _ => {
-                if ftz {
-                    errors.push(PtxError::NonF32Ftz);
-                }
+                // .ftz needs an f32 source or destination; ptxas rejects it
+                // elsewhere, PTX-formalization accepts it and flushes f16
+                // and f64 subnormals too. It is ignored here
+                let _ = ftz;
                 None
             }
         };

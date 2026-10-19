@@ -2571,6 +2571,31 @@ impl<'a> MethodEmitContext<'a> {
                     .fpext(self.resolver, data.to, Some(arguments.dst), data.from, flushed)?;
                 return Ok(());
             }
+            ptx_parser::CvtMode::FPTruncate {
+                rounding,
+                flush_to_zero: Some(true),
+                is_integer_rounding: false,
+                relu,
+                satfinite,
+                ..
+            } if self.target == Target::Agx
+                && data.from == ast::ScalarType::F32
+                && arguments.src2.is_none() =>
+            {
+                // .ftz flushes subnormal f32 sources
+                let src = self.resolver.value(arguments.src)?;
+                let flushed = self.emit_flush_f32(src);
+                let mut result =
+                    self.emit_cvt_float_to_float_impl(Some(rounding), data.to, None, data.from, flushed)?;
+                if relu {
+                    result = self.emit_relu(data.to, result)?;
+                }
+                if satfinite {
+                    result = self.emit_satfinite(data.to, result)?;
+                }
+                self.resolver.register(arguments.dst, result);
+                return Ok(());
+            }
             ptx_parser::CvtMode::FPExtend {
                 relu, satfinite, ..
             } => {
