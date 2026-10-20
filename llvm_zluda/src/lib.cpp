@@ -465,10 +465,14 @@ static bool zludaAgxRewriteLocalAddress(Instruction *I)
     return true;
 }
 
-// AGX has no generic addressing of threadgroup or private memory, so
-// isspacep is decided at compile time, after optimization: calls to
-// i1 @__zluda_agx_isspacep_<space>(i64) become constants. Also rewrites the
-// generic addresses of those memories (see zludaAgxRewriteLocalAddress).
+// isspacep after optimization: calls to i1 @__zluda_agx_isspacep_<space>(i64)
+// become constants when the address space of the argument is known, and
+// otherwise test the tag of the generic address. The LLVM AGX backend
+// (AGXLowerGenericAddresses) tags generic pointers to threadgroup memory with
+// bit 63 and those to private memory with bit 62; device addresses have
+// neither (top two bits 0, 2 or 3, 1). Also rewrites the generic addresses of
+// those memories that went through integer arithmetic (see
+// zludaAgxRewriteLocalAddress), which keeps them out of the tagged form.
 // Returns whether anything changed.
 bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
 {
@@ -476,13 +480,15 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
     {
         const char *name;
         bool (*test)(unsigned);
+        // the top two bits a generic address of this space has: mask of {0, 1, 2, 3}
+        unsigned tags;
     };
     static const Space spaces[] = {
-        {"__zluda_agx_isspacep_global", [](unsigned as) { return as == 0 || as == 1; }},
-        {"__zluda_agx_isspacep_shared", [](unsigned as) { return as == 3; }},
-        {"__zluda_agx_isspacep_local", [](unsigned as) { return as == 5; }},
-        {"__zluda_agx_isspacep_const", [](unsigned as) { return as == 4; }},
-        {"__zluda_agx_isspacep_param", [](unsigned) { return false; }},
+        {"__zluda_agx_isspacep_global", [](unsigned as) { return as == 1; }, 0b0001},
+        {"__zluda_agx_isspacep_shared", [](unsigned as) { return as == 3; }, 0b1100},
+        {"__zluda_agx_isspacep_local", [](unsigned as) { return as == 5; }, 0b0010},
+        {"__zluda_agx_isspacep_const", [](unsigned as) { return as == 4; }, 0},
+        {"__zluda_agx_isspacep_param", [](unsigned) { return false; }, 0},
     };
     Module *Mod = unwrap(M);
     bool found = false;
@@ -502,7 +508,19 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
             if (!Call)
                 continue;
             unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0));
-            Call->replaceAllUsesWith(ConstantInt::getBool(Call->getContext(), space.test(as)));
+            Value *Result;
+            if (as != 0 || space.tags == 0)
+                Result = ConstantInt::getBool(Call->getContext(), space.test(as));
+            else
+            {
+                IRBuilder<> Builder(Call);
+                Value *Tag = Builder.CreateLShr(Call->getArgOperand(0), 62);
+                if (space.tags == 0b1100)
+                    Result = Builder.CreateICmpUGE(Tag, Builder.getInt64(2));
+                else
+                    Result = Builder.CreateICmpEQ(Tag, Builder.getInt64(space.tags == 0b0001 ? 0 : 1));
+            }
+            Call->replaceAllUsesWith(Result);
             Call->eraseFromParent();
             found = true;
         }

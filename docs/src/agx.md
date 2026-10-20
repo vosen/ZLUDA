@@ -88,7 +88,8 @@ an error.
 * `alloca` takes a constant size (the AGX stack has a fixed size).
   `bar.red` with a thread count reduces over the SIMD-group when the count
   is 32 (threads arrive at barriers in whole warps) and over the whole
-  threadgroup otherwise. `isspacep` is decided at compile time (see below).
+  threadgroup otherwise. `isspacep` is decided at compile time where it can
+  be, and at run time otherwise (see below).
 * Not supported yet: `fma.relu` of `f16x2`/`bf16x2`, `add.f32x2` and the
   other `f32x2` instructions, `set` of packed integer types, `prmt` modes,
   `szext`, `fns`, the 3-input `min`/`max`, `cvt` with `.pzo`, `.scaled`,
@@ -130,14 +131,24 @@ three differences.
   `e2m1x2` and `ue8m0x2`, `cvt` to `tf32`, `.relu`/`.satfinite`, `bfind`,
   `bmsk`, `clmad`, the packed byte arithmetic (`.u8x4`, `.s8x4`) and
   `min`/`max` `.xorsign.abs` are integer arithmetic on the bit patterns.
-* `isspacep`: AGX has no generic addressing of threadgroup and private
-  memory, so a generic address of them must be resolved at compile time.
-  The front end emits calls to `@__zluda_agx_isspacep_<space>`, which
-  `llvm_zluda` replaces after optimization by whether the address comes from
-  that space (addresses of unknown origin are device memory). The same step
-  rewrites generic addresses of those memories that went through integer
-  arithmetic into pointer arithmetic, and turns those only used as integers
-  (compared, masked) into their 32-bit offsets.
+* Generic addresses: AGX has no generic address space; device, threadgroup
+  and private memory are reached by different instructions. The LLVM AGX
+  backend (`AGXLowerGenericAddresses`) represents a generic pointer to
+  threadgroup memory as its offset with bit 63 set and one to private memory
+  as its offset with bit 62 set (device addresses are below 2^48), and a
+  load, store or atomic through a generic pointer whose memory is not known
+  at compile time tests those bits and branches to the right instruction.
+  `cvta`, `ld`/`st`/`atom` on generic addresses and `ldmatrix`/`stmatrix` on
+  generic shared addresses therefore work wherever the addresses come from.
+  A private address is only meaningful in the thread that made it, as in
+  PTX.
+* `isspacep`: the front end emits calls to `@__zluda_agx_isspacep_<space>`,
+  which `llvm_zluda` replaces after optimization by a constant when the
+  address's memory is known, and otherwise by a test of the tag bits. The
+  same step rewrites generic addresses of threadgroup and private memory that
+  went through integer arithmetic into pointer arithmetic, and turns those
+  only used as integers (compared, masked) into their 32-bit offsets, which
+  avoids the tagged form where it is not needed.
 * `alloca`, `stacksave` and `stackrestore` use a per-function stack (a
   private array and the offset of its top), so that allocations made after
   a `stackrestore` reuse the freed addresses as in PTX.
@@ -246,9 +257,7 @@ they need more registers than the hardware has), 7,000 to 15,000 for fp8,
 Not supported: `mma.m8n8k4` with `f16` A and B (its four quad-pair
 products), `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
 rounding mode other than `.rn`, register selectors of block scaled and
-sparse `mma`, and `wgmma`/`tcgen05`. `ldmatrix` and `stmatrix` need shared
-memory addresses: AGX has no generic addressing of threadgroup memory, so
-shared memory addresses converted with `cvta.shared` cannot be used.
+sparse `mma`, and `wgmma`/`tcgen05`.
 
 ## Asynchronous copies and mbarriers
 
