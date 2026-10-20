@@ -1,0 +1,19 @@
+[package]
+name = "zluda_blaslt_agx"
+version = "0.0.0"
+edition = "2021"
+description = "cuBLASLt on Apple GPUs (Asahi Linux) for zluda_agx, on the agx_blas engine and its MLIR kernels"
+
+[lib]
+name = "cublaslt_agx"
+crate-type = ["cdylib"]
+
+[dependencies]
+cuda_types = { path = "../cuda_types", default-features = false }
+cuda_macros = { path = "../cuda_macros" }
+agx_blas = { path = "../agx_blas" }
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = ["libcublasLt.so", "libcublasLt.so.11", "libcublasLt.so.12", "libcublasLt.so.13"]

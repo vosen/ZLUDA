@@ -1,4 +1,4 @@
-//! Compiles the MLIR kernels in kernels/ for every AGX chip into one fat AGX object, with the LLVM fork's
+//! Compiles the MLIR kernels in kernels/ for every AGX chip into fat AGX objects, with the LLVM fork's
 //! mlir/utils/agx-kernels/agx-build-fatbin.py and the mlir-opt, mlir-translate and llc of the LLVM build in
 //! ZLUDA_LLVM_BUILD_DIR. The LLVM sources are found through ZLUDA_LLVM_SOURCE_DIR or the build's CMakeCache.txt.
 
@@ -25,7 +25,7 @@ fn main() {
     println!("cargo:rerun-if-changed=kernels/hgemm.mlir");
     println!("cargo:rerun-if-changed=kernels/epilogue.mlir");
     let build = PathBuf::from(env::var_os("ZLUDA_LLVM_BUILD_DIR").expect(
-        "zluda_blas_agx compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
+        "agx_blas compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
     ));
     let script = llvm_source(&build).join("mlir/utils/agx-kernels/agx-build-fatbin.py");
     let bin = build.join("bin");

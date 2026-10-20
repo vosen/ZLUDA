@@ -1,0 +1,12 @@
+[package]
+name = "agx_blas"
+version = "0.0.0"
+edition = "2021"
+description = "GEMM engine and MLIR kernels shared by zluda_blas_agx and zluda_blaslt_agx"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+cuda_types = { path = "../cuda_types", default-features = false }
+libloading = "0.8"

@@ -6,12 +6,12 @@ description = "cuBLAS on Apple GPUs (Asahi Linux) for zluda_agx, with MLIR-gener
 
 [lib]
 name = "cublas_agx"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
+agx_blas = { path = "../agx_blas" }
 cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
-libloading = "0.8"
 
 [package.metadata.zluda]
 agx = true

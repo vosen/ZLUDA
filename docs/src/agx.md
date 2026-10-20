@@ -438,7 +438,8 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 
 ## cuBLAS (`zluda_blas_agx`)
 
-`libcublas` for zluda_agx. Its kernels are MLIR (`zluda_blas_agx/kernels/*.mlir`:
+`libcublas` for zluda_agx, on the `agx_blas` engine (shared with cuBLASLt).
+Its kernels are MLIR (`agx_blas/kernels/*.mlir`:
 standard dialects and `agx` operations, no chip names), compiled at build time
 for every G13/G14 chip by the LLVM fork's
 `mlir/utils/agx-kernels/agx-build-fatbin.py` into one fat AGX object
@@ -457,21 +458,36 @@ it), as NVIDIA's does.
   of 8, even leading dimensions and 8-byte aligned matrices, the column-major
   product runs on the row-major tile kernel `agx_sgemm_tile64` (A and B
   swapped): 64 x 64 tiles per threadgroup of 2 x 2 SIMD-groups built on
-  `agx.mma_tile` (`kernels/sgemm.mlir`; the f16 forms are in
-  `kernels/hgemm.mlir`). Everything else runs on a generic kernel, one
+  `agx.mma_tile` (`agx_blas/kernels/sgemm.mlir`; the f16 forms are in
+  `hgemm.mlir`). Everything else runs on a generic kernel, one
   thread per element with arbitrary strides.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
-  (`zluda_blas_agx/kernels/test_kernels.py`: tile sizes, all four transpose
+  (`agx_blas/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).
 
 Building needs `ZLUDA_LLVM_BUILD_DIR` (mlir-opt, mlir-translate and llc of
 the LLVM fork).
 
+## cuBLASLt (`zluda_blaslt_agx`)
+
+`libcublasLt` on the same engine. `cublasLtMatmul` computes
+`D = alpha op(A) op(B) + beta C` for column-major layouts with the type
+combinations of cuBLAS above, strided batches (a batch count of 1 on an
+operand broadcasts it), host or device alpha / beta, and the epilogues bias,
+ReLU, ReLU + bias, GELU and GELU + bias (`agx_blas/kernels/epilogue.mlir`,
+bias of D's type, optionally with a batch stride). When C and D are
+different buffers, C is first copied into D on the stream (they must then
+have the same layout). `cublasLtMatmulAlgoGetHeuristic` returns one
+algorithm, needing no workspace, or `CUBLAS_STATUS_NOT_SUPPORTED` for what
+the kernels do not do (row-major or tiled orders, fp8 / int8 / bf16, scale
+pointers, auxiliary epilogue outputs and gradients); preferences are
+accepted and ignored.
+
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx, zluda_ml_agx and zluda_blas_agx, with libcuda / libnvidia-ml / libcublas symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx, zluda_ml_agx, zluda_blas_agx and zluda_blaslt_agx, with libcuda / libnvidia-ml / libcublas / libcublasLt symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -489,7 +505,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, cuBLASLt, cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
+| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |
