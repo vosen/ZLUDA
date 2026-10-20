@@ -1,4 +1,5 @@
-use cuda_types::cuda::{CUfunction, CUfunction_attribute, CUkernel};
+use crate::r#impl::driver;
+use cuda_types::cuda::{CUerror, CUfunction, CUfunction_attribute, CUkernel};
 use dark_api::FunctionArgInfo;
 use hip_runtime_sys::*;
 use std::mem;
@@ -45,14 +46,15 @@ pub(crate) fn get_attribute(
     pi: &mut i32,
     cu_attrib: CUfunction_attribute,
     func: &Function,
-) -> hipError_t {
+) -> Result<(), CUerror> {
     match cu_attrib {
         CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION => {
             *pi = func.sm_version as i32;
             return Ok(());
         }
         CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION => {
-            *pi = 120;
+            let (major_cap, minor_cap) = driver::global_state()?.compute_capability;
+            *pi = major_cap * 10 + minor_cap;
             return Ok(());
         }
         CUfunction_attribute::CU_FUNC_ATTRIBUTE_CLUSTER_SIZE_MUST_BE_SET
@@ -127,4 +129,56 @@ pub(crate) unsafe fn set_cache_config(
     _config: cuda_types::cuda::CUfunc_cache,
 ) -> hipError_t {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::CudaApi;
+    use cuda_macros::test_cuda;
+    use cuda_types::cuda::{CUdevice_attribute, CUfunction_attribute};
+    use std::mem;
+
+    #[test_cuda]
+    fn check_versions(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut ctx = unsafe { mem::zeroed() };
+        api.cuCtxCreate_v2(&mut ctx, 0, 0);
+        let mut major = 0;
+        api.cuDeviceGetAttribute(
+            &mut major,
+            CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+            0,
+        );
+        let mut minor = 0;
+        api.cuDeviceGetAttribute(
+            &mut minor,
+            CUdevice_attribute::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+            0,
+        );
+        let ptx = c".version 8.7
+        .target sm_60
+        .address_size 64
+
+        .entry foobar() { ret; }
+        ";
+
+        let mut module = unsafe { mem::zeroed() };
+        api.cuModuleLoadData(&mut module, ptx.as_ptr().cast());
+        let mut func = unsafe { mem::zeroed() };
+        api.cuModuleGetFunction(&mut func, module, c"foobar".as_ptr().cast());
+        let mut binary_version = 0;
+        api.cuFuncGetAttribute(
+            &mut binary_version,
+            CUfunction_attribute::CU_FUNC_ATTRIBUTE_BINARY_VERSION,
+            func,
+        );
+        let mut ptx_version = 0;
+        api.cuFuncGetAttribute(
+            &mut ptx_version,
+            CUfunction_attribute::CU_FUNC_ATTRIBUTE_PTX_VERSION,
+            func,
+        );
+        assert_eq!(binary_version, major * 10 + minor);
+        assert_eq!(ptx_version, 60);
+    }
 }

@@ -1384,26 +1384,29 @@ pub(crate) unsafe fn restore_dropout_descriptor(
     )
 }
 
-pub(crate) unsafe fn get_property(
-    property_type: libraryPropertyType,
-    value: &mut i32,
-) -> miopenStatus_t {
-    let version = match property_type {
-        libraryPropertyType::MAJOR_VERSION => CUDNN_MAJOR,
-        libraryPropertyType::MINOR_VERSION => CUDNN_MINOR,
-        libraryPropertyType::PATCH_LEVEL => CUDNN_PATCHLEVEL,
-        _ => return miopenStatus_t::ErrorNotImplemented,
-    };
-    *value = version as i32;
-    Ok(())
-}
-
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use static_assertions::assert_eq_size;
 
     pub(crate) fn get_version() -> usize {
         return cuda_types::cudnn8::CUDNN_VERSION as usize;
+    }
+
+    pub(crate) unsafe fn get_property(
+        property_type: libraryPropertyType,
+        value: *mut i32,
+    ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
+        let version = match property_type {
+            libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn8::CUDNN_MAJOR,
+            libraryPropertyType::MINOR_VERSION => cuda_types::cudnn8::CUDNN_MINOR,
+            libraryPropertyType::PATCH_LEVEL => cuda_types::cudnn8::CUDNN_PATCHLEVEL,
+            _ => return Err(cudnnError_t::INVALID_VALUE),
+        };
+        *value = version as i32;
+        Ok(())
     }
 
     pub(crate) fn get_error_string(
@@ -1553,6 +1556,23 @@ pub mod dnn9 {
 
     pub(crate) fn get_version() -> usize {
         return cuda_types::cudnn9::CUDNN_VERSION as usize;
+    }
+
+    pub(crate) unsafe fn get_property(
+        property_type: libraryPropertyType,
+        value: *mut i32,
+    ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
+        let version = match property_type {
+            libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn9::CUDNN_MAJOR,
+            libraryPropertyType::MINOR_VERSION => cuda_types::cudnn9::CUDNN_MINOR,
+            libraryPropertyType::PATCH_LEVEL => cuda_types::cudnn9::CUDNN_PATCHLEVEL,
+            _ => return Err(cudnnError_t::INVALID_VALUE),
+        };
+        *value = version as i32;
+        Ok(())
     }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {

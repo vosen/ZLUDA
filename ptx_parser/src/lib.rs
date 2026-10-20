@@ -2,6 +2,7 @@ use derive_more::Display;
 use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::num::{NonZeroU8, ParseFloatError, ParseIntError};
 use std::{iter, usize};
@@ -299,27 +300,39 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 }
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
-    take_error(token::any.verify_map(|(t, _)| match t {
-        Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
-            Ok(x) => Ok(f64::from_bits(x)),
-            Err(err) => Err((0.0, PtxError::from(err))),
+    take_error(
+        (opt(Token::Minus), token::any).verify_map(|(neg, (t, _))| match (neg, t) {
+            (None, Token::F64Hex(f)) => Some(match u64::from_str_radix(&f[2..], 16) {
+                Ok(x) => Ok(f64::from_bits(x)),
+                Err(err) => Err((0.0, PtxError::from(err))),
+            }),
+            (neg, Token::F64(f)) => {
+                let full_number = if neg.is_some() {
+                    Cow::Owned(format!("-{f}"))
+                } else {
+                    Cow::Borrowed(f)
+                };
+
+                Some(match full_number.parse::<f64>() {
+                    Ok(x) => Ok(x),
+                    Err(err) => Err((0.0, PtxError::from(err))),
+                })
+            }
+            _ => None,
         }),
-        Token::F64(f) => Some(match f.parse::<f64>() {
-            Ok(x) => Ok(x),
-            Err(err) => Err((0.0, PtxError::from(err))),
-        }),
-        _ => None,
-    }))
+    )
     .parse_next(stream)
 }
 
-fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
+fn s64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i64> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
-        match i32::from_str_radix(text, radix) {
-            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
-            Err(err) => Err((0, PtxError::from(err))),
-        }
+        let signed_text = if sign.is_some() {
+            Cow::Owned(format!("-{text}"))
+        } else {
+            Cow::Borrowed(text)
+        };
+        i64::from_str_radix(&signed_text, radix).map_err(|err| (0, PtxError::from(err)))
     }))
     .parse_next(stream)
 }
@@ -1522,7 +1535,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
         ) -> PResult<ast::ParsedOperand<&'input str>> {
             let main_ident = ident.parse_next(stream)?;
             alt((
-                preceded(Token::Plus, s32)
+                preceded(Token::Plus, s64)
                     .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset)),
                 take_error(dot_ident.map(move |suffix| {
                     let vector_index = vector_index(suffix)
@@ -4136,14 +4149,17 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync
 
-    vote.sync.mode.pred  d, {!}a, membermask => {
+    vote{.sync}.mode.pred  d, {!}a{, membermask} => {
+        if sync != membermask.is_some() {
+            state.errors.push(PtxError::SyntaxError("vote instruction with inconsistent sync and membermask".to_string()));
+        }
         let (negate, a) = a;
         Instruction::Vote {
             data: VoteDetails {
                 mode,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
+            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
         }
     }
     vote.ballot.b32 d, {!}a => {
@@ -5060,5 +5076,28 @@ mod tests {
             result.array_init,
             vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0))]
         );
+    }
+
+    #[test]
+    fn signed_immediate() {
+        fn parse_value(text: &str) -> crate::ImmediateValue {
+            let tokens = Token::lexer(text)
+                .map(|t| t.map(|t| (t, Span::default())))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let mut errors = Vec::new();
+            let stream = super::PtxParser {
+                input: &tokens[..],
+                state: PtxParserState::new(text, &mut errors),
+            };
+            let result = super::immediate_value.parse(stream).unwrap();
+            assert!(errors.is_empty());
+            result
+        }
+
+        assert_eq!(parse_value("-42"), crate::ImmediateValue::S64(-42));
+        assert_eq!(parse_value("-1.5"), crate::ImmediateValue::F64(-1.5));
+        assert_eq!(parse_value("-1.5e-2"), crate::ImmediateValue::F64(-0.015));
+        assert_eq!(parse_value("-1.5E+2"), crate::ImmediateValue::F64(-150.0));
     }
 }
