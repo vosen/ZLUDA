@@ -33,7 +33,7 @@ HARNESS = ('.buffer', '.launch', '.cooplaunch', '.print', '.expect', '.patch', '
            '.tensormap', '.texture', '.sampler', '.surface', '.multimem', '.fabric',
            '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
 IGNORED = ('.print', '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
-UNSUPPORTED = ('.texture', '.sampler', '.surface', '.multimem', '.fabric')
+UNSUPPORTED = ('.multimem', '.fabric')
 
 SIZES = {'b8': 1, 'u8': 1, 's8': 1, 'b16': 2, 'u16': 2, 's16': 2, 'f16': 2, 'bf16': 2,
          'b32': 4, 'u32': 4, 's32': 4, 'f32': 4, 'f16x2': 4, 'bf16x2': 4,
@@ -51,6 +51,28 @@ class Unsupported(Exception):
 # tensormap.replace.elemtype numbering (PTX-formalization's tensor-map encoding)
 TM_ELEMTYPE = {'u8': 0, 'u16': 1, 'u32': 2, 's32': 3, 'u64': 4, 's64': 5, 'f16': 6, 'f32': 7,
                'f64': 9, 'bf16': 10, 'tf32': 11}
+
+
+# descriptor type codes of PTX-formalization's .texture (tmCode of ptx-harness.k)
+TEX_CODE = {'u8': 0, 'u16': 1, 'u32': 2, 's32': 3, 'u64': 4, 's64': 5, 'f16': 6, 'f32': 7, 's8': 20, 's16': 21,
+            'f64': 8, 'bf16': 9, 'tf32': 11, 'b8': 0, 'b16': 1, 'b32': 2, 'b64': 4}
+
+
+def object_words(kind, t, addr, attrs, dims):
+    """The descriptor of a .texture / .sampler / .surface directive (objBlob / smBlob of
+    semantics/ptx-harness.k), which zluda_agx's cuTexObjectCreate / cuSurfObjectCreate also write."""
+    nth = lambda l, i, d=0: l[i] if i < len(l) else d
+    if kind == 'sampler':
+        return [0x5343504d, nth(attrs, 0), nth(attrs, 1), nth(attrs, 2), nth(attrs, 3), nth(attrs, 4),
+                nth(attrs, 5, 1048576)] + [0] * 9
+    if kind == 'texture':
+        if t not in TEX_CODE:
+            raise Unsupported('texture type .' + t)
+        return [0x54585854, addr, TEX_CODE[t]] + [nth(attrs, i) for i in range(6)] + [nth(dims, i) for i in range(3)] + \
+               [nth(attrs, 6, 1), nth(attrs, 7), 0, nth(attrs, 8)]
+    return [0x53545446, addr, SIZES[t], nth(attrs, 0), nth(dims, 0), nth(dims, 1), nth(dims, 2), nth(attrs, 1, 11),
+            nth(attrs, 2, 1), nth(attrs, 3), nth(attrs, 4), nth(attrs, 5, 1), nth(attrs, 6, int(nth(attrs, 0) > 1)),
+            0, 0, 0]
 
 
 def tensormap_words(t, addr, dims, strides, box, swizzle, im2col=None):
@@ -458,6 +480,22 @@ def run_test(path, args):
                 bufs[m.group(1)] = [addr, 'u64', 16]
                 for k, v in enumerate(words):
                     mem.write(addr + 8 * k, 8, v)
+            elif kw in ('.texture', '.sampler', '.surface'):
+                m = re.fullmatch(r'\.(texture|surface) ([\w$.]+) \.(\w+) ([\w$.]+) \.dims \{(.*?)\} \.attrs \{(.*?)\}\s*;?', d) \
+                    or re.fullmatch(r'\.(sampler) ([\w$.]+) \.attrs \{(.*?)\}\s*;?', d)
+                if not m:
+                    raise Unsupported(d)
+                ints = lambda g: [int(v, 0) for v in split_vals(g)] if g and g.strip() else []
+                if m.group(1) == 'sampler':
+                    words = object_words('sampler', None, 0, ints(m.group(3)), [])
+                else:
+                    words = object_words(m.group(1), m.group(3), syms[m.group(4)], ints(m.group(6)), ints(m.group(5)))
+                addr = BASE + ((mem.top + 255) & ~255)
+                mem.top = (addr - BASE) + 8 * len(words)
+                syms[m.group(2)] = addr
+                bufs[m.group(2)] = [addr, 'u64', len(words)]
+                for k, v in enumerate(words):
+                    mem.write(addr + 8 * k, 8, v & (2**64 - 1))
             elif kw in ('.patch', '.append'):
                 m = re.fullmatch(r'\.(patch|append) ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = ty_of(m.group(3))

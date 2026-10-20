@@ -335,6 +335,44 @@ agx-g14c. The interleaved layouts are plain copies of the dims, as in the
 model. `cp.async.bulk.prefetch.tensor` and `.tile::gather4` / `scatter4` are
 not supported yet.
 
+### Textures and surfaces
+
+Textures and surfaces are sampled in software (`ptx/lib/zluda_ptx_impl_agx_tex.c`, compiled to the generated
+part of `zluda_ptx_impl_agx.ll` by `ptx/lib/gen_agx_tex.py`). AGX's texture unit is not used yet: its descriptors
+and sampling rules have not been measured (simulator task B29). The rules are those of PTX-formalization's model:
+- coordinates scale by the extent when normalized;
+- point and linear filtering, with weights quantised to 1/256 and the sum computed exactly (in software fp64)
+  and rounded once;
+- wrap, clamp, mirror and border (zeros) address modes;
+- read-normalized 8- and 16-bit integers;
+- mipmaps: `.level`, `.grad`, nearest or linear between levels;
+- 1D / 2D / 3D, layered, cube and layered cube textures;
+- depth compare (LEQUAL);
+- texel offsets.
+
+Supported instructions:
+- `tex` (`.base`, `.level`, `.grad`, separate samplers, the residency predicate);
+- `tld4`, `txq`;
+- `suld.b`, `sust.b` and `sust.p` (formatted), `sured.b` and `sured.p`, each with `.trap` (an out-of-bounds
+  access reports `CUDA_ERROR_ASSERT`), `.clamp` and `.zero`;
+- `suq`, `istypep`.
+
+The runtime supports:
+- CUDA arrays (`cuArrayCreate`, `cuArray3DCreate`, layered and cubemap; `cuMipmappedArray*`);
+- copies to and from arrays (`cuMemcpy2D`, `cuMemcpy3D`, `cuMemcpyHtoA` / `AtoH`);
+- `cuTexObjectCreate` over arrays, mipmapped arrays, linear and pitch-linear memory;
+- `cuSurfObjectCreate` over arrays.
+
+Not supported:
+- the legacy texture references (`cuTexRef*`, module `.texref` variables);
+- arbitrary border colours (the border is zero);
+- the min/max mipmap level clamps and the level bias of `CUDA_TEXTURE_DESC`;
+- per-dimension address modes (the first one applies).
+
+All PTX-formalization texture and surface programs (`tex`, `tex-mip`, `surf`, `istypep`) match the formal
+semantics. A texture fetch runs a few thousand instructions, and kernels with many `tex` instructions take
+minutes to compile.
+
 ## Asynchronous copies and mbarriers
 
 The hardware has no asynchronous copy engine and no transaction barriers, so
@@ -504,17 +542,22 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
     PTX-formalization/tests/*.ptx
 ```
 
-Kernels with statements that ZLUDA's front end does not support (`tcgen05`,
-textures and surfaces, the sm_107 conversions) are skipped, together with the
-checks that follow their launch. Of the 1716 checks of the 286 programs
-(2026-10-20, agx-g14c), 1363 run. With `--strict-fp` all 1363 match the
-formal semantics (242 programs pass completely). Without it 1188 match and
-the other 175 are the floating point differences listed above (denormal
-`f32` operands and results, NaN bit patterns, `-0.0` under `.sat`, `div`
-and `sqrt` precision). The 353 skipped checks follow kernels using
-`tcgen05`, textures, the sm_107 conversions (`.scaled`, `ue5m3x2`,
-`s2f6x2`), `mul.rz.f16x2.f32x2.f32x2` and the non-PTX `coll_test`. A full run takes about 100 seconds
-with `-j 8`.
+Kernels with statements that ZLUDA's front end does not support (`tcgen05`, the sm_107 conversions) are
+skipped, together with the checks that follow their launch. Of the 1738 checks of the 286 programs (2026-10-20,
+agx-g14c), 1385 run. With `--strict-fp` all 1385 match the formal semantics, and 246 programs pass completely.
+Without it 1210 match. The other 175 are the floating point differences listed above:
+- denormal `f32` operands and results;
+- NaN bit patterns;
+- `-0.0` under `.sat`;
+- `div` and `sqrt` precision.
+
+The 353 skipped checks follow kernels using:
+- `tcgen05`;
+- the sm_107 conversions (`.scaled`, `ue5m3x2`, `s2f6x2`);
+- `mul.rz.f16x2.f32x2.f32x2`;
+- the non-PTX `coll_test`.
+
+A full run takes about 10 minutes with `-j 4` (most of it compiling the texture tests).
 
 All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`
 (`ldm-*`, `ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal

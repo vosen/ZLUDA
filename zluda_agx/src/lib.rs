@@ -9,6 +9,7 @@
 
 mod dark;
 mod driver;
+mod texture;
 
 use cuda_types::cuda::*;
 use std::sync::OnceLock;
@@ -56,6 +57,11 @@ cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented
         <= [
+            cuArray3DCreate_v2,
+            cuArray3DGetDescriptor_v2,
+            cuArrayCreate_v2,
+            cuArrayDestroy,
+            cuArrayGetDescriptor_v2,
             cuCtxCreate_v2,
             cuCtxDestroy_v2,
             cuCtxGetApiVersion,
@@ -113,6 +119,11 @@ cuda_macros::cuda_function_declarations!(
             cuLibraryGetModule,
             cuLibraryLoadData,
             cuLibraryUnload,
+            cuLinkAddData_v2,
+            cuLinkAddFile_v2,
+            cuLinkComplete,
+            cuLinkCreate_v2,
+            cuLinkDestroy,
             cuMemAdvise,
             cuMemAllocAsync,
             cuMemAllocHost_v2,
@@ -132,11 +143,15 @@ cuda_macros::cuda_function_declarations!(
             cuMemcpy2DAsync_v2,
             cuMemcpy2DUnaligned_v2,
             cuMemcpy2D_v2,
+            cuMemcpy3DAsync_v2,
+            cuMemcpy3D_v2,
             cuMemcpyAsync,
+            cuMemcpyAtoH_v2,
             cuMemcpyDtoDAsync_v2,
             cuMemcpyDtoD_v2,
             cuMemcpyDtoHAsync_v2,
             cuMemcpyDtoH_v2,
+            cuMemcpyHtoA_v2,
             cuMemcpyHtoDAsync_v2,
             cuMemcpyHtoD_v2,
             cuMemcpyPeer,
@@ -153,11 +168,9 @@ cuda_macros::cuda_function_declarations!(
             cuMemsetD32_v2,
             cuMemsetD8Async,
             cuMemsetD8_v2,
-            cuLinkAddData_v2,
-            cuLinkAddFile_v2,
-            cuLinkComplete,
-            cuLinkCreate_v2,
-            cuLinkDestroy,
+            cuMipmappedArrayCreate,
+            cuMipmappedArrayDestroy,
+            cuMipmappedArrayGetLevel,
             cuModuleGetFunction,
             cuModuleGetGlobal_v2,
             cuModuleGetLoadingMode,
@@ -180,9 +193,13 @@ cuda_macros::cuda_function_declarations!(
             cuStreamQuery,
             cuStreamSynchronize,
             cuStreamWaitEvent,
+            cuSurfObjectCreate,
+            cuSurfObjectDestroy,
             cuTensorMapEncodeIm2col,
             cuTensorMapEncodeTiled,
             cuTensorMapReplaceAddress,
+            cuTexObjectCreate,
+            cuTexObjectDestroy,
             cuThreadExchangeStreamCaptureMode,
         ]
 );

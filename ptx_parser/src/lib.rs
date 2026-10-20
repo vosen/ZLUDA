@@ -2275,13 +2275,17 @@ fn tensor_instruction<'a, 'input>(
         return backtrack();
     };
     let opcode = &stream.state.text[span.clone()];
-    if opcode != "cp" && opcode != "tensormap" {
+    let texture = ["tex", "tld4", "txq", "suld", "sust", "sured", "suq", "istypep"].contains(&opcode);
+    if opcode != "cp" && opcode != "tensormap" && !texture {
         return backtrack();
     }
     stream.input = &stream.input[1..];
     let mut modifiers = matrix_modifiers(stream);
     if opcode == "tensormap" {
         return tensormap_replace(stream, modifiers);
+    }
+    if texture {
+        return texture_instruction(stream, opcode, modifiers);
     }
     let reduce = take_modifier(&mut modifiers, "reduce");
     if !take_modifier(&mut modifiers, "async")
@@ -2485,6 +2489,361 @@ fn tensor_instruction<'a, 'input>(
             src_cache_policy,
         },
     })
+}
+
+// The elements of a vector operand `{a, b, ...}` (or a lone operand as one element).
+fn operand_elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<ParsedOperandStr<'input>>> {
+    match operand {
+        ast::ParsedOperand::VecPack(values) => values
+            .into_iter()
+            .map(|c| match c {
+                Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
+                Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
+                None => backtrack(),
+            })
+            .collect(),
+        other => Ok(vec![other]),
+    }
+}
+
+fn take_geometry(modifiers: &mut Vec<&str>) -> Option<ast::TexGeometry> {
+    use ast::TexGeometry::*;
+    [("1d", D1), ("2d", D2), ("3d", D3), ("a1d", A1d), ("a2d", A2d), ("cube", Cube), ("acube", ACube)]
+        .iter()
+        .find(|(name, _)| take_modifier(modifiers, name))
+        .map(|&(_, g)| g)
+}
+
+fn take_type(modifiers: &mut Vec<&str>, types: &[(&str, ScalarType)]) -> Option<ScalarType> {
+    types.iter().find(|(name, _)| take_modifier(modifiers, name)).map(|&(_, t)| t)
+}
+
+// The texture and surface instructions in the forms the instruction grammar
+// does not have (every geometry, lod and gradient operands, samplers,
+// offsets, depth compare, the residency predicate, tld4, queries, surfaces).
+// The plain `tex.{1d,2d,3d}.v4.dtype.ctype d, [t, c]` stays with the grammar.
+// tex{.base|.level|.grad}.geom.v4.dtype.ctype d{|p}, [t{, s}, c] {, lod | , dPdx, dPdy} {, offsets} {, ref}
+// tld4.comp.geom.v4.dtype.f32 d{|p}, [t{, s}, c] {, offsets} {, ref}
+// txq.field.b32 d, [t]       suq.field.b32 d, [s]       istypep.kind p, a
+// suld.b.geom{.vN}.btype{.cop}.mode d, [s, c]        sust.{b,p}.geom{.vN}.btype{.cop}.mode [s, c], v
+// sured.{b,p}.op.geom.type.mode [s, c], v
+fn texture_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    // [handle {, handle}, {coords}] or [handle]
+    let bracket = |stream: &mut PtxParser<'a, 'input>| -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let (first, rest) = delimited(
+            Token::LBracket,
+            (ParsedOperandStr::parse, repeat(0.., preceded(Token::Comma, ParsedOperandStr::parse))),
+            Token::RBracket,
+        )
+        .parse_next(stream)?;
+        let mut all = vec![first];
+        let rest: Vec<_> = rest;
+        all.extend(rest);
+        Ok(all)
+    };
+    let rest_operands = |stream: &mut PtxParser<'a, 'input>| -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let mut out = Vec::new();
+        while opt(Token::Comma).parse_next(stream)?.is_some() {
+            out.push(ParsedOperandStr::parse.parse_next(stream)?);
+        }
+        Ok(out)
+    };
+    match opcode {
+        "tex" | "tld4" => {
+            let op = if opcode == "tld4" {
+                let comp = ["r", "g", "b", "a"].iter().position(|c| take_modifier(&mut modifiers, c));
+                match comp {
+                    Some(c) => ast::TexOp::Tld4(c as u8),
+                    None => return backtrack(),
+                }
+            } else {
+                ast::TexOp::Tex
+            };
+            let plain = modifiers.len() == 4;
+            let lod_mode = if take_modifier(&mut modifiers, "level") {
+                1
+            } else if take_modifier(&mut modifiers, "grad") {
+                2
+            } else {
+                take_modifier(&mut modifiers, "base");
+                0
+            };
+            let Some(geometry) = take_geometry(&mut modifiers) else {
+                return backtrack();
+            };
+            if !take_modifier(&mut modifiers, "v4") {
+                return backtrack();
+            }
+            let types = [("f32", ScalarType::F32), ("s32", ScalarType::S32), ("u32", ScalarType::U32)];
+            let (Some(dtype), Some(ctype)) = (take_type(&mut modifiers, &types), take_type(&mut modifiers, &types))
+            else {
+                return backtrack();
+            };
+            if !modifiers.is_empty() || ctype == ScalarType::U32 {
+                return backtrack();
+            }
+            let dst = operand(stream)?;
+            let dst_pred = if opt(Token::Pipe).parse_next(stream)?.is_some() { Some(operand(stream)?) } else { None };
+            comma(stream)?;
+            let mut handles = bracket(stream)?;
+            let extra = rest_operands(stream)?;
+            let simple_geometry = matches!(geometry, ast::TexGeometry::D1 | ast::TexGeometry::D2 | ast::TexGeometry::D3);
+            if matches!(op, ast::TexOp::Tex) && plain && lod_mode == 0 && simple_geometry && dst_pred.is_none()
+                && handles.len() == 2 && extra.is_empty()
+            {
+                // the instruction grammar's form
+                return backtrack();
+            }
+            if handles.len() < 2 || handles.len() > 3 {
+                return backtrack();
+            }
+            let coords = operand_elements(handles.pop().unwrap())?;
+            let src_sampler = if handles.len() == 2 { handles.pop() } else { None };
+            let src_tex = handles.pop().unwrap();
+            let dsts = operand_elements(dst)?;
+            if dsts.len() != 4 || coords.len() > 4 {
+                return backtrack();
+            }
+            let mut extra = extra.into_iter().peekable();
+            let src_lod = if lod_mode == 1 { extra.next() } else { None };
+            let (dx, dy) = if lod_mode == 2 {
+                match (extra.next(), extra.next()) {
+                    (Some(dx), Some(dy)) => (operand_elements(dx)?, operand_elements(dy)?),
+                    _ => return backtrack(),
+                }
+            } else {
+                (Vec::new(), Vec::new())
+            };
+            // a vector next is the offset (a 1d offset is a lone register, which then reads as the reference)
+            let offsets = match extra.peek() {
+                Some(ast::ParsedOperand::VecPack(_)) => operand_elements(extra.next().unwrap())?,
+                _ => Vec::new(),
+            };
+            let src_ref = extra.next();
+            if extra.next().is_some() || dx.len() > 3 || dy.len() > 3 || offsets.len() > 3 {
+                return backtrack();
+            }
+            let mut d = dsts.into_iter();
+            let mut c = coords.into_iter();
+            let mut dx = dx.into_iter();
+            let mut dy = dy.into_iter();
+            let mut o = offsets.into_iter();
+            Ok(ast::Instruction::TexAgx {
+                data: ast::TexAgxDetails { op, geometry, lod_mode, dtype, ctype },
+                arguments: ast::TexAgxArgs {
+                    dst0: d.next().unwrap(),
+                    dst1: d.next().unwrap(),
+                    dst2: d.next().unwrap(),
+                    dst3: d.next().unwrap(),
+                    dst_pred,
+                    src_tex,
+                    src_sampler,
+                    src_c0: c.next(),
+                    src_c1: c.next(),
+                    src_c2: c.next(),
+                    src_c3: c.next(),
+                    src_lod,
+                    src_dx0: dx.next(),
+                    src_dx1: dx.next(),
+                    src_dx2: dx.next(),
+                    src_dy0: dy.next(),
+                    src_dy1: dy.next(),
+                    src_dy2: dy.next(),
+                    src_o0: o.next(),
+                    src_o1: o.next(),
+                    src_o2: o.next(),
+                    src_ref,
+                },
+            })
+        }
+        "txq" | "suq" => {
+            let fields: &[&str] = if opcode == "txq" {
+                &["width", "height", "depth", "array_size", "normalized_coords", "filter_mode", "addr_mode_0",
+                  "num_mipmap_levels", "addr_mode_1", "addr_mode_2", "channel_data_type", "channel_order",
+                  "num_samples", "force_unnormalized_coords"]
+            } else {
+                &["width", "height", "depth", "array_size", "channel_data_type", "channel_order", "memory_layout"]
+            };
+            let Some(field) = fields.iter().position(|f| take_modifier(&mut modifiers, f)) else {
+                return backtrack();
+            };
+            take_modifier(&mut modifiers, "level");
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            // txq: the addr_mode_* fields read the same word; the others the helper does not know read 0
+            let field = match (opcode, field) {
+                ("txq", 8 | 9) => 6,
+                ("txq", f) if f >= 10 => 255,
+                (_, f) => f,
+            } as u8;
+            let dst = operand(stream)?;
+            comma(stream)?;
+            let mut handles = bracket(stream)?;
+            if handles.len() != 1 {
+                return backtrack();
+            }
+            Ok(ast::Instruction::TexQuery {
+                data: ast::TexQueryDetails { surface: opcode == "suq", field },
+                arguments: ast::TexQueryArgs { dst, src: handles.pop().unwrap() },
+            })
+        }
+        "istypep" => {
+            let Some(kind) = ["texref", "samplerref", "surfref"].iter().position(|k| take_modifier(&mut modifiers, k))
+            else {
+                return backtrack();
+            };
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let dst = operand(stream)?;
+            comma(stream)?;
+            let src = operand(stream)?;
+            Ok(ast::Instruction::Istypep { data: kind as u8, arguments: ast::IstypepArgs { dst, src } })
+        }
+        _ => {
+            let formatted = take_modifier(&mut modifiers, "p");
+            if !formatted && !take_modifier(&mut modifiers, "b") {
+                return backtrack();
+            }
+            let op = if opcode == "sured" {
+                let op = match modifiers.first() {
+                    Some(&"add") => ast::AtomicOp::Add,
+                    Some(&"and") => ast::AtomicOp::And,
+                    Some(&"or") => ast::AtomicOp::Or,
+                    Some(&"min") => ast::AtomicOp::UnsignedMin,
+                    Some(&"max") => ast::AtomicOp::UnsignedMax,
+                    _ => return backtrack(),
+                };
+                modifiers.remove(0);
+                Some(op)
+            } else {
+                None
+            };
+            let Some(geometry) = take_geometry(&mut modifiers) else {
+                return backtrack();
+            };
+            let vector = if take_modifier(&mut modifiers, "v4") {
+                4
+            } else if take_modifier(&mut modifiers, "v2") {
+                2
+            } else {
+                take_modifier(&mut modifiers, "v1");
+                1
+            };
+            let types = [
+                ("b8", ScalarType::B8),
+                ("b16", ScalarType::B16),
+                ("b32", ScalarType::B32),
+                ("b64", ScalarType::B64),
+                ("u32", ScalarType::U32),
+                ("s32", ScalarType::S32),
+                ("u64", ScalarType::U64),
+                ("s64", ScalarType::S64),
+            ];
+            let Some(type_) = take_type(&mut modifiers, &types) else {
+                return backtrack();
+            };
+            let mode = if take_modifier(&mut modifiers, "zero") {
+                ast::SurfaceMode::Zero
+            } else if take_modifier(&mut modifiers, "clamp") {
+                ast::SurfaceMode::Clamp
+            } else {
+                take_modifier(&mut modifiers, "trap");
+                ast::SurfaceMode::Trap
+            };
+            // cache operators and .vec are hints
+            for hint in ["ca", "cg", "cs", "cv", "wb", "wt"] {
+                take_modifier(&mut modifiers, hint);
+            }
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let surface = |stream: &mut PtxParser<'a, 'input>| -> PResult<(ParsedOperandStr<'input>, Vec<ParsedOperandStr<'input>>)> {
+                let mut handles = bracket(stream)?;
+                if handles.len() != 2 {
+                    return backtrack();
+                }
+                let coords = operand_elements(handles.pop().unwrap())?;
+                if coords.len() > 4 {
+                    return backtrack();
+                }
+                Ok((handles.pop().unwrap(), coords))
+            };
+            let data = ast::SurfaceDetails { geometry, mode, vector, type_, formatted, op };
+            if opcode == "suld" {
+                if formatted {
+                    return backtrack();
+                }
+                let dst = operand_elements(operand(stream)?)?;
+                comma(stream)?;
+                let (src_surf, coords) = surface(stream)?;
+                if dst.len() != vector as usize {
+                    return backtrack();
+                }
+                let mut d = dst.into_iter();
+                let mut c = coords.into_iter();
+                return Ok(ast::Instruction::SuldAgx {
+                    data,
+                    arguments: ast::SuldAgxArgs {
+                        dst0: d.next().unwrap(),
+                        dst1: d.next(),
+                        dst2: d.next(),
+                        dst3: d.next(),
+                        src_surf,
+                        src_c0: c.next(),
+                        src_c1: c.next(),
+                        src_c2: c.next(),
+                        src_c3: c.next(),
+                    },
+                });
+            }
+            let (src_surf, coords) = surface(stream)?;
+            comma(stream)?;
+            let values = operand_elements(operand(stream)?)?;
+            let mut c = coords.into_iter();
+            if opcode == "sured" {
+                if values.len() != 1 {
+                    return backtrack();
+                }
+                return Ok(ast::Instruction::SuredAgx {
+                    data,
+                    arguments: ast::SuredAgxArgs {
+                        src_surf,
+                        src_c0: c.next(),
+                        src_c1: c.next(),
+                        src_c2: c.next(),
+                        src_c3: c.next(),
+                        src_v: values.into_iter().next().unwrap(),
+                    },
+                });
+            }
+            if values.len() != vector as usize {
+                return backtrack();
+            }
+            let mut v = values.into_iter();
+            Ok(ast::Instruction::SustAgx {
+                data,
+                arguments: ast::SustAgxArgs {
+                    src_surf,
+                    src_c0: c.next(),
+                    src_c1: c.next(),
+                    src_c2: c.next(),
+                    src_c3: c.next(),
+                    src_v0: v.next().unwrap(),
+                    src_v1: v.next(),
+                    src_v2: v.next(),
+                    src_v3: v.next(),
+                },
+            })
+        }
+    }
 }
 
 fn tensormap_replace<'a, 'input>(

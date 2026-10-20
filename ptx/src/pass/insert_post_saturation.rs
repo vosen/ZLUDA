@@ -131,6 +131,12 @@ fn run_instruction<'input>(
         | ast::Instruction::CpAsyncBulk { .. }
         | ast::Instruction::CpAsyncBulkTensor { .. }
         | ast::Instruction::TensormapReplace { .. }
+        | ast::Instruction::TexAgx { .. }
+        | ast::Instruction::TexQuery { .. }
+        | ast::Instruction::SuldAgx { .. }
+        | ast::Instruction::SustAgx { .. }
+        | ast::Instruction::SuredAgx { .. }
+        | ast::Instruction::Istypep { .. }
         | ast::Instruction::CpReduceAsyncBulk { .. }
         | ast::Instruction::MbarrierInit { .. }
         | ast::Instruction::MbarrierInval { .. }

@@ -914,6 +914,12 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CpAsyncBulkTensor { data, arguments } => {
                 self.emit_cp_async_bulk_tensor(data, arguments)
             }
+            ast::Instruction::TexAgx { data, arguments } => self.emit_tex_agx(data, arguments),
+            ast::Instruction::TexQuery { data, arguments } => self.emit_tex_query(data, arguments),
+            ast::Instruction::SuldAgx { data, arguments } => self.emit_suld(data, arguments),
+            ast::Instruction::SustAgx { data, arguments } => self.emit_sust(data, arguments),
+            ast::Instruction::SuredAgx { data, arguments } => self.emit_sured(data, arguments),
+            ast::Instruction::Istypep { data, arguments } => self.emit_istypep(data, arguments),
             ast::Instruction::TensormapReplace { data, arguments } => {
                 self.emit_tensormap_replace(data, arguments)
             }
@@ -6037,6 +6043,294 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_agx_helper(c"__zluda_ptx_impl_agx_tma_store", None, None, &args)?;
             }
         }
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------- textures and surfaces (in software)
+
+    fn i32_value(&mut self, id: Option<SpirvWord>) -> Result<LLVMValueRef, TranslateError> {
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        Ok(match id {
+            Some(id) => {
+                let v = self.resolver.value(id)?;
+                let ty = unsafe { LLVMTypeOf(v) };
+                unsafe {
+                    if LLVMGetTypeKind(ty) == LLVMTypeKind::LLVMFloatTypeKind {
+                        LLVMBuildBitCast(self.builder, v, i32_type, LLVM_UNNAMED.as_ptr())
+                    } else {
+                        LLVMBuildZExtOrBitCast(self.builder, v, i32_type, LLVM_UNNAMED.as_ptr())
+                    }
+                }
+            }
+            None => self.const_u32(0),
+        })
+    }
+
+    fn f32_value(&mut self, id: Option<SpirvWord>) -> Result<LLVMValueRef, TranslateError> {
+        let v = self.i32_value(id)?;
+        Ok(unsafe { LLVMBuildBitCast(self.builder, v, LLVMFloatTypeInContext(self.context), LLVM_UNNAMED.as_ptr()) })
+    }
+
+    // a texture, sampler or surface handle as a device pointer to its descriptor (null for None)
+    fn descriptor(&mut self, id: Option<SpirvWord>) -> Result<LLVMValueRef, TranslateError> {
+        let ptr = get_pointer_type(self.context, ast::StateSpace::Global)?;
+        Ok(match id {
+            Some(id) => {
+                let v = self.resolver.value(id)?;
+                let v = unsafe {
+                    LLVMBuildZExtOrBitCast(self.builder, v, LLVMInt64TypeInContext(self.context), LLVM_UNNAMED.as_ptr())
+                };
+                unsafe { LLVMBuildIntToPtr(self.builder, v, ptr, LLVM_UNNAMED.as_ptr()) }
+            }
+            None => unsafe { LLVMConstNull(ptr) },
+        })
+    }
+
+    // a helper returning a vector of 4 `element`s
+    fn emit_vector_helper(
+        &mut self,
+        name: &CStr,
+        element: ast::ScalarType,
+        arguments: &[LLVMValueRef],
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let return_type = ast::Type::Vector(4, element);
+        self.emit_intrinsic(
+            name,
+            None,
+            vec![&return_type],
+            arguments.iter().map(|arg| (*arg, unsafe { LLVMTypeOf(*arg) })).collect(),
+        )
+    }
+
+    // element i of a vector, as the type of the destination
+    fn vector_element(
+        &mut self,
+        vector: LLVMValueRef,
+        i: u32,
+        dst: SpirvWord,
+        dst_type: ast::ScalarType,
+    ) -> Result<(), TranslateError> {
+        let builder = self.builder;
+        let index = self.const_u32(i as u64);
+        let v = unsafe { LLVMBuildExtractElement(builder, vector, index, LLVM_UNNAMED.as_ptr()) };
+        let target = get_scalar_type(self.context, dst_type);
+        let v = unsafe {
+            if dst_type.kind() == ast::ScalarKind::Float {
+                LLVMBuildBitCast(builder, v, target, LLVM_UNNAMED.as_ptr())
+            } else {
+                LLVMBuildTruncOrBitCast(builder, v, target, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        self.resolver.register(dst, v);
+        Ok(())
+    }
+
+    fn geometry_code(geometry: ast::TexGeometry) -> u64 {
+        geometry as u64
+    }
+
+    fn emit_tex_agx(
+        &mut self,
+        data: ast::TexAgxDetails,
+        arguments: ast::TexAgxArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let tex = self.descriptor(Some(arguments.src_tex))?;
+        let sampler = self.descriptor(arguments.src_sampler)?;
+        let geometry = self.const_u32(Self::geometry_code(data.geometry));
+        let dtype = self.const_u32(match data.dtype {
+            ast::ScalarType::F32 => 0,
+            ast::ScalarType::S32 => 1,
+            _ => 2,
+        });
+        let mut coords = Vec::new();
+        for c in [arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3] {
+            coords.push(self.i32_value(c)?);
+        }
+        let mut offsets = Vec::new();
+        for o in [arguments.src_o0, arguments.src_o1, arguments.src_o2] {
+            offsets.push(self.i32_value(o)?);
+        }
+        let has_ref = self.const_u32(arguments.src_ref.is_some() as u64);
+        let reference = self.i32_value(arguments.src_ref)?;
+        let result = match data.op {
+            ast::TexOp::Tex => {
+                let mut args = vec![
+                    tex,
+                    sampler,
+                    geometry,
+                    self.const_u32(data.lod_mode as u64),
+                    self.const_u32((data.ctype == ast::ScalarType::F32) as u64),
+                    dtype,
+                ];
+                args.extend(coords);
+                args.push(self.f32_value(arguments.src_lod)?);
+                for g in [
+                    arguments.src_dx0,
+                    arguments.src_dx1,
+                    arguments.src_dx2,
+                    arguments.src_dy0,
+                    arguments.src_dy1,
+                    arguments.src_dy2,
+                ] {
+                    args.push(self.f32_value(g)?);
+                }
+                args.extend(offsets);
+                args.extend([has_ref, reference]);
+                self.emit_vector_helper(c"__zluda_ptx_impl_agx_tex", ast::ScalarType::B32, &args)?
+            }
+            ast::TexOp::Tld4(comp) => {
+                let mut args = vec![tex, sampler, geometry, self.const_u32(comp as u64), dtype];
+                args.extend(coords);
+                args.extend(&offsets[..2]);
+                args.extend([has_ref, reference]);
+                self.emit_vector_helper(c"__zluda_ptx_impl_agx_tld4", ast::ScalarType::B32, &args)?
+            }
+        };
+        let _ = i32_type;
+        for (i, dst) in [arguments.dst0, arguments.dst1, arguments.dst2, arguments.dst3].into_iter().enumerate() {
+            self.vector_element(result, i as u32, dst, data.dtype)?;
+        }
+        // every level is resident
+        if let Some(pred) = arguments.dst_pred {
+            let one = unsafe { LLVMConstInt(LLVMInt1TypeInContext(self.context), 1, 0) };
+            self.resolver.register(pred, one);
+        }
+        Ok(())
+    }
+
+    fn emit_tex_query(
+        &mut self,
+        data: ast::TexQueryDetails,
+        arguments: ast::TexQueryArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let handle = self.descriptor(Some(arguments.src))?;
+        let field = self.const_u32(data.field as u64);
+        let name = if data.surface { c"__zluda_ptx_impl_agx_suq" } else { c"__zluda_ptx_impl_agx_txq" };
+        self.emit_agx_helper(name, Some(arguments.dst), Some(ast::ScalarType::B32), &[handle, field])?;
+        Ok(())
+    }
+
+    fn surface_coords(&mut self, cs: [Option<SpirvWord>; 4]) -> Result<Vec<LLVMValueRef>, TranslateError> {
+        cs.into_iter().map(|c| self.i32_value(c)).collect()
+    }
+
+    fn i64_value(&mut self, id: SpirvWord) -> Result<LLVMValueRef, TranslateError> {
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let v = self.resolver.value(id)?;
+        let ty = unsafe { LLVMTypeOf(v) };
+        Ok(unsafe {
+            match LLVMGetTypeKind(ty) {
+                LLVMTypeKind::LLVMFloatTypeKind => {
+                    let i = LLVMBuildBitCast(self.builder, v, LLVMInt32TypeInContext(self.context), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildZExt(self.builder, i, i64_type, LLVM_UNNAMED.as_ptr())
+                }
+                LLVMTypeKind::LLVMDoubleTypeKind => LLVMBuildBitCast(self.builder, v, i64_type, LLVM_UNNAMED.as_ptr()),
+                LLVMTypeKind::LLVMHalfTypeKind | LLVMTypeKind::LLVMBFloatTypeKind => {
+                    let i = LLVMBuildBitCast(self.builder, v, LLVMInt16TypeInContext(self.context), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildZExt(self.builder, i, i64_type, LLVM_UNNAMED.as_ptr())
+                }
+                _ => LLVMBuildZExtOrBitCast(self.builder, v, i64_type, LLVM_UNNAMED.as_ptr()),
+            }
+        })
+    }
+
+    fn emit_suld(
+        &mut self,
+        data: ast::SurfaceDetails,
+        arguments: ast::SuldAgxArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let surface = self.descriptor(Some(arguments.src_surf))?;
+        let mut args = vec![
+            surface,
+            self.const_u32(Self::geometry_code(data.geometry)),
+            self.const_u32(data.mode as u64),
+            self.const_u32(data.vector as u64),
+            self.const_u32(data.type_.size_of() as u64),
+        ];
+        args.extend(self.surface_coords([arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3])?);
+        let result = self.emit_vector_helper(c"__zluda_ptx_impl_agx_suld_b", ast::ScalarType::B64, &args)?;
+        let dsts = [Some(arguments.dst0), arguments.dst1, arguments.dst2, arguments.dst3];
+        for (i, dst) in dsts.into_iter().enumerate() {
+            if let Some(dst) = dst {
+                self.vector_element(result, i as u32, dst, data.type_)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_sust(
+        &mut self,
+        data: ast::SurfaceDetails,
+        arguments: ast::SustAgxArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let surface = self.descriptor(Some(arguments.src_surf))?;
+        let mut args = vec![surface, self.const_u32(Self::geometry_code(data.geometry)), self.const_u32(data.mode as u64)];
+        args.push(self.const_u32(data.vector as u64));
+        let values = [Some(arguments.src_v0), arguments.src_v1, arguments.src_v2, arguments.src_v3];
+        if data.formatted {
+            args.extend(self.surface_coords([arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3])?);
+            for v in values {
+                args.push(self.i32_value(v)?);
+            }
+            self.emit_agx_helper(c"__zluda_ptx_impl_agx_sust_p", None, None, &args)?;
+        } else {
+            args.push(self.const_u32(data.type_.size_of() as u64));
+            args.extend(self.surface_coords([arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3])?);
+            for v in values {
+                args.push(match v {
+                    Some(v) => self.i64_value(v)?,
+                    None => unsafe { LLVMConstInt(LLVMInt64TypeInContext(self.context), 0, 0) },
+                });
+            }
+            self.emit_agx_helper(c"__zluda_ptx_impl_agx_sust_b", None, None, &args)?;
+        }
+        Ok(())
+    }
+
+    fn emit_sured(
+        &mut self,
+        data: ast::SurfaceDetails,
+        arguments: ast::SuredAgxArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let surface = self.descriptor(Some(arguments.src_surf))?;
+        let bytes = data.type_.size_of() as u64;
+        let mut args = vec![
+            surface,
+            self.const_u32(Self::geometry_code(data.geometry)),
+            self.const_u32(data.mode as u64),
+            self.const_u32(data.formatted as u64),
+            self.const_u32(bytes),
+        ];
+        args.extend(self.surface_coords([arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3])?);
+        let value = self.i64_value(arguments.src_v)?;
+        // signed: .s32 / .s64, or (.p) a signed integer surface format
+        let signed = if data.formatted {
+            let s = self.emit_agx_helper(c"__zluda_ptx_impl_agx_surface_signed", None, Some(ast::ScalarType::B32), &[surface])?;
+            s
+        } else {
+            self.const_u32(matches!(data.type_, ast::ScalarType::S32 | ast::ScalarType::S64) as u64)
+        };
+        let op = self.const_u32(match data.op {
+            Some(ast::AtomicOp::Add) => 0,
+            Some(ast::AtomicOp::And) => 1,
+            Some(ast::AtomicOp::Or) => 2,
+            Some(ast::AtomicOp::UnsignedMin) => 3,
+            Some(ast::AtomicOp::UnsignedMax) => 4,
+            _ => return Err(error_unreachable()),
+        });
+        args.extend([op, signed, value]);
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_sured", None, None, &args)?;
+        Ok(())
+    }
+
+    fn emit_istypep(&mut self, kind: u8, arguments: ast::IstypepArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let handle = self.i64_value(arguments.src)?;
+        let kind = self.const_u32(kind as u64);
+        let is = self.emit_agx_helper(c"__zluda_ptx_impl_agx_istypep", None, Some(ast::ScalarType::B32), &[handle, kind])?;
+        let zero = self.const_u32(0);
+        let p = unsafe { LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntNE, is, zero, LLVM_UNNAMED.as_ptr()) };
+        self.resolver.register(arguments.dst, p);
         Ok(())
     }
 

@@ -14,6 +14,8 @@ use std::num::NonZeroU32;
 use std::sync::Mutex;
 use std::time::Instant;
 
+pub(crate) use crate::texture::*;
+
 struct Stream {
     queue: Queue,
     /// Fences of other streams the next command must wait for (cuStreamWaitEvent).
@@ -36,8 +38,8 @@ enum Op {
     Copy { dst: u64, src: u64, n: usize },
 }
 
-struct Driver {
-    ctx: Context,
+pub(crate) struct Driver {
+    pub(crate) ctx: Context,
     default_waits: Vec<Fence>,
     modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
@@ -142,11 +144,11 @@ fn err(code: u32) -> CUerror {
     CUerror(NonZeroU32::new(code).unwrap())
 }
 
-fn from_io(e: io::Error) -> CUerror {
+pub(crate) fn from_io(e: io::Error) -> CUerror {
     err(error::cuda_error(&e))
 }
 
-fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
+pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
     let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     match g.as_mut() {
         Some(d) => f(d),
@@ -206,7 +208,7 @@ impl Driver {
         }
     }
 
-    fn sync_all(&mut self) -> Result<(), CUerror> {
+    pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
         self.ctx.stream.synchronize().map_err(from_io)?;
         for s in self.streams.values_mut() {
             s.queue.synchronize().map_err(from_io)?;
@@ -327,7 +329,7 @@ unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     Ok(ptx)
 }
 
-unsafe fn out<T>(p: *mut T, v: T) -> CUresult {
+pub(crate) unsafe fn out<T>(p: *mut T, v: T) -> CUresult {
     if p.is_null() {
         return Err(CUerror::INVALID_VALUE);
     }
@@ -1373,15 +1375,25 @@ unsafe fn copy_side(
 unsafe fn memcpy_2d(c: *const CUDA_MEMCPY2D) -> CUresult {
     let c = c.as_ref().ok_or(CUerror::INVALID_VALUE)?;
     let (w, h) = (c.WidthInBytes, c.Height);
-    if h > 1 && (c.srcPitch < w || c.dstPitch < w) {
+    let array = CUmemorytype::CU_MEMORYTYPE_ARRAY;
+    if h > 1 && ((c.srcMemoryType != array && c.srcPitch < w) || (c.dstMemoryType != array && c.dstPitch < w)) {
         return Err(CUerror::INVALID_VALUE);
     }
     with(|d| {
         d.sync_all()?;
-        let src = copy_side(d, c.srcMemoryType, c.srcHost, c.srcDevice, c.srcXInBytes, c.srcY, c.srcPitch, w, h)?;
-        let dst = copy_side(d, c.dstMemoryType, c.dstHost, c.dstDevice, c.dstXInBytes, c.dstY, c.dstPitch, w, h)?;
+        // an array's rows are dense, at its own pitch
+        let (src, src_pitch) = if c.srcMemoryType == array {
+            array_side(d, c.srcArray, c.srcXInBytes, c.srcY, 0)?
+        } else {
+            (copy_side(d, c.srcMemoryType, c.srcHost, c.srcDevice, c.srcXInBytes, c.srcY, c.srcPitch, w, h)?, c.srcPitch)
+        };
+        let (dst, dst_pitch) = if c.dstMemoryType == array {
+            array_side(d, c.dstArray, c.dstXInBytes, c.dstY, 0)?
+        } else {
+            (copy_side(d, c.dstMemoryType, c.dstHost, c.dstDevice, c.dstXInBytes, c.dstY, c.dstPitch, w, h)?, c.dstPitch)
+        };
         for row in 0..h {
-            std::ptr::copy(src.add(row * c.srcPitch), dst.add(row * c.dstPitch), w);
+            std::ptr::copy(src.add(row * src_pitch), dst.add(row * dst_pitch), w);
         }
         Ok(())
     })

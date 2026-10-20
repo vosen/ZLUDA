@@ -1538,6 +1538,296 @@ ptx_parser_macros::generate_instruction_type!(
         WgmmaFence {
             data: WgmmaControl,
         },
+        // tex / tld4 in their full forms (textures sampled in software on AGX)
+        TexAgx {
+            type: !,
+            data: TexAgxDetails,
+            arguments<T>: {
+                dst0: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst1: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst2: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst3: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_tex: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_sampler: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_lod: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ref: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // txq.field.b32 / suq.field.b32
+        TexQuery {
+            type: !,
+            data: TexQueryDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // suld.b
+        SuldAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                dst0: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // sust.b / sust.p
+        SustAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_v0: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // sured.b / sured.p
+        SuredAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_v: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // istypep.{texref,samplerref,surfref} p, a
+        Istypep {
+            type: !,
+            data: u8,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                    relaxed_type_check: true,
+                },
+            }
+        },
         // cp.async.bulk.tensor / cp.reduce.async.bulk.tensor in tile mode
         CpAsyncBulkTensor {
             type: Type::Scalar(ScalarType::B8),
@@ -4683,4 +4973,56 @@ pub struct TensormapReplaceDetails {
     pub field: TensormapField,
     pub space: StateSpace,
     pub type_: ScalarType,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TexGeometry {
+    D1 = 0,
+    D2 = 1,
+    D3 = 2,
+    A1d = 3,
+    A2d = 4,
+    Cube = 5,
+    ACube = 6,
+}
+
+#[derive(Copy, Clone)]
+pub enum TexOp {
+    Tex,
+    // tld4.{r,g,b,a}: the component
+    Tld4(u8),
+}
+
+pub struct TexAgxDetails {
+    pub op: TexOp,
+    pub geometry: TexGeometry,
+    // 0: none (.base too), 1: .level, 2: .grad
+    pub lod_mode: u8,
+    pub dtype: ScalarType,
+    pub ctype: ScalarType,
+}
+
+pub struct TexQueryDetails {
+    // false: txq (textures), true: suq (surfaces)
+    pub surface: bool,
+    // the helper's field number
+    pub field: u8,
+}
+
+#[derive(Copy, Clone)]
+pub enum SurfaceMode {
+    Trap = 0,
+    Clamp = 1,
+    Zero = 2,
+}
+
+pub struct SurfaceDetails {
+    pub geometry: TexGeometry,
+    pub mode: SurfaceMode,
+    pub vector: u8,
+    pub type_: ScalarType,
+    // .p (formatted) rather than .b
+    pub formatted: bool,
+    // sured: the operation (Add, And, Or, signed or unsigned Min / Max)
+    pub op: Option<AtomicOp>,
 }
