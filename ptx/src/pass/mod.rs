@@ -1474,6 +1474,7 @@ fn scalar_to_ptx_name(this: ast::ScalarType) -> &'static str {
         ast::ScalarType::F64 => "f64",
         ast::ScalarType::BF16 => "bf16",
         ast::ScalarType::BF16x2 => "bf16x2",
+        ast::ScalarType::F32x2 => "f32x2",
         ast::ScalarType::Pred => "pred",
         ast::ScalarType::E4m3x2 => "e4m3x2",
         ast::ScalarType::E5m2x2 => "e5m2x2",

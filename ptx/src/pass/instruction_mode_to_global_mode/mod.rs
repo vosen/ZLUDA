@@ -154,7 +154,8 @@ impl InstructionModes {
         denormal: Option<DenormalMode>,
         rounding: Option<RoundingMode>,
     ) -> Self {
-        if type_ != ast::ScalarType::F32 {
+        // packed f32x2 follows the f32 modes
+        if type_.packed_type().unwrap_or(type_) != ast::ScalarType::F32 {
             Self {
                 denormal_f16f64: denormal,
                 rounding_f16f64: rounding,

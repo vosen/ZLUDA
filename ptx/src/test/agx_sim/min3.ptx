@@ -1,0 +1,25 @@
+.version 8.8
+.target sm_100
+.address_size 64
+
+.visible .entry min3(.param .u64 out)
+{
+    .reg .u64 p;
+    .reg .f32 a, b, c, r;
+    ld.param.u64 p, [out];
+    mov.f32 a, 0f40400000;  // 3
+    mov.f32 b, 0fBF800000;  // -1
+    mov.f32 c, 0f40000000;  // 2
+    min.f32 r, a, b, c;
+    st.global.f32 [p+0], r;
+    max.f32 r, a, b, c;
+    st.global.f32 [p+4], r;
+    min.f32 r, a, c;
+    st.global.f32 [p+8], r;
+    mov.f32 c, 0f7FC00000;  // NaN
+    max.NaN.f32 r, a, b, c;
+    st.global.f32 [p+12], r;
+    max.f32 r, a, b, c;
+    st.global.f32 [p+16], r;
+    ret;
+}

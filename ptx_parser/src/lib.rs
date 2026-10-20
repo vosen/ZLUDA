@@ -3567,6 +3567,19 @@ derive_parser!(
     ScalarType =        { .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-add
+    // two f32 at once in a 64-bit register (sm_100)
+    add{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
+        ast::Instruction::Add {
+            data: ast::ArithDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
+                }),
+            arguments: AddArgs { dst: d, src1: a, src2: b }
+        }
+    }
     add{.rnd}{.ftz}{.sat}.f32  d, a, b => {
         Instruction::Add {
             data: ast::ArithDetails::Float(
@@ -3600,7 +3613,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType =        { .f32, .f64 };
+    ScalarType =        { .f32, .f32x2, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add
     add{.rnd}{.ftz}{.sat}.f16   d, a, b => {
@@ -3699,6 +3712,19 @@ derive_parser!(
                           .s16, .s32 };
     RawMulIntControl =  { .wide };
 
+    // two f32 at once in a 64-bit register (sm_100)
+    mul{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
+                }),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
     mul{.rnd}{.ftz}{.sat}.f32  d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
@@ -3728,7 +3754,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType = { .f32, .f64 };
+    ScalarType = { .f32, .f32x2, .f64 };
 
     mul{.rnd}{.ftz}{.sat}.f16   d, a, b => {
         ast::Instruction::Mul {
@@ -4262,6 +4288,19 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-fma
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-fma
+    // two f32 at once in a 64-bit register (sm_100)
+    fma.rnd{.ftz}{.sat}.f32x2  d, a, b, c => {
+        ast::Instruction::Fma {
+            data: ast::ArithFloat {
+                    type_: f32x2,
+                    rounding: rnd.into(),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: false
+                },
+            arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
     fma.rnd{.ftz}{.sat}.f32  d, a, b, c => {
         ast::Instruction::Fma {
             data: ast::ArithFloat {
@@ -4287,7 +4326,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType =            { .f32, .f64 };
+    ScalarType =            { .f32, .f32x2, .f64 };
 
     fma.rnd{.ftz}{.sat}.f16 d, a, b, c => {
         ast::Instruction::Fma {
@@ -4357,6 +4396,19 @@ derive_parser!(
                           .s16, .s32, .s64 };
     ScalarType = { .s32 };
 
+    // two f32 at once in a 64-bit register (sm_100)
+    sub{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
+        ast::Instruction::Sub {
+            data: ast::ArithDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none()
+                }),
+            arguments: SubArgs { dst: d, src1: a, src2: b }
+        }
+    }
     sub{.rnd}{.ftz}{.sat}.f32  d, a, b => {
         ast::Instruction::Sub {
             data: ast::ArithDetails::Float(
@@ -4386,7 +4438,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType = { .f32, .f64 };
+    ScalarType = { .f32, .f32x2, .f64 };
 
     sub{.rnd}{.ftz}{.sat}.f16   d, a, b => {
         ast::Instruction::Sub {

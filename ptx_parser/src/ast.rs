@@ -1878,7 +1878,7 @@ impl ScalarType {
             | ScalarType::S16x2
             | ScalarType::F16x2
             | ScalarType::BF16x2 => 4,
-            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 => 8,
+            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 | ScalarType::F32x2 => 8,
             ScalarType::B128 => 16,
             ScalarType::Pred => 1,
         }
@@ -1906,7 +1906,7 @@ impl ScalarType {
             | ScalarType::S16x2
             | ScalarType::F16x2
             | ScalarType::BF16x2 => Layout::new::<u32>(),
-            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 => {
+            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 | ScalarType::F32x2 => {
                 Layout::new::<u64>()
             }
             ScalarType::B128 => unsafe { Layout::from_size_align_unchecked(16, 16) },
@@ -1935,6 +1935,7 @@ impl ScalarType {
             ScalarType::F16 => ScalarKind::Float,
             ScalarType::F16x2 => ScalarKind::Float,
             ScalarType::F32 => ScalarKind::Float,
+            ScalarType::F32x2 => ScalarKind::Float,
             ScalarType::F64 => ScalarKind::Float,
             ScalarType::BF16 => ScalarKind::Float,
             ScalarType::BF16x2 => ScalarKind::Float,
@@ -1949,6 +1950,7 @@ impl ScalarType {
             ScalarType::E4m3x2 => Some(ScalarType::B8),
             ScalarType::E5m2x2 => Some(ScalarType::B8),
             ScalarType::F16x2 => Some(ScalarType::F16),
+            ScalarType::F32x2 => Some(ScalarType::F32),
             ScalarType::BF16x2 => Some(ScalarType::BF16),
             ScalarType::U16x2 => Some(ScalarType::U16),
             ScalarType::S16x2 => Some(ScalarType::S16),

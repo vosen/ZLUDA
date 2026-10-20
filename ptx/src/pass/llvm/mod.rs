@@ -43,6 +43,7 @@ fn get_scalar_type(context: LLVMContextRef, type_: ast::ScalarType) -> LLVMTypeR
         },
         ast::ScalarType::F16x2 => unsafe { LLVMVectorType(LLVMHalfTypeInContext(context), 2) },
         ast::ScalarType::BF16x2 => unsafe { LLVMVectorType(LLVMBFloatTypeInContext(context), 2) },
+        ast::ScalarType::F32x2 => unsafe { LLVMVectorType(LLVMFloatTypeInContext(context), 2) },
     }
 }
 

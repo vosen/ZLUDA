@@ -6824,6 +6824,7 @@ impl std::fmt::Display for LLVMTypeDisplay {
             ptx_parser::ScalarType::S16x2 | ptx_parser::ScalarType::U16x2 => write!(f, "v2i16"),
             ast::ScalarType::F16x2 => write!(f, "v2f16"),
             ptx_parser::ScalarType::BF16x2 => write!(f, "v2bf16"),
+            ptx_parser::ScalarType::F32x2 => write!(f, "v2f32"),
         }
     }
 }
