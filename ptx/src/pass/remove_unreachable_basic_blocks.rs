@@ -6,8 +6,12 @@ use petgraph::{
 };
 use rustc_hash::FxHashSet;
 
+/// Removes unreachable basic blocks, and the functions nothing calls or takes the address of. With
+/// `keep_visible`, `.visible` functions stay even when uncalled: another module may call them once linked
+/// (`cuLink*` on AGX).
 pub(crate) fn run(
     mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    keep_visible: bool,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut reachable_funcs = FxHashSet::default();
     for directive in directives.iter_mut() {
@@ -82,8 +86,14 @@ pub(crate) fn run(
             Directive2::Method(Function {
                 name,
                 kernel_attributes,
+                linkage,
+                body,
                 ..
-            }) => kernel_attributes.is_some() || reachable_funcs.contains(name),
+            }) => {
+                kernel_attributes.is_some()
+                    || reachable_funcs.contains(name)
+                    || (keep_visible && body.is_some() && linkage.contains(ast::LinkingDirective::VISIBLE))
+            }
         })
         .collect::<Vec<_>>())
 }

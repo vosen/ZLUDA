@@ -227,21 +227,40 @@ fn zoc_path() -> std::path::PathBuf {
 
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
+    compile_ptx_linked(&[ptx], cpu)
+}
+
+/// Compiles PTX modules into one AGX object: one module, or several linked together (`cuLink*`: functions declared
+/// `.extern` in one are defined `.visible` in another).
+pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8>, String), String> {
     let zoc = zoc_path();
     let stamp = std::fs::metadata(&zoc)
         .and_then(|m| m.modified())
         .map(|t| format!("{t:?}"))
         .unwrap_or_default();
     let compiler = format!("zoc {} {stamp}", zoc.display());
-    let key = Key { source: ptx, chip: cpu, compiler: &compiler, options: &[] };
+    // the cache key of a link is every source, each prefixed with its length
+    let joined;
+    let source: &[u8] = if let [one] = sources {
+        one
+    } else {
+        joined = sources.iter().flat_map(|s| (s.len() as u64).to_le_bytes().into_iter().chain(s.iter().copied())).collect::<Vec<u8>>();
+        &joined
+    };
+    let options: &[&str] = if sources.len() > 1 { &["link"] } else { &[] };
+    let key = Key { source, chip: cpu, compiler: &compiler, options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-        let src = dir.path().join("module.ptx");
-        std::fs::write(&src, ptx).map_err(|e| e.to_string())?;
+        let mut paths = Vec::new();
+        for (i, ptx) in sources.iter().enumerate() {
+            let src = dir.path().join(if i == 0 { "module.ptx".to_string() } else { format!("module_{i}.ptx") });
+            std::fs::write(&src, ptx).map_err(|e| e.to_string())?;
+            paths.push(src);
+        }
         let out = std::process::Command::new(&zoc)
             .args(["--target", "agx", "--arch", cpu, "--output-dir"])
             .arg(dir.path())
-            .arg(&src)
+            .args(&paths)
             .output()
             .map_err(|e| format!("{}: {e}", zoc.display()))?;
         let object = std::fs::read(dir.path().join("module.o"))
@@ -563,6 +582,151 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
         Ok(h)
     })?;
     out(module, CUmodule(h as *mut _))
+}
+
+pub(crate) unsafe fn cuModuleLoadDataEx(
+    module: *mut CUmodule,
+    image: *const c_void,
+    _num_options: c_uint,
+    _options: *mut CUjit_option,
+    _values: *mut *mut c_void,
+) -> CUresult {
+    // the JIT options (log buffers, optimization level, ...) change nothing here
+    cuModuleLoadData(module, image)
+}
+
+pub(crate) unsafe fn cuModuleLoadFatBinary(module: *mut CUmodule, image: *const c_void) -> CUresult {
+    cuModuleLoadData(module, image)
+}
+
+pub(crate) unsafe fn cuModuleLoad(module: *mut CUmodule, fname: *const c_char) -> CUresult {
+    if fname.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let path = std::path::PathBuf::from(CStr::from_ptr(fname).to_string_lossy().into_owned());
+    let mut data = std::fs::read(&path).map_err(|_| CUerror::FILE_NOT_FOUND)?;
+    data.push(0);
+    cuModuleLoadData(module, data.as_ptr() as *const c_void)
+}
+
+/// A `cuLink*` session: the PTX of each input, then the linked AGX object.
+#[derive(Default)]
+struct Link {
+    ptx: Vec<Vec<u8>>,
+    /// An AGX object given as the only input passes through unchanged.
+    object: Option<Vec<u8>>,
+    linked: Option<Vec<u8>>,
+}
+
+pub(crate) unsafe fn cuLinkCreate_v2(
+    _num_options: c_uint,
+    _options: *mut CUjit_option,
+    _values: *mut *mut c_void,
+    state: *mut CUlinkState,
+) -> CUresult {
+    out(state, Box::into_raw(Box::<Link>::default()) as CUlinkState)
+}
+
+unsafe fn link_add(state: CUlinkState, ty: CUjitInputType, data: &[u8]) -> CUresult {
+    let link = (state as *mut Link).as_mut().ok_or(CUerror::INVALID_HANDLE)?;
+    match ty {
+        CUjitInputType::CU_JIT_INPUT_PTX => {
+            let end = data.iter().position(|&b| b == 0).unwrap_or(data.len());
+            link.ptx.push(data[..end].to_vec());
+        }
+        CUjitInputType::CU_JIT_INPUT_FATBINARY => {
+            let mut ptx = ptx_in_fatbin(data.as_ptr())?;
+            ptx.pop();
+            link.ptx.push(ptx);
+        }
+        CUjitInputType::CU_JIT_INPUT_CUBIN | CUjitInputType::CU_JIT_INPUT_OBJECT if data.starts_with(b"\x7fELF") => {
+            // AGX objects are final: one can only be "linked" alone
+            if link.object.is_some() {
+                return Err(CUerror::NOT_SUPPORTED);
+            }
+            link.object = Some(data.to_vec());
+        }
+        CUjitInputType::CU_JIT_INPUT_CUBIN | CUjitInputType::CU_JIT_INPUT_OBJECT | CUjitInputType::CU_JIT_INPUT_LIBRARY => {
+            // NVIDIA machine code, or an archive of it
+            return Err(CUerror::NO_BINARY_FOR_GPU);
+        }
+        _ => return Err(CUerror::NOT_SUPPORTED),
+    }
+    Ok(())
+}
+
+pub(crate) unsafe fn cuLinkAddData_v2(
+    state: CUlinkState,
+    ty: CUjitInputType,
+    data: *mut c_void,
+    size: usize,
+    _name: *const c_char,
+    _num_options: c_uint,
+    _options: *mut CUjit_option,
+    _values: *mut *mut c_void,
+) -> CUresult {
+    if data.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    // a fat binary's size comes from its header
+    let size = if size == 0 && ty == CUjitInputType::CU_JIT_INPUT_PTX {
+        CStr::from_ptr(data as *const c_char).to_bytes().len()
+    } else {
+        size
+    };
+    if ty == CUjitInputType::CU_JIT_INPUT_FATBINARY {
+        let link = (state as *mut Link).as_mut().ok_or(CUerror::INVALID_HANDLE)?;
+        let mut ptx = ptx_in_fatbin(data as *const u8)?;
+        ptx.pop();
+        link.ptx.push(ptx);
+        return Ok(());
+    }
+    link_add(state, ty, std::slice::from_raw_parts(data as *const u8, size))
+}
+
+pub(crate) unsafe fn cuLinkAddFile_v2(
+    state: CUlinkState,
+    ty: CUjitInputType,
+    path: *const c_char,
+    _num_options: c_uint,
+    _options: *mut CUjit_option,
+    _values: *mut *mut c_void,
+) -> CUresult {
+    if path.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let data = std::fs::read(CStr::from_ptr(path).to_string_lossy().as_ref()).map_err(|_| CUerror::FILE_NOT_FOUND)?;
+    link_add(state, ty, &data)
+}
+
+pub(crate) unsafe fn cuLinkComplete(state: CUlinkState, cubin: *mut *mut c_void, size: *mut usize) -> CUresult {
+    let link = (state as *mut Link).as_mut().ok_or(CUerror::INVALID_HANDLE)?;
+    let object = match (&link.object, link.ptx.len()) {
+        (Some(o), 0) => o.clone(),
+        (Some(_), _) => return Err(CUerror::NOT_SUPPORTED),
+        (None, 0) => return Err(CUerror::INVALID_VALUE),
+        (None, _) => {
+            let cpu = with(|d| Ok(d.ctx.props.llvm_cpu.clone()))?;
+            let sources: Vec<&[u8]> = link.ptx.iter().map(|p| &p[..]).collect();
+            compile_ptx_linked(&sources, &cpu)
+                .map_err(|e| {
+                    eprintln!("zluda_agx: {e}");
+                    CUerror::INVALID_PTX
+                })?
+                .0
+        }
+    };
+    let linked = link.linked.insert(object);
+    out(cubin, linked.as_mut_ptr() as *mut c_void)?;
+    out(size, linked.len())
+}
+
+pub(crate) unsafe fn cuLinkDestroy(state: CUlinkState) -> CUresult {
+    if state.is_null() {
+        return Err(CUerror::INVALID_HANDLE);
+    }
+    drop(Box::from_raw(state as *mut Link));
+    Ok(())
 }
 
 pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
@@ -1533,5 +1697,43 @@ mod tests {
     fn error_names() {
         assert_eq!(error_name(code(Err(CUerror::ASSERT))).to_str().unwrap(), "CUDA_ERROR_ASSERT");
         assert_eq!(error_name(code(Ok(()))).to_str().unwrap(), "CUDA_SUCCESS");
+    }
+}
+
+#[cfg(test)]
+mod link_tests {
+    /// Links `extern_func.ptx` (which calls an `.extern` function) with a module defining it. Needs zoc
+    /// (`ZLUDA_AGX_ZOC`, or `target/<profile>/zoc`); skipped without it.
+    #[test]
+    fn links_an_extern_function() {
+        let exe = std::env::current_exe().unwrap();
+        let zoc = exe.parent().and_then(|d| d.parent()).map(|d| d.join("zoc"));
+        match (std::env::var_os("ZLUDA_AGX_ZOC"), zoc) {
+            (Some(_), _) => {}
+            (None, Some(z)) if z.exists() => std::env::set_var("ZLUDA_AGX_ZOC", z),
+            _ => return eprintln!("no zoc: skipped"),
+        }
+        let main = include_bytes!("../../ptx/src/test/spirv_run/extern_func.ptx");
+        let lib = b".version 6.5
+.target sm_30
+.address_size 64
+.visible .func (.param .align 16 .b8 r[16]) foobar(.param .b64 x)
+{
+    .reg .u64 a;
+    ld.param.u64 a, [x];
+    add.u64 a, a, 1;
+    st.param.u64 [r+0], a;
+    ret;
+}
+.visible .entry other(.param .u64 p)
+{
+    ret;
+}
+";
+        let (object, asm) = super::compile_ptx_linked(&[main, lib], "agx-g14c").unwrap();
+        let m = agx_runtime::module::Module::load(&object, &asm).unwrap();
+        assert!(m.kernels.contains_key("extern_func") && m.kernels.contains_key("other"), "{:?}", m.kernels.keys());
+        // alone, the call has no definition
+        assert!(super::compile_ptx(main, "agx-g14c").is_err());
     }
 }

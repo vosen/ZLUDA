@@ -14,7 +14,7 @@ use crate::{
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
     LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
-    LLVMIsDeclaration, LLVMSetLinkage, LLVMSetVisibility,
+    LLVMGetVisibility, LLVMIsDeclaration, LLVMSetLinkage, LLVMSetVisibility,
 };
 use llvm_sys::{LLVMLinkage, LLVMVisibility};
 use llvm_sys::prelude::LLVMDiagnosticInfoRef;
@@ -123,6 +123,21 @@ fn internalize_helpers(module: &Module) {
     }
 }
 
+/// A linked image is complete: its functions (hidden, as the PTX translation emits every non-kernel function)
+/// become internal, so that they are inlined into the kernels and the unused ones disappear.
+fn internalize_functions(module: &Module) {
+    unsafe {
+        let mut function = LLVMGetFirstFunction(module.get());
+        while !function.is_null() {
+            if LLVMIsDeclaration(function) == 0 && LLVMGetVisibility(function) == LLVMVisibility::LLVMHiddenVisibility {
+                LLVMSetLinkage(function, LLVMLinkage::LLVMInternalLinkage);
+                LLVMSetVisibility(function, LLVMVisibility::LLVMDefaultVisibility);
+            }
+            function = LLVMGetNextFunction(function);
+        }
+    }
+}
+
 /// Link `main` with the AGX implementation of ZLUDA's PTX helper functions
 /// (`ptx_impl`, textual IR or bitcode),
 /// optimize, and generate code for the AGX processor `cpu` (for example
@@ -136,12 +151,33 @@ pub fn compile_agx(
     ptx_impl: &[u8],
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<AgxCompilation, String> {
+    compile_agx_linked(ctx, cpu, strict_fp, main, &[], ptx_impl, compiler_hook)
+}
+
+/// `compile_agx` for several PTX modules linked into one object (`cuLink*`): `others` are the LLVM IR (text or
+/// bitcode) of the modules after the first, whose functions and kernels all stay.
+pub fn compile_agx_linked(
+    ctx: &Context,
+    cpu: &str,
+    strict_fp: bool,
+    main: Module,
+    others: &[&[u8]],
+    ptx_impl: &[u8],
+    compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
+) -> Result<AgxCompilation, String> {
     init_globals()?;
     let diagnostics = Diagnostics::new(ctx);
 
     let linked = Module::new(ctx, c"llvm-link");
     let ptx_impl = load_module(ctx, ptx_impl, c"zluda_ptx_impl_agx.ll")?;
     linked.link(main)?;
+    for (i, ir) in others.iter().enumerate() {
+        let name = std::ffi::CString::new(format!("linked_module_{}", i + 1)).unwrap();
+        linked.link(load_module(ctx, ir, &name)?)?;
+    }
+    if !others.is_empty() {
+        internalize_functions(&linked);
+    }
     linked.link(ptx_impl)?;
     internalize_helpers(&linked);
     unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };

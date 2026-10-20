@@ -189,8 +189,23 @@ that the Registers word encodes 256 halves as 0, are Mesa's and not yet
 confirmed there (`tasks/ptx-re-blockers.md`, B26).
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
-run tests for AGX: 194 of 195 compile. `extern_func` calls a function defined
-in another module, which needs linking (`cuLink*`), not supported yet.
+run tests for AGX: 194 of 195 compile on their own. The other, `extern_func`,
+calls a function defined in another module: it compiles when linked with one
+(`cuLink*`, below).
+
+### Linking (`cuLink*`)
+
+`cuLinkCreate` / `cuLinkAddData` / `cuLinkAddFile` / `cuLinkComplete` take
+PTX (or the PTX of a fat binary) and link it into one AGX object, which
+`cuModuleLoadData` then loads: `zoc` translates each module, links them as
+LLVM IR (the `.extern` declarations of one resolve to the `.visible`
+definitions of another) and makes every non-kernel function internal, so that
+the calls are inlined as AGX requires. On AGX, `.visible` functions are kept
+even when their own module does not call them. An AGX object can be "linked"
+only on its own, and NVIDIA objects or libraries (`CU_JIT_INPUT_CUBIN`,
+`OBJECT`, `LIBRARY` holding SASS) return `CUDA_ERROR_NO_BINARY_FOR_GPU`.
+`zoc` links the same way when given several PTX files. `cuModuleLoad` (a
+file) and `cuModuleLoadDataEx` (JIT options ignored) are supported too.
 
 ## Warp-level matrix instructions
 

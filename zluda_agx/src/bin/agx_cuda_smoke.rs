@@ -2,7 +2,8 @@
 //! CUDA application would (cuInit ... cuModuleLoadData, cuLaunchKernel, cuMemcpyDtoH, events), and checks the
 //! result; then replays it as a CUDA graph, runs it on managed and mapped host memory, and does a 2D copy. Without
 //! an argument the PTX is compiled by zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH); with one, that AGX
-//! object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Prints one JSON line.
+//! object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Without an argument it also links
+//! two PTX modules with cuLink* and runs the result (`link_ok`). Prints one JSON line.
 
 use cuda_types::cuda::*;
 use nvcuda_agx::*;
@@ -10,6 +11,20 @@ use std::ffi::{c_void, CStr};
 use std::ptr::null_mut;
 
 const PTX: &str = concat!(include_str!("../../../ptx/src/test/_Z9vectorAddPKfS0_Pfi.ptx"), "\0");
+/// cuLink: a kernel calling an `.extern` function, and a module defining it (x + 1).
+const LINK_MAIN: &str = concat!(include_str!("../../../ptx/src/test/spirv_run/extern_func.ptx"), "\0");
+const LINK_LIB: &str = ".version 6.5
+.target sm_30
+.address_size 64
+.visible .func (.param .align 16 .b8 r[16]) foobar(.param .b64 x)
+{
+    .reg .u64 a;
+    ld.param.u64 a, [x];
+    add.u64 a, a, 1;
+    st.param.u64 [r+0], a;
+    ret;
+}
+\0";
 
 fn check(what: &str, r: CUresult) {
     if let Err(e) = r {
@@ -136,13 +151,44 @@ fn main() {
         check("cuMemcpy2D", cuMemcpy2D_v2(&cb));
         let copy2d_wrong = (0..w * h).filter(|&i| back[i] != src[(2 + i / w) * 64 + 3 + i % w]).count();
 
+        // cuLink (needs zoc, so only without an object argument): extern_func(in = 7) -> foobar(7) = 8
+        let link_ok = if object.is_some() {
+            "null".to_string()
+        } else {
+            let mut state = null_mut();
+            check("cuLinkCreate", cuLinkCreate_v2(0, null_mut(), null_mut(), &mut state));
+            for (src, name) in [(LINK_MAIN, c"main.ptx"), (LINK_LIB, c"lib.ptx")] {
+                check(
+                    "cuLinkAddData",
+                    cuLinkAddData_v2(state, CUjitInputType::CU_JIT_INPUT_PTX, src.as_ptr() as *mut c_void, src.len(), name.as_ptr(), 0, null_mut(), null_mut()),
+                );
+            }
+            let (mut cubin, mut size) = (null_mut(), 0usize);
+            check("cuLinkComplete", cuLinkComplete(state, &mut cubin, &mut size));
+            let mut linked = CUmodule(null_mut());
+            check("cuModuleLoadData(linked)", cuModuleLoadData(&mut linked, cubin));
+            check("cuLinkDestroy", cuLinkDestroy(state));
+            let mut lf = CUfunction(null_mut());
+            check("cuModuleGetFunction(extern_func)", cuModuleGetFunction(&mut lf, linked, c"extern_func".as_ptr()));
+            let (mut din, mut dout) = (CUdeviceptr_v2(null_mut()), CUdeviceptr_v2(null_mut()));
+            check("cuMemAlloc", cuMemAlloc_v2(&mut din, 8));
+            check("cuMemAlloc", cuMemAlloc_v2(&mut dout, 8));
+            let seven = 7u64;
+            check("cuMemcpyHtoD", cuMemcpyHtoD_v2(din, &seven as *const u64 as *const c_void, 8));
+            let mut lp: [*mut c_void; 2] = [&mut din as *mut _ as *mut c_void, &mut dout as *mut _ as *mut c_void];
+            check("cuLaunchKernel(extern_func)", cuLaunchKernel(lf, 1, 1, 1, 1, 1, 1, 0, stream, lp.as_mut_ptr(), null_mut()));
+            let mut got = 0u64;
+            check("cuMemcpyDtoH", cuMemcpyDtoH_v2(&mut got as *mut u64 as *mut c_void, dout, 8));
+            (got == 8).to_string()
+        };
+
         let name = CStr::from_ptr(name.as_ptr()).to_string_lossy();
         println!(
-            "{{\"device\":{name:?},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"unified\":{},\"unified_wrong\":{unified_wrong},\"copy2d_wrong\":{copy2d_wrong},\"kernel_ms\":{ms}}}",
+            "{{\"device\":{name:?},\"link_ok\":{link_ok},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"unified\":{},\"unified_wrong\":{unified_wrong},\"copy2d_wrong\":{copy2d_wrong},\"kernel_ms\":{ms}}}",
             managed && mapped
         );
         // unified memory needs the CPU range of the GPU addresses to be free; its absence is reported, not a failure
-        let ok = wrong == 0 && graph_wrong == 0 && unified_wrong <= 0 && copy2d_wrong == 0;
+        let ok = wrong == 0 && graph_wrong == 0 && unified_wrong <= 0 && copy2d_wrong == 0 && link_ok != "false";
         std::process::exit(if ok { 0 } else { 2 });
     }
 }

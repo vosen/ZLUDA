@@ -155,7 +155,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("replace_instructions_with_functions_fp_required");
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     on_pass_end("normalize_basic_blocks");
-    let directives = remove_unreachable_basic_blocks::run(directives)?;
+    let directives = remove_unreachable_basic_blocks::run(directives, target == Target::Agx)?;
     on_pass_end("remove_unreachable_basic_blocks");
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");

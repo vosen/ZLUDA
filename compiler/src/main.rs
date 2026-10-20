@@ -42,9 +42,10 @@ pub struct Options {
     /// in software where the hardware differs. Slower
     strict_fp: bool,
 
-    #[bpaf(positional("filename"))]
-    /// PTX file
-    ptx_path: String,
+    #[bpaf(positional("filename"), some("a PTX file"))]
+    /// PTX files. AGX links several into one object (their kernels and
+    /// functions, as cuLink does); the outputs are named after the first
+    ptx_paths: Vec<String>,
 }
 
 fn main() -> ExitCode {
@@ -58,7 +59,8 @@ fn main() -> ExitCode {
 fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
 
-    let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
+    let ptx_path = Path::new(&opts.ptx_paths[0]).to_path_buf();
+    let others: Vec<PathBuf> = opts.ptx_paths[1..].iter().map(PathBuf::from).collect();
     let filename_base = ptx_path
         .file_name()
         .map(|osstr| osstr.to_str().unwrap_or("output"))
@@ -91,6 +93,7 @@ fn main_core() -> Result<(), CompilerError> {
     if target == ptx::Target::Agx {
         return compile_agx(
             &ptx_path,
+            &others,
             &output_path,
             opts.arch,
             opts.ignore_errors,
@@ -98,6 +101,12 @@ fn main_core() -> Result<(), CompilerError> {
         );
     }
 
+    if !others.is_empty() {
+        return Err(CompilerError::GenericError {
+            cause: None,
+            message: "linking several PTX files is only implemented for agx".to_string(),
+        });
+    }
     let arch: String = match opts.arch {
         Some(s) => s,
         None => (|| {
@@ -168,6 +177,7 @@ fn compile_amdgpu(
 #[cfg(feature = "agx")]
 fn compile_agx(
     ptx_path: &Path,
+    others: &[PathBuf],
     output_path: &Path,
     arch: Option<String>,
     ignore_errors: bool,
@@ -185,16 +195,32 @@ fn compile_agx(
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+    // the other modules, translated on their own and linked as LLVM IR
+    let mut other_ir = Vec::new();
+    for path in others {
+        let ptx = fs::read(path)?;
+        let other = ptx_to_llvm(
+            ignore_errors,
+            str::from_utf8(&ptx)?,
+            ptx::Options {
+                target: ptx::Target::Agx,
+                strict_fp,
+            },
+        )?;
+        other_ir.push(other.llvm_ir);
+    }
+    let other_ir: Vec<&[u8]> = other_ir.iter().map(|v| &v[..]).collect();
     let compiler_hook = |bytes: &Vec<u8>, extension: String| {
         let output_path = output_path.with_extension(extension);
         write_to_file(bytes, &output_path).unwrap();
     };
     let mut start = Instant::now();
-    llvm_zluda::compile_agx(
+    llvm_zluda::compile_agx_linked(
         &llvm.context,
         &arch,
         strict_fp,
         llvm.main,
+        &other_ir,
         llvm.linked_bitcode,
         Some(&compiler_hook),
     )
@@ -209,6 +235,7 @@ fn compile_agx(
 #[cfg(not(feature = "agx"))]
 fn compile_agx(
     _ptx_path: &Path,
+    _others: &[PathBuf],
     _output_path: &Path,
     _arch: Option<String>,
     _ignore_errors: bool,
