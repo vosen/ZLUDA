@@ -69,6 +69,9 @@ pub struct Module {
     pub kernels: HashMap<String, KernelInfo>,
     /// Offset and size of each named object in the global data buffer.
     pub global_symbols: HashMap<String, (u64, u64)>,
+    /// Words of the global data buffer that hold addresses in it: (offset, width in bytes, target offset). The
+    /// loader adds the buffer's address (`Module::relocated_globals`).
+    pub global_relocs: Vec<(u64, u8, u64)>,
 }
 
 struct Elf<'a> {
@@ -117,6 +120,34 @@ impl<'a> Elf<'a> {
             .map(|(n, t, o, s, l, e)| Ok((cstr(data, strtab + n)?, t, o, s, l, e)))
             .collect::<Result<_, Error>>()?;
         Ok(Elf { data, sections })
+    }
+
+    /// Relocations of `.agx.globals`, which may only point into it: R_AGX_ABS64 (1) and R_AGX_ABS32 (2), S + A.
+    fn global_relocs(&self) -> Result<Vec<(u64, u8, u64)>, Error> {
+        let Some(target) = self.sections.iter().position(|s| s.0 == ".agx.globals") else { return Ok(Vec::new()) };
+        let Some(rela) = self.sections.iter().find(|s| s.0 == ".rela.agx.globals" && s.1 == 4) else {
+            return Ok(Vec::new());
+        };
+        let symtab = self.sections.get(rela.4 as usize).ok_or_else(|| Error("bad relocation symbol table".into()))?;
+        let size = self.sections[target].3;
+        let mut out = Vec::new();
+        for i in 0..rela.3 / 24 {
+            let e = rela.2 + i * 24;
+            let (offset, info, addend) = (rd(self.data, e, 8)?, rd(self.data, e + 8, 8)?, rd(self.data, e + 16, 8)?);
+            let sym = symtab.2 + (info >> 32) * symtab.5.max(24);
+            let (shndx, value) = (rd(self.data, sym + 6, 2)?, rd(self.data, sym + 8, 8)?);
+            let width = match info as u32 {
+                1 => 8,
+                2 => 4,
+                t => return err(format!("unsupported relocation type {t} in .agx.globals")),
+            };
+            let to = value.wrapping_add(addend);
+            if shndx as usize != target || to > size || offset + width as u64 > size {
+                return err("a relocation of .agx.globals points outside it (external symbols are not supported)");
+            }
+            out.push((offset, width, to));
+        }
+        Ok(out)
     }
 
     fn section(&self, name: &str) -> Option<&[u8]> {
@@ -282,7 +313,18 @@ impl Module {
             return err("no kernels with resource comments");
         }
         let global_symbols = elf.symbols(".agx.globals", 1)?.into_iter().map(|(n, v, s)| (n, (v, s))).collect();
-        Ok(Module { text, globals, kernels, global_symbols })
+        let global_relocs = elf.global_relocs()?;
+        Ok(Module { text, globals, kernels, global_symbols, global_relocs })
+    }
+
+    /// The initial global data buffer once placed at `va`, with its relocations applied.
+    pub fn relocated_globals(&self, va: u64) -> Vec<u8> {
+        let mut g = self.globals.clone();
+        for &(offset, width, to) in &self.global_relocs {
+            let v = (va + to).to_le_bytes();
+            g[offset as usize..offset as usize + width as usize].copy_from_slice(&v[..width as usize]);
+        }
+        g
     }
 }
 
@@ -427,6 +469,18 @@ mod tests {
         };
         let d = crate::printf::drain(&g[off as usize..(off + size) as usize], read);
         assert_eq!(d.text, b"42\n");
+    }
+
+    // tests/data/global-relocs.ll: a global array of addresses of other globals.
+    #[test]
+    fn relocates_addresses_in_global_data() {
+        let m = Module::load_object(include_bytes!("../tests/data/global-relocs.o")).unwrap();
+        let (x, y, p) = (m.global_symbols["x"].0, m.global_symbols["y"].0, m.global_symbols["p"].0);
+        assert_eq!(m.global_relocs, [(p, 8, x), (p + 8, 8, y)]);
+        let g = m.relocated_globals(0x10_0000_0000);
+        let word = |o: u64| u64::from_le_bytes(g[o as usize..o as usize + 8].try_into().unwrap());
+        assert_eq!((word(p), word(p + 8)), (0x10_0000_0000 + x, 0x10_0000_0000 + y));
+        assert_eq!((word(x), word(y + 8)), (1, 5));
     }
 
     // tests/data/byref.ll: the backend's .agx.kernels records, and packing cuLaunchKernel-style parameters.

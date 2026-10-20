@@ -49,7 +49,9 @@ The assembly lists the resources of each kernel: uniform registers,
 general purpose registers, threadgroup memory, stack and, when the module has
 `.global` or `.const` variables, the uniform registers holding the address of
 the global data buffer (whose initial contents are the `.agx.globals`
-section). See `llvm/docs/AGXUsage.rst` in the LLVM fork for the kernel ABI.
+section). Variables initialized with addresses of other variables have
+`R_AGX_ABS64` / `R_AGX_ABS32` relocations in `.rela.agx.globals`, which
+`agx_runtime` applies once it has placed the buffer. See `llvm/docs/AGXUsage.rst` in the LLVM fork for the kernel ABI.
 
 M4, M5 and A18 (`agx-g16*`, `agx-g17*`) use an instruction encoding that is
 not documented well enough to generate code; compiling for them fails with
@@ -163,8 +165,8 @@ three differences.
   (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
-run tests for AGX: 193 of 195 compile, and the remaining ones use the
-features above.
+run tests for AGX: 194 of 195 compile. `extern_func` calls a function defined
+in another module, which needs linking (`cuLink*`), not supported yet.
 
 ## Warp-level matrix instructions
 
@@ -411,7 +413,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Area | Status |
 | --- | --- |
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
-| PTX | 193 of 195 ZLUDA run tests compile. Missing: textures and surfaces, a few warp-level and bulk-copy forms. |
+| PTX | 194 of 195 ZLUDA run tests compile (not `extern_func`, which needs linking). Missing: textures and surfaces, a few warp-level and bulk-copy forms. |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` / strict mode for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
 | Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
 | Memory model | fences of every scope lower to measured barrier sequences |

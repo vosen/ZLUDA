@@ -882,7 +882,8 @@ impl LoadedModule {
             None
         } else {
             let mut g = vm.alloc_data(module.globals.len() as u64)?;
-            g.as_mut_slice()[..module.globals.len()].copy_from_slice(&module.globals);
+            let init = module.relocated_globals(g.va);
+            g.as_mut_slice()[..init.len()].copy_from_slice(&init);
             Some(g)
         };
         Ok(LoadedModule { module, code, entries, globals })
