@@ -99,6 +99,8 @@ an error.
   denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
   `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (with
   round to nearest; a directed `.relu` fma is not implemented).
+  `lop3` (any lookup table, also in a register, and the predicate output
+  form `lop3.and`/`lop3.or`) is the OR of the table's minterms.
   `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
   all-ones lanes where the comparison holds.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on

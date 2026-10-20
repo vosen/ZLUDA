@@ -205,6 +205,28 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Lop3 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Option<SetpBoolPostOp>,
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src1: T,
+                src2: T,
+                src3: T,
+                src_lut: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+            }
+        },
         Szext {
             type: { Type::Scalar(data.type_) },
             data: SzextDetails,

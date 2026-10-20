@@ -194,6 +194,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Popc { .. }
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Szext { .. }
+        | ast::Instruction::Lop3 { .. }
         | ast::Instruction::Fns { .. }
         | ast::Instruction::Rcp { .. }
         | ast::Instruction::Rem { .. }

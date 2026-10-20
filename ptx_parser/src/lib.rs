@@ -5481,6 +5481,25 @@ derive_parser!(
     }
     .mode: BmskMode = { .clamp, .wrap };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-lop3
+    lop3.b32  d, a, b, c, lut => {
+        ast::Instruction::Lop3 {
+            data: None,
+            arguments: Lop3Args { dst: d, dst_pred: None, src1: a, src2: b, src3: c, src_lut: lut, src_pred: None },
+        }
+    }
+    // the predicate output form (PTX ISA 8.2): p = (d != 0) BoolOp q
+    lop3.BoolOp.b32  d[|p], a, b, c, lut, q => {
+        if p.is_none() {
+            state.errors.push(PtxError::SyntaxError("lop3.BoolOp needs a predicate destination".to_string()));
+        }
+        ast::Instruction::Lop3 {
+            data: Some(boolop),
+            arguments: Lop3Args { dst: d, dst_pred: p, src1: a, src2: b, src3: c, src_lut: lut, src_pred: Some(q) },
+        }
+    }
+    .BoolOp: SetpBoolPostOp = { .and, .or };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-szext
     szext.mode.type  d, a, b => {
         ast::Instruction::Szext {

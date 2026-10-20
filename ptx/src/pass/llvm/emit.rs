@@ -834,6 +834,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Ex2 { data, arguments } => self.emit_ex2(data, arguments),
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
             ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
+            ast::Instruction::Lop3 { data, arguments } => self.emit_lop3(data, arguments),
             ast::Instruction::Bmsk {
                 data: ast::BmskMode::Wrap,
                 arguments,
@@ -6368,6 +6369,53 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     // bmsk.wrap.b32 d, a, b: b one bits starting at bit a, both taken modulo 32
+    // lop3: bit i of the lookup table is the result for the inputs (a, b, c) = (i >> 2, i >> 1, i) & 1, the
+    // minterms of PTX's ta = 0xF0, tb = 0xCC, tc = 0xAA. The table may be a register, so every minterm is masked by
+    // its bit; a constant table folds away.
+    fn emit_lop3(
+        &mut self,
+        data: Option<ast::SetpBoolPostOp>,
+        arguments: ast::Lop3Args<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let (x, y, z) = (
+            self.resolver.value(arguments.src1)?,
+            self.resolver.value(arguments.src2)?,
+            self.resolver.value(arguments.src3)?,
+        );
+        let lut = self.resolver.value(arguments.src_lut)?;
+        let result = unsafe {
+            let c = |v: u64| LLVMConstInt(i32_type, v, 0);
+            let not = |v: LLVMValueRef| LLVMBuildNot(b, v, LLVM_UNNAMED.as_ptr());
+            let mut acc = c(0);
+            for i in 0..8u64 {
+                let a = if i & 4 != 0 { x } else { not(x) };
+                let bb = if i & 2 != 0 { y } else { not(y) };
+                let cc = if i & 1 != 0 { z } else { not(z) };
+                let term = LLVMBuildAnd(b, LLVMBuildAnd(b, a, bb, LLVM_UNNAMED.as_ptr()), cc, LLVM_UNNAMED.as_ptr());
+                // all ones when bit i of the table is set
+                let bit = LLVMBuildAnd(b, LLVMBuildLShr(b, lut, c(i), LLVM_UNNAMED.as_ptr()), c(1), LLVM_UNNAMED.as_ptr());
+                let mask = LLVMBuildSub(b, c(0), bit, LLVM_UNNAMED.as_ptr());
+                acc = LLVMBuildOr(b, acc, LLVMBuildAnd(b, term, mask, LLVM_UNNAMED.as_ptr()), LLVM_UNNAMED.as_ptr());
+            }
+            acc
+        };
+        self.resolver.register(arguments.dst, result);
+        if let (Some(op), Some(p), Some(q)) = (data, arguments.dst_pred, arguments.src_pred) {
+            let q = self.resolver.value(q)?;
+            unsafe {
+                let nonzero = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntNE, result, LLVMConstInt(i32_type, 0, 0), LLVM_UNNAMED.as_ptr());
+                self.resolver.with_result(p, |name| match op {
+                    ast::SetpBoolPostOp::And => LLVMBuildAnd(b, nonzero, q, name),
+                    ast::SetpBoolPostOp::Or => LLVMBuildOr(b, nonzero, q, name),
+                    ast::SetpBoolPostOp::Xor => LLVMBuildXor(b, nonzero, q, name),
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn emit_bmsk_wrap(&mut self, arguments: ast::BmskArgs<SpirvWord>) -> Result<(), TranslateError> {
         let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
         let position = self.resolver.value(arguments.src_a)?;
