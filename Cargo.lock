@@ -5294,6 +5294,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_fft_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_inject"
 version = "0.0.0"
 dependencies = [

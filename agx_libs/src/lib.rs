@@ -15,6 +15,8 @@ static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
 static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxfat"));
 /// The 2-D convolution kernels of zluda_dnn_agx (`kernels/conv.mlir`).
 pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
+/// The FFT kernels of zluda_fft_agx (`kernels/fft.mlir`).
+pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 
 /// Element types of A and B, and of C.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -132,6 +134,9 @@ pub mod engine {
     type MemcpyDtoH = unsafe extern "system" fn(*mut c_void, CUdeviceptr, usize) -> CUresult;
     type MemcpyDtoDAsync = unsafe extern "system" fn(CUdeviceptr, CUdeviceptr, usize, CUstream) -> CUresult;
     type CtxGetCurrent = unsafe extern "system" fn(*mut CUcontext) -> CUresult;
+    type MemAlloc = unsafe extern "system" fn(*mut CUdeviceptr, usize) -> CUresult;
+    type MemFree = unsafe extern "system" fn(CUdeviceptr) -> CUresult;
+    type MemcpyHtoD = unsafe extern "system" fn(CUdeviceptr, *const c_void, usize) -> CUresult;
 
     /// The driver API of the process's libcuda (zluda_agx).
     struct Driver {
@@ -142,6 +147,9 @@ pub mod engine {
         dtoh: MemcpyDtoH,
         dtod: MemcpyDtoDAsync,
         current: CtxGetCurrent,
+        alloc: MemAlloc,
+        free: MemFree,
+        htod: MemcpyHtoD,
     }
 
     fn driver() -> Result<&'static Driver, Error> {
@@ -156,6 +164,9 @@ pub mod engine {
                 dtoh: *lib.get(b"cuMemcpyDtoH_v2\0").ok()?,
                 dtod: *lib.get(b"cuMemcpyDtoDAsync_v2\0").ok()?,
                 current: *lib.get(b"cuCtxGetCurrent\0").ok()?,
+                alloc: *lib.get(b"cuMemAlloc_v2\0").ok()?,
+                free: *lib.get(b"cuMemFree_v2\0").ok()?,
+                htod: *lib.get(b"cuMemcpyHtoD_v2\0").ok()?,
                 _lib: lib,
             })
         })
@@ -253,6 +264,25 @@ pub mod engine {
     /// Launches `f` on `stream` with `params` (pointers to each argument's value).
     pub unsafe fn launch_kernel(f: CUfunction, grid: [u32; 2], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
         launch(driver()?, f, grid, block, params, stream)
+    }
+
+    /// Device memory for plans and workspaces (`cuMemAlloc`).
+    pub unsafe fn alloc(n: usize) -> Result<*mut c_void, Error> {
+        let mut p = CUdeviceptr_v2(std::ptr::null_mut());
+        (driver()?.alloc)(&mut p, n.max(1)).map_err(|_| Error::Failed)?;
+        Ok(p.0)
+    }
+
+    pub unsafe fn free(p: *mut c_void) -> Result<(), Error> {
+        if p.is_null() {
+            return Ok(());
+        }
+        (driver()?.free)(CUdeviceptr_v2(p)).map_err(|_| Error::Failed)
+    }
+
+    /// Copies `n` bytes from host memory to device memory.
+    pub unsafe fn write(dst: *mut c_void, src: *const c_void, n: usize) -> Result<(), Error> {
+        (driver()?.htod)(CUdeviceptr_v2(dst), src, n).map_err(|_| Error::Failed)
     }
 
     /// Reads `n` bytes of device memory (alpha and beta in device pointer mode).

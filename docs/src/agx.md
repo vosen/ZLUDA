@@ -500,11 +500,28 @@ tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
 `test_kernels.py`). The backend (graph) API, pooling, normalization and
 the other operations are not implemented yet.
 
+## cuFFT (`zluda_fft_agx`)
+
+`libcufft` on `agx_libs/kernels/fft.mlir` (one source for every chip).
+Single precision: complex to complex transforms of rank 1 to 3 (rank 1 also
+strided and batched through `cufftPlanMany`, with the same input and output
+layout), and real to complex / complex to real transforms of rank 1,
+batched, in or out of place. Power-of-two lengths use radix-2 Stockham passes
+alternating two work buffers; other lengths use a direct transform. The
+twiddles are computed on the host in double precision and uploaded with the
+plan. The plan allocates its own work buffers (`cufftSetWorkArea` is
+accepted and unused). Like cuFFT, inverse transforms are not normalized.
+Double precision, multi-dimensional real transforms, callbacks and the Xt
+API return `CUFFT_NOT_SUPPORTED`. The kernels are tested on the simulator
+for agx-g13g and agx-g14c, and the plans' launch sequences (ping-pong
+buffers, in-place copies, the passes of each dimension) are checked in unit
+tests against a direct DFT.
+
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx, zluda_ml_agx, zluda_blas_agx, zluda_blaslt_agx and zluda_dnn_agx, with their libcuda / libnvidia-ml / libcublas / libcublasLt / libcudnn symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT), with their library symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -522,7 +539,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, the rest of cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
+| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, the rest of cuDNN, double precision cuFFT, cuSPARSE (to be written as MLIR kernels) |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |
