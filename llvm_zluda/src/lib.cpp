@@ -531,3 +531,56 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
 }
 
 LLVM_C_EXTERN_C_END
+
+// The optimizer folds operations on constants to the default NaN of LLVM
+// (0x7fc00000 for f32). In the strict floating point mode PTX's canonical NaN
+// is wanted (0x7fffffff, 0x7fff for f16 and bf16, 0x7fffffffffffffff for f64),
+// which the backend produces for the operations it emits; this rewrites the
+// folded ones. A NaN literal with the default payload that is only moved also
+// becomes the canonical NaN.
+static Constant *zludaCanonicalNaN(Constant *C)
+{
+    if (auto *FP = dyn_cast<ConstantFP>(C))
+    {
+        const APFloat &V = FP->getValueAPF();
+        if (!V.isNaN())
+            return nullptr;
+        const fltSemantics &Sem = V.getSemantics();
+        if (V.bitcastToAPInt() != APFloat::getQNaN(Sem).bitcastToAPInt())
+            return nullptr;
+        unsigned Bits = APFloat::getSizeInBits(Sem);
+        return ConstantFP::get(C->getType(), APFloat(Sem, APInt::getSignedMaxValue(Bits)));
+    }
+    if (isa<ConstantDataVector>(C) || isa<ConstantVector>(C))
+    {
+        auto *VT = cast<FixedVectorType>(C->getType());
+        if (!VT->getElementType()->isFloatingPointTy())
+            return nullptr;
+        SmallVector<Constant *, 8> Elems;
+        bool Changed = false;
+        for (unsigned i = 0; i < VT->getNumElements(); i++)
+        {
+            Constant *E = C->getAggregateElement(i);
+            Constant *N = E ? zludaCanonicalNaN(E) : nullptr;
+            Changed |= N != nullptr;
+            Elems.push_back(N ? N : E);
+        }
+        return Changed ? ConstantVector::get(Elems) : nullptr;
+    }
+    return nullptr;
+}
+
+LLVM_C_EXTERN_C_BEGIN
+
+void LLVMZludaAgxCanonicalizeFoldedNaNs(LLVMModuleRef M)
+{
+    for (Function &F : *unwrap(M))
+        for (BasicBlock &BB : F)
+            for (Instruction &I : BB)
+                for (unsigned i = 0; i < I.getNumOperands(); i++)
+                    if (auto *C = dyn_cast<Constant>(I.getOperand(i)))
+                        if (Constant *N = zludaCanonicalNaN(C))
+                            I.setOperand(i, N);
+}
+
+LLVM_C_EXTERN_C_END

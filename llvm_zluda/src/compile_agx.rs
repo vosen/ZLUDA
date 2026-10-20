@@ -9,7 +9,8 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
-    LLVMZludaAgxLowerAddressSpaces, LLVMZludaUpgradeFunctionAttributes,
+    LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxLowerAddressSpaces,
+    LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
@@ -243,6 +244,10 @@ pub fn compile_agx_linked(
             let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
             return Err(message.to_str().to_string());
         }
+    }
+
+    if strict_fp {
+        unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }
 
     if let Some(hook) = compiler_hook {

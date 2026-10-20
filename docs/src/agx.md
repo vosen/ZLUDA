@@ -352,7 +352,12 @@ exactly:
   estimates corrected with exact remainders, integer arithmetic outside the
   normal range).
 * NaN results are PTX's canonical NaN (`0x7fffffff`, `0x7fff` for `f16` and
-  `bf16`).
+  `bf16`), also for the operations the optimizer evaluates at compile time:
+  their folded NaNs (LLVM's default NaN) are rewritten after optimization, so
+  a NaN literal with exactly that default payload (`0f7FC00000`) that is only
+  moved, never computed with, is stored as the canonical NaN too.
+* Conversions from floating point to integers saturate (NaN gives 0) in both
+  modes.
 * `.sat` keeps `-0.0`.
 
 The cost depends on the operation: an addition gets about 10 more

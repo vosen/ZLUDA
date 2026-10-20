@@ -227,6 +227,56 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Mad24 {
+            type: { Type::from(data.type_) },
+            data: Mad24Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        MixedFloat {
+            type: { Type::Scalar(data.dtype) },
+            data: MixedFloatDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    type: Type::Scalar(data.atype)
+                },
+                src2: {
+                    repr: T,
+                    type: Type::Scalar(data.btype)
+                },
+                src3: Option<T>,
+            }
+        },
+        Slct {
+            type: { Type::Scalar(data.type_) },
+            data: SlctDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(data.ctype)
+                },
+            }
+        },
+        Testp {
+            type: Type::from(ScalarType::Pred),
+            data: TestpDetails,
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.type_)
+                },
+            }
+        },
         Szext {
             type: { Type::Scalar(data.type_) },
             data: SzextDetails,
@@ -2701,6 +2751,62 @@ pub struct Mul24Details {
     pub control: Mul24Control,
 }
 
+/// mad24.mode{.sat}.type: the 24-bit product's low 32 bits (lo) or bits 47..16 (hi), plus c; .sat (hi.s32 only)
+/// saturates the addition
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Mad24Details {
+    pub type_: ScalarType,
+    pub control: Mul24Control,
+    pub saturate: bool,
+}
+
+/// slct.dtype.ctype: a when c >= 0, else b (for f32 c, -0 counts as >= 0 and NaN does not; .ftz flushes c first)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SlctDetails {
+    pub type_: ScalarType,
+    pub ctype: ScalarType,
+    pub flush_to_zero: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MixedFloatOp {
+    Add,
+    Sub,
+    Mul,
+    Fma,
+}
+
+/// The mixed-precision forms (PTX ISA 8.6 and 9.x, sm_100 and later): add / sub / fma.f32.{f16,bf16} convert the
+/// 16-bit operands to f32 and compute in f32 (the third source of fma, and the second of add / sub, is f32);
+/// add / sub / mul / fma.rz.{f16x2,bf16x2}.f32x2.f32x2 compute both lanes in f32 and round the results to the
+/// 16-bit type with the given rounding
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MixedFloatDetails {
+    pub op: MixedFloatOp,
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub rounding: RoundingMode,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TestpOp {
+    Finite,
+    Infinite,
+    Number,
+    NotANumber,
+    Normal,
+    Subnormal,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TestpDetails {
+    pub op: TestpOp,
+    pub type_: ScalarType,
+}
+
 pub struct SetData {
     pub dtype: ScalarType,
     pub base: SetpData,
@@ -3290,6 +3396,8 @@ impl MadDetails {
 #[derive(Copy, Clone)]
 pub enum MinMaxDetails {
     Signed(ScalarType),
+    /// .relu of s32 / s16x2: negative results become 0
+    SignedRelu(ScalarType),
     Unsigned(ScalarType),
     Float(MinMaxFloat),
 }
@@ -3297,7 +3405,7 @@ pub enum MinMaxDetails {
 impl MinMaxDetails {
     pub fn type_(&self) -> ScalarType {
         match self {
-            MinMaxDetails::Signed(t) => *t,
+            MinMaxDetails::Signed(t) | MinMaxDetails::SignedRelu(t) => *t,
             MinMaxDetails::Unsigned(t) => *t,
             MinMaxDetails::Float(float) => float.type_,
         }

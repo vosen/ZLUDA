@@ -3180,7 +3180,8 @@ derive_parser!(
         F64Hex(&'input str),
         #[regex(r"0[xX][0-9a-zA-Z]+U?", |lex| lex.slice())]
         Hex(&'input str),
-        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice())]
+        // with a fraction, or with only an exponent (1e20)
+        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice())]
         F64(&'input str),
         #[regex(r"[0-9]+U?", |lex| lex.slice())]
         Decimal(&'input str),
@@ -3309,6 +3310,9 @@ derive_parser!(
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum PackedSetType { }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum TestpOperation { }
+
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash, Debug)]
     pub enum PackedCvtType { }
 
@@ -3329,9 +3333,8 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st
     st{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.vec}.type  [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
@@ -3354,9 +3357,8 @@ derive_parser!(
         }
     }
     st.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st.relaxed instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st.relaxed: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
@@ -3368,9 +3370,8 @@ derive_parser!(
         }
     }
     st.release.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st.release instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st.release: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Release(scope),
@@ -3410,9 +3411,8 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
         let (a, unified) = a;
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || unified || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy, &unified);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
@@ -3425,9 +3425,8 @@ derive_parser!(
         }
     }
     ld.volatile{.ss}{.level::prefetch_size}{.vec}.type                                                      d, [a] => {
-        if level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo("ld.volatile instruction with prefetch size".to_string()));
-        }
+        // ld.volatile: the cache and prefetch hints do not change the result
+        let _ = &level_prefetch_size;
         Instruction::Ld {
             data: LdDetails {
                 qualifier: volatile.into(),
@@ -3440,9 +3439,8 @@ derive_parser!(
         }
     }
     ld.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.relaxed instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.relaxed: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
@@ -3455,9 +3453,8 @@ derive_parser!(
         }
     }
     ld.acquire.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.acquire instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.acquire: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Acquire(scope),
@@ -3525,9 +3522,8 @@ derive_parser!(
                 state.errors.push(PtxError::SyntaxError(format!("cannot have both {} and {} in {:?}", cop, level_eviction_priority, state.text)));
             }
         }
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.global.nc instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.global.nc: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Weak,
@@ -3599,20 +3595,36 @@ derive_parser!(
             arguments: AddArgs { dst: d, src1: a, src2: b }
         }
     }
-    add{.rnd}{.ftz}{.sat}.f32  d, a, b => {
-        Instruction::Add {
-            data: ast::ArithDetails::Float(
-                ast::ArithFloat {
-                    type_: f32,
+    // with .atype, the mixed-precision form (sm_100): a is converted to f32
+    add{.rnd}{.ftz}{.sat}.f32{.atype}  d, a, b => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Add,
+                    dtype: f32,
+                    atype,
+                    btype: f32,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: Some(ftz),
+                    flush_to_zero: ftz,
                     saturate: sat,
-                    is_fusable: rnd.is_none(),
-                    relu: false,
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: None }
+            }
+        } else {
+            Instruction::Add {
+                data: ast::ArithDetails::Float(
+                    ast::ArithFloat {
+                        type_: f32,
+                        rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                        flush_to_zero: Some(ftz),
+                        saturate: sat,
+                        is_fusable: rnd.is_none(),
+                        relu: false,
+                    }
+                ),
+                arguments: AddArgs {
+                    dst: d, src1: a, src2: b
                 }
-            ),
-            arguments: AddArgs {
-                dst: d, src1: a, src2: b
             }
         }
     }
@@ -3634,6 +3646,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
+    .atype: ScalarType = { .f16, .bf16 };
     ScalarType =        { .f32, .f32x2, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add
@@ -4226,7 +4239,7 @@ derive_parser!(
             }
         }
     }
-    .type: ScalarType = { .s16, .s32, .s64 };
+    .type: ScalarType = { .s16x2, .s16, .s32, .s64 };
     ScalarType = { .f32, .f64, .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad
@@ -4337,17 +4350,33 @@ derive_parser!(
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    fma.rnd{.ftz}{.sat}.f32  d, a, b, c => {
-        ast::Instruction::Fma {
-            data: ast::ArithFloat {
-                type_: f32,
-                rounding: rnd.into(),
-                flush_to_zero: Some(ftz),
-                saturate: sat,
-                is_fusable: false,
-                relu: false,
-            },
-            arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
+    // with .atype, the mixed-precision form (sm_100): a and b are converted to f32
+    fma.rnd{.ftz}{.sat}.f32{.atype}  d, a, b, c => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Fma,
+                    dtype: f32,
+                    atype,
+                    btype: atype,
+                    rounding: rnd.into(),
+                    flush_to_zero: ftz,
+                    saturate: sat,
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: Some(c) }
+            }
+        } else {
+            ast::Instruction::Fma {
+                data: ast::ArithFloat {
+                    type_: f32,
+                    rounding: rnd.into(),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: false,
+                    relu: false,
+                },
+                arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
+            }
         }
     }
     fma.rnd.f64              d, a, b, c => {
@@ -4364,6 +4393,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
+    .atype: ScalarType =    { .f16, .bf16 };
     ScalarType =            { .f32, .f32x2, .f64 };
 
     fma.rnd{.ftz}{.sat}{.relu}.f16 d, a, b, c => {
@@ -4428,7 +4458,8 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .u16, .u32, .u64,
-                          .s16, .s32, .s64 };
+                          .s16, .s32, .s64,
+                          .u16x2, .s16x2 };
     ScalarType = { .s32 };
 
     // two f32 at once in a 64-bit register (sm_100)
@@ -4445,19 +4476,35 @@ derive_parser!(
             arguments: SubArgs { dst: d, src1: a, src2: b }
         }
     }
-    sub{.rnd}{.ftz}{.sat}.f32  d, a, b => {
-        ast::Instruction::Sub {
-            data: ast::ArithDetails::Float(
-                ast::ArithFloat {
-                    type_: f32,
+    // with .atype, the mixed-precision form (sm_100): a is converted to f32
+    sub{.rnd}{.ftz}{.sat}.f32{.atype}  d, a, b => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Sub,
+                    dtype: f32,
+                    atype,
+                    btype: f32,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: Some(ftz),
+                    flush_to_zero: ftz,
                     saturate: sat,
-                    is_fusable: rnd.is_none(),
-                    relu: false,
-                }
-            ),
-            arguments: SubArgs { dst: d, src1: a, src2: b  }
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: None }
+            }
+        } else {
+            ast::Instruction::Sub {
+                data: ast::ArithDetails::Float(
+                    ast::ArithFloat {
+                        type_: f32,
+                        rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                        flush_to_zero: Some(ftz),
+                        saturate: sat,
+                        is_fusable: rnd.is_none(),
+                        relu: false,
+                    }
+                ),
+                arguments: SubArgs { dst: d, src1: a, src2: b  }
+            }
         }
     }
     sub{.rnd}.f64              d, a, b => {
@@ -4476,6 +4523,7 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
+    .atype: ScalarType = { .f16, .bf16 };
     ScalarType = { .f32, .f32x2, .f64 };
 
     sub{.rnd}{.ftz}{.sat}.f16   d, a, b => {
@@ -4554,10 +4602,9 @@ derive_parser!(
             arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
-    //min{.relu}.btype  d, a, b => { todo!() }
-    min.btype  d, a, b => {
+    min{.relu}.btype  d, a, b => {
         ast::Instruction::Min {
-            data: ast::MinMaxDetails::Signed(btype),
+            data: if relu { ast::MinMaxDetails::SignedRelu(btype) } else { ast::MinMaxDetails::Signed(btype) },
             arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
@@ -4666,10 +4713,9 @@ derive_parser!(
             arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
-    //max{.relu}.btype  d, a, b => { todo!() }
-    max.btype  d, a, b => {
+    max{.relu}.btype  d, a, b => {
         ast::Instruction::Max {
-            data: ast::MinMaxDetails::Signed(btype),
+            data: if relu { ast::MinMaxDetails::SignedRelu(btype) } else { ast::MinMaxDetails::Signed(btype) },
             arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
@@ -5221,7 +5267,7 @@ derive_parser!(
             arguments: NegArgs { dst: d, src: a, },
         }
     }
-    .type: ScalarType = { .s16, .s32, .s64 };
+    .type: ScalarType = { .s16, .s32, .s64, .s16x2 };
 
     neg{.ftz}.f32  d, a => {
         ast::Instruction::Neg {
@@ -5616,6 +5662,51 @@ derive_parser!(
 
     .mode: Mul24Control = { .hi, .lo };
     .type: ScalarType = { .u32, .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad24
+    mad24.mode.type  d, a, b, c => {
+        ast::Instruction::Mad24 {
+            data: ast::Mad24Details { control: mode, type_, saturate: false },
+            arguments: Mad24Args { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    mad24.hi.sat.s32  d, a, b, c => {
+        ast::Instruction::Mad24 {
+            data: ast::Mad24Details { control: Mul24Control::Hi, type_: s32, saturate: true },
+            arguments: Mad24Args { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .mode: Mul24Control = { .hi, .lo };
+    .type: ScalarType = { .u32, .s32 };
+    ScalarType = { .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-slct
+    slct{.ftz}.dtype.ctype  d, a, b, c => {
+        ast::Instruction::Slct {
+            data: ast::SlctDetails { type_: dtype, ctype, flush_to_zero: ftz && ctype == ScalarType::F32 },
+            arguments: SlctArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .dtype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f32, .f64 };
+    .ctype: ScalarType = { .s32, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-testp
+    testp.op.type  p, a => {
+        let op = match op {
+            TestpOperation::Finite => ast::TestpOp::Finite,
+            TestpOperation::Infinite => ast::TestpOp::Infinite,
+            TestpOperation::Number => ast::TestpOp::Number,
+            TestpOperation::Notanumber => ast::TestpOp::NotANumber,
+            TestpOperation::Normal => ast::TestpOp::Normal,
+            TestpOperation::Subnormal => ast::TestpOp::Subnormal,
+        };
+        ast::Instruction::Testp {
+            data: ast::TestpDetails { op, type_ },
+            arguments: TestpArgs { dst: p, src: a }
+        }
+    }
+    .op: TestpOperation = { .finite, .infinite, .number, .notanumber, .normal, .subnormal };
+    .type: ScalarType = { .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
     shfl.mode.b32  d[|p], a, b, c => {

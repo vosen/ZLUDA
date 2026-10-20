@@ -835,6 +835,11 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
             ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
             ast::Instruction::Lop3 { data, arguments } => self.emit_lop3(data, arguments),
+            ast::Instruction::Mad24 { data, arguments } => self.emit_mad24(data, arguments),
+            ast::Instruction::Slct { data, arguments } => self.emit_slct(data, arguments),
+            // expanded by insert_post_saturation
+            ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
+            ast::Instruction::Testp { data, arguments } => self.emit_testp(data, arguments),
             ast::Instruction::MatchAllSync { data, arguments } => self.emit_match_all_sync(data, arguments),
             ast::Instruction::ElectSync { arguments } => self.emit_elect_sync(arguments),
             ast::Instruction::Bmsk {
@@ -1059,8 +1064,11 @@ impl<'a> MethodEmitContext<'a> {
                 let to_layout = to_type.layout().ok_or_else(error_unreachable)?;
                 if from_layout.size() == to_layout.size() {
                     let dst_type = get_type(self.context, &to_type)?;
+                    // integers of one width are the same LLVM type, but the packed integer types (u16x2, s16x2)
+                    // are vectors and need a real bitcast
                     if from_type.kind() != ast::ScalarKind::Float
                         && to_type_scalar.kind() != ast::ScalarKind::Float
+                        && unsafe { LLVMTypeOf(src) } == dst_type
                     {
                         // It is noop, but another instruction expects result of this conversion
                         self.resolver.register(dst, src);
@@ -4335,8 +4343,9 @@ impl<'a> MethodEmitContext<'a> {
         // the problem is that, when using *.sat variants AMDGPU target _always_ emits saturation
         // checks. Often they are unnecessary because v_cvt_* instructions saturates anyway.
         // For that reason, all from-to combinations that we know have a direct corresponding
-        // v_cvt_* instruction get special treatment
-        let is_saturating_cast = match (to, from) {
+        // v_cvt_* instruction get special treatment. AGX has no such guarantee (the out-of-range
+        // fptosi folds to anything), so it always takes the .sat intrinsics
+        let is_saturating_cast = self.target != Target::Agx && match (to, from) {
             (ast::ScalarType::S16, ast::ScalarType::F16)
             | (ast::ScalarType::S32, ast::ScalarType::F32)
             | (ast::ScalarType::S32, ast::ScalarType::F64)
@@ -4896,8 +4905,8 @@ impl<'a> MethodEmitContext<'a> {
         src3: Option<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let llvm_prefix = match (data, is_min) {
-            (ptx_parser::MinMaxDetails::Signed(..), true) => "llvm.smin",
-            (ptx_parser::MinMaxDetails::Signed(..), false) => "llvm.smax",
+            (ptx_parser::MinMaxDetails::Signed(..) | ptx_parser::MinMaxDetails::SignedRelu(..), true) => "llvm.smin",
+            (ptx_parser::MinMaxDetails::Signed(..) | ptx_parser::MinMaxDetails::SignedRelu(..), false) => "llvm.smax",
             (ptx_parser::MinMaxDetails::Unsigned(..), true) => "llvm.umin",
             (ptx_parser::MinMaxDetails::Unsigned(..), false) => "llvm.umax",
             (ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan: false, .. }), true) => {
@@ -4940,6 +4949,19 @@ impl<'a> MethodEmitContext<'a> {
         )?;
         let result = if xorsign_abs {
             self.emit_xor_sign(type_, result, original_a, original_b)?
+        } else {
+            result
+        };
+        // .relu of the signed integer forms
+        let result = if let ptx_parser::MinMaxDetails::SignedRelu(t) = data {
+            let smax = format!("llvm.smax.{}\0", LLVMTypeDisplay(t));
+            let zero = unsafe { LLVMConstNull(llvm_type) };
+            self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(smax.as_bytes()) },
+                None,
+                vec![&type_.into()],
+                vec![(result, llvm_type), (zero, llvm_type)],
+            )?
         } else {
             result
         };
@@ -6486,6 +6508,106 @@ impl<'a> MethodEmitContext<'a> {
         self.resolver.register(arguments.dst, mask);
         if let Some(p) = arguments.dst_pred {
             self.resolver.register(p, all);
+        }
+        Ok(())
+    }
+
+    fn emit_mad24(&mut self, data: ast::Mad24Details, arguments: ast::Mad24Args<SpirvWord>) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+        let b = self.builder;
+        let signed = data.type_ == ast::ScalarType::S32;
+        let (x, y, z) = (
+            self.resolver.value(arguments.src1)?,
+            self.resolver.value(arguments.src2)?,
+            self.resolver.value(arguments.src3)?,
+        );
+        let product = unsafe {
+            let c32 = |v: u64| LLVMConstInt(i32_type, v, 0);
+            // the low 24 bits, sign- or zero-extended
+            let ext = |v: LLVMValueRef| {
+                let up = LLVMBuildShl(b, v, c32(8), LLVM_UNNAMED.as_ptr());
+                if signed {
+                    LLVMBuildSExt(b, LLVMBuildAShr(b, up, c32(8), LLVM_UNNAMED.as_ptr()), i64_type, LLVM_UNNAMED.as_ptr())
+                } else {
+                    LLVMBuildZExt(b, LLVMBuildLShr(b, up, c32(8), LLVM_UNNAMED.as_ptr()), i64_type, LLVM_UNNAMED.as_ptr())
+                }
+            };
+            let p = LLVMBuildMul(b, ext(x), ext(y), LLVM_UNNAMED.as_ptr());
+            let p = if data.control == Mul24Control::Hi {
+                LLVMBuildLShr(b, p, LLVMConstInt(i64_type, 16, 0), LLVM_UNNAMED.as_ptr())
+            } else {
+                p
+            };
+            LLVMBuildTrunc(b, p, i32_type, LLVM_UNNAMED.as_ptr())
+        };
+        let result = if data.saturate {
+            self.emit_int_intrinsic("llvm.sadd.sat", i32_type, &[product, z])
+        } else {
+            unsafe { LLVMBuildAdd(b, product, z, LLVM_UNNAMED.as_ptr()) }
+        };
+        self.resolver.register(arguments.dst, result);
+        Ok(())
+    }
+
+    fn emit_slct(&mut self, data: ast::SlctDetails, arguments: ast::SlctArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let b = self.builder;
+        let (x, y) = (self.resolver.value(arguments.src1)?, self.resolver.value(arguments.src2)?);
+        let c = self.resolver.value(arguments.src3)?;
+        let take_a = unsafe {
+            let k = |v: u64| LLVMConstInt(i32_type, v, 0);
+            if data.ctype == ast::ScalarType::S32 {
+                LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntSGE, c, k(0), LLVM_UNNAMED.as_ptr())
+            } else {
+                // on the bits, so that the floating point modes do not matter: positive (not NaN) or -0, and with
+                // .ftz any subnormal
+                let bits = LLVMBuildBitCast(b, c, i32_type, LLVM_UNNAMED.as_ptr());
+                let magnitude = LLVMBuildAnd(b, bits, k(0x7fff_ffff), LLVM_UNNAMED.as_ptr());
+                let positive = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntSGE, bits, k(0), LLVM_UNNAMED.as_ptr());
+                let not_nan = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntULE, magnitude, k(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+                let small = if data.flush_to_zero { 0x80_0000 } else { 1 };
+                let zero = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntULT, magnitude, k(small), LLVM_UNNAMED.as_ptr());
+                LLVMBuildOr(b, LLVMBuildAnd(b, positive, not_nan, LLVM_UNNAMED.as_ptr()), zero, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        self.resolver.with_result(arguments.dst, |name| unsafe { LLVMBuildSelect(b, take_a, x, y, name) });
+        Ok(())
+    }
+
+    fn emit_testp(&mut self, data: ast::TestpDetails, arguments: ast::TestpArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let (bits_type, exp_mask, mant_mask, mag_mask) = if data.type_ == ast::ScalarType::F64 {
+            (get_scalar_type(self.context, ast::ScalarType::B64), 0x7ff0_0000_0000_0000u64, 0x000f_ffff_ffff_ffffu64, 0x7fff_ffff_ffff_ffffu64)
+        } else {
+            (get_scalar_type(self.context, ast::ScalarType::B32), 0x7f80_0000, 0x007f_ffff, 0x7fff_ffff)
+        };
+        let b = self.builder;
+        let src = self.resolver.value(arguments.src)?;
+        unsafe {
+            let k = |v: u64| LLVMConstInt(bits_type, v, 0);
+            let bits = LLVMBuildBitCast(b, src, bits_type, LLVM_UNNAMED.as_ptr());
+            let magnitude = LLVMBuildAnd(b, bits, k(mag_mask), LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildAnd(b, bits, k(exp_mask), LLVM_UNNAMED.as_ptr());
+            let cmp = |p, l, r| LLVMBuildICmp(b, p, l, r, LLVM_UNNAMED.as_ptr());
+            use LLVMIntPredicate::*;
+            let result = match data.op {
+                ast::TestpOp::Finite => cmp(LLVMIntNE, exponent, k(exp_mask)),
+                ast::TestpOp::Infinite => cmp(LLVMIntEQ, magnitude, k(exp_mask)),
+                ast::TestpOp::Number => cmp(LLVMIntULE, magnitude, k(exp_mask)),
+                ast::TestpOp::NotANumber => cmp(LLVMIntUGT, magnitude, k(exp_mask)),
+                ast::TestpOp::Normal => {
+                    let not_special = cmp(LLVMIntNE, exponent, k(exp_mask));
+                    let not_small = cmp(LLVMIntNE, exponent, k(0));
+                    LLVMBuildAnd(b, not_special, not_small, LLVM_UNNAMED.as_ptr())
+                }
+                ast::TestpOp::Subnormal => {
+                    let small = cmp(LLVMIntEQ, exponent, k(0));
+                    let nonzero = cmp(LLVMIntNE, magnitude, k(0));
+                    let _ = mant_mask;
+                    LLVMBuildAnd(b, small, nonzero, LLVM_UNNAMED.as_ptr())
+                }
+            };
+            self.resolver.register(arguments.dst, result);
         }
         Ok(())
     }

@@ -2168,6 +2168,10 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Lop3 { .. }
+        | ast::Instruction::Mad24 { .. }
+        | ast::Instruction::Slct { .. }
+        | ast::Instruction::MixedFloat { .. }
+        | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
         | ast::Instruction::ElectSync { .. }
         | ast::Instruction::Fns { .. }
@@ -2268,11 +2272,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             ..
         }
         | ast::Instruction::Min {
-            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::SignedRelu(..) | ast::MinMaxDetails::Unsigned(..),
             ..
         }
         | ast::Instruction::Max {
-            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::SignedRelu(..) | ast::MinMaxDetails::Unsigned(..),
             ..
         }
         | ast::Instruction::Div {

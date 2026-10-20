@@ -58,6 +58,9 @@ fn run_instruction<'input>(
     mut instruction: ast::Instruction<SpirvWord>,
 ) -> Result<(), TranslateError> {
     match instruction {
+        ast::Instruction::MixedFloat { data, arguments } => {
+            return expand_mixed_float(resolver, result, data, arguments);
+        }
         ast::Instruction::Abs { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Add {
@@ -195,6 +198,9 @@ fn run_instruction<'input>(
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Lop3 { .. }
+        | ast::Instruction::Mad24 { .. }
+        | ast::Instruction::Slct { .. }
+        | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
         | ast::Instruction::ElectSync { .. }
         | ast::Instruction::Fns { .. }
@@ -358,4 +364,68 @@ fn get_post_saturation<'input>(
         src: post_sat,
         type_,
     })
+}
+
+// The mixed-precision forms: the 16-bit operands are converted to f32 (exactly) and the operation is the f32 one,
+// whose .sat is then handled like any other
+fn expand_mixed_float<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+    data: ast::MixedFloatDetails,
+    arguments: ast::MixedFloatArgs<SpirvWord>,
+) -> Result<(), TranslateError> {
+    if data.dtype != ast::ScalarType::F32 {
+        return Err(error_todo_msg("mixed-precision forms with a 16-bit result"));
+    }
+    let mut widen = |src: SpirvWord, from: ast::ScalarType| {
+        if from == ast::ScalarType::F32 {
+            return src;
+        }
+        let dst = resolver.register_unnamed(Some((ast::ScalarType::F32.into(), ast::StateSpace::Reg)));
+        result.push(Statement::Instruction(ast::Instruction::Cvt {
+            data: ast::CvtDetails {
+                from,
+                to: ast::ScalarType::F32,
+                mode: ast::CvtMode::FPExtend {
+                    flush_to_zero: None,
+                    saturate: false,
+                    relu: false,
+                    satfinite: false,
+                },
+            },
+            arguments: ast::CvtArgs { dst, src, src2: None },
+        }));
+        dst
+    };
+    let src1 = widen(arguments.src1, data.atype);
+    let src2 = widen(arguments.src2, data.btype);
+    let float = ast::ArithFloat {
+        type_: ast::ScalarType::F32,
+        rounding: data.rounding,
+        flush_to_zero: Some(data.flush_to_zero),
+        saturate: data.saturate,
+        is_fusable: false,
+        relu: false,
+    };
+    let dst = arguments.dst;
+    let instruction = match (data.op, arguments.src3) {
+        (ast::MixedFloatOp::Add, None) => ast::Instruction::Add {
+            data: ast::ArithDetails::Float(float),
+            arguments: ast::AddArgs { dst, src1, src2 },
+        },
+        (ast::MixedFloatOp::Sub, None) => ast::Instruction::Sub {
+            data: ast::ArithDetails::Float(float),
+            arguments: ast::SubArgs { dst, src1, src2 },
+        },
+        (ast::MixedFloatOp::Mul, None) => ast::Instruction::Mul {
+            data: ast::MulDetails::Float(float),
+            arguments: ast::MulArgs { dst, src1, src2 },
+        },
+        (ast::MixedFloatOp::Fma, Some(src3)) => ast::Instruction::Fma {
+            data: float,
+            arguments: ast::FmaArgs { dst, src1, src2, src3 },
+        },
+        _ => return Err(error_unreachable()),
+    };
+    run_instruction(resolver, result, instruction)
 }
