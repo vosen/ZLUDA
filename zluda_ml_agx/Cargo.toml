@@ -1,0 +1,20 @@
+[package]
+name = "zluda_ml_agx"
+version = "0.0.0"
+edition = "2021"
+description = "NVML on Apple GPUs (Asahi Linux) for zluda_agx"
+
+[lib]
+name = "nvml_agx"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+agx_runtime = { path = "../agx_runtime" }
+cuda_types = { path = "../cuda_types", default-features = false }
+cuda_macros = { path = "../cuda_macros" }
+
+[package.metadata.zluda]
+linux_symlinks = [
+    "libnvidia-ml.so",
+    "libnvidia-ml.so.1",
+]
