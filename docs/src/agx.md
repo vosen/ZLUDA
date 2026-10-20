@@ -394,3 +394,29 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
 * There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
   the first one that answers the Asahi parameter query.
+
+## Building a release for Asahi
+
+```
+ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and zluda_ml_agx, with libcuda / libnvidia-ml symlinks
+```
+
+`ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
+HIP-based ones; the two sets ship libraries with the same names. Put `target/release/zoc` next to the application
+or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=target/release`.
+
+## Support matrix (Asahi Linux, M1 / M2 family)
+
+| Area | Status |
+| --- | --- |
+| Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
+| PTX | 176 of 195 ZLUDA run tests compile. Missing: textures and surfaces, a few warp-level and bulk-copy forms. |
+| Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` / strict mode for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
+| Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
+| Memory model | fences of every scope lower to measured barrier sequences |
+| Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
+| Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
+| Not yet | per-thread scratch (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, unified memory APIs, libraries (cuBLAS, cuDNN, cuFFT, cuSPARSE: in progress as MLIR kernels) |
+| NVML | device count, name, UUID, memory, compute capability; no telemetry |
+| Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

@@ -14,6 +14,8 @@ cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
 
 [package.metadata.zluda]
+agx = true
+linux_only = true
 linux_symlinks = [
     "libnvidia-ml.so",
     "libnvidia-ml.so.1",

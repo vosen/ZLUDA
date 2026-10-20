@@ -14,3 +14,11 @@ cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
 dark_api = { path = "../dark_api" }
 tempfile = "3"
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = [
+    "libcuda.so",
+    "libcuda.so.1",
+]
