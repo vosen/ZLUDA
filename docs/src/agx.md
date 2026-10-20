@@ -171,9 +171,11 @@ allow 1024 threads and 128 allow 384. `.maxntid` / `.reqntid` (times
 `.minnctapersm`) and `.maxnreg` make the backend spill instead of exceeding
 the registers that many threads need. `cuFuncGetAttribute(MAX_THREADS_PER_BLOCK)`
 reports the limit, and a launch with a larger block fails with
-`CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES`, as on NVIDIA GPUs. This register budget
-is Mesa's occupancy table; it is not yet measured on the M2 Max (AGX
-Performance Simulator `tasks/ptx-re-blockers.md`, B26).
+`CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES`, as on NVIDIA GPUs. The per-core budget is
+measured on the M2 Max (AGX Performance Simulator `tasks/safe-11`) and agrees
+with Mesa's occupancy table; that a single threadgroup must fit in it, and
+that the Registers word encodes 256 halves as 0, are Mesa's and not yet
+confirmed there (`tasks/ptx-re-blockers.md`, B26).
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 194 of 195 compile. `extern_func` calls a function defined
