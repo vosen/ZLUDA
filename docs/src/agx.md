@@ -155,6 +155,12 @@ three differences.
   forms, `%p`, `%s` and the floating point conversions). The argument size is
   found by scanning the format string; `vprintf` returns the number of
   conversions.
+* `__assertfail` writes CUDA's message (`file:line: function: block: [x,y,z],
+  thread: [x,y,z] Assertion `+"`expr`"+` failed.`) as a printf record, sets
+  `__zluda_agx_trap_flag` (which `agx_runtime` reports as
+  `CUDA_ERROR_ASSERT`), orders its stores with a release fence and executes
+  `trap`. What `trap` does on the hardware when executed is not measured yet
+  (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 176 of 195 compile, and the remaining ones use the

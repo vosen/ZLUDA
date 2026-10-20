@@ -788,6 +788,16 @@ impl LoadedModule {
         self.globals.as_ref().map(|g| g.va)
     }
 
+    /// Whether a device `assert` failed since the last call (CUDA_ERROR_ASSERT); clears the flag.
+    pub fn take_assert_failure(&mut self) -> bool {
+        let Some(&(off, _)) = self.module.global_symbols.get(printf::TRAP_FLAG_SYMBOL) else { return false };
+        let Some(g) = self.globals.as_mut() else { return false };
+        let w = &mut g.as_mut_slice()[off as usize..off as usize + 4];
+        let failed = w != [0; 4];
+        w.fill(0);
+        failed
+    }
+
     /// Formats and clears the device `printf` records written since the last drain. Strings outside the module's
     /// global data buffer (`%s` of a device buffer) are read through `read_other`. `None` if the module does not use
     /// `printf`. Call it after the launches that printed have finished.

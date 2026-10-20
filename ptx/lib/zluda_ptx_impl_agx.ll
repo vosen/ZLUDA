@@ -832,7 +832,60 @@ exit:
   ret i32 %count
 }
 
+; __assertfail: prints CUDA's assertion message through the printf buffer,
+; sets @__zluda_agx_trap_flag for the host (CUDA_ERROR_ASSERT) and traps. The
+; record holds file, line, function, block and thread indices and message,
+; laid out as vprintf would for @__zluda_agx_assert_format.
+@__zluda_agx_assert_format = internal addrspace(1) constant [73 x i8] c"%s:%u: %s: block: [%u,%u,%u], thread: [%u,%u,%u] Assertion `%s` failed.\0A\00", align 8
+@__zluda_agx_trap_flag = internal addrspace(1) global i32 0, align 4
+
 define void @__zluda_ptx_impl___assertfail(i64 %message, i64 %file, i32 %line, i64 %function, i64 %char_size) #1 {
+entry:
+  store volatile i32 1, ptr addrspace(1) @__zluda_agx_trap_flag, align 4
+  %start = atomicrmw add ptr addrspace(1) @__zluda_agx_printf_buffer, i32 72 monotonic
+  %end = add i32 %start, 72
+  %fits = icmp ule i32 %end, 65528
+  br i1 %fits, label %write, label %trap
+write:
+  %start64 = zext i32 %start to i64
+  %offset = add i64 %start64, 8
+  %r = getelementptr inbounds i8, ptr addrspace(1) @__zluda_agx_printf_buffer, i64 %offset
+  store i32 72, ptr addrspace(1) %r, align 8
+  %r4 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 4
+  store i32 56, ptr addrspace(1) %r4, align 4
+  %r8 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 8
+  %fmt = ptrtoint ptr addrspace(1) @__zluda_agx_assert_format to i64
+  store i64 %fmt, ptr addrspace(1) %r8, align 8
+  %a0 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 16
+  store i64 %file, ptr addrspace(1) %a0, align 8
+  %a8 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 24
+  store i32 %line, ptr addrspace(1) %a8, align 4
+  %a16 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 32
+  store i64 %function, ptr addrspace(1) %a16, align 8
+  %bx = call i32 @llvm.agx.threadgroup.position.in.grid.x()
+  %by = call i32 @llvm.agx.threadgroup.position.in.grid.y()
+  %bz = call i32 @llvm.agx.threadgroup.position.in.grid.z()
+  %tx = call i32 @llvm.agx.thread.position.in.threadgroup.x()
+  %ty = call i32 @llvm.agx.thread.position.in.threadgroup.y()
+  %tz = call i32 @llvm.agx.thread.position.in.threadgroup.z()
+  %a24 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 40
+  store i32 %bx, ptr addrspace(1) %a24, align 4
+  %a28 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 44
+  store i32 %by, ptr addrspace(1) %a28, align 4
+  %a32 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 48
+  store i32 %bz, ptr addrspace(1) %a32, align 4
+  %a36 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 52
+  store i32 %tx, ptr addrspace(1) %a36, align 4
+  %a40 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 56
+  store i32 %ty, ptr addrspace(1) %a40, align 4
+  %a44 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 60
+  store i32 %tz, ptr addrspace(1) %a44, align 4
+  %a48 = getelementptr inbounds i8, ptr addrspace(1) %r, i64 64
+  store i64 %message, ptr addrspace(1) %a48, align 8
+  br label %trap
+trap:
+  ; The stores must reach memory before the SIMD-group ends.
+  fence release
   call void @llvm.trap()
   unreachable
 }

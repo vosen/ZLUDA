@@ -9,6 +9,8 @@
 use std::ffi::CString;
 
 pub const BUFFER_SYMBOL: &str = "__zluda_agx_printf_buffer";
+/// Set to 1 by `__assertfail` (and by nothing else) before it traps.
+pub const TRAP_FLAG_SYMBOL: &str = "__zluda_agx_trap_flag";
 const HEADER: usize = 8;
 
 /// The formatted output of a buffer, and how many record bytes did not fit.
@@ -265,6 +267,32 @@ mod tests {
             "x=-7 u=4294967295 h=0x00ab c=Z s=world\n-1 deadbeefcafe  3.14 1.000000e-10 0.5 0x1234 (nil) %   42|2.2   |\n"
         );
         assert_eq!(d.dropped_bytes, 0);
+    }
+
+    // The record __assertfail wrote for thread 1 of `assert(x > 0)` in agx_run (globals at 0x4000000: the
+    // message, file and function strings at 0, 6 and 11, the format at 0x10018).
+    #[test]
+    fn formats_assert_records_from_the_simulator() {
+        let rec = "060000040000000007000000000000000b000004000000000000000000000000\
+                   000000000100000000000000000000000000000400000000";
+        let args: Vec<u8> = (0..rec.len()).step_by(2).map(|i| u8::from_str_radix(&rec[i..i + 2], 16).unwrap()).collect();
+        let mut b = vec![0u8; 8];
+        b.extend_from_slice(&72u32.to_le_bytes());
+        b.extend_from_slice(&56u32.to_le_bytes());
+        b.extend_from_slice(&0x4010018u64.to_le_bytes());
+        b.extend_from_slice(&args);
+        b[..4].copy_from_slice(&72u32.to_le_bytes());
+        let read = |a: u64| match a {
+            0x4000000 => Some(b"x > 0".to_vec()),
+            0x4000006 => Some(b"a.cu".to_vec()),
+            0x400000b => Some(b"k".to_vec()),
+            0x4010018 => Some(b"%s:%u: %s: block: [%u,%u,%u], thread: [%u,%u,%u] Assertion `%s` failed.\n".to_vec()),
+            _ => None,
+        };
+        assert_eq!(
+            String::from_utf8(drain(&b, read).text).unwrap(),
+            "a.cu:7: k: block: [0,0,0], thread: [1,0,0] Assertion `x > 0` failed.\n"
+        );
     }
 
     #[test]
