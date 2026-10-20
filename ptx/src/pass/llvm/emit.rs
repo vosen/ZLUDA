@@ -314,9 +314,23 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         array_init: &[ast::RegOrImmediate<SpirvWord>],
     ) -> Result<*mut LLVMValue, TranslateError> {
         let initializer = match type_ {
+            ast::Type::Array(None, scalar, dimensions) if dimensions.len() > 1 => {
+                // the elements are in row-major order: one constant array per row
+                let rows = dimensions[0] as usize;
+                if rows == 0 || array_init.len() % rows != 0 {
+                    return Err(error_unreachable());
+                }
+                let row_type = ast::Type::Array(None, *scalar, dimensions[1..].to_vec());
+                let mut items = array_init
+                    .chunks(array_init.len() / rows)
+                    .map(|row| self.get_array_init(&row_type, row))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let llvm_row = get_type(self.context, &row_type)?;
+                unsafe { LLVMConstArray2(llvm_row, items.as_mut_ptr(), items.len() as u64) }
+            }
             ast::Type::Array(None, scalar, dimensions) => {
                 if dimensions.len() != 1 {
-                    todo!()
+                    return Err(error_todo_msg("an initializer of an array without dimensions"));
                 }
                 if dimensions[0] as usize != array_init.len() {
                     return Err(error_unreachable());

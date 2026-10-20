@@ -9,6 +9,7 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/ReplaceConstant.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
 #include <optional>
@@ -922,6 +923,29 @@ int LLVMZludaAgxLowerClusters(LLVMModuleRef M, char **error)
         }
     }
     return changed ? 1 : 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// The module's global and constant variables stay in the image even when no
+// kernel uses them: cuModuleGetGlobal finds them by name (ZLUDA's own
+// helper variables, __zluda_*, may go).
+void LLVMZludaAgxKeepGlobals(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    SmallVector<GlobalValue *, 16> keep;
+    for (GlobalVariable &GV : Mod->globals())
+    {
+        unsigned as = GV.getAddressSpace();
+        if (GV.isDeclaration() || (as != 1 && as != 4) || GV.getName().starts_with("__zluda") ||
+            GV.getName().starts_with("llvm."))
+            continue;
+        keep.push_back(&GV);
+    }
+    if (!keep.empty())
+        appendToUsed(*Mod, keep);
 }
 
 LLVM_C_EXTERN_C_END

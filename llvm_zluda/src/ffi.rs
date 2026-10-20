@@ -112,6 +112,8 @@ extern "C" {
 
     pub fn LLVMZludaAgxCanonicalizeFoldedNaNs(module: LLVMModuleRef);
 
+    pub fn LLVMZludaAgxKeepGlobals(module: LLVMModuleRef);
+
     pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut i8) -> i32;
 }
 

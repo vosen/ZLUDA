@@ -238,6 +238,13 @@ fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, 
                         (&s[2..], 16, false)
                     }
                 }
+                Token::Binary(s) => {
+                    if s.ends_with('U') {
+                        (&s[2..s.len() - 1], 2, true)
+                    } else {
+                        (&s[2..], 2, false)
+                    }
+                }
                 Token::Decimal(s) => {
                     let radix = if s.starts_with('0') { 8 } else { 10 };
                     if s.ends_with('U') {
@@ -565,10 +572,11 @@ fn target<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, Optio
         Token::DotTarget,
         (
             ident.and_then(shader_model),
-            opt((Token::Comma, ident_literal("debug"))),
+            // debug, texmode_unified, texmode_independent, map_f64_to_f32
+            repeat::<_, _, (), _, _>(0.., (Token::Comma, ident)),
         ),
     )
-    .map(|((target, arch_variant), _debug)| (target, arch_variant))
+    .map(|((target, arch_variant), _options)| (target, arch_variant))
     .parse_next(stream)
 }
 
@@ -602,6 +610,7 @@ fn directive<'a, 'input>(
                 function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
                 file.map(|_| None),
                 section.map(|_| None),
+                pragma.map(|_| None),
                 (module_variable, Token::Semicolon)
                     .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
             )),
@@ -615,7 +624,7 @@ fn directive<'a, 'input>(
             // module variables
             | Token::DotGlobal | Token::DotConst | Token::DotShared
             // other sections
-            | Token::DotFile | Token::DotSection => true,
+            | Token::DotFile | Token::DotSection | Token::DotPragma => true,
             _ => false,
         }),
             )
@@ -1223,13 +1232,12 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     vector: Option<NonZeroU8>,
     array_dimensions: &'b Vec<u32>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
+    // The elements in row-major order, missing ones (and missing sub-arrays) zero
+    let total = move || array_dimensions.iter().map(|d| *d as usize).product::<usize>();
     let pad_with_zeros = move |result: Option<Vec<RegOrImmediate<&'input str>>>| {
         let mut result = result.unwrap_or(Vec::new());
-        let result_size = array_dimensions[0] as usize;
         let default = default_immediate_from_type(type_);
-        result.extend(
-            iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
-        );
+        result.extend(iter::repeat(ast::RegOrImmediate::Imm(default)).take(total() - result.len()));
         result
     };
     trace(
@@ -1237,24 +1245,53 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
         opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
-            // TODO: vector constants and multi dim arrays
-            if vector.is_some() || array_dimensions[0] == 0 || array_dimensions.len() > 1 {
+            // TODO: vector constants
+            if vector.is_some() || array_dimensions.iter().any(|d| *d == 0) {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
-            delimited(
-                Token::LBrace,
-                separated::<_, (), (), _, _, _, _>(
-                    0..=array_dimensions[0] as usize,
-                    single_value_append(&mut result),
-                    Token::Comma,
-                ),
-                Token::RBrace,
-            )
-            .parse_next(stream)?;
+            nested_initializer(stream, type_, array_dimensions, &mut result)?;
             Ok(result)
         })
         .map(pad_with_zeros),
     )
+}
+
+// One level of an array initializer: `{a, b, ...}` for the last dimension, `{{...}, {...}}` (or a flat list of
+// all the elements) for the others
+fn nested_initializer<'a, 'input: 'a>(
+    stream: &mut PtxParser<'a, 'input>,
+    type_: ScalarType,
+    dimensions: &[u32],
+    result: &mut Vec<RegOrImmediate<&'input str>>,
+) -> PResult<()> {
+    let size: usize = dimensions.iter().map(|d| *d as usize).product();
+    let start = result.len();
+    Token::LBrace.parse_next(stream)?;
+    let nested = dimensions.len() > 1 && matches!(stream.input.first(), Some((Token::LBrace, _)));
+    if nested {
+        let inner: usize = dimensions[1..].iter().map(|d| *d as usize).product();
+        let mut count = 0;
+        loop {
+            if count == dimensions[0] {
+                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+            }
+            let at = result.len();
+            nested_initializer(stream, type_, &dimensions[1..], result)?;
+            let default = default_immediate_from_type(type_);
+            result.extend(iter::repeat(ast::RegOrImmediate::Imm(default)).take(inner - (result.len() - at)));
+            count += 1;
+            if opt(Token::Comma).parse_next(stream)?.is_none() {
+                break;
+            }
+        }
+    } else {
+        separated::<_, (), (), _, _, _, _>(0..=size, single_value_append(result), Token::Comma).parse_next(stream)?;
+    }
+    Token::RBrace.parse_next(stream)?;
+    if result.len() - start > size {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    Ok(())
 }
 
 fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
@@ -3202,6 +3239,8 @@ derive_parser!(
         F64Hex(&'input str),
         #[regex(r"0[xX][0-9a-zA-Z]+U?", |lex| lex.slice())]
         Hex(&'input str),
+        #[regex(r"0[bB][01]+U?", |lex| lex.slice())]
+        Binary(&'input str),
         // with a fraction, or with only an exponent (1e20)
         #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice())]
         F64(&'input str),

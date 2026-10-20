@@ -9,7 +9,8 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
-    LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters,
+    LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces,
+    LLVMZludaAgxLowerClusters,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
@@ -179,6 +180,7 @@ pub fn compile_agx_linked(
     if !others.is_empty() {
         internalize_functions(&linked);
     }
+    unsafe { LLVMZludaAgxKeepGlobals(linked.get()) };
     linked.link(ptx_impl)?;
     internalize_helpers(&linked);
     unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
