@@ -19,6 +19,8 @@ use asahi_sys::*;
 use std::ffi::CString;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -26,6 +28,58 @@ pub const PAGE: u64 = 16384;
 
 fn round_up(x: u64, a: u64) -> u64 {
     x.div_ceil(a) * a
+}
+
+/// First-fit allocator of address ranges. Freed ranges are merged with their neighbours.
+#[derive(Debug)]
+pub struct RangeAllocator {
+    /// start -> length of each free range
+    free: BTreeMap<u64, u64>,
+}
+
+impl RangeAllocator {
+    pub fn new(start: u64, len: u64) -> RangeAllocator {
+        let mut free = BTreeMap::new();
+        if len != 0 {
+            free.insert(start, len);
+        }
+        RangeAllocator { free }
+    }
+
+    pub fn alloc(&mut self, size: u64, align: u64) -> Option<u64> {
+        let (start, len, at) = self.free.iter().find_map(|(&start, &len)| {
+            let at = round_up(start, align);
+            (at + size <= start + len).then_some((start, len, at))
+        })?;
+        self.free.remove(&start);
+        if at > start {
+            self.free.insert(start, at - start);
+        }
+        if at + size < start + len {
+            self.free.insert(at + size, start + len - at - size);
+        }
+        Some(at)
+    }
+
+    pub fn free(&mut self, mut start: u64, mut len: u64) {
+        if let Some((&prev, &prev_len)) = self.free.range(..start).next_back() {
+            debug_assert!(prev + prev_len <= start, "double free of {start:#x}");
+            if prev + prev_len == start {
+                self.free.remove(&prev);
+                start = prev;
+                len += prev_len;
+            }
+        }
+        if let Some(&next_len) = self.free.get(&(start + len)) {
+            self.free.remove(&(start + len));
+            len += next_len;
+        }
+        self.free.insert(start, len);
+    }
+
+    pub fn free_bytes(&self) -> u64 {
+        self.free.values().sum()
+    }
 }
 
 // The generic DRM ioctls are function-like macros in drm.h, so they are computed here: _IOC(dir, 'd', nr, size).
@@ -118,6 +172,8 @@ pub struct Bo {
     /// GPU virtual address, or 0 if the object is not bound.
     pub va: u64,
     map: *mut u8,
+    /// The VM the object is bound in, and the allocator its range returns to.
+    binding: Option<(u32, Option<Rc<RefCell<RangeAllocator>>>)>,
 }
 
 impl Bo {
@@ -131,6 +187,28 @@ impl Bo {
 
 impl Drop for Bo {
     fn drop(&mut self) {
+        if let Some((vm_id, heap)) = self.binding.take() {
+            let op = drm_asahi_gem_bind_op {
+                flags: DRM_ASAHI_BIND_UNBIND as u32,
+                handle: 0,
+                offset: 0,
+                range: self.size,
+                addr: self.va,
+            };
+            let mut vb = drm_asahi_vm_bind {
+                vm_id,
+                num_binds: 1,
+                stride: std::mem::size_of_val(&op) as u32,
+                pad: 0,
+                userptr: &op as *const _ as u64,
+            };
+            // Reuse the range only if it is really unmapped.
+            if self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-unbind").is_ok() {
+                if let Some(heap) = heap {
+                    heap.borrow_mut().free(self.va, self.size);
+                }
+            }
+        }
         // Close explicitly: leaving objects to process exit leaked their shmem in the kernel
         // (simulator drm_compute.c, AGX_CLEAN_EXIT).
         unsafe { libc::munmap(self.map as *mut _, self.size as usize) };
@@ -145,9 +223,8 @@ pub struct Vm {
     dev: Rc<DeviceInner>,
     pub id: u32,
     pub usc_base: u64,
-    usc_next: u64,
-    data_next: u64,
-    data_end: u64,
+    usc: Rc<RefCell<RangeAllocator>>,
+    data: Rc<RefCell<RangeAllocator>>,
 }
 
 pub const USC_HEAP_SIZE: u64 = 1 << 32;
@@ -168,18 +245,17 @@ impl Vm {
             id: vc.vm_id,
             usc_base,
             // offset 0 of the heap is never used, so a USC offset of 0 can mean "none"
-            usc_next: PAGE,
-            data_next: data_base,
-            data_end: vc.kernel_start,
+            usc: Rc::new(RefCell::new(RangeAllocator::new(usc_base + PAGE, USC_HEAP_SIZE - PAGE))),
+            data: Rc::new(RefCell::new(RangeAllocator::new(data_base, vc.kernel_start - data_base))),
         })
     }
 
-    fn create(&self, size: u64, va: u64, bind_flags: u32) -> io::Result<Bo> {
+    fn create(&self, size: u64, va: u64, bind_flags: u32, heap: Option<&Rc<RefCell<RangeAllocator>>>) -> io::Result<Bo> {
         let size = round_up(size.max(1), PAGE);
         let mut gc = drm_asahi_gem_create { size, flags: DRM_ASAHI_GEM_WRITEBACK as u32, vm_id: 0, handle: 0, pad: 0 };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_CREATE as u64, &mut gc, "gem-create")?;
         let mut mo = drm_asahi_gem_mmap_offset { handle: gc.handle, flags: 0, offset: 0 };
-        let mut bo = Bo { dev: self.dev.clone(), handle: gc.handle, size, va: 0, map: std::ptr::null_mut() };
+        let mut bo = Bo { dev: self.dev.clone(), handle: gc.handle, size, va: 0, map: std::ptr::null_mut(), binding: None };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET as u64, &mut mo, "gem-mmap-offset")?;
         let map = unsafe {
             libc::mmap(
@@ -207,6 +283,7 @@ impl Vm {
             };
             self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-bind")?;
             bo.va = va;
+            bo.binding = Some((self.id, heap.cloned()));
         }
         Ok(bo)
     }
@@ -214,24 +291,18 @@ impl Vm {
     /// A read-only object in the USC heap, for shader code and pipeline words. Its USC offset is
     /// `bo.va - vm.usc_base`.
     pub fn alloc_usc(&mut self, size: u64) -> io::Result<Bo> {
-        let size = round_up(size.max(1), PAGE);
-        if self.usc_next + size > USC_HEAP_SIZE {
-            return Err(io::Error::new(io::ErrorKind::OutOfMemory, "USC heap full"));
-        }
-        let bo = self.create(size, self.usc_base + self.usc_next, DRM_ASAHI_BIND_READ as u32)?;
-        self.usc_next += size;
-        Ok(bo)
+        self.alloc_in(&self.usc.clone(), size, DRM_ASAHI_BIND_READ as u32, "USC heap full")
     }
 
     /// A read/write data object at the next free data address.
     pub fn alloc_data(&mut self, size: u64) -> io::Result<Bo> {
+        self.alloc_in(&self.data.clone(), size, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, "data heap full")
+    }
+
+    fn alloc_in(&self, heap: &Rc<RefCell<RangeAllocator>>, size: u64, flags: u32, full: &str) -> io::Result<Bo> {
         let size = round_up(size.max(1), PAGE);
-        if self.data_next + size > self.data_end {
-            return Err(io::Error::new(io::ErrorKind::OutOfMemory, "data heap full"));
-        }
-        let bo = self.create(size, self.data_next, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32)?;
-        self.data_next += size;
-        Ok(bo)
+        let va = heap.borrow_mut().alloc(size, PAGE).ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, full))?;
+        self.create(size, va, flags, Some(heap)).inspect_err(|_| heap.borrow_mut().free(va, size))
     }
 
     /// A read/write data object at a fixed GPU address (page aligned, below the USC heap).
@@ -239,12 +310,12 @@ impl Vm {
         if va % PAGE != 0 || va + round_up(size, PAGE) > self.usc_base {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fixed address {va:#x} not usable")));
         }
-        self.create(size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32)
+        self.create(size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, None)
     }
 
     /// An unbound object (e.g. firmware timestamps).
     pub fn alloc_unbound(&mut self, size: u64) -> io::Result<Bo> {
-        self.create(size, 0, 0)
+        self.create(size, 0, 0, None)
     }
 }
 
@@ -463,6 +534,31 @@ impl Drop for Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn range_allocator_reuses_and_merges_freed_ranges() {
+        let mut a = RangeAllocator::new(0x10000, 0x10000);
+        let x = a.alloc(0x4000, 0x4000).unwrap();
+        let y = a.alloc(0x4000, 0x4000).unwrap();
+        let z = a.alloc(0x4000, 0x4000).unwrap();
+        assert_eq!((x, y, z), (0x10000, 0x14000, 0x18000));
+        a.free(y, 0x4000);
+        assert_eq!(a.alloc(0x4000, 0x4000), Some(y));
+        assert_eq!(a.alloc(0x8000, 0x4000), None);
+        a.free(x, 0x4000);
+        a.free(z, 0x4000);
+        a.free(y, 0x4000);
+        assert_eq!(a.free_bytes(), 0x10000);
+        assert_eq!(a.alloc(0x10000, 0x4000), Some(0x10000));
+    }
+
+    #[test]
+    fn range_allocator_aligns_inside_a_free_range() {
+        let mut a = RangeAllocator::new(0x1000, 0x20000);
+        assert_eq!(a.alloc(0x4000, 0x8000), Some(0x8000));
+        assert_eq!(a.alloc(0x1000, 0x1000), Some(0x1000));
+        assert_eq!(a.free_bytes(), 0x20000 - 0x5000);
+    }
 
     fn hex(b: &[u8]) -> String {
         b.iter().map(|x| format!("{x:02x}")).collect()
