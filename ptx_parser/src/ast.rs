@@ -3,9 +3,8 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, MatrixLayout, MatrixNumber,
-    MatrixShape, Mul24Control, PtxError, PtxParserState, Reduction, ShiftDirection, ShuffleMode,
-    VoteMode, VshOp,
+    BmskMode, PrmtMode, CacheLevel, EvictionPriority, FunnelShiftMode, Mul24Control, PtxError,
+    PtxParserState, Reduction, ShiftDirection, ShuffleMode, Tf32Rounding, VoteMode, VshOp,
 };
 use bitflags::bitflags;
 use derive_more::Display;
@@ -108,6 +107,17 @@ ptx_parser_macros::generate_instruction_type!(
                 src2: T,
             }
         },
+        Red {
+            type: &data.type_,
+            data: AtomDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src2: T,
+            }
+        },
         AtomCas {
             type: Type::Scalar(data.type_),
             data: AtomCasDetails,
@@ -142,7 +152,13 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst1: {
                     repr: T,
-                    type: Type::from(ScalarType::Pred)
+                    type: {
+                        if data.pred_reduction == Reduction::Popc {
+                            Type::from(ScalarType::U32)
+                        } else {
+                            Type::from(ScalarType::Pred)
+                        }
+                    }
                 },
                 src_barrier: T,
                 src_threadcount: Option<T>,
@@ -186,6 +202,105 @@ ptx_parser_macros::generate_instruction_type!(
                 src4: {
                     repr: T,
                     type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Lop3 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Option<SetpBoolPostOp>,
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src1: T,
+                src2: T,
+                src3: T,
+                src_lut: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+            }
+        },
+        Mad24 {
+            type: { Type::from(data.type_) },
+            data: Mad24Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        MixedFloat {
+            type: { Type::Scalar(data.dtype) },
+            data: MixedFloatDetails,
+            arguments<T>: {
+                dst: T,
+                src1: {
+                    repr: T,
+                    type: Type::Scalar(data.atype)
+                },
+                src2: {
+                    repr: T,
+                    type: Type::Scalar(data.btype)
+                },
+                src3: Option<T>,
+            }
+        },
+        Slct {
+            type: { Type::Scalar(data.type_) },
+            data: SlctDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: {
+                    repr: T,
+                    type: Type::Scalar(data.ctype)
+                },
+            }
+        },
+        Testp {
+            type: Type::from(ScalarType::Pred),
+            data: TestpDetails,
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.type_)
+                },
+            }
+        },
+        Szext {
+            type: { Type::Scalar(data.type_) },
+            data: SzextDetails,
+            arguments<T>: {
+                dst: T,
+                src_a: T,
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Fns {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src_mask: T,
+                src_base: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src_offset: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::S32)
                 },
             }
         },
@@ -250,9 +365,87 @@ ptx_parser_macros::generate_instruction_type!(
                 src_from: {
                     repr: T,
                     space: StateSpace::Global
+                },
+                // src-size or ignore-src in a register (an immediate src-size is in data)
+                src_size: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(if data.ignore_src { ScalarType::Pred } else { ScalarType::U32 }) },
                 }
             }
         },
+        CpAsyncMbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: CpAsyncMbarrierArriveDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                }
+            }
+        },
+        CpAsyncBulk {
+            type: Type::Scalar(ScalarType::B8),
+            data: CpAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_byte_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+        CpReduceAsyncBulk {
+            type: { Type::Scalar(data.type_) },
+            data: CpReduceAsyncBulkDetails,
+            arguments<T>: {
+                src_to: {
+                    repr: T,
+                    space: { data.dst_space },
+                },
+                src_from: {
+                    repr: T,
+                    space: { data.src_space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.dst_space },
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
+        },
+
         CpAsyncCommitGroup { },
         CpAsyncWaitGroup {
             type: Type::Scalar(ScalarType::U64),
@@ -286,6 +479,195 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: Option<T>,
                     type: { Type::Scalar(data.from) },
                     relaxed_type_check: true,
+                },
+            }
+        },
+        Alloca {
+            type: Type::Scalar(data.type_),
+            data: AllocaDetails,
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
+        StackSave {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                dst: T,
+            }
+        },
+        StackRestore {
+            type: Type::Scalar(data.clone()),
+            data: ScalarType,
+            arguments<T>: {
+                src: T,
+            }
+        },
+        // clmad: carry-less multiply of a and b, the low (data false) or
+        // high (true) 64 bits xor c
+        // Scalar video instructions: vadd, vsub, vabsdiff, vmin, vmax, vshl,
+        // vshr and vset. src3 is the operand of the secondary operation or
+        // of the merge
+        VideoScalar {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoScalarDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: Option<T>,
+            }
+        },
+        // SIMD video instructions: vadd2, vsub2, vavrg2, vabsdiff2, vmin2,
+        // vmax2, vset2 and their 4-way versions
+        VideoSimd {
+            type: Type::Scalar(ScalarType::B32),
+            data: VideoSimdDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Vmad {
+            type: Type::Scalar(ScalarType::B32),
+            data: VmadDetails,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Clmad {
+            type: Type::Scalar(ScalarType::U64),
+            data: bool,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        Packed8 {
+            type: Type::Scalar(ScalarType::B32),
+            data: Packed8Details,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: Option<T>,
+            }
+        },
+        Isspacep {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: T,
+            }
+        },
+        // Conversions to and from the narrow floating point formats
+        CvtMini {
+            data: CvtMiniDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.src_type() },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // spcompress.es.ib.sp::2:4.xN mdata, cdata, data, spdesc (PTX ISA 9.4)
+        Spcompress {
+            data: SparseDetails,
+            arguments<T>: {
+                dst_m: {
+                    repr: T,
+                    type: { registers(data.mdata) },
+                },
+                dst_c: {
+                    repr: T,
+                    type: { registers(data.cdata) },
+                },
+                src_data: {
+                    repr: T,
+                    type: { registers(data.data) },
+                },
+                src_desc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // spdecompress.es.ib.sp::S:T.xN data, mdata, cdata
+        Spdecompress {
+            data: SparseDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.data) },
+                },
+                src_m: {
+                    repr: T,
+                    type: { registers(data.mdata) },
+                },
+                src_c: {
+                    repr: T,
+                    type: { registers(data.cdata) },
+                },
+            }
+        },
+        // The PTX ISA 9.x narrow conversions (.pzo, .scaled::n{1,2}::ue8m0, .ue5m3x2, .s2f6x2), in software
+        CvtNarrow {
+            data: CvtNarrowDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.src_type() },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                    relaxed_type_check: true,
+                },
+                src_scale: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B16) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        CvtTf32 {
+            data: CvtTf32Details,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
                 },
             }
         },
@@ -349,7 +731,7 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         Ex2 {
-            type: Type::Scalar(ScalarType::F32),
+            type: Type::Scalar(data.type_),
             data: TypeFtz,
             arguments<T>: {
                 dst: T,
@@ -427,10 +809,110 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+                src3: Option<T>,
             }
         },
         Membar {
             data: MemScope
+        },
+        MbarrierInit {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                },
+                src_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierInval {
+            type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.clone() },
+                }
+            }
+        },
+        MbarrierArrive {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierArriveDetails,
+            arguments<T>: {
+                dst_state: Option<T>,
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_tx_count: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierTx {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierTxDetails,
+            arguments<T>: {
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_tx_count: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierWait {
+            type: Type::Scalar(ScalarType::B64),
+            data: MbarrierWaitDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_mbarrier: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(if data.parity { ScalarType::U32 } else { ScalarType::B64 }),
+                },
+                src_time_hint: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
+                }
+            }
+        },
+        MbarrierPendingCount {
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_state: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                }
+            }
         },
         Min {
             type: { Type::from(data.type_()) },
@@ -439,13 +921,18 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+                src3: Option<T>,
             }
         },
         Mov {
             type: { &data.typ },
             data: MovDetails,
             arguments<T>: {
-                dst: T,
+                dst: {
+                    repr: T,
+                    type: { &data.typ },
+                    relaxed_type_check: true,
+                },
                 src: T
             },
             display: write!(f, "mov{}", data.typ)?
@@ -486,6 +973,14 @@ ptx_parser_macros::generate_instruction_type!(
                 src: T
             }
         },
+        Cnot {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src: T,
+            }
+        },
         Not {
             data: ScalarType,
             type: { Type::Scalar(data.clone()) },
@@ -516,6 +1011,7 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Prmt {
             type: Type::Scalar(ScalarType::B32),
+            data: Option<PrmtMode>,
             arguments<T>: {
                 dst: T,
                 src1: T,
@@ -676,6 +1172,33 @@ ptx_parser_macros::generate_instruction_type!(
                 src_membermask: T
             }
         },
+        MatchAllSync {
+            data: ScalarType,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.clone())
+                },
+                src_membermask: T
+            }
+        },
+        ElectSync {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src_membermask: T
+            }
+        },
         Shf {
             data: ShfDetails,
             type: Type::Scalar(ScalarType::B32),
@@ -820,27 +1343,911 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        StMatrix {
+            type: data.get_loaded_type(),
+            data: LdMatrixDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src2: {
+                    repr: T,
+                    relaxed_type_check: true,
+                }
+            }
+        },
+        MovMatrix {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src: T
+            }
+        },
+        MmaSparse {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::D) },
+                },
+                src1: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::A) },
+                },
+                src2: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::B) },
+                },
+                src3: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::C) },
+                },
+                src_metadata: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_a: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_b: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
+            }
+        },
+        MmaBlockScale {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::D) },
+                },
+                src1: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::A) },
+                },
+                src2: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::B) },
+                },
+                src3: {
+                    repr: T,
+                    type: { data.mma_type(MmaMatrix::C) },
+                },
+                src_scale_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_scale_b: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
+                }
+            }
+        },
+        WmmaLoad {
+            type: data.fragment_type(),
+            data: WmmaLoadStoreDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src_stride: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+        },
+        WmmaStore {
+            type: data.fragment_type(),
+            data: WmmaLoadStoreDetails,
+            arguments<T>: {
+                src1: {
+                    repr: T,
+                    space: { data.state_space },
+                },
+                src2: {
+                    repr: T,
+                    relaxed_type_check: true,
+                },
+                src_stride: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::U32) },
+                }
+            }
+        },
+        WmmaMma {
+            data: MmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::D) },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::A) },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::B) },
+                    relaxed_type_check: true,
+                },
+                src3: {
+                    repr: T,
+                    type: { data.wmma_type(MmaMatrix::C) },
+                    relaxed_type_check: true,
+                }
+            }
+        },
         GridDepControl {
             data: crate::GridDepControlAction,
+        },
+        BarrierCluster {
+            data: BarrierClusterDetails,
+        },
+        StAsync {
+            type: { &data.type_ },
+            data: StAsyncDetails,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_value: T,
+                src_mbarrier: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        StBulk {
+            type: Type::Scalar(ScalarType::B8),
+            data: StBulkDetails,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                },
+                src_init: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                },
+            }
+        },
+        SetMaxNReg {
+            data: u32,
+        },
+        ClusterLaunchTryCancel {
+            type: Type::Scalar(ScalarType::B128),
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_mbarrier: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        ClusterLaunchQuery {
+            type: { Type::from(data.dst_type()) },
+            data: ClusterLaunchQueryDetails,
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B128),
+                    space: { data.space },
+                },
+            }
+        },
+        Mapa {
+            type: Type::Scalar(data.type_),
+            data: MapaDetails,
+            arguments<T>: {
+                dst: T,
+                src_addr: T,
+                src_rank: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Getctarank {
+            type: Type::Scalar(ScalarType::U32),
+            data: MapaDetails,
+            arguments<T>: {
+                dst: T,
+                src_addr: {
+                    repr: T,
+                    type: Type::Scalar(data.type_)
+                },
+            }
+        },
+        Wgmma {
+            data: WgmmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.d_type() },
+                },
+                src_a: {
+                    repr: T,
+                    type: { data.a_type() },
+                },
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                // the incoming values of D (the same registers as dst)
+                src_c: {
+                    repr: T,
+                    type: { data.d_type() },
+                },
+                src_scale_d: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_metadata: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        WgmmaFence {
+            data: WgmmaControl,
+        },
+        // tcgen05.fence / wait / relinquish_alloc_permit: the emulated operations complete in program order
+        Tcgen05Sync { },
+        // tcgen05.alloc.cta_group::N.sync.aligned.shared::cta.b32 [dst], ncols
+        Tcgen05Alloc {
+            type: Type::Scalar(ScalarType::B32),
+            data: u8,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_ncols: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.mma.cta_group::1.kind [d], a-desc | [a], b-desc, idesc{, disable-output-lane}, enable-input-d{, scale}
+        Tcgen05Mma {
+            data: Tcgen05MmaDetails,
+            arguments<T>: {
+                src_d: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(if data.a_tmem { ScalarType::B32 } else { ScalarType::B64 }) },
+                },
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                // .sp: the tensor memory address of the metadata
+                src_meta: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_idesc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                // .block_scale: the tensor memory addresses of the scale factors of A and B
+                src_scale_a: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_scale_b: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_mask: {
+                    repr: Option<T>,
+                    type: Type::Vector(4, ScalarType::B32),
+                },
+                src_enable: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_scale: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                // .ws: the zero-column mask descriptor
+                src_zmask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tcgen05.cp.cta_group::N.shape{.decompression} [taddr], s-desc: data is the shape, the decompression code and N
+        Tcgen05Cp {
+            data: (u8, u8, u8),
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_desc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tcgen05.shift.cta_group::1.down [taddr]
+        Tcgen05Shift {
+            data: u8,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.commit.cta_group::1.mbarrier::arrive::one{.shared::cluster}.b64 [mbar]
+        Tcgen05Commit {
+            type: Type::Scalar(ScalarType::B64),
+            arguments<T>: {
+                src_mbar: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        // tcgen05.dealloc.cta_group::N.sync.aligned.b32 taddr, ncols
+        Tcgen05Dealloc {
+            data: u8,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_ncols: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.ld.sync.aligned.shape.num{.pack::16b}.b32 d, [taddr]{, offset}
+        Tcgen05Ld {
+            data: Tcgen05LdStDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.registers) },
+                },
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_offset: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.ld.red / ld.spcompress / ld.red.spcompress: dst is the loaded registers, or the metadata with
+        // .spcompress (then dst_c the kept values); dst_red the reduction
+        Tcgen05LdRed {
+            data: Tcgen05LdRedDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.dst_registers) },
+                },
+                dst_c: {
+                    repr: Option<T>,
+                    type: { registers(data.c_registers) },
+                },
+                dst_red: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.st.sync.aligned.shape.num{.unpack::16b}.b32 [taddr]{, offset}, values
+        Tcgen05St {
+            data: Tcgen05LdStDetails,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_offset: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_values: {
+                    repr: T,
+                    type: { registers(data.registers) },
+                },
+            }
+        },
+        // tex / tld4 in their full forms (textures sampled in software on AGX)
+        TexAgx {
+            type: !,
+            data: TexAgxDetails,
+            arguments<T>: {
+                dst0: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst1: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst2: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst3: {
+                    repr: T,
+                    type: { Type::Scalar(data.dtype) },
+                    relaxed_type_check: true,
+                },
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_tex: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_sampler: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_lod: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dx2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_dy2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_o2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ref: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // txq.field.b32 / suq.field.b32
+        TexQuery {
+            type: !,
+            data: TexQueryDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // suld.b
+        SuldAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                dst0: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                dst3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // sust.b / sust.p
+        SustAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_v0: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+                src_v3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // sured.b / sured.p
+        SuredAgx {
+            type: !,
+            data: SurfaceDetails,
+            arguments<T>: {
+                src_surf: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_v: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // istypep.{texref,samplerref,surfref} p, a
+        Istypep {
+            type: !,
+            data: u8,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // cp.async.bulk.tensor / cp.reduce.async.bulk.tensor in tile mode
+        CpAsyncBulkTensor {
+            type: Type::Scalar(ScalarType::B8),
+            data: CpAsyncBulkTensorDetails,
+            arguments<T>: {
+                // the shared-memory image: the destination of loads, the source of stores
+                src_smem: {
+                    repr: T,
+                    space: { data.smem_space },
+                },
+                // the generic address of the tensor map
+                src_tmap: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                src_c0: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c4: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                // .override::global_address / .override::global_dim{_stride}:
+                // the new address, dims, and strides (low 32 bits, then the
+                // upper 4 bits of each in one 16-bit register)
+                src_ov_addr: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_ov_d0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d4: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_up: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.smem_space },
+                },
+                // im2col offsets (im2col) or {wHalo, wOffset} (im2col::w)
+                src_i0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_i1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_i2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.mask_type()) },
+                    relaxed_type_check: true,
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tensormap.replace.tile.field.space.b1024.type [tmap], {ord,} value
+        TensormapReplace {
+            type: Type::Scalar(ScalarType::B8),
+            data: TensormapReplaceDetails,
+            arguments<T>: {
+                src_tmap: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_ord: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_value: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
         },
         Mma {
             data: MmaDetails,
             arguments<T>: {
                 dst: {
                     repr: T,
-                    type: { data.dtype() },
+                    type: { data.mma_type(MmaMatrix::D) },
                 },
                 src1: {
                     repr: T,
-                    type: { data.atype() },
+                    type: { data.mma_type(MmaMatrix::A) },
                 },
                 src2: {
                     repr: T,
-                    type: { data.btype() },
+                    type: { data.mma_type(MmaMatrix::B) },
                 },
                 src3: {
                     repr: T,
-                    type: { data.ctype() },
+                    type: { data.mma_type(MmaMatrix::C) },
                 }
             }
         },
@@ -861,7 +2268,6 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::from(ScalarType::B8),
                     space: { data.space },
-                    relaxed_type_check: true
                 }
             }
         },
@@ -901,6 +2307,8 @@ ptx_parser_macros::generate_instruction_type!(
                 }
             }
         },
+        // vshr.u32.u32.u32.clamp.add, kept apart from VideoScalar so that its
+        // code does not change
         Vshr {
             type: Type::Scalar(ScalarType::U32),
             data: VshData,
@@ -947,7 +2355,7 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Bfind {
             type: !,
-            data: (),
+            data: BfindDetails,
             arguments<T>: {
                 dst: {
                     repr: T,
@@ -956,7 +2364,7 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src:  {
                     repr: T,
-                    type: { Type::Scalar(ScalarType::U32) }
+                    type: { Type::Scalar(data.type_) }
 
                 }
             }
@@ -1080,6 +2488,10 @@ where
                                     (self)(ident, type_space, is_dst, relaxed_type_check)?,
                                 )),
                                 Some(RegOrImmediate::Imm(imm)) => Some(RegOrImmediate::Imm(imm)),
+                                Some(RegOrImmediate::RegOffset(ident, offset)) => Some(RegOrImmediate::RegOffset(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                    offset,
+                                )),
                                 None => None,
                             })
                         })
@@ -1222,6 +2634,12 @@ pub enum MultiVariable<ID> {
     Names {
         info: VariableInfo<ID>,
         names: Vec<ID>,
+    },
+    /// A list of register names of which some are parameterized, as in
+    /// `.reg .b32 %r<8>, %q<4>, %x;`.
+    List {
+        info: VariableInfo<ID>,
+        names: Vec<(ID, Option<u32>)>,
     },
 }
 
@@ -1384,7 +2802,7 @@ impl ScalarType {
             | ScalarType::S16x2
             | ScalarType::F16x2
             | ScalarType::BF16x2 => 4,
-            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 => 8,
+            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 | ScalarType::F32x2 => 8,
             ScalarType::B128 => 16,
             ScalarType::Pred => 1,
         }
@@ -1412,7 +2830,7 @@ impl ScalarType {
             | ScalarType::S16x2
             | ScalarType::F16x2
             | ScalarType::BF16x2 => Layout::new::<u32>(),
-            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 => {
+            ScalarType::U64 | ScalarType::S64 | ScalarType::B64 | ScalarType::F64 | ScalarType::F32x2 => {
                 Layout::new::<u64>()
             }
             ScalarType::B128 => unsafe { Layout::from_size_align_unchecked(16, 16) },
@@ -1441,6 +2859,7 @@ impl ScalarType {
             ScalarType::F16 => ScalarKind::Float,
             ScalarType::F16x2 => ScalarKind::Float,
             ScalarType::F32 => ScalarKind::Float,
+            ScalarType::F32x2 => ScalarKind::Float,
             ScalarType::F64 => ScalarKind::Float,
             ScalarType::BF16 => ScalarKind::Float,
             ScalarType::BF16x2 => ScalarKind::Float,
@@ -1455,6 +2874,7 @@ impl ScalarType {
             ScalarType::E4m3x2 => Some(ScalarType::B8),
             ScalarType::E5m2x2 => Some(ScalarType::B8),
             ScalarType::F16x2 => Some(ScalarType::F16),
+            ScalarType::F32x2 => Some(ScalarType::F32),
             ScalarType::BF16x2 => Some(ScalarType::BF16),
             ScalarType::U16x2 => Some(ScalarType::U16),
             ScalarType::S16x2 => Some(ScalarType::S16),
@@ -1541,7 +2961,47 @@ pub struct CpAsyncDetails {
     pub caching: CpAsyncCacheOperator,
     pub space: StateSpace,
     pub cp_size: CpAsyncCpSize,
+    // immediate src-size
     pub src_size: Option<u64>,
+    // the src_size argument is the ignore-src predicate
+    pub ignore_src: bool,
+}
+
+pub struct CpAsyncMbarrierArriveDetails {
+    pub space: StateSpace,
+    pub noinc: bool,
+}
+
+pub struct CpAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub multicast: bool,
+}
+
+pub struct CpReduceAsyncBulkDetails {
+    pub dst_space: StateSpace,
+    pub src_space: StateSpace,
+    pub op: AtomicOp,
+    pub type_: ScalarType,
+}
+
+pub struct MbarrierArriveDetails {
+    pub space: StateSpace,
+    // arrive_drop: also decrements the expected arrival count
+    pub drop: bool,
+}
+
+pub struct MbarrierTxDetails {
+    pub space: StateSpace,
+    // complete_tx (decrements the transaction count) instead of expect_tx
+    pub complete: bool,
+}
+
+pub struct MbarrierWaitDetails {
+    pub space: StateSpace,
+    pub parity: bool,
+    // try_wait (potentially blocking) instead of test_wait
+    pub try_wait: bool,
 }
 
 pub struct ShfDetails {
@@ -1553,6 +3013,9 @@ pub struct ShfDetails {
 pub enum RegOrImmediate<Ident> {
     Reg(Ident),
     Imm(ImmediateValue),
+    /// the address of a variable plus a byte offset (in initializers: `name + 4`)
+    #[display("{_0}+{_1}")]
+    RegOffset(Ident, i64),
 }
 
 #[derive(Clone)]
@@ -1788,6 +3251,8 @@ pub struct ArithFloat {
     pub rounding: RoundingMode,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
+    /// `.relu` (fma): negative results become +0, NaN stays NaN
+    pub relu: bool,
     // From PTX documentation: https://docs.nvidia.com/cuda/parallel-thread-execution/#mixed-precision-floating-point-instructions-add
     // Note that an add instruction with an explicit rounding modifier is treated conservatively by
     // the code optimizer. An add instruction with no rounding modifier defaults to
@@ -1861,8 +3326,24 @@ pub struct LdDetails {
     pub non_coherent: bool,
 }
 
+/// Shapes of `ldmatrix` and `stmatrix`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixShape {
+    M8n8,
+    M16n16,
+    M8n16,
+    M16n8,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixNumber {
+    X1,
+    X2,
+    X4,
+}
+
 impl MatrixNumber {
-    fn get(&self) -> u8 {
+    pub fn get(&self) -> u8 {
         match self {
             MatrixNumber::X1 => 1,
             MatrixNumber::X2 => 2,
@@ -1871,34 +3352,42 @@ impl MatrixNumber {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MatrixLayout {
+    Row,
+    Col,
+}
+
+/// Element format of `ldmatrix` and `stmatrix`: 16-bit or 8-bit elements, or
+/// (sm_100) packed 6-bit, 4-bit and signed 4-bit elements expanded to 8-bit
+/// containers (`.b8x16.b6x16_p32`, `.b8x16.b4x16_p64`, `.s8.s4`).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum LdMatrixFormat {
+    B16,
+    B8,
+    B6x16P32,
+    B4x16P64,
+    S4,
+}
+
 #[derive(Copy, Clone)]
 pub struct LdMatrixDetails {
     pub shape: MatrixShape,
     pub number: MatrixNumber,
     pub transpose: bool,
     pub state_space: StateSpace,
-    pub type_: ScalarType,
+    pub format: LdMatrixFormat,
 }
 
 impl LdMatrixDetails {
-    pub fn new(
-        shape: MatrixShape,
-        number: MatrixNumber,
-        transpose: bool,
-        ss: Option<StateSpace>,
-        type_: ScalarType,
-    ) -> Self {
-        Self {
-            shape,
-            number,
-            transpose,
-            state_space: ss.unwrap_or(StateSpace::Shared),
-            type_,
-        }
+    /// Number of 32-bit registers of the destination (or source) vector.
+    pub fn registers(&self) -> u8 {
+        let per_matrix = if self.shape == MatrixShape::M16n16 { 2 } else { 1 };
+        self.number.get() * per_matrix
     }
+
     pub fn get_loaded_type(&self) -> Type {
-        let count = self.number.get();
-        Type::Vector(count, ScalarType::B32)
+        Type::Vector(self.registers(), ScalarType::B32)
     }
 }
 
@@ -1921,6 +3410,10 @@ pub enum TuningDirective {
     ReqNtid(u32, u32, u32),
     MinNCtaPerSm(u32),
     NoReturn,
+    /// .reqnctapercluster: the CTAs of a cluster along x, y and z
+    ReqNctaPerCluster(u32, u32, u32),
+    ExplicitCluster,
+    MaxClusterRank(u32),
 }
 
 pub struct MethodDeclaration<'input, ID> {
@@ -2090,6 +3583,109 @@ pub struct Mul24Details {
     pub control: Mul24Control,
 }
 
+/// mad24.mode{.sat}.type: the 24-bit product's low 32 bits (lo) or bits 47..16 (hi), plus c; .sat (hi.s32 only)
+/// saturates the addition
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Mad24Details {
+    pub type_: ScalarType,
+    pub control: Mul24Control,
+    pub saturate: bool,
+}
+
+/// slct.dtype.ctype: a when c >= 0, else b (for f32 c, -0 counts as >= 0 and NaN does not; .ftz flushes c first)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SlctDetails {
+    pub type_: ScalarType,
+    pub ctype: ScalarType,
+    pub flush_to_zero: bool,
+}
+
+/// st.async (red: None) / red.async: a store, or an atomic operation, on shared::cluster memory that completes
+/// its bytes on an mbarrier
+#[derive(Clone)]
+pub struct StAsyncDetails {
+    pub type_: Type,
+    pub red: Option<AtomicOp>,
+    pub scalar: ScalarType,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct StBulkDetails {
+    pub space: StateSpace,
+}
+
+/// clusterlaunchcontrol.query_cancel: is_canceled (a predicate), or get_first_ctaid (x, y, z or all as v4.b32)
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ClusterLaunchQueryDetails {
+    pub ctaid: Option<Option<u8>>,
+    /// where the response is: a .b128 register, or shared memory
+    pub space: StateSpace,
+}
+
+impl ClusterLaunchQueryDetails {
+    pub fn dst_type(&self) -> Type {
+        match self.ctaid {
+            None => Type::Scalar(ScalarType::Pred),
+            Some(Some(_)) => Type::Scalar(ScalarType::B32),
+            Some(None) => Type::Vector(4, ScalarType::B32),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct BarrierClusterDetails {
+    /// arrive (else wait)
+    pub arrive: bool,
+    /// .relaxed arrive: no release ordering
+    pub relaxed: bool,
+}
+
+/// The address form of mapa and getctarank: shared::cluster (a 32-bit shared address) or generic (64-bit)
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MapaDetails {
+    pub shared: bool,
+    pub type_: ScalarType,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MixedFloatOp {
+    Add,
+    Sub,
+    Mul,
+    Fma,
+}
+
+/// The mixed-precision forms (PTX ISA 8.6 and 9.x, sm_100 and later): add / sub / fma.f32.{f16,bf16} convert the
+/// 16-bit operands to f32 and compute in f32 (the third source of fma, and the second of add / sub, is f32);
+/// add / sub / mul / fma.rz.{f16x2,bf16x2}.f32x2.f32x2 compute both lanes in f32 and round the results to the
+/// 16-bit type with the given rounding
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MixedFloatDetails {
+    pub op: MixedFloatOp,
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub rounding: RoundingMode,
+    pub flush_to_zero: bool,
+    pub saturate: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TestpOp {
+    Finite,
+    Infinite,
+    Number,
+    NotANumber,
+    Normal,
+    Subnormal,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TestpDetails {
+    pub op: TestpOp,
+    pub type_: ScalarType,
+}
+
 pub struct SetData {
     pub dtype: ScalarType,
     pub base: SetpData,
@@ -2109,8 +3705,10 @@ impl SetpData {
         ftz: bool,
         type_: ScalarType,
     ) -> Self {
+        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them
         let flush_to_zero = match (ftz, type_) {
-            (_, ScalarType::F32) => Some(ftz),
+            (_, ScalarType::F32 | ScalarType::F16 | ScalarType::F16x2) => Some(ftz),
+            (false, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
             (true, _) => {
                 state.errors.push(PtxError::NonF32Ftz);
                 None
@@ -2399,6 +3997,8 @@ pub enum CvtMode {
     FPExtend {
         flush_to_zero: Option<bool>,
         saturate: bool,
+        relu: bool,
+        satfinite: bool,
     },
     FPTruncate {
         // float rounding
@@ -2407,6 +4007,7 @@ pub enum CvtMode {
         flush_to_zero: Option<bool>,
         saturate: bool,
         relu: bool,
+        satfinite: bool,
     },
     FPRound {
         integer_rounding: Option<RoundingMode>,
@@ -2440,16 +4041,24 @@ impl CvtDetails {
         ftz: bool,
         saturate: bool,
         relu: bool,
+        satfinite: bool,
         dst: ScalarType,
         src: ScalarType,
     ) -> Self {
+        if (relu || satfinite) && !(dst.kind() == ScalarKind::Float && src.kind() == ScalarKind::Float)
+        {
+            errors.push(PtxError::SyntaxError(
+                ".relu and .satfinite in cvt need floating point types".to_string(),
+            ));
+        }
         // Modifier .ftz can only be specified when either .dtype or .atype is .f32 and applies only to single precision (.f32) inputs and results.
         let flush_to_zero = match (dst, src) {
             (ScalarType::F32, _) | (_, ScalarType::F32) => Some(ftz),
             _ => {
-                if ftz {
-                    errors.push(PtxError::NonF32Ftz);
-                }
+                // .ftz needs an f32 source or destination; ptxas rejects it
+                // elsewhere, PTX-formalization accepts it and flushes f16
+                // and f64 subnormals too. It is ignored here
+                let _ = ftz;
                 None
             }
         };
@@ -2477,7 +4086,10 @@ impl CvtDetails {
         };
         let mode = match (dst.kind(), src.kind()) {
             (ScalarKind::Float, ScalarKind::Float) => match dst_size.cmp(&src.size_of()) {
-                Ordering::Less => {
+                // Conversions between f16 and bf16 round like truncations
+                Ordering::Less | Ordering::Equal
+                    if dst_size < src.size_of() || (dst != src && dst.packed_type().is_none()) =>
+                {
                     let (rounding, is_integer_rounding) = unwrap_rounding();
                     CvtMode::FPTruncate {
                         rounding,
@@ -2485,7 +4097,15 @@ impl CvtDetails {
                         flush_to_zero,
                         saturate,
                         relu,
+                        satfinite,
                     }
+                }
+                Ordering::Less => unreachable!(),
+                Ordering::Equal if relu || satfinite => {
+                    errors.push(PtxError::SyntaxError(
+                        ".relu and .satfinite in cvt need different types".to_string(),
+                    ));
+                    CvtMode::Bitcast
                 }
                 Ordering::Equal => CvtMode::FPRound {
                     integer_rounding: rounding.map(|(rnd, _)| rnd),
@@ -2504,6 +4124,8 @@ impl CvtDetails {
                     CvtMode::FPExtend {
                         flush_to_zero,
                         saturate,
+                        relu,
+                        satfinite,
                     }
                 }
             },
@@ -2653,6 +4275,8 @@ impl MadDetails {
 #[derive(Copy, Clone)]
 pub enum MinMaxDetails {
     Signed(ScalarType),
+    /// .relu of s32 / s16x2: negative results become 0
+    SignedRelu(ScalarType),
     Unsigned(ScalarType),
     Float(MinMaxFloat),
 }
@@ -2660,7 +4284,7 @@ pub enum MinMaxDetails {
 impl MinMaxDetails {
     pub fn type_(&self) -> ScalarType {
         match self {
-            MinMaxDetails::Signed(t) => *t,
+            MinMaxDetails::Signed(t) | MinMaxDetails::SignedRelu(t) => *t,
             MinMaxDetails::Unsigned(t) => *t,
             MinMaxDetails::Float(float) => float.type_,
         }
@@ -2671,6 +4295,9 @@ impl MinMaxDetails {
 pub struct MinMaxFloat {
     pub flush_to_zero: Option<bool>,
     pub nan: bool,
+    // .xorsign.abs: compare the magnitudes, the result has the sign
+    // sign(a) xor sign(b)
+    pub xorsign_abs: bool,
     pub type_: ScalarType,
 }
 
@@ -2679,6 +4306,8 @@ pub struct RcpData {
     pub kind: RcpKind,
     pub flush_to_zero: Option<bool>,
     pub type_: ScalarType,
+    /// .sat of sqrt.rnd.f32 (accepted by PTX-formalization): the result clamped to [0, 1]
+    pub saturate: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -2789,6 +4418,8 @@ pub struct DivFloatDetails {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: DivFloatKind,
+    /// .sat (PTX-formalization accepts it on div.rnd.f32): the result clamped to [0, 1]
+    pub saturate: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -2811,7 +4442,7 @@ pub struct VoteDetails {
 impl VoteMode {
     fn type_(self) -> ScalarType {
         match self {
-            VoteMode::All | VoteMode::Any => ScalarType::Pred,
+            VoteMode::All | VoteMode::Any | VoteMode::Uni => ScalarType::Pred,
             VoteMode::Ballot => ScalarType::B32,
         }
     }
@@ -2822,32 +4453,452 @@ pub struct ReduxSyncData {
     pub reduction: Reduction,
 }
 
+/// Element types of the warp-level matrix instructions (`mma`, `wmma`).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaType {
+    F16,
+    Bf16,
+    Tf32,
+    F32,
+    F64,
+    S8,
+    U8,
+    S4,
+    U4,
+    B1,
+    S32,
+    E4m3,
+    E5m2,
+    E3m2,
+    E2m3,
+    E2m1,
+    /// e2m1 packed two per byte (block scaled `kind::mxf4`, `kind::mxf4nvf4`)
+    E2m1x2,
+}
+
+impl MmaType {
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "f16" => MmaType::F16,
+            "bf16" => MmaType::Bf16,
+            "tf32" => MmaType::Tf32,
+            "f32" => MmaType::F32,
+            "f64" => MmaType::F64,
+            "s8" => MmaType::S8,
+            "u8" => MmaType::U8,
+            "s4" => MmaType::S4,
+            "u4" => MmaType::U4,
+            "b1" => MmaType::B1,
+            "s32" => MmaType::S32,
+            "e4m3" => MmaType::E4m3,
+            "e5m2" => MmaType::E5m2,
+            "e3m2" => MmaType::E3m2,
+            "e2m3" => MmaType::E2m3,
+            "e2m1" => MmaType::E2m1,
+            "e2m1x2" => MmaType::E2m1x2,
+            _ => return None,
+        })
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            MmaType::F16 => "f16",
+            MmaType::Bf16 => "bf16",
+            MmaType::Tf32 => "tf32",
+            MmaType::F32 => "f32",
+            MmaType::F64 => "f64",
+            MmaType::S8 => "s8",
+            MmaType::U8 => "u8",
+            MmaType::S4 => "s4",
+            MmaType::U4 => "u4",
+            MmaType::B1 => "b1",
+            MmaType::S32 => "s32",
+            MmaType::E4m3 => "e4m3",
+            MmaType::E5m2 => "e5m2",
+            MmaType::E3m2 => "e3m2",
+            MmaType::E2m3 => "e2m3",
+            MmaType::E2m1 => "e2m1",
+            MmaType::E2m1x2 => "e2m1x2",
+        }
+    }
+
+    pub fn is_float(self) -> bool {
+        !matches!(
+            self,
+            MmaType::S8 | MmaType::U8 | MmaType::S4 | MmaType::U4 | MmaType::B1 | MmaType::S32
+        )
+    }
+
+    /// Width of an element in a fragment register, in bits. The 6-bit and
+    /// 4-bit floating point elements of `mma .kind::f8f6f4` are in 8-bit
+    /// containers.
+    pub fn bits(self) -> u32 {
+        match self {
+            MmaType::F64 => 64,
+            MmaType::Tf32 | MmaType::F32 | MmaType::S32 => 32,
+            MmaType::F16 | MmaType::Bf16 => 16,
+            MmaType::S4 | MmaType::U4 | MmaType::E2m1x2 => 4,
+            MmaType::B1 => 1,
+            _ => 8,
+        }
+    }
+}
+
+/// The matrices of `D = A * B + C`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaMatrix {
+    A,
+    B,
+    C,
+    D,
+}
+
+/// The operation of single-bit `mma`: `.xor.popc` or `.and.popc`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum MmaB1Op {
+    Xor,
+    And,
+}
+
+/// The scale factors of block scaled `mma.sync` (`.block_scale`): every row
+/// of A and column of B is cut into `chunks` blocks (`.scale_vec::NX`), each
+/// multiplied by a scale factor (`.ue8m0`, or `.ue4m3` with `ue4m3`). The
+/// factors of A are byte `a_byte + j` of the scale register of the thread
+/// `a_thread` of the selector (the `{byte-id, thread-id}` operands, which
+/// must be immediates), and likewise for B.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct MmaBlockScale {
+    pub chunks: u32,
+    pub ue4m3: bool,
+    pub a_byte: u32,
+    pub a_thread: u32,
+    pub b_byte: u32,
+    pub b_thread: u32,
+}
+
+/// `mma.sync` and `wmma.mma`: D (m x n) = A (m x k) * B (k x n) + C.
+#[derive(Copy, Clone)]
 pub struct MmaDetails {
+    pub m: u32,
+    pub n: u32,
+    pub k: u32,
     pub alayout: MatrixLayout,
     pub blayout: MatrixLayout,
-    pub cd_type_scalar: ScalarType,
-    pub ab_type_scalar: ScalarType,
+    pub dtype: MmaType,
+    pub atype: MmaType,
+    pub btype: MmaType,
+    pub ctype: MmaType,
+    pub satfinite: bool,
+    pub b1_op: Option<MmaB1Op>,
+    pub block_scale: Option<MmaBlockScale>,
+    /// Sparse `mma.sp`: A is 2:4 (1:2 for `tf32`, 4:8 for 4-bit elements)
+    /// structured sparse, its fragment holds the non-zero elements and the
+    /// metadata operand their positions; the value is the sparsity selector
+    /// (an immediate).
+    pub sparse: Option<u32>,
 }
 
 impl MmaDetails {
-    pub fn dtype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
-        } else {
-            Type::Vector(4, ScalarType::U32)
+    /// Whether this is one of the `mma.sync` variants that are supported:
+    /// the PTX shapes of the `f16`, `bf16`, `tf32`, `f64`, integer, single
+    /// bit and 8-bit floating point (`kind::f8f6f4` included) types.
+    pub fn is_supported_mma(&self, kind_f8f6f4: bool) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let (a, b, c, d) = (self.atype, self.btype, self.ctype, self.dtype);
+        let float_accumulator = matches!(c, F16 | F32) && matches!(d, F16 | F32);
+        let integer_accumulator = c == S32 && d == S32;
+        let integer = matches!(a, S8 | U8 | S4 | U4);
+        if (self.b1_op.is_some() != (a == B1)) || (self.satfinite && !integer) {
+            return false;
+        }
+        if kind_f8f6f4 {
+            let f8f6f4 = |t| matches!(t, E4m3 | E5m2 | E3m2 | E2m3 | E2m1);
+            return shape == (16, 8, 32) && f8f6f4(a) && f8f6f4(b) && float_accumulator;
+        }
+        match (a, b) {
+            (F16, F16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && float_accumulator,
+            (Bf16, Bf16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && c == F32 && d == F32,
+            (Tf32, Tf32) => matches!(shape, (16, 8, 4) | (16, 8, 8)) && c == F32 && d == F32,
+            (F64, F64) => {
+                matches!(shape, (8, 8, 4) | (16, 8, 4) | (16, 8, 8) | (16, 8, 16))
+                    && c == F64
+                    && d == F64
+            }
+            (S8 | U8, S8 | U8) => {
+                matches!(shape, (8, 8, 16) | (16, 8, 16) | (16, 8, 32)) && integer_accumulator
+            }
+            (S4 | U4, S4 | U4) => {
+                matches!(shape, (8, 8, 32) | (16, 8, 32) | (16, 8, 64)) && integer_accumulator
+            }
+            (B1, B1) => {
+                matches!(shape, (8, 8, 128) | (16, 8, 128) | (16, 8, 256)) && integer_accumulator
+            }
+            (E4m3 | E5m2, E4m3 | E5m2) => {
+                matches!(shape, (16, 8, 16) | (16, 8, 32)) && float_accumulator
+            }
+            _ => false,
         }
     }
-    pub fn atype(&self) -> Type {
-        Type::Vector(4, ScalarType::U32)
-    }
-    pub fn btype(&self) -> Type {
-        Type::Vector(2, ScalarType::U32)
-    }
-    pub fn ctype(&self) -> Type {
-        if self.cd_type_scalar.kind() == ScalarKind::Float {
-            Type::Vector(4, ScalarType::F32)
+
+    /// Whether this is a supported block scaled `mma.sync` (`fp4`: of kind
+    /// `mxf4` or `mxf4nvf4`).
+    pub fn is_supported_block_scale(&self, scale: &MmaBlockScale, fp4: bool) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        if self.ctype != F32 || self.dtype != F32 || self.satfinite || self.b1_op.is_some() {
+            return false;
+        }
+        if fp4 {
+            shape == (16, 8, 64)
+                && self.atype == E2m1x2
+                && self.btype == E2m1x2
+                && matches!(scale.chunks, 2 | 4)
         } else {
-            Type::Vector(4, ScalarType::U32)
+            let f8f6f4 = |t| matches!(t, E4m3 | E5m2 | E3m2 | E2m3 | E2m1);
+            shape == (16, 8, 32)
+                && f8f6f4(self.atype)
+                && f8f6f4(self.btype)
+                && scale.chunks == 1
+                && !scale.ue4m3
+        }
+    }
+
+    /// Whether this is a supported `mma.sp` (with the block scaling of
+    /// `scale` if any): m16n8 with the depths of the PTX ISA.
+    pub fn is_supported_sparse(
+        &self,
+        kind_f8f6f4: bool,
+        scale: Option<(&MmaBlockScale, bool)>,
+    ) -> bool {
+        use MmaType::*;
+        let (depths, dense_k): (&[u32], u32) = match self.atype {
+            F16 | Bf16 => (&[16, 32], 16),
+            Tf32 => (&[8, 16], 8),
+            S8 | U8 => (&[32, 64], 32),
+            S4 | U4 => (&[64, 128], 64),
+            E2m1x2 => (&[128], 64),
+            E4m3 | E5m2 | E3m2 | E2m3 | E2m1 => (&[64], 32),
+            _ => return false,
+        };
+        // the types are those of a dense mma
+        let dense = MmaDetails {
+            k: dense_k,
+            sparse: None,
+            ..*self
+        };
+        let types = match scale {
+            Some((scale, fp4)) => dense.is_supported_block_scale(scale, fp4),
+            None => dense.is_supported_mma(kind_f8f6f4),
+        };
+        self.m == 16 && self.n == 8 && depths.contains(&self.k) && types
+    }
+
+    /// Whether this is a supported `wmma.mma`: all the shapes and types of
+    /// the PTX ISA (`.rn` only for `f64`).
+    pub fn is_supported_wmma(&self) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let (a, c, d) = (self.atype, self.ctype, self.dtype);
+        let integer = matches!(a, S8 | U8 | S4 | U4);
+        if self.btype != a || (self.b1_op.is_some() != (a == B1)) || (self.satfinite && !integer)
+        {
+            return false;
+        }
+        let k16 = matches!(shape, (16, 16, 16) | (32, 8, 16) | (8, 32, 16));
+        match a {
+            F16 => k16 && matches!(c, F16 | F32) && matches!(d, F16 | F32),
+            Bf16 => k16 && c == F32 && d == F32,
+            S8 | U8 => k16 && c == S32 && d == S32,
+            Tf32 => shape == (16, 16, 8) && c == F32 && d == F32,
+            F64 => shape == (8, 8, 4) && c == F64 && d == F64,
+            S4 | U4 => shape == (8, 8, 32) && c == S32 && d == S32,
+            B1 => shape == (8, 8, 128) && c == S32 && d == S32,
+            _ => false,
+        }
+    }
+
+    pub fn element_type(&self, matrix: MmaMatrix) -> MmaType {
+        match matrix {
+            MmaMatrix::A => self.atype,
+            MmaMatrix::B => self.btype,
+            MmaMatrix::C => self.ctype,
+            MmaMatrix::D => self.dtype,
+        }
+    }
+
+    /// Rows and columns of a matrix.
+    pub fn matrix_size(&self, matrix: MmaMatrix) -> (u32, u32) {
+        match matrix {
+            MmaMatrix::A => (self.m, self.k),
+            MmaMatrix::B => (self.k, self.n),
+            MmaMatrix::C | MmaMatrix::D => (self.m, self.n),
+        }
+    }
+
+    /// Number of registers of a fragment of `mma.sync`: each thread of the
+    /// warp holds 1/32 of the matrix, packed in 32-bit registers (64-bit for
+    /// `f64`).
+    pub fn mma_registers(&self, matrix: MmaMatrix) -> u8 {
+        let (rows, cols) = self.matrix_size(matrix);
+        let type_ = self.element_type(matrix);
+        let register_bits = if type_ == MmaType::F64 { 64 } else { 32 };
+        // half of the elements of a sparse A
+        let sparsity = if self.sparse.is_some() && matrix == MmaMatrix::A { 2 } else { 1 };
+        (rows * cols / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
+    }
+
+    /// Number of registers of a fragment of `wmma`, as given by the PTX ISA:
+    /// like `mma.sync`, except that `f16` A and B fragments have 8 registers
+    /// (every element is held by two threads).
+    pub fn wmma_registers(&self, matrix: MmaMatrix) -> u8 {
+        let type_ = self.element_type(matrix);
+        if type_ == MmaType::F16 && matches!(matrix, MmaMatrix::A | MmaMatrix::B) {
+            8
+        } else {
+            self.mma_registers(matrix)
+        }
+    }
+
+    // The variants of the original AMD GPU implementation keep its operand
+    // types: m16n8k16 f32.{f16,bf16} and m16n8k32 s32.s8.s8.
+    fn is_legacy(&self) -> bool {
+        matches!(
+            (self.m, self.n, self.k, self.dtype, self.atype, self.btype, self.ctype),
+            (16, 8, 16, MmaType::F32, MmaType::F16, MmaType::F16, MmaType::F32)
+                | (16, 8, 16, MmaType::F32, MmaType::Bf16, MmaType::Bf16, MmaType::F32)
+                | (16, 8, 32, MmaType::S32, MmaType::S8, MmaType::S8, MmaType::S32)
+        ) && !self.satfinite
+            && self.sparse.is_none()
+    }
+
+    pub fn mma_type(&self, matrix: MmaMatrix) -> Type {
+        let registers = self.mma_registers(matrix);
+        if self.is_legacy() {
+            let scalar = match matrix {
+                MmaMatrix::A | MmaMatrix::B => ScalarType::U32,
+                MmaMatrix::C | MmaMatrix::D if self.dtype == MmaType::F32 => ScalarType::F32,
+                MmaMatrix::C | MmaMatrix::D => ScalarType::U32,
+            };
+            return Type::Vector(registers, scalar);
+        }
+        Type::Vector(registers, fragment_scalar(self.element_type(matrix)))
+    }
+
+    pub fn wmma_type(&self, matrix: MmaMatrix) -> Type {
+        Type::Vector(
+            self.wmma_registers(matrix),
+            fragment_scalar(self.element_type(matrix)),
+        )
+    }
+}
+
+fn fragment_scalar(type_: MmaType) -> ScalarType {
+    if type_ == MmaType::F64 {
+        ScalarType::B64
+    } else {
+        ScalarType::B32
+    }
+}
+
+/// `wgmma.mma_async{.sp}`: the warpgroup (4 warps) computes a 64 x n x k product. `mma` holds the shape and
+/// types (m = 64, ctype = dtype, sparse = the selector of .sp); A is in registers (the m16n8kK fragment of each
+/// warp) or in shared memory (a matrix descriptor), B in shared memory.
+#[derive(Copy, Clone)]
+pub struct WgmmaDetails {
+    pub mma: MmaDetails,
+    pub a_descriptor: bool,
+    /// imm-scale-a / imm-scale-b of -1: the elements are negated
+    pub negate_a: bool,
+    pub negate_b: bool,
+    /// imm-trans-a / imm-trans-b (16-bit types): the descriptor's tile is MN-major instead of K-major
+    pub transpose_a: bool,
+    pub transpose_b: bool,
+    /// scale-d as an immediate (false: D = A * B); None when it is a predicate operand
+    pub scale_d: Option<bool>,
+}
+
+impl WgmmaDetails {
+    /// D: n / 2 elements per thread, 32-bit registers
+    pub fn d_type(&self) -> Type {
+        let elements = self.mma.n / 2;
+        let per = if self.mma.dtype.bits() == 16 { 2 } else { 1 };
+        Type::Vector((elements / per) as u8, ScalarType::B32)
+    }
+
+    pub fn a_type(&self) -> Type {
+        if self.a_descriptor {
+            Type::Scalar(ScalarType::B64)
+        } else {
+            // the m16n8kK A fragment (sparse: of the compressed matrix)
+            let k = if self.mma.sparse.is_some() { self.mma.k / 2 } else { self.mma.k };
+            Type::Vector((16 * k * self.mma.atype.bits() / 32 / 32) as u8, ScalarType::B32)
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum WgmmaControl {
+    Fence,
+    CommitGroup,
+    WaitGroup(u32),
+}
+
+/// `wmma.load` and `wmma.store`: one fragment of a `wmma.mma` of shape
+/// m x n x k, in row or column major order in memory.
+#[derive(Copy, Clone)]
+pub struct WmmaLoadStoreDetails {
+    pub matrix: MmaMatrix,
+    pub layout: MatrixLayout,
+    pub m: u32,
+    pub n: u32,
+    pub k: u32,
+    pub state_space: StateSpace,
+    pub type_: MmaType,
+}
+
+impl WmmaLoadStoreDetails {
+    /// The `wmma.mma` whose fragment this is (only the shape and the element
+    /// type of the matrix matter).
+    pub fn mma(&self) -> MmaDetails {
+        MmaDetails {
+            m: self.m,
+            n: self.n,
+            k: self.k,
+            alayout: self.layout,
+            blayout: self.layout,
+            dtype: self.type_,
+            atype: self.type_,
+            btype: self.type_,
+            ctype: self.type_,
+            satfinite: false,
+            b1_op: None,
+            block_scale: None,
+            sparse: None,
+        }
+    }
+
+    pub fn fragment_type(&self) -> Type {
+        self.mma().wmma_type(self.matrix)
+    }
+
+    /// Whether the fragment belongs to a supported `wmma.mma`.
+    pub fn is_supported(&self) -> bool {
+        use MmaType::*;
+        let shape = (self.m, self.n, self.k);
+        let k16 = matches!(shape, (16, 16, 16) | (32, 8, 16) | (8, 32, 16));
+        match (self.matrix, self.type_) {
+            (MmaMatrix::A | MmaMatrix::B, F16 | Bf16 | S8 | U8) => k16,
+            (MmaMatrix::A | MmaMatrix::B, Tf32) => shape == (16, 16, 8),
+            (MmaMatrix::A | MmaMatrix::B, S4 | U4) => shape == (8, 8, 32),
+            (MmaMatrix::A | MmaMatrix::B, B1) => shape == (8, 8, 128),
+            (_, F64) => shape == (8, 8, 4),
+            (MmaMatrix::C | MmaMatrix::D, F16) => k16,
+            (MmaMatrix::C | MmaMatrix::D, F32) => k16 || shape == (16, 16, 8),
+            (MmaMatrix::C | MmaMatrix::D, S32) => {
+                k16 || matches!(shape, (8, 8, 32) | (8, 8, 128))
+            }
+            _ => false,
         }
     }
 }
@@ -2910,8 +4961,449 @@ pub enum TexType {
     Texobj,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniFormat {
+    E4m3x2,
+    E5m2x2,
+    E2m1x2,
+    E2m3x2,
+    E3m2x2,
+    Ue8m0x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum MiniDirection {
+    // two f32 (the first one into the high element)
+    FromF32,
+    FromF16x2,
+    FromBf16x2,
+    ToF16x2,
+    ToBf16x2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct CvtMiniDetails {
+    pub format: MiniFormat,
+    pub direction: MiniDirection,
+    pub rounding: RoundingMode,
+    pub relu: bool,
+}
+
+impl CvtMiniDetails {
+    pub fn dst_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B32),
+            _ => Type::Scalar(ScalarType::B16),
+        }
+    }
+
+    pub fn src_type(&self) -> Type {
+        match self.direction {
+            MiniDirection::FromF32 => Type::Scalar(ScalarType::F32),
+            MiniDirection::FromF16x2 | MiniDirection::FromBf16x2 => Type::Scalar(ScalarType::B32),
+            MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B16),
+        }
+    }
+}
+
+/// spcompress / spdecompress: element and index bits, the sp::S:T ratio, the iterations and the registers of the
+/// three vectors (data is uncompressed, cdata compressed, mdata the indices)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SparseDetails {
+    pub element_bits: u8,
+    pub index_bits: u8,
+    pub kept: u8,
+    pub group: u8,
+    pub iterations: u8,
+    pub data: u8,
+    pub cdata: u8,
+    pub mdata: u8,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Tcgen05Kind {
+    F16,
+    Tf32,
+    I8,
+    F8f6f4,
+    // block scaled
+    Mxf8f6f4,
+    Mxf4,
+    Mxf4nvf4,
+}
+
+/// tcgen05.mma (one thread computes the whole tile of D in tensor memory; the instruction descriptor gives the
+/// shape and the element types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Tcgen05MmaDetails {
+    pub kind: Tcgen05Kind,
+    /// A is in tensor memory (otherwise a shared memory descriptor)
+    pub a_tmem: bool,
+    /// .ashift: the rows of A move down one row
+    pub ashift: bool,
+    pub mask: bool,
+    pub scale: bool,
+    /// .sp: A is 2:4 (1:2 for tf32) structured sparse, with metadata in tensor memory
+    pub sparse: bool,
+    /// .ws (weight stationary), with a zero-column mask descriptor or without
+    pub ws: bool,
+    pub zmask: bool,
+    /// .cta_group::2: the CTA pair of the cluster computes the tile
+    pub pair: bool,
+    /// .block_scale: the scale vector size (0 the default of the kind, 2 for .scale_vec::2X, 4 for .scale_vec::4X,
+    /// 16 for .block16, 32 for .block32)
+    pub block: Option<u8>,
+}
+
+/// The register <-> tensor memory shapes of tcgen05.ld / st
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Tcgen05Shape {
+    S32x32b,
+    S16x64b,
+    S16x128b,
+    S16x256b,
+    S16x32bx2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Tcgen05LdStDetails {
+    pub shape: Tcgen05Shape,
+    /// the repeat count (.xN)
+    pub num: u8,
+    /// .pack::16b (ld) / .unpack::16b (st): two 16-bit columns per register
+    pub packed: bool,
+    /// the registers of the vector operand
+    pub registers: u8,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Tcgen05LdRedDetails {
+    pub shape: Tcgen05Shape,
+    /// the registers loaded (repeats times the registers per repeat)
+    pub loaded: u8,
+    /// min (otherwise max)
+    pub min: bool,
+    pub abs: bool,
+    pub nan: bool,
+    /// 0 f32, 1 u32, 2 s32
+    pub type_: u8,
+    pub red: bool,
+    pub spcompress: bool,
+    pub dst_registers: u8,
+    pub c_registers: u8,
+}
+
+/// n 32-bit registers: a scalar or a vector
+pub fn registers(n: u8) -> Type {
+    if n == 1 {
+        Type::Scalar(ScalarType::B32)
+    } else {
+        Type::Vector(n, ScalarType::B32)
+    }
+}
+
+/// cvt.rnd{.relu}.satfinite{.pzo}{.scaled::n1::ue8m0|.scaled::n2::ue8m0}.<kind>x2.{f32,f16x2,bf16x2} d, a{, b}{, scale}
+/// and cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CvtNarrowDetails {
+    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6
+    pub kind: u8,
+    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2
+    pub flags: u8,
+    /// narrowing: 0 f32 pair, 1 f16x2, 2 bf16x2; widening: 0 f16x2, 1 bf16x2
+    pub other: u8,
+    pub widen: bool,
+}
+
+impl CvtNarrowDetails {
+    pub fn dst_type(&self) -> Type {
+        Type::Scalar(if self.widen { ScalarType::B32 } else { ScalarType::B16 })
+    }
+
+    pub fn src_type(&self) -> Type {
+        Type::Scalar(match (self.widen, self.other) {
+            (true, _) => ScalarType::B16,
+            (false, 0) => ScalarType::F32,
+            _ => ScalarType::B32,
+        })
+    }
+}
+
+// cvt.rnd{.relu}{.satfinite}.tf32.f32: rounds an f32 to the 10 fraction bits
+// of tf32, the result keeps the binary32 layout with the low 13 bits clear
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CvtTf32Details {
+    pub rounding: Tf32Rounding,
+    pub relu: bool,
+    pub satfinite: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VshData {
     pub mode: FunnelShiftMode,
     pub op2: VshOp,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoOp {
+    Add,
+    Sub,
+    Absdiff,
+    Min,
+    Max,
+    Shl,
+    Shr,
+    Avrg,
+    Set(VideoCompare),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoCompare {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum VideoSecondaryOp {
+    Add,
+    Min,
+    Max,
+}
+
+// A byte (.b) or half-word (.h) selector of a video instruction operand:
+// one digit for scalar instructions, one per lane (most significant lane
+// first, like in the source) for SIMD instructions and their masks
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct VideoSelector {
+    pub half: bool,
+    pub digits: [u8; 4],
+    pub len: u8,
+}
+
+impl VideoSelector {
+    pub fn width(&self) -> u32 {
+        if self.half {
+            16
+        } else {
+            8
+        }
+    }
+
+    pub fn digits(&self) -> &[u8] {
+        &self.digits[..self.len as usize]
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoScalarDetails {
+    pub op: VideoOp,
+    // .u32 for vset, which has no destination type
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // shift amount mode of vshl and vshr: .clamp (default) or .wrap
+    pub clamp: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+    // merge of the result into src3
+    pub dsel: Option<VideoSelector>,
+    pub secondary: Option<VideoSecondaryOp>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VideoSimdDetails {
+    pub op: VideoOp,
+    // 2 or 4
+    pub lanes: u8,
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .add: the sum of the lanes plus src3, otherwise the lanes merged
+    // with src3
+    pub add: bool,
+    pub mask: Option<VideoSelector>,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VmadDetails {
+    pub dtype: ScalarType,
+    pub atype: ScalarType,
+    pub btype: ScalarType,
+    pub saturate: bool,
+    // .shr7 or .shr15
+    pub shift: u8,
+    pub plus_one: bool,
+    pub negate_a: bool,
+    pub negate_b: bool,
+    pub negate_c: bool,
+    pub asel: Option<VideoSelector>,
+    pub bsel: Option<VideoSelector>,
+}
+
+// Operations on four byte lanes of a .b32 (.u8x4 and .s8x4 types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Packed8Details {
+    pub op: Packed8Op,
+    pub signed: bool,
+    pub saturate: bool,
+    pub relu: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Packed8Op {
+    Add,
+    Sub,
+    Min,
+    Max,
+    Neg,
+    Abs,
+    /// set.CmpOp on packed lanes (PTX ISA 9.4): all ones in each lane that compares true. `lanes16` selects
+    /// u16x2 / s16x2 instead of the byte lanes.
+    Set { cmp: PackedCmp, lanes16: bool },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PackedCmp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AllocaDetails {
+    pub type_: ScalarType,
+    pub align: u32,
+}
+
+/// `szext.mode.type`: the low N bits of a, sign- (.s32) or zero-extended (.u32), N = b mod 32 (.wrap) or
+/// min(b, 32) (.clamp).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SzextDetails {
+    pub clamp: bool,
+    pub type_: ScalarType,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BfindDetails {
+    pub type_: ScalarType,
+    pub shift_amount: bool,
+}
+
+
+#[derive(Copy, Clone)]
+pub enum TensorCopyKind {
+    Load,
+    Store,
+    Reduce(AtomicOp),
+}
+
+pub struct CpAsyncBulkTensorDetails {
+    pub dims: u8,
+    pub kind: TensorCopyKind,
+    // shared::cluster (loads) or shared::cta
+    pub smem_space: StateSpace,
+    pub multicast: bool,
+    // .multicast::cluster::32b: a 32-bit CTA mask
+    pub mask32: bool,
+    pub cta_group2: bool,
+    // None for tile mode; im2col modes: 0 .im2col / .im2col_no_offs, 1 .im2col::w,
+    // 2 .im2col::w::128, 3 .im2col_no_offs::w
+    pub im2col: Option<u8>,
+    // .override::global_address (the address operand replaces the map's)
+    pub override_address: bool,
+}
+
+impl CpAsyncBulkTensorDetails {
+    pub fn mask_type(&self) -> ScalarType {
+        if self.mask32 {
+            ScalarType::B32
+        } else {
+            ScalarType::B16
+        }
+    }
+}
+
+/// The fields of tensormap.replace, numbered as the AGX runtime helper takes them.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TensormapField {
+    GlobalAddress = 0,
+    Rank = 1,
+    BoxDim = 2,
+    GlobalDim = 3,
+    GlobalStride = 4,
+    ElementStride = 5,
+    Elemtype = 6,
+    InterleaveLayout = 7,
+    SwizzleMode = 8,
+    SwizzleAtomicity = 9,
+    FillMode = 10,
+}
+
+pub struct TensormapReplaceDetails {
+    pub field: TensormapField,
+    pub space: StateSpace,
+    pub type_: ScalarType,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TexGeometry {
+    D1 = 0,
+    D2 = 1,
+    D3 = 2,
+    A1d = 3,
+    A2d = 4,
+    Cube = 5,
+    ACube = 6,
+}
+
+#[derive(Copy, Clone)]
+pub enum TexOp {
+    Tex,
+    // tld4.{r,g,b,a}: the component
+    Tld4(u8),
+}
+
+pub struct TexAgxDetails {
+    pub op: TexOp,
+    pub geometry: TexGeometry,
+    // 0: none (.base too), 1: .level, 2: .grad
+    pub lod_mode: u8,
+    pub dtype: ScalarType,
+    pub ctype: ScalarType,
+}
+
+pub struct TexQueryDetails {
+    // false: txq (textures), true: suq (surfaces)
+    pub surface: bool,
+    // the helper's field number
+    pub field: u8,
+}
+
+#[derive(Copy, Clone)]
+pub enum SurfaceMode {
+    Trap = 0,
+    Clamp = 1,
+    Zero = 2,
+}
+
+pub struct SurfaceDetails {
+    pub geometry: TexGeometry,
+    pub mode: SurfaceMode,
+    pub vector: u8,
+    pub type_: ScalarType,
+    // .p (formatted) rather than .b
+    pub formatted: bool,
+    // sured: the operation (Add, And, Or, signed or unsigned Min / Max)
+    pub op: Option<AtomicOp>,
 }

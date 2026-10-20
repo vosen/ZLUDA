@@ -15,8 +15,15 @@ use smallvec::SmallVec;
 
 pub(crate) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
+    // AGX keeps the division as a single precise fdiv (its helpers were a
+    // plain fdiv anyway), so the global mode pass can give it the
+    // instruction's rounding mode.
+    if target == Target::Agx {
+        return Ok(directives);
+    }
     let mut imports = None;
     let directives = directives
         .into_iter()
@@ -237,6 +244,7 @@ fn run_statement<'input>(
                     flush_to_zero,
                     kind: ast::DivFloatKind::Rounding(rnd),
                     type_,
+                    ..
                 }),
             arguments,
         }) => {

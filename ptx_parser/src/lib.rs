@@ -110,6 +110,11 @@ struct PtxParserState<'a, 'input> {
     errors: &'a mut Vec<PtxError<'input>>,
     function_declarations:
         FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .callprototype and .calltargets labels: the signature of indirect calls
+    call_prototypes:
+        FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
+    // .branchtargets labels
+    branch_targets: FxHashMap<&'input str, Vec<&'input str>>,
 }
 
 impl<'a, 'input> PtxParserState<'a, 'input> {
@@ -118,6 +123,8 @@ impl<'a, 'input> PtxParserState<'a, 'input> {
             text,
             errors,
             function_declarations: FxHashMap::default(),
+            call_prototypes: FxHashMap::default(),
+            branch_targets: FxHashMap::default(),
         }
     }
 
@@ -219,6 +226,17 @@ fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input 
     .parse_next(stream)
 }
 
+// The next token if its text is `text` (for the words the lexer has no dedicated token for)
+fn token_text<'a, 'input>(stream: &mut PtxParser<'a, 'input>, text: &str) -> PResult<()> {
+    match stream.input.first() {
+        Some((_, span)) if &stream.state.text[span.clone()] == text => {
+            stream.input = &stream.input[1..];
+            Ok(())
+        }
+        _ => backtrack(),
+    }
+}
+
 fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, u32, bool)> {
     trace(
         "num",
@@ -229,6 +247,13 @@ fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, 
                         (&s[2..s.len() - 1], 16, true)
                     } else {
                         (&s[2..], 16, false)
+                    }
+                }
+                Token::Binary(s) => {
+                    if s.ends_with('U') {
+                        (&s[2..s.len() - 1], 2, true)
+                    } else {
+                        (&s[2..], 2, false)
                     }
                 }
                 Token::Decimal(s) => {
@@ -299,6 +324,13 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 }
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
+    // A negative decimal literal: -1.5
+    let negative = opt(Token::Minus).parse_next(stream)?.is_some();
+    let value = f64_unsigned.parse_next(stream)?;
+    Ok(if negative { -value } else { value })
+}
+
+fn f64_unsigned<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     take_error(token::any.verify_map(|(t, _)| match t {
         Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
             Ok(x) => Ok(f64::from_bits(x)),
@@ -387,6 +419,29 @@ fn reg_or_immediate<'a, 'input>(
         )),
     )
     .parse_next(stream)
+}
+
+// A value in a variable initializer: also `generic(name)` (the address of a
+// variable, the same in the generic space here) and `name + offset`
+fn initializer_value<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::RegOrImmediate<&'input str>> {
+    if token_text(stream, "generic").is_ok() {
+        return delimited(Token::LParen, ident, Token::RParen)
+            .map(ast::RegOrImmediate::Reg)
+            .parse_next(stream);
+    }
+    let value = reg_or_immediate.parse_next(stream)?;
+    match value {
+        ast::RegOrImmediate::Reg(name) => {
+            let offset = opt(preceded(Token::Plus, u32)).parse_next(stream)?;
+            Ok(match offset {
+                Some(offset) => ast::RegOrImmediate::RegOffset(name, offset as i64),
+                None => value,
+            })
+        }
+        _ => Ok(value),
+    }
 }
 
 pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
@@ -551,10 +606,11 @@ fn target<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, Optio
         Token::DotTarget,
         (
             ident.and_then(shader_model),
-            opt((Token::Comma, ident_literal("debug"))),
+            // debug, texmode_unified, texmode_independent, map_f64_to_f32
+            repeat::<_, _, (), _, _>(0.., (Token::Comma, ident)),
         ),
     )
-    .map(|((target, arch_variant), _debug)| (target, arch_variant))
+    .map(|((target, arch_variant), _options)| (target, arch_variant))
     .parse_next(stream)
 }
 
@@ -588,6 +644,10 @@ fn directive<'a, 'input>(
                 function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
                 file.map(|_| None),
                 section.map(|_| None),
+                pragma.map(|_| None),
+                // .alias name, aliasee; (calls go to the aliasee by name)
+                (|stream: &mut PtxParser<'a, 'input>| token_text(stream, ".alias"), ident, Token::Comma, ident, Token::Semicolon)
+                    .map(|_| None),
                 (module_variable, Token::Semicolon)
                     .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
             )),
@@ -601,7 +661,7 @@ fn directive<'a, 'input>(
             // module variables
             | Token::DotGlobal | Token::DotConst | Token::DotShared
             // other sections
-            | Token::DotFile | Token::DotSection => true,
+            | Token::DotFile | Token::DotSection | Token::DotPragma => true,
             _ => false,
         }),
             )
@@ -620,7 +680,14 @@ fn module_variable<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(ast::LinkingDirective, ast::Variable<&'input str>)> {
     let linking = linking_directives.parse_next(stream)?;
-    let var = global_space
+    // .attribute(.managed): managed memory is ordinary device memory here
+    let var = terminated(
+        global_space,
+        opt(|stream: &mut PtxParser<'a, 'input>| {
+            token_text(stream, ".attribute")?;
+            (Token::LParen, dot_ident, Token::RParen).void().parse_next(stream)
+        }),
+    )
         .flat_map(|space| multi_variable(linking.contains(LinkingDirective::EXTERN), space))
         // TODO: support multi var in globals
         .verify_map(|multi_var| match multi_var {
@@ -666,8 +733,8 @@ fn section<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
 fn section_dwarf_line<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
     alt((
         (section_label, Token::Colon).void(),
-        (Token::DotB32, section_label, opt((Token::Add, u32))).void(),
-        (Token::DotB64, section_label, opt((Token::Add, u32))).void(),
+        (Token::DotB32, section_label, opt(alt(((Token::Plus, u32).void(), (Token::Minus, section_label).void())))).void(),
+        (Token::DotB64, section_label, opt(alt(((Token::Plus, u32).void(), (Token::Minus, section_label).void())))).void(),
         (
             any_bit_type,
             separated::<_, _, (), _, _, _, _>(1.., u32, Token::Comma),
@@ -695,28 +762,33 @@ fn function<'a, 'input>(
     ast::LinkingDirective,
     ast::Function<'input, &'input str, ast::Statement<ParsedOperand<&'input str>>>,
 )> {
-    let (linking, function) = trace(
-        "function",
-        (
-            linking_directives,
-            method_declaration,
-            repeat(0.., tuning_directive),
-            function_body,
-        )
-            .map(|(linking, func_directive, tuning, body)| {
-                (
-                    linking,
-                    ast::Function {
-                        func_directive,
-                        tuning,
-                        body,
-                    },
-                )
-            }),
+    let (linking, func_directive) =
+        trace("function", (linking_directives, method_declaration)).parse_next(stream)?;
+    // Recorded before the body, which can call the function recursively
+    stream.state.record_function(&func_directive);
+    prescan_branch_targets(stream);
+    // .pragma can sit among the tuning directives
+    let (tuning, body): (Vec<Option<ast::TuningDirective>>, _) = (
+        // (there without the semicolon too)
+        repeat(
+            0..,
+            alt((
+                tuning_directive.map(Some),
+                (Token::DotPragma, Token::String, opt(Token::Semicolon)).map(|_| None),
+            )),
+        ),
+        function_body,
     )
-    .parse_next(stream)?;
-    stream.state.record_function(&function.func_directive);
-    Ok((linking, function))
+        .parse_next(stream)?;
+    let tuning = tuning.into_iter().flatten().collect();
+    Ok((
+        linking,
+        ast::Function {
+            func_directive,
+            tuning,
+            body,
+        },
+    ))
 }
 
 fn linking_directives<'a, 'input>(
@@ -747,6 +819,9 @@ fn tuning_directive<'a, 'input>(
         (Token::DotReqntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNtid(nx, ny, nz)),
         (Token::DotMinnctapersm, _) => u32.map(ast::TuningDirective::MinNCtaPerSm),
         (Token::DotNoreturn, _) => empty.map(|_| ast::TuningDirective::NoReturn),
+        (Token::DotReqnctapercluster, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNctaPerCluster(nx, ny, nz)),
+        (Token::DotExplicitcluster, _) => empty.map(|_| ast::TuningDirective::ExplicitCluster),
+        (Token::DotMaxclusterrank, _) => u32.map(ast::TuningDirective::MaxClusterRank),
         _ => fail
     }
     .parse_next(stream)
@@ -860,6 +935,7 @@ fn statement<'a, 'input>(
 ) -> PResult<Option<Statement<ParsedOperandStr<'input>>>> {
     with_recovery(
         alt((
+            call_target_directive.map(|_| None),
             label.map(Some),
             debug_directive.map(|_| None),
             terminated(
@@ -868,6 +944,16 @@ fn statement<'a, 'input>(
                     .map(|var| Some(Statement::Variable(var))),
                 Token::Semicolon,
             ),
+            // `.pred %p;` declares predicate registers like `.reg .pred %p;`
+            terminated(
+                winnow::combinator::preceded(
+                    winnow::combinator::peek(Token::DotPred),
+                    multi_variable(false, StateSpace::Reg),
+                )
+                .map(|var| Some(Statement::Variable(var))),
+                Token::Semicolon,
+            ),
+            brx_idx.map(Some),
             predicated_instruction.map(Some),
             pragma.map(|_| None),
             block_statement.map(Some),
@@ -1022,7 +1108,12 @@ enum ParsedType {
 fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
     trace(
         "texref",
-        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+        alt((
+            Token::DotTexref.void(),
+            Token::DotSurfref.void(),
+            |stream: &mut PtxParser<'a, 'input>| token_text(stream, ".samplerref"),
+        ))
+        .map(|_| ParsedType::Texref),
     )
     .parse_next(stream)
 }
@@ -1086,13 +1177,48 @@ fn multi_variable<'a, 'input: 'a>(
     trace(
         "multi_variable",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let (parsed_type, names, count): (_, Vec<_>, _) = (
+            let (parsed_type, entries): (_, Vec<(_, Option<u32>)>) = (
                 variable_info(state_space),
-                separated(1.., ident, Token::Comma),
-                // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
-                opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
+                separated(
+                    1..,
+                    (
+                        ident,
+                        // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parameterized-variable-names
+                        opt(delimited(Token::Lt, u32.verify(|x| *x != 0), Token::Gt)),
+                    ),
+                    Token::Comma,
+                ),
             )
                 .parse_next(stream)?;
+            let count = match &entries[..] {
+                [(_, count)] => *count,
+                _ if entries.iter().all(|(_, count)| count.is_none()) => None,
+                _ => {
+                    // ptxas accepts parameterized names in a list of
+                    // register names.
+                    let ParsedType::Type {
+                        align,
+                        vector,
+                        scalar,
+                    } = parsed_type
+                    else {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    };
+                    if state_space != StateSpace::Reg {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    }
+                    return Ok(MultiVariable::List {
+                        info: VariableInfo {
+                            align,
+                            v_type: Type::maybe_vector_parsed(vector, scalar),
+                            state_space,
+                            array_init: Vec::new(),
+                        },
+                        names: entries,
+                    });
+                }
+            };
+            let names = entries.into_iter().map(|(name, _)| name).collect::<Vec<_>>();
             let (align, vector, type_) = match parsed_type {
                 ParsedType::Texref => {
                     if count.is_some() {
@@ -1168,13 +1294,12 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
     vector: Option<NonZeroU8>,
     array_dimensions: &'b Vec<u32>,
 ) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
+    // The elements in row-major order, missing ones (and missing sub-arrays) zero
+    let total = move || array_dimensions.iter().map(|d| *d as usize).product::<usize>();
     let pad_with_zeros = move |result: Option<Vec<RegOrImmediate<&'input str>>>| {
         let mut result = result.unwrap_or(Vec::new());
-        let result_size = array_dimensions[0] as usize;
         let default = default_immediate_from_type(type_);
-        result.extend(
-            iter::repeat(ast::RegOrImmediate::Imm(default)).take(result_size - result.len()),
-        );
+        result.extend(iter::repeat(ast::RegOrImmediate::Imm(default)).take(total() - result.len()));
         result
     };
     trace(
@@ -1182,24 +1307,53 @@ fn array_initializer<'b, 'a: 'b, 'input: 'a>(
         opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
-            // TODO: vector constants and multi dim arrays
-            if vector.is_some() || array_dimensions[0] == 0 || array_dimensions.len() > 1 {
+            // TODO: vector constants
+            if vector.is_some() || array_dimensions.iter().any(|d| *d == 0) {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
-            delimited(
-                Token::LBrace,
-                separated::<_, (), (), _, _, _, _>(
-                    0..=array_dimensions[0] as usize,
-                    single_value_append(&mut result),
-                    Token::Comma,
-                ),
-                Token::RBrace,
-            )
-            .parse_next(stream)?;
+            nested_initializer(stream, type_, array_dimensions, &mut result)?;
             Ok(result)
         })
         .map(pad_with_zeros),
     )
+}
+
+// One level of an array initializer: `{a, b, ...}` for the last dimension, `{{...}, {...}}` (or a flat list of
+// all the elements) for the others
+fn nested_initializer<'a, 'input: 'a>(
+    stream: &mut PtxParser<'a, 'input>,
+    type_: ScalarType,
+    dimensions: &[u32],
+    result: &mut Vec<RegOrImmediate<&'input str>>,
+) -> PResult<()> {
+    let size: usize = dimensions.iter().map(|d| *d as usize).product();
+    let start = result.len();
+    Token::LBrace.parse_next(stream)?;
+    let nested = dimensions.len() > 1 && matches!(stream.input.first(), Some((Token::LBrace, _)));
+    if nested {
+        let inner: usize = dimensions[1..].iter().map(|d| *d as usize).product();
+        let mut count = 0;
+        loop {
+            if count == dimensions[0] {
+                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+            }
+            let at = result.len();
+            nested_initializer(stream, type_, &dimensions[1..], result)?;
+            let default = default_immediate_from_type(type_);
+            result.extend(iter::repeat(ast::RegOrImmediate::Imm(default)).take(inner - (result.len() - at)));
+            count += 1;
+            if opt(Token::Comma).parse_next(stream)?.is_none() {
+                break;
+            }
+        }
+    } else {
+        separated::<_, (), (), _, _, _, _>(0..=size, single_value_append(result), Token::Comma).parse_next(stream)?;
+    }
+    Token::RBrace.parse_next(stream)?;
+    if result.len() - start > size {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    Ok(())
 }
 
 fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
@@ -1240,7 +1394,7 @@ fn single_value_append<'b, 'a: 'b, 'input: 'a>(
     trace(
         "single_value_append",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let value = reg_or_immediate.parse_next(stream)?;
+            let value = initializer_value.parse_next(stream)?;
             accumulator.push(value);
             Ok(())
         },
@@ -1338,6 +1492,19 @@ fn vector_prefix<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Opti
 }
 
 fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ScalarType> {
+    // the storage of the narrow and tf32 types in declarations
+    if let Some((_, span)) = stream.input.first() {
+        let storage = match &stream.state.text[span.clone()] {
+            ".tf32" => Some(ScalarType::B32),
+            ".e2m1x2" => Some(ScalarType::B8),
+            ".e4m3x2" | ".e5m2x2" | ".e2m3x2" | ".e3m2x2" | ".ue8m0x2" => Some(ScalarType::B16),
+            _ => None,
+        };
+        if let Some(storage) = storage {
+            stream.input = &stream.input[1..];
+            return Ok(storage);
+        }
+    }
     token::any
         .verify_map(|(t, _)| {
             Some(match t {
@@ -1372,12 +1539,27 @@ fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Scalar
 fn predicated_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    trace(
+    let start = stream.input.first().map(|(_, span)| span.start);
+    let errors_before = stream.state.errors.len();
+    let statement = trace(
         "predicated_instruction",
-        (opt(pred_at), parse_instruction, Token::Semicolon)
+        (opt(pred_at), alt((tensor_instruction, parse_instruction)), Token::Semicolon)
             .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
     )
-    .parse_next(stream)
+    .parse_next(stream)?;
+    // name the statement in the "not yet implemented" errors its rule raised, so that they can be traced back to it
+    if let Some(start) = start {
+        let end = stream.input.first().map(|(_, span)| span.start).unwrap_or(stream.state.text.len());
+        let text = stream.state.text[start..end].trim();
+        for e in stream.state.errors[errors_before..].iter_mut() {
+            if let PtxError::Todo(message) = e {
+                if !message.ends_with(';') {
+                    *message = format!("{message}: {text}");
+                }
+            }
+        }
+    }
+    Ok(statement)
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
@@ -1391,6 +1573,166 @@ fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredA
     .parse_next(stream)
 }
 
+// label: .callprototype {(ret)} _ (params); label: .calltargets f, ...;
+// label: .branchtargets l, ...;
+fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
+    fn prototype_parameter<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<(ast::Type, StateSpace)> {
+        let space = dispatch! { token::any;
+            (Token::DotParam, _) => empty.value(StateSpace::Param),
+            (Token::DotReg, _) => empty.value(StateSpace::Reg),
+            _ => fail
+        }
+        .parse_next(stream)?;
+        let (_, vector, type_) = variable_info_non_texref.parse_next(stream)?;
+        alt((Token::Sink.void(), ident.void())).parse_next(stream)?;
+        let dimensions = if space != StateSpace::Reg {
+            opt(array_dimensions).parse_next(stream)?
+        } else {
+            None
+        };
+        Ok((Type::maybe_array(vector, type_, dimensions), space))
+    }
+    fn prototype_parameters<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<Vec<(ast::Type, StateSpace)>> {
+        delimited(
+            Token::LParen,
+            separated(0.., prototype_parameter, Token::Comma),
+            Token::RParen,
+        )
+        .parse_next(stream)
+    }
+    let (name, _, directive) = (ident, Token::Colon, dot_ident).parse_next(stream)?;
+    match directive {
+        ".callprototype" => {
+            let (returns, _, inputs, _) = (
+                opt(prototype_parameters),
+                Token::Sink,
+                prototype_parameters,
+                Token::Semicolon,
+            )
+                .parse_next(stream)?;
+            stream
+                .state
+                .call_prototypes
+                .insert(name, (returns.unwrap_or_default(), inputs));
+        }
+        ".calltargets" | ".branchtargets" => {
+            let (targets, _): (Vec<_>, _) =
+                (separated(1.., ident, Token::Comma), Token::Semicolon).parse_next(stream)?;
+            if directive == ".branchtargets" {
+                stream.state.branch_targets.insert(name, targets);
+            } else {
+                match stream.state.function_declarations.get(targets[0]) {
+                    Some(signature) => {
+                        let signature = signature.clone();
+                        stream.state.call_prototypes.insert(name, signature);
+                    }
+                    None => stream.state.errors.push(PtxError::UnknownFunction),
+                }
+            }
+        }
+        _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+    }
+    Ok(())
+}
+
+// The .branchtargets tables of the function body that starts at the stream, which brx.idx
+// can name before they are declared
+fn prescan_branch_targets<'a, 'input>(stream: &mut PtxParser<'a, 'input>) {
+    let tokens = stream.input;
+    let text = stream.state.text;
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < tokens.len() {
+        match tokens[i].0 {
+            Token::LBrace => depth += 1,
+            Token::RBrace => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+            }
+            Token::Colon if i > 0 && i + 1 < tokens.len() && &text[tokens[i + 1].1.clone()] == ".branchtargets" => {
+                let name = &text[tokens[i - 1].1.clone()];
+                let mut targets = Vec::new();
+                let mut j = i + 2;
+                while j < tokens.len() && !matches!(tokens[j].0, Token::Semicolon) {
+                    if !matches!(tokens[j].0, Token::Comma) {
+                        targets.push(&text[tokens[j].1.clone()]);
+                    }
+                    j += 1;
+                }
+                stream.state.branch_targets.insert(name, targets);
+                i = j;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+}
+
+// brx.idx{.uni} index, targets; becomes a branch to each target guarded
+// by a comparison of the index (an index out of range falls through)
+fn brx_idx<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
+    let (_, idx, _, index, _, table, _) = (
+        ident_literal("brx"),
+        Token::DotIdx,
+        opt(Token::DotUni),
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ident,
+        Token::Semicolon,
+    )
+        .parse_next(stream)?;
+    let _ = idx;
+    let Some(targets) = stream.state.branch_targets.get(table).cloned() else {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    };
+    const PREDICATE: &str = "%__zluda_brx_idx";
+    let mut statements = vec![ast::Statement::Variable(ast::MultiVariable::Names {
+        info: ast::VariableInfo {
+            align: None,
+            v_type: Type::Scalar(ScalarType::Pred),
+            state_space: StateSpace::Reg,
+            array_init: Vec::new(),
+        },
+        names: vec![PREDICATE],
+    })];
+    for (i, target) in targets.into_iter().enumerate() {
+        statements.push(ast::Statement::Instruction(
+            None,
+            ast::Instruction::Setp {
+                data: ast::SetpData {
+                    type_: ScalarType::U32,
+                    flush_to_zero: None,
+                    cmp_op: ast::SetpCompareOp::Integer(ast::SetpCompareInt::Eq),
+                },
+                arguments: SetpArgs {
+                    dst1: ParsedOperand::Reg(PREDICATE),
+                    dst2: None,
+                    src1: index.clone(),
+                    src2: ParsedOperand::Imm(ImmediateValue::U64(i as u64)),
+                },
+            },
+        ));
+        statements.push(ast::Statement::Instruction(
+            Some(ast::PredAt {
+                not: false,
+                label: PREDICATE,
+            }),
+            ast::Instruction::Bra {
+                arguments: BraArgs { src: target },
+            },
+        ));
+    }
+    Ok(ast::Statement::Block(statements))
+}
+
 fn label<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
@@ -1399,22 +1741,24 @@ fn label<'a, 'input>(
         .parse_next(stream)
 }
 
+// .loc file line column {prologue_end} {, function_name label{+offset}} {, inlined_at file line column}
 fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
     (
         Token::DotLoc,
         u32,
         u32,
         u32,
-        opt((
-            Token::Comma,
-            ident_literal("function_name"),
-            ident,
-            dispatch! { token::any;
-                (Token::Comma, _) => (ident_literal("inlined_at"), u32, u32, u32).void(),
-                (Token::Plus, _) => (u32, Token::Comma, ident_literal("inlined_at"), u32, u32, u32).void(),
-                _ => fail
-            },
-        )),
+        opt(ident_literal("prologue_end")),
+        repeat::<_, _, (), _, _>(
+            0..,
+            preceded(
+                Token::Comma,
+                alt((
+                    (ident_literal("function_name"), ident, opt((Token::Plus, u32))).void(),
+                    (ident_literal("inlined_at"), u32, u32, u32).void(),
+                )),
+            ),
+        ),
     )
         .void()
         .parse_next(stream)
@@ -1521,7 +1865,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
             delimited(
                 Token::LBrace,
                 separated(
-                    1..=8,
+                    1..=256,
                     alt((Token::Sink.value(None), reg_or_immediate.map(Some))),
                     Token::Comma,
                 ),
@@ -1538,6 +1882,8 @@ impl<Ident> ast::ParsedOperand<Ident> {
                     "vector_operand",
                     vector_operand.map(ast::ParsedOperand::VecPack),
                 ),
+                // a lone sink (`mbarrier.arrive.b64 _, [addr]`), see sink_to_none
+                Token::Sink.value(ast::ParsedOperand::VecPack(vec![None])),
             )),
         )
         .parse_next(stream)
@@ -1738,10 +2084,16 @@ fn call<'a, 'input>(
         ),
     )
     .parse_next(stream)?;
+    // call (ret), %fp, (args), prototype-or-targets;
+    let prototype = opt(preceded(Token::Comma, ident)).parse_next(stream)?;
     let uniform = uni.is_some();
-    let recorded_fn = match stream.state.function_declarations.get(name) {
-        Some(decl) => decl,
-        None => {
+    let (recorded_fn, is_indirect) = match (
+        stream.state.function_declarations.get(name),
+        prototype.and_then(|p| stream.state.call_prototypes.get(p)),
+    ) {
+        (_, Some(prototype)) => (prototype, true),
+        (Some(decl), None) => (decl, false),
+        (None, None) => {
             stream.state.errors.push(PtxError::UnknownFunction);
             return Ok(empty_call(uniform, name));
         }
@@ -1762,7 +2114,8 @@ fn call<'a, 'input>(
         return_arguments,
         func: name,
         input_arguments,
-        is_external: false,
+        // Indirect calls are not followed by instruction_mode_to_global_mode
+        is_external: is_indirect,
     };
     Ok(ast::Instruction::Call { data, arguments })
 }
@@ -1786,40 +2139,2435 @@ fn empty_call<'input>(
     }
 }
 
-fn vshr<'a, 'input>(
+// The modifiers of an instruction parsed by hand, without their dots, for
+// example `["sync", "aligned", "m16n8k16", "shared::cta"]`. A modifier ends
+// at the next dot or at the first token that does not follow it immediately.
+fn matrix_modifiers<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> Vec<&'input str> {
+    let text = stream.state.text;
+    let mut modifiers = Vec::new();
+    let mut current: Option<(usize, usize)> = None;
+    while let Some((token, span)) = stream.input.first() {
+        let piece = &text[span.clone()];
+        match current {
+            _ if piece.starts_with('.') && piece.len() > 1 => {
+                if let Some((start, end)) = current {
+                    modifiers.push(&text[start + 1..end]);
+                }
+                current = Some((span.start, span.end));
+            }
+            // pieces of a modifier (`::`, digits), not the end of an instruction without operands
+            Some((start, end)) if span.start == end && !matches!(token, Token::Semicolon | Token::Comma) => {
+                current = Some((start, span.end))
+            }
+            _ => break,
+        }
+        stream.input = &stream.input[1..];
+    }
+    if let Some((start, end)) = current {
+        modifiers.push(&text[start + 1..end]);
+    }
+    modifiers
+}
+
+fn backtrack<T>() -> PResult<T> {
+    Err(ErrMode::Backtrack(ContextError::new()))
+}
+
+// Removes `name` from the modifiers, returns whether it was there.
+fn take_modifier(modifiers: &mut Vec<&str>, name: &str) -> bool {
+    match modifiers.iter().position(|m| *m == name) {
+        Some(i) => {
+            modifiers.remove(i);
+            true
+        }
+        None => false,
+    }
+}
+
+fn take_state_space(modifiers: &mut Vec<&str>) -> Option<StateSpace> {
+    for (name, space) in [
+        ("global", StateSpace::Global),
+        ("shared", StateSpace::Shared),
+        ("shared::cta", StateSpace::Shared),
+    ] {
+        if take_modifier(modifiers, name) {
+            return Some(space);
+        }
+    }
+    None
+}
+
+fn take_matrix_number(modifiers: &mut Vec<&str>) -> Option<ast::MatrixNumber> {
+    for (name, number) in [
+        ("x1", ast::MatrixNumber::X1),
+        ("x2", ast::MatrixNumber::X2),
+        ("x4", ast::MatrixNumber::X4),
+    ] {
+        if take_modifier(modifiers, name) {
+            return Some(number);
+        }
+    }
+    None
+}
+
+// `mMnNkK` -> (M, N, K)
+fn take_mma_shape(modifiers: &mut Vec<&str>) -> Option<(u32, u32, u32)> {
+    let position = modifiers.iter().position(|m| {
+        m.starts_with('m') && m.contains('n') && m.contains('k') && m.len() > 5
+    })?;
+    let shape = modifiers.remove(position);
+    let (m, rest) = shape[1..].split_once('n')?;
+    let (n, k) = rest.split_once('k')?;
+    Some((m.parse().ok()?, n.parse().ok()?, k.parse().ok()?))
+}
+
+fn take_layout(modifiers: &mut Vec<&str>) -> Option<ast::MatrixLayout> {
+    let position = modifiers.iter().position(|m| *m == "row" || *m == "col")?;
+    Some(if modifiers.remove(position) == "row" {
+        ast::MatrixLayout::Row
+    } else {
+        ast::MatrixLayout::Col
+    })
+}
+
+fn bracketed_operand<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-    ctor: impl FnOnce(
-        FunnelShiftMode,
-        VshOp,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-        ParsedOperandStr<'input>,
-    ) -> ast::Instruction<ParsedOperandStr<'input>>,
+) -> PResult<ParsedOperandStr<'input>> {
+    delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+}
+
+// ldmatrix.sync.aligned.m8n8.num{.trans}{.ss}.b16                       r, [p];
+// ldmatrix.sync.aligned.m16n16.num.trans{.ss}.{b8, b8x16.b6x16_p32, b8x16.b4x16_p64} r, [p];
+// ldmatrix.sync.aligned.m8n16.num{.ss}.{b8x16.b6x16_p32, b8x16.b4x16_p64, s8.s4}  r, [p];
+fn ldmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
-    // vshr.u32.u32.u32.mode.op2 d, a, b, c
-    let ((), (), (), mode, op2, d, (), a, (), b, (), c) = trace(
-        "vshr",
-        (
-            Token::DotU32.void(),
-            Token::DotU32.void(),
-            Token::DotU32.void(),
-            alt((
-                Token::DotClamp.map(|_| FunnelShiftMode::Clamp),
-                Token::DotWrap.map(|_| FunnelShiftMode::Wrap),
-            )),
-            Token::DotAdd.map(|_| VshOp::Add),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-            Token::Comma.void(),
-            ParsedOperandStr::parse,
-        ),
+    let data = matrix_move_details(stream, false)?;
+    let (dst, _, src) =
+        (ParsedOperandStr::parse, Token::Comma, bracketed_operand).parse_next(stream)?;
+    Ok(ast::Instruction::LdMatrix {
+        data,
+        arguments: LdMatrixArgs { dst, src },
+    })
+}
+
+// stmatrix.sync.aligned.m8n8.num{.trans}{.ss}.b16       [p], r;
+// stmatrix.sync.aligned.m16n8.num.trans{.ss}.b8         [p], r;
+fn stmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let data = matrix_move_details(stream, true)?;
+    let (src1, _, src2) =
+        (bracketed_operand, Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    Ok(ast::Instruction::StMatrix {
+        data,
+        arguments: StMatrixArgs { src1, src2 },
+    })
+}
+
+fn matrix_move_details<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    store: bool,
+) -> PResult<ast::LdMatrixDetails> {
+    let mut modifiers = matrix_modifiers(stream);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let shapes: &[_] = if store {
+        &[("m8n8", ast::MatrixShape::M8n8), ("m16n8", ast::MatrixShape::M16n8)]
+    } else {
+        &[
+            ("m8n8", ast::MatrixShape::M8n8),
+            ("m16n16", ast::MatrixShape::M16n16),
+            ("m8n16", ast::MatrixShape::M8n16),
+        ]
+    };
+    let Some(shape) = shapes
+        .iter()
+        .find_map(|(name, shape)| take_modifier(&mut modifiers, name).then_some(*shape))
+    else {
+        return backtrack();
+    };
+    let Some(number) = take_matrix_number(&mut modifiers) else {
+        return backtrack();
+    };
+    let transpose = take_modifier(&mut modifiers, "trans");
+    let state_space = take_state_space(&mut modifiers).unwrap_or(StateSpace::Shared);
+    if state_space != StateSpace::Shared {
+        return backtrack();
+    }
+    let format = match &modifiers[..] {
+        ["b16"] => ast::LdMatrixFormat::B16,
+        ["b8"] => ast::LdMatrixFormat::B8,
+        ["b8x16", "b6x16_p32"] => ast::LdMatrixFormat::B6x16P32,
+        ["b8x16", "b4x16_p64"] => ast::LdMatrixFormat::B4x16P64,
+        ["s8", "s4"] => ast::LdMatrixFormat::S4,
+        _ => return backtrack(),
+    };
+    use ast::LdMatrixFormat as F;
+    let valid = match shape {
+        ast::MatrixShape::M8n8 => format == F::B16,
+        ast::MatrixShape::M16n8 => format == F::B8 && transpose,
+        ast::MatrixShape::M16n16 => {
+            transpose
+                && number != ast::MatrixNumber::X4
+                && matches!(format, F::B8 | F::B6x16P32 | F::B4x16P64)
+        }
+        ast::MatrixShape::M8n16 => {
+            !transpose && matches!(format, F::B6x16P32 | F::B4x16P64 | F::S4)
+        }
+    };
+    if !valid {
+        return backtrack();
+    }
+    Ok(ast::LdMatrixDetails {
+        shape,
+        number,
+        transpose,
+        state_space,
+        format,
+    })
+}
+
+// movmatrix.sync.aligned.m8n8.trans.b16 d, a;
+fn movmatrix<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let modifiers = matrix_modifiers(stream);
+    if modifiers != ["sync", "aligned", "m8n8", "trans", "b16"] {
+        return backtrack();
+    }
+    let (dst, _, src) =
+        (ParsedOperandStr::parse, Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    Ok(ast::Instruction::MovMatrix {
+        arguments: MovMatrixArgs { dst, src },
+    })
+}
+
+// The element types at the end of an mma or wmma.mma: dtype.atype.btype.ctype
+// or (f16 wmma.mma) dtype.ctype.
+fn take_mma_types(modifiers: &mut Vec<&str>) -> Option<[ast::MmaType; 4]> {
+    let types = modifiers
+        .iter()
+        .filter_map(|m| ast::MmaType::from_name(m))
+        .collect::<Vec<_>>();
+    modifiers.retain(|m| ast::MmaType::from_name(m).is_none());
+    match types[..] {
+        [d, a, b, c] => Some([d, a, b, c]),
+        [d, c] => Some([d, ast::MmaType::F16, ast::MmaType::F16, c]),
+        _ => None,
+    }
+}
+
+fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
+    if !take_modifier(modifiers, "popc") {
+        return None;
+    }
+    if take_modifier(modifiers, "xor") {
+        Some(ast::MmaB1Op::Xor)
+    } else if take_modifier(modifiers, "and") {
+        Some(ast::MmaB1Op::And)
+    } else {
+        None
+    }
+}
+
+// wgmma.fence / commit_group / wait_group N, and
+// The tensor-map instructions, whose `[tensorMap, {coords}]` operand the
+// instruction grammar cannot express:
+// cp.async.bulk.tensor.dim.dst.src{.tile}.mbarrier::complete_tx::bytes{.multicast::cluster{::32b}}{.cta_group::2}{.L2::cache_hint}
+//     [dstMem], [tensorMap, {coords}], [mbar]{, ctaMask}{, cache-policy}
+// cp.async.bulk.tensor.dim.global.shared::cta{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
+// cp.reduce.async.bulk.tensor.dim.global.shared::cta.redOp{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
+// tensormap.replace.tile.field{.space}.b1024.type [tensorMap], {ord,} value
+fn tensor_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let Some((_, span)) = stream.input.first() else {
+        return backtrack();
+    };
+    let opcode = &stream.state.text[span.clone()];
+    let texture = ["tex", "tld4", "txq", "suld", "sust", "sured", "suq", "istypep"].contains(&opcode);
+    let arith = ["add", "sub", "mul", "fma"].contains(&opcode);
+    let sparse = opcode == "spcompress" || opcode == "spdecompress";
+    let tcgen05 = opcode == "tcgen05";
+    if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05 {
+        return backtrack();
+    }
+    stream.input = &stream.input[1..];
+    let mut modifiers = matrix_modifiers(stream);
+    if opcode == "cvt" {
+        return cvt_narrow_instruction(stream, modifiers);
+    }
+    if sparse {
+        return sparse_instruction(stream, opcode, modifiers);
+    }
+    if tcgen05 {
+        return tcgen05_instruction(stream, modifiers);
+    }
+    if arith {
+        return mixed_float_instruction(stream, opcode, modifiers);
+    }
+    if opcode == "tensormap" {
+        return tensormap_replace(stream, modifiers);
+    }
+    if texture {
+        return texture_instruction(stream, opcode, modifiers);
+    }
+    let reduce = take_modifier(&mut modifiers, "reduce");
+    if !take_modifier(&mut modifiers, "async")
+        || !take_modifier(&mut modifiers, "bulk")
+        || !take_modifier(&mut modifiers, "tensor")
+    {
+        return backtrack();
+    }
+    let dims = match modifiers.first().and_then(|m| m.strip_suffix('d')).and_then(|d| d.parse::<u8>().ok()) {
+        Some(d @ 1..=5) => d,
+        _ => return backtrack(),
+    };
+    modifiers.remove(0);
+    // the destination space comes first
+    let load = match modifiers.first() {
+        Some(&"shared::cluster") | Some(&"shared::cta") => true,
+        Some(&"global") => false,
+        _ => return backtrack(),
+    };
+    // shared::cluster addresses are shared addresses of the cluster's threadgroup
+    if !take_modifier(&mut modifiers, "shared::cluster") && !take_modifier(&mut modifiers, "shared::cta") {
+        return backtrack();
+    }
+    let smem_space = StateSpace::Shared;
+    if !take_modifier(&mut modifiers, "global") {
+        return backtrack();
+    }
+    take_modifier(&mut modifiers, "tile");
+    let im2col = [("im2col", 0u8), ("im2col_no_offs", 0), ("im2col::w", 1), ("im2col::w::128", 2), ("im2col_no_offs::w", 3)]
+        .iter()
+        .find(|(name, _)| take_modifier(&mut modifiers, name))
+        .map(|&(_, mode)| mode);
+    // the im2col offsets are an operand of loads only
+    let no_offs = !load || im2col.is_none();
+    let cache_hint = take_modifier(&mut modifiers, "L2::cache_hint");
+    let multicast32 = take_modifier(&mut modifiers, "multicast::cluster::32b");
+    let multicast = multicast32 || take_modifier(&mut modifiers, "multicast::cluster");
+    let ov_addr = take_modifier(&mut modifiers, "override::global_address");
+    let ov_dim_stride = take_modifier(&mut modifiers, "override::global_dim_stride");
+    let ov_dim = ov_dim_stride || take_modifier(&mut modifiers, "override::global_dim");
+    let cta_group2 = take_modifier(&mut modifiers, "cta_group::2");
+    take_modifier(&mut modifiers, "cta_group::1");
+    let op = if reduce {
+        let op = match modifiers.first() {
+            Some(&"add") => ast::AtomicOp::Add,
+            Some(&"min") => ast::AtomicOp::SignedMin,
+            Some(&"max") => ast::AtomicOp::SignedMax,
+            Some(&"inc") => ast::AtomicOp::IncrementWrap,
+            Some(&"dec") => ast::AtomicOp::DecrementWrap,
+            Some(&"and") => ast::AtomicOp::And,
+            Some(&"or") => ast::AtomicOp::Or,
+            Some(&"xor") => ast::AtomicOp::Xor,
+            _ => return backtrack(),
+        };
+        modifiers.remove(0);
+        Some(op)
+    } else {
+        None
+    };
+    let completion = if load { "mbarrier::complete_tx::bytes" } else { "bulk_group" };
+    if !take_modifier(&mut modifiers, completion) || !modifiers.is_empty() || (reduce && load) || (multicast && !load) {
+        return backtrack();
+    }
+    let address = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+    };
+    fn elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let ast::ParsedOperand::VecPack(values) = operand else {
+            return backtrack();
+        };
+        values
+            .into_iter()
+            .map(|c| match c {
+                Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
+                Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
+                _ => backtrack(),
+            })
+            .collect()
+    }
+    // [tensorMap{, newAddress{, {dims}{, {strides}, upperStrideBits}}}, {coords}]
+    struct Tensor<'input> {
+        tmap: ParsedOperandStr<'input>,
+        address: Option<ParsedOperandStr<'input>>,
+        dims: Vec<ParsedOperandStr<'input>>,
+        strides: Vec<ParsedOperandStr<'input>>,
+        upper: Option<ParsedOperandStr<'input>>,
+        coords: Vec<ParsedOperandStr<'input>>,
+    }
+    let tensor = |stream: &mut PtxParser<'a, 'input>| -> PResult<Tensor<'input>> {
+        let (tmap, rest) = delimited(
+            Token::LBracket,
+            (ParsedOperandStr::parse, repeat(1.., preceded(Token::Comma, ParsedOperandStr::parse))),
+            Token::RBracket,
+        )
+        .parse_next(stream)?;
+        let mut rest: Vec<ParsedOperandStr<'input>> = rest;
+        let coords = elements(rest.pop().unwrap())?;
+        let expected = (ov_addr || ov_dim) as usize + ov_dim as usize + 2 * ov_dim_stride as usize;
+        if rest.len() != expected {
+            return backtrack();
+        }
+        let mut rest = rest.into_iter();
+        let address = if ov_addr || ov_dim { rest.next() } else { None };
+        let dims = if ov_dim { elements(rest.next().unwrap())? } else { Vec::new() };
+        let strides = if ov_dim_stride { elements(rest.next().unwrap())? } else { Vec::new() };
+        let upper = rest.next();
+        if dims.len() > 5 || strides.len() > 4 {
+            return backtrack();
+        }
+        Ok(Tensor { tmap, address, dims, strides, upper, coords })
+    };
+    let (smem, tensor, mbarrier) = if load {
+        let smem = address(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let tensor = tensor(stream)?;
+        Token::Comma.parse_next(stream)?;
+        (smem, tensor, Some(address(stream)?))
+    } else {
+        let tensor = tensor(stream)?;
+        Token::Comma.parse_next(stream)?;
+        (address(stream)?, tensor, None)
+    };
+    let Tensor { tmap, address: ov_address, dims: ov_dims, strides: ov_strides, upper: ov_upper, coords } = tensor;
+    if coords.len() != dims as usize || (im2col.is_some() && dims < 3) {
+        return backtrack();
+    }
+    let mut info = Vec::new();
+    if !no_offs {
+        Token::Comma.parse_next(stream)?;
+        let ast::ParsedOperand::VecPack(values) = ParsedOperandStr::parse.parse_next(stream)? else {
+            return backtrack();
+        };
+        for v in values {
+            info.push(match v {
+                Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+                Some(ast::RegOrImmediate::Imm(i)) => ast::ParsedOperand::Imm(i),
+                _ => return backtrack(),
+            });
+        }
+        if info.len() > 3 {
+            return backtrack();
+        }
+    }
+    let mut info = info.into_iter();
+    let mut ov_dims = ov_dims.into_iter();
+    let mut ov_strides = ov_strides.into_iter();
+    let src_cta_mask = if multicast {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let src_cache_policy = if cache_hint {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let mut coords = coords.into_iter();
+    let src_c0 = coords.next().unwrap();
+    let kind = match op {
+        Some(op) => ast::TensorCopyKind::Reduce(op),
+        None if load => ast::TensorCopyKind::Load,
+        None => ast::TensorCopyKind::Store,
+    };
+    Ok(ast::Instruction::CpAsyncBulkTensor {
+        data: ast::CpAsyncBulkTensorDetails {
+            dims,
+            kind,
+            smem_space,
+            multicast,
+            mask32: multicast32,
+            cta_group2,
+            im2col,
+            override_address: ov_addr || ov_dim,
+        },
+        arguments: ast::CpAsyncBulkTensorArgs {
+            src_smem: smem,
+            src_tmap: tmap,
+            src_c0,
+            src_c1: coords.next(),
+            src_c2: coords.next(),
+            src_c3: coords.next(),
+            src_c4: coords.next(),
+            src_mbarrier: mbarrier,
+            src_ov_addr: ov_address,
+            src_ov_d0: ov_dims.next(),
+            src_ov_d1: ov_dims.next(),
+            src_ov_d2: ov_dims.next(),
+            src_ov_d3: ov_dims.next(),
+            src_ov_d4: ov_dims.next(),
+            src_ov_s0: ov_strides.next(),
+            src_ov_s1: ov_strides.next(),
+            src_ov_s2: ov_strides.next(),
+            src_ov_s3: ov_strides.next(),
+            src_ov_up: ov_upper,
+            src_i0: info.next(),
+            src_i1: info.next(),
+            src_i2: info.next(),
+            src_cta_mask,
+            src_cache_policy,
+        },
+    })
+}
+
+// The elements of a vector operand `{a, b, ...}` (or a lone operand as one element).
+fn operand_elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<ParsedOperandStr<'input>>> {
+    match operand {
+        ast::ParsedOperand::VecPack(values) => values
+            .into_iter()
+            .map(|c| match c {
+                Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
+                Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
+                _ => backtrack(),
+            })
+            .collect(),
+        other => Ok(vec![other]),
+    }
+}
+
+fn take_geometry(modifiers: &mut Vec<&str>) -> Option<ast::TexGeometry> {
+    use ast::TexGeometry::*;
+    [("1d", D1), ("2d", D2), ("3d", D3), ("a1d", A1d), ("a2d", A2d), ("cube", Cube), ("acube", ACube)]
+        .iter()
+        .find(|(name, _)| take_modifier(modifiers, name))
+        .map(|&(_, g)| g)
+}
+
+fn take_type(modifiers: &mut Vec<&str>, types: &[(&str, ScalarType)]) -> Option<ScalarType> {
+    types.iter().find(|(name, _)| take_modifier(modifiers, name)).map(|&(_, t)| t)
+}
+
+// The narrow conversions of PTX ISA 9.1 / 9.4 that the instruction grammar does
+// not have: .pzo, .scaled::n1::ue8m0 / .scaled::n2::ue8m0 and the .ue5m3x2 and
+// .s2f6x2 formats (see ast::CvtNarrowDetails). Every other cvt stays with the grammar.
+fn cvt_narrow_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let new_form = modifiers
+        .iter()
+        .any(|m| matches!(*m, "pzo" | "scaled::n1::ue8m0" | "scaled::n2::ue8m0" | "ue5m3x2" | "s2f6x2"));
+    if !new_form {
+        return backtrack();
+    }
+    let rounding = if take_modifier(&mut modifiers, "rn") {
+        0u8
+    } else if take_modifier(&mut modifiers, "rz") {
+        1
+    } else if take_modifier(&mut modifiers, "rp") {
+        2
+    } else {
+        return backtrack();
+    };
+    let mut flags = rounding;
+    for (name, bit) in [("relu", 4u8), ("pzo", 8), ("scaled::n1::ue8m0", 16), ("scaled::n2::ue8m0", 32)] {
+        if take_modifier(&mut modifiers, name) {
+            flags |= bit;
+        }
+    }
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let kind_of = |m: &str| {
+        Some(match m {
+            "e4m3x2" => 0u8,
+            "e5m2x2" => 1,
+            "e2m3x2" => 2,
+            "e3m2x2" => 3,
+            "e2m1x2" => 4,
+            "ue5m3x2" => 5,
+            "s2f6x2" => 6,
+            _ => return None,
+        })
+    };
+    let half_of = |m: &str| match m {
+        "f16x2" => Some(0u8),
+        "bf16x2" => Some(1u8),
+        _ => None,
+    };
+    let (kind, other, widen) = match modifiers.as_slice() {
+        [d, "f32"] if kind_of(d).is_some() => (kind_of(d).unwrap(), 0u8, false),
+        [d, s] if kind_of(d).is_some() && half_of(s).is_some() => (kind_of(d).unwrap(), half_of(s).unwrap() + 1, false),
+        [d, s] if half_of(d).is_some() && kind_of(s).is_some() => (kind_of(s).unwrap(), half_of(d).unwrap(), true),
+        _ => return backtrack(),
+    };
+    // narrowing needs .satfinite; widening rounds to nearest without the other modifiers
+    if widen == satfinite || (widen && (rounding != 0 || flags & !32 != 0)) {
+        return backtrack();
+    }
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src1 = ParsedOperandStr::parse.parse_next(stream)?;
+    let src2 = if !widen && other == 0 {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let scale = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+    Ok(ast::Instruction::CvtNarrow {
+        data: ast::CvtNarrowDetails { kind, flags, other, widen },
+        arguments: CvtNarrowArgs { dst, src1, src2, src_scale: scale },
+    })
+}
+
+// tcgen05 (the fifth-generation tensor core of sm_100, emulated on AGX with the tensor memory in device memory)
+fn tcgen05_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let Some(&op) = modifiers.first() else {
+        return backtrack();
+    };
+    modifiers.remove(0);
+    // `.cta_group::1.128x256b` lexes as one piece (`1.128` is a number)
+    modifiers = modifiers
+        .into_iter()
+        .flat_map(|m| match m.strip_prefix("cta_group::").and_then(|rest| rest.split_once('.')) {
+            Some(_) => {
+                let (group, shape) = m.split_at("cta_group::".len() + 1);
+                vec![group, &shape[1..]]
+            }
+            None => vec![m],
+        })
+        .collect();
+    let cta_group = if take_modifier(&mut modifiers, "cta_group::2") {
+        2u8
+    } else {
+        take_modifier(&mut modifiers, "cta_group::1");
+        1
+    };
+    take_modifier(&mut modifiers, "sync");
+    take_modifier(&mut modifiers, "aligned");
+    let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    // [taddr] as a value
+    let bracketed = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+    };
+    let count = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(values) => values.len() as u8,
+        _ => 1,
+    };
+    let single = |o: ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(ref values) if values.len() == 1 => match values[0] {
+            Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+            _ => o,
+        },
+        other => other,
+    };
+    match op {
+        "fence::before_thread_sync" | "fence::after_thread_sync" | "wait::ld" | "wait::st" | "relinquish_alloc_permit" => {
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            Ok(ast::Instruction::Tcgen05Sync {})
+        }
+        "alloc" => {
+            if !take_modifier(&mut modifiers, "shared::cta") || !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let addr = bracketed(stream)?;
+            comma(stream)?;
+            let ncols = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Alloc { data: cta_group, arguments: Tcgen05AllocArgs { src_addr: addr, src_ncols: ncols } })
+        }
+        "mma" => {
+            // .sp and .ws come before .cta_group
+            let sparse_first = take_modifier(&mut modifiers, "sp");
+            let ws_first = take_modifier(&mut modifiers, "ws");
+            let kind = [
+                ("kind::f16", ast::Tcgen05Kind::F16),
+                ("kind::tf32", ast::Tcgen05Kind::Tf32),
+                ("kind::i8", ast::Tcgen05Kind::I8),
+                ("kind::f8f6f4", ast::Tcgen05Kind::F8f6f4),
+                ("kind::mxf8f6f4", ast::Tcgen05Kind::Mxf8f6f4),
+                ("kind::mxf4", ast::Tcgen05Kind::Mxf4),
+                ("kind::mxf4nvf4", ast::Tcgen05Kind::Mxf4nvf4),
+            ]
+            .iter()
+            .find(|(name, _)| take_modifier(&mut modifiers, name))
+            .map(|&(_, k)| k);
+            let Some(kind) = kind else {
+                return backtrack();
+            };
+            let block_scale = take_modifier(&mut modifiers, "block_scale");
+            let block = if !block_scale {
+                None
+            } else if take_modifier(&mut modifiers, "scale_vec::2X") {
+                Some(2u8)
+            } else if take_modifier(&mut modifiers, "scale_vec::4X") {
+                Some(4)
+            } else if take_modifier(&mut modifiers, "block16") {
+                Some(16)
+            } else if take_modifier(&mut modifiers, "block32") {
+                Some(32)
+            } else {
+                take_modifier(&mut modifiers, "scale_vec::1X");
+                Some(0)
+            };
+            let scaled_kind = matches!(kind, ast::Tcgen05Kind::Mxf8f6f4 | ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4);
+            if scaled_kind != block_scale {
+                return backtrack();
+            }
+            let ashift = take_modifier(&mut modifiers, "ashift");
+            let sparse = take_modifier(&mut modifiers, "sp");
+            let ws = take_modifier(&mut modifiers, "ws");
+            // the operand collector hints do not change the result
+            modifiers.retain(|m| !m.starts_with("collector::"));
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let d = bracketed(stream)?;
+            comma(stream)?;
+            let (a, a_tmem) = if matches!(stream.input.first(), Some((Token::LBracket, _))) {
+                (bracketed(stream)?, true)
+            } else {
+                (operand(stream)?, false)
+            };
+            comma(stream)?;
+            let sparse = sparse || sparse_first;
+            let ws = ws || ws_first;
+            let b = operand(stream)?;
+            comma(stream)?;
+            let meta = if sparse {
+                let m = bracketed(stream)?;
+                comma(stream)?;
+                Some(m)
+            } else {
+                None
+            };
+            let idesc = operand(stream)?;
+            comma(stream)?;
+            // .block_scale: [scale-A], [scale-B], enable
+            let (scale_a, scale_b) = if block.is_some() {
+                let sa = bracketed(stream)?;
+                comma(stream)?;
+                let sb = bracketed(stream)?;
+                comma(stream)?;
+                (Some(sa), Some(sb))
+            } else {
+                (None, None)
+            };
+            let first = operand(stream)?;
+            let (mask, enable) = if matches!(first, ast::ParsedOperand::VecPack(_)) {
+                comma(stream)?;
+                (Some(first), operand(stream)?)
+            } else {
+                (None, first)
+            };
+            let last = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+            let (scale, zmask) = if ws { (None, last) } else { (last, None) };
+            let data = ast::Tcgen05MmaDetails {
+                kind,
+                a_tmem,
+                ashift,
+                mask: mask.is_some(),
+                scale: scale.is_some(),
+                sparse,
+                ws,
+                zmask: zmask.is_some(),
+                pair: cta_group == 2,
+                block,
+            };
+            Ok(ast::Instruction::Tcgen05Mma {
+                data,
+                arguments: Tcgen05MmaArgs {
+                    src_d: d,
+                    src_a: a,
+                    src_b: b,
+                    src_meta: meta,
+                    src_idesc: idesc,
+                    src_scale_a: scale_a,
+                    src_scale_b: scale_b,
+                    src_mask: mask,
+                    src_enable: enable,
+                    src_scale: scale,
+                    src_zmask: zmask,
+                },
+            })
+        }
+        "cp" => {
+            let shape = ["128x256b", "4x256b", "128x128b", "64x128b.warpx2::02_13", "64x128b.warpx2::01_23", "32x128b.warpx4"];
+            // the shape is split at the dot into two modifiers for the warpx forms
+            let joined = modifiers.join(".");
+            let decompress = if joined.ends_with(".b8x16.b6x16_p32") {
+                6u8
+            } else if joined.ends_with(".b8x16.b4x16_p64") {
+                4
+            } else {
+                0
+            };
+            let base = joined
+                .trim_end_matches(".b8x16.b6x16_p32")
+                .trim_end_matches(".b8x16.b4x16_p64");
+            let Some(code) = shape.iter().position(|s| *s == base) else {
+                return backtrack();
+            };
+            let taddr = bracketed(stream)?;
+            comma(stream)?;
+            let desc = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Cp {
+                data: (code as u8, decompress, cta_group),
+                arguments: Tcgen05CpArgs { src_taddr: taddr, src_desc: desc },
+            })
+        }
+        "shift" => {
+            if !take_modifier(&mut modifiers, "down") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let taddr = bracketed(stream)?;
+            Ok(ast::Instruction::Tcgen05Shift { data: cta_group, arguments: Tcgen05ShiftArgs { src_taddr: taddr } })
+        }
+        "commit" if cta_group == 1 => {
+            take_modifier(&mut modifiers, "shared::cluster");
+            take_modifier(&mut modifiers, "shared::cta");
+            if !take_modifier(&mut modifiers, "mbarrier::arrive::one") || !take_modifier(&mut modifiers, "b64") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let mbar = bracketed(stream)?;
+            Ok(ast::Instruction::Tcgen05Commit { arguments: Tcgen05CommitArgs { src_mbar: mbar } })
+        }
+        "dealloc" => {
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let taddr = operand(stream)?;
+            comma(stream)?;
+            let ncols = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Dealloc { data: cta_group, arguments: Tcgen05DeallocArgs { src_taddr: taddr, src_ncols: ncols } })
+        }
+        "ld" | "st" => {
+            let shape = [
+                ("32x32b", ast::Tcgen05Shape::S32x32b),
+                ("16x64b", ast::Tcgen05Shape::S16x64b),
+                ("16x128b", ast::Tcgen05Shape::S16x128b),
+                ("16x256b", ast::Tcgen05Shape::S16x256b),
+                ("16x32bx2", ast::Tcgen05Shape::S16x32bx2),
+            ]
+            .iter()
+            .find(|(name, _)| take_modifier(&mut modifiers, name))
+            .map(|&(_, s)| s);
+            let Some(shape) = shape else {
+                return backtrack();
+            };
+            let num = modifiers
+                .iter()
+                .position(|m| m.strip_prefix('x').map_or(false, |n| n.parse::<u8>().is_ok()))
+                .map(|i| modifiers.remove(i)[1..].parse::<u8>().unwrap());
+            let Some(num) = num else {
+                return backtrack();
+            };
+            let red = op == "ld" && take_modifier(&mut modifiers, "red");
+            let spcompress = op == "ld" && take_modifier(&mut modifiers, "spcompress");
+            if red || spcompress {
+                let min = take_modifier(&mut modifiers, "min");
+                if !min && !take_modifier(&mut modifiers, "max") {
+                    return backtrack();
+                }
+                let abs = take_modifier(&mut modifiers, "abs");
+                let nan = take_modifier(&mut modifiers, "NaN");
+                if spcompress && (!take_modifier(&mut modifiers, "sp::2:4") || !take_modifier(&mut modifiers, "b2")) {
+                    return backtrack();
+                }
+                let type_ = if take_modifier(&mut modifiers, "f32") {
+                    0u8
+                } else if take_modifier(&mut modifiers, "u32") {
+                    1
+                } else if take_modifier(&mut modifiers, "s32") {
+                    2
+                } else {
+                    return backtrack();
+                };
+                if !modifiers.is_empty() || (spcompress && type_ != 0) {
+                    return backtrack();
+                }
+                let per = match shape {
+                    ast::Tcgen05Shape::S16x256b => 4,
+                    ast::Tcgen05Shape::S16x128b => 2,
+                    _ => 1,
+                };
+                let dst = single(operand(stream)?);
+                comma(stream)?;
+                let dst_c = if spcompress {
+                    let c = single(operand(stream)?);
+                    comma(stream)?;
+                    Some(c)
+                } else {
+                    None
+                };
+                let dst_red = if red {
+                    let r = operand(stream)?;
+                    comma(stream)?;
+                    Some(r)
+                } else {
+                    None
+                };
+                let taddr = bracketed(stream)?;
+                let data = ast::Tcgen05LdRedDetails {
+                    shape,
+                    loaded: num * per,
+                    min,
+                    abs,
+                    nan,
+                    type_,
+                    red,
+                    spcompress,
+                    dst_registers: count(&dst),
+                    c_registers: dst_c.as_ref().map_or(1, |c| count(c)),
+                };
+                return Ok(ast::Instruction::Tcgen05LdRed {
+                    data,
+                    arguments: Tcgen05LdRedArgs { dst, dst_c, dst_red, src_taddr: taddr },
+                });
+            }
+            let packed = take_modifier(&mut modifiers, if op == "ld" { "pack::16b" } else { "unpack::16b" });
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            if op == "ld" {
+                let dst = single(operand(stream)?);
+                comma(stream)?;
+                let taddr = bracketed(stream)?;
+                let offset = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+                let data = ast::Tcgen05LdStDetails { shape, num, packed, registers: count(&dst) };
+                Ok(ast::Instruction::Tcgen05Ld { data, arguments: Tcgen05LdArgs { dst, src_taddr: taddr, src_offset: offset } })
+            } else {
+                let taddr = bracketed(stream)?;
+                comma(stream)?;
+                let first = operand(stream)?;
+                let (offset, values) = if matches!(first, ast::ParsedOperand::VecPack(_)) {
+                    (None, first)
+                } else {
+                    comma(stream)?;
+                    (Some(first), operand(stream)?)
+                };
+                let values = single(values);
+                let data = ast::Tcgen05LdStDetails { shape, num, packed, registers: count(&values) };
+                Ok(ast::Instruction::Tcgen05St {
+                    data,
+                    arguments: Tcgen05StArgs { src_taddr: taddr, src_offset: offset, src_values: values },
+                })
+            }
+        }
+        _ => backtrack(),
+    }
+}
+
+// spcompress.{b8,b16}.{b2,b4}.sp::2:4.xN {mdata}, {cdata}, {data}, spdesc
+// spdecompress.{b8,b16}.{b2,b4}.sp::S:T.xN {data}, {mdata}, {cdata}
+fn sparse_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let element_bits = if take_modifier(&mut modifiers, "b8") {
+        8u32
+    } else if take_modifier(&mut modifiers, "b16") {
+        16
+    } else {
+        return backtrack();
+    };
+    let index_bits = if take_modifier(&mut modifiers, "b2") {
+        2u32
+    } else if take_modifier(&mut modifiers, "b4") {
+        4
+    } else {
+        return backtrack();
+    };
+    let (kept, group, iterations) = match modifiers.as_slice() {
+        [ratio, n] => {
+            let Some((s, t)) = ratio.strip_prefix("sp::").and_then(|r| r.split_once(':')) else {
+                return backtrack();
+            };
+            let (Ok(s), Ok(t)) = (s.parse::<u32>(), t.parse::<u32>()) else {
+                return backtrack();
+            };
+            let Some(Ok(n)) = n.strip_prefix('x').map(|n| n.parse::<u32>()) else {
+                return backtrack();
+            };
+            (s, t, n)
+        }
+        _ => return backtrack(),
+    };
+    let compress = opcode == "spcompress";
+    // each iteration of the uncompressed vector is at most 64 bits
+    if !(1..=8).contains(&iterations) || (compress && (kept, group) != (2, 4)) || kept >= group || group * element_bits > 64 {
+        return backtrack();
+    }
+    let operand = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        let operand = ParsedOperandStr::parse.parse_next(stream)?;
+        Ok(match operand {
+            ast::ParsedOperand::VecPack(ref values) if values.len() == 1 => match values[0] {
+                Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+                _ => return backtrack(),
+            },
+            other => other,
+        })
+    };
+    let first = operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let second = operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let third = operand(stream)?;
+    let count = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(values) => values.len() as u32,
+        _ => 1,
+    };
+    // the vectors have the registers the instruction names (the model pads with zeros or truncates)
+    let (m, c, d) = if compress { (&first, &second, &third) } else { (&second, &third, &first) };
+    let data = ast::SparseDetails {
+        element_bits: element_bits as u8,
+        index_bits: index_bits as u8,
+        kept: kept as u8,
+        group: group as u8,
+        iterations: iterations as u8,
+        data: count(d) as u8,
+        cdata: count(c) as u8,
+        mdata: count(m) as u8,
+    };
+    if compress {
+        Token::Comma.parse_next(stream)?;
+        let desc = ParsedOperandStr::parse.parse_next(stream)?;
+        Ok(ast::Instruction::Spcompress {
+            data,
+            arguments: SpcompressArgs { dst_m: first, dst_c: second, src_data: third, src_desc: desc },
+        })
+    } else {
+        Ok(ast::Instruction::Spdecompress {
+            data,
+            arguments: SpdecompressArgs { dst: first, src_m: second, src_c: third },
+        })
+    }
+}
+
+// The mixed-precision forms with packed operands (PTX ISA 8.6 / 9.4), which
+// the instruction grammar cannot express (several types after one another):
+// {add,sub,mul}{.rnd}{.ftz}{.sat}.f32x2.{f16x2,bf16x2}.f32x2       d, a, c
+// fma.rnd{.ftz}{.sat}.f32x2.{f16x2,bf16x2}.f32x2.f32x2              d, a, b, c
+// {add,sub,mul}{.rnd}{.ftz}{.sat}.{f16x2,bf16x2}.f32x2.f32x2       d, a, c   (computed and rounded with rz)
+// mul{.rnd}{.ftz}{.sat}.bf16x2.bf16x2.f16x2 (and f16x2.f16x2.bf16x2) d, a, c   (c converted to the type of a)
+// and the scalar mul{.rnd}{.ftz}{.sat}.f32.{f16,bf16} d, a, c. Every other
+// form stays with the grammar.
+fn mixed_float_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let type_of = |m: &str| match m {
+        "f32" => Some(ScalarType::F32),
+        "f16" => Some(ScalarType::F16),
+        "bf16" => Some(ScalarType::BF16),
+        "f32x2" => Some(ScalarType::F32x2),
+        "f16x2" => Some(ScalarType::F16x2),
+        "bf16x2" => Some(ScalarType::BF16x2),
+        _ => None,
+    };
+    let types: Vec<ScalarType> = modifiers.iter().filter_map(|m| type_of(m)).collect();
+    modifiers.retain(|m| type_of(m).is_none());
+    let rounding = [
+        ("rn", ast::RoundingMode::NearestEven),
+        ("rz", ast::RoundingMode::Zero),
+        ("rm", ast::RoundingMode::NegativeInf),
+        ("rp", ast::RoundingMode::PositiveInf),
+    ]
+    .iter()
+    .find(|(name, _)| take_modifier(&mut modifiers, name))
+    .map(|&(_, r)| r);
+    let flush_to_zero = take_modifier(&mut modifiers, "ftz");
+    let saturate = take_modifier(&mut modifiers, "sat");
+    if !modifiers.is_empty() {
+        return backtrack();
+    }
+    let narrow = |t: ScalarType| matches!(t, ScalarType::F16x2 | ScalarType::BF16x2);
+    use ScalarType::*;
+    let (op, dtype, atype, btype) = match (opcode, types.as_slice()) {
+        ("mul", &[F32, a @ (F16 | BF16)]) => (ast::MixedFloatOp::Mul, F32, a, F32),
+        ("add" | "sub" | "mul", &[F32x2, a, F32x2]) if narrow(a) => (op_of(opcode), F32x2, a, F32x2),
+        ("fma", &[F32x2, a, F32x2, F32x2]) if narrow(a) => (ast::MixedFloatOp::Fma, F32x2, a, a),
+        ("add" | "sub" | "mul", &[d, F32x2, F32x2]) if narrow(d) => (op_of(opcode), d, F32x2, F32x2),
+        ("mul", &[d, a, c]) if narrow(d) && d == a && narrow(c) && c != d => (ast::MixedFloatOp::Mul, d, a, c),
+        _ => return backtrack(),
+    };
+    let fma = op == ast::MixedFloatOp::Fma;
+    if fma && rounding.is_none() {
+        return backtrack();
+    }
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src1 = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src2 = ParsedOperandStr::parse.parse_next(stream)?;
+    let src3 = if fma {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    Ok(ast::Instruction::MixedFloat {
+        data: ast::MixedFloatDetails {
+            op,
+            dtype,
+            atype,
+            btype,
+            rounding: rounding.unwrap_or(ast::RoundingMode::NearestEven),
+            flush_to_zero,
+            saturate,
+        },
+        arguments: MixedFloatArgs { dst, src1, src2, src3 },
+    })
+}
+
+fn op_of(opcode: &str) -> ast::MixedFloatOp {
+    match opcode {
+        "add" => ast::MixedFloatOp::Add,
+        "sub" => ast::MixedFloatOp::Sub,
+        _ => ast::MixedFloatOp::Mul,
+    }
+}
+
+// The texture and surface instructions in the forms the instruction grammar
+// does not have (every geometry, lod and gradient operands, samplers,
+// offsets, depth compare, the residency predicate, tld4, queries, surfaces).
+// The plain `tex.{1d,2d,3d}.v4.dtype.ctype d, [t, c]` stays with the grammar.
+// tex{.base|.level|.grad}.geom.v4.dtype.ctype d{|p}, [t{, s}, c] {, lod | , dPdx, dPdy} {, offsets} {, ref}
+// tld4.comp.geom.v4.dtype.f32 d{|p}, [t{, s}, c] {, offsets} {, ref}
+// txq.field.b32 d, [t]       suq.field.b32 d, [s]       istypep.kind p, a
+// suld.b.geom{.vN}.btype{.cop}.mode d, [s, c]        sust.{b,p}.geom{.vN}.btype{.cop}.mode [s, c], v
+// sured.{b,p}.op.geom.type.mode [s, c], v
+fn texture_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    // [handle {, handle}, {coords}] or [handle]
+    let bracket = |stream: &mut PtxParser<'a, 'input>| -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let (first, rest) = delimited(
+            Token::LBracket,
+            (ParsedOperandStr::parse, repeat(0.., preceded(Token::Comma, ParsedOperandStr::parse))),
+            Token::RBracket,
+        )
+        .parse_next(stream)?;
+        let mut all = vec![first];
+        let rest: Vec<_> = rest;
+        all.extend(rest);
+        Ok(all)
+    };
+    let rest_operands = |stream: &mut PtxParser<'a, 'input>| -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let mut out = Vec::new();
+        while opt(Token::Comma).parse_next(stream)?.is_some() {
+            out.push(ParsedOperandStr::parse.parse_next(stream)?);
+        }
+        Ok(out)
+    };
+    match opcode {
+        "tex" | "tld4" => {
+            let op = if opcode == "tld4" {
+                let comp = ["r", "g", "b", "a"].iter().position(|c| take_modifier(&mut modifiers, c));
+                match comp {
+                    Some(c) => ast::TexOp::Tld4(c as u8),
+                    None => return backtrack(),
+                }
+            } else {
+                ast::TexOp::Tex
+            };
+            let plain = modifiers.len() == 4;
+            let lod_mode = if take_modifier(&mut modifiers, "level") {
+                1
+            } else if take_modifier(&mut modifiers, "grad") {
+                2
+            } else {
+                take_modifier(&mut modifiers, "base");
+                0
+            };
+            let Some(geometry) = take_geometry(&mut modifiers) else {
+                return backtrack();
+            };
+            if !take_modifier(&mut modifiers, "v4") {
+                return backtrack();
+            }
+            let types = [("f32", ScalarType::F32), ("s32", ScalarType::S32), ("u32", ScalarType::U32)];
+            let (Some(dtype), Some(ctype)) = (take_type(&mut modifiers, &types), take_type(&mut modifiers, &types))
+            else {
+                return backtrack();
+            };
+            if !modifiers.is_empty() || ctype == ScalarType::U32 {
+                return backtrack();
+            }
+            let dst = operand(stream)?;
+            let dst_pred = if opt(Token::Pipe).parse_next(stream)?.is_some() { Some(operand(stream)?) } else { None };
+            comma(stream)?;
+            let mut handles = bracket(stream)?;
+            let extra = rest_operands(stream)?;
+            let simple_geometry = matches!(geometry, ast::TexGeometry::D1 | ast::TexGeometry::D2 | ast::TexGeometry::D3);
+            if matches!(op, ast::TexOp::Tex) && plain && lod_mode == 0 && simple_geometry && dst_pred.is_none()
+                && handles.len() == 2 && extra.is_empty()
+            {
+                // the instruction grammar's form
+                return backtrack();
+            }
+            if handles.len() < 2 || handles.len() > 3 {
+                return backtrack();
+            }
+            let coords = operand_elements(handles.pop().unwrap())?;
+            let src_sampler = if handles.len() == 2 { handles.pop() } else { None };
+            let src_tex = handles.pop().unwrap();
+            let dsts = operand_elements(dst)?;
+            if dsts.len() != 4 || coords.len() > 4 {
+                return backtrack();
+            }
+            let mut extra = extra.into_iter().peekable();
+            let src_lod = if lod_mode == 1 { extra.next() } else { None };
+            let (dx, dy) = if lod_mode == 2 {
+                match (extra.next(), extra.next()) {
+                    (Some(dx), Some(dy)) => (operand_elements(dx)?, operand_elements(dy)?),
+                    _ => return backtrack(),
+                }
+            } else {
+                (Vec::new(), Vec::new())
+            };
+            // a vector next is the offset (a 1d offset is a lone register, which then reads as the reference)
+            let offsets = match extra.peek() {
+                Some(ast::ParsedOperand::VecPack(_)) => operand_elements(extra.next().unwrap())?,
+                _ => Vec::new(),
+            };
+            let src_ref = extra.next();
+            if extra.next().is_some() || dx.len() > 3 || dy.len() > 3 || offsets.len() > 3 {
+                return backtrack();
+            }
+            let mut d = dsts.into_iter();
+            let mut c = coords.into_iter();
+            let mut dx = dx.into_iter();
+            let mut dy = dy.into_iter();
+            let mut o = offsets.into_iter();
+            Ok(ast::Instruction::TexAgx {
+                data: ast::TexAgxDetails { op, geometry, lod_mode, dtype, ctype },
+                arguments: ast::TexAgxArgs {
+                    dst0: d.next().unwrap(),
+                    dst1: d.next().unwrap(),
+                    dst2: d.next().unwrap(),
+                    dst3: d.next().unwrap(),
+                    dst_pred,
+                    src_tex,
+                    src_sampler,
+                    src_c0: c.next(),
+                    src_c1: c.next(),
+                    src_c2: c.next(),
+                    src_c3: c.next(),
+                    src_lod,
+                    src_dx0: dx.next(),
+                    src_dx1: dx.next(),
+                    src_dx2: dx.next(),
+                    src_dy0: dy.next(),
+                    src_dy1: dy.next(),
+                    src_dy2: dy.next(),
+                    src_o0: o.next(),
+                    src_o1: o.next(),
+                    src_o2: o.next(),
+                    src_ref,
+                },
+            })
+        }
+        "txq" | "suq" => {
+            let fields: &[&str] = if opcode == "txq" {
+                &["width", "height", "depth", "array_size", "normalized_coords", "filter_mode", "addr_mode_0",
+                  "num_mipmap_levels", "addr_mode_1", "addr_mode_2", "channel_data_type", "channel_order",
+                  "num_samples", "force_unnormalized_coords"]
+            } else {
+                &["width", "height", "depth", "array_size", "channel_data_type", "channel_order", "memory_layout"]
+            };
+            let Some(field) = fields.iter().position(|f| take_modifier(&mut modifiers, f)) else {
+                return backtrack();
+            };
+            take_modifier(&mut modifiers, "level");
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            // txq: the addr_mode_* fields read the same word; the others the helper does not know read 0
+            let field = match (opcode, field) {
+                ("txq", 8 | 9) => 6,
+                ("txq", f) if f >= 10 => 255,
+                (_, f) => f,
+            } as u8;
+            let dst = operand(stream)?;
+            comma(stream)?;
+            let mut handles = bracket(stream)?;
+            if handles.len() != 1 {
+                return backtrack();
+            }
+            Ok(ast::Instruction::TexQuery {
+                data: ast::TexQueryDetails { surface: opcode == "suq", field },
+                arguments: ast::TexQueryArgs { dst, src: handles.pop().unwrap() },
+            })
+        }
+        "istypep" => {
+            let Some(kind) = ["texref", "samplerref", "surfref"].iter().position(|k| take_modifier(&mut modifiers, k))
+            else {
+                return backtrack();
+            };
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let dst = operand(stream)?;
+            comma(stream)?;
+            let src = operand(stream)?;
+            Ok(ast::Instruction::Istypep { data: kind as u8, arguments: ast::IstypepArgs { dst, src } })
+        }
+        _ => {
+            let formatted = take_modifier(&mut modifiers, "p");
+            if !formatted && !take_modifier(&mut modifiers, "b") {
+                return backtrack();
+            }
+            let op = if opcode == "sured" {
+                let op = match modifiers.first() {
+                    Some(&"add") => ast::AtomicOp::Add,
+                    Some(&"and") => ast::AtomicOp::And,
+                    Some(&"or") => ast::AtomicOp::Or,
+                    Some(&"min") => ast::AtomicOp::UnsignedMin,
+                    Some(&"max") => ast::AtomicOp::UnsignedMax,
+                    _ => return backtrack(),
+                };
+                modifiers.remove(0);
+                Some(op)
+            } else {
+                None
+            };
+            let Some(geometry) = take_geometry(&mut modifiers) else {
+                return backtrack();
+            };
+            let vector = if take_modifier(&mut modifiers, "v4") {
+                4
+            } else if take_modifier(&mut modifiers, "v2") {
+                2
+            } else {
+                take_modifier(&mut modifiers, "v1");
+                1
+            };
+            let types = [
+                ("b8", ScalarType::B8),
+                ("b16", ScalarType::B16),
+                ("b32", ScalarType::B32),
+                ("b64", ScalarType::B64),
+                ("u32", ScalarType::U32),
+                ("s32", ScalarType::S32),
+                ("u64", ScalarType::U64),
+                ("s64", ScalarType::S64),
+            ];
+            let Some(type_) = take_type(&mut modifiers, &types) else {
+                return backtrack();
+            };
+            let mode = if take_modifier(&mut modifiers, "zero") {
+                ast::SurfaceMode::Zero
+            } else if take_modifier(&mut modifiers, "clamp") {
+                ast::SurfaceMode::Clamp
+            } else {
+                take_modifier(&mut modifiers, "trap");
+                ast::SurfaceMode::Trap
+            };
+            // cache operators and .vec are hints
+            for hint in ["ca", "cg", "cs", "cv", "wb", "wt"] {
+                take_modifier(&mut modifiers, hint);
+            }
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let surface = |stream: &mut PtxParser<'a, 'input>| -> PResult<(ParsedOperandStr<'input>, Vec<ParsedOperandStr<'input>>)> {
+                let mut handles = bracket(stream)?;
+                if handles.len() != 2 {
+                    return backtrack();
+                }
+                let coords = operand_elements(handles.pop().unwrap())?;
+                if coords.len() > 4 {
+                    return backtrack();
+                }
+                Ok((handles.pop().unwrap(), coords))
+            };
+            let data = ast::SurfaceDetails { geometry, mode, vector, type_, formatted, op };
+            if opcode == "suld" {
+                if formatted {
+                    return backtrack();
+                }
+                let dst = operand_elements(operand(stream)?)?;
+                comma(stream)?;
+                let (src_surf, coords) = surface(stream)?;
+                if dst.len() != vector as usize {
+                    return backtrack();
+                }
+                let mut d = dst.into_iter();
+                let mut c = coords.into_iter();
+                return Ok(ast::Instruction::SuldAgx {
+                    data,
+                    arguments: ast::SuldAgxArgs {
+                        dst0: d.next().unwrap(),
+                        dst1: d.next(),
+                        dst2: d.next(),
+                        dst3: d.next(),
+                        src_surf,
+                        src_c0: c.next(),
+                        src_c1: c.next(),
+                        src_c2: c.next(),
+                        src_c3: c.next(),
+                    },
+                });
+            }
+            let (src_surf, coords) = surface(stream)?;
+            comma(stream)?;
+            let values = operand_elements(operand(stream)?)?;
+            let mut c = coords.into_iter();
+            if opcode == "sured" {
+                if values.len() != 1 {
+                    return backtrack();
+                }
+                return Ok(ast::Instruction::SuredAgx {
+                    data,
+                    arguments: ast::SuredAgxArgs {
+                        src_surf,
+                        src_c0: c.next(),
+                        src_c1: c.next(),
+                        src_c2: c.next(),
+                        src_c3: c.next(),
+                        src_v: values.into_iter().next().unwrap(),
+                    },
+                });
+            }
+            if values.len() != vector as usize {
+                return backtrack();
+            }
+            let mut v = values.into_iter();
+            Ok(ast::Instruction::SustAgx {
+                data,
+                arguments: ast::SustAgxArgs {
+                    src_surf,
+                    src_c0: c.next(),
+                    src_c1: c.next(),
+                    src_c2: c.next(),
+                    src_c3: c.next(),
+                    src_v0: v.next().unwrap(),
+                    src_v1: v.next(),
+                    src_v2: v.next(),
+                    src_v3: v.next(),
+                },
+            })
+        }
+    }
+}
+
+fn tensormap_replace<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    use ast::TensormapField::*;
+    if !take_modifier(&mut modifiers, "replace") || !take_modifier(&mut modifiers, "tile") || !take_modifier(&mut modifiers, "b1024")
+    {
+        return backtrack();
+    }
+    let fields = [
+        ("global_address", GlobalAddress),
+        ("rank", Rank),
+        ("box_dim", BoxDim),
+        ("global_dim", GlobalDim),
+        ("global_stride", GlobalStride),
+        ("element_stride", ElementStride),
+        ("elemtype", Elemtype),
+        ("interleave_layout", InterleaveLayout),
+        ("swizzle_mode", SwizzleMode),
+        ("swizzle_atomicity", SwizzleAtomicity),
+        ("fill_mode", FillMode),
+    ];
+    let Some(&(_, field)) = fields.iter().find(|(name, _)| take_modifier(&mut modifiers, name)) else {
+        return backtrack();
+    };
+    let space = if take_modifier(&mut modifiers, "shared::cta") {
+        StateSpace::Shared
+    } else {
+        take_modifier(&mut modifiers, "global");
+        StateSpace::Global
+    };
+    let type_ = if take_modifier(&mut modifiers, "b32") {
+        ScalarType::B32
+    } else if take_modifier(&mut modifiers, "b64") {
+        ScalarType::B64
+    } else {
+        return backtrack();
+    };
+    if !modifiers.is_empty() {
+        return backtrack();
+    }
+    let tmap = delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let first = ParsedOperandStr::parse.parse_next(stream)?;
+    let (src_ord, src_value) = if opt(Token::Comma).parse_next(stream)?.is_some() {
+        (Some(first), ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        (None, first)
+    };
+    if src_ord.is_some() != matches!(field, BoxDim | GlobalDim | GlobalStride | ElementStride) {
+        return backtrack();
+    }
+    Ok(ast::Instruction::TensormapReplace {
+        data: ast::TensormapReplaceDetails { field, space, type_ },
+        arguments: ast::TensormapReplaceArgs { src_tmap: tmap, src_ord, src_value },
+    })
+}
+
+// wgmma.mma_async{.sp}.sync.aligned.m64nNkK.dtype.atype.btype{.satfinite}{.bop.popc}
+//     d, a | a-desc, b-desc{, sp-meta, sp-sel}, scale-d{, imm-scale-a, imm-scale-b{, imm-trans-a,} imm-trans-b}
+fn wgmma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let control = if take_modifier(&mut modifiers, "fence") {
+        Some(ast::WgmmaControl::Fence)
+    } else if take_modifier(&mut modifiers, "commit_group") {
+        Some(ast::WgmmaControl::CommitGroup)
+    } else if take_modifier(&mut modifiers, "wait_group") {
+        let n = match ParsedOperandStr::parse.parse_next(stream)? {
+            ast::ParsedOperand::Imm(value) => match value.as_u64() {
+                Some(n) => n as u32,
+                None => return backtrack(),
+            },
+            _ => return backtrack(),
+        };
+        Some(ast::WgmmaControl::WaitGroup(n))
+    } else {
+        None
+    };
+    if let Some(control) = control {
+        if !modifiers.is_empty() {
+            return backtrack();
+        }
+        return Ok(ast::Instruction::WgmmaFence { data: control });
+    }
+    if !take_modifier(&mut modifiers, "mma_async") {
+        return backtrack();
+    }
+    let sparse = take_modifier(&mut modifiers, "sp");
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let b1_op = take_b1_op(&mut modifiers);
+    let types = modifiers
+        .iter()
+        .filter_map(|m| ast::MmaType::from_name(m))
+        .collect::<Vec<_>>();
+    modifiers.retain(|m| ast::MmaType::from_name(m).is_none());
+    let [dtype, atype, btype] = types[..] else {
+        return backtrack();
+    };
+    if !modifiers.is_empty() || m != 64 || n == 0 || n > 256 || n % 8 != 0 {
+        return backtrack();
+    }
+    let mut operands = vec![ParsedOperandStr::parse.parse_next(stream)?];
+    while opt(Token::Comma).parse_next(stream)?.is_some() {
+        operands.push(ParsedOperandStr::parse.parse_next(stream)?);
+    }
+    let imm = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::Imm(value) => value.as_u64().map(|v| v as i64),
+        _ => None,
+    };
+    let mut rest = operands.into_iter();
+    let (Some(dst), Some(src_a), Some(src_b)) = (rest.next(), rest.next(), rest.next()) else {
+        return backtrack();
+    };
+    let a_descriptor = !matches!(src_a, ast::ParsedOperand::VecPack(_));
+    let (src_metadata, selector) = if sparse {
+        let (Some(meta), Some(sel)) = (rest.next(), rest.next()) else {
+            return backtrack();
+        };
+        match imm(&sel) {
+            Some(sel) if (0..4).contains(&sel) => (Some(meta), Some(sel as u32)),
+            _ => return backtrack(),
+        }
+    } else {
+        (None, None)
+    };
+    let Some(scale_d) = rest.next() else {
+        return backtrack();
+    };
+    let (scale_d, src_scale_d) = match imm(&scale_d) {
+        Some(v) => (Some(v != 0), None),
+        None => (None, Some(scale_d)),
+    };
+    let mut immediates = Vec::new();
+    for operand in rest {
+        match imm(&operand) {
+            Some(v) => immediates.push(v),
+            None => return backtrack(),
+        }
+    }
+    // imm-scale-a, imm-scale-b (floating point types), then the transposes of the 16-bit types (only B's when A
+    // is in registers)
+    let (negate_a, negate_b) = (immediates.first() == Some(&-1), immediates.get(1) == Some(&-1));
+    let transposes = immediates.get(2..).unwrap_or(&[]);
+    let (transpose_a, transpose_b) = match (a_descriptor, transposes) {
+        (true, [a, b]) => (*a != 0, *b != 0),
+        (false, [b]) => (false, *b != 0),
+        (_, []) => (false, false),
+        _ => return backtrack(),
+    };
+    let mma = ast::MmaDetails {
+        m,
+        n,
+        k,
+        alayout: ast::MatrixLayout::Row,
+        blayout: ast::MatrixLayout::Col,
+        dtype,
+        atype,
+        btype,
+        ctype: dtype,
+        satfinite,
+        b1_op,
+        block_scale: None,
+        sparse: selector,
+    };
+    Ok(ast::Instruction::Wgmma {
+        data: ast::WgmmaDetails {
+            mma,
+            a_descriptor,
+            negate_a,
+            negate_b,
+            transpose_a,
+            transpose_b,
+            scale_d,
+        },
+        arguments: WgmmaArgs { src_c: dst.clone(), dst, src_a, src_b, src_scale_d, src_metadata },
+    })
+}
+
+// mma.sync.aligned.shape.row.col{.satfinite}{.kind::f8f6f4}{.bop.popc}.dtype.atype.btype.ctype d, a, b, c;
+// Block scaling (.block_scale) and sparse mma (mma.sp) are not supported.
+fn mma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    let sparse =
+        take_modifier(&mut modifiers, "sp::ordered_metadata") || take_modifier(&mut modifiers, "sp");
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    let (Some(alayout), Some(blayout)) = (take_layout(&mut modifiers), take_layout(&mut modifiers))
+    else {
+        return backtrack();
+    };
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let kind_f8f6f4 = take_modifier(&mut modifiers, "kind::f8f6f4");
+    let block_scale = match take_block_scale(&mut modifiers) {
+        Ok(block_scale) => block_scale,
+        Err(()) => return backtrack(),
+    };
+    let b1_op = take_b1_op(&mut modifiers);
+    let Some([dtype, mut atype, mut btype, ctype]) = take_mma_types(&mut modifiers) else {
+        return backtrack();
+    };
+    // fp4 elements are packed two per byte with kind::mxf4 and kind::mxf4nvf4
+    if let Some((_, true)) = block_scale {
+        for t in [&mut atype, &mut btype] {
+            if *t == ast::MmaType::E2m1 {
+                *t = ast::MmaType::E2m1x2;
+            }
+        }
+    }
+    let data = ast::MmaDetails {
+        m,
+        n,
+        k,
+        alayout,
+        blayout,
+        dtype,
+        atype,
+        btype,
+        ctype,
+        satfinite,
+        b1_op,
+        block_scale: None,
+        sparse: None,
+    };
+    let supported = match (sparse, block_scale) {
+        (true, block_scale) => data.is_supported_sparse(kind_f8f6f4, block_scale.as_ref().map(|(s, fp4)| (s, *fp4))),
+        (false, None) => data.is_supported_mma(kind_f8f6f4),
+        (false, Some((scale, fp4))) => data.is_supported_block_scale(&scale, fp4),
+    };
+    if !modifiers.is_empty()
+        || alayout != ast::MatrixLayout::Row
+        || blayout != ast::MatrixLayout::Col
+        || !supported
+    {
+        return backtrack();
+    }
+    let (dst, _, src1, _, src2, _, src3) = (
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
+        Token::Comma,
+        ParsedOperandStr::parse,
     )
-    .parse_next(stream)?;
-    Ok(ctor(mode, op2, d, a, b, c))
+        .parse_next(stream)?;
+    // , metadata, sparsity selector
+    let sparse = if sparse {
+        let (_, metadata, _, selector) =
+            (Token::Comma, ParsedOperandStr::parse, Token::Comma, ParsedOperandStr::parse)
+                .parse_next(stream)?;
+        let selector = match selector {
+            ast::ParsedOperand::Imm(value) => match value.as_u64() {
+                Some(selector) if selector < 4 => selector as u32,
+                _ => return backtrack(),
+            },
+            _ => return backtrack(),
+        };
+        Some((metadata, selector))
+    } else {
+        None
+    };
+    let mut scale_operands = None;
+    let mut scale = None;
+    if let Some((mut s, _)) = block_scale {
+        // , scale-a, {byte-id-a, thread-id-a}, scale-b, {byte-id-b, thread-id-b}
+        let (_, src_scale_a, _, (a_byte, a_thread), _, src_scale_b, _, (b_byte, b_thread)) = (
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            scale_selector,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            scale_selector,
+        )
+            .parse_next(stream)?;
+        (s.a_byte, s.a_thread, s.b_byte, s.b_thread) = (a_byte, a_thread, b_byte, b_thread);
+        scale = Some(s);
+        scale_operands = Some((src_scale_a, src_scale_b));
+    }
+    let data = ast::MmaDetails {
+        block_scale: scale,
+        sparse: sparse.as_ref().map(|(_, selector)| *selector),
+        ..data
+    };
+    if let Some((src_metadata, _)) = sparse {
+        let (src_scale_a, src_scale_b) = match scale_operands {
+            Some((a, b)) => (Some(a), Some(b)),
+            None => (None, None),
+        };
+        return Ok(ast::Instruction::MmaSparse {
+            data,
+            arguments: MmaSparseArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+                src_metadata,
+                src_scale_a,
+                src_scale_b,
+            },
+        });
+    }
+    let Some((src_scale_a, src_scale_b)) = scale_operands else {
+        return Ok(ast::Instruction::Mma {
+            data,
+            arguments: MmaArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        });
+    };
+    Ok(ast::Instruction::MmaBlockScale {
+        data,
+        arguments: MmaBlockScaleArgs {
+            dst,
+            src1,
+            src2,
+            src3,
+            src_scale_a,
+            src_scale_b,
+        },
+    })
+}
+
+// .kind::{mxf8f6f4, mxf4, mxf4nvf4}.block_scale{.scale_vec::NX} ... .stype:
+// the scale factors (with selectors to fill in) and whether the elements are
+// packed fp4.
+fn take_block_scale(modifiers: &mut Vec<&str>) -> Result<Option<(ast::MmaBlockScale, bool)>, ()> {
+    let kinds = [("kind::mxf8f6f4", 1, false), ("kind::mxf4", 2, true), ("kind::mxf4nvf4", 0, true)];
+    let Some((_, default_chunks, fp4)) = kinds
+        .into_iter()
+        .find(|(name, _, _)| take_modifier(modifiers, name))
+    else {
+        return Ok(None);
+    };
+    if !take_modifier(modifiers, "block_scale") {
+        return Err(());
+    }
+    let chunks = [("scale_vec::1X", 1), ("scale_vec::2X", 2), ("scale_vec::4X", 4)]
+        .into_iter()
+        .find_map(|(name, chunks)| take_modifier(modifiers, name).then_some(chunks))
+        .unwrap_or(default_chunks);
+    let ue4m3 = take_modifier(modifiers, "ue4m3");
+    if !ue4m3 && !take_modifier(modifiers, "ue8m0") {
+        return Err(());
+    }
+    if chunks == 0 {
+        return Err(());
+    }
+    Ok(Some((
+        ast::MmaBlockScale {
+            chunks,
+            ue4m3,
+            a_byte: 0,
+            a_thread: 0,
+            b_byte: 0,
+            b_thread: 0,
+        },
+        fp4,
+    )))
+}
+
+// {byte-id, thread-id}, as immediates
+fn scale_selector<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, u32)> {
+    let selector = ParsedOperandStr::parse.parse_next(stream)?;
+    let ast::ParsedOperand::VecPack(items) = selector else {
+        return backtrack();
+    };
+    let value = |item: &Option<ast::RegOrImmediate<&str>>| match item {
+        Some(ast::RegOrImmediate::Imm(value)) => value.as_u64().map(|v| v as u32),
+        _ => None,
+    };
+    match &items[..] {
+        [byte, thread] => match (value(byte), value(thread)) {
+            (Some(byte), Some(thread)) if byte < 4 && thread < 4 => Ok((byte, thread)),
+            _ => backtrack(),
+        },
+        _ => backtrack(),
+    }
+}
+
+// wmma.load.{a,b,c}.sync.aligned.layout.shape{.ss}.type r, [p]{, stride};
+// wmma.store.d.sync.aligned.layout.shape{.ss}.type    [p], r{, stride};
+// wmma.mma.sync.aligned.alayout.blayout.shape.dtype.ctype d, a, b, c;                (f16)
+// wmma.mma{.bop.popc}.sync.aligned.alayout.blayout.shape{.rnd}.dtype.atype.btype.ctype{.satfinite} d, a, b, c;
+fn wmma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    let operation = if modifiers.is_empty() {
+        return backtrack();
+    } else {
+        modifiers.remove(0)
+    };
+    let b1_op = take_b1_op(&mut modifiers);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    if operation == "mma" {
+        let (Some(alayout), Some(blayout)) =
+            (take_layout(&mut modifiers), take_layout(&mut modifiers))
+        else {
+            return backtrack();
+        };
+        let satfinite = take_modifier(&mut modifiers, "satfinite");
+        take_modifier(&mut modifiers, "rn");
+        let Some([dtype, atype, btype, ctype]) = take_mma_types(&mut modifiers) else {
+            return backtrack();
+        };
+        let data = ast::MmaDetails {
+            m,
+            n,
+            k,
+            alayout,
+            blayout,
+            dtype,
+            atype,
+            btype,
+            ctype,
+            satfinite,
+            b1_op,
+            block_scale: None,
+            sparse: None,
+        };
+        if !modifiers.is_empty() || !data.is_supported_wmma() {
+            return backtrack();
+        }
+        let (dst, _, src1, _, src2, _, src3) = (
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+            Token::Comma,
+            ParsedOperandStr::parse,
+        )
+            .parse_next(stream)?;
+        return Ok(ast::Instruction::WmmaMma {
+            data,
+            arguments: WmmaMmaArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        });
+    }
+    if b1_op.is_some() || modifiers.is_empty() {
+        return backtrack();
+    }
+    let matrix = match (operation, modifiers.remove(0)) {
+        ("load", "a") => ast::MmaMatrix::A,
+        ("load", "b") => ast::MmaMatrix::B,
+        ("load", "c") => ast::MmaMatrix::C,
+        ("store", "d") => ast::MmaMatrix::D,
+        _ => return backtrack(),
+    };
+    let Some(layout) = take_layout(&mut modifiers) else {
+        return backtrack();
+    };
+    let state_space = take_state_space(&mut modifiers).unwrap_or(StateSpace::Generic);
+    let type_ = match &modifiers[..] {
+        [name] => match ast::MmaType::from_name(name) {
+            Some(type_) => type_,
+            None => return backtrack(),
+        },
+        _ => return backtrack(),
+    };
+    let data = ast::WmmaLoadStoreDetails {
+        matrix,
+        layout,
+        m,
+        n,
+        k,
+        state_space,
+        type_,
+    };
+    if !data.is_supported() {
+        return backtrack();
+    }
+    // Without a stride, the matrix is packed: the stride is its number of
+    // columns (row major) or rows (column major).
+    let (rows, columns) = data.mma().matrix_size(matrix);
+    let default_stride = match layout {
+        ast::MatrixLayout::Row => columns,
+        ast::MatrixLayout::Col => rows,
+    };
+    let stride = |stream: &mut PtxParser<'a, 'input>| {
+        opt(preceded(Token::Comma, ParsedOperandStr::parse))
+            .map(|stride| {
+                stride.unwrap_or(ast::ParsedOperand::Imm(ast::ImmediateValue::U64(
+                    default_stride as u64,
+                )))
+            })
+            .parse_next(stream)
+    };
+    if matrix == ast::MmaMatrix::D {
+        let (src1, _, src2, src_stride) =
+            (bracketed_operand, Token::Comma, ParsedOperandStr::parse, stride)
+                .parse_next(stream)?;
+        Ok(ast::Instruction::WmmaStore {
+            data,
+            arguments: WmmaStoreArgs {
+                src1,
+                src2,
+                src_stride,
+            },
+        })
+    } else {
+        let (dst, _, src, src_stride) =
+            (ParsedOperandStr::parse, Token::Comma, bracketed_operand, stride)
+                .parse_next(stream)?;
+        Ok(ast::Instruction::WmmaLoad {
+            data,
+            arguments: WmmaLoadArgs {
+                dst,
+                src,
+                src_stride,
+            },
+        })
+    }
+}
+
+// `_` in place of an optional destination
+fn sink_to_none<'input>(operand: ParsedOperandStr<'input>) -> Option<ParsedOperandStr<'input>> {
+    match operand {
+        ast::ParsedOperand::VecPack(ref elements) if elements.len() == 1 && elements[0].is_none() => {
+            None
+        }
+        operand => Some(operand),
+    }
+}
+
+// .shared::cta and .shared::cluster addresses are .shared addresses (on AGX, a cluster
+// is one threadgroup with the CTAs' shared memory side by side)
+fn shared_space(space: Option<StateSpace>) -> StateSpace {
+    match space {
+        Some(StateSpace::Shared | StateSpace::SharedCta | StateSpace::SharedCluster) => {
+            StateSpace::Shared
+        }
+        Some(space) => space,
+        None => StateSpace::Generic,
+    }
+}
+
+fn mbarrier_arrive<'input>(
+    mbstate: ParsedOperandStr<'input>,
+    drop: bool,
+    expect_tx: bool,
+    no_complete: bool,
+    space: Option<StateSpace>,
+    addr: ParsedOperandStr<'input>,
+    count: Option<ParsedOperandStr<'input>>,
+    extra: Option<ParsedOperandStr<'input>>,
+    multicast: bool,
+) -> ast::Instruction<ParsedOperandStr<'input>> {
+    // .noComplete takes a count (it only marks that the arrival must not complete the phase)
+    let _ = no_complete;
+    // .multicast::cluster::32b: the CTA mask is the last operand
+    let (count, cta_mask) = match (multicast, count, extra) {
+        (true, Some(count), Some(mask)) => (Some(count), Some(mask)),
+        (true, mask, None) => (None, mask),
+        (_, count, _) => (count, None),
+    };
+    let (count, tx_count) = if expect_tx { (None, count) } else { (count, None) };
+    ast::Instruction::MbarrierArrive {
+        data: ast::MbarrierArriveDetails {
+            space: shared_space(space),
+            drop,
+        },
+        arguments: ast::MbarrierArriveArgs {
+            dst_state: sink_to_none(mbstate),
+            src_mbarrier: addr,
+            src_count: count,
+            src_tx_count: tx_count,
+            src_cta_mask: cta_mask,
+        },
+    }
+}
+
+// .xorsign and .abs of min/max must come together
+fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
+    if xorsign != abs {
+        state
+            .errors
+            .push(PtxError::SyntaxError(".xorsign requires .abs".to_string()));
+    }
+    xorsign && abs
+}
+
+fn packed_cvt<'input, 'e>(
+    errors: &mut Vec<PtxError<'e>>,
+    rounding: RawRoundingMode,
+    relu: bool,
+    satfinite: bool,
+    dst_type: PackedCvtType,
+    src_type: PackedCvtType,
+    dst: ParsedOperandStr<'input>,
+    src: ParsedOperandStr<'input>,
+    src2: Option<ParsedOperandStr<'input>>,
+) -> ast::Instruction<ParsedOperandStr<'input>> {
+    fn mini(t: PackedCvtType) -> Option<ast::MiniFormat> {
+        Some(match t {
+            PackedCvtType::E4m3x2 => ast::MiniFormat::E4m3x2,
+            PackedCvtType::E5m2x2 => ast::MiniFormat::E5m2x2,
+            PackedCvtType::E2m1x2 => ast::MiniFormat::E2m1x2,
+            PackedCvtType::E2m3x2 => ast::MiniFormat::E2m3x2,
+            PackedCvtType::E3m2x2 => ast::MiniFormat::E3m2x2,
+            PackedCvtType::Ue8m0x2 => ast::MiniFormat::Ue8m0x2,
+            _ => return None,
+        })
+    }
+    fn scalar(t: PackedCvtType) -> ScalarType {
+        match t {
+            PackedCvtType::F16x2 => ScalarType::F16x2,
+            PackedCvtType::BF16x2 => ScalarType::BF16x2,
+            PackedCvtType::E4m3x2 => ScalarType::E4m3x2,
+            PackedCvtType::E5m2x2 => ScalarType::E5m2x2,
+            _ => ScalarType::F32,
+        }
+    }
+    let is_half = |t| matches!(t, PackedCvtType::F16x2 | PackedCvtType::BF16x2);
+    let is_legacy_fp8 = |t| matches!(t, PackedCvtType::E4m3x2 | PackedCvtType::E5m2x2);
+    let mini_instruction = |format, direction, errors: &mut Vec<PtxError<'e>>| {
+        let rounding = ast::RoundingMode::from(rounding);
+        if (rounding == ast::RoundingMode::PositiveInf) != (format == ast::MiniFormat::Ue8m0x2 && direction != ast::MiniDirection::ToBf16x2)
+            && rounding != ast::RoundingMode::Zero
+        {
+            errors.push(PtxError::SyntaxError("invalid rounding of cvt".to_string()));
+        }
+        ast::Instruction::CvtMini {
+            data: ast::CvtMiniDetails {
+                format,
+                direction,
+                rounding,
+                relu,
+            },
+            arguments: CvtMiniArgs {
+                dst: dst.clone(),
+                src1: src.clone(),
+                src2: src2.clone(),
+            },
+        }
+    };
+    let pair = src2.is_some();
+    match (is_half(dst_type), mini(dst_type), src_type, mini(src_type)) {
+        // cvt.frnd2{.relu}{.satfinite}.{f16x2,bf16x2}.f32 d, a, b
+        (true, _, PackedCvtType::F32, _) if pair && rounding != RawRoundingMode::Rp => {
+            let data = ast::CvtDetails::new(errors, Some(rounding), false, false, relu, satfinite, scalar(dst_type), ScalarType::F32);
+            ast::Instruction::Cvt {
+                data,
+                arguments: ast::CvtArgs { dst, src, src2 }
+            }
+        }
+        // widening of the narrow formats
+        (true, _, _, Some(format)) if !pair && rounding == RawRoundingMode::Rn => {
+            if is_legacy_fp8(src_type) && !relu && !satfinite {
+                let data = ast::CvtDetails::new(errors, Some(rounding), false, false, false, false, scalar(dst_type), scalar(src_type));
+                ast::Instruction::Cvt {
+                    data,
+                    arguments: ast::CvtArgs { dst, src, src2: None }
+                }
+            } else {
+                let direction = if dst_type == PackedCvtType::F16x2 {
+                    ast::MiniDirection::ToF16x2
+                } else {
+                    ast::MiniDirection::ToBf16x2
+                };
+                mini_instruction(format, direction, errors)
+            }
+        }
+        // narrowing to them
+        (false, Some(format), _, None) if pair == (src_type == PackedCvtType::F32) => {
+            if is_legacy_fp8(dst_type) && pair && rounding == RawRoundingMode::Rn && !relu && satfinite {
+                let data = ast::CvtDetails::new(errors, Some(rounding), false, false, false, false, scalar(dst_type), ScalarType::F32);
+                ast::Instruction::Cvt {
+                    data,
+                    arguments: ast::CvtArgs { dst, src, src2 }
+                }
+            } else {
+                let direction = match src_type {
+                    PackedCvtType::F32 => ast::MiniDirection::FromF32,
+                    PackedCvtType::F16x2 => ast::MiniDirection::FromF16x2,
+                    _ => ast::MiniDirection::FromBf16x2,
+                };
+                mini_instruction(format, direction, errors)
+            }
+        }
+        _ => {
+            errors.push(PtxError::SyntaxError("invalid packed cvt".to_string()));
+            mini_instruction(ast::MiniFormat::E4m3x2, ast::MiniDirection::ToF16x2, errors)
+        }
+    }
+}
+
+// The source text of the next token
+fn next_token_text<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input str> {
+    let (_, span) = token::any.parse_next(stream)?;
+    Ok(&stream.state.text[span])
+}
+
+fn video_selector(text: &str) -> Option<ast::VideoSelector> {
+    let half = match text.get(..2)? {
+        ".h" => true,
+        ".b" => false,
+        _ => return None,
+    };
+    let digits = &text[2..];
+    if digits.is_empty() || digits.len() > 4 || !digits.bytes().all(|d| d.is_ascii_digit()) {
+        return None;
+    }
+    let mut result = ast::VideoSelector {
+        half,
+        digits: [0; 4],
+        len: digits.len() as u8,
+    };
+    for (i, d) in digits.bytes().enumerate() {
+        result.digits[i] = d - b'0';
+    }
+    Some(result)
+}
+
+// A video instruction operand: {-}register{.selector} or an immediate
+fn video_operand<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<(
+    bool,
+    ast::ParsedOperand<&'input str>,
+    Option<ast::VideoSelector>,
+)> {
+    let negate = opt(Token::Minus).parse_next(stream)?.is_some();
+    if let Ok(imm) = immediate_value.parse_next(stream) {
+        return Ok((negate, ast::ParsedOperand::Imm(imm), None));
+    }
+    let name = ident.parse_next(stream)?;
+    let checkpoint = stream.checkpoint();
+    let selector = match next_token_text(stream).map(video_selector) {
+        Ok(Some(selector)) => Some(selector),
+        _ => {
+            stream.reset(&checkpoint);
+            None
+        }
+    };
+    Ok((negate, ast::ParsedOperand::Reg(name), selector))
+}
+
+// Video instructions: the modifiers start with the operand types, and the
+// operands carry selectors (%r1.b0, %r2.h10, ...), so they are parsed here
+fn video<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &'static str,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = Vec::new();
+    loop {
+        let checkpoint = stream.checkpoint();
+        match next_token_text(stream) {
+            Ok(text) if text.starts_with('.') => modifiers.push(text),
+            _ => {
+                stream.reset(&checkpoint);
+                break;
+            }
+        }
+    }
+    let operands: Vec<_> = separated(3..=4, video_operand, Token::Comma).parse_next(stream)?;
+    let mut errors = Vec::new();
+    let types = modifiers
+        .iter()
+        .take_while(|m| matches!(**m, ".u32" | ".s32"))
+        .map(|m| {
+            if *m == ".u32" {
+                ScalarType::U32
+            } else {
+                ScalarType::S32
+            }
+        })
+        .collect::<Vec<_>>();
+    let is_set = opcode.starts_with("vset");
+    let type_count = if is_set { 2 } else { 3 };
+    if types.len() != type_count {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    let (dtype, atype, btype) = if is_set {
+        (ScalarType::U32, types[0], types[1])
+    } else {
+        (types[0], types[1], types[2])
+    };
+    let mut saturate = false;
+    let mut secondary = None;
+    let mut clamp = None;
+    let mut shift = 0;
+    let mut plus_one = false;
+    let mut compare = None;
+    for m in &modifiers[type_count..] {
+        match *m {
+            ".sat" => saturate = true,
+            ".add" => secondary = Some(ast::VideoSecondaryOp::Add),
+            ".min" => secondary = Some(ast::VideoSecondaryOp::Min),
+            ".max" => secondary = Some(ast::VideoSecondaryOp::Max),
+            ".clamp" => clamp = Some(true),
+            ".wrap" => clamp = Some(false),
+            ".shr7" => shift = 7,
+            ".shr15" => shift = 15,
+            ".po" => plus_one = true,
+            ".eq" => compare = Some(ast::VideoCompare::Eq),
+            ".ne" => compare = Some(ast::VideoCompare::Ne),
+            ".lt" => compare = Some(ast::VideoCompare::Lt),
+            ".le" => compare = Some(ast::VideoCompare::Le),
+            ".gt" => compare = Some(ast::VideoCompare::Gt),
+            ".ge" => compare = Some(ast::VideoCompare::Ge),
+            _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+        }
+    }
+    let base = opcode.trim_end_matches(['2', '4']);
+    let lanes = match opcode.as_bytes()[opcode.len() - 1] {
+        b'2' => 2,
+        b'4' => 4,
+        _ => 1,
+    };
+    let op = match base {
+        "vadd" => ast::VideoOp::Add,
+        "vsub" => ast::VideoOp::Sub,
+        "vabsdiff" => ast::VideoOp::Absdiff,
+        "vmin" => ast::VideoOp::Min,
+        "vmax" => ast::VideoOp::Max,
+        "vshl" => ast::VideoOp::Shl,
+        "vshr" => ast::VideoOp::Shr,
+        "vavrg" => ast::VideoOp::Avrg,
+        "vset" => match compare {
+            Some(cmp) => ast::VideoOp::Set(cmp),
+            None => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+        },
+        "vmad" => ast::VideoOp::Add,
+        _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
+    };
+    if compare.is_some() && !is_set
+        || clamp.is_some() && !matches!(op, ast::VideoOp::Shl | ast::VideoOp::Shr)
+        || (shift != 0 || plus_one) && base != "vmad"
+    {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    let mut operands = operands.into_iter();
+    let (dst_neg, dst, dsel) = operands.next().unwrap();
+    let (neg_a, src1, asel) = operands.next().unwrap();
+    let (neg_b, src2, bsel) = operands.next().unwrap();
+    let src3 = operands.next();
+    let any_negation = dst_neg || neg_a || neg_b || src3.as_ref().map_or(false, |c| c.0);
+    if src3.as_ref().map_or(false, |c| c.2.is_some()) || (any_negation && base != "vmad") {
+        errors.push(PtxError::SyntaxError(format!("invalid operands of {opcode}")));
+    }
+    let check_scalar = |sel: &Option<ast::VideoSelector>, errors: &mut Vec<PtxError>| {
+        if let Some(sel) = sel {
+            if sel.len != 1 || sel.digits[0] >= if sel.half { 2 } else { 4 } {
+                errors.push(PtxError::SyntaxError(format!("invalid selector of {opcode}")));
+            }
+        }
+    };
+    let instruction = if base == "vmad" {
+        check_scalar(&asel, &mut errors);
+        check_scalar(&bsel, &mut errors);
+        let Some((neg_c, src3, _)) = src3 else {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        };
+        if dsel.is_some() || secondary.is_some() || (plus_one && (neg_a || neg_b || neg_c)) {
+            errors.push(PtxError::SyntaxError("invalid vmad".to_string()));
+        }
+        ast::Instruction::Vmad {
+            data: ast::VmadDetails {
+                dtype,
+                atype,
+                btype,
+                saturate,
+                shift,
+                plus_one,
+                negate_a: neg_a,
+                negate_b: neg_b,
+                negate_c: neg_c,
+                asel,
+                bsel,
+            },
+            arguments: VmadArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    } else if base == "vshr"
+        && types == [ScalarType::U32; 3]
+        && clamp != Some(false)
+        && !saturate
+        && secondary == Some(ast::VideoSecondaryOp::Add)
+        && asel.is_none()
+        && bsel.is_none()
+        && dsel.is_none()
+        && src3.is_some()
+    {
+        ast::Instruction::Vshr {
+            data: ast::VshData {
+                mode: FunnelShiftMode::Clamp,
+                op2: VshOp::Add,
+            },
+            arguments: VshrArgs {
+                dst,
+                src1,
+                src2,
+                src3: src3.unwrap().1,
+            },
+        }
+    } else if lanes == 1 {
+        check_scalar(&asel, &mut errors);
+        check_scalar(&bsel, &mut errors);
+        check_scalar(&dsel, &mut errors);
+        let src3 = src3.map(|c| c.1);
+        if (dsel.is_some() || secondary.is_some()) != src3.is_some()
+            || (dsel.is_some() && secondary.is_some())
+        {
+            errors.push(PtxError::SyntaxError(format!("invalid operands of {opcode}")));
+        }
+        if matches!(op, ast::VideoOp::Shl | ast::VideoOp::Shr) && btype != ScalarType::U32 {
+            errors.push(PtxError::SyntaxError(format!("{opcode} needs .u32 b")));
+        }
+        ast::Instruction::VideoScalar {
+            data: ast::VideoScalarDetails {
+                op,
+                dtype,
+                atype,
+                btype,
+                saturate: saturate && !is_set,
+                clamp: clamp.unwrap_or(true),
+                asel,
+                bsel,
+                dsel,
+                secondary,
+            },
+            arguments: VideoScalarArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    } else {
+        let Some((_, src3, _)) = src3 else {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        };
+        let element_count = if lanes == 2 { 4 } else { 8 };
+        let check = |sel: &Option<ast::VideoSelector>, is_mask: bool, errors: &mut Vec<PtxError>| {
+            if let Some(sel) = sel {
+                let valid = sel.half == (lanes == 2)
+                    && if is_mask {
+                        sel.digits().iter().all(|d| *d < lanes)
+                    } else {
+                        sel.len == lanes && sel.digits().iter().all(|d| *d < element_count)
+                    };
+                if !valid {
+                    errors.push(PtxError::SyntaxError(format!("invalid selector of {opcode}")));
+                }
+            }
+        };
+        check(&asel, false, &mut errors);
+        check(&bsel, false, &mut errors);
+        check(&dsel, true, &mut errors);
+        if matches!(secondary, Some(ast::VideoSecondaryOp::Min | ast::VideoSecondaryOp::Max)) {
+            errors.push(PtxError::SyntaxError(format!("invalid secondary operation of {opcode}")));
+        }
+        ast::Instruction::VideoSimd {
+            data: ast::VideoSimdDetails {
+                op,
+                lanes,
+                dtype,
+                atype,
+                btype,
+                saturate: saturate && !is_set,
+                add: secondary.is_some(),
+                mask: dsel,
+                asel,
+                bsel,
+            },
+            arguments: VideoSimdArgs {
+                dst,
+                src1,
+                src2,
+                src3,
+            },
+        }
+    };
+    stream.state.errors.extend(errors);
+    Ok(instruction)
 }
 
 type ParsedOperandStr<'input> = ast::ParsedOperand<&'input str>;
@@ -1980,7 +4728,10 @@ derive_parser!(
         F64Hex(&'input str),
         #[regex(r"0[xX][0-9a-zA-Z]+U?", |lex| lex.slice())]
         Hex(&'input str),
-        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice())]
+        #[regex(r"0[bB][01]+U?", |lex| lex.slice())]
+        Binary(&'input str),
+        // with a fraction, or with only an exponent (1e20)
+        #[regex(r"[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice())]
         F64(&'input str),
         #[regex(r"[0-9]+U?", |lex| lex.slice())]
         Decimal(&'input str),
@@ -2010,6 +4761,12 @@ derive_parser!(
         DotReqntid,
         #[token(".minnctapersm")]
         DotMinnctapersm,
+        #[token(".reqnctapercluster")]
+        DotReqnctapercluster,
+        #[token(".explicitcluster")]
+        DotExplicitcluster,
+        #[token(".maxclusterrank")]
+        DotMaxclusterrank,
         #[token(".entry")]
         DotEntry,
         #[token(".func")]
@@ -2048,7 +4805,12 @@ derive_parser!(
     pub enum MemScope { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum ScalarType { }
+    pub enum ScalarType {
+        #[display(".e4m3x2")]
+        E4m3x2,
+        #[display(".e5m2x2")]
+        E5m2x2
+    }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum SetpBoolPostOp { }
@@ -2060,7 +4822,9 @@ derive_parser!(
     pub enum Mul24Control { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum Reduction { }
+    pub enum Reduction {
+        Popc
+    }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum ShuffleMode { }
@@ -2077,15 +4841,6 @@ derive_parser!(
     }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixShape { }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixNumber { }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
-    pub enum MatrixLayout { }
-
-    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum CacheLevel { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -2096,6 +4851,28 @@ derive_parser!(
         Add
     }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum BmskMode { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum PrmtMode { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum Tf32Rounding { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum Packed8Type { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum PackedSetType { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum TestpOperation { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash, Debug)]
+    pub enum PackedCvtType { }
+
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-mov
     mov{.vec}.type  d, a => {
         Instruction::Mov {
@@ -2105,20 +4882,19 @@ derive_parser!(
     }
     .vec: VectorPrefix = { .v2, .v4, .v8 };
     .type: ScalarType =  { .pred,
-                           .b16, .b32, .b64,
+                           .b16, .b32, .b64, .b128,
                            .u16, .u32, .u64,
                            .s16, .s32, .s64,
                                  .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st
     st{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.vec}.type  [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: cop.unwrap_or(RawStCacheOperator::Wb).into(),
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -2129,7 +4905,7 @@ derive_parser!(
         Instruction::St {
             data: StData {
                 qualifier: volatile.into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -2137,13 +4913,12 @@ derive_parser!(
         }
     }
     st.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st.relaxed instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st.relaxed: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -2151,13 +4926,12 @@ derive_parser!(
         }
     }
     st.release.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.vec}.type [a], b{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("st.release instruction with cache policy/eviction priority/cache hints".to_string()));
-        }
+        // st.release: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &cache_policy);
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Release(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -2165,7 +4939,7 @@ derive_parser!(
         }
     }
     st.mmio.relaxed.sys{.global}.type                                               [a], b => {
-        state.errors.push(PtxError::Todo("st.mmio.relaxed.sys instruction (MMIO store operations)".to_string()));
+        // an MMIO access happens exactly once, neither merged nor split: as a relaxed system-scope access
         Instruction::St {
             data: ast::StData {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -2193,13 +4967,12 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
     ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
         let (a, unified) = a;
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || unified || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy, &unified);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: cop.unwrap_or(RawLdCacheOperator::Ca).into(),
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -2208,13 +4981,12 @@ derive_parser!(
         }
     }
     ld.volatile{.ss}{.level::prefetch_size}{.vec}.type                                                      d, [a] => {
-        if level_prefetch_size.is_some() {
-            state.errors.push(PtxError::Todo("ld.volatile instruction with prefetch size".to_string()));
-        }
+        // ld.volatile: the cache and prefetch hints do not change the result
+        let _ = &level_prefetch_size;
         Instruction::Ld {
             data: LdDetails {
                 qualifier: volatile.into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -2223,13 +4995,12 @@ derive_parser!(
         }
     }
     ld.relaxed.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.relaxed instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.relaxed: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -2238,13 +5009,12 @@ derive_parser!(
         }
     }
     ld.acquire.scope{.ss}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.acquire instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.acquire: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Acquire(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -2253,7 +5023,7 @@ derive_parser!(
         }
     }
     ld.mmio.relaxed.sys{.global}.type                                                                       d, [a] => {
-        state.errors.push(PtxError::Todo("ld.mmio.relaxed.sys instruction (MMIO load operations)".to_string()));
+        // an MMIO access happens exactly once, neither merged nor split: as a relaxed system-scope access
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -2280,6 +5050,27 @@ derive_parser!(
     RawLdStQualifier =                      { .weak, .volatile };
     StateSpace =                            { .global };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ldu
+    // A load of data that is the same for all threads; read as a normal load
+    ldu{.ss}{.vec}.type  d, [a] => {
+        Instruction::Ld {
+            data: LdDetails {
+                qualifier: ast::LdStQualifier::Weak,
+                state_space: shared_space(ss),
+                caching: ast::LdCacheOperator::Cached,
+                typ: Type::maybe_vector(vec, type_),
+                non_coherent: false
+            },
+            arguments: LdArgs { dst:d, src:a }
+        }
+    }
+    .ss: StateSpace =                       { .global };
+    .vec: VectorPrefix  =                   { .v2, .v4 };
+    .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
+                                              .u8, .u16, .u32, .u64,
+                                              .s8, .s16, .s32, .s64,
+                                              .f32, .f64 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-ld-global-nc
     ld.global{.cop}.nc{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type  d, [a]{, cache_policy} => {
         if let Some(cop) = cop {
@@ -2287,9 +5078,8 @@ derive_parser!(
                 state.errors.push(PtxError::SyntaxError(format!("cannot have both {} and {} in {:?}", cop, level_eviction_priority, state.text)));
             }
         }
-        if level_eviction_priority.is_some() || level_cache_hint || level_prefetch_size.is_some() || cache_policy.is_some() {
-            state.errors.push(PtxError::Todo("ld.global.nc instruction with cache policy/eviction priority/cache hints/prefetch size".to_string()));
-        }
+        // ld.global.nc: the cache and prefetch hints do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Weak,
@@ -2347,19 +5137,50 @@ derive_parser!(
     ScalarType =        { .s32 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-add
-    add{.rnd}{.ftz}{.sat}.f32  d, a, b => {
-        Instruction::Add {
-            data: ast::ArithDetails::Float(
-                ast::ArithFloat {
-                    type_: f32,
+    // two f32 at once in a 64-bit register (sm_100)
+    add{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
+        ast::Instruction::Add {
+            data: ast::ArithDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
+                }),
+            arguments: AddArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    // with .atype, the mixed-precision form (sm_100): a is converted to f32
+    add{.rnd}{.ftz}{.sat}.f32{.atype}  d, a, b => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Add,
+                    dtype: f32,
+                    atype,
+                    btype: f32,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: ftz,
+                    saturate: sat,
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: None }
+            }
+        } else {
+            Instruction::Add {
+                data: ast::ArithDetails::Float(
+                    ast::ArithFloat {
+                        type_: f32,
+                        rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                        flush_to_zero: Some(ftz),
+                        saturate: sat,
+                        is_fusable: rnd.is_none(),
+                        relu: false,
+                    }
+                ),
+                arguments: AddArgs {
+                    dst: d, src1: a, src2: b
                 }
-            ),
-            arguments: AddArgs {
-                dst: d, src1: a, src2: b
             }
         }
     }
@@ -2371,7 +5192,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -2380,7 +5202,8 @@ derive_parser!(
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType =        { .f32, .f64 };
+    .atype: ScalarType = { .f16, .bf16 };
+    ScalarType =        { .f32, .f32x2, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add
     add{.rnd}{.ftz}{.sat}.f16   d, a, b => {
@@ -2391,7 +5214,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -2407,7 +5231,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -2415,15 +5240,16 @@ derive_parser!(
             }
         }
     }
-    add{.rnd}.bf16              d, a, b => {
+    add{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         Instruction::Add {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -2431,15 +5257,16 @@ derive_parser!(
             }
         }
     }
-    add{.rnd}.bf16x2            d, a, b => {
+    add{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         Instruction::Add {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -2447,7 +5274,7 @@ derive_parser!(
             }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =        { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mul
@@ -2479,6 +5306,20 @@ derive_parser!(
                           .s16, .s32 };
     RawMulIntControl =  { .wide };
 
+    // two f32 at once in a 64-bit register (sm_100)
+    mul{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
+        ast::Instruction::Mul {
+            data: ast::MulDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
+                }),
+            arguments: MulArgs { dst: d, src1: a, src2: b }
+        }
+    }
     mul{.rnd}{.ftz}{.sat}.f32  d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
@@ -2487,7 +5328,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2501,14 +5343,15 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType = { .f32, .f64 };
+    ScalarType = { .f32, .f32x2, .f64 };
 
     mul{.rnd}{.ftz}{.sat}.f16   d, a, b => {
         ast::Instruction::Mul {
@@ -2518,7 +5361,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -2532,41 +5376,44 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    mul{.rnd}.bf16   d, a, b => {
+    mul{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    mul{.rnd}.bf16x2 d, a, b => {
+    mul{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#comparison-and-selection-instructions-set
@@ -2652,6 +5499,15 @@ derive_parser!(
                                   .f32, .f64,
                                   .f16, .f16x2, .bf16, .bf16x2 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-cnot
+    cnot.type d, a => {
+        ast::Instruction::Cnot {
+            data: type_,
+            arguments: CnotArgs { dst: d, src: a }
+        }
+    }
+    .type: ScalarType = { .b16, .b32, .b64 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
     not.type d, a => {
         ast::Instruction::Not {
@@ -2687,37 +5543,32 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
     cvt{.ifrnd}{.ftz}{.sat}.dtype.atype         d, a => {
-        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, dtype, atype);
+        let data = ast::CvtDetails::new(&mut state.errors, ifrnd, ftz, sat, false, false, dtype, atype);
         let arguments = ast::CvtArgs { dst: d, src: a, src2: None };
         ast::Instruction::Cvt {
             data, arguments
         }
     }
+    // Floating point conversions with .relu or .satfinite (at least one of them)
+    cvt{.frnd}.relu{.satfinite}.fdtype.fatype   d, a => {
+        let data = ast::CvtDetails::new(&mut state.errors, frnd, false, false, true, satfinite, fdtype, fatype);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
+        }
+    }
+    cvt{.frnd}.satfinite.fdtype.fatype          d, a => {
+        let data = ast::CvtDetails::new(&mut state.errors, frnd, false, false, false, true, fdtype, fatype);
+        ast::Instruction::Cvt {
+            data,
+            arguments: ast::CvtArgs { dst: d, src: a, src2: None }
+        }
+    }
     // cvt.frnd2{.relu}{.satfinite}.f16.f32       d, a;
     // cvt.frnd2{.relu}{.satfinite}.f16x2.f32     d, a, b;
     // cvt.frnd2{.relu}{.satfinite}.bf16.f32      d, a;
-    cvt.frnd2{.relu}{.satfinite}.x2_to_type.x2_from_type    d, a {, b} => {
-        if satfinite {
-            state.errors.push(PtxError::Todo("cvt.frnd2 instruction with satfinite modifier".to_string()));
-        }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(frnd2), false, false, relu, x2_to_type, x2_from_type);
-        ast::Instruction::Cvt {
-            data,
-            arguments:  ast::CvtArgs { dst: d, src: a, src2: b }
-        }
-    }
     // cvt.rna{.satfinite}.tf32.f32               d, a;
-    // cvt.frnd2{.relu}.tf32.f32                   d, a;
-    cvt.rn.satfinite{.relu}.f8x2type.f32       d, a, b => {
-        if relu {
-            state.errors.push(PtxError::Todo("cvt.rn.satfinite.f8x2 instruction with relu modifier".to_string()));
-        }
-        let data = ast::CvtDetails::new(&mut state.errors, Some(rn), false, false, false, f8x2type, ScalarType::F32);
-        ast::Instruction::Cvt {
-            data,
-            arguments: ast::CvtArgs { dst: d, src: a, src2: Some(b) }
-        }
-    }
+    // cvt.frnd2{.relu}{.satfinite}.tf32.f32       d, a;
     // cvt.rn.satfinite{.relu}.f8x2type.f16x2     d, a;
     /*
     cvt.rn{.relu}.f16x2.f8x2type              d, a => {
@@ -2733,7 +5584,9 @@ derive_parser!(
     */
 
     .ifrnd: RawRoundingMode =   { .rn,  .rz,  .rm,  .rp,  .rni, .rzi, .rmi, .rpi };
-    .frnd2: RawRoundingMode =   { .rn,  .rz };
+    .frnd: RawRoundingMode =    { .rn,  .rz,  .rm,  .rp };
+    .fdtype: ScalarType =       { .bf16, .f16, .f32, .f64 };
+    .fatype: ScalarType =       { .bf16, .f16, .f32, .f64 };
     RawRoundingMode =           { .rn };
     .dtype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
@@ -2741,9 +5594,24 @@ derive_parser!(
     .atype: ScalarType =        { .u8,   .u16, .u32, .u64,
                                   .s8,   .s16, .s32, .s64,
                                   .bf16, .f16, .f32, .f64 };
-    .f8x2type: ScalarType =         { .e4m3x2, .e5m2x2 };
-    .x2_to_type: ScalarType =      { .f16x2, .bf16x2 };
-    .x2_from_type: ScalarType =    { .e4m3x2, .e5m2x2, .f32 };
+
+    cvt.tfrnd{.relu}{.satfinite}.tf32.f32         d, a => {
+        ast::Instruction::CvtTf32 {
+            data: ast::CvtTf32Details { rounding: tfrnd, relu, satfinite },
+            arguments: CvtTf32Args { dst: d, src: a }
+        }
+    }
+    .tfrnd: Tf32Rounding = { .rn, .rz, .rm, .rp, .rna };
+
+    // Conversions with packed pairs: cvt.frnd2{.relu}{.satfinite}.{f16x2,bf16x2}.f32 d, a, b
+    // and the conversions to and from the narrow formats (fp8, fp6, fp4, ue8m0). One
+    // pattern, so that the parser can tell it from the others by the destination type
+    cvt.prnd{.relu}{.satfinite}.pdst.psrc      d, a {, b} => {
+        packed_cvt(&mut state.errors, prnd, relu, satfinite, pdst, psrc, d, a, b)
+    }
+    .prnd: RawRoundingMode =    { .rn, .rz, .rp };
+    .pdst: PackedCvtType =      { .f16x2, .bf16x2, .e4m3x2, .e5m2x2, .e2m1x2, .e2m3x2, .e3m2x2, .ue8m0x2 };
+    .psrc: PackedCvtType =      { .f32, .f16x2, .bf16x2, .e4m3x2, .e5m2x2, .e2m1x2, .e2m3x2, .e3m2x2, .ue8m0x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cvt-pack
     cvt.pack.sat.convertType.s32.b32        d, a, b, c => {
@@ -2773,6 +5641,49 @@ derive_parser!(
                           .u16, .u32, .u64,
                           .s16, .s32, .s64 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-alloca
+    alloca.type  ptr, size{, align} => {
+        let align = match align.map(|a| a.as_immediate()) {
+            None => 8,
+            Some(Some(ImmediateValue::U64(a))) if a.is_power_of_two() => a as u32,
+            Some(Some(ImmediateValue::S64(a))) if a > 0 && (a as u64).is_power_of_two() => a as u32,
+            Some(_) => {
+                state.errors.push(PtxError::SyntaxError("alloca alignment must be a power of two".to_string()));
+                8
+            }
+        };
+        ast::Instruction::Alloca {
+            data: ast::AllocaDetails { type_, align },
+            arguments: AllocaArgs { dst: ptr, src: size }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stacksave
+    stacksave.type  d => {
+        ast::Instruction::StackSave {
+            data: type_,
+            arguments: StackSaveArgs { dst: d }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#stack-manipulation-instructions-stackrestore
+    stackrestore.type  a => {
+        ast::Instruction::StackRestore {
+            data: type_,
+            arguments: StackRestoreArgs { src: a }
+        }
+    }
+    .type: ScalarType = { .u32, .u64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-isspacep
+    isspacep.space  p, a => {
+        ast::Instruction::Isspacep {
+            data: space,
+            arguments: IsspacepArgs { dst: p, src: a }
+        }
+    }
+    .space: StateSpace = { .const, .global, .local, .shared{::cta, ::cluster}, .param };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
     cvta.space.size     p, a => {
         let size = match size {
@@ -2781,7 +5692,7 @@ derive_parser!(
             _ => unreachable!()
         };
         let data = ast::CvtaDetails {
-            state_space: space,
+            state_space: shared_space(Some(space)),
             direction: ast::CvtaDirection::ExplicitToGeneric,
             size,
         };
@@ -2799,7 +5710,7 @@ derive_parser!(
             _ => unreachable!()
         };
         let data = ast::CvtaDetails {
-            state_space: space,
+            state_space: shared_space(Some(space)),
             direction: ast::CvtaDirection::GenericToExplicit,
             size,
         };
@@ -2893,7 +5804,7 @@ derive_parser!(
             }
         }
     }
-    .type: ScalarType = { .s16, .s32, .s64 };
+    .type: ScalarType = { .s16x2, .s16, .s32, .s64 };
     ScalarType = { .f32, .f64, .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad
@@ -2948,7 +5859,8 @@ derive_parser!(
                     rounding: ast::RoundingMode::NearestEven,
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2962,7 +5874,8 @@ derive_parser!(
                     rounding: rnd.into(),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2976,7 +5889,8 @@ derive_parser!(
                     rounding: rnd.into(),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -2987,16 +5901,47 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-fma
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#half-precision-floating-point-instructions-fma
-    fma.rnd{.ftz}{.sat}.f32  d, a, b, c => {
+    // two f32 at once in a 64-bit register (sm_100)
+    fma.rnd{.ftz}{.sat}.f32x2  d, a, b, c => {
         ast::Instruction::Fma {
             data: ast::ArithFloat {
-                type_: f32,
-                rounding: rnd.into(),
-                flush_to_zero: Some(ftz),
-                saturate: sat,
-                is_fusable: false
-            },
-            arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
+                    type_: f32x2,
+                    rounding: rnd.into(),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: false,
+                    relu: false,
+                },
+            arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    // with .atype, the mixed-precision form (sm_100): a and b are converted to f32
+    fma.rnd{.ftz}{.sat}.f32{.atype}  d, a, b, c => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Fma,
+                    dtype: f32,
+                    atype,
+                    btype: atype,
+                    rounding: rnd.into(),
+                    flush_to_zero: ftz,
+                    saturate: sat,
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: Some(c) }
+            }
+        } else {
+            ast::Instruction::Fma {
+                data: ast::ArithFloat {
+                    type_: f32,
+                    rounding: rnd.into(),
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: false,
+                    relu: false,
+                },
+                arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
+            }
         }
     }
     fma.rnd.f64              d, a, b, c => {
@@ -3006,49 +5951,47 @@ derive_parser!(
                 rounding: rnd.into(),
                 flush_to_zero: None,
                 saturate: false,
-                is_fusable: false
+                is_fusable: false,
+                relu: false,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType =            { .f32, .f64 };
+    .atype: ScalarType =    { .f16, .bf16 };
+    ScalarType =            { .f32, .f32x2, .f64 };
 
-    fma.rnd{.ftz}{.sat}.f16 d, a, b, c => {
+    fma.rnd{.ftz}{.sat}{.relu}.f16 d, a, b, c => {
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: f16,
                 rounding: rnd.into(),
                 flush_to_zero: Some(ftz),
                 saturate: sat,
-                is_fusable: false
+                is_fusable: false,
+                relu,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =            { .f16 };
-    //fma.rnd{.ftz}{.sat}.f16x2   d, a, b, c;
-    //fma.rnd{.ftz}.relu.f16      d, a, b, c;
-    //fma.rnd{.ftz}.relu.f16x2    d, a, b, c;
-    //fma.rnd{.relu}.bf16         d, a, b, c;
-    fma.rnd{.relu}.type_x2       d, a, b, c => {
-        if relu {
-            state.errors.push(PtxError::Todo("fma instruction with relu modifier for bf16x2/f16x2 types".to_string()));
-        }
+    fma.rnd{.ftz}{.sat}{.relu}.type_x2       d, a, b, c => {
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: type_x2,
                 rounding: rnd.into(),
-                flush_to_zero: None,
-                saturate: false,
-                is_fusable: false
+                // bf16's .ftz is applied explicitly (insert_post_saturation), its denormal mode is not the f16 one
+                flush_to_zero: if type_x2 == ScalarType::F16x2 || ftz { Some(ftz) } else { None },
+                saturate: sat,
+                is_fusable: false,
+                relu,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
-    .type_x2: ScalarType =            { .bf16x2, .f16x2 };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
+    .type_x2: ScalarType =            { .bf16x2, .f16x2, .bf16 };
     //fma.rnd.oob.{relu}.type     d, a, b, c;
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sub
@@ -3077,21 +6020,53 @@ derive_parser!(
         }
     }
     .type: ScalarType = { .u16, .u32, .u64,
-                          .s16, .s32, .s64 };
+                          .s16, .s32, .s64,
+                          .u16x2, .s16x2 };
     ScalarType = { .s32 };
 
-    sub{.rnd}{.ftz}{.sat}.f32  d, a, b => {
+    // two f32 at once in a 64-bit register (sm_100)
+    sub{.rnd}{.ftz}{.sat}.f32x2  d, a, b => {
         ast::Instruction::Sub {
-            data: ast::ArithDetails::Float(
-                ast::ArithFloat {
-                    type_: f32,
+            data: ast::ArithDetails::Float(ast::ArithFloat {
+                    type_: f32x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
-                }
-            ),
-            arguments: SubArgs { dst: d, src1: a, src2: b  }
+                    is_fusable: rnd.is_none(),
+                    relu: false,
+                }),
+            arguments: SubArgs { dst: d, src1: a, src2: b }
+        }
+    }
+    // with .atype, the mixed-precision form (sm_100): a is converted to f32
+    sub{.rnd}{.ftz}{.sat}.f32{.atype}  d, a, b => {
+        if let Some(atype) = atype {
+            ast::Instruction::MixedFloat {
+                data: ast::MixedFloatDetails {
+                    op: ast::MixedFloatOp::Sub,
+                    dtype: f32,
+                    atype,
+                    btype: f32,
+                    rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                    flush_to_zero: ftz,
+                    saturate: sat,
+                },
+                arguments: MixedFloatArgs { dst: d, src1: a, src2: b, src3: None }
+            }
+        } else {
+            ast::Instruction::Sub {
+                data: ast::ArithDetails::Float(
+                    ast::ArithFloat {
+                        type_: f32,
+                        rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
+                        flush_to_zero: Some(ftz),
+                        saturate: sat,
+                        is_fusable: rnd.is_none(),
+                        relu: false,
+                    }
+                ),
+                arguments: SubArgs { dst: d, src1: a, src2: b  }
+            }
         }
     }
     sub{.rnd}.f64              d, a, b => {
@@ -3102,14 +6077,16 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    ScalarType = { .f32, .f64 };
+    .atype: ScalarType = { .f16, .bf16 };
+    ScalarType = { .f32, .f32x2, .f64 };
 
     sub{.rnd}{.ftz}{.sat}.f16   d, a, b => {
         ast::Instruction::Sub {
@@ -3119,7 +6096,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -3133,41 +6111,44 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    sub{.rnd}.bf16   d, a, b => {
+    sub{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         ast::Instruction::Sub {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    sub{.rnd}.bf16x2 d, a, b => {
+    sub{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         ast::Instruction::Sub {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
-                    is_fusable: rnd.is_none()
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    .rnd: RawRoundingMode = { .rn };
+    .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-min
@@ -3180,14 +6161,13 @@ derive_parser!(
             } else {
                 ast::MinMaxDetails::Unsigned(atype)
             },
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
-    //min{.relu}.btype  d, a, b => { todo!() }
-    min.btype  d, a, b => {
+    min{.relu}.btype  d, a, b => {
         ast::Instruction::Min {
-            data: ast::MinMaxDetails::Signed(btype),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            data: if relu { ast::MinMaxDetails::SignedRelu(btype) } else { ast::MinMaxDetails::Signed(btype) },
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     .atype: ScalarType = { .u16, .u32, .u64,
@@ -3195,28 +6175,31 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //min{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    min{.ftz}{.NaN}.f32   d, a, b => {
+    // the third input is sm_100's three-input form
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f32
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min.f64         d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
-                    nan: false,
+                    nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f64
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f32, .f64 };
@@ -3225,52 +6208,56 @@ derive_parser!(
     //min{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    min{.ftz}{.NaN}.f16      d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.ftz}{.NaN}.f16x2    d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.NaN}.bf16           d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.NaN}.bf16x2         d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
@@ -3285,14 +6272,13 @@ derive_parser!(
             } else {
                 ast::MinMaxDetails::Unsigned(atype)
             },
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
-    //max{.relu}.btype  d, a, b => { todo!() }
-    max.btype  d, a, b => {
+    max{.relu}.btype  d, a, b => {
         ast::Instruction::Max {
-            data: ast::MinMaxDetails::Signed(btype),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            data: if relu { ast::MinMaxDetails::SignedRelu(btype) } else { ast::MinMaxDetails::Signed(btype) },
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     .atype: ScalarType = { .u16, .u32, .u64,
@@ -3300,28 +6286,31 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //max{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    max{.ftz}{.NaN}.f32   d, a, b => {
+    // the third input is sm_100's three-input form
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f32
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max.f64         d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
-                    nan: false,
+                    nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f64
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f32, .f64 };
@@ -3330,52 +6319,56 @@ derive_parser!(
     //max{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    max{.ftz}{.NaN}.f16      d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.ftz}{.NaN}.f16x2    d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: Some(ftz),
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: f16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.NaN}.bf16           d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.NaN}.bf16x2         d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
                     flush_to_zero: None,
                     nan,
+                    xorsign_abs: xorsign_abs(state, xorsign, abs),
                     type_: bf16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
@@ -3387,7 +6380,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Approx,
                 flush_to_zero: Some(ftz),
-                type_
+                type_,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -3397,7 +6391,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -3407,7 +6402,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
-                type_: f64
+                type_: f64,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -3422,17 +6418,19 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Approx,
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: false,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
     }
-    sqrt.rnd{.ftz}.f32     d, a => {
+    sqrt.rnd{.ftz}{.sat}.f32     d, a => {
         ast::Instruction::Sqrt {
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: sat,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
@@ -3442,7 +6440,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
-                type_: f64
+                type_: f64,
+                saturate: false,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
@@ -3516,7 +6515,23 @@ derive_parser!(
         }
     }
     //bar{.cta}.arrive    a, b;
-    //bar{.cta}.red.popc.u32  d, a{, b}, {!}c;
+    bar{.cta}.red.popc.u32  d, a{, b}, {!}c => {
+        let _ = cta;
+        let (negate_src3, c) = c;
+        ast::Instruction::BarRed {
+            data: ast::BarRedData {
+                aligned: true,
+                pred_reduction: Reduction::Popc,
+            },
+            arguments: BarRedArgs {
+                dst1: d,
+                src_barrier: a,
+                src_threadcount: b,
+                src_predicate: c,
+                src_negate_predicate: ParsedOperand::Imm(ImmediateValue::U64(negate_src3 as u64))
+            }
+        }
+    }
     bar{.cta}.red.op.pred   p, a{, b}, {!}c => {
         let _ = cta;
         let (negate_src3, c) = c;
@@ -3552,7 +6567,7 @@ derive_parser!(
             data: AtomDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 op: ast::AtomicOp::new(op, type_.kind()),
                 type_: type_.into()
             },
@@ -3564,7 +6579,7 @@ derive_parser!(
             data: AtomCasDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 type_: cas_type
             },
             arguments: AtomCasArgs { dst: d, src1: a, src2: b, src3: c }
@@ -3578,7 +6593,7 @@ derive_parser!(
             data: AtomDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 op: ast::AtomicOp::new(exch, b128.kind()),
                 type_: b128.into()
             },
@@ -3600,7 +6615,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on f16/bf16 with cache policy/cache hints".to_string()));
         }
@@ -3615,7 +6631,8 @@ derive_parser!(
             arguments: AtomArgs { dst: d, src1: a, src2: b }
         }
     }
-    atom{.sem}{.scope}{.global}.float_op.noftz{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+    atom{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     d, [a], b{, cache_policy} => {
+        let _ = noftz;
         if level_cache_hint || cache_policy.is_some() {
             state.errors.push(PtxError::Todo("atom float operation on packed types with cache policy/cache hints".to_string()));
         }
@@ -3649,6 +6666,85 @@ derive_parser!(
     StateSpace =                    { .global };
     RawAtomicOp =                   { .exch };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-red
+    red{.sem}{.scope}{.space}.op{.level::cache_hint}.type                                      [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red instruction with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: shared_space(space),
+                op: ast::AtomicOp::new(op, type_.kind()),
+                type_: type_.into()
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.level::cache_hint}.vec_32_bit.f32                     [a], b{, cache_policy} => {
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f32 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, f32.kind()),
+                type_: ast::Type::Vector(vec_32_bit.len().get(), f32)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_16_bit}.half_word_type  [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on f16/bf16 with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, half_word_type.kind()),
+                type_: ast::Type::maybe_vector(vec_16_bit, half_word_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    red{.sem}{.scope}{.global}.float_op{.noftz}{.level::cache_hint}{.vec_32_bit}.packed_type     [a], b{, cache_policy} => {
+        let _ = noftz;
+        if level_cache_hint || cache_policy.is_some() {
+            state.errors.push(PtxError::Todo("red float operation on packed types with cache policy/cache hints".to_string()));
+        }
+        ast::Instruction::Red {
+            data: AtomDetails {
+                semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
+                scope: scope.unwrap_or(MemScope::Gpu),
+                space: global.unwrap_or(StateSpace::Generic),
+                op: ast::AtomicOp::new(float_op, packed_type.kind()),
+                type_: ast::Type::maybe_vector(vec_32_bit, packed_type)
+            },
+            arguments: RedArgs { src1: a, src2: b }
+        }
+    }
+    .space: StateSpace =            { .global, .shared{::cta, ::cluster} };
+    .sem: AtomSemantics =           { .relaxed, .release };
+    .scope: MemScope =              { .cta, .cluster, .gpu, .sys };
+    .op: RawAtomicOp =              { .and, .or, .xor,
+                                      .add, .inc, .dec,
+                                      .min, .max };
+    .level::cache_hint =            { .L2::cache_hint };
+    .type: ScalarType =             { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+    .half_word_type: ScalarType =   { .f16, .bf16 };
+    .packed_type: ScalarType =      { .f16x2, .bf16x2 };
+    .vec_16_bit: VectorPrefix =     { .v2, .v4, .v8 };
+    .vec_32_bit:  VectorPrefix =    { .v2, .v4 };
+    .float_op: RawAtomicOp =        { .add, .min, .max };
+    ScalarType =                    { .f32 };
+    StateSpace =                    { .global };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-div
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
     div.type  d, a, b => {
@@ -3673,7 +6769,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::Approx
+                kind: ast::DivFloatKind::Approx,
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,
@@ -3687,7 +6784,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::ApproxFull
+                kind: ast::DivFloatKind::ApproxFull,
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,
@@ -3696,12 +6794,13 @@ derive_parser!(
             },
         }
     }
-    div.rnd{.ftz}.f32     d, a, b => {
+    div.rnd{.ftz}{.sat}.f32     d, a, b => {
         ast::Instruction::Div {
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::Rounding(rnd.into())
+                kind: ast::DivFloatKind::Rounding(rnd.into()),
+                saturate: sat,
             }),
             arguments: DivArgs {
                 dst: d,
@@ -3715,7 +6814,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f64,
                 flush_to_zero: None,
-                kind: ast::DivFloatKind::Rounding(rnd.into())
+                kind: ast::DivFloatKind::Rounding(rnd.into()),
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,
@@ -3739,7 +6839,7 @@ derive_parser!(
             arguments: NegArgs { dst: d, src: a, },
         }
     }
-    .type: ScalarType = { .s16, .s32, .s64 };
+    .type: ScalarType = { .s16, .s32, .s64, .s16x2 };
 
     neg{.ftz}.f32  d, a => {
         ast::Instruction::Neg {
@@ -3903,6 +7003,88 @@ derive_parser!(
     }
     .type: ScalarType = { .u16, .u32, .u64, .s16, .s32, .s64 };
 
+    // Packed bytes (PTX ISA 9.2): add, sub, min, max, neg and abs on four byte lanes
+    add{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Add, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    sub{.sat}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Sub, signed: p8type == Packed8Type::S8x4, saturate: sat, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    min{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Min, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    max{.relu}.p8type  d, a, b => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Max, signed: p8type == Packed8Type::S8x4, saturate: false, relu },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    neg.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Neg, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+    abs.p8type  d, a => {
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details { op: ast::Packed8Op::Abs, signed: p8type == Packed8Type::S8x4, saturate: false, relu: false },
+            arguments: Packed8Args { dst: d, src1: a, src2: None }
+        }
+    }
+    .p8type: Packed8Type = { .u8x4, .s8x4 };
+
+    // set on packed integer lanes (PTX ISA 9.4)
+    set.CmpOp.ptype  d, a, b => {
+        use RawSetpCompareOp as C;
+        let cmp = match cmpop {
+            C::Eq => ast::PackedCmp::Eq,
+            C::Ne => ast::PackedCmp::Ne,
+            C::Lt | C::Lo => ast::PackedCmp::Lt,
+            C::Le | C::Ls => ast::PackedCmp::Le,
+            C::Gt | C::Hi => ast::PackedCmp::Gt,
+            C::Ge | C::Hs => ast::PackedCmp::Ge,
+            _ => {
+                state.errors.push(PtxError::SyntaxError("set on packed lanes takes an integer comparison".to_string()));
+                ast::PackedCmp::Eq
+            }
+        };
+        let lanes16 = matches!(ptype, PackedSetType::U16x2 | PackedSetType::S16x2);
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details {
+                op: ast::Packed8Op::Set { cmp, lanes16 },
+                signed: matches!(ptype, PackedSetType::S8x4 | PackedSetType::S16x2),
+                saturate: false,
+                relu: false,
+            },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .CmpOp: RawSetpCompareOp  = { .eq, .ne, .lt, .le, .gt, .ge, .lo, .ls, .hi, .hs };
+    .ptype: PackedSetType = { .u8x4, .s8x4, .u16x2, .s16x2 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-clmad
+    clmad.mode.u64  d, a, b, c => {
+        ast::Instruction::Clmad {
+            data: mode == RawMulIntControl::Hi,
+            arguments: ClmadArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .mode: RawMulIntControl = { .lo, .hi };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-bfe
     bfe.type  d, a, b, c => {
         ast::Instruction::Bfe {
@@ -3928,18 +7110,64 @@ derive_parser!(
             arguments: BmskArgs { dst: d, src_a: a, src_b: b },
         }
     }
-    .mode: BmskMode = { .clamp };
+    .mode: BmskMode = { .clamp, .wrap };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-lop3
+    lop3.b32  d, a, b, c, lut => {
+        ast::Instruction::Lop3 {
+            data: None,
+            arguments: Lop3Args { dst: d, dst_pred: None, src1: a, src2: b, src3: c, src_lut: lut, src_pred: None },
+        }
+    }
+    // the predicate output form (PTX ISA 8.2): p = (d != 0) BoolOp q
+    lop3.BoolOp.b32  d[|p], a, b, c, lut, q => {
+        if p.is_none() {
+            state.errors.push(PtxError::SyntaxError("lop3.BoolOp needs a predicate destination".to_string()));
+        }
+        ast::Instruction::Lop3 {
+            data: Some(boolop),
+            arguments: Lop3Args { dst: d, dst_pred: p, src1: a, src2: b, src3: c, src_lut: lut, src_pred: Some(q) },
+        }
+    }
+    .BoolOp: SetpBoolPostOp = { .and, .or };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-szext
+    szext.mode.type  d, a, b => {
+        ast::Instruction::Szext {
+            data: ast::SzextDetails { clamp: mode == BmskMode::Clamp, type_ },
+            arguments: SzextArgs { dst: d, src_a: a, src_b: b },
+        }
+    }
+    .mode: BmskMode = { .clamp, .wrap };
+    .type: ScalarType = { .u32, .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-fns
+    fns.b32  d, mask, base, offset => {
+        ast::Instruction::Fns {
+            arguments: FnsArgs { dst: d, src_mask: mask, src_base: base, src_offset: offset },
+        }
+    }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
     // prmt.b32{.mode}  d, a, b, c;
     // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
     prmt.b32  d, a, b, c => {
         ast::Instruction::Prmt {
+            data: None,
             arguments: PrmtArgs {
                 dst: d, src1: a, src2: b, src3: c
             }
         }
     }
+    prmt.b32.mode  d, a, b, c => {
+        ast::Instruction::Prmt {
+            data: Some(mode),
+            arguments: PrmtArgs {
+                dst: d, src1: a, src2: b, src3: c
+            }
+        }
+    }
+    .mode: PrmtMode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-activemask
     activemask.b32 d => {
@@ -3969,6 +7197,26 @@ derive_parser!(
     }
     .level: MemScope      = { .cta, .sys };
 
+    // Clusters have a single CTA: cluster scope is treated as GPU scope.
+    fence{.sem}.scope => {
+        let _ = sem;
+        ast::Instruction::Membar {
+            data: if scope == MemScope::Cluster { MemScope::Gpu } else { scope }
+        }
+    }
+    // Orders a CTA's mbarrier.init before the other CTAs of the cluster use the object
+    fence.mbarrier_init.release.cluster => {
+        ast::Instruction::Membar { data: MemScope::Cta }
+    }
+    // Asynchronous copies are emulated with ordinary loads and stores (the generic proxy)
+    fence.proxy.async{.space} => {
+        let _ = space;
+        ast::Instruction::Membar { data: MemScope::Cta }
+    }
+    .sem: RawFenceSemantics = { .sc, .acq_rel, .acquire, .release };
+    .scope: MemScope = { .cta, .cluster, .gpu, .sys };
+    .space: StateSpace = { .global, .shared{::cta, ::cluster} };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-ret
     ret{.uni} => {
         Instruction::Ret { data: RetData { uniform: uni } }
@@ -3986,6 +7234,51 @@ derive_parser!(
 
     .mode: Mul24Control = { .hi, .lo };
     .type: ScalarType = { .u32, .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-mad24
+    mad24.mode.type  d, a, b, c => {
+        ast::Instruction::Mad24 {
+            data: ast::Mad24Details { control: mode, type_, saturate: false },
+            arguments: Mad24Args { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    mad24.hi.sat.s32  d, a, b, c => {
+        ast::Instruction::Mad24 {
+            data: ast::Mad24Details { control: Mul24Control::Hi, type_: s32, saturate: true },
+            arguments: Mad24Args { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .mode: Mul24Control = { .hi, .lo };
+    .type: ScalarType = { .u32, .s32 };
+    ScalarType = { .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-slct
+    slct{.ftz}.dtype.ctype  d, a, b, c => {
+        ast::Instruction::Slct {
+            data: ast::SlctDetails { type_: dtype, ctype, flush_to_zero: ftz && ctype == ScalarType::F32 },
+            arguments: SlctArgs { dst: d, src1: a, src2: b, src3: c }
+        }
+    }
+    .dtype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f32, .f64 };
+    .ctype: ScalarType = { .s32, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-testp
+    testp.op.type  p, a => {
+        let op = match op {
+            TestpOperation::Finite => ast::TestpOp::Finite,
+            TestpOperation::Infinite => ast::TestpOp::Infinite,
+            TestpOperation::Number => ast::TestpOp::Number,
+            TestpOperation::Notanumber => ast::TestpOp::NotANumber,
+            TestpOperation::Normal => ast::TestpOp::Normal,
+            TestpOperation::Subnormal => ast::TestpOp::Subnormal,
+        };
+        ast::Instruction::Testp {
+            data: ast::TestpDetails { op, type_ },
+            arguments: TestpArgs { dst: p, src: a }
+        }
+    }
+    .op: TestpOperation = { .finite, .infinite, .number, .notanumber, .normal, .subnormal };
+    .type: ScalarType = { .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync
     shfl.mode.b32  d[|p], a, b, c => {
@@ -4017,7 +7310,7 @@ derive_parser!(
             arguments: TanhArgs { dst: d, src: a }
         }
     }
-    .type: ScalarType = { .f32, .f16 };
+    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
@@ -4036,9 +7329,15 @@ derive_parser!(
                 CpAsyncCpSize::Bytes4
             });
 
-        let src_size = src_size
-            .and_then(|op| op.as_immediate())
-            .and_then(|imm| imm.as_u64());
+        // with .L2::cache_hint, a single optional operand is the cache policy
+        let src_size = if level_cache_hint && cache_policy.is_none() { None } else { src_size };
+        let (src_size, src_size_reg) = match src_size {
+            Some(op) => match op.as_immediate() {
+                Some(imm) => (imm.as_u64(), None),
+                None => (None, Some(op)),
+            },
+            None => (None, None),
+        };
 
         Instruction::CpAsync {
             data: CpAsyncDetails {
@@ -4046,10 +7345,12 @@ derive_parser!(
                 space,
                 cp_size,
                 src_size,
+                ignore_src: false,
             },
             arguments: CpAsyncArgs {
                 src_to: dst,
                 src_from: src,
+                src_size: src_size_reg,
             }
         }
     }
@@ -4066,12 +7367,18 @@ derive_parser!(
     .cop: RawCpAsyncCacheOperator = { .ca, .cg };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-commit-group
-    cp.async.commit_group => {
+    // cp.async.bulk.commit_group too: copies complete when they are issued
+    cp.async{.bulk}.commit_group => {
+        let _ = bulk;
         Instruction::CpAsyncCommitGroup {}
     }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-wait-group
-    cp.async.wait_group n => {
+    // cp.async.bulk.wait_group{.read} too
+    cp.async{.bulk}.wait_group{.read} n => {
+        if read && !bulk {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.async.wait_group in {:?}", state.text)));
+        }
         Instruction::CpAsyncWaitGroup {
             arguments: CpAsyncWaitGroupArgs { src_group: n },
         }
@@ -4079,6 +7386,162 @@ derive_parser!(
     cp.async.wait_all => {
         Instruction::CpAsyncWaitAll {}
     }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive
+    cp.async.mbarrier.arrive{.noinc}{.space}.b64 [addr] => {
+        Instruction::CpAsyncMbarrierArrive {
+            data: CpAsyncMbarrierArriveDetails { space: shared_space(space), noinc },
+            arguments: CpAsyncMbarrierArriveArgs { src_mbarrier: addr }
+        }
+    }
+    .space: StateSpace = { .shared{::cta} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-bulk
+    // cp.async.bulk.{shared::cta, shared::cluster}.global.mbarrier::complete_tx::bytes{.multicast::cluster}{.level::cache_hint}
+    //                                      [dstmem], [srcmem], size, [mbar]{, ctamask}{, cache-policy}
+    // cp.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes [dstmem], [srcmem], size, [mbar]
+    // cp.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}{.cp_mask}
+    //                                      [dstmem], [srcmem], size{, cache-policy}{, bytemask}
+    // The modifiers are unordered, so the direction follows from the completion mechanism.
+    cp.async.bulk{.shared::cluster}{.shared::cta}{.global}{.completion_mechanism}{.bulk_group}{.multicast}{.level::cache_hint}{.cp_mask}
+                                            [dstmem], [srcmem], size{, [mbar]}{, extra1}{, extra2} => {
+        let mut extra = [extra1, extra2].into_iter().flatten();
+        let to_shared = completion_mechanism && !bulk_group && global as u8 + shared_cta as u8 + shared_cluster as u8 == 2;
+        let to_global = bulk_group && !completion_mechanism && global && shared_cta && !shared_cluster;
+        let (dst_space, src_space) = if to_global {
+            (StateSpace::Global, StateSpace::Shared)
+        } else {
+            (StateSpace::Shared, if global { StateSpace::Global } else { StateSpace::Shared })
+        };
+        let cta_mask = if multicast { extra.next() } else { None };
+        let cache_policy = if level_cache_hint { extra.next() } else { None };
+        let byte_mask = if cp_mask { extra.next() } else { None };
+        let valid = (to_shared && mbar.is_some() && !cp_mask && (global || !(multicast || level_cache_hint)))
+            || (to_global && mbar.is_none() && !multicast && cp_mask == byte_mask.is_some());
+        if !valid || extra.next().is_some() || (multicast && cta_mask.is_none()) || (level_cache_hint && cache_policy.is_none()) {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.async.bulk in {:?}", state.text)));
+        }
+        Instruction::CpAsyncBulk {
+            data: CpAsyncBulkDetails {
+                dst_space,
+                src_space,
+                multicast,
+            },
+            arguments: CpAsyncBulkArgs {
+                src_to: dstmem,
+                src_from: srcmem,
+                src_size: size,
+                src_mbarrier: mbar,
+                src_cta_mask: cta_mask,
+                src_byte_mask: byte_mask,
+                src_cache_policy: cache_policy,
+            }
+        }
+    }
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .multicast = { .multicast::cluster };
+    .level::cache_hint = { .L2::cache_hint };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier
+    // Clusters have a single CTA, so .shared::cluster addresses are those of .shared::cta.
+    mbarrier.init{.space}.b64 [addr], count => {
+        Instruction::MbarrierInit {
+            data: shared_space(space),
+            arguments: MbarrierInitArgs { src_mbarrier: addr, src_count: count }
+        }
+    }
+    mbarrier.inval{.space}.b64 [addr] => {
+        Instruction::MbarrierInval {
+            data: shared_space(space),
+            arguments: MbarrierInvalArgs { src_mbarrier: addr }
+        }
+    }
+    // .multicast::cluster::32b: the operation on the mbarrier at the same offset of each CTA in the mask
+    mbarrier.expect_tx{.sem}{.scope}{.space}{.multicast}.b64 [addr], txcount{, ctamask} => {
+        let _ = (sem, scope, multicast);
+        Instruction::MbarrierTx {
+            data: MbarrierTxDetails { space: shared_space(space), complete: false },
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount, src_cta_mask: ctamask }
+        }
+    }
+    mbarrier.complete_tx{.sem}{.scope}{.space}{.multicast}.b64 [addr], txcount{, ctamask} => {
+        let _ = (sem, scope, multicast);
+        Instruction::MbarrierTx {
+            data: MbarrierTxDetails { space: shared_space(space), complete: true },
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount, src_cta_mask: ctamask }
+        }
+    }
+    // mbarrier.arrive{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr]{, count};
+    // mbarrier.arrive{.sem}{.scope}{.shared::cluster}.b64 _, [addr]{, count};
+    // mbarrier.arrive.expect_tx{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr], txCount;
+    // mbarrier.arrive.noComplete{.release}{.cta}{.shared{::cta}}.b64 mbstate, [addr], count;
+    mbarrier.arrive{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}{.multicast}.b64 mbstate, [addr]{, count}{, extra} => {
+        let _ = (sem, scope);
+        mbarrier_arrive(mbstate, false, expect_tx, nocomplete, space, addr, count, extra, multicast)
+    }
+    mbarrier.arrive_drop{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}{.multicast}.b64 mbstate, [addr]{, count}{, extra} => {
+        let _ = (sem, scope);
+        mbarrier_arrive(mbstate, true, expect_tx, nocomplete, space, addr, count, extra, multicast)
+    }
+    // mbarrier.test_wait{.parity}{.sem}{.scope}{.shared{::cta}}.b64 waitcomplete, [addr], mbstate|phaseParity;
+    mbarrier.test_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate => {
+        let _ = (sem, scope);
+        Instruction::MbarrierWait {
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: false },
+            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: None }
+        }
+    }
+    mbarrier.try_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate{, timehint} => {
+        let _ = (sem, scope);
+        Instruction::MbarrierWait {
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: true },
+            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: timehint }
+        }
+    }
+    mbarrier.pending_count.b64 count, mbstate => {
+        Instruction::MbarrierPendingCount {
+            arguments: MbarrierPendingCountArgs { dst: count, src_state: mbstate }
+        }
+    }
+    .nocomplete = { .noComplete };
+    .sem: RawMbarrierSemantics = { .release, .acquire, .relaxed };
+    .scope: MemScope = { .cta, .cluster };
+    .space: StateSpace = { .shared{::cta, ::cluster} };
+    .multicast = { .multicast::cluster::32b };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-reduce-async-bulk
+    // cp.reduce.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes.redOp.type [dstmem], [srcmem], size, [mbar]
+    // cp.reduce.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}.redOp.type [dstmem], [srcmem], size{, cache-policy}
+    cp.reduce.async.bulk{.shared::cluster}{.global}.shared::cta{.completion_mechanism}{.bulk_group}{.level::cache_hint}.redOp.type
+                                            [dstmem], [srcmem], size{, [mbar]}{, cache_policy} => {
+        let valid = if shared_cluster {
+            !global && completion_mechanism && !bulk_group && !level_cache_hint && mbar.is_some() && cache_policy.is_none()
+        } else {
+            global && bulk_group && !completion_mechanism && mbar.is_none() && level_cache_hint == cache_policy.is_some()
+        };
+        if !valid {
+            state.errors.push(PtxError::SyntaxError(format!("invalid cp.reduce.async.bulk in {:?}", state.text)));
+        }
+        Instruction::CpReduceAsyncBulk {
+            data: CpReduceAsyncBulkDetails {
+                dst_space: if global { StateSpace::Global } else { StateSpace::Shared },
+                src_space: StateSpace::Shared,
+                op: ast::AtomicOp::new(redop, type_.kind()),
+                type_
+            },
+            arguments: CpReduceAsyncBulkArgs {
+                src_to: dstmem,
+                src_from: srcmem,
+                src_size: size,
+                src_mbarrier: mbar,
+                src_cache_policy: cache_policy,
+            }
+        }
+    }
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .level::cache_hint = { .L2::cache_hint };
+    .redOp: RawAtomicOp = { .and, .or, .xor, .add, .inc, .dec, .min, .max };
+    .type: ScalarType = { .b32, .u32, .s32, .b64, .u64, .s64, .f32, .f64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#logic-and-shift-instructions-shf
     shf.dir.mode.b32  d, a, b, c => {
@@ -4149,8 +7612,7 @@ derive_parser!(
         }
     }
 
-    // .mode: VoteMode = { .all, .any, .uni };
-    .mode: VoteMode = { .all, .any };
+    .mode: VoteMode = { .all, .any, .uni };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-redux-sync
 
@@ -4162,6 +7624,13 @@ derive_parser!(
     }
     .op: Reduction = {.add, .min, .max};
     .type: ScalarType = {.u32, .s32};
+    redux.sync.bop.b32 dst, src, membermask => {
+        Instruction::ReduxSync {
+            data: ReduxSyncData { type_: ScalarType::B32, reduction: bop },
+            arguments: ReduxSyncArgs { dst, src, src_membermask: membermask }
+        }
+    }
+    .bop: Reduction = {.and, .or, .xor};
 
     // redux.sync.op.b32 dst, src, membermask;
     // .op   = {.and, .or, .xor}
@@ -4170,26 +7639,118 @@ derive_parser!(
     // .op   = { .min, .max }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
-    ldmatrix.sync.aligned.shape.num{.trans}{.ss}.type r, [p] => {
-        let data = LdMatrixDetails::new(shape, num, trans, ss, type_);
-        Instruction::LdMatrix {
-            data,
-            arguments: LdMatrixArgs {
-                dst: r,
-                src: p
-            }
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-stmatrix
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-movmatrix
+    // The many combinations of shapes and element types of the warp-level
+    // matrix instructions are parsed by hand.
+    ldmatrix <= { ldmatrix(stream) }
+    stmatrix <= { stmatrix(stream) }
+    movmatrix <= { movmatrix(stream) }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-async
+    // st.async and red.async to shared::cluster memory, completing their bytes on an mbarrier there
+    st.async{.weak}{.sem}{.scope}{.ss}{.completion_mechanism}{.vec}.type [a], b, [mbar] => {
+        let _ = (weak, sem, scope, ss, completion_mechanism);
+        Instruction::StAsync {
+            data: ast::StAsyncDetails { type_: ast::Type::maybe_vector(vec, type_), red: None, scalar: type_ },
+            arguments: StAsyncArgs { src_addr: a, src_value: b, src_mbarrier: mbar }
+        }
+    }
+    .sem: StAsyncSem = { .relaxed };
+    .scope: MemScope = { .cluster };
+    .ss: StateSpace = { .shared{::cluster} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .vec: VectorPrefix = { .v2, .v4 };
+    .type: ScalarType = { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+
+    red.async{.sem}{.scope}{.ss}{.completion_mechanism}.op.type [a], b, [mbar] => {
+        let _ = (sem, scope, ss, completion_mechanism);
+        Instruction::StAsync {
+            data: ast::StAsyncDetails {
+                type_: ast::Type::Scalar(type_),
+                red: Some(ast::AtomicOp::new(op, type_.kind())),
+                scalar: type_,
+            },
+            arguments: StAsyncArgs { src_addr: a, src_value: b, src_mbarrier: mbar }
+        }
+    }
+    .sem: StAsyncSem = { .relaxed };
+    .scope: MemScope = { .cluster };
+    .ss: StateSpace = { .shared{::cluster} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .op: RawAtomicOp = { .and, .or, .xor, .add, .inc, .dec, .min, .max };
+    .type: ScalarType = { .b32, .b64, .u32, .u64, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-bulk
+    st.bulk{.weak}{.ss} [a], size, initval => {
+        let _ = weak;
+        Instruction::StBulk {
+            data: ast::StBulkDetails { space: shared_space(ss) },
+            arguments: StBulkArgs { src_addr: a, src_size: size, src_init: initval }
+        }
+    }
+    .ss: StateSpace = { .shared{::cta} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#miscellaneous-instructions-setmaxnreg
+    // a register count hint: the backend allocates registers per kernel
+    setmaxnreg.action.sync.aligned.u32 imm => {
+        let _ = (action, imm);
+        Instruction::SetMaxNReg { data: 0 }
+    }
+    .action: SetMaxNRegAction = { .inc, .dec };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol
+    // No cluster is ever canceled (a valid outcome of try_cancel): the response says so
+    clusterlaunchcontrol.try_cancel.async{.space}.completion_mechanism{.multicast}.b128 [addr], [mbar] => {
+        let _ = (space, multicast);
+        Instruction::ClusterLaunchTryCancel {
+            arguments: ClusterLaunchTryCancelArgs { src_addr: addr, src_mbarrier: mbar }
+        }
+    }
+    .space: StateSpace = { .shared{::cta} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .multicast = { .multicast::cluster::all };
+
+    clusterlaunchcontrol.query_cancel.is_canceled.pred.b128 p, [resp] => {
+        Instruction::ClusterLaunchQuery {
+            data: ast::ClusterLaunchQueryDetails { ctaid: None, space: StateSpace::Shared },
+            arguments: ClusterLaunchQueryArgs { dst: p, src: resp }
         }
     }
 
-    // ldmatrix.sync.aligned.m8n16.num{.ss}.dst_fmt.src_fmt        r, [p];
-    // ldmatrix.sync.aligned.m16n16.num.trans{.ss}.dst_fmt.src_fmt r, [p];
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-barrier-cluster
+    barrier.cluster.arrive{.sem}{.aligned} => {
+        let _ = aligned;
+        Instruction::BarrierCluster {
+            data: ast::BarrierClusterDetails { arrive: true, relaxed: sem == Some(BarrierClusterSem::Relaxed) }
+        }
+    }
+    barrier.cluster.wait{.acquire}{.aligned} => {
+        let _ = (acquire, aligned);
+        Instruction::BarrierCluster {
+            data: ast::BarrierClusterDetails { arrive: false, relaxed: false }
+        }
+    }
+    .sem: BarrierClusterSem = { .release, .relaxed };
 
-    .shape: MatrixShape = {.m8n8, .m16n16};
-    .num: MatrixNumber = {.x1, .x2, .x4};
-    .ss: StateSpace = {.shared{::cta}};
-    .type: ScalarType = {.b16, .b8};
-    // .dst_fmt = { .b8x16 };
-    // .src_fmt = { .b6x16_p32, .b4x16_p64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-mapa
+    mapa{.space}.type d, a, b => {
+        Instruction::Mapa {
+            data: ast::MapaDetails { shared: space.is_some(), type_ },
+            arguments: MapaArgs { dst: d, src_addr: a, src_rank: b }
+        }
+    }
+    .space: StateSpace = { .shared{::cluster} };
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-getctarank
+    getctarank{.space}.type d, a => {
+        Instruction::Getctarank {
+            data: ast::MapaDetails { shared: space.is_some(), type_ },
+            arguments: GetctarankArgs { dst: d, src_addr: a }
+        }
+    }
+    .space: StateSpace = { .shared{::cluster} };
+    .type: ScalarType = { .u32, .u64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol
     griddepcontrol.action => {
@@ -4200,44 +7761,11 @@ derive_parser!(
     .action: GridDepControlAction  = { .launch_dependents, .wait };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-mma
-    mma.sync.aligned.m16n8k16.alayout.blayout.f32.bf16.bf16.f32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::F32,
-                ab_type_scalar: ScalarType::BF16,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    mma.sync.aligned.m16n8k16.alayout.blayout.f32.f16.f16.f32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::F32,
-                ab_type_scalar: ScalarType::F16,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    mma.sync.aligned.m16n8k32.alayout.blayout.s32.s8.s8.s32 d, a, b, c => {
-        Instruction::Mma {
-            data: MmaDetails {
-                alayout,
-                blayout,
-                cd_type_scalar: ScalarType::S32,
-                ab_type_scalar: ScalarType::S8,
-            },
-            arguments: MmaArgs { dst: d, src1: a, src2: b, src3: c }
-        }
-    }
-
-    .alayout: MatrixLayout = {.row};
-    .blayout: MatrixLayout = {.col};
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-wmma
+    mma <= { mma(stream) }
+    wmma <= { wmma(stream) }
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#asynchronous-warpgroup-level-matrix-instructions
+    wgmma <= { wgmma(stream) }
 
     copysign.type  d, a, b => {
         ast::Instruction::Copysign {
@@ -4247,16 +7775,46 @@ derive_parser!(
     }
     .type: ScalarType = { .f32, .f64 };
 
-    prefetch{.space}.level [a] => {
+    // also prefetch.global.L2::evict_{last,normal}
+    prefetch{.space}{.level}{.level::eviction_priority} [a] => {
+        let _ = level_eviction_priority;
         let space = space.unwrap_or(StateSpace::Generic);
         ast::Instruction::Prefetch {
-            data: PrefetchData { space, level, },
+            data: PrefetchData { space, level: level.unwrap_or(CacheLevel::L2) },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .space: StateSpace =    { .global, .local };
+    .level: CacheLevel =    { .L1, .L2 };
+    .level::eviction_priority: EvictionPriority = { .L2::evict_last, .L2::evict_normal };
+
+    prefetchu.L1 [a] => {
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: StateSpace::Generic, level: CacheLevel::L1 },
             arguments: PrefetchArgs { src: a }
         }
     }
 
-    .space: StateSpace =    { .global, .local };
-    .level: CacheLevel =    { .L1, .L2 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-applypriority
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-discard
+    // Cache hints, no-ops like prefetch: the lines discard leaves undefined keep their data
+    applypriority{.global}.level::eviction_priority [a], size => {
+        let _ = (level_eviction_priority, size);
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: if global { StateSpace::Global } else { StateSpace::Generic }, level: CacheLevel::L2 },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .level::eviction_priority: EvictionPriority = { .L2::evict_normal };
+
+    discard{.global}.level [a], size => {
+        let _ = size;
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: if global { StateSpace::Global } else { StateSpace::Generic }, level },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .level: CacheLevel = { .L2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-createpolicy
     // createpolicy.range{.global}.level::primary_priority{.level::secondary_priority}.b64
@@ -4396,20 +7954,32 @@ derive_parser!(
     .mode: RawMulIntControl = { .lo, .hi };
     .type: ScalarType = { .u32, .s32, .u64, .s64 };
 
-    // https://docs.nvidia.com/cuda/parallel-thread-execution/#scalar-video-instructions-vshl-vshr
-    // This one gets custom handling because the type modifiers are at the start
-    // of the instruction instead of all being before the registers
-    vshr <= {
-        vshr(stream, |mode, op2, d, a, b, c| {
-            Instruction::Vshr {
-                data: VshData {
-                    mode: mode,
-                    op2: op2,
-                },
-                arguments: VshrArgs { dst: d, src1: a, src2: b, src3: c }
-            }
-        })
-    }
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#video-instructions
+    // These get custom handling because the type modifiers are at the start
+    // of the instruction and the operands have selectors
+    vadd <= { video(stream, "vadd") }
+    vsub <= { video(stream, "vsub") }
+    vabsdiff <= { video(stream, "vabsdiff") }
+    vmin <= { video(stream, "vmin") }
+    vmax <= { video(stream, "vmax") }
+    vshl <= { video(stream, "vshl") }
+    vshr <= { video(stream, "vshr") }
+    vset <= { video(stream, "vset") }
+    vmad <= { video(stream, "vmad") }
+    vadd2 <= { video(stream, "vadd2") }
+    vsub2 <= { video(stream, "vsub2") }
+    vavrg2 <= { video(stream, "vavrg2") }
+    vabsdiff2 <= { video(stream, "vabsdiff2") }
+    vmin2 <= { video(stream, "vmin2") }
+    vmax2 <= { video(stream, "vmax2") }
+    vset2 <= { video(stream, "vset2") }
+    vadd4 <= { video(stream, "vadd4") }
+    vsub4 <= { video(stream, "vsub4") }
+    vavrg4 <= { video(stream, "vavrg4") }
+    vabsdiff4 <= { video(stream, "vabsdiff4") }
+    vmin4 <= { video(stream, "vmin4") }
+    vmax4 <= { video(stream, "vmax4") }
+    vset4 <= { video(stream, "vset4") }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#texture-instructions-tex
     tex.1d.v4.dtype.ctype  d, [a, c] => {
@@ -4456,16 +8026,32 @@ derive_parser!(
             arguments: MatchSyncArgs { dst: d, src: a, src_membermask: membermask }
         }
     }
+    // d = the member mask when every thread holds the same a (else 0), p = whether they do
+    match.all.sync.type  d[|p], a, membermask => {
+        Instruction::MatchAllSync {
+            data: type_,
+            arguments: MatchAllSyncArgs { dst: d, dst_pred: p, src: a, src_membermask: membermask }
+        }
+    }
 
     .type: ScalarType = { .b32, .b64 };
 
-    // https://docs.nvidia.com/cuda/parallel-thread-execution/
-    bfind.shiftamt.u32  d, a => {
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-elect-sync
+    // d = the lane of the leader (the lowest active member of membermask), p = whether this is the leader
+    elect.sync  d[|p], membermask => {
+        Instruction::ElectSync {
+            arguments: ElectSyncArgs { dst: d, dst_pred: p, src_membermask: membermask }
+        }
+    }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-bfind
+    bfind{.shiftamt}.type  d, a => {
         Instruction::Bfind {
-            data: (),
+            data: BfindDetails { type_, shift_amount: shiftamt },
             arguments: BfindArgs { dst: d, src: a }
         }
     }
+    .type: ScalarType = { .u32, .u64, .s32, .s64 };
 );
 
 #[cfg(test)]
@@ -4576,6 +8162,29 @@ mod tests {
         let text = "C";
         let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn prmt_modes() {
+        for mode in ["", ".f4e", ".b4e", ".rc8", ".ecl", ".ecr", ".rc16"] {
+            let text = format!(
+                ".version 7.0\n.target sm_70\n.address_size 64\n.visible .entry k() {{ .reg .b32 r; prmt.b32{mode} r, r, r, r; ret; }}"
+            );
+            assert!(parse_module_checked(&text).is_ok(), "prmt.b32{mode}");
+        }
+        assert!(parse_module_checked(
+            ".version 7.0\n.target sm_70\n.address_size 64\n.visible .entry k() { .reg .b32 r; prmt.b32.f5e r, r, r, r; ret; }"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn szext_fns_min3() {
+        let body = "szext.wrap.s32 r, r, r; szext.clamp.u32 r, r, r; fns.b32 r, r, r, r; min.f32 f, f, f, f; max.NaN.f32 f, f, f, f;";
+        let text = format!(
+            ".version 8.8\n.target sm_100\n.address_size 64\n.visible .entry k() {{ .reg .b32 r; .reg .f32 f; {body} ret; }}"
+        );
+        assert!(parse_module_checked(&text).is_ok());
     }
 
     #[test]

@@ -1,0 +1,49 @@
+.version 8.0
+.target sm_90
+.address_size 64
+
+// fma.rn.relu on f16x2, bf16x2, f16 and bf16: negative results become +0, NaN stays NaN
+.visible .entry fma_relu(.param .u64 out)
+{
+    .reg .u64 p;
+    .reg .b32 a, b, c, r;
+    .reg .b16 h, i, j, s;
+    ld.param.u64 p, [out];
+    // f16x2: lo 2 * 3 - 7 = -1 -> 0, hi -1.5 * 2 + 5 = 2
+    mov.b32 a, 0xBE004000;
+    mov.b32 b, 0x40004200;
+    mov.b32 c, 0x4500C700;
+    fma.rn.relu.f16x2 r, a, b, c;
+    st.global.b32 [p+0], r;
+    // the same with hi + NaN
+    mov.b32 c, 0x7E00C700;
+    fma.rn.relu.f16x2 r, a, b, c;
+    st.global.b32 [p+4], r;
+    // bf16x2
+    mov.b32 a, 0xBFC04000;
+    mov.b32 b, 0x40004040;
+    mov.b32 c, 0x40A0C0E0;
+    fma.rn.relu.bf16x2 r, a, b, c;
+    st.global.b32 [p+8], r;
+    // f16: -1.5 * 2 + 5 = 2, then -1.5 * 2 - 7 = -10 -> 0
+    mov.b16 h, 0xBE00;
+    mov.b16 i, 0x4000;
+    mov.b16 j, 0x4500;
+    fma.rn.relu.f16 s, h, i, j;
+    st.global.b16 [p+12], s;
+    mov.b16 j, 0xC700;
+    fma.rn.relu.f16 s, h, i, j;
+    st.global.b16 [p+14], s;
+    // bf16: -1.5 * 2 + 5 = 2
+    mov.b16 h, 0xBFC0;
+    mov.b16 i, 0x4000;
+    mov.b16 j, 0x40A0;
+    fma.rn.relu.bf16 s, h, i, j;
+    st.global.b16 [p+16], s;
+    // without relu: -10
+    mov.b16 h, 0xBE00;
+    mov.b16 j, 0xC700;
+    fma.rn.f16 s, h, i, j;
+    st.global.b16 [p+18], s;
+    ret;
+}

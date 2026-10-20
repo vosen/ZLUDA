@@ -154,7 +154,8 @@ impl InstructionModes {
         denormal: Option<DenormalMode>,
         rounding: Option<RoundingMode>,
     ) -> Self {
-        if type_ != ast::ScalarType::F32 {
+        // packed f32x2 follows the f32 modes
+        if type_.packed_type().unwrap_or(type_) != ast::ScalarType::F32 {
             Self {
                 denormal_f16f64: denormal,
                 rounding_f16f64: rounding,
@@ -208,7 +209,26 @@ impl InstructionModes {
     fn from_arith_float(arith: &ast::ArithFloat) -> InstructionModes {
         let denormal = arith.flush_to_zero.map(DenormalMode::from_ftz);
         let rounding = Some(RoundingMode::from_ast(arith.rounding));
-        InstructionModes::new(arith.type_, denormal, rounding)
+        let mut modes = InstructionModes::new(arith.type_, denormal, rounding);
+        // Directed rounding of 16-bit floats is computed in f32 on AGX (see
+        // emit_half_directed_rounding), so it needs both rounding modes
+        if arith.rounding != ast::RoundingMode::NearestEven
+            && matches!(
+                arith.type_,
+                ast::ScalarType::F16
+                    | ast::ScalarType::F16x2
+                    | ast::ScalarType::BF16
+                    | ast::ScalarType::BF16x2
+            )
+        {
+            modes.rounding_f32 = rounding;
+            // the f32 computation must also keep the denormals of the 16-bit operands (all of bf16's and, without
+            // .ftz, f16's), which are f32 denormals once widened
+            if arith.flush_to_zero != Some(true) {
+                modes.denormal_f32 = Some(DenormalMode::Preserve);
+            }
+        }
+        modes
     }
 
     fn from_ftz(type_: ast::ScalarType, ftz: Option<bool>) -> Self {
@@ -270,12 +290,18 @@ impl InstructionModes {
                     (true, Some(true)) => DenormalMode::FlushToZero,
                     _ => DenormalMode::Preserve,
                 };
-                Self::from_typed_denormal_rounding(
+                let mut modes = Self::from_typed_denormal_rounding(
                     cvt.from,
                     cvt.to,
                     denormal_mode,
                     RoundingMode::from_ast(rounding),
-                )
+                );
+                // f16 <-> bf16 goes through f32 (emit_cvt_float_to_float_impl),
+                // whose denormals must survive
+                if cvt.from.size_of() == 2 && cvt.to.size_of() == 2 {
+                    modes.denormal_f32 = Some(DenormalMode::Preserve);
+                }
+                modes
             }
             ast::CvtMode::FPRound { flush_to_zero, .. } => Self::from_typed_denormal(
                 cvt.from,
@@ -296,7 +322,13 @@ impl InstructionModes {
             ),
             ast::CvtMode::FPFromSigned { rounding, .. }
             | ast::CvtMode::FPFromUnsigned { rounding, .. } => {
-                Self::new(cvt.to, None, Some(RoundingMode::from_ast(rounding)))
+                let rounding = Some(RoundingMode::from_ast(rounding));
+                let mut modes = Self::new(cvt.to, None, rounding);
+                // Converted through f32 on AGX, see emit_cvt_int_to_float
+                if cvt.to == ast::ScalarType::BF16 {
+                    modes.rounding_f32 = rounding;
+                }
+                modes
             }
         }
     }
@@ -519,13 +551,16 @@ impl ResolvedControlFlowGraph {
     }
 }
 
-fn resolve_fast<T: Copy + VariantArray + Into<usize>>(
+fn resolve_fast<T: Copy + Default + VariantArray + Into<usize>>(
     modes: &MandatoryModeInsertions<T>,
     value: &Option<T>,
     kernels: &FixedBitSet,
 ) -> Result<Resolved<T>, TranslateError> {
-    Ok(if kernels.is_empty() {
-        Resolved::Value(value.ok_or_else(error_unreachable)?)
+    // FixedBitSet::is_empty() is true only for a zero-length set. Code that
+    // no kernel reaches (for example an uncalled .weak function) never runs,
+    // so any mode will do.
+    Ok(if kernels.is_clear() {
+        Resolved::Value(value.unwrap_or_default())
     } else {
         match value {
             None => from_kernel_modes_overlap(kernels, modes)?,
@@ -2137,11 +2172,29 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
         | ast::Instruction::Prmt { .. }
+        | ast::Instruction::Szext { .. }
+        | ast::Instruction::Lop3 { .. }
+        | ast::Instruction::Mad24 { .. }
+        | ast::Instruction::Slct { .. }
+        | ast::Instruction::MixedFloat { .. }
+        | ast::Instruction::Mapa { .. }
+        | ast::Instruction::Getctarank { .. }
+        | ast::Instruction::BarrierCluster { .. }
+        | ast::Instruction::StAsync { .. }
+        | ast::Instruction::StBulk { .. }
+        | ast::Instruction::SetMaxNReg { .. }
+        | ast::Instruction::ClusterLaunchTryCancel { .. }
+        | ast::Instruction::ClusterLaunchQuery { .. }
+        | ast::Instruction::Testp { .. }
+        | ast::Instruction::MatchAllSync { .. }
+        | ast::Instruction::ElectSync { .. }
+        | ast::Instruction::Fns { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Membar { .. }
         | ast::Instruction::Trap {}
         | ast::Instruction::Exit {}
         | ast::Instruction::Not { .. }
+        | ast::Instruction::Cnot { .. }
         | ast::Instruction::Or { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Bra { .. }
@@ -2162,6 +2215,23 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::CpAsyncCommitGroup { .. }
         | ast::Instruction::CpAsyncWaitGroup { .. }
         | ast::Instruction::CpAsyncWaitAll { .. }
+        | ast::Instruction::CpAsyncMbarrierArrive { .. }
+        | ast::Instruction::CpAsyncBulk { .. }
+        | ast::Instruction::CpAsyncBulkTensor { .. }
+        | ast::Instruction::TensormapReplace { .. }
+        | ast::Instruction::TexAgx { .. }
+        | ast::Instruction::TexQuery { .. }
+        | ast::Instruction::SuldAgx { .. }
+        | ast::Instruction::SustAgx { .. }
+        | ast::Instruction::SuredAgx { .. }
+        | ast::Instruction::Istypep { .. }
+        | ast::Instruction::CpReduceAsyncBulk { .. }
+        | ast::Instruction::MbarrierInit { .. }
+        | ast::Instruction::MbarrierInval { .. }
+        | ast::Instruction::MbarrierArrive { .. }
+        | ast::Instruction::MbarrierTx { .. }
+        | ast::Instruction::MbarrierWait { .. }
+        | ast::Instruction::MbarrierPendingCount { .. }
         | ast::Instruction::Shf { .. }
         | ast::Instruction::Shl { .. }
         | ast::Instruction::Selp { .. }
@@ -2170,8 +2240,33 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Bar { .. }
         | ast::Instruction::BarRed { .. }
         | ast::Instruction::CvtPack { .. }
+        | ast::Instruction::CvtTf32 { .. }
+        | ast::Instruction::CvtMini { .. }
+        | ast::Instruction::CvtNarrow { .. }
+        | ast::Instruction::Spcompress { .. }
+        | ast::Instruction::Spdecompress { .. }
+        | ast::Instruction::Tcgen05Sync { .. }
+        | ast::Instruction::Tcgen05Alloc { .. }
+        | ast::Instruction::Tcgen05Dealloc { .. }
+        | ast::Instruction::Tcgen05Ld { .. }
+        | ast::Instruction::Tcgen05St { .. }
+        | ast::Instruction::Tcgen05Mma { .. }
+        | ast::Instruction::Tcgen05Cp { .. }
+        | ast::Instruction::Tcgen05Shift { .. }
+        | ast::Instruction::Tcgen05Commit { .. }
+        | ast::Instruction::Tcgen05LdRed { .. }
+        | ast::Instruction::Isspacep { .. }
+        | ast::Instruction::Packed8 { .. }
+        | ast::Instruction::Clmad { .. }
+        | ast::Instruction::VideoScalar { .. }
+        | ast::Instruction::VideoSimd { .. }
+        | ast::Instruction::Vmad { .. }
+        | ast::Instruction::Alloca { .. }
+        | ast::Instruction::StackSave { .. }
+        | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
         | ast::Instruction::Atom { .. }
+        | ast::Instruction::Red { .. }
         | ast::Instruction::Mul24 { .. }
         | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::AtomCas { .. }
@@ -2179,7 +2274,16 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::ReduxSync { .. }
         | ast::Instruction::GridDepControl { .. }
         | ast::Instruction::LdMatrix { .. }
+        | ast::Instruction::StMatrix { .. }
+        | ast::Instruction::MmaSparse { .. }
+        | ast::Instruction::MmaBlockScale { .. }
+        | ast::Instruction::MovMatrix { .. }
+        | ast::Instruction::WmmaLoad { .. }
+        | ast::Instruction::WmmaStore { .. }
+        | ast::Instruction::WmmaMma { .. }
         | ast::Instruction::Mma { .. }
+        | ast::Instruction::Wgmma { .. }
+        | ast::Instruction::WgmmaFence { .. }
         | ast::Instruction::Prefetch { .. }
         | ast::Instruction::CreatePolicyFractional { .. }
         | ast::Instruction::Dp2a { .. }
@@ -2206,11 +2310,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
             ..
         }
         | ast::Instruction::Min {
-            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::SignedRelu(..) | ast::MinMaxDetails::Unsigned(..),
             ..
         }
         | ast::Instruction::Max {
-            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::Unsigned(..),
+            data: ast::MinMaxDetails::Signed(..) | ast::MinMaxDetails::SignedRelu(..) | ast::MinMaxDetails::Unsigned(..),
             ..
         }
         | ast::Instruction::Div {
@@ -2305,6 +2409,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                     type_,
                     flush_to_zero,
                     kind,
+                    ..
                 }),
             ..
         } => {
@@ -2330,6 +2435,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 type_: data.type_,
                 flush_to_zero: data.flush_to_zero,
                 kind: ast::RcpKind::Approx,
+                saturate: false,
             };
             InstructionModes::from_rtz_special(data)
         },
@@ -2338,6 +2444,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 type_: ast::ScalarType::F32,
                 flush_to_zero: Some(data.flush_to_zero),
                 kind: ast::RcpKind::Approx,
+                saturate: false,
             };
             InstructionModes::from_rtz_special(data)
         },

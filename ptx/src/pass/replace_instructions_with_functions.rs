@@ -4,13 +4,14 @@ use std::collections::{btree_map, BTreeMap};
 
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     // We use BTreeMap here to have deterministic ordering of function declarations.
     let mut fn_declarations = BTreeMap::default();
     let remapped_directives = directives
         .into_iter()
-        .map(|directive| run_directive(resolver, &mut fn_declarations, directive))
+        .map(|directive| run_directive(resolver, target, &mut fn_declarations, directive))
         .collect::<Result<Vec<_>, _>>()?;
     let mut result = fn_declarations
         .into_iter()
@@ -34,6 +35,7 @@ pub(super) fn run<'input>(
 
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -49,7 +51,7 @@ fn run_directive<'input>(
         Directive2::Method(mut method) => {
             method.body = method
                 .body
-                .map(|statements| run_statements(resolver, fn_declarations, statements))
+                .map(|statements| run_statements(resolver, target, fn_declarations, statements))
                 .transpose()?;
             Directive2::Method(method)
         }
@@ -89,6 +91,7 @@ fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
 
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -103,6 +106,21 @@ fn run_statements<'input>(
         .into_iter()
         .map(|statement| {
             Ok::<SmallVec<[_; 3]>, _>(match statement {
+                // On AGX conversions to and from fp8 are emitted inline
+                Statement::Instruction(
+                    cvt @ ast::Instruction::Cvt {
+                        data:
+                            ast::CvtDetails {
+                                from: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
+                                ..
+                            }
+                            | ast::CvtDetails {
+                                to: ast::ScalarType::E4m3x2 | ast::ScalarType::E5m2x2,
+                                ..
+                            },
+                        ..
+                    },
+                ) if target == Target::Agx => smallvec![Statement::Instruction(cvt)],
                 Statement::Instruction(ast::Instruction::Shfl {
                     data,
                     arguments:
@@ -323,7 +341,7 @@ fn run_statements<'input>(
                 Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(instruction) => {
                     smallvec![
                         Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(
-                            run_instruction(resolver, fn_declarations, instruction)?
+                            run_instruction(resolver, target, fn_declarations, instruction)?
                         )
                     ]
                 }
@@ -339,6 +357,7 @@ fn run_statements<'input>(
 
 fn run_instruction<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
+    target: Target,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -349,6 +368,13 @@ fn run_instruction<'input>(
     >,
     instruction: ptx_parser::Instruction<SpirvWord>,
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
+    // On AGX the warp-level matrix instructions are emulated by helper
+    // functions generated for each variant (see agx_matrix).
+    if target == Target::Agx {
+        if let Some(name) = agx_matrix::helper_name(&instruction) {
+            return to_call(resolver, fn_declarations, name.into(), instruction);
+        }
+    }
     Ok(match instruction {
         i @ ast::Instruction::Div {
             data:
@@ -399,6 +425,7 @@ fn run_instruction<'input>(
                     kind: ast::RcpKind::Approx,
                     type_: ast::ScalarType::F32,
                     flush_to_zero: None | Some(false),
+                    ..
                 },
             ..
         } => to_call(resolver, fn_declarations, "sqrt_approx_f32".into(), i)?,
@@ -416,6 +443,7 @@ fn run_instruction<'input>(
                     kind: ast::RcpKind::Approx,
                     type_: ast::ScalarType::F32,
                     flush_to_zero: None | Some(false),
+                    ..
                 },
             ..
         } => to_call(resolver, fn_declarations, "rcp_approx_f32".into(), i)?,
@@ -465,30 +493,27 @@ fn run_instruction<'input>(
             );
             to_call(resolver, fn_declarations, name.into(), i)?
         }
-        i @ ptx_parser::Instruction::Mma {
-            data:
-                ast::MmaDetails {
-                    alayout,
-                    blayout,
-                    cd_type_scalar,
-                    ab_type_scalar,
-                },
-            ..
-        } => {
-            let cd_type_name = scalar_to_ptx_name(cd_type_scalar);
-            let ab_type_name = scalar_to_ptx_name(ab_type_scalar);
-            let dimensions = if cd_type_scalar.kind() == ast::ScalarKind::Float {
-                "m16n8k16"
-            } else {
-                "m16n8k32"
+        i @ ptx_parser::Instruction::Mma { data, .. } => {
+            // The AMD GPU implementation has m16n8k16 f32.{f16,bf16} and
+            // m16n8k32 s32.s8.s8 only.
+            let dimensions = match (data.m, data.n, data.k, data.atype, data.btype, data.ctype) {
+                (16, 8, 16, ast::MmaType::F16 | ast::MmaType::Bf16, _, ast::MmaType::F32)
+                | (16, 8, 32, ast::MmaType::S8, ast::MmaType::S8, ast::MmaType::S32)
+                    if data.atype == data.btype && data.dtype == data.ctype && !data.satfinite =>
+                {
+                    format!("m{}n{}k{}", data.m, data.n, data.k)
+                }
+                _ => return Err(TranslateError::Todo(format!("mma variant on AMD GPUs"))),
             };
+            let cd_type_name = data.ctype.name();
+            let ab_type_name = data.atype.name();
             let name = format!(
                 "mma_sync_aligned_{dimensions}_{}_{}_{cd_type_name}_{ab_type_name}_{ab_type_name}_{cd_type_name}",
-                match alayout {
+                match data.alayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
                 },
-                match blayout {
+                match data.blayout {
                     ast::MatrixLayout::Row => "row",
                     ast::MatrixLayout::Col => "col",
                 }
@@ -511,25 +536,29 @@ fn run_instruction<'input>(
             let name = ["bfi_", scalar_to_ptx_name(data)].concat();
             to_call(resolver, fn_declarations, name.into(), i)?
         }
-        i @ ptx_parser::Instruction::Bmsk { .. } => {
-            to_call(resolver, fn_declarations, "bmsk_clamp_b32".into(), i)?
-        }
+        i @ ptx_parser::Instruction::Bmsk {
+            data: ptx_parser::BmskMode::Clamp,
+            ..
+        } => to_call(resolver, fn_declarations, "bmsk_clamp_b32".into(), i)?,
         i @ ptx_parser::Instruction::Bar { .. } => {
             to_call(resolver, fn_declarations, "bar_sync".into(), i)?
         }
         ptx_parser::Instruction::BarRed { data, arguments } => {
-            if arguments.src_threadcount.is_some() {
-                return Err(error_todo());
-            }
             let name = match data.pred_reduction {
                 ptx_parser::Reduction::And => "bar_red_and_pred",
                 ptx_parser::Reduction::Or => "bar_red_or_pred",
+                ptx_parser::Reduction::Popc => "bar_red_popc_u32",
                 _ => return Err(error_unreachable()),
+            };
+            let count = if arguments.src_threadcount.is_some() {
+                "_count"
+            } else {
+                ""
             };
             to_call(
                 resolver,
                 fn_declarations,
-                name.into(),
+                format!("{name}{count}").into(),
                 ptx_parser::Instruction::BarRed { data, arguments },
             )?
         }
@@ -537,6 +566,7 @@ fn run_instruction<'input>(
             let mode = match data.mode {
                 ptx_parser::VoteMode::Any => "any_pred",
                 ptx_parser::VoteMode::All => "all_pred",
+                ptx_parser::VoteMode::Uni => "uni_pred",
                 ptx_parser::VoteMode::Ballot => "ballot_b32",
             };
             let negate = if data.negate { "_negate" } else { "" };
@@ -558,6 +588,10 @@ fn run_instruction<'input>(
                 ptx_parser::Reduction::Add => "add",
                 ptx_parser::Reduction::Min => "min",
                 ptx_parser::Reduction::Max => "max",
+                ptx_parser::Reduction::And => "and",
+                ptx_parser::Reduction::Or => "or",
+                ptx_parser::Reduction::Xor => "xor",
+                #[allow(unreachable_patterns)]
                 _ => return Err(error_unreachable()),
             };
             let name = format!(
@@ -621,7 +655,7 @@ fn run_instruction<'input>(
         i @ ptx_parser::Instruction::LdMatrix { data, .. } => {
             let shape = match data.shape {
                 ptx_parser::MatrixShape::M8n8 => "m8n8",
-                ptx_parser::MatrixShape::M16n16 => return Err(error_todo()),
+                _ => return Err(error_todo()),
             };
             let number = match data.number {
                 ptx_parser::MatrixNumber::X2 => "x2",
@@ -629,10 +663,9 @@ fn run_instruction<'input>(
                 ptx_parser::MatrixNumber::X1 => return Err(error_todo()),
             };
             let trans = if data.transpose { "_trans" } else { "" };
-            let type_str = match data.type_ {
-                ptx_parser::ScalarType::B16 => "b16",
-                ptx_parser::ScalarType::B8 => return Err(error_todo()),
-                _ => return Err(error_unreachable()),
+            let type_str = match data.format {
+                ptx_parser::LdMatrixFormat::B16 => "b16",
+                _ => return Err(error_todo()),
             };
 
             to_call(
@@ -642,8 +675,76 @@ fn run_instruction<'input>(
                 i,
             )?
         }
-        i @ ptx_parser::Instruction::Prmt { .. } => {
+        ptx_parser::Instruction::StMatrix { .. }
+        | ptx_parser::Instruction::MmaBlockScale { .. }
+        | ptx_parser::Instruction::MmaSparse { .. }
+        | ptx_parser::Instruction::MovMatrix { .. }
+        | ptx_parser::Instruction::WmmaLoad { .. }
+        | ptx_parser::Instruction::WmmaStore { .. }
+        | ptx_parser::Instruction::WmmaMma { .. } => {
+            return Err(TranslateError::Todo(
+                "stmatrix, movmatrix, block scaled and sparse mma and wmma on AMD GPUs".to_string(),
+            ))
+        }
+        // Clusters of several CTAs: the helpers call placeholders that llvm_zluda's
+        // LLVMZludaAgxLowerClusters resolves for each kernel
+        i @ ptx_parser::Instruction::Mapa { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("mapa on AMD GPUs".to_string()));
+            }
+            let space = if data.shared { "shared" } else { "generic" };
+            let name = format!("mapa_{space}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Getctarank { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("getctarank on AMD GPUs".to_string()));
+            }
+            let space = if data.shared { "shared" } else { "generic" };
+            let name = format!("getctarank_{space}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::BarrierCluster { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("barrier.cluster on AMD GPUs".to_string()));
+            }
+            let name = match (data.arrive, data.relaxed) {
+                (true, false) => "barrier_cluster_arrive",
+                (true, true) => "barrier_cluster_arrive_relaxed",
+                (false, _) => "barrier_cluster_wait",
+            };
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Szext { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("szext on AMD GPUs".to_string()));
+            }
+            let mode = if data.clamp { "clamp" } else { "wrap" };
+            let name = format!("szext_{mode}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Fns { .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("fns on AMD GPUs".to_string()));
+            }
+            to_call(resolver, fn_declarations, "fns_b32".into(), i)?
+        }
+        i @ ptx_parser::Instruction::Prmt { data: None, .. } => {
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
+        }
+        i @ ptx_parser::Instruction::Prmt { data: Some(mode), .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("prmt modes on AMD GPUs".to_string()));
+            }
+            let mode = match mode {
+                ptx_parser::PrmtMode::F4e => "f4e",
+                ptx_parser::PrmtMode::B4e => "b4e",
+                ptx_parser::PrmtMode::Rc8 => "rc8",
+                ptx_parser::PrmtMode::Ecl => "ecl",
+                ptx_parser::PrmtMode::Ecr => "ecr",
+                ptx_parser::PrmtMode::Rc16 => "rc16",
+            };
+            to_call(resolver, fn_declarations, format!("prmt_{mode}_b32").into(), i)?
         }
         i @ ast::Instruction::MatchSync { data, .. } => {
             let name = format!("match_any_sync_{}", scalar_to_ptx_name(data));

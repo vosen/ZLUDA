@@ -570,6 +570,7 @@ const _: fn() = || {
     let _ = std::mem::transmute::<cusparseStatus_t, u32>;
 };
 
+#[cfg(feature = "rocm")]
 impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
     fn from(error: rocsparse_sys::rocsparse_error) -> Self {
         match error {

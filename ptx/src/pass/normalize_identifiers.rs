@@ -37,14 +37,26 @@ fn run_method<'input, 'b>(
     let name = resolver.add_or_get_in_current_scope_untyped(method.func_directive.name.text())?;
     resolver.start_scope();
     let (return_arguments, input_arguments) = run_function_decl(resolver, method.func_directive)?;
+    resolver.implicit_registers = Some((resolver.scopes.len() - 1, Vec::new()));
     let body = method
         .body
         .map(|statements| {
-            let mut result = Vec::with_capacity(statements.len());
-            run_statements(resolver, &mut result, statements)?;
+            let mut body = Vec::with_capacity(statements.len());
+            run_statements(resolver, &mut body, statements)?;
+            let implicit = resolver
+                .implicit_registers
+                .as_mut()
+                .map(|(_, registers)| std::mem::take(registers))
+                .unwrap_or_default();
+            let mut result = implicit
+                .into_iter()
+                .map(Statement::Variable)
+                .collect::<Vec<_>>();
+            result.extend(body);
             Ok::<_, TranslateError>(result)
         })
         .transpose()?;
+    resolver.implicit_registers = None;
     resolver.end_scope();
     Ok(Function {
         return_arguments,
@@ -151,17 +163,79 @@ fn run_statements<'input, 'b>(
 
 fn run_instruction<'input, 'b>(
     resolver: &mut ScopedResolver<'input, 'b>,
-    instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
+    mut instruction: ast::Instruction<ast::ParsedOperand<&'input str>>,
 ) -> Result<ast::Instruction<ast::ParsedOperand<SpirvWord>>, TranslateError> {
-    ast::visit_map(instruction, &mut |name: &'input str,
-                                      _: Option<(
-        &ast::Type,
-        ast::StateSpace,
-    )>,
-                                      _,
-                                      _| {
-        resolver.get(&name)
-    })
+    // The optional operand of cp.async after cp-size is src-size or, for a
+    // predicate, ignore-src
+    if let ast::Instruction::CpAsync {
+        data,
+        arguments:
+            ast::CpAsyncArgs {
+                src_size: Some(ast::ParsedOperand::Reg(name)),
+                ..
+            },
+    } = &mut instruction
+    {
+        data.ignore_src = matches!(
+            resolver.get_type(name),
+            Some(ast::Type::Scalar(ast::ScalarType::Pred))
+        );
+    }
+    ast::visit_map(instruction, &mut Normalize { resolver })
+}
+
+struct Normalize<'a, 'input, 'b> {
+    resolver: &'a mut ScopedResolver<'input, 'b>,
+}
+
+impl<'a, 'input, 'b>
+    ast::VisitorMap<ast::ParsedOperand<&'input str>, ast::ParsedOperand<SpirvWord>, TranslateError>
+    for Normalize<'a, 'input, 'b>
+{
+    fn visit(
+        &mut self,
+        operand: ast::ParsedOperand<&'input str>,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+        relaxed_type_check: bool,
+    ) -> Result<ast::ParsedOperand<SpirvWord>, TranslateError> {
+        match operand {
+            // A register may shadow a special register that is still used
+            // as a vector: `.reg .b32 %tid; mov.u32 %tid, %tid.x;`
+            ast::ParsedOperand::VecMember(name, index) => Ok(ast::ParsedOperand::VecMember(
+                self.resolver.get_vector(name)?,
+                index,
+            )),
+            operand => {
+                // The elements of a vector operand ({%a, %b}) have the scalar
+                // type of the vector
+                let element_type = match (&operand, type_space) {
+                    (ast::ParsedOperand::VecPack(_), Some((ast::Type::Vector(_, scalar), space))) => {
+                        Some((ast::Type::Scalar(*scalar), space))
+                    }
+                    _ => None,
+                };
+                let resolver = &mut *self.resolver;
+                (&mut |name: &'input str, type_space: Option<(&ast::Type, ast::StateSpace)>, _, _| {
+                    match &element_type {
+                        Some((type_, space)) => resolver.get_or_declare(name, Some((type_, *space))),
+                        None => resolver.get_or_declare(name, type_space),
+                    }
+                })
+                    .visit(operand, type_space, is_dst, relaxed_type_check)
+            }
+        }
+    }
+
+    fn visit_ident(
+        &mut self,
+        name: &'input str,
+        _: Option<(&ast::Type, ast::StateSpace)>,
+        _: bool,
+        _: bool,
+    ) -> Result<SpirvWord, TranslateError> {
+        self.resolver.get(&name)
+    }
 }
 
 fn run_multivariable<'input, 'b>(
@@ -178,6 +252,24 @@ fn run_multivariable<'input, 'b>(
                     info: run_variable_info(resolver, info.clone())?,
                     name: ident,
                 }));
+            }
+        }
+        ptx_parser::MultiVariable::List { info, names } => {
+            for (name, count) in names {
+                let names = match count {
+                    Some(count) => (0..count)
+                        .map(|i| Cow::Owned(format!("{}{}", name, i)))
+                        .collect::<Vec<_>>(),
+                    None => vec![Cow::Borrowed(name)],
+                };
+                for name in names {
+                    let ident =
+                        resolver.add(name, Some((info.v_type.clone(), info.state_space)))?;
+                    result.push(Statement::Variable(ast::Variable {
+                        info: run_variable_info(resolver, info.clone())?,
+                        name: ident,
+                    }));
+                }
             }
         }
         ptx_parser::MultiVariable::Names { info, names } => {
@@ -203,6 +295,9 @@ fn run_array_init<'input, 'b>(
         .map(|elem| match elem {
             ast::RegOrImmediate::Reg(name) => Ok(ast::RegOrImmediate::Reg(resolver.get(name)?)),
             ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(*imm)),
+            ast::RegOrImmediate::RegOffset(name, offset) => {
+                Ok(ast::RegOrImmediate::RegOffset(resolver.get(name)?, *offset))
+            }
         })
         .collect::<Result<Vec<_>, _>>()?)
 }

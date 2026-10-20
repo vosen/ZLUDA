@@ -3,5 +3,9 @@ pub(crate) mod pass;
 mod test;
 
 pub use pass::to_llvm_module;
+pub use pass::to_llvm_module_for_target;
+pub use pass::to_llvm_module_with_options;
+pub use pass::Options;
 pub use pass::Attributes;
+pub use pass::Target;
 pub use pass::TranslateError;

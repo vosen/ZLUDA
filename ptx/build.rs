@@ -6,8 +6,12 @@ fn main() {
     let bc_constrained_path = "lib/zluda_ptx_impl_constrained.bc";
     println!("cargo:rerun-if-changed={}", bc_path);
     println!("cargo:rerun-if-changed={}", bc_constrained_path);
-    check_lfs_file(bc_path);
-    check_lfs_file(bc_constrained_path);
+    println!("cargo:rerun-if-changed=lib/zluda_ptx_impl_agx.ll");
+    // The AMDGPU helper bitcode is only linked when targeting AMDGPU.
+    if std::env::var_os("CARGO_FEATURE_AMDGPU").is_some() {
+        check_lfs_file(bc_path);
+        check_lfs_file(bc_constrained_path);
+    }
 }
 
 fn check_lfs_file(bc_path: &str) {

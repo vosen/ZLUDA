@@ -11,12 +11,18 @@ path = "src/main.rs"
 
 [dependencies]
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
-llvm_zluda = { path = "../llvm_zluda" }
+llvm_zluda = { path = "../llvm_zluda", default-features = false }
 kernel_metadata = { path = "../kernel_metadata" }
-ptx = { path = "../ptx" }
+ptx = { path = "../ptx", default-features = false }
 ptx_parser = { path = "../ptx_parser" }
 libloading = "0.8"
 thiserror = "2.0.12"
+
+[features]
+default = ["amdgpu"]
+amdgpu = ["llvm_zluda/amdgpu", "ptx/amdgpu"]
+# Compile for Apple GPUs (`--target agx`) with the experimental AGX backend.
+agx = ["llvm_zluda/agx", "ptx/agx"]
 
 [package.metadata.zluda]
 debug_only = true

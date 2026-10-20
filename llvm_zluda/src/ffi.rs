@@ -49,6 +49,15 @@ extern "C" {
         Name: *const i8,
     ) -> LLVMValueRef;
 
+    pub fn LLVMZludaBuildArrayAlloca(
+        B: LLVMBuilderRef,
+        Ty: LLVMTypeRef,
+        AddrSpace: u32,
+        ArraySize: LLVMValueRef,
+        Align: u32,
+        Name: *const i8,
+    ) -> LLVMValueRef;
+
     pub fn LLVMZludaBuildAtomicRMW(
         B: LLVMBuilderRef,
         op: LLVMZludaAtomicRMWBinOp,
@@ -83,6 +92,7 @@ extern "C" {
         SSID: *const i8,
     );
 
+    #[cfg(feature = "amdgpu")]
     pub fn LLVMZludaLinkWithLLD(
         inputs: u32,
         input_paths: *const *const i8,
@@ -95,4 +105,24 @@ extern "C" {
         argv: *const *const i8,
         error_message: *mut *mut i8,
     ) -> bool;
+
+    pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
+
+    pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;
+
+    pub fn LLVMZludaAgxCanonicalizeFoldedNaNs(module: LLVMModuleRef);
+
+    pub fn LLVMZludaAgxKeepGlobals(module: LLVMModuleRef);
+
+    pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut i8) -> i32;
+}
+
+// The AGX target is not part of upstream LLVM, so llvm-sys has no bindings
+// for its initialization functions.
+#[cfg(feature = "agx")]
+extern "C" {
+    pub fn LLVMInitializeAGXTargetInfo();
+    pub fn LLVMInitializeAGXTarget();
+    pub fn LLVMInitializeAGXTargetMC();
+    pub fn LLVMInitializeAGXAsmPrinter();
 }

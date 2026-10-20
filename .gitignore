@@ -6,3 +6,4 @@ Cargo.lock
 
 ptx/lib/zluda_ptx_impl.ll
 ptx/lib/zluda_ptx_impl_constrained.ll
+__pycache__/

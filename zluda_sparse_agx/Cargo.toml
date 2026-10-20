@@ -1,0 +1,19 @@
+[package]
+name = "zluda_sparse_agx"
+version = "0.0.0"
+edition = "2021"
+description = "cuSPARSE on Apple GPUs (Asahi Linux) for zluda_agx, on agx_libs' MLIR kernels"
+
+[lib]
+name = "cusparse_agx"
+crate-type = ["cdylib"]
+
+[dependencies]
+agx_libs = { path = "../agx_libs" }
+cuda_types = { path = "../cuda_types", default-features = false }
+cuda_macros = { path = "../cuda_macros" }
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = ["libcusparse.so", "libcusparse.so.12"]

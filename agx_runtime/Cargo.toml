@@ -1,0 +1,8 @@
+[package]
+name = "agx_runtime"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+asahi-sys = { path = "../ext/asahi-sys" }
+libc = "0.2"

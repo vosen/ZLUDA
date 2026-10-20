@@ -6,12 +6,24 @@ use petgraph::{
 };
 use rustc_hash::FxHashSet;
 
+/// Removes unreachable basic blocks, and the functions nothing calls or takes the address of. With
+/// `keep_visible`, `.visible` functions stay even when uncalled: another module may call them once linked
+/// (`cuLink*` on AGX).
 pub(crate) fn run(
     mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+    keep_visible: bool,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     let mut reachable_funcs = FxHashSet::default();
     for directive in directives.iter_mut() {
         match directive {
+            // Functions whose addresses initialize variables
+            Directive2::Variable(_, var) => {
+                for init in var.info.array_init.iter() {
+                    if let ast::RegOrImmediate::Reg(name) | ast::RegOrImmediate::RegOffset(name, _) = init {
+                        reachable_funcs.insert(*name);
+                    }
+                }
+            }
             Directive2::Method(Function {
                 body: Some(body), ..
             }) => {
@@ -37,10 +49,8 @@ pub(crate) fn run(
                         }) => {
                             cfg.add_branch(current_bb, *src);
                         }
-                        Statement::FunctionPointer(FunctionPointerDetails {
-                            src: _func, ..
-                        }) => {
-                            return Err(error_todo());
+                        Statement::FunctionPointer(FunctionPointerDetails { src, .. }) => {
+                            reachable_funcs.insert(*src);
                         }
                         Statement::Instruction(ast::Instruction::Call {
                             arguments: ast::CallArgs { func, .. },
@@ -76,8 +86,14 @@ pub(crate) fn run(
             Directive2::Method(Function {
                 name,
                 kernel_attributes,
+                linkage,
+                body,
                 ..
-            }) => kernel_attributes.is_some() || reachable_funcs.contains(name),
+            }) => {
+                kernel_attributes.is_some()
+                    || reachable_funcs.contains(name)
+                    || (keep_visible && body.is_some() && linkage.contains(ast::LinkingDirective::VISIBLE))
+            }
         })
         .collect::<Vec<_>>())
 }

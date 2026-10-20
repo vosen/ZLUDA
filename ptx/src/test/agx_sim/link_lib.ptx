@@ -1,0 +1,32 @@
+.version 6.5
+.target sm_30
+.address_size 64
+
+// returns {x + 1, x * 2}
+.visible .func  (.param .align 16 .b8 func_retval0[16]) foobar
+(
+	.param .b64 x
+)
+{
+	.reg .u64 a;
+	.reg .u64 b;
+	ld.param.u64 a, [x];
+	add.u64 b, a, 1;
+	st.param.u64 [func_retval0+0], b;
+	shl.b64 b, a, 1;
+	st.param.u64 [func_retval0+8], b;
+	ret;
+}
+
+.visible .entry double_it(
+	.param .u64 output
+)
+{
+	.reg .u64 p;
+	.reg .u64 v;
+	ld.param.u64 p, [output];
+	ld.global.u64 v, [p];
+	shl.b64 v, v, 1;
+	st.global.u64 [p], v;
+	ret;
+}

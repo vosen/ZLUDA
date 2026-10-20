@@ -1,6 +1,9 @@
 use crate::pass::{self, TranslateError};
 use ptx_parser as ast;
 
+#[cfg(feature = "agx")]
+mod agx;
+#[cfg(feature = "amdgpu")]
 mod spirv_run;
 
 #[cfg(not(feature = "ci_build"))]

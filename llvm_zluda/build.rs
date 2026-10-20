@@ -9,20 +9,63 @@ use std::{env, io};
 const COMPONENTS: &[&'static str] = &[
     "LLVMCore",
     "LLVMBitWriter",
-    "AMDGPU",
     "llvm-libraries",
-    "lldCommon",
-    "lldELF",
     "LLVMBitReader",
     "LLVMAnalysis", // for module verify
 ];
 
-fn main() {
-    let bc_path1 = "src/device-libs/ockl.bc";
-    println!("cargo:rerun-if-changed={}", bc_path1);
-    check_lfs_file(bc_path1);
+// Only the AMDGPU backend links code objects with LLD.
+const AMDGPU_COMPONENTS: &[&'static str] = &["AMDGPU", "lldCommon", "lldELF"];
 
-    let mut cmake = Config::new(r"../ext/llvm-project/llvm");
+// The AGX backend is an experimental LLVM target that is not part of
+// upstream LLVM: building it requires an LLVM source tree that has it (see
+// ZLUDA_LLVM_SOURCE_DIR below and docs/src/agx.md).
+const AGX_COMPONENTS: &[&'static str] = &["LLVMAGXCodeGen", "LLVMAGXAsmParser"];
+
+fn amdgpu_enabled() -> bool {
+    env::var_os("CARGO_FEATURE_AMDGPU").is_some()
+}
+
+fn agx_enabled() -> bool {
+    env::var_os("CARGO_FEATURE_AGX").is_some()
+}
+
+fn main() {
+    if amdgpu_enabled() {
+        let bc_path1 = "src/device-libs/ockl.bc";
+        println!("cargo:rerun-if-changed={}", bc_path1);
+        check_lfs_file(bc_path1);
+    }
+    println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_BUILD_DIR");
+    println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_SOURCE_DIR");
+
+    // An existing LLVM build (the directory with bin/llvm-config) can be used
+    // instead of building the LLVM sources.
+    let llvm_build_path = match env::var_os("ZLUDA_LLVM_BUILD_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => build_llvm(),
+    };
+    println!("cargo:build-path={}", llvm_build_path.display());
+    let (cxxflags, ldflags, libdir, lib_names, system_libs) =
+        llvm_config(&llvm_build_path.join("bin/llvm-config")).unwrap();
+    println!("cargo:rustc-link-arg={ldflags}");
+    println!("cargo:rustc-link-search=native={libdir}");
+    for lib in system_libs.split_ascii_whitespace() {
+        println!("cargo:rustc-link-arg={lib}");
+    }
+    if amdgpu_enabled() {
+        link_lld_components();
+    }
+    link_llvm_components(lib_names);
+    compile_cxx_lib(cxxflags, &llvm_build_path);
+}
+
+// Builds ext/llvm-project, or the LLVM tree in ZLUDA_LLVM_SOURCE_DIR.
+fn build_llvm() -> PathBuf {
+    let source_dir = env::var_os("ZLUDA_LLVM_SOURCE_DIR")
+        .map(|dir| PathBuf::from(dir).join("llvm"))
+        .unwrap_or_else(|| PathBuf::from(r"../ext/llvm-project/llvm"));
+    let mut cmake = Config::new(source_dir);
     try_use_sccache(&mut cmake);
     try_use_ninja(&mut cmake);
     cmake
@@ -43,8 +86,18 @@ fn main() {
         .define("LLVM_BUILD_TOOLS", "OFF")
         .define("LLVM_OPTIMIZED_TABLEGEN", "ON")
         //.define("LLVM_USE_LINKER", "lld")
-        .define("LLVM_TARGETS_TO_BUILD", "AMDGPU")
-        .define("LLVM_ENABLE_PROJECTS", "llvm;lld");
+        .define(
+            "LLVM_TARGETS_TO_BUILD",
+            if amdgpu_enabled() { "AMDGPU" } else { "" },
+        )
+        .define(
+            "LLVM_EXPERIMENTAL_TARGETS_TO_BUILD",
+            if agx_enabled() { "AGX" } else { "" },
+        )
+        .define(
+            "LLVM_ENABLE_PROJECTS",
+            if amdgpu_enabled() { "llvm;lld" } else { "llvm" },
+        );
     // Debug build is so slow that no debugging of ZLUDA is possible.
     // If you want to build with debug symbols, use dev-llvm profile.
     if try_get_build_profile_name() == "debug" {
@@ -52,23 +105,19 @@ fn main() {
     }
     cmake.build_target("llvm-config");
     let llvm_dir = cmake.build();
-    for c in COMPONENTS {
+    let mut components = COMPONENTS.to_vec();
+    if amdgpu_enabled() {
+        components.extend_from_slice(AMDGPU_COMPONENTS);
+    }
+    if agx_enabled() {
+        components.extend_from_slice(AGX_COMPONENTS);
+    }
+    for c in components {
         cmake.build_target(c);
         cmake.build();
     }
     let cmake_profile = cmake.get_profile();
-    let llvm_build_path = get_llvm_build_path(&llvm_dir, cmake_profile);
-    println!("cargo:build-path={}", llvm_build_path.display());
-    let (cxxflags, ldflags, libdir, lib_names, system_libs) =
-        llvm_config(&llvm_build_path.join("bin/llvm-config")).unwrap();
-    println!("cargo:rustc-link-arg={ldflags}");
-    println!("cargo:rustc-link-search=native={libdir}");
-    for lib in system_libs.split_ascii_whitespace() {
-        println!("cargo:rustc-link-arg={lib}");
-    }
-    link_lld_components();
-    link_llvm_components(lib_names);
-    compile_cxx_lib(cxxflags, &llvm_build_path);
+    get_llvm_build_path(&llvm_dir, cmake_profile)
 }
 
 fn check_lfs_file(bc_path: &str) {
@@ -152,7 +201,12 @@ fn llvm_config(llvm_config_path: &PathBuf) -> io::Result<(String, String, String
     ]);
     cmd.arg("core");
     cmd.arg("bitwriter");
-    cmd.arg("amdgpu");
+    if amdgpu_enabled() {
+        cmd.arg("amdgpu");
+    }
+    if agx_enabled() {
+        cmd.arg("agx");
+    }
     cmd.arg("option");
     cmd.arg("codegen");
     cmd.arg("passes");
@@ -190,10 +244,15 @@ fn compile_cxx_lib(cxxflags: String, llvm_build_path: &PathBuf) {
         cc.flag(flag);
     }
 
-    let lld_include = PathBuf::from("../ext/llvm-project/lld/include");
-    cc.include(&lld_include);
-    let lld_build_include = llvm_build_path.join("tools/lld/include");
-    cc.include(&lld_build_include);
+    if amdgpu_enabled() {
+        let lld_include = env::var_os("ZLUDA_LLVM_SOURCE_DIR")
+            .map(|dir| PathBuf::from(dir).join("lld/include"))
+            .unwrap_or_else(|| PathBuf::from("../ext/llvm-project/lld/include"));
+        cc.include(&lld_include);
+        let lld_build_include = llvm_build_path.join("tools/lld/include");
+        cc.include(&lld_build_include);
+        cc.define("ZLUDA_WITH_LLD", None);
+    }
 
     cc.cpp(true).file("src/lib.cpp").compile("llvm_zluda_cpp");
     println!("cargo:rerun-if-changed=../ext/llvm-project");

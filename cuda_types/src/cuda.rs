@@ -9396,6 +9396,7 @@ pub type CUresult = ::core::result::Result<(), CUerror>;
 const _: fn() = || {
     let _ = std::mem::transmute::<CUresult, u32>;
 };
+#[cfg(feature = "rocm")]
 impl From<hip_runtime_sys::hipErrorCode_t> for CUerror {
     fn from(error: hip_runtime_sys::hipErrorCode_t) -> Self {
         Self(error.0)

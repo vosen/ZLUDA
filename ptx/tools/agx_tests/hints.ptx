@@ -1,0 +1,22 @@
+// MMIO accesses and cache hints (prefetch, prefetchu, discard, applypriority) compile and behave like plain
+// accesses and no-ops; run with ptx/tools/agx_ptx_formalization_check.py
+.version 8.6
+.target sm_100
+.address_size 64
+.visible .entry k(.param .u64 pi, .param .u64 po)
+{
+    .reg .b64 %rd<4>; .reg .b32 %r<4>;
+    ld.param.u64 %rd0, [pi]; ld.param.u64 %rd1, [po];
+    ld.mmio.relaxed.sys.global.b32 %r0, [%rd0];
+    prefetch.global.L2::evict_last [%rd0];
+    prefetchu.L1 [%rd0];
+    discard.global.L2 [%rd0], 128;
+    applypriority.global.L2::evict_normal [%rd0], 128;
+    add.u32 %r1, %r0, 1;
+    st.mmio.relaxed.sys.global.b32 [%rd1], %r1;
+    ret;
+}
+.buffer I .u32 = { 41 };
+.buffer O .u32 [1];
+.launch k <<< 1, 1 >>> (I, O);
+.expect O .u32 = { 42 };

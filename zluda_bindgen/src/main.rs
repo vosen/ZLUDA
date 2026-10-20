@@ -25,6 +25,12 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
 
 fn main() {
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
+    // `zluda_bindgen asahi` regenerates only the Asahi bindings, which need no ROCm or CUDA headers
+    if std::env::args().nth(1).as_deref() == Some("asahi") {
+        generate_asahi(&crate_root, &["..", "ext", "asahi-sys", "src", "lib.rs"]);
+        return;
+    }
+    generate_asahi(&crate_root, &["..", "ext", "asahi-sys", "src", "lib.rs"]);
     generate_hip_runtime(
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
@@ -369,6 +375,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix = "
+#[cfg(feature = \"rocm\")]
 impl From<hipfft_sys::hipfftError> for cufftError_t {
     fn from(error: hipfft_sys::hipfftError) -> Self {
         Self(error.0)
@@ -443,7 +450,8 @@ fn generate_cusparse(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix =
-"impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
+"#[cfg(feature = \"rocm\")]
+impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
     fn from(error: rocsparse_sys::rocsparse_error) -> Self {
         match error {
             rocsparse_sys::rocsparse_error::invalid_handle => cusparseError_t::INVALID_VALUE,
@@ -639,6 +647,7 @@ fn write_cudnn9_types(
     let mut text = prettyplease::unparse(&module);
     text.push_str(
         "
+#[cfg(feature = \"rocm\")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {
@@ -768,6 +777,7 @@ impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
         }
     }
 }
+#[cfg(feature = \"rocm\")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {
@@ -1199,6 +1209,7 @@ fn generate_ml(crate_root: &PathBuf) {
     };
     let suffix =
 "#[cfg(unix)]
+#[cfg(feature = \"rocm\")]
 impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
     fn from(error: rocm_smi_sys::rsmi_error) -> Self {
         match error {
@@ -1496,6 +1507,38 @@ fn generate_rocm_smi(output: &PathBuf, path: &[&str]) {
     write_rust_to_file(output, &prettyplease::unparse(&module))
 }
 
+fn generate_asahi(output: &PathBuf, path: &[&str]) {
+    let mut include = output.clone();
+    include.extend(["..", "ext", "asahi-sys", "include"]);
+    let mut header = include.clone();
+    header.push("asahi_drm.h");
+    let asahi_header = new_builder()
+        .header(header.to_str().unwrap())
+        .allowlist_type("^drm_asahi.*")
+        // the generic DRM objects a compute runtime uses (their ioctl numbers are function-like macros)
+        .allowlist_type("^drm_syncobj_(create|destroy|wait|array|timeline_wait|timeline_array)$")
+        .allowlist_type("^drm_gem_close$")
+        .allowlist_var("^DRM_ASAHI.*")
+        .allowlist_var("^DRM_IOCTL_ASAHI.*")
+        .allowlist_var("^DRM_COMMAND_BASE$")
+        // the ioctl numbers are enumerators of an anonymous enum: keep them as plain constants
+        .default_enum_style(bindgen::EnumVariation::Consts)
+        .prepend_enum_name(false)
+        .layout_tests(true)
+        // drm.h includes drm_mode.h, which the system provides
+        .clang_args([
+            format!("-I{}", include.to_str().unwrap()),
+            "-I/usr/include/drm".to_string(),
+        ])
+        .generate()
+        .unwrap()
+        .to_string();
+    let module: syn::File = syn::parse_str(&asahi_header).unwrap();
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(output, &prettyplease::unparse(&module))
+}
+
 fn add_send_sync(items: &mut Vec<Item>, arg: &[&str]) {
     for type_ in arg {
         let type_ = Ident::new(type_, Span::call_site());
@@ -1734,7 +1777,7 @@ impl ConvertIntoRustResult {
         items.extend(extra_items);
         for hip_error_path in self.options.hip_types {
             items.push(
-                parse_quote! {impl From<#hip_error_path> for #new_error_type {
+                parse_quote! {#[cfg(feature = "rocm")] impl From<#hip_error_path> for #new_error_type {
                     fn from(error: #hip_error_path) -> Self {
                         Self(error.0)
                     }

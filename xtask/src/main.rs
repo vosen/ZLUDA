@@ -250,6 +250,10 @@ struct ZludaMetadata {
     is_32bit: bool,
     #[serde(default)]
     debug_only: bool,
+    /// Part of the Apple GPU (Asahi Linux) build: built, instead of the HIP-based libraries, when
+    /// ZLUDA_XTASK_AGX is set (their symlinks have the same names).
+    #[serde(default)]
+    agx: bool,
     #[cfg_attr(not(unix), allow(unused))]
     #[serde(default)]
     linux_symlinks: Vec<String>,
@@ -305,10 +309,12 @@ fn compile(b: Build) -> (PathBuf, String, Vec<Project>) {
     if let Some(target) = &cargo_flags.target {
         target_directory.push(target);
     }
+    let agx = env::var_os("ZLUDA_XTASK_AGX").is_some();
     let projects = meta
         .packages
         .into_iter()
         .filter_map(|pkg| Project::try_new(pkg, cargo_flags.is_32bit))
+        .filter(|project| project.meta.agx == agx)
         .filter(|project| {
             if cargo_flags.is_32bit {
                 if !project.meta.is_32bit {

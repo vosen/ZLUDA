@@ -9,6 +9,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "agx_libs"
+version = "0.0.0"
+dependencies = [
+ "cuda_types",
+ "libloading",
+]
+
+[[package]]
+name = "agx_runtime"
+version = "0.0.0"
+dependencies = [
+ "asahi-sys",
+ "libc",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -98,6 +114,10 @@ name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
+name = "asahi-sys"
+version = "0.0.0"
 
 [[package]]
 name = "async-task"
@@ -5101,6 +5121,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_runtime",
+ "cuda_macros",
+ "cuda_types",
+ "dark_api",
+ "tempfile",
+]
+
+[[package]]
 name = "zluda_bindgen"
 version = "0.1.0"
 dependencies = [
@@ -5131,6 +5162,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_blas_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_blaslt"
 version = "0.0.0"
 dependencies = [
@@ -5143,6 +5183,15 @@ dependencies = [
  "paste",
  "zluda_common",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_blaslt_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
 ]
 
 [[package]]
@@ -5219,6 +5268,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_dnn_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_fft"
 version = "0.0.0"
 dependencies = [
@@ -5233,6 +5291,15 @@ dependencies = [
  "unwrap_or",
  "zluda_common",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_fft_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
 ]
 
 [[package]]
@@ -5265,6 +5332,15 @@ dependencies = [
  "cuda_types",
  "rocm_smi-sys",
  "zluda_common",
+]
+
+[[package]]
+name = "zluda_ml_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_runtime",
+ "cuda_macros",
+ "cuda_types",
 ]
 
 [[package]]
@@ -5324,6 +5400,15 @@ dependencies = [
  "unwrap_or",
  "zluda_common",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_sparse_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
 ]
 
 [[package]]

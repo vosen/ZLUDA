@@ -1,0 +1,33 @@
+.version 7.0
+.target sm_70
+.address_size 64
+
+// out[6 * i + m] = prmt.b32.<mode m> (a, b, i) for the selectors i = 0..3
+.visible .entry prmt_modes(.param .u64 out)
+{
+    .reg .u64 p;
+    .reg .b32 a, b, r, i;
+    .reg .pred %p1;
+    ld.param.u64 p, [out];
+    mov.b32 a, 0x33221100;
+    mov.b32 b, 0x77665544;
+    mov.b32 i, 0;
+LOOP:
+    prmt.b32.f4e r, a, b, i;
+    st.global.b32 [p+0], r;
+    prmt.b32.b4e r, a, b, i;
+    st.global.b32 [p+4], r;
+    prmt.b32.rc8 r, a, b, i;
+    st.global.b32 [p+8], r;
+    prmt.b32.ecl r, a, b, i;
+    st.global.b32 [p+12], r;
+    prmt.b32.ecr r, a, b, i;
+    st.global.b32 [p+16], r;
+    prmt.b32.rc16 r, a, b, i;
+    st.global.b32 [p+20], r;
+    add.u64 p, p, 24;
+    add.u32 i, i, 1;
+    setp.lt.u32 %p1, i, 4;
+    @%p1 bra LOOP;
+    ret;
+}

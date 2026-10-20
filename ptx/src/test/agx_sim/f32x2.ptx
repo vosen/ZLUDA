@@ -1,0 +1,32 @@
+.version 8.6
+.target sm_100a
+.address_size 64
+
+// out: add, sub, mul, fma, add.sat, add.rz, add.rm, add.ftz of (x, y, z) pairs
+.visible .entry f32x2(.param .u64 in, .param .u64 out)
+{
+    .reg .u64 p, q;
+    .reg .b64 x, y, z, r;
+    ld.param.u64 p, [in];
+    ld.param.u64 q, [out];
+    ld.global.b64 x, [p];
+    ld.global.b64 y, [p+8];
+    ld.global.b64 z, [p+16];
+    add.f32x2 r, x, y;
+    st.global.b64 [q], r;
+    sub.rn.f32x2 r, x, y;
+    st.global.b64 [q+8], r;
+    mul.f32x2 r, x, y;
+    st.global.b64 [q+16], r;
+    fma.rn.f32x2 r, x, y, z;
+    st.global.b64 [q+24], r;
+    add.sat.f32x2 r, x, y;
+    st.global.b64 [q+32], r;
+    add.rz.f32x2 r, x, z;
+    st.global.b64 [q+40], r;
+    add.rm.f32x2 r, x, z;
+    st.global.b64 [q+48], r;
+    add.ftz.f32x2 r, z, z;
+    st.global.b64 [q+56], r;
+    ret;
+}

@@ -37,6 +37,7 @@ fn run_method<'input>(
                                 type_,
                                 kind: ast::RcpKind::Compliant(rnd),
                                 flush_to_zero,
+                                ..
                             },
                         arguments,
                     }) => {
@@ -54,6 +55,7 @@ fn run_method<'input>(
                                 type_: type_,
                                 kind: ast::DivFloatKind::Rounding(rnd),
                                 flush_to_zero,
+                                saturate: false,
                             }),
                             arguments: ast::DivArgs {
                                 dst: arguments.dst,

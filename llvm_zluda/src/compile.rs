@@ -1,3 +1,5 @@
+//! Compilation of ZLUDA's LLVM modules to AMDGPU code objects.
+
 use crate::utils::{Context, Message, PassBuilderOptions, TargetMachine};
 use crate::LLVMZludaParseCommandLineOptions;
 use crate::{ffi::LLVMZludaLinkWithLLD, utils::Module};

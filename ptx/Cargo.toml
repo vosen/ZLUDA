@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 ptx_parser = { path = "../ptx_parser" }
-llvm_zluda = { path = "../llvm_zluda" }
+llvm_zluda = { path = "../llvm_zluda", default-features = false }
 kernel_metadata = { path = "../kernel_metadata" }
 quick-error = "1.2"
 thiserror = "1.0"
@@ -35,4 +35,8 @@ pretty_assertions = "1.4.1"
 libloading = "0.8"
 
 [features]
+default = ["amdgpu"]
 ci_build = []
+amdgpu = ["llvm_zluda/amdgpu"]
+# Compile PTX for Apple GPUs with the experimental AGX LLVM backend.
+agx = ["llvm_zluda/agx"]

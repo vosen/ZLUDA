@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-cuda_types = { path = "../cuda_types" }
+cuda_types = { path = "../cuda_types", default-features = false }
 format = { path = "../format" }
 uuid = "1.16"
 paste = "1.0"

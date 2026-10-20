@@ -10,6 +10,7 @@ use std::{
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+mod agx_matrix;
 mod convert_32bit_to_64bit;
 mod deparamize_functions;
 mod expand_operands;
@@ -37,6 +38,8 @@ mod test;
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
     include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
+// Textual LLVM IR, see the comment at its top.
+static ZLUDA_PTX_IMPL_AGX: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl_agx.ll");
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {
@@ -51,7 +54,23 @@ quick_error! {
         Todo(msg: String) {
             display("TODO: {}", msg)
         }
+        /// A feature the target hardware does not have.
+        Unsupported(msg: String) {
+            display("{}", msg)
+        }
     }
+}
+
+/// The GPU architecture that code is generated for.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum Target {
+    /// AMD GPUs, with the AMDGPU LLVM backend.
+    #[default]
+    Amdgpu,
+    /// Apple GPUs, with the experimental AGX LLVM backend. Kernels use the
+    /// agx_kernel calling convention and the helper functions are linked
+    /// from lib/zluda_ptx_impl_agx.bc.
+    Agx,
 }
 
 /// GPU attributes needed at compile time.
@@ -64,13 +83,53 @@ pub struct Attributes {
 pub fn to_llvm_module<'input>(
     ast: ast::Module<'input>,
     attributes: Attributes,
+    on_pass_end: impl FnMut(&str),
+) -> Result<Module, TranslateError> {
+    to_llvm_module_for_target(ast, attributes, Target::Amdgpu, on_pass_end)
+}
+
+/// Options of the translation.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Options {
+    pub target: Target,
+    /// Follow the floating point semantics of PTX exactly where the AGX
+    /// hardware differs: the generated code implements IEEE 754 binary32
+    /// arithmetic (denormals, correctly rounded division and square root) and
+    /// canonical NaNs in software, and `.sat` keeps `-0.0`. Slower; ignored
+    /// for AMDGPU.
+    pub strict_fp: bool,
+}
+
+pub fn to_llvm_module_for_target<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+    target: Target,
+    on_pass_end: impl FnMut(&str),
+) -> Result<Module, TranslateError> {
+    to_llvm_module_with_options(
+        ast,
+        attributes,
+        Options {
+            target,
+            strict_fp: false,
+        },
+        on_pass_end,
+    )
+}
+
+pub fn to_llvm_module_with_options<'input>(
+    ast: ast::Module<'input>,
+    attributes: Attributes,
+    options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
+    let Options { target, strict_fp } = options;
+    let strict_fp = strict_fp && target == Target::Agx;
     let sm_version = ast.sm_version;
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
     let sreg_map = SpecialRegistersMap::new(&mut scoped_resolver)?;
-    let directives = normalize_identifiers::run(&mut scoped_resolver, ast.directives)?;
+    let directives = normalize_identifiers::run(&mut scoped_resolver, merge_symbols(ast.directives))?;
     on_pass_end("normalize_identifiers");
     let directives = replace_known_functions::run(&mut flat_resolver, directives);
     on_pass_end("replace_known_functions");
@@ -80,22 +139,23 @@ pub fn to_llvm_module<'input>(
     on_pass_end("optimize_function_arguments");
     let directives = resolve_function_pointers::run(directives)?;
     on_pass_end("resolve_function_pointers");
-    let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, target, directives)?;
     on_pass_end("fix_special_registers");
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     on_pass_end("expand_operands");
     let directives = insert_post_saturation::run(&mut flat_resolver, directives)?;
     on_pass_end("insert_post_saturation");
+    let directives = append_implicit_ret(directives);
     let directives = deparamize_functions::run(&mut flat_resolver, directives)?;
     on_pass_end("deparamize_functions");
     let directives = rcp_f64_into_div::run(&mut flat_resolver, directives)?;
     on_pass_end("rcp_f64_into_div");
     let directives =
-        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, directives)?;
+        replace_instructions_with_functions_fp_required::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions_fp_required");
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     on_pass_end("normalize_basic_blocks");
-    let directives = remove_unreachable_basic_blocks::run(directives)?;
+    let directives = remove_unreachable_basic_blocks::run(directives, target == Target::Agx)?;
     on_pass_end("remove_unreachable_basic_blocks");
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
@@ -112,14 +172,16 @@ pub fn to_llvm_module<'input>(
     let directives =
         insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
-    let directives = replace_instructions_with_functions::run(&mut flat_resolver, directives)?;
+    let directives =
+        replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
-    let fp_mode = get_fp_mode(&directives[..]);
+    let fp_mode = get_fp_mode(target, &directives[..]);
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
-    let llvm_ir = llvm::emit::run(&context, flat_resolver, directives, fp_mode)?;
+    let llvm_ir =
+        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -129,14 +191,101 @@ pub fn to_llvm_module<'input>(
         metadata: kernel_metadata::ModuleMetadataV1::new(sm_version),
         metadata32,
         constrained_fp: fp_mode == llvm::emit::FloatingPointMode::Constrained,
+        target,
+        strict_fp,
     })
 }
 
+/// Keeps one module-level definition per name, like a PTX linker: the first
+/// definition that is not `.weak`, or else the first `.weak` one. Extern
+/// declarations of a defined variable and the other definitions are dropped;
+/// the kept variable takes the place of the first declaration, so that it
+/// still precedes its uses. Function declarations without a body are kept.
+fn merge_symbols<'input>(
+    directives: Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>>,
+) -> Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>> {
+    fn name<'a>(d: &ast::Directive<'a, ast::ParsedOperand<&'a str>>) -> &'a str {
+        match d {
+            ast::Directive::Variable(_, v) => v.name,
+            ast::Directive::Method(_, f) => f.func_directive.name(),
+        }
+    }
+    fn is_definition(d: &ast::Directive<'_, ast::ParsedOperand<&str>>) -> bool {
+        match d {
+            ast::Directive::Variable(linking, _) => !linking.contains(ast::LinkingDirective::EXTERN),
+            ast::Directive::Method(_, f) => f.body.is_some(),
+        }
+    }
+    fn is_weak(d: &ast::Directive<'_, ast::ParsedOperand<&str>>) -> bool {
+        match d {
+            ast::Directive::Variable(linking, _) | ast::Directive::Method(linking, _) => {
+                linking.contains(ast::LinkingDirective::WEAK)
+            }
+        }
+    }
+    let mut winner = FxHashMap::<&str, usize>::default();
+    let mut first = FxHashMap::<&str, usize>::default();
+    for (i, d) in directives.iter().enumerate() {
+        let n = name(d);
+        first.entry(n).or_insert(i);
+        if !is_definition(d) {
+            continue;
+        }
+        match winner.get(n) {
+            Some(&w) if !(is_weak(&directives[w]) && !is_weak(d)) => {}
+            _ => {
+                winner.insert(n, i);
+            }
+        }
+    }
+    let duplicated = |n: &str| directives.iter().filter(|d| name(d) == n).count() > 1;
+    let duplicated = winner
+        .keys()
+        .copied()
+        .filter(|n| duplicated(n))
+        .collect::<Vec<_>>();
+    if duplicated.is_empty() {
+        return directives;
+    }
+    let mut slots = directives.into_iter().map(Some).collect::<Vec<_>>();
+    for n in duplicated {
+        let w = winner[n];
+        let is_variable = matches!(slots[w], Some(ast::Directive::Variable(..)));
+        for i in 0..slots.len() {
+            let drop = match &slots[i] {
+                Some(d) if i != w && name(d) == n => is_variable || is_definition(d),
+                _ => false,
+            };
+            if drop {
+                slots[i] = None;
+            }
+        }
+        let f = first[n];
+        if is_variable && f != w {
+            slots.swap(f, w);
+        }
+    }
+    slots.into_iter().flatten().collect()
+}
+
 fn get_fp_mode(
+    target: Target,
     directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
 ) -> llvm::emit::FloatingPointMode {
     for d in directives {
         if let Directive2::Method(method) = d {
+            // AMDGPU applies a kernel's initial rounding mode to every
+            // instruction through the hardware mode register. On AGX only
+            // constrained instructions read the emulated mode register.
+            if target == Target::Agx {
+                if let Some(attrs) = &method.kernel_attributes {
+                    if attrs.rounding_mode_f32 != ast::RoundingMode::NearestEven
+                        || attrs.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
+                    {
+                        return llvm::emit::FloatingPointMode::Constrained;
+                    }
+                }
+            }
             for s in method.body.iter().flatten() {
                 if let Statement::SetMode(_) = s {
                     return llvm::emit::FloatingPointMode::Constrained;
@@ -154,11 +303,19 @@ pub struct Module {
     pub metadata: kernel_metadata::ModuleMetadataV1,
     pub metadata32: Option<kernel_metadata::ModuleMetadata32Bit>,
     pub constrained_fp: bool,
+    pub target: Target,
+    /// The code must be compiled with the strict floating point features of
+    /// the AGX backend (see `Options::strict_fp`).
+    pub strict_fp: bool,
 }
 
 impl Module {
+    /// The module of helper functions to link with: bitcode for AMDGPU,
+    /// textual IR for AGX.
     pub fn linked_bitcode(&self) -> &'static [u8] {
-        if self.constrained_fp {
+        if self.target == Target::Agx {
+            ZLUDA_PTX_IMPL_AGX
+        } else if self.constrained_fp {
             ZLUDA_PTX_IMPL_CONSTRAINED
         } else {
             ZLUDA_PTX_IMPL
@@ -173,62 +330,150 @@ enum PtxSpecialRegister {
     Ctaid,
     Nctaid,
     Clock,
+    Clock64,
+    Globaltimer,
     LanemaskLe,
     LanemaskLt,
     LanemaskGe,
     Laneid,
+    Warpid,
+    Nwarpid,
+    Smid,
+    Nsmid,
+    Warpsize,
+    Clusterid,
+    Nclusterid,
+    ClusterCtaid,
+    ClusterNctaid,
+    ClusterCtarank,
+    ClusterNctarank,
+    IsExplicitCluster,
+    #[strum(disabled)]
+    Envreg(u8),
+    #[strum(disabled)]
+    Pm(u8),
 }
 
 impl PtxSpecialRegister {
-    fn as_str(self) -> &'static str {
-        match self {
+    fn all() -> impl Iterator<Item = Self> {
+        Self::iter()
+            .chain((0..32).map(Self::Envreg))
+            .chain((0..8).map(Self::Pm))
+    }
+
+    fn name(self) -> Cow<'static, str> {
+        Cow::Borrowed(match self {
             Self::Tid => "%tid",
             Self::Ntid => "%ntid",
             Self::Ctaid => "%ctaid",
             Self::Nctaid => "%nctaid",
             Self::Clock => "%clock",
+            Self::Clock64 => "%clock64",
+            Self::Globaltimer => "%globaltimer",
             Self::LanemaskLe => "%lanemask_le",
             Self::LanemaskLt => "%lanemask_lt",
             Self::LanemaskGe => "%lanemask_ge",
             Self::Laneid => "%laneid",
-        }
+            Self::Warpid => "%warpid",
+            Self::Nwarpid => "%nwarpid",
+            Self::Smid => "%smid",
+            Self::Nsmid => "%nsmid",
+            Self::Warpsize => "%warpsize",
+            Self::Clusterid => "%clusterid",
+            Self::Nclusterid => "%nclusterid",
+            Self::ClusterCtaid => "%cluster_ctaid",
+            Self::ClusterNctaid => "%cluster_nctaid",
+            Self::ClusterCtarank => "%cluster_ctarank",
+            Self::ClusterNctarank => "%cluster_nctarank",
+            Self::IsExplicitCluster => "%is_explicit_cluster",
+            Self::Envreg(n) => return Cow::Owned(format!("%envreg{}", n)),
+            Self::Pm(n) => return Cow::Owned(format!("%pm{}", n)),
+        })
+    }
+
+    fn is_vector(self) -> bool {
+        matches!(
+            self,
+            Self::Tid
+                | Self::Ntid
+                | Self::Ctaid
+                | Self::Nctaid
+                | Self::Clusterid
+                | Self::Nclusterid
+                | Self::ClusterCtaid
+                | Self::ClusterNctaid
+        )
     }
 
     fn get_type(self) -> ast::Type {
-        match self {
-            PtxSpecialRegister::Tid
-            | PtxSpecialRegister::Ntid
-            | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => ast::Type::Vector(4, self.get_function_return_type()),
-            _ => ast::Type::Scalar(self.get_function_return_type()),
+        if self.is_vector() {
+            ast::Type::Vector(4, self.get_function_return_type())
+        } else {
+            ast::Type::Scalar(self.get_function_return_type())
         }
+    }
+
+    fn is_cluster(self) -> bool {
+        matches!(
+            self,
+            Self::Clusterid
+                | Self::Nclusterid
+                | Self::ClusterCtaid
+                | Self::ClusterNctaid
+                | Self::ClusterCtarank
+                | Self::ClusterNctarank
+                | Self::IsExplicitCluster
+        )
+    }
+
+    /// The register that this one reads, if it is the same. On AMD GPUs a
+    /// cluster is a single CTA; AGX runs a cluster as one threadgroup and
+    /// reads the cluster registers with functions.
+    fn canonical(self, target: Target) -> Self {
+        match self {
+            Self::Clusterid if target != Target::Agx => Self::Ctaid,
+            Self::Nclusterid if target != Target::Agx => Self::Nctaid,
+            other => other,
+        }
+    }
+
+    /// The value of registers that are constant (outside of a cluster
+    /// launch on AMD GPUs), for the vector member if any.
+    fn constant(self, member: Option<u8>, target: Target) -> Option<u64> {
+        if target == Target::Agx && self.is_cluster() {
+            return None;
+        }
+        match self {
+            Self::Warpsize => Some(32),
+            // An upper bound of %smid: the number of cores is not known when
+            // compiling.
+            Self::Nsmid => Some(128),
+            Self::ClusterCtaid | Self::ClusterCtarank | Self::IsExplicitCluster => Some(0),
+            Self::ClusterNctaid => Some((member.unwrap_or(0) < 3) as u64),
+            Self::ClusterNctarank => Some(1),
+            Self::Envreg(_) | Self::Pm(_) => Some(0),
+            _ => None,
+        }
+    }
+
+    fn needs_function(self, target: Target) -> bool {
+        self.canonical(target) == self && self.constant(None, target).is_none()
     }
 
     fn get_function_return_type(self) -> ast::ScalarType {
         match self {
-            PtxSpecialRegister::Tid => ast::ScalarType::U32,
-            PtxSpecialRegister::Ntid => ast::ScalarType::U32,
-            PtxSpecialRegister::Ctaid => ast::ScalarType::U32,
-            PtxSpecialRegister::Nctaid => ast::ScalarType::U32,
-            PtxSpecialRegister::Clock => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskLe => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskLt => ast::ScalarType::U32,
-            PtxSpecialRegister::LanemaskGe => ast::ScalarType::U32,
-            PtxSpecialRegister::Laneid => ast::ScalarType::U32,
+            PtxSpecialRegister::Clock64 | PtxSpecialRegister::Globaltimer => {
+                ast::ScalarType::U64
+            }
+            _ => ast::ScalarType::U32,
         }
     }
 
     fn get_function_input_type(self) -> Option<ast::ScalarType> {
-        match self {
-            PtxSpecialRegister::Tid
-            | PtxSpecialRegister::Ntid
-            | PtxSpecialRegister::Ctaid
-            | PtxSpecialRegister::Nctaid => Some(ast::ScalarType::U8),
-            PtxSpecialRegister::Clock
-            | PtxSpecialRegister::LanemaskLe
-            | PtxSpecialRegister::LanemaskLt
-            | PtxSpecialRegister::LanemaskGe
-            | PtxSpecialRegister::Laneid => None,
+        if self.is_vector() {
+            Some(ast::ScalarType::U8)
+        } else {
+            None
         }
     }
 
@@ -239,12 +484,54 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Ctaid => "sreg_ctaid",
             PtxSpecialRegister::Nctaid => "sreg_nctaid",
             PtxSpecialRegister::Clock => "sreg_clock",
+            PtxSpecialRegister::Clock64 => "sreg_clock64",
+            PtxSpecialRegister::Globaltimer => "sreg_globaltimer",
             PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
             PtxSpecialRegister::LanemaskLe => "sreg_lanemask_le",
             PtxSpecialRegister::LanemaskGe => "sreg_lanemask_ge",
             PtxSpecialRegister::Laneid => "sreg_laneid",
+            PtxSpecialRegister::Warpid => "sreg_warpid",
+            PtxSpecialRegister::Nwarpid => "sreg_nwarpid",
+            PtxSpecialRegister::Smid => "sreg_smid",
+            PtxSpecialRegister::Clusterid => "sreg_clusterid",
+            PtxSpecialRegister::Nclusterid => "sreg_nclusterid",
+            PtxSpecialRegister::ClusterCtaid => "sreg_cluster_ctaid",
+            PtxSpecialRegister::ClusterNctaid => "sreg_cluster_nctaid",
+            PtxSpecialRegister::ClusterCtarank => "sreg_cluster_ctarank",
+            PtxSpecialRegister::ClusterNctarank => "sreg_cluster_nctarank",
+            PtxSpecialRegister::IsExplicitCluster => "sreg_is_explicit_cluster",
+            _ => "",
         }
     }
+}
+
+/// Execution that reaches the end of a function body returns, as if the body
+/// ended with `ret;`.
+fn append_implicit_ret(
+    mut directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
+) -> Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>> {
+    for directive in directives.iter_mut() {
+        if let Directive2::Method(Function {
+            body: Some(body), ..
+        }) = directive
+        {
+            let falls_through = !matches!(
+                body.last(),
+                Some(Statement::Instruction(
+                    ast::Instruction::Ret { .. }
+                        | ast::Instruction::Exit { .. }
+                        | ast::Instruction::Trap { .. }
+                        | ast::Instruction::Bra { .. }
+                ))
+            );
+            if falls_through {
+                body.push(Statement::Instruction(ast::Instruction::Ret {
+                    data: ast::RetData { uniform: false },
+                }));
+            }
+        }
+    }
+    directives
 }
 
 #[cfg(debug_assertions)]
@@ -324,6 +611,12 @@ enum Statement<I, P: ast::Operand> {
         rnd_f16f64: Option<ast::RoundingMode>,
     },
     FpSaturate {
+        dst: SpirvWord,
+        src: SpirvWord,
+        type_: ast::ScalarType,
+    },
+    /// Subnormal values become zeros of the same sign (.ftz of the types without a denormal mode, bf16)
+    FpFlush {
         dst: SpirvWord,
         src: SpirvWord,
         type_: ast::ScalarType,
@@ -641,6 +934,21 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
             }
+            Statement::FpFlush { dst, src, type_ } => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    src,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::FpFlush { dst, src, type_ }
+            }
             Statement::FpModeRequired {
                 ftz_f32,
                 rnd_f32,
@@ -909,6 +1217,9 @@ struct IdentEntry<'input> {
 struct ScopedResolver<'input, 'b> {
     flat_resolver: &'b mut GlobalStringIdentResolver2<'input>,
     scopes: Vec<ScopeMarker<'input>>,
+    // The scope of the function being normalized and the registers used in
+    // it without a declaration (see get_or_declare)
+    implicit_registers: Option<(usize, Vec<ast::Variable<SpirvWord>>)>,
 }
 
 impl<'input, 'b> ScopedResolver<'input, 'b> {
@@ -916,7 +1227,53 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
         Self {
             flat_resolver,
             scopes: vec![ScopeMarker::new()],
+            implicit_registers: None,
         }
+    }
+
+    // Like get, but a register (%name) that was never declared is declared
+    // in the function with the type of its first use. ptxas rejects such
+    // code; the K semantics of PTX (PTX-formalization) accept it.
+    fn get_or_declare(
+        &mut self,
+        name: &'input str,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+    ) -> Result<SpirvWord, TranslateError> {
+        let error = match self.get(name) {
+            Ok(word) => return Ok(word),
+            Err(error) => error,
+        };
+        let (Some((scope, _)), Some((type_ @ ast::Type::Scalar(_), _)), true) =
+            (&self.implicit_registers, type_space, name.starts_with('%'))
+        else {
+            return Err(error);
+        };
+        let scope = *scope;
+        let result = self.flat_resolver.current_id;
+        self.flat_resolver.current_id.0 += 1;
+        let type_space = (type_.clone(), ast::StateSpace::Reg);
+        self.scopes[scope]
+            .name_to_ident
+            .insert(Cow::Borrowed(name), result);
+        self.scopes[scope].ident_map.insert(
+            result,
+            IdentEntry {
+                name: Some(Cow::Borrowed(name)),
+                type_space: Some(type_space),
+            },
+        );
+        if let Some((_, registers)) = &mut self.implicit_registers {
+            registers.push(ast::Variable {
+                info: ast::VariableInfo {
+                    align: None,
+                    v_type: type_.clone(),
+                    state_space: ast::StateSpace::Reg,
+                    array_init: Vec::new(),
+                },
+                name: result,
+            });
+        }
+        Ok(result)
     }
 
     fn start_scope(&mut self) {
@@ -993,7 +1350,33 @@ impl<'input, 'b> ScopedResolver<'input, 'b> {
             .iter()
             .rev()
             .find_map(|resolver| resolver.name_to_ident.get(name).copied())
-            .ok_or_else(|| error_unknown_symbol(name))
+            // An undeclared identifier is an error in the input, not in the
+            // compiler
+            .ok_or_else(|| TranslateError::UnknownSymbol(name.to_string()))
+    }
+
+    // The innermost variable of this name that is a vector, or else the
+    // innermost variable
+    fn get_vector(&mut self, name: &str) -> Result<SpirvWord, TranslateError> {
+        let vector = self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            match scope.ident_map.get(ident)?.type_space {
+                Some((ast::Type::Vector(..), _)) => Some(*ident),
+                _ => None,
+            }
+        });
+        match vector {
+            Some(ident) => Ok(ident),
+            None => self.get(name),
+        }
+    }
+
+    fn get_type(&self, name: &str) -> Option<&ast::Type> {
+        self.scopes.iter().rev().find_map(|scope| {
+            let ident = scope.name_to_ident.get(name)?;
+            let entry = scope.ident_map.get(ident)?;
+            entry.type_space.as_ref().map(|(type_, _)| type_)
+        })
     }
 
     fn get_in_current_scope(&self, label: &'input str) -> Result<SpirvWord, TranslateError> {
@@ -1035,10 +1418,9 @@ impl SpecialRegistersMap {
             reg_to_id: FxHashMap::default(),
             id_to_reg: FxHashMap::default(),
         };
-        for sreg in PtxSpecialRegister::iter() {
-            let text = sreg.as_str();
+        for sreg in PtxSpecialRegister::all() {
             let id = resolver.add(
-                Cow::Borrowed(text),
+                sreg.name(),
                 Some((sreg.get_type(), ast::StateSpace::Reg)),
             )?;
             result.reg_to_id.insert(sreg, id);
@@ -1052,11 +1434,12 @@ impl SpecialRegistersMap {
     }
 
     fn len() -> usize {
-        PtxSpecialRegister::iter().len()
+        PtxSpecialRegister::all().count()
     }
 
     fn foreach_declaration<'a, 'input>(
         resolver: &'a mut GlobalStringIdentResolver2<'input>,
+        target: Target,
         mut fn_: impl FnMut(
             PtxSpecialRegister,
             (
@@ -1066,7 +1449,7 @@ impl SpecialRegistersMap {
             ),
         ),
     ) {
-        for sreg in PtxSpecialRegister::iter() {
+        for sreg in PtxSpecialRegister::all().filter(|sreg| sreg.needs_function(target)) {
             let external_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
             let name = resolver.register_named(Cow::Owned(external_fn_name), None);
             let return_type = sreg.get_function_return_type();
@@ -1137,6 +1520,7 @@ fn scalar_to_ptx_name(this: ast::ScalarType) -> &'static str {
         ast::ScalarType::F64 => "f64",
         ast::ScalarType::BF16 => "bf16",
         ast::ScalarType::BF16x2 => "bf16x2",
+        ast::ScalarType::F32x2 => "f32x2",
         ast::ScalarType::Pred => "pred",
         ast::ScalarType::E4m3x2 => "e4m3x2",
         ast::ScalarType::E5m2x2 => "e5m2x2",

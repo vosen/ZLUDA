@@ -12,6 +12,8 @@ use std::{env, mem};
 mod error;
 
 const DEFAULT_ARCH: &'static str = "gfx1100";
+#[cfg(feature = "agx")]
+const DEFAULT_AGX_ARCH: &'static str = llvm_zluda::compile_agx::AGX_DEFAULT_CPU;
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options, version)]
@@ -21,17 +23,29 @@ pub struct Options {
     output_dir: Option<PathBuf>,
 
     #[bpaf(long("arch"))]
-    /// Target GPU architecture
+    /// Target GPU architecture (for example gfx1100, or agx-g14g for AGX)
     arch: Option<String>,
+
+    #[bpaf(long("target"), argument("TARGET"))]
+    /// GPU family: amdgpu (default) or agx (Apple GPUs, experimental). An
+    /// agx-* --arch selects agx
+    target: Option<String>,
 
     #[bpaf(long("ignore-errors"))]
     /// Try to ignore errors. This will try and produce output even if there are
     /// parsing errors (e.g. an unimplemented instruction)
     ignore_errors: bool,
 
-    #[bpaf(positional("filename"))]
-    /// PTX file
-    ptx_path: String,
+    #[bpaf(long("strict-fp"))]
+    /// AGX: follow the floating point semantics of PTX exactly (denormals,
+    /// correctly rounded division and square root, canonical NaNs), emulated
+    /// in software where the hardware differs. Slower
+    strict_fp: bool,
+
+    #[bpaf(positional("filename"), some("a PTX file"))]
+    /// PTX files. AGX links several into one object (their kernels and
+    /// functions, as cuLink does); the outputs are named after the first
+    ptx_paths: Vec<String>,
 }
 
 fn main() -> ExitCode {
@@ -45,7 +59,8 @@ fn main() -> ExitCode {
 fn main_core() -> Result<(), CompilerError> {
     let opts = options().run();
 
-    let ptx_path = Path::new(&opts.ptx_path).to_path_buf();
+    let ptx_path = Path::new(&opts.ptx_paths[0]).to_path_buf();
+    let others: Vec<PathBuf> = opts.ptx_paths[1..].iter().map(PathBuf::from).collect();
     let filename_base = ptx_path
         .file_name()
         .map(|osstr| osstr.to_str().unwrap_or("output"))
@@ -63,6 +78,35 @@ fn main_core() -> Result<(), CompilerError> {
     };
     output_path.push(filename_base);
 
+    let target = match opts.target.as_deref() {
+        Some("agx") => ptx::Target::Agx,
+        Some("amdgpu") => ptx::Target::Amdgpu,
+        Some(other) => {
+            return Err(CompilerError::GenericError {
+                cause: None,
+                message: format!("unknown target '{other}' (expected amdgpu or agx)"),
+            })
+        }
+        None if opts.arch.as_deref().is_some_and(|a| a.starts_with("agx")) => ptx::Target::Agx,
+        None => ptx::Target::Amdgpu,
+    };
+    if target == ptx::Target::Agx {
+        return compile_agx(
+            &ptx_path,
+            &others,
+            &output_path,
+            opts.arch,
+            opts.ignore_errors,
+            opts.strict_fp,
+        );
+    }
+
+    if !others.is_empty() {
+        return Err(CompilerError::GenericError {
+            cause: None,
+            message: "linking several PTX files is only implemented for agx".to_string(),
+        });
+    }
     let arch: String = match opts.arch {
         Some(s) => s,
         None => (|| {
@@ -75,7 +119,14 @@ fn main_core() -> Result<(), CompilerError> {
 
     let ptx = fs::read(&ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
-    let llvm = ptx_to_llvm(opts.ignore_errors, ptx)?;
+    let llvm = ptx_to_llvm(
+        opts.ignore_errors,
+        ptx,
+        ptx::Options {
+            target,
+            strict_fp: false,
+        },
+    )?;
 
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
 
@@ -84,6 +135,15 @@ fn main_core() -> Result<(), CompilerError> {
         write_to_file(bytes, &output_path).unwrap();
     };
 
+    compile_amdgpu(&arch, llvm, &compiler_hook)
+}
+
+#[cfg(feature = "amdgpu")]
+fn compile_amdgpu(
+    arch: &str,
+    llvm: LLVMArtifacts,
+    compiler_hook: &dyn Fn(&Vec<u8>, String),
+) -> Result<(), CompilerError> {
     let mut start = Instant::now();
     llvm_zluda::compile(
         &llvm.context,
@@ -93,25 +153,117 @@ fn main_core() -> Result<(), CompilerError> {
         llvm.attributes,
         llvm.metadata,
         llvm.metadata32,
-        Some(&compiler_hook),
+        Some(compiler_hook),
     )?;
     report_pass_time("compile_bitcode", &mut start);
 
     Ok(())
 }
 
-fn ptx_to_llvm(ignore_errors: bool, ptx: &str) -> Result<LLVMArtifacts, CompilerError> {
+#[cfg(not(feature = "amdgpu"))]
+fn compile_amdgpu(
+    _arch: &str,
+    _llvm: LLVMArtifacts,
+    _compiler_hook: &dyn Fn(&Vec<u8>, String),
+) -> Result<(), CompilerError> {
+    Err(CompilerError::GenericError {
+        cause: None,
+        message: "zoc was built without the amdgpu feature".to_string(),
+    })
+}
+
+/// Compile for Apple GPUs. Writes the LLVM IR (.ll, linked.ll, opt.ll), the
+/// assembly (.asm) and the ELF object (.o).
+#[cfg(feature = "agx")]
+fn compile_agx(
+    ptx_path: &Path,
+    others: &[PathBuf],
+    output_path: &Path,
+    arch: Option<String>,
+    ignore_errors: bool,
+    strict_fp: bool,
+) -> Result<(), CompilerError> {
+    let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
+    let ptx = fs::read(ptx_path)?;
+    let ptx = str::from_utf8(&ptx)?;
+    let llvm = ptx_to_llvm(
+        ignore_errors,
+        ptx,
+        ptx::Options {
+            target: ptx::Target::Agx,
+            strict_fp,
+        },
+    )?;
+    write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+    // the other modules, translated on their own and linked as LLVM IR
+    let mut other_ir = Vec::new();
+    for path in others {
+        let ptx = fs::read(path)?;
+        let other = ptx_to_llvm(
+            ignore_errors,
+            str::from_utf8(&ptx)?,
+            ptx::Options {
+                target: ptx::Target::Agx,
+                strict_fp,
+            },
+        )?;
+        other_ir.push(other.llvm_ir);
+    }
+    let other_ir: Vec<&[u8]> = other_ir.iter().map(|v| &v[..]).collect();
+    let compiler_hook = |bytes: &Vec<u8>, extension: String| {
+        let output_path = output_path.with_extension(extension);
+        write_to_file(bytes, &output_path).unwrap();
+    };
+    let mut start = Instant::now();
+    llvm_zluda::compile_agx_linked(
+        &llvm.context,
+        &arch,
+        strict_fp,
+        llvm.main,
+        &other_ir,
+        llvm.linked_bitcode,
+        Some(&compiler_hook),
+    )
+    .map_err(|message| CompilerError::GenericError {
+        cause: None,
+        message,
+    })?;
+    report_pass_time("compile_agx", &mut start);
+    Ok(())
+}
+
+#[cfg(not(feature = "agx"))]
+fn compile_agx(
+    _ptx_path: &Path,
+    _others: &[PathBuf],
+    _output_path: &Path,
+    _arch: Option<String>,
+    _ignore_errors: bool,
+    _strict_fp: bool,
+) -> Result<(), CompilerError> {
+    Err(CompilerError::GenericError {
+        cause: None,
+        message: "zoc was built without the agx feature".to_string(),
+    })
+}
+
+fn ptx_to_llvm(
+    ignore_errors: bool,
+    ptx: &str,
+    options: ptx::Options,
+) -> Result<LLVMArtifacts, CompilerError> {
     let ast = if ignore_errors {
         ptx_parser::parse_module_unchecked(ptx)
     } else {
         ptx_parser::parse_module_checked(ptx)?
     };
     let mut start = Instant::now();
-    let module = ptx::to_llvm_module(
+    let module = ptx::to_llvm_module_with_options(
         ast,
         ptx::Attributes {
             clock_rate: 2124000,
         },
+        options,
         |pass| {
             report_pass_time(pass, &mut start);
         },
@@ -137,6 +289,7 @@ fn report_pass_time(pass: &str, start: &mut Instant) {
     *start = Instant::now();
 }
 
+#[cfg_attr(not(feature = "amdgpu"), allow(dead_code))]
 struct LLVMArtifacts {
     main: llvm_zluda::utils::Module,
     attributes: llvm_zluda::utils::Module,
