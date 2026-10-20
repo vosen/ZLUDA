@@ -266,7 +266,11 @@ impl CudaDisplay for *mut c_void {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 
@@ -277,7 +281,11 @@ impl CudaDisplay for *const c_void {
         _index: usize,
         writer: &mut (impl std::io::Write + ?Sized),
     ) -> std::io::Result<()> {
-        write!(writer, "{:p}", *self)
+        if self.is_null() {
+            writer.write_all(b"NULL")
+        } else {
+            write!(writer, "{:p}", *self)
+        }
     }
 }
 
@@ -1536,6 +1544,34 @@ impl crate::CudaDisplay for cuda_types::cufft::cufftHandle {
         write!(writer, "{:#x}", self.0)
     }
 }
+
+macro_rules! impl_cuda_display_for_ptr {
+    ($t:ty) => {
+        impl CudaDisplay for *mut $t {
+            fn write(
+                &self,
+                _fn_name: &'static str,
+                _index: usize,
+                writer: &mut (impl std::io::Write + ?Sized),
+            ) -> std::io::Result<()> {
+                if self.is_null() {
+                    writer.write_all(b"NULL")
+                } else {
+                    write!(writer, "{:p}", *self)
+                }
+            }
+        }
+    };
+}
+
+impl_cuda_display_for_ptr!(cuda_types::cuda::IDXGIAdapter);
+impl_cuda_display_for_ptr!(cuda_types::cuda::IDirect3DDevice9);
+impl_cuda_display_for_ptr!(cuda_types::cuda::IDirect3DResource9);
+impl_cuda_display_for_ptr!(cuda_types::cuda::IDirect3DVertexBuffer9);
+impl_cuda_display_for_ptr!(cuda_types::cuda::ID3D10Device);
+impl_cuda_display_for_ptr!(cuda_types::cuda::ID3D10Resource);
+impl_cuda_display_for_ptr!(cuda_types::cuda::ID3D11Device);
+impl_cuda_display_for_ptr!(cuda_types::cuda::ID3D11Resource);
 
 mod dark_api;
 mod format_generated;

@@ -1,3 +1,4 @@
+use bpaf::{construct, pure, Bpaf, Parser};
 use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -23,32 +24,155 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
     "2.0", "1.1", "1.0",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Project {
+    HipRuntime,
+    Rocblas,
+    HipblasLt,
+    RocmSmi,
+    Miopen,
+    RocSparse,
+    HipFft,
+    Cuda,
+    Ml,
+    Cublas,
+    CublasLt,
+    CuFft,
+    CuSparse,
+    CuDnn,
+}
+
+static PROJECTS: &[(&str, Project, &str)] = &[
+    (
+        "hip-runtime",
+        Project::HipRuntime,
+        "Generate bindings for hip_runtime-sys",
+    ),
+    (
+        "rocblas",
+        Project::Rocblas,
+        "Generate bindings for rocblas-sys",
+    ),
+    (
+        "hipblaslt",
+        Project::HipblasLt,
+        "Generate bindings for hipblaslt-sys",
+    ),
+    (
+        "rocm-smi",
+        Project::RocmSmi,
+        "Generate bindings for rocm_smi-sys",
+    ),
+    (
+        "miopen",
+        Project::Miopen,
+        "Generate bindings for miopen-sys",
+    ),
+    (
+        "rocsparse",
+        Project::RocSparse,
+        "Generate bindings for rocsparse-sys",
+    ),
+    (
+        "hipfft",
+        Project::HipFft,
+        "Generate bindings for hipfft-sys",
+    ),
+    (
+        "cuda",
+        Project::Cuda,
+        "Generate bindings for cuda-sys and the process address table",
+    ),
+    ("ml", Project::Ml, "Generate bindings for nvml"),
+    (
+        "cublas",
+        Project::Cublas,
+        "Generate bindings for cublas-sys",
+    ),
+    (
+        "cublaslt",
+        Project::CublasLt,
+        "Generate bindings for cublaslt-sys",
+    ),
+    ("cufft", Project::CuFft, "Generate bindings for cufft-sys"),
+    (
+        "cusparse",
+        Project::CuSparse,
+        "Generate bindings for cusparse-sys",
+    ),
+    ("cudnn", Project::CuDnn, "Generate bindings for cudnn-sys"),
+];
+
+fn projects() -> impl Parser<Vec<Project>> {
+    PROJECTS.iter().fold(
+        Parser::boxed(pure(Vec::with_capacity(PROJECTS.len()))),
+        |parser, (name, project, help)| {
+            let arg = bpaf::long(name).help(*help).switch();
+            construct!(parser, arg)
+                .map(move |(mut acc, cur)| {
+                    if cur {
+                        acc.push(*project);
+                    }
+                    acc
+                })
+                .boxed()
+        },
+    )
+}
+
+#[derive(Debug, Bpaf)]
+#[bpaf(options)]
+struct Options {
+    #[bpaf(external)]
+    projects: Vec<Project>,
+}
+
 fn main() {
+    let options = options().run();
+    let projects: Vec<Project> = if options.projects.is_empty() {
+        PROJECTS.iter().map(|(_, project, _)| *project).collect()
+    } else {
+        options.projects
+    };
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
-    generate_hip_runtime(
-        &crate_root,
-        &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
-    );
-    generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"]);
-    generate_hiplaslt(
-        &crate_root,
-        &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
-    );
-    generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"]);
-    generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"]);
-    generate_rocsparse(
-        &crate_root,
-        &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
-    );
-    generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"]);
-    let cuda_functions = generate_cuda(&crate_root);
-    generate_process_address_table(&crate_root, cuda_functions);
-    generate_ml(&crate_root);
-    generate_cublas(&crate_root);
-    generate_cublaslt(&crate_root);
-    generate_cufft(&crate_root);
-    generate_cusparse(&crate_root);
-    generate_cudnn(&crate_root);
+    for project in projects {
+        match project {
+            Project::HipRuntime => generate_hip_runtime(
+                &crate_root,
+                &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
+            ),
+            Project::Rocblas => {
+                generate_rocblas(&crate_root, &["..", "ext", "rocblas-sys", "src", "lib.rs"])
+            }
+            Project::HipblasLt => generate_hiplaslt(
+                &crate_root,
+                &["..", "ext", "hipblaslt-sys", "src", "lib.rs"],
+            ),
+            Project::RocmSmi => {
+                generate_rocm_smi(&crate_root, &["..", "ext", "rocm_smi-sys", "src", "lib.rs"])
+            }
+            Project::Miopen => {
+                generate_miopen(&crate_root, &["..", "ext", "miopen-sys", "src", "lib.rs"])
+            }
+            Project::RocSparse => generate_rocsparse(
+                &crate_root,
+                &["..", "ext", "rocsparse-sys", "src", "lib.rs"],
+            ),
+            Project::HipFft => {
+                generate_hipfft(&crate_root, &["..", "ext", "hipfft-sys", "src", "lib.rs"])
+            }
+            Project::Cuda => {
+                let cuda_functions = generate_cuda(&crate_root);
+                generate_process_address_table(&crate_root, cuda_functions);
+            }
+            Project::Ml => generate_ml(&crate_root),
+            Project::Cublas => generate_cublas(&crate_root),
+            Project::CublasLt => generate_cublaslt(&crate_root),
+            Project::CuFft => generate_cufft(&crate_root),
+            Project::CuSparse => generate_cusparse(&crate_root),
+            Project::CuDnn => generate_cudnn(&crate_root),
+        }
+    }
 }
 
 fn generate_rocsparse(output: &PathBuf, path: &[&str]) {
@@ -233,7 +357,18 @@ fn generate_miopen(output: &PathBuf, path: &[&'static str]) {
     )
 }
 
+fn is_cuda_windows_only_function(fn_: &Ident) -> bool {
+    let fn_ = fn_.to_string();
+    fn_.starts_with("cuGraphicsD3D") || fn_.starts_with("cuD3D")
+}
+
 fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>) {
+    if cfg!(windows) {
+        cuda_fns = cuda_fns
+            .into_iter()
+            .filter(is_cuda_windows_only_function)
+            .collect();
+    }
     cuda_fns.sort_unstable();
     let mut versions = KNOWN_CUDA_VERSIONS
         .iter()
@@ -241,8 +376,19 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
         .map(cuda_numeric_version)
         .collect::<Vec<_>>();
     versions.sort_unstable();
-    let library =
-        unsafe { libloading::Library::new("/usr/lib/x86_64-linux-gnu/libcuda.so.1") }.unwrap();
+    #[cfg(not(windows))]
+    let libcuda_path: &str = "/usr/lib/x86_64-linux-gnu/libcuda.so.1";
+    #[cfg(windows)]
+    let libcuda_path: &str = "C:\\Windows\\System32\\nvcuda.dll";
+    let _library = unsafe { libloading::Library::new(libcuda_path) }.unwrap();
+    let library = if cfg!(windows) {
+        let cu_init =
+            unsafe { _library.get::<unsafe extern "system" fn() -> u32>(b"cuInit\0") }.unwrap();
+        unsafe { cu_init() };
+        unsafe { libloading::Library::new("nvcuda64.dll") }.unwrap()
+    } else {
+        _library
+    };
     let cu_get_proc_address = unsafe {
         library.get::<unsafe extern "system" fn(
             symbol: *const ::core::ffi::c_char,
@@ -295,8 +441,15 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
                         }
                         Err(e) => panic!("{:?}/{}/{}: {}", symbol, version, flag.0, e.0)
                     }
-                    if status != cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS {
-                        continue;
+                    match status{
+                        cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS => {}
+                        cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SYMBOL_NOT_FOUND => {
+                            break;
+                        }
+                        cuda_types::cuda::CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_VERSION_NOT_SUFFICIENT => {
+                            continue;
+                        }
+                        _ => { panic!("Unexpected status: {:?}", status); }
                     }
                     if Some(result) != last_result {
                         last_result = Some(result);
@@ -310,7 +463,12 @@ fn generate_process_address_table(crate_root: &PathBuf, mut cuda_fns: Vec<Ident>
             }
     }
     let mut path = crate_root.clone();
-    path.extend(["..", "zluda_bindgen", "src", "process_table.rs"]);
+    let output_file = if cfg!(windows) {
+        "process_table_windows.rs"
+    } else {
+        "process_table.rs"
+    };
+    path.extend(["..", "zluda_bindgen", "src", output_file]);
     let mut file = File::create(path).unwrap();
     writeln!(file, "match (name, flag) {{").unwrap();
     for (fn_, version, breakpoints) in result {
@@ -1115,6 +1273,12 @@ fn generate_cublaslt(crate_root: &PathBuf) {
 }
 
 fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
+    let system_include = if cfg!(windows) {
+        let cuda_path = std::env::var("CUDA_PATH").unwrap();
+        format!("-I{cuda_path}\\include")
+    } else {
+        "-I/usr/local/cuda/include".to_string()
+    };
     let cuda_header = new_builder()
         .header_contents("cuda_wrapper.h", include_str!("../build/cuda_wrapper.h"))
         .allowlist_type("^CU.*")
@@ -1123,6 +1287,7 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         .allowlist_type("^libraryPropertyType.*")
         .allowlist_function("^cu.*")
         .allowlist_var("^CU.*")
+        .blocklist_var("^CUSTOM.*") // Windows API
         .must_use_type("cudaError_enum")
         .constified_enum("cudaError_enum")
         .no_partialeq("CUDA_HOST_NODE_PARAMS_st")
@@ -1132,7 +1297,10 @@ fn generate_cuda(crate_root: &PathBuf) -> Vec<Ident> {
         .new_type_alias(r"^CUmodule$")
         .new_type_alias(r"^CUfunction$")
         .new_type_alias(r"^CUlibrary$")
-        .clang_args(["-I/usr/local/cuda/include"])
+        .clang_args([
+            &system_include,
+            &format!("-I{}/build", crate_root.display()),
+        ])
         .generate()
         .unwrap()
         .to_string();
@@ -1519,7 +1687,7 @@ fn generate_functions(
     let fns_ = module.items.iter().filter_map(|item| match item {
         Item::ForeignMod(extern_) => match &*extern_.items {
             [ForeignItem::Fn(fn_)] => Some(fn_),
-            _ => unreachable!(),
+            _ => unreachable!("{:?}", extern_),
         },
         _ => None,
     });

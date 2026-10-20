@@ -73,6 +73,7 @@ bitflags! {
         const Linux = 0x0000000000000010;
         const Mac = 0x0000000000000020;
         const Windows = 0x0000000000000040;
+        const CompressedDeflate = 0x0000000000001000;
         const CompressedLz4 = 0x0000000000002000;
         const CompressedZstd = 0x0000000000008000;
 

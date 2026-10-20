@@ -794,6 +794,7 @@ dependencies = [
  "bit-vec",
  "cglue",
  "cuda_types",
+ "flate2",
  "format",
  "lz4-sys",
  "paste",
@@ -5105,6 +5106,7 @@ name = "zluda_bindgen"
 version = "0.1.0"
 dependencies = [
  "bindgen 0.70.1",
+ "bpaf",
  "cuda_types",
  "libloading",
  "prettyplease",
