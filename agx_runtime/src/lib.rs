@@ -13,6 +13,7 @@
 //!
 //! USC addresses (shader code, pipeline words) are 32-bit offsets from the queue's `usc_exec_base`.
 
+pub mod cache;
 pub mod error;
 pub mod module;
 
