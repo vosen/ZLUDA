@@ -270,10 +270,19 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             q = pos + 12 + (nlen + 3) // 4 * 4
             halves, tg_half, glob, _gprs, tg_bytes, _stack, nargs = struct.unpack_from('<7I', d, q)
             args = [struct.unpack_from('<3I', d, q + 28 + 12 * i) for i in range(nargs)]
-            records[name] = (halves, tg_half, glob, tg_bytes, args)
+            # tagged extensions up to the record's end: 1 = cluster dimensions
+            cluster, e = (1, 1, 1), q + 28 + 12 * nargs
+            while e + 4 <= pos + size:
+                tag, = struct.unpack_from('<I', d, e)
+                if tag == 1 and e + 16 <= pos + size:
+                    cluster = struct.unpack_from('<3I', d, e + 4)
+                    e += 16
+                else:
+                    break
+            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster)
             pos += size
     kernels = {}
-    for name, (halves, tg_half, glob, tg_bytes, args) in records.items():
+    for name, (halves, tg_half, glob, tg_bytes, args, cluster) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
@@ -285,6 +294,8 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             'shared': tg_bytes,
             # (by pointer, bytes, first 16-bit half) per source-level argument
             'args': [(bp == 1, nb, h) for bp, nb, h in args],
+            # CTAs per cluster: a cluster runs as one threadgroup, thread (x, y, z) of CTA r at (x, y, z * C + r)
+            'cluster': cluster,
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
     return kernels, gdata, gsyms
@@ -460,8 +471,13 @@ def run_test(path, args):
                         put(half, PARAM_BASE + off, 8)
                     else:
                         put(half, value, nbytes)
+                c = k['cluster']
+                if any(grid[j] % c[j] for j in range(3)):
+                    raise Unsupported('grid not a multiple of the cluster dimensions')
+                hw_grid = [grid[j] // c[j] for j in range(3)]
+                hw_block = [block[0], block[1], block[2] * c[0] * c[1] * c[2]]
                 for j in range(3):
-                    put(k['grid_half'] + 2 * j, grid[j], 4)
+                    put(k['grid_half'] + 2 * j, hw_grid[j], 4)
                 if k['globals_half'] is not None:
                     put(k['globals_half'], GLOBALS_BASE, 8)
                 # agx_run takes 32-bit uniforms
@@ -481,8 +497,8 @@ def run_test(path, args):
                 with open(f_glob, 'wb') as f:
                     f.write(globals_mem or b'\0' * 16)
                 cmd = [args.agx_run, f_code,
-                       '--grid', ','.join(str(grid[j] * block[j]) for j in range(3)),
-                       '--wg', ','.join(map(str, block)),
+                       '--grid', ','.join(str(hw_grid[j] * hw_block[j]) for j in range(3)),
+                       '--wg', ','.join(map(str, hw_block)),
                        '--shared', str(k['shared'] + dyn),
                        '--map', '%#x=%s' % (BASE, f_mem), '--map', '%#x=%s' % (PARAM_BASE, f_par),
                        '--map', '%#x=%s' % (GLOBALS_BASE, f_glob),

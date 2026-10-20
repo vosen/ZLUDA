@@ -210,6 +210,9 @@ fn run_instruction<'input>(
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Lop3 { .. }
         | ast::Instruction::Mad24 { .. }
+        | ast::Instruction::Mapa { .. }
+        | ast::Instruction::Getctarank { .. }
+        | ast::Instruction::BarrierCluster { .. }
         | ast::Instruction::Slct { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }

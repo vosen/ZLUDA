@@ -42,6 +42,9 @@ pub struct KernelInfo {
     pub stack_bytes: u32,
     /// How each source-level argument is passed (from `.agx.kernels`; empty for objects without it).
     pub args: Vec<ArgSlot>,
+    /// CTAs per cluster along x, y and z (`.agx.kernels` extension 1; 1, 1, 1 without clusters). A cluster runs
+    /// as one threadgroup: thread (x, y, z) of CTA r of the cluster is thread (x, y, z * C + r), C = x * y * z.
+    pub cluster: [u32; 3],
 }
 
 /// One argument of the source kernel (a PTX `.param`, a CUDA kernel parameter).
@@ -55,6 +58,23 @@ pub struct ArgSlot {
 }
 
 impl KernelInfo {
+    /// The threadgroups and threadgroup size of a launch of `grid` CTAs of `block` threads: with clusters, one
+    /// threadgroup per cluster, its CTAs side by side along z.
+    pub fn hardware_launch(&self, grid: [u32; 3], block: [u32; 3]) -> Result<([u32; 3], [u32; 3]), Error> {
+        let c = self.cluster;
+        if c == [1, 1, 1] {
+            return Ok((grid, block));
+        }
+        if (0..3).any(|i| grid[i] % c[i] != 0) {
+            return err(format!("{}: grid {grid:?} is not a multiple of the cluster {c:?}", self.name));
+        }
+        let local = [block[0], block[1], block[2] * c[0] * c[1] * c[2]];
+        if local.iter().map(|&v| v as u64).product::<u64>() > 1024 {
+            return err(format!("{}: a cluster of {c:?} CTAs of {block:?} threads exceeds 1024 threads", self.name));
+        }
+        Ok((std::array::from_fn(|i| grid[i] / c[i]), local))
+    }
+
     /// The register allocation of the USC Registers word, in 16-bit halves (8..=256).
     pub fn gpr_halves(&self) -> u32 {
         (2 * self.gprs).clamp(8, 256)
@@ -68,8 +88,9 @@ impl KernelInfo {
 
     /// The largest threadgroup the kernel's registers allow (a threadgroup runs on one core), at most 1024
     /// (Mesa's agx_occupancy table; the backend prints it in the resource comments).
+    /// The largest CTA: its threadgroup holds all the CTAs of a cluster.
     pub fn max_threads_per_threadgroup(&self) -> u32 {
-        (32 * self.simd_groups_per_core()).min(1024)
+        (32 * self.simd_groups_per_core()).min(1024) / (self.cluster[0] * self.cluster[1] * self.cluster[2]).max(1)
     }
 }
 
@@ -193,6 +214,17 @@ impl<'a> Elf<'a> {
             let args = (0..nargs)
                 .map(|i| Ok(ArgSlot { by_pointer: word(f + 7 + 3 * i)? == 1, bytes: word(f + 8 + 3 * i)?, half: word(f + 9 + 3 * i)? }))
                 .collect::<Result<_, Error>>()?;
+            // tagged extensions up to the end of the record
+            let (mut cluster, mut e, end) = ([1, 1, 1], f + 7 + 3 * nargs, at + size / 4);
+            while e < end {
+                match word(e)? {
+                    1 if e + 4 <= end => {
+                        cluster = [word(e + 1)?.max(1), word(e + 2)?.max(1), word(e + 3)?.max(1)];
+                        e += 4;
+                    }
+                    _ => break,
+                }
+            }
             out.insert(
                 name.clone(),
                 KernelInfo {
@@ -206,6 +238,7 @@ impl<'a> Elf<'a> {
                     threadgroup_bytes: word(f + 4)?,
                     stack_bytes: word(f + 5)?,
                     args,
+                    cluster,
                 },
             );
             at += size / 4;
@@ -318,6 +351,7 @@ impl Module {
                     threadgroup_bytes: r[4].unwrap_or(0),
                     stack_bytes: r[5].unwrap_or(0),
                     args: Vec::new(),
+                    cluster: [1, 1, 1],
                 },
             );
         }
@@ -615,6 +649,7 @@ mod tests {
                 threadgroup_bytes: 256,
                 stack_bytes: 0,
                 args: vec![],
+                cluster: [1, 1, 1],
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -635,6 +670,7 @@ mod tests {
             threadgroup_bytes: 0,
             stack_bytes: 0,
             args: vec![],
+            cluster: [1, 1, 1],
         };
         let u = pack_uniforms(
             &k,

@@ -684,6 +684,35 @@ fn run_instruction<'input>(
                 "stmatrix, movmatrix, block scaled and sparse mma and wmma on AMD GPUs".to_string(),
             ))
         }
+        // Clusters of several CTAs: the helpers call placeholders that llvm_zluda's
+        // LLVMZludaAgxLowerClusters resolves for each kernel
+        i @ ptx_parser::Instruction::Mapa { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("mapa on AMD GPUs".to_string()));
+            }
+            let space = if data.shared { "shared" } else { "generic" };
+            let name = format!("mapa_{space}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Getctarank { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("getctarank on AMD GPUs".to_string()));
+            }
+            let space = if data.shared { "shared" } else { "generic" };
+            let name = format!("getctarank_{space}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::BarrierCluster { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("barrier.cluster on AMD GPUs".to_string()));
+            }
+            let name = match (data.arrive, data.relaxed) {
+                (true, false) => "barrier_cluster_arrive",
+                (true, true) => "barrier_cluster_arrive_relaxed",
+                (false, _) => "barrier_cluster_wait",
+            };
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Szext { data, .. } => {
             if target != Target::Agx {
                 return Err(TranslateError::Todo("szext on AMD GPUs".to_string()));

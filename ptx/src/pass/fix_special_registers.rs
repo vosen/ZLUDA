@@ -3,6 +3,7 @@ use super::*;
 pub(super) fn run<'a, 'input>(
     resolver: &'a mut GlobalStringIdentResolver2<'input>,
     special_registers: &'a SpecialRegistersMap,
+    target: Target,
     directives: Vec<UnconditionalDirective>,
 ) -> Result<Vec<UnconditionalDirective>, TranslateError> {
     let mut result = Vec::with_capacity(SpecialRegistersMap::len() + directives.len());
@@ -10,6 +11,7 @@ pub(super) fn run<'a, 'input>(
         FxHashMap::with_capacity_and_hasher(SpecialRegistersMap::len(), Default::default());
     SpecialRegistersMap::foreach_declaration(
         resolver,
+        target,
         |sreg, (return_arguments, name, input_arguments)| {
             result.push(UnconditionalDirective::Method(UnconditionalFunction {
                 return_arguments,
@@ -29,6 +31,7 @@ pub(super) fn run<'a, 'input>(
         resolver,
         special_registers,
         sreg_to_function,
+        target,
         result: Vec::new(),
     };
     for directive in directives.into_iter() {
@@ -79,6 +82,7 @@ struct SpecialRegisterResolver<'a, 'input> {
     resolver: &'a mut GlobalStringIdentResolver2<'input>,
     special_registers: &'a SpecialRegistersMap,
     sreg_to_function: FxHashMap<PtxSpecialRegister, SpirvWord>,
+    target: Target,
     result: Vec<UnconditionalStatement>,
 }
 
@@ -152,7 +156,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
         sreg: PtxSpecialRegister,
         member: Option<u8>,
     ) -> Result<SpirvWord, TranslateError> {
-        let constant = match (sreg.constant(member), member) {
+        let constant = match (sreg.constant(member, self.target), member) {
             (Some(value), _) => Some(value),
             (None, Some(3)) => Some(0),
             _ => None,
@@ -170,7 +174,7 @@ impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
                 }));
                 Ok(dst)
             }
-            None => self.emit_call(sreg.canonical(), member),
+            None => self.emit_call(sreg.canonical(self.target), member),
         }
     }
 

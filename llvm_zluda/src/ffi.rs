@@ -111,6 +111,8 @@ extern "C" {
     pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;
 
     pub fn LLVMZludaAgxCanonicalizeFoldedNaNs(module: LLVMModuleRef);
+
+    pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut i8) -> i32;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

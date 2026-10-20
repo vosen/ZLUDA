@@ -9,7 +9,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
-    LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxLowerAddressSpaces,
+    LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
@@ -225,10 +225,19 @@ pub fn compile_agx_linked(
         return Err(message.to_str().to_string());
     }
 
+    // clusters (and the cluster registers of every kernel), on the inlined code
+    let mut err = std::ptr::null_mut();
+    let clusters = unsafe { LLVMZludaAgxLowerClusters(linked.get(), &mut err) };
+    if clusters < 0 {
+        let message = Message::new(unsafe { CStr::from_ptr(err) });
+        return Err(message.to_str().to_string());
+    }
+
     // isspacep and the generic addresses of threadgroup and private memory
     // are resolved on the optimized code, which is then optimized again
-    for _ in 0..4 {
-        if !unsafe { LLVMZludaAgxLowerAddressSpaces(linked.get()) } {
+    for i in 0..4 {
+        let lowered = unsafe { LLVMZludaAgxLowerAddressSpaces(linked.get()) };
+        if !lowered && !(i == 0 && clusters > 0) {
             break;
         }
         let error = unsafe {

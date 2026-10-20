@@ -753,6 +753,9 @@ fn tuning_directive<'a, 'input>(
         (Token::DotReqntid, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNtid(nx, ny, nz)),
         (Token::DotMinnctapersm, _) => u32.map(ast::TuningDirective::MinNCtaPerSm),
         (Token::DotNoreturn, _) => empty.map(|_| ast::TuningDirective::NoReturn),
+        (Token::DotReqnctapercluster, _) => tuple1to3_u32.map(|(nx, ny, nz)| ast::TuningDirective::ReqNctaPerCluster(nx, ny, nz)),
+        (Token::DotExplicitcluster, _) => empty.map(|_| ast::TuningDirective::ExplicitCluster),
+        (Token::DotMaxclusterrank, _) => u32.map(ast::TuningDirective::MaxClusterRank),
         _ => fail
     }
     .parse_next(stream)
@@ -873,6 +876,15 @@ fn statement<'a, 'input>(
                 method_space
                     .flat_map(|space| multi_variable(false, space))
                     .map(|var| Some(Statement::Variable(var))),
+                Token::Semicolon,
+            ),
+            // `.pred %p;` declares predicate registers like `.reg .pred %p;`
+            terminated(
+                winnow::combinator::preceded(
+                    winnow::combinator::peek(Token::DotPred),
+                    multi_variable(false, StateSpace::Reg),
+                )
+                .map(|var| Some(Statement::Variable(var))),
                 Token::Semicolon,
             ),
             brx_idx.map(Some),
@@ -2575,7 +2587,8 @@ fn sink_to_none<'input>(operand: ParsedOperandStr<'input>) -> Option<ParsedOpera
     }
 }
 
-// Clusters have a single CTA, so .shared::cluster addresses are .shared::cta addresses
+// .shared::cta and .shared::cluster addresses are .shared addresses (on AGX, a cluster
+// is one threadgroup with the CTAs' shared memory side by side)
 fn shared_space(space: Option<StateSpace>) -> StateSpace {
     match space {
         Some(StateSpace::Shared | StateSpace::SharedCta | StateSpace::SharedCluster) => {
@@ -3211,6 +3224,12 @@ derive_parser!(
         DotReqntid,
         #[token(".minnctapersm")]
         DotMinnctapersm,
+        #[token(".reqnctapercluster")]
+        DotReqnctapercluster,
+        #[token(".explicitcluster")]
+        DotExplicitcluster,
+        #[token(".maxclusterrank")]
+        DotMaxclusterrank,
         #[token(".entry")]
         DotEntry,
         #[token(".func")]
@@ -3338,7 +3357,7 @@ derive_parser!(
         Instruction::St {
             data: StData {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: cop.unwrap_or(RawStCacheOperator::Wb).into(),
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -3349,7 +3368,7 @@ derive_parser!(
         Instruction::St {
             data: StData {
                 qualifier: volatile.into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -3362,7 +3381,7 @@ derive_parser!(
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -3375,7 +3394,7 @@ derive_parser!(
         Instruction::St {
             data: StData {
                 qualifier: ast::LdStQualifier::Release(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::StCacheOperator::Writeback,
                 typ: ast::Type::maybe_vector(vec, type_)
             },
@@ -3416,7 +3435,7 @@ derive_parser!(
         Instruction::Ld {
             data: LdDetails {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: cop.unwrap_or(RawLdCacheOperator::Ca).into(),
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -3430,7 +3449,7 @@ derive_parser!(
         Instruction::Ld {
             data: LdDetails {
                 qualifier: volatile.into(),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -3444,7 +3463,7 @@ derive_parser!(
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -3458,7 +3477,7 @@ derive_parser!(
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Acquire(scope),
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: ast::Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -3500,7 +3519,7 @@ derive_parser!(
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Weak,
-                state_space: ss.unwrap_or(StateSpace::Generic),
+                state_space: shared_space(ss),
                 caching: ast::LdCacheOperator::Cached,
                 typ: Type::maybe_vector(vec, type_),
                 non_coherent: false
@@ -4117,7 +4136,7 @@ derive_parser!(
             arguments: IsspacepArgs { dst: p, src: a }
         }
     }
-    .space: StateSpace = { .const, .global, .local, .shared, .param };
+    .space: StateSpace = { .const, .global, .local, .shared{::cta, ::cluster}, .param };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvta
     cvta.space.size     p, a => {
@@ -4127,7 +4146,7 @@ derive_parser!(
             _ => unreachable!()
         };
         let data = ast::CvtaDetails {
-            state_space: space,
+            state_space: shared_space(Some(space)),
             direction: ast::CvtaDirection::ExplicitToGeneric,
             size,
         };
@@ -4145,7 +4164,7 @@ derive_parser!(
             _ => unreachable!()
         };
         let data = ast::CvtaDetails {
-            state_space: space,
+            state_space: shared_space(Some(space)),
             direction: ast::CvtaDirection::GenericToExplicit,
             size,
         };
@@ -4996,7 +5015,7 @@ derive_parser!(
             data: AtomDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 op: ast::AtomicOp::new(op, type_.kind()),
                 type_: type_.into()
             },
@@ -5008,7 +5027,7 @@ derive_parser!(
             data: AtomCasDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 type_: cas_type
             },
             arguments: AtomCasArgs { dst: d, src1: a, src2: b, src3: c }
@@ -5022,7 +5041,7 @@ derive_parser!(
             data: AtomDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 op: ast::AtomicOp::new(exch, b128.kind()),
                 type_: b128.into()
             },
@@ -5104,7 +5123,7 @@ derive_parser!(
             data: AtomDetails {
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
-                space: space.unwrap_or(StateSpace::Generic),
+                space: shared_space(space),
                 op: ast::AtomicOp::new(op, type_.kind()),
                 type_: type_.into()
             },
@@ -6069,6 +6088,40 @@ derive_parser!(
     ldmatrix <= { ldmatrix(stream) }
     stmatrix <= { stmatrix(stream) }
     movmatrix <= { movmatrix(stream) }
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-barrier-cluster
+    barrier.cluster.arrive{.sem}{.aligned} => {
+        let _ = aligned;
+        Instruction::BarrierCluster {
+            data: ast::BarrierClusterDetails { arrive: true, relaxed: sem == Some(BarrierClusterSem::Relaxed) }
+        }
+    }
+    barrier.cluster.wait{.acquire}{.aligned} => {
+        let _ = (acquire, aligned);
+        Instruction::BarrierCluster {
+            data: ast::BarrierClusterDetails { arrive: false, relaxed: false }
+        }
+    }
+    .sem: BarrierClusterSem = { .release, .relaxed };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-mapa
+    mapa{.space}.type d, a, b => {
+        Instruction::Mapa {
+            data: ast::MapaDetails { shared: space.is_some(), type_ },
+            arguments: MapaArgs { dst: d, src_addr: a, src_rank: b }
+        }
+    }
+    .space: StateSpace = { .shared{::cluster} };
+    .type: ScalarType = { .u32, .u64 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-getctarank
+    getctarank{.space}.type d, a => {
+        Instruction::Getctarank {
+            data: ast::MapaDetails { shared: space.is_some(), type_ },
+            arguments: GetctarankArgs { dst: d, src_addr: a }
+        }
+    }
+    .space: StateSpace = { .shared{::cluster} };
+    .type: ScalarType = { .u32, .u64 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol
     griddepcontrol.action => {

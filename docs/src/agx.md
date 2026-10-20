@@ -291,9 +291,8 @@ sparse `mma`, and `wgmma`/`tcgen05`.
 ## Asynchronous copies and mbarriers
 
 The hardware has no asynchronous copy engine and no transaction barriers, so
-these are emulated with ordinary instructions, and clusters have a single CTA
-(`.shared::cluster` addresses are those of `.shared::cta`, cluster scope
-fences are GPU scope ones):
+these are emulated with ordinary instructions (clusters: see the next
+section; cluster scope fences are GPU scope ones):
 
 * `cp.async` (with `src-size` or `ignore-src` zero filling), `cp.async.bulk`
   (global to shared, shared to shared, shared to global, also with
@@ -301,8 +300,9 @@ fences are GPU scope ones):
   stores (atomic ones for the reductions) at the point of the instruction.
   `commit_group`, `wait_group` and `wait_all` are no-ops: the copies of a
   thread are complete when it waits, but waiting does not synchronize
-  threads, as in PTX. `.multicast::cluster` copies write to the issuing CTA
-  only, and cache hints and policies are ignored. `fence.proxy.async` is a
+  threads, as in PTX. `.multicast::cluster` copies write to the same offset
+  of each CTA in the mask and complete the transaction on each one's
+  mbarrier. Cache hints and policies are ignored. `fence.proxy.async` is a
   CTA fence; `fence.sc`/`fence.acq_rel` and `fence.mbarrier_init` are
   ordinary fences.
 * An mbarrier is its 8 bytes of shared memory, updated with 32-bit
@@ -334,6 +334,47 @@ distinguished by their parity; the `.multicast::cluster::32b` mbarrier
 operations, tensor copies (`cp.async.bulk.tensor`) and `elect.sync` are not
 supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
 reductions and the mbarrier operations with two SIMD-groups.
+
+## Thread block clusters
+
+AGX threadgroups cannot see each other's threadgroup memory, so a kernel with
+`.reqnctapercluster x, y, z` runs each cluster of C = x * y * z CTAs as one
+threadgroup of C times the CTA's threads. The backend records the cluster
+shape in the kernel's `.agx.kernels` record (extension 1) and the launch
+(`agx_runtime`, `zluda_agx`, the conformance harness) divides the grid by
+(x, y, z) and multiplies the threadgroup's z by C. Thread (x, y, z) of CTA r
+of the cluster is thread (x, y, z * C + r) of the threadgroup, so with CTAs of
+depth 1 each CTA's threads are consecutive, in whole SIMD-groups when the CTA
+has a multiple of 32 threads. After inlining, `LLVMZludaAgxLowerClusters`
+(llvm_zluda) rewrites each cluster kernel:
+
+* `%tid`, `%ntid`, `%ctaid`, `%nctaid` and the linear thread index are the
+  CTA's; `%clusterid`, `%nclusterid`, `%cluster_ctaid`, `%cluster_nctaid`,
+  `%cluster_ctarank`, `%cluster_nctarank` and `%is_explicit_cluster` are
+  derived from the hardware ids (kernels without clusters get the values of a
+  single-CTA cluster).
+* The shared variables the kernel uses are packed into one array of C
+  windows, CTA r using window r. A `.shared::cluster` address is a
+  threadgroup address: `mapa` adds (r - rank) times the window size,
+  `getctarank` divides by it, `isspacep.shared::cluster` is any window and
+  `isspacep.shared(::cta)` the CTA's own.
+* `barrier.cluster.wait` is the threadgroup barrier (with release and
+  acquire fences); `barrier.cluster.arrive` only orders memory. A CTA's
+  `bar.sync` is also the threadgroup barrier: correct when the CTAs of a
+  cluster execute the same sequence of CTA barriers, or have exited. That a
+  barrier does not wait for SIMD-groups that have ended is what the
+  functional simulator does; the hardware question is ptx-re-blockers B28.
+
+Limitations: at most 1024 threads per cluster and 32 KiB of shared memory per
+cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
+grid must be a multiple of the cluster (else `CUDA_ERROR_INVALID_CLUSTER_SIZE`);
+a function that reads thread ids and is not inlined cannot be shared by kernels
+of different cluster shapes; cluster dimensions set at launch
+(`cuLaunchKernelEx` attributes), `clusterlaunchcontrol` and the
+`.multicast::cluster` mbarrier operations are not supported. PTX-formalization
+`cluster.ptx`, `cluster-exit.ptx`, `cluster-generic.ptx`,
+`mbarrier-cluster.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
+single CTA.
 
 ## Strict floating point mode
 

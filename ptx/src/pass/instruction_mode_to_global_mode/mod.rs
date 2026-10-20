@@ -2171,6 +2171,9 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Mad24 { .. }
         | ast::Instruction::Slct { .. }
         | ast::Instruction::MixedFloat { .. }
+        | ast::Instruction::Mapa { .. }
+        | ast::Instruction::Getctarank { .. }
+        | ast::Instruction::BarrierCluster { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
         | ast::Instruction::ElectSync { .. }

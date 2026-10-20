@@ -139,7 +139,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("optimize_function_arguments");
     let directives = resolve_function_pointers::run(directives)?;
     on_pass_end("resolve_function_pointers");
-    let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, directives)?;
+    let directives = fix_special_registers::run(&mut flat_resolver, &sreg_map, target, directives)?;
     on_pass_end("fix_special_registers");
     let directives = expand_operands::run(&mut flat_resolver, directives)?;
     on_pass_end("expand_operands");
@@ -413,19 +413,36 @@ impl PtxSpecialRegister {
         }
     }
 
-    /// The register that this one reads, if it is the same: without
-    /// clusters, a cluster is a single CTA.
-    fn canonical(self) -> Self {
+    fn is_cluster(self) -> bool {
+        matches!(
+            self,
+            Self::Clusterid
+                | Self::Nclusterid
+                | Self::ClusterCtaid
+                | Self::ClusterNctaid
+                | Self::ClusterCtarank
+                | Self::ClusterNctarank
+                | Self::IsExplicitCluster
+        )
+    }
+
+    /// The register that this one reads, if it is the same. On AMD GPUs a
+    /// cluster is a single CTA; AGX runs a cluster as one threadgroup and
+    /// reads the cluster registers with functions.
+    fn canonical(self, target: Target) -> Self {
         match self {
-            Self::Clusterid => Self::Ctaid,
-            Self::Nclusterid => Self::Nctaid,
+            Self::Clusterid if target != Target::Agx => Self::Ctaid,
+            Self::Nclusterid if target != Target::Agx => Self::Nctaid,
             other => other,
         }
     }
 
     /// The value of registers that are constant (outside of a cluster
-    /// launch), for the vector member if any.
-    fn constant(self, member: Option<u8>) -> Option<u64> {
+    /// launch on AMD GPUs), for the vector member if any.
+    fn constant(self, member: Option<u8>, target: Target) -> Option<u64> {
+        if target == Target::Agx && self.is_cluster() {
+            return None;
+        }
         match self {
             Self::Warpsize => Some(32),
             // An upper bound of %smid: the number of cores is not known when
@@ -439,8 +456,8 @@ impl PtxSpecialRegister {
         }
     }
 
-    fn needs_function(self) -> bool {
-        self.canonical() == self && self.constant(None).is_none()
+    fn needs_function(self, target: Target) -> bool {
+        self.canonical(target) == self && self.constant(None, target).is_none()
     }
 
     fn get_function_return_type(self) -> ast::ScalarType {
@@ -476,6 +493,13 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Warpid => "sreg_warpid",
             PtxSpecialRegister::Nwarpid => "sreg_nwarpid",
             PtxSpecialRegister::Smid => "sreg_smid",
+            PtxSpecialRegister::Clusterid => "sreg_clusterid",
+            PtxSpecialRegister::Nclusterid => "sreg_nclusterid",
+            PtxSpecialRegister::ClusterCtaid => "sreg_cluster_ctaid",
+            PtxSpecialRegister::ClusterNctaid => "sreg_cluster_nctaid",
+            PtxSpecialRegister::ClusterCtarank => "sreg_cluster_ctarank",
+            PtxSpecialRegister::ClusterNctarank => "sreg_cluster_nctarank",
+            PtxSpecialRegister::IsExplicitCluster => "sreg_is_explicit_cluster",
             _ => "",
         }
     }
@@ -1415,6 +1439,7 @@ impl SpecialRegistersMap {
 
     fn foreach_declaration<'a, 'input>(
         resolver: &'a mut GlobalStringIdentResolver2<'input>,
+        target: Target,
         mut fn_: impl FnMut(
             PtxSpecialRegister,
             (
@@ -1424,7 +1449,7 @@ impl SpecialRegistersMap {
             ),
         ),
     ) {
-        for sreg in PtxSpecialRegister::all().filter(|sreg| sreg.needs_function()) {
+        for sreg in PtxSpecialRegister::all().filter(|sreg| sreg.needs_function(target)) {
             let external_fn_name = [ZLUDA_PTX_PREFIX, sreg.get_unprefixed_function_name()].concat();
             let name = resolver.register_named(Cow::Owned(external_fn_name), None);
             let return_type = sreg.get_function_return_type();

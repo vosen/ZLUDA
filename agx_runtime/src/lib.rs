@@ -983,6 +983,7 @@ impl LoadedModule {
     ) -> io::Result<Fence> {
         queue.collect()?;
         let k = self.kernel(kernel, dynamic_shared)?;
+        let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
         let halves = module::pack_uniforms(k, args, threadgroups, self.globals_va()).map_err(|e| invalid(e.to_string()))?;
         self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
     }
@@ -1004,6 +1005,7 @@ impl LoadedModule {
     ) -> io::Result<Fence> {
         queue.collect()?;
         let k = self.kernel(kernel, dynamic_shared)?;
+        let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
         let (mut halves, block) =
             module::pack_params(k, params, threadgroups, self.globals_va(), 0).map_err(|e| invalid(e.to_string()))?;
         if !block.is_empty() {

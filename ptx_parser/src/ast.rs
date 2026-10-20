@@ -1408,6 +1408,32 @@ ptx_parser_macros::generate_instruction_type!(
         GridDepControl {
             data: crate::GridDepControlAction,
         },
+        BarrierCluster {
+            data: BarrierClusterDetails,
+        },
+        Mapa {
+            type: Type::Scalar(data.type_),
+            data: MapaDetails,
+            arguments<T>: {
+                dst: T,
+                src_addr: T,
+                src_rank: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Getctarank {
+            type: Type::Scalar(ScalarType::U32),
+            data: MapaDetails,
+            arguments<T>: {
+                dst: T,
+                src_addr: {
+                    repr: T,
+                    type: Type::Scalar(data.type_)
+                },
+            }
+        },
         Mma {
             data: MmaDetails,
             arguments<T>: {
@@ -2582,6 +2608,10 @@ pub enum TuningDirective {
     ReqNtid(u32, u32, u32),
     MinNCtaPerSm(u32),
     NoReturn,
+    /// .reqnctapercluster: the CTAs of a cluster along x, y and z
+    ReqNctaPerCluster(u32, u32, u32),
+    ExplicitCluster,
+    MaxClusterRank(u32),
 }
 
 pub struct MethodDeclaration<'input, ID> {
@@ -2766,6 +2796,21 @@ pub struct SlctDetails {
     pub type_: ScalarType,
     pub ctype: ScalarType,
     pub flush_to_zero: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct BarrierClusterDetails {
+    /// arrive (else wait)
+    pub arrive: bool,
+    /// .relaxed arrive: no release ordering
+    pub relaxed: bool,
+}
+
+/// The address form of mapa and getctarank: shared::cluster (a 32-bit shared address) or generic (64-bit)
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MapaDetails {
+    pub shared: bool,
+    pub type_: ScalarType,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

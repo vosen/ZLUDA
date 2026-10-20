@@ -269,6 +269,123 @@ define void @__zluda_ptx_impl_bar_sync(i32 %barrier) #1 {
   ret void
 }
 
+; Clusters of several CTAs run as one threadgroup (llvm_zluda's
+; LLVMZludaAgxLowerClusters). These placeholders are resolved there for each
+; kernel, from its agx-cluster-dims: __zluda_agx_cluster(which) reads
+; %cluster_ctaid.{x,y,z} (0-2), %cluster_nctaid (3-5), %cluster_ctarank (6),
+; %cluster_nctarank (7), %clusterid (8-10), %nclusterid (11-13) and
+; %is_explicit_cluster (14); mapa and rank_of take 32-bit shared addresses.
+declare i32 @__zluda_agx_cluster(i32) #4
+declare i32 @__zluda_agx_cluster_mapa(i32, i32) #4
+declare i32 @__zluda_agx_cluster_rank_of(i32) #4
+
+define i32 @__zluda_ptx_impl_sreg_cluster_ctaid(i8 zeroext %member) #0 {
+  %m = zext i8 %member to i32
+  %v = call i32 @__zluda_agx_cluster(i32 %m)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_cluster_nctaid(i8 zeroext %member) #0 {
+  %m = zext i8 %member to i32
+  %w = add i32 %m, 3
+  %v = call i32 @__zluda_agx_cluster(i32 %w)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_cluster_ctarank() #0 {
+  %v = call i32 @__zluda_agx_cluster(i32 6)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_cluster_nctarank() #0 {
+  %v = call i32 @__zluda_agx_cluster(i32 7)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_clusterid(i8 zeroext %member) #0 {
+  %m = zext i8 %member to i32
+  %w = add i32 %m, 8
+  %v = call i32 @__zluda_agx_cluster(i32 %w)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_nclusterid(i8 zeroext %member) #0 {
+  %m = zext i8 %member to i32
+  %w = add i32 %m, 11
+  %v = call i32 @__zluda_agx_cluster(i32 %w)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_is_explicit_cluster() #0 {
+  %v = call i32 @__zluda_agx_cluster(i32 14)
+  ret i32 %v
+}
+
+define i32 @__zluda_ptx_impl_mapa_shared_u32(i32 %addr, i32 %rank) #0 {
+  %v = call i32 @__zluda_agx_cluster_mapa(i32 %addr, i32 %rank)
+  ret i32 %v
+}
+define i64 @__zluda_ptx_impl_mapa_shared_u64(i64 %addr, i32 %rank) #0 {
+  %a = trunc i64 %addr to i32
+  %v = call i32 @__zluda_agx_cluster_mapa(i32 %a, i32 %rank)
+  %r = zext i32 %v to i64
+  ret i64 %r
+}
+; A generic address of shared memory, mapped through its shared address
+define i64 @__zluda_ptx_impl_mapa_generic_u64(i64 %addr, i32 %rank) #0 {
+  %p = inttoptr i64 %addr to ptr
+  %s = addrspacecast ptr %p to ptr addrspace(3)
+  %a = ptrtoint ptr addrspace(3) %s to i32
+  %v = call i32 @__zluda_agx_cluster_mapa(i32 %a, i32 %rank)
+  %q = inttoptr i32 %v to ptr addrspace(3)
+  %g = addrspacecast ptr addrspace(3) %q to ptr
+  %r = ptrtoint ptr %g to i64
+  ret i64 %r
+}
+define i32 @__zluda_ptx_impl_mapa_generic_u32(i32 %addr, i32 %rank) #0 {
+  %v = call i32 @__zluda_agx_cluster_mapa(i32 %addr, i32 %rank)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_getctarank_shared_u32(i32 %addr) #0 {
+  %v = call i32 @__zluda_agx_cluster_rank_of(i32 %addr)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_getctarank_shared_u64(i64 %addr) #0 {
+  %a = trunc i64 %addr to i32
+  %v = call i32 @__zluda_agx_cluster_rank_of(i32 %a)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_getctarank_generic_u64(i64 %addr) #0 {
+  %p = inttoptr i64 %addr to ptr
+  %s = addrspacecast ptr %p to ptr addrspace(3)
+  %a = ptrtoint ptr addrspace(3) %s to i32
+  %v = call i32 @__zluda_agx_cluster_rank_of(i32 %a)
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_getctarank_generic_u32(i32 %addr) #0 {
+  %v = call i32 @__zluda_agx_cluster_rank_of(i32 %addr)
+  ret i32 %v
+}
+
+; Whether a generic address of shared memory is in this CTA's window
+define zeroext i1 @__zluda_ptx_impl_agx_in_own_cta(i64 %addr) #0 {
+  %r = call i32 @__zluda_ptx_impl_getctarank_generic_u64(i64 %addr)
+  %me = call i32 @__zluda_agx_cluster(i32 6)
+  %own = icmp eq i32 %r, %me
+  ret i1 %own
+}
+
+; The cluster is the threadgroup: its barrier is the threadgroup barrier,
+; with release and acquire ordering of shared and global memory. An arrive
+; is completed by the wait that follows it.
+define void @__zluda_ptx_impl_barrier_cluster_arrive() #1 {
+  fence syncscope("agent") release
+  ret void
+}
+define void @__zluda_ptx_impl_barrier_cluster_arrive_relaxed() #1 {
+  ret void
+}
+define void @__zluda_ptx_impl_barrier_cluster_wait() #1 {
+  fence syncscope("agent") seq_cst
+  call void @llvm.agx.threadgroup.barrier()
+  fence syncscope("agent") acquire
+  ret void
+}
+
 ; Threadgroup-wide reductions of a predicate, through a threadgroup variable.
 @__zluda_ptx_impl_agx_bar_red = internal addrspace(3) global i32 undef
 
@@ -1366,6 +1483,35 @@ exit:
 
 ; cp.async.bulk.global.shared::cta.cp_mask: bit i of the mask selects byte i
 ; of every 16 bytes.
+; A multicast bulk copy: the same bytes to the same shared offset of every
+; CTA of the cluster in the mask, completing the transaction on each one's
+; mbarrier (at the mbarrier's offset in that CTA)
+define void @__zluda_ptx_impl_agx_cp_async_bulk_multicast(ptr addrspace(3) %dst, ptr addrspace(1) %src, i32 %size, ptr addrspace(3) %mbar, i32 %mask) #3 {
+entry:
+  %dst_a = ptrtoint ptr addrspace(3) %dst to i32
+  %mbar_a = ptrtoint ptr addrspace(3) %mbar to i32
+  br label %loop
+loop:
+  %rank = phi i32 [ 0, %entry ], [ %next, %latch ]
+  %bit = lshr i32 %mask, %rank
+  %set = trunc i32 %bit to i1
+  br i1 %set, label %copy, label %latch
+copy:
+  %to_a = call i32 @__zluda_agx_cluster_mapa(i32 %dst_a, i32 %rank)
+  %to = inttoptr i32 %to_a to ptr addrspace(3)
+  call void @llvm.memcpy.p3.p1.i32(ptr addrspace(3) align 16 %to, ptr addrspace(1) align 16 %src, i32 %size, i1 false)
+  %bar_a = call i32 @__zluda_agx_cluster_mapa(i32 %mbar_a, i32 %rank)
+  %bar = inttoptr i32 %bar_a to ptr addrspace(3)
+  call void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %bar, i32 %size)
+  br label %latch
+latch:
+  %next = add i32 %rank, 1
+  %done = icmp eq i32 %next, 16
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
 define void @__zluda_ptx_impl_agx_cp_async_bulk_masked(ptr addrspace(1) %dst, ptr addrspace(3) %src, i32 %size, i32 %mask) #3 {
 entry:
   %empty = icmp eq i32 %size, 0
@@ -1773,7 +1919,10 @@ attributes #0 = { alwaysinline nounwind willreturn memory(none) }
 attributes #1 = { alwaysinline convergent nounwind }
 attributes #2 = { alwaysinline convergent nounwind willreturn memory(none) }
 attributes #3 = { alwaysinline nounwind }
+attributes #4 = { nounwind willreturn memory(none) }
 
 declare i32 @llvm.agx.simdgroup.index.in.threadgroup()
 
 declare i32 @llvm.agx.core.id()
+
+declare void @llvm.memcpy.p3.p1.i32(ptr addrspace(3) noalias nocapture writeonly, ptr addrspace(1) noalias nocapture readonly, i32, i1 immarg)

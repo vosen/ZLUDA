@@ -8,6 +8,12 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/ReplaceConstant.h>
+#include <llvm/ADT/SetVector.h>
+#include <llvm/Support/Alignment.h>
+#include <optional>
+#include <string>
+#include <llvm/IR/CallingConv.h>
 #ifdef ZLUDA_WITH_LLD
 #include <lld/Common/Driver.h>
 #include <lld/Common/CommonLinkerContext.h>
@@ -581,6 +587,347 @@ void LLVMZludaAgxCanonicalizeFoldedNaNs(LLVMModuleRef M)
                     if (auto *C = dyn_cast<Constant>(I.getOperand(i)))
                         if (Constant *N = zludaCanonicalNaN(C))
                             I.setOperand(i, N);
+}
+
+LLVM_C_EXTERN_C_END
+
+// Clusters of several CTAs on AGX. A kernel with agx-cluster-dims (x, y, z)
+// runs a cluster of C = x * y * z CTAs as one threadgroup of C times the CTA's
+// threads: the runtime launches the grid divided by the cluster dimensions,
+// with the CTA's z multiplied by C. Thread (x, y, z) of CTA r is thread
+// (x, y, z * C + r) of the threadgroup: no division by a runtime value, and
+// with a CTA of depth 1 (the usual case) each CTA's threads are consecutive
+// (whole SIMD-groups when it has a multiple of 32 threads). Here, in each
+// function, after inlining:
+// * the thread and threadgroup ids become the CTA's (%tid.z, %ntid.z, %ctaid,
+//   %nctaid and the linear index in the threadgroup);
+// * the shared variables the kernel uses are packed into one array of C
+//   windows, CTA r using window r; mapa and getctarank are arithmetic on the
+//   window stride;
+// * the placeholders of zluda_ptx_impl_agx.ll (__zluda_agx_cluster*) get the
+//   cluster registers.
+// Kernels without clusters get C = 1: the cluster registers of a single CTA.
+namespace
+{
+    struct ClusterShape
+    {
+        unsigned dims[3] = {1, 1, 1};
+        bool explicit_ = false;
+        unsigned count() const { return dims[0] * dims[1] * dims[2]; }
+        bool operator==(const ClusterShape &o) const
+        {
+            return dims[0] == o.dims[0] && dims[1] == o.dims[1] && dims[2] == o.dims[2] &&
+                   explicit_ == o.explicit_;
+        }
+    };
+
+    ClusterShape zludaClusterShape(const Function &F)
+    {
+        ClusterShape shape;
+        Attribute A = F.getFnAttribute("agx-cluster-dims");
+        if (!A.isValid())
+            return shape;
+        SmallVector<StringRef, 3> parts;
+        A.getValueAsString().split(parts, ',');
+        for (unsigned i = 0; i < parts.size() && i < 3; i++)
+        {
+            unsigned v = 1;
+            if (!parts[i].trim().getAsInteger(10, v) && v > 0)
+                shape.dims[i] = v;
+        }
+        shape.explicit_ = true;
+        return shape;
+    }
+
+    bool zludaIsCalled(const CallInst *CI, StringRef name)
+    {
+        const Function *callee = CI->getCalledFunction();
+        return callee && callee->getName() == name;
+    }
+
+    // with ids: also the thread and threadgroup ids a cluster changes
+    bool zludaUsesClusterState(const Function &F, bool ids)
+    {
+        for (const BasicBlock &BB : F)
+            for (const Instruction &I : BB)
+            {
+                if (auto *CI = dyn_cast<CallInst>(&I))
+                    if (const Function *callee = CI->getCalledFunction())
+                    {
+                        StringRef n = callee->getName();
+                        if (n.starts_with("__zluda_agx_cluster"))
+                            return true;
+                        if (ids && (n.starts_with("llvm.agx.thread.position.in.threadgroup") ||
+                            n.starts_with("llvm.agx.threads.per.threadgroup") ||
+                            n.starts_with("llvm.agx.threadgroup.position.in.grid") ||
+                            n.starts_with("llvm.agx.threadgroups.per.grid") ||
+                            n == "llvm.agx.thread.index.in.threadgroup"))
+                            return true;
+                    }
+            }
+        return false;
+    }
+
+    // The addrspace(3) variables an instruction refers to, through constant
+    // expressions
+    void zludaSharedVariables(Value *V, SmallSetVector<GlobalVariable *, 8> &out,
+                              SmallPtrSetImpl<Value *> &seen)
+    {
+        if (!seen.insert(V).second)
+            return;
+        if (auto *GV = dyn_cast<GlobalVariable>(V))
+        {
+            if (GV->getAddressSpace() == 3)
+                out.insert(GV);
+            return;
+        }
+        if (auto *CE = dyn_cast<ConstantExpr>(V))
+            for (Value *op : CE->operands())
+                zludaSharedVariables(op, out, seen);
+    }
+
+    std::string zludaLowerClusters(Function &F, const ClusterShape &shape)
+    {
+        Module &M = *F.getParent();
+        LLVMContext &ctx = M.getContext();
+        const DataLayout &DL = M.getDataLayout();
+        Type *I32 = Type::getInt32Ty(ctx);
+        const unsigned C = shape.count();
+        auto intrinsic = [&](const char *name) {
+            return M.getOrInsertFunction(name, FunctionType::get(I32, false));
+        };
+
+        SmallVector<CallInst *, 16> calls;
+        for (BasicBlock &BB : F)
+            for (Instruction &I : BB)
+                if (auto *CI = dyn_cast<CallInst>(&I))
+                    if (CI->getCalledFunction())
+                        calls.push_back(CI);
+
+        // the shared variables of a cluster kernel, packed into windows
+        SmallSetVector<GlobalVariable *, 8> shared;
+        if (C > 1)
+        {
+            SmallPtrSet<Value *, 32> seen;
+            for (BasicBlock &BB : F)
+                for (Instruction &I : BB)
+                    for (Value *op : I.operands())
+                        zludaSharedVariables(op, shared, seen);
+        }
+
+        IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());
+        Value *hw_tid_z = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.z"));
+        Value *hw_ntid_z = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.z"));
+        Value *ntid_x = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.x"));
+        Value *ntid_y = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.y"));
+        Value *hw_linear = B.CreateCall(intrinsic("llvm.agx.thread.index.in.threadgroup"));
+        Value *hw_ctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.x")),
+                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.y")),
+                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.z"))};
+        Value *hw_nctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.x")),
+                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.y")),
+                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.z"))};
+        auto k = [&](uint64_t v) { return ConstantInt::get(I32, v); };
+        Value *ntid_z = B.CreateUDiv(hw_ntid_z, k(C));
+        Value *rank = C > 1 ? B.CreateURem(hw_tid_z, k(C)) : static_cast<Value *>(k(0));
+        Value *tid_z = C > 1 ? B.CreateUDiv(hw_tid_z, k(C)) : hw_tid_z;
+        Value *linear = hw_linear;
+        if (C > 1)
+        {
+            Value *tid_x = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.x"));
+            Value *tid_y = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.y"));
+            linear = B.CreateAdd(tid_x, B.CreateMul(ntid_x, B.CreateAdd(tid_y, B.CreateMul(ntid_y, tid_z))));
+        }
+        const unsigned *d = shape.dims;
+        Value *in_cluster[3] = {B.CreateURem(rank, k(d[0])),
+                                B.CreateURem(B.CreateUDiv(rank, k(d[0])), k(d[1])),
+                                B.CreateUDiv(rank, k(d[0] * d[1]))};
+        Value *ctaid[3], *nctaid[3];
+        for (int i = 0; i < 3; i++)
+        {
+            ctaid[i] = B.CreateAdd(B.CreateMul(hw_ctaid[i], k(d[i])), in_cluster[i]);
+            nctaid[i] = B.CreateMul(hw_nctaid[i], k(d[i]));
+        }
+
+        // the windows: each variable at its offset, aligned, in a window of
+        // `stride` bytes
+        uint64_t stride = 0;
+        Align max_align(1);
+        GlobalVariable *windows = nullptr;
+        if (!shared.empty())
+        {
+            SmallVector<uint64_t, 8> offsets;
+            for (GlobalVariable *GV : shared)
+            {
+                if (GV->hasInitializer() && !isa<UndefValue>(GV->getInitializer()))
+                    return "the shared variable " + GV->getName().str() + " of a cluster kernel has an initializer";
+                uint64_t size = DL.getTypeAllocSize(GV->getValueType());
+                // the shared variables are declarations the backend allocates; extern
+                // .shared arrays (dynamic shared memory) have no size
+                if (size == 0)
+                    return "dynamic shared memory (" + GV->getName().str() + ") is not implemented in cluster kernels";
+                Align a = GV->getAlign().value_or(DL.getPrefTypeAlign(GV->getValueType()));
+                max_align = std::max(max_align, a);
+                stride = alignTo(stride, a);
+                offsets.push_back(stride);
+                stride += size;
+            }
+            stride = alignTo(stride, max_align);
+            if (stride * C > 32768)
+                return "the shared memory of a cluster (" + std::to_string(C) + " x " + std::to_string(stride) +
+                       " bytes) exceeds the 32 KiB of a threadgroup";
+            auto *array = ArrayType::get(Type::getInt8Ty(ctx), stride * C);
+            windows = new GlobalVariable(M, array, false, GlobalValue::InternalLinkage, UndefValue::get(array),
+                                         F.getName() + ".cluster_shared", nullptr,
+                                         GlobalValue::NotThreadLocal, 3);
+            windows->setAlignment(max_align);
+            Value *window = B.CreateInBoundsGEP(Type::getInt8Ty(ctx), windows, B.CreateMul(rank, k(stride)));
+            SmallVector<Constant *, 8> consts(shared.begin(), shared.end());
+            convertUsersOfConstantsToInstructions(consts, &F);
+            for (unsigned i = 0; i < shared.size(); i++)
+            {
+                GlobalVariable *GV = shared[i];
+                Value *ptr = B.CreateInBoundsGEP(Type::getInt8Ty(ctx), window, k(offsets[i]));
+                GV->replaceUsesWithIf(ptr, [&](Use &U) {
+                    auto *I = dyn_cast<Instruction>(U.getUser());
+                    return I && I->getFunction() == &F;
+                });
+            }
+        }
+        Value *base = windows ? B.CreatePtrToInt(windows, I32) : static_cast<Value *>(k(0));
+
+        for (CallInst *CI : calls)
+        {
+            StringRef n = CI->getCalledFunction()->getName();
+            Value *v = nullptr;
+            IRBuilder<> At(CI);
+            if (n == "__zluda_agx_cluster")
+            {
+                Value *values[15] = {in_cluster[0], in_cluster[1], in_cluster[2],
+                                     k(d[0]), k(d[1]), k(d[2]),
+                                     rank, k(C),
+                                     hw_ctaid[0], hw_ctaid[1], hw_ctaid[2],
+                                     hw_nctaid[0], hw_nctaid[1], hw_nctaid[2],
+                                     k(shape.explicit_ ? 1 : 0)};
+                Value *which = CI->getArgOperand(0);
+                if (auto *c = dyn_cast<ConstantInt>(which))
+                    v = c->getZExtValue() < 15 ? values[c->getZExtValue()] : static_cast<Value *>(k(0));
+                else
+                {
+                    v = k(0);
+                    for (unsigned i = 0; i < 15; i++)
+                        v = At.CreateSelect(At.CreateICmpEQ(which, k(i)), values[i], v);
+                }
+            }
+            else if (n == "__zluda_agx_cluster_mapa")
+            {
+                Value *addr = CI->getArgOperand(0), *to = CI->getArgOperand(1);
+                v = C > 1 ? At.CreateAdd(addr, At.CreateMul(At.CreateSub(to, rank), k(stride))) : addr;
+            }
+            else if (n == "__zluda_agx_cluster_rank_of")
+                v = C > 1 && stride ? At.CreateUDiv(At.CreateSub(CI->getArgOperand(0), base), k(stride))
+                                    : static_cast<Value *>(k(0));
+            else if (C > 1)
+            {
+                if (n == "llvm.agx.thread.position.in.threadgroup.z")
+                    v = tid_z;
+                else if (n == "llvm.agx.threads.per.threadgroup.z")
+                    v = ntid_z;
+                else if (n == "llvm.agx.thread.index.in.threadgroup")
+                    v = linear;
+                else
+                    for (int i = 0; i < 3; i++)
+                    {
+                        std::string axis(1, "xyz"[i]);
+                        if (n == "llvm.agx.threadgroup.position.in.grid." + axis)
+                            v = ctaid[i];
+                        else if (n == "llvm.agx.threadgroups.per.grid." + axis)
+                            v = nctaid[i];
+                    }
+            }
+            if (v)
+            {
+                CI->replaceAllUsesWith(v);
+                CI->eraseFromParent();
+            }
+        }
+        return "";
+    }
+}
+
+LLVM_C_EXTERN_C_BEGIN
+
+// Returns 1 if the module changed, 0 if not, and -1 with a message (to
+// dispose with LLVMDisposeMessage) if a kernel's cluster cannot be lowered.
+int LLVMZludaAgxLowerClusters(LLVMModuleRef M, char **error)
+{
+    Module *Mod = unwrap(M);
+    SmallVector<Function *, 8> kernels, functions;
+    for (Function &F : *Mod)
+        if (!F.isDeclaration())
+            (F.getCallingConv() == CallingConv::AGX_KERNEL ? kernels : functions).push_back(&F);
+    std::optional<ClusterShape> common;
+    bool mixed = false;
+    for (Function *F : kernels)
+    {
+        ClusterShape s = zludaClusterShape(*F);
+        if (common && !(*common == s))
+            mixed = true;
+        common = s;
+    }
+    bool changed = false;
+    for (Function *F : kernels)
+    {
+        if (zludaClusterShape(*F).count() == 1 && !zludaUsesClusterState(*F, false))
+            continue;
+        changed = true;
+        std::string e = zludaLowerClusters(*F, zludaClusterShape(*F));
+        if (!e.empty())
+        {
+            *error = LLVMCreateMessage((F->getName().str() + ": " + e).c_str());
+            return -1;
+        }
+    }
+    for (Function *F : functions)
+    {
+        ClusterShape s = common.value_or(ClusterShape());
+        if (!zludaUsesClusterState(*F, mixed || s.count() > 1))
+            continue;
+        if (mixed)
+        {
+            *error = LLVMCreateMessage((F->getName().str() +
+                                        ": a function reading thread ids, not inlined, is called from kernels of "
+                                        "different cluster shapes")
+                                           .c_str());
+            return -1;
+        }
+        // shared variables are packed per kernel: a cluster kernel needs them inlined
+        bool shared = false;
+        for (BasicBlock &BB : *F)
+            for (Instruction &I : BB)
+            {
+                SmallSetVector<GlobalVariable *, 8> vars;
+                SmallPtrSet<Value *, 8> seen;
+                for (Value *op : I.operands())
+                    zludaSharedVariables(op, vars, seen);
+                shared |= !vars.empty();
+            }
+        if (s.count() > 1 && shared)
+        {
+            *error = LLVMCreateMessage((F->getName().str() +
+                                        ": shared memory in a function not inlined into a cluster kernel")
+                                           .c_str());
+            return -1;
+        }
+        changed = true;
+        std::string e = zludaLowerClusters(*F, s);
+        if (!e.empty())
+        {
+            *error = LLVMCreateMessage((F->getName().str() + ": " + e).c_str());
+            return -1;
+        }
+    }
+    return changed ? 1 : 0;
 }
 
 LLVM_C_EXTERN_C_END

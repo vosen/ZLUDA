@@ -378,6 +378,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             // threadgroups .minnctapersm asks for.
             let mut threads = None;
             let mut ctas = 1;
+            let mut cluster = 1;
             for tuning in tuning_directives {
                 match *tuning {
                     ptx_parser::TuningDirective::MaxNReg(n) => {
@@ -387,11 +388,19 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                         threads = Some(x * y * z)
                     }
                     ptx_parser::TuningDirective::MinNCtaPerSm(n) => ctas = n.max(1),
-                    ptx_parser::TuningDirective::NoReturn => {}
+                    // A cluster runs as one threadgroup of its CTAs (see llvm_zluda's
+                    // LLVMZludaAgxLowerClusters)
+                    ptx_parser::TuningDirective::ReqNctaPerCluster(x, y, z) => {
+                        cluster = x.max(1) * y.max(1) * z.max(1);
+                        self.emit_fn_attribute_string(fn_, "agx-cluster-dims", &format!("{x},{y},{z}"));
+                    }
+                    ptx_parser::TuningDirective::NoReturn
+                    | ptx_parser::TuningDirective::ExplicitCluster
+                    | ptx_parser::TuningDirective::MaxClusterRank(_) => {}
                 }
             }
             if let Some(t) = threads {
-                let t = t.saturating_mul(ctas).min(1024);
+                let t = t.saturating_mul(ctas).saturating_mul(cluster).min(1024);
                 self.emit_fn_attribute_string(fn_, "agx-max-threads-per-threadgroup", &t.to_string());
             }
             return;
@@ -418,6 +427,10 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     let value = format!("{ctas},1024");
                     self.emit_fn_attribute_string(fn_, "amdgpu-waves-per-eu", &value);
                 }
+                // clusters of several CTAs are only implemented for AGX: their instructions are rejected here
+                ptx_parser::TuningDirective::ReqNctaPerCluster(..)
+                | ptx_parser::TuningDirective::ExplicitCluster
+                | ptx_parser::TuningDirective::MaxClusterRank(_) => {}
             }
         }
     }
@@ -840,6 +853,10 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Slct { data, arguments } => self.emit_slct(data, arguments),
             // expanded by insert_post_saturation
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
+            // calls (replace_instructions_with_functions)
+            ast::Instruction::Mapa { .. }
+            | ast::Instruction::Getctarank { .. }
+            | ast::Instruction::BarrierCluster { .. } => Err(error_unreachable()),
             ast::Instruction::Testp { data, arguments } => self.emit_testp(data, arguments),
             ast::Instruction::MatchAllSync { data, arguments } => self.emit_match_all_sync(data, arguments),
             ast::Instruction::ElectSync { arguments } => self.emit_elect_sync(arguments),
@@ -4085,7 +4102,7 @@ impl<'a> MethodEmitContext<'a> {
         let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
         let name = match space {
             ast::StateSpace::Global => "global",
-            ast::StateSpace::Shared => "shared",
+            ast::StateSpace::Shared | ast::StateSpace::SharedCta | ast::StateSpace::SharedCluster => "shared",
             ast::StateSpace::Local => "local",
             ast::StateSpace::Const => "const",
             ast::StateSpace::Param => "param",
@@ -4111,8 +4128,19 @@ impl<'a> MethodEmitContext<'a> {
                 }
             }
             let mut args = [src];
+            if !matches!(space, ast::StateSpace::Shared | ast::StateSpace::SharedCta) {
+                self.resolver.with_result(arguments.dst, |dst| unsafe {
+                    LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, dst)
+                });
+                return Ok(());
+            }
+            // .shared is .shared::cta: also in this CTA's window of a cluster
+            let in_shared =
+                unsafe { LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, LLVM_UNNAMED.as_ptr()) };
+            let own = self.emit_agx_helper(c"__zluda_ptx_impl_agx_in_own_cta", None, Some(ast::ScalarType::Pred), &[src])?;
+            let false_ = unsafe { LLVMConstInt(i1_type, 0, 0) };
             self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, dst)
+                LLVMBuildSelect(self.builder, in_shared, own, false_, dst)
             });
             return Ok(());
         }
@@ -5719,11 +5747,25 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::CpAsyncBulkDetails,
         arguments: ast::CpAsyncBulkArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        // Clusters have a single CTA: a multicast copy writes to the issuing CTA
-        let _ = (data.multicast, arguments.src_cta_mask, arguments.src_cache_policy);
+        let _ = arguments.src_cache_policy;
         let to = self.resolver.value(arguments.src_to)?;
         let from = self.resolver.value(arguments.src_from)?;
         let size = self.resolver.value(arguments.src_size)?;
+        // to the CTAs of the cluster in the mask (a cluster is one threadgroup on AGX)
+        if let (true, Some(mask), Some(mbarrier)) = (data.multicast, arguments.src_cta_mask, arguments.src_mbarrier) {
+            let mask = self.resolver.value(mask)?;
+            let mask = unsafe {
+                LLVMBuildZExt(self.builder, mask, LLVMInt32TypeInContext(self.context), LLVM_UNNAMED.as_ptr())
+            };
+            let mbarrier = self.mbarrier_pointer(data.dst_space, mbarrier)?;
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_cp_async_bulk_multicast",
+                None,
+                None,
+                &[to, from, size, mbarrier, mask],
+            )?;
+            return Ok(());
+        }
         match arguments.src_byte_mask {
             Some(byte_mask) => {
                 let byte_mask = self.resolver.value(byte_mask)?;

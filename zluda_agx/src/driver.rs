@@ -81,9 +81,14 @@ impl Driver {
         if threads == 0 {
             return Err(CUerror::INVALID_VALUE);
         }
+        let k = &self.modules[&m].module.kernels[&name];
         // the kernel's registers do not leave room for this many threads on a core
-        if threads > self.modules[&m].module.kernels[&name].max_threads_per_threadgroup() as u64 {
+        if threads > k.max_threads_per_threadgroup() as u64 {
             return Err(CUerror::LAUNCH_OUT_OF_RESOURCES);
+        }
+        // a cluster kernel's grid is a multiple of its cluster
+        if (0..3).any(|i| grid[i] % k.cluster[i] != 0) {
+            return Err(CUerror::INVALID_CLUSTER_SIZE);
         }
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
