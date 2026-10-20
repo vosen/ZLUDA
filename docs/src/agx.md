@@ -466,7 +466,7 @@ completely). Without it 1064 match and the other 172 are the floating point
 differences listed above (denormal `f32` operands and results, NaN bit
 patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 423 skipped
 checks follow kernels using `wgmma` and `tcgen05` (emulation not written),
-`ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
+the sm_107 conversions (`.scaled`, `ue5m3x2`,
 `s2f6x2`) and `mul.rz.f16x2.f32x2.f32x2`. A full run takes about 100 seconds
 with `-j 8`.
 

@@ -3411,7 +3411,7 @@ derive_parser!(
         }
     }
     st.mmio.relaxed.sys{.global}.type                                               [a], b => {
-        state.errors.push(PtxError::Todo("st.mmio.relaxed.sys instruction (MMIO store operations)".to_string()));
+        // an MMIO access happens exactly once, neither merged nor split: as a relaxed system-scope access
         Instruction::St {
             data: ast::StData {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -3495,7 +3495,7 @@ derive_parser!(
         }
     }
     ld.mmio.relaxed.sys{.global}.type                                                                       d, [a] => {
-        state.errors.push(PtxError::Todo("ld.mmio.relaxed.sys instruction (MMIO load operations)".to_string()));
+        // an MMIO access happens exactly once, neither merged nor split: as a relaxed system-scope access
         Instruction::Ld {
             data: LdDetails {
                 qualifier: ast::LdStQualifier::Relaxed(MemScope::Sys),
@@ -6226,16 +6226,46 @@ derive_parser!(
     }
     .type: ScalarType = { .f32, .f64 };
 
-    prefetch{.space}.level [a] => {
+    // also prefetch.global.L2::evict_{last,normal}
+    prefetch{.space}{.level}{.level::eviction_priority} [a] => {
+        let _ = level_eviction_priority;
         let space = space.unwrap_or(StateSpace::Generic);
         ast::Instruction::Prefetch {
-            data: PrefetchData { space, level, },
+            data: PrefetchData { space, level: level.unwrap_or(CacheLevel::L2) },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .space: StateSpace =    { .global, .local };
+    .level: CacheLevel =    { .L1, .L2 };
+    .level::eviction_priority: EvictionPriority = { .L2::evict_last, .L2::evict_normal };
+
+    prefetchu.L1 [a] => {
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: StateSpace::Generic, level: CacheLevel::L1 },
             arguments: PrefetchArgs { src: a }
         }
     }
 
-    .space: StateSpace =    { .global, .local };
-    .level: CacheLevel =    { .L1, .L2 };
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-applypriority
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-discard
+    // Cache hints, no-ops like prefetch: the lines discard leaves undefined keep their data
+    applypriority{.global}.level::eviction_priority [a], size => {
+        let _ = (level_eviction_priority, size);
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: if global { StateSpace::Global } else { StateSpace::Generic }, level: CacheLevel::L2 },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .level::eviction_priority: EvictionPriority = { .L2::evict_normal };
+
+    discard{.global}.level [a], size => {
+        let _ = size;
+        ast::Instruction::Prefetch {
+            data: PrefetchData { space: if global { StateSpace::Global } else { StateSpace::Generic }, level },
+            arguments: PrefetchArgs { src: a }
+        }
+    }
+    .level: CacheLevel = { .L2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-createpolicy
     // createpolicy.range{.global}.level::primary_priority{.level::secondary_priority}.b64

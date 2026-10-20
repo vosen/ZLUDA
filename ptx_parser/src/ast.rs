@@ -1442,7 +1442,6 @@ ptx_parser_macros::generate_instruction_type!(
                 src_addr: {
                     repr: T,
                     space: { data.space },
-                    relaxed_type_check: true,
                 },
                 src_size: {
                     repr: T,
@@ -1544,7 +1543,6 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::from(ScalarType::B8),
                     space: { data.space },
-                    relaxed_type_check: true
                 }
             }
         },
