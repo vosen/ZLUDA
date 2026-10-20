@@ -11,6 +11,13 @@ mod dark;
 mod driver;
 
 use cuda_types::cuda::*;
+use std::sync::OnceLock;
+
+/// `ZLUDA_AGX_LOG`: report unimplemented functions and failing calls on stderr.
+fn log_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("ZLUDA_AGX_LOG").is_some())
+}
 
 macro_rules! unimplemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -18,6 +25,9 @@ macro_rules! unimplemented {
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes, improper_ctypes_definitions, unused_variables, non_snake_case)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                if log_enabled() {
+                    eprintln!("[zluda_agx] {} is not implemented", stringify!($fn_name));
+                }
                 Err(CUerror::NOT_SUPPORTED)
             }
         )*
@@ -30,7 +40,13 @@ macro_rules! implemented {
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes, improper_ctypes_definitions, non_snake_case)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
-                driver::$fn_name($($arg_id),*)
+                let r = driver::$fn_name($($arg_id),*);
+                if let Err(e) = r {
+                    if log_enabled() {
+                        eprintln!("[zluda_agx] {} failed with CUDA error {}", stringify!($fn_name), e.0);
+                    }
+                }
+                r
             }
         )*
     };
