@@ -92,7 +92,8 @@ an error.
   be, and at run time otherwise (see below). `prmt` takes every mode
   (`.f4e`, `.b4e`, `.rc8`, `.ecl`, `.ecr`, `.rc16`), and `szext` and `fns`
   are helpers (AGX only: the AMD path reports them as not implemented). The
-  3-input `min`/`max` of `f32` (sm_100) is two 2-input operations.
+  3-input `min`/`max` of `f32`, `f16`, `f16x2`, `bf16` and `bf16x2` (sm_100)
+  is two 2-input operations.
   `add`, `sub`, `mul` and `fma` of `f32x2` (sm_100, two f32 in a 64-bit
   register) are `<2 x float>` operations that follow the f32 rounding and
   denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
@@ -101,8 +102,7 @@ an error.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
 * Not supported yet: the `f32x2` forms of
-  instructions other than `add`/`sub`/`mul`/`fma`, `set` of packed integer types, the 3-input
-  `min`/`max` of 16-bit types, `cvt` with `.pzo`, `.scaled`,
+  instructions other than `add`/`sub`/`mul`/`fma`, `set` of packed integer types, `cvt` with `.pzo`, `.scaled`,
   `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
   does not have).
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of

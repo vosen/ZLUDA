@@ -83,6 +83,14 @@ def min3(a, tmp):
     return [k for k in range(5) if not (got[k] != got[k] if want[k] is None else got[k] == want[k])]
 
 
+def min3_16(a, tmp):
+    (out,) = t.run(a, compile_ptx(a, tmp, "min3_16.ptx"), "min3_16", [("buf", bytes(24), True)], (1, 1), (1, 1), tmp)
+    got = struct.unpack("<4H4I", out)
+    # f16 -1 / 3, bf16 -1 / 3, f16x2 (min lo -1, hi -2; max lo 3, hi 4), bf16x2 likewise
+    want = (0xBC00, 0x4200, 0xBF80, 0x4040, 0xC000BC00, 0x44004200, 0xC000BF80, 0x40804040)
+    return [k for k in range(8) if got[k] != want[k]]
+
+
 def f32x2(a, tmp, strict):
     from fractions import Fraction as F
     x, y, z = [f32(0.75), f32(1.0)], [f32(0.5), f32(-3.25)], [f32(1e-8), f32(-2.0 ** -30)]
@@ -144,7 +152,7 @@ def main():
     ap.add_argument("--chip", default="agx-g14c")
     a = ap.parse_args()
     failed = 0
-    cases = [("prmt modes", prmt), ("szext and fns", szext_fns), ("3-input min/max", min3),
+    cases = [("prmt modes", prmt), ("szext and fns", szext_fns), ("3-input min/max", min3), ("3-input 16-bit", min3_16),
              ("f32x2", lambda a, tmp: f32x2(a, tmp, False)), ("f32x2 strict", lambda a, tmp: f32x2(a, tmp, True)),
              ("fma.relu", fma_relu), ("cuLink extern_func", link)]
     for label, f in cases:

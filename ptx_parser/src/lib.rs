@@ -4583,7 +4583,7 @@ derive_parser!(
     //min{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //min{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    min{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4593,10 +4593,10 @@ derive_parser!(
                     type_: f16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4606,10 +4606,10 @@ derive_parser!(
                     type_: f16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4619,10 +4619,10 @@ derive_parser!(
                     type_: bf16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    min{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
+    min{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4632,7 +4632,7 @@ derive_parser!(
                     type_: bf16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
@@ -4695,7 +4695,7 @@ derive_parser!(
     //max{.ftz}{.NaN}{.xorsign.abs}.f16x2    d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16           d, a, b;
     //max{.NaN}{.xorsign.abs}.bf16x2         d, a, b;
-    max{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4705,10 +4705,10 @@ derive_parser!(
                     type_: f16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4718,10 +4718,10 @@ derive_parser!(
                     type_: f16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4731,10 +4731,10 @@ derive_parser!(
                     type_: bf16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
-    max{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
+    max{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4744,7 +4744,7 @@ derive_parser!(
                     type_: bf16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };

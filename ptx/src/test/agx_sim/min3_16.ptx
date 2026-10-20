@@ -1,0 +1,43 @@
+.version 8.8
+.target sm_100
+.address_size 64
+
+// three-input min/max of f16, f16x2, bf16 and bf16x2
+.visible .entry min3_16(.param .u64 out)
+{
+    .reg .u64 p;
+    .reg .b16 a, b, c, r;
+    .reg .b32 x, y, z, s;
+    ld.param.u64 p, [out];
+    mov.b16 a, 0x4200;  // 3
+    mov.b16 b, 0xBC00;  // -1
+    mov.b16 c, 0x4000;  // 2
+    min.f16 r, a, b, c;
+    st.global.b16 [p+0], r;
+    max.f16 r, a, b, c;
+    st.global.b16 [p+2], r;
+    mov.b16 a, 0x4040;  // bf16 3
+    mov.b16 b, 0xBF80;  // bf16 -1
+    mov.b16 c, 0x4000;  // bf16 2
+    min.bf16 r, a, b, c;
+    st.global.b16 [p+4], r;
+    max.bf16 r, a, b, c;
+    st.global.b16 [p+6], r;
+    // f16x2 lanes (3, 1), (-1, 4), (2, -2)
+    mov.b32 x, 0x3C004200;
+    mov.b32 y, 0x4400BC00;
+    mov.b32 z, 0xC0004000;
+    min.f16x2 s, x, y, z;
+    st.global.b32 [p+8], s;
+    max.f16x2 s, x, y, z;
+    st.global.b32 [p+12], s;
+    // bf16x2 lanes (3, 1), (-1, 4), (2, -2)
+    mov.b32 x, 0x3F804040;
+    mov.b32 y, 0x4080BF80;
+    mov.b32 z, 0xC0004000;
+    min.bf16x2 s, x, y, z;
+    st.global.b32 [p+16], s;
+    max.bf16x2 s, x, y, z;
+    st.global.b32 [p+20], s;
+    ret;
+}
