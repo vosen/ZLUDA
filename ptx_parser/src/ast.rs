@@ -2637,8 +2637,10 @@ impl SetpData {
         ftz: bool,
         type_: ScalarType,
     ) -> Self {
+        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them
         let flush_to_zero = match (ftz, type_) {
-            (_, ScalarType::F32) => Some(ftz),
+            (_, ScalarType::F32 | ScalarType::F16 | ScalarType::F16x2) => Some(ftz),
+            (false, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
             (true, _) => {
                 state.errors.push(PtxError::NonF32Ftz);
                 None

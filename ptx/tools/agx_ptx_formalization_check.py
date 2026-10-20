@@ -346,6 +346,8 @@ def run_test(path, args):
         for n, off in gsyms.items():
             syms[n] = GLOBALS_BASE + off
         failures, launches, skipped, passed, skipped_launches = [], 0, 0, 0, []
+        # buffers a skipped launch could have written (its arguments), and what later launches derive from them
+        tainted_bufs = set()
 
         def gwrite(addr, n, bits):
             if GLOBALS_BASE <= addr < GLOBALS_BASE + len(globals_mem):
@@ -401,7 +403,10 @@ def run_test(path, args):
                 if tainted is None or name in tainted or name not in kernels:
                     # rejected by the compiler (an unsupported statement)
                     skipped_launches.append(name)
+                    tainted_bufs.update(o.strip() for o in m.group(6).split(','))
                     continue
+                if any(o.strip() in tainted_bufs for o in m.group(6).split(',')):
+                    tainted_bufs.update(o.strip() for o in m.group(6).split(','))
                 k = kernels[name]
                 grid, block = parse_dim(m.group(2)), parse_dim(m.group(3))
                 dyn = int(m.group(5)) if m.group(5) else 0
@@ -480,7 +485,8 @@ def run_test(path, args):
                     raise Unsupported('.expect of unknown symbol ' + name)
                 off = int(m.group(4)) if m.group(4) else 0
                 vals = split_vals(m.group(5))
-                if skipped_launches:
+                if skipped_launches and (name in tainted_bufs or name not in bufs):
+                    # the buffer may have been written by a skipped kernel (globals: by any kernel)
                     skipped += 1
                     continue
                 bad = []
@@ -497,7 +503,8 @@ def run_test(path, args):
         args.counts['pass'] += passed
         args.counts['skip'] += skipped
         if failures:
-            return 'FAIL', '; '.join(failures[:4]) + (' (+%d)' % (len(failures) - 4) if len(failures) > 4 else '')
+            n = args.max_failures
+            return 'FAIL', '; '.join(failures[:n]) + (' (+%d)' % (len(failures) - n) if len(failures) > n else '')
         if skipped_launches:
             return 'PARTIAL', '%d check(s) pass, %d skipped after rejected kernels %s; rejected: %s' % (
                 passed, skipped, ','.join(sorted(set(skipped_launches))), ' | '.join(rejected)[:200])
@@ -515,6 +522,7 @@ def main():
     ap.add_argument('--strict-fp', action='store_true',
                     help='compile with zoc --strict-fp (software IEEE binary32, canonical NaNs)')
     ap.add_argument('--timeout', type=int, default=120)
+    ap.add_argument('--max-failures', type=int, default=4, help='failing elements listed per test')
     ap.add_argument('-j', type=int, default=os.cpu_count())
     ap.add_argument('--json', help='write the results to this file')
     args = ap.parse_args()

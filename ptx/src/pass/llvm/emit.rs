@@ -2411,11 +2411,34 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::SetpData,
         arguments: ptx_parser::SetpArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if data.type_.packed_type().is_some() {
-            return Err(error_todo_msg("setp with a packed type not yet supported"));
-        }
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
+        if let Some(scalar_type) = data.type_.packed_type() {
+            // setp.f16x2 p|q: p compares the low halves, q the high halves
+            let u8_llvm = get_scalar_type(self.context, ast::ScalarType::B8);
+            let lane = |i| unsafe { LLVMConstInt(u8_llvm, i, 0) };
+            let b = self.builder;
+            let (a0, a1, b0, b1) = unsafe {
+                (
+                    LLVMBuildExtractElement(b, src1, lane(0), LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildExtractElement(b, src1, lane(1), LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildExtractElement(b, src2, lane(0), LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildExtractElement(b, src2, lane(1), LLVM_UNNAMED.as_ptr()),
+                )
+            };
+            let data = ptx_parser::SetpData {
+                type_: scalar_type,
+                ..data
+            };
+            let lo = self.emit_setp_impl(data, a0, b0)?;
+            let hi = self.emit_setp_impl(data, a1, b1)?;
+            self.resolver.register(arguments.dst1, lo);
+            match arguments.dst2 {
+                Some(dst2) => self.resolver.register(dst2, hi),
+                None => return Err(error_unreachable()),
+            }
+            return Ok(());
+        }
         let dst = self.emit_setp_impl(data, src1, src2)?;
         self.resolver.register(arguments.dst1, dst);
         if let Some(dst2) = arguments.dst2 {
@@ -2571,6 +2594,43 @@ impl<'a> MethodEmitContext<'a> {
             }
             ptx_parser::CvtMode::IntSaturateToUnsigned => {
                 return self.emit_cvt_signed_to_unsigned_sat(data.from, data.to, arguments)
+            }
+            // .ftz flushes subnormal .f32 results (of bf16 / f64 sources; PTX ISA cvt: .ftz
+            // "applies only to single precision (.f32) inputs and results")
+            ptx_parser::CvtMode::FPExtend {
+                flush_to_zero: Some(true),
+                relu: false,
+                satfinite: false,
+                ..
+            } if self.target == Target::Agx
+                && data.to == ast::ScalarType::F32
+                && data.from != ast::ScalarType::F32
+                && arguments.src2.is_none() =>
+            {
+                let src = self.resolver.value(arguments.src)?;
+                let result = self.emit_cvt_float_to_float_impl(None, data.to, None, data.from, src)?;
+                let flushed = self.emit_flush_f32(result);
+                self.resolver.register(arguments.dst, flushed);
+                return Ok(());
+            }
+            ptx_parser::CvtMode::FPTruncate {
+                rounding,
+                flush_to_zero: Some(true),
+                is_integer_rounding: false,
+                relu: false,
+                satfinite: false,
+                ..
+            } if self.target == Target::Agx
+                && data.to == ast::ScalarType::F32
+                && data.from == ast::ScalarType::F64
+                && arguments.src2.is_none() =>
+            {
+                let src = self.resolver.value(arguments.src)?;
+                let result =
+                    self.emit_cvt_float_to_float_impl(Some(rounding), data.to, None, data.from, src)?;
+                let flushed = self.emit_flush_f32(result);
+                self.resolver.register(arguments.dst, flushed);
+                return Ok(());
             }
             ptx_parser::CvtMode::FPExtend {
                 flush_to_zero: Some(true),
@@ -4124,6 +4184,12 @@ impl<'a> MethodEmitContext<'a> {
                     ptx_parser::ScalarType::S64 => i64::MAX as u64,
                     _ => return Err(error_unreachable()),
                 };
+                // a destination at least as wide as the source range needs no clamp (the
+                // constant would not even fit the source type)
+                let from_bits = from.layout().size() as u32 * 8;
+                if from_bits < 64 && max_value >= (1u64 << from_bits) - 1 {
+                    return self.resolver.value(src);
+                }
                 let intrinsic = format!("llvm.umin.{}\0", LLVMTypeDisplay(from));
                 let max = unsafe { LLVMConstInt(from_llvm, max_value, 0) };
                 let clamped = self.emit_intrinsic(
