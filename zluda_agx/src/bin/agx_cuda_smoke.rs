@@ -67,8 +67,27 @@ fn main() {
         check("cuMemcpyDtoH", cuMemcpyDtoH_v2(c.as_mut_ptr() as *mut c_void, dc, bytes));
         let wrong = (0..n as usize).filter(|&i| c[i] != a[i] + b[i]).count();
         check("cuCtxSynchronize", cuCtxSynchronize());
+
+        // The same work as a CUDA graph: capture (clear C, launch), then replay twice.
+        let mut s1 = CUstream(null_mut());
+        check("cuStreamCreate", cuStreamCreate(&mut s1, 0));
+        check("cuStreamBeginCapture", cuStreamBeginCapture_v2(s1, CUstreamCaptureMode_enum::CU_STREAM_CAPTURE_MODE_GLOBAL));
+        check("cuMemsetD32Async", cuMemsetD32Async(dc, 0, n as usize, s1));
+        check("cuLaunchKernel", cuLaunchKernel(f, grid, 1, 1, block, 1, 1, 0, s1, params.as_mut_ptr(), null_mut()));
+        let mut graph = null_mut();
+        check("cuStreamEndCapture", cuStreamEndCapture(s1, &mut graph));
+        let mut exec = null_mut();
+        check("cuGraphInstantiate", cuGraphInstantiateWithFlags(&mut exec, graph, 0));
+        let mut graph_wrong = 0;
+        for _ in 0..2 {
+            check("cuGraphLaunch", cuGraphLaunch(exec, s1));
+            check("cuStreamSynchronize", cuStreamSynchronize(s1));
+            c.fill(0.0);
+            check("cuMemcpyDtoH", cuMemcpyDtoH_v2(c.as_mut_ptr() as *mut c_void, dc, bytes));
+            graph_wrong += (0..n as usize).filter(|&i| c[i] != a[i] + b[i]).count();
+        }
         let name = CStr::from_ptr(name.as_ptr()).to_string_lossy();
-        println!("{{\"device\":{name:?},\"n\":{n},\"wrong\":{wrong},\"kernel_ms\":{ms}}}");
-        std::process::exit(if wrong == 0 { 0 } else { 2 });
+        println!("{{\"device\":{name:?},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"kernel_ms\":{ms}}}");
+        std::process::exit(if wrong == 0 && graph_wrong == 0 { 0 } else { 2 });
     }
 }

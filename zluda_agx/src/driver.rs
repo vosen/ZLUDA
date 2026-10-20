@@ -27,6 +27,15 @@ struct Event {
     recorded: Option<Instant>,
 }
 
+/// A captured stream operation (CUDA graphs are built by stream capture).
+#[derive(Clone)]
+enum Op {
+    Launch { f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, params: Vec<Vec<u8>> },
+    Memset { dst: u64, pattern: Vec<u8>, count: u64 },
+    /// Device or host addresses, resolved when the graph runs (unified addressing).
+    Copy { dst: u64, src: u64, n: usize },
+}
+
 struct Driver {
     ctx: Context,
     default_waits: Vec<Fence>,
@@ -35,6 +44,76 @@ struct Driver {
     streams: HashMap<usize, Stream>,
     events: HashMap<usize, Event>,
     next_handle: usize,
+    /// Streams being captured (0 is the default stream) and their operations so far.
+    capturing: HashMap<usize, Vec<Op>>,
+    /// Graphs and their instantiations: both are operation lists.
+    graphs: HashMap<usize, Vec<Op>>,
+    execs: HashMap<usize, Vec<Op>>,
+}
+
+fn stream_key(s: CUstream) -> usize {
+    if (s.0 as usize) <= 2 {
+        0
+    } else {
+        s.0 as usize
+    }
+}
+
+impl Driver {
+    /// Records `op` if `stream` is being captured.
+    fn captured(&mut self, stream: CUstream, op: impl FnOnce() -> Op) -> bool {
+        match self.capturing.get_mut(&stream_key(stream)) {
+            Some(ops) => {
+                ops.push(op());
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
+        let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        let g14x = self.ctx.device.g14x();
+        let Driver { ctx, default_waits, modules, streams, .. } = self;
+        let (queue, waits) = if sh <= 2 {
+            (&mut ctx.stream, default_waits)
+        } else {
+            let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
+            (&mut s.queue, &mut s.waits)
+        };
+        let w = std::mem::take(waits);
+        modules[&m]
+            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &w)
+            .map(|_| ())
+            .map_err(from_io)
+    }
+
+    fn run(&mut self, op: &Op, sh: usize) -> CUresult {
+        match op {
+            Op::Launch { f, grid, block, shared, params } => {
+                let args: Vec<&[u8]> = params.iter().map(|p| &p[..]).collect();
+                self.launch(*f, *grid, *block, *shared, sh, &args)
+            }
+            Op::Memset { dst, pattern, count } => {
+                self.sync_all()?;
+                self.ctx.memset(*dst, pattern, *count).map_err(from_io)
+            }
+            Op::Copy { dst, src, n } => {
+                self.sync_all()?;
+                let (dd, sd) = (self.ctx.address_range(*dst).is_some(), self.ctx.address_range(*src).is_some());
+                match (dd, sd) {
+                    (true, true) => self.ctx.memcpy_dtod(*dst, *src, *n as u64),
+                    (true, false) => self.ctx.memcpy_htod(*dst, unsafe { std::slice::from_raw_parts(*src as *const u8, *n) }),
+                    (false, true) => self.ctx.memcpy_dtoh(unsafe { std::slice::from_raw_parts_mut(*dst as *mut u8, *n) }, *src),
+                    (false, false) => {
+                        unsafe { std::ptr::copy(*src as *const u8, *dst as *mut u8, *n) };
+                        Ok(())
+                    }
+                }
+                .map_err(from_io)
+            }
+        }
+    }
 }
 
 // The runtime objects use Rc internally; they are only reached through DRIVER's mutex.
@@ -232,6 +311,9 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
             streams: HashMap::new(),
             events: HashMap::new(),
             next_handle: 16,
+            capturing: HashMap::new(),
+            graphs: HashMap::new(),
+            execs: HashMap::new(),
         });
     }
     Ok(())
@@ -531,26 +613,18 @@ pub(crate) unsafe fn cuLaunchKernel(
     }
     with(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
-        let g14x = d.ctx.device.g14x();
         let slots = d.modules[&m].module.kernels[&name].args.clone();
         let args: Vec<&[u8]> = slots
             .iter()
             .enumerate()
             .map(|(i, s)| std::slice::from_raw_parts(*params.add(i) as *const u8, s.bytes as usize))
             .collect();
-        let sh = stream.0 as usize;
-        let Driver { ctx, default_waits, modules, streams, .. } = d;
-        let (queue, waits) = if sh <= 2 {
-            (&mut ctx.stream, default_waits)
-        } else {
-            let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
-            (&mut s.queue, &mut s.waits)
-        };
-        let w = std::mem::take(waits);
-        modules[&m]
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, &args, [gx, gy, gz], [bx, by, bz], shared, &w)
-            .map(|_| ())
-            .map_err(from_io)
+        let (grid, block) = ([gx, gy, gz], [bx, by, bz]);
+        let op = || Op::Launch { f: f.0 as usize, grid, block, shared, params: args.iter().map(|a| a.to_vec()).collect() };
+        if d.captured(stream, op) {
+            return Ok(());
+        }
+        d.launch(f.0 as usize, grid, block, shared, stream.0 as usize, &args)
     })
 }
 
@@ -924,23 +998,38 @@ pub(crate) unsafe fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> C
     }
 }
 
-pub(crate) unsafe fn cuMemcpyAsync(dst: CUdeviceptr, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemcpyAsync(dst: CUdeviceptr, src: CUdeviceptr, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Copy { dst: dst.0 as u64, src: src.0 as u64, n })))? {
+        return Ok(());
+    }
     cuMemcpy(dst, src, n)
 }
 
-pub(crate) unsafe fn cuMemcpyHtoDAsync_v2(dst: CUdeviceptr, src: *const c_void, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemcpyHtoDAsync_v2(dst: CUdeviceptr, src: *const c_void, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Copy { dst: dst.0 as u64, src: src as u64, n })))? {
+        return Ok(());
+    }
     cuMemcpyHtoD_v2(dst, src, n)
 }
 
-pub(crate) unsafe fn cuMemcpyDtoHAsync_v2(dst: *mut c_void, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemcpyDtoHAsync_v2(dst: *mut c_void, src: CUdeviceptr, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Copy { dst: dst as u64, src: src.0 as u64, n })))? {
+        return Ok(());
+    }
     cuMemcpyDtoH_v2(dst, src, n)
 }
 
-pub(crate) unsafe fn cuMemcpyDtoDAsync_v2(dst: CUdeviceptr, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemcpyDtoDAsync_v2(dst: CUdeviceptr, src: CUdeviceptr, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Copy { dst: dst.0 as u64, src: src.0 as u64, n })))? {
+        return Ok(());
+    }
     cuMemcpyDtoD_v2(dst, src, n)
 }
 
-pub(crate) unsafe fn cuMemsetD8Async(dst: CUdeviceptr, uc: u8, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemsetD8Async(dst: CUdeviceptr, uc: u8, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Memset { dst: dst.0 as u64, pattern: vec![uc], count: n as u64 })))? {
+        return Ok(());
+    }
     cuMemsetD8_v2(dst, uc, n)
 }
 
@@ -951,11 +1040,17 @@ pub(crate) unsafe fn cuMemsetD16_v2(dst: CUdeviceptr, us: u16, n: usize) -> CUre
     })
 }
 
-pub(crate) unsafe fn cuMemsetD16Async(dst: CUdeviceptr, us: u16, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemsetD16Async(dst: CUdeviceptr, us: u16, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Memset { dst: dst.0 as u64, pattern: us.to_le_bytes().to_vec(), count: n as u64 })))? {
+        return Ok(());
+    }
     cuMemsetD16_v2(dst, us, n)
 }
 
-pub(crate) unsafe fn cuMemsetD32Async(dst: CUdeviceptr, ui: c_uint, n: usize, _s: CUstream) -> CUresult {
+pub(crate) unsafe fn cuMemsetD32Async(dst: CUdeviceptr, ui: c_uint, n: usize, s: CUstream) -> CUresult {
+    if with(|d| Ok(d.captured(s, || Op::Memset { dst: dst.0 as u64, pattern: ui.to_le_bytes().to_vec(), count: n as u64 })))? {
+        return Ok(());
+    }
     cuMemsetD32_v2(dst, ui, n)
 }
 
@@ -999,6 +1094,79 @@ pub(crate) unsafe fn cuPointerGetAttribute(data: *mut c_void, attribute: CUpoint
         P::CU_POINTER_ATTRIBUTE_CONTEXT if device => out(data as *mut CUcontext, CUcontext(CTX as *mut _)),
         _ => Err(CUerror::INVALID_VALUE),
     }
+}
+
+// ---- CUDA graphs, built by stream capture and replayed in order on the launch stream
+
+pub(crate) unsafe fn cuStreamBeginCapture_v2(s: CUstream, _mode: CUstreamCaptureMode) -> CUresult {
+    with(|d| {
+        let k = stream_key(s);
+        if d.capturing.contains_key(&k) {
+            return Err(CUerror::ILLEGAL_STATE);
+        }
+        d.capturing.insert(k, Vec::new());
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuStreamEndCapture(s: CUstream, graph: *mut CUgraph) -> CUresult {
+    let h = with(|d| {
+        let ops = d.capturing.remove(&stream_key(s)).ok_or(CUerror::ILLEGAL_STATE)?;
+        let h = d.handle();
+        d.graphs.insert(h, ops);
+        Ok(h)
+    })?;
+    out(graph, h as CUgraph)
+}
+
+pub(crate) unsafe fn cuStreamIsCapturing(s: CUstream, status: *mut CUstreamCaptureStatus) -> CUresult {
+    let on = with(|d| Ok(d.capturing.contains_key(&stream_key(s))))?;
+    out(
+        status,
+        if on { CUstreamCaptureStatus_enum::CU_STREAM_CAPTURE_STATUS_ACTIVE } else { CUstreamCaptureStatus_enum::CU_STREAM_CAPTURE_STATUS_NONE },
+    )
+}
+
+pub(crate) unsafe fn cuThreadExchangeStreamCaptureMode(_mode: *mut CUstreamCaptureMode) -> CUresult {
+    Ok(())
+}
+
+pub(crate) unsafe fn cuGraphInstantiateWithFlags(exec: *mut CUgraphExec, graph: CUgraph, _flags: std::ffi::c_ulonglong) -> CUresult {
+    let h = with(|d| {
+        let ops = d.graphs.get(&(graph as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        let h = d.handle();
+        d.execs.insert(h, ops);
+        Ok(h)
+    })?;
+    out(exec, h as CUgraphExec)
+}
+
+pub(crate) unsafe fn cuGraphInstantiate_v2(
+    exec: *mut CUgraphExec,
+    graph: CUgraph,
+    _error_node: *mut CUgraphNode,
+    _log: *mut c_char,
+    _log_size: usize,
+) -> CUresult {
+    cuGraphInstantiateWithFlags(exec, graph, 0)
+}
+
+pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
+    with(|d| {
+        let ops = d.execs.get(&(exec as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        for op in &ops {
+            d.run(op, s.0 as usize)?;
+        }
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuGraphExecDestroy(exec: CUgraphExec) -> CUresult {
+    with(|d| d.execs.remove(&(exec as usize)).map(|_| ()).ok_or(CUerror::INVALID_HANDLE))
+}
+
+pub(crate) unsafe fn cuGraphDestroy(graph: CUgraph) -> CUresult {
+    with(|d| d.graphs.remove(&(graph as usize)).map(|_| ()).ok_or(CUerror::INVALID_HANDLE))
 }
 
 fn error_name(code: u32) -> &'static CStr {
