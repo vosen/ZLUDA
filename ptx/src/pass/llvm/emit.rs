@@ -835,6 +835,8 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Clz { data, arguments } => self.emit_clz(data, arguments),
             ast::Instruction::Bfind { data, arguments } => self.emit_bfind(data, arguments),
             ast::Instruction::Lop3 { data, arguments } => self.emit_lop3(data, arguments),
+            ast::Instruction::MatchAllSync { data, arguments } => self.emit_match_all_sync(data, arguments),
+            ast::Instruction::ElectSync { arguments } => self.emit_elect_sync(arguments),
             ast::Instruction::Bmsk {
                 data: ast::BmskMode::Wrap,
                 arguments,
@@ -3574,7 +3576,7 @@ impl<'a> MethodEmitContext<'a> {
         let bits = unsafe { LLVMGetIntTypeWidth(type_) };
         let name = format!("{name}.i{bits}\0");
         let mut params = vec![type_; args.len()];
-        if name.starts_with("llvm.abs.") || name.starts_with("llvm.ctlz.") {
+        if name.starts_with("llvm.abs.") || name.starts_with("llvm.ctlz.") || name.starts_with("llvm.cttz.") {
             params[1] = unsafe { LLVMInt1TypeInContext(self.context) };
         }
         unsafe {
@@ -6412,6 +6414,78 @@ impl<'a> MethodEmitContext<'a> {
                     ast::SetpBoolPostOp::Xor => LLVMBuildXor(b, nonzero, q, name),
                 });
             }
+        }
+        Ok(())
+    }
+
+    // The member mask is ignored, as in the other warp operations: all active threads take part
+    fn emit_active_lanes(&mut self) -> Result<LLVMValueRef, TranslateError> {
+        let i1 = unsafe { LLVMInt1TypeInContext(self.context) };
+        let true_ = unsafe { LLVMConstInt(i1, 1, 0) };
+        self.emit_intrinsic(c"llvm.agx.simd.ballot", None, vec![&ast::Type::Scalar(ast::ScalarType::U32)], vec![(true_, i1)])
+    }
+
+    fn emit_lane_id(&mut self) -> Result<LLVMValueRef, TranslateError> {
+        self.emit_intrinsic(c"llvm.agx.thread.index.in.simdgroup", None, vec![&ast::Type::Scalar(ast::ScalarType::U32)], vec![])
+    }
+
+    // elect.sync: the leader is the lowest active lane
+    fn emit_elect_sync(&mut self, arguments: ast::ElectSyncArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let active = self.emit_active_lanes()?;
+        let i1 = unsafe { LLVMInt1TypeInContext(self.context) };
+        let false_ = unsafe { LLVMConstInt(i1, 0, 0) };
+        let leader = self.emit_int_intrinsic("llvm.cttz", i32_type, &[active, false_]);
+        self.resolver.register(arguments.dst, leader);
+        if let Some(p) = arguments.dst_pred {
+            let lane = self.emit_lane_id()?;
+            self.resolver.with_result(p, |name| unsafe {
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, lane, leader, name)
+            });
+        }
+        Ok(())
+    }
+
+    // match.all.sync: compare with the value of the lowest active lane
+    fn emit_match_all_sync(
+        &mut self,
+        type_: ast::ScalarType,
+        arguments: ast::MatchAllSyncArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i1 = unsafe { LLVMInt1TypeInContext(self.context) };
+        let b = self.builder;
+        let value = self.resolver.value(arguments.src)?;
+        let active = self.emit_active_lanes()?;
+        let false_ = unsafe { LLVMConstInt(i1, 0, 0) };
+        let leader = self.emit_int_intrinsic("llvm.cttz", i32_type, &[active, false_]);
+        let u32_ = ast::Type::Scalar(ast::ScalarType::U32);
+        let shuffle = |this: &mut Self, v: LLVMValueRef| {
+            this.emit_intrinsic(c"llvm.agx.simd.shuffle.i32", None, vec![&u32_], vec![(v, i32_type), (leader, i32_type)])
+        };
+        let same = unsafe {
+            if type_.size_of() == 8 {
+                let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                let v = LLVMBuildBitCast(b, value, i64_type, LLVM_UNNAMED.as_ptr());
+                let lo = LLVMBuildTrunc(b, v, i32_type, LLVM_UNNAMED.as_ptr());
+                let hi = LLVMBuildTrunc(b, LLVMBuildLShr(b, v, LLVMConstInt(i64_type, 32, 0), LLVM_UNNAMED.as_ptr()), i32_type, LLVM_UNNAMED.as_ptr());
+                let (slo, shi) = (shuffle(self, lo)?, shuffle(self, hi)?);
+                let elo = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, lo, slo, LLVM_UNNAMED.as_ptr());
+                let ehi = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, hi, shi, LLVM_UNNAMED.as_ptr());
+                LLVMBuildAnd(b, elo, ehi, LLVM_UNNAMED.as_ptr())
+            } else {
+                let v = LLVMBuildBitCast(b, value, i32_type, LLVM_UNNAMED.as_ptr());
+                let sv = shuffle(self, v)?;
+                LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, v, sv, LLVM_UNNAMED.as_ptr())
+            }
+        };
+        let different = unsafe { LLVMBuildNot(b, same, LLVM_UNNAMED.as_ptr()) };
+        let differ_mask = self.emit_intrinsic(c"llvm.agx.simd.ballot", None, vec![&u32_], vec![(different, i1)])?;
+        let all = unsafe { LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, differ_mask, LLVMConstInt(i32_type, 0, 0), LLVM_UNNAMED.as_ptr()) };
+        let mask = unsafe { LLVMBuildSelect(b, all, active, LLVMConstInt(i32_type, 0, 0), LLVM_UNNAMED.as_ptr()) };
+        self.resolver.register(arguments.dst, mask);
+        if let Some(p) = arguments.dst_pred {
+            self.resolver.register(p, all);
         }
         Ok(())
     }

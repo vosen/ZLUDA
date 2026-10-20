@@ -195,6 +195,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Lop3 { .. }
+        | ast::Instruction::MatchAllSync { .. }
+        | ast::Instruction::ElectSync { .. }
         | ast::Instruction::Fns { .. }
         | ast::Instruction::Rcp { .. }
         | ast::Instruction::Rem { .. }

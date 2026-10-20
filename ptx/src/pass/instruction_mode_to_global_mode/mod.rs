@@ -2168,6 +2168,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Prmt { .. }
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Lop3 { .. }
+        | ast::Instruction::MatchAllSync { .. }
+        | ast::Instruction::ElectSync { .. }
         | ast::Instruction::Fns { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Membar { .. }

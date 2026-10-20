@@ -564,6 +564,7 @@ fn run_instruction<'input>(
             let mode = match data.mode {
                 ptx_parser::VoteMode::Any => "any_pred",
                 ptx_parser::VoteMode::All => "all_pred",
+                ptx_parser::VoteMode::Uni => "uni_pred",
                 ptx_parser::VoteMode::Ballot => "ballot_b32",
             };
             let negate = if data.negate { "_negate" } else { "" };
@@ -585,6 +586,10 @@ fn run_instruction<'input>(
                 ptx_parser::Reduction::Add => "add",
                 ptx_parser::Reduction::Min => "min",
                 ptx_parser::Reduction::Max => "max",
+                ptx_parser::Reduction::And => "and",
+                ptx_parser::Reduction::Or => "or",
+                ptx_parser::Reduction::Xor => "xor",
+                #[allow(unreachable_patterns)]
                 _ => return Err(error_unreachable()),
             };
             let name = format!(

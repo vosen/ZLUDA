@@ -5947,8 +5947,7 @@ derive_parser!(
         }
     }
 
-    // .mode: VoteMode = { .all, .any, .uni };
-    .mode: VoteMode = { .all, .any };
+    .mode: VoteMode = { .all, .any, .uni };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-redux-sync
 
@@ -5960,6 +5959,13 @@ derive_parser!(
     }
     .op: Reduction = {.add, .min, .max};
     .type: ScalarType = {.u32, .s32};
+    redux.sync.bop.b32 dst, src, membermask => {
+        Instruction::ReduxSync {
+            data: ReduxSyncData { type_: ScalarType::B32, reduction: bop },
+            arguments: ReduxSyncArgs { dst, src, src_membermask: membermask }
+        }
+    }
+    .bop: Reduction = {.and, .or, .xor};
 
     // redux.sync.op.b32 dst, src, membermask;
     // .op   = {.and, .or, .xor}
@@ -6218,8 +6224,23 @@ derive_parser!(
             arguments: MatchSyncArgs { dst: d, src: a, src_membermask: membermask }
         }
     }
+    // d = the member mask when every thread holds the same a (else 0), p = whether they do
+    match.all.sync.type  d[|p], a, membermask => {
+        Instruction::MatchAllSync {
+            data: type_,
+            arguments: MatchAllSyncArgs { dst: d, dst_pred: p, src: a, src_membermask: membermask }
+        }
+    }
 
     .type: ScalarType = { .b32, .b64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-elect-sync
+    // d = the lane of the leader (the lowest active member of membermask), p = whether this is the leader
+    elect.sync  d[|p], membermask => {
+        Instruction::ElectSync {
+            arguments: ElectSyncArgs { dst: d, dst_pred: p, src_membermask: membermask }
+        }
+    }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-bfind
     bfind{.shiftamt}.type  d, a => {

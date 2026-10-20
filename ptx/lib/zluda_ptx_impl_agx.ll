@@ -522,6 +522,21 @@ define zeroext i1 @__zluda_ptx_impl_vote_sync_all_pred_negate(i1 zeroext %value,
   ret i1 %r
 }
 
+; uni: every active thread holds the same value (so negating it changes nothing)
+define zeroext i1 @__zluda_ptx_impl_vote_sync_uni_pred(i1 zeroext %value, i32 %membermask) #2 {
+  %active = call i32 @llvm.agx.simd.ballot(i1 true)
+  %b = call i32 @llvm.agx.simd.ballot(i1 %value)
+  %none = icmp eq i32 %b, 0
+  %all = icmp eq i32 %b, %active
+  %r = or i1 %none, %all
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_sync_uni_pred_negate(i1 zeroext %value, i32 %membermask) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_uni_pred(i1 %value, i32 %membermask)
+  ret i1 %r
+}
+
 define i32 @__zluda_ptx_impl_vote_sync_ballot_b32(i1 zeroext %value, i32 %membermask) #2 {
   %b = call i32 @llvm.agx.simd.ballot(i1 %value)
   ret i32 %b

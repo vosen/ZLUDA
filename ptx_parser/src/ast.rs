@@ -1040,6 +1040,33 @@ ptx_parser_macros::generate_instruction_type!(
                 src_membermask: T
             }
         },
+        MatchAllSync {
+            data: ScalarType,
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src: {
+                    repr: T,
+                    type: Type::Scalar(data.clone())
+                },
+                src_membermask: T
+            }
+        },
+        ElectSync {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                dst_pred: {
+                    repr: Option<T>,
+                    type: Type::from(ScalarType::Pred)
+                },
+                src_membermask: T
+            }
+        },
         Shf {
             data: ShfDetails,
             type: Type::Scalar(ScalarType::B32),
@@ -3424,7 +3451,7 @@ pub struct VoteDetails {
 impl VoteMode {
     fn type_(self) -> ScalarType {
         match self {
-            VoteMode::All | VoteMode::Any => ScalarType::Pred,
+            VoteMode::All | VoteMode::Any | VoteMode::Uni => ScalarType::Pred,
             VoteMode::Ballot => ScalarType::B32,
         }
     }
