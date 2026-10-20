@@ -397,9 +397,13 @@ cargo build -p zluda_agx
 ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 ```
 
-* Modules: `cuModuleLoadData` takes PTX text (compiled by `zoc`, found through
-  `ZLUDA_AGX_ZOC`, next to the executable or on `PATH`, and cached in
-  `ZLUDA_CACHE_DIR`) or an AGX object. Fat binaries are not unpacked yet.
+* Modules: `cuModuleLoadData` takes PTX text, a fat binary (its PTX for the
+  newest architecture is used; SASS-only fat binaries cannot load) or an AGX
+  object. PTX is compiled by `zoc` (found through `ZLUDA_AGX_ZOC`, next to the
+  executable or on `PATH`) and the result is cached in `ZLUDA_CACHE_DIR`
+  (default `$XDG_CACHE_HOME/zluda/agx` or `~/.cache/zluda/agx`; disabled by
+  `ZLUDA_CACHE_DISABLE`). Entries are keyed by the PTX, the chip and the `zoc`
+  binary, so a rebuilt compiler does not reuse old code.
 * Launches: `cuLaunchKernel` packs `kernelParams` with the argument layout of
   the object's `.agx.kernels` section. Most parameters travel in uniform
   registers; the others go in a parameter block.
