@@ -371,10 +371,13 @@ cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
 grid must be a multiple of the cluster (else `CUDA_ERROR_INVALID_CLUSTER_SIZE`);
 a function that reads thread ids and is not inlined cannot be shared by kernels
 of different cluster shapes; cluster dimensions set at launch
-(`cuLaunchKernelEx` attributes) and `clusterlaunchcontrol` are not
-supported. PTX-formalization `cluster.ptx`, `cluster-exit.ptx`,
-`cluster-generic.ptx`, `mbarrier-cluster.ptx`, `mbar-mc.ptx` and `bulk.ptx`
-pass. On AMD GPUs clusters still have a
+(`cuLaunchKernelEx` attributes) are not supported. `st.async` and
+`red.async` store (or update atomically) and complete their bytes on the
+destination's mbarrier; `clusterlaunchcontrol.try_cancel` never cancels a
+cluster (a valid outcome: the response is 0 and `query_cancel.is_canceled`
+false); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formalization
+`cluster.ptx`, `cluster-exit.ptx`, `cluster-generic.ptx`,
+`mbarrier-cluster.ptx`, `mbar-mc.ptx`, `misc-async.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
 single CTA.
 
 ## Strict floating point mode
@@ -463,7 +466,7 @@ completely). Without it 1064 match and the other 172 are the floating point
 differences listed above (denormal `f32` operands and results, NaN bit
 patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 423 skipped
 checks follow kernels using `wgmma` and `tcgen05` (emulation not written),
-`clusterlaunchcontrol`, `ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
+`ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
 `s2f6x2`) and `mul.rz.f16x2.f32x2.f32x2`. A full run takes about 100 seconds
 with `-j 8`.
 

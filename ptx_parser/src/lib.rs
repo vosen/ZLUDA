@@ -6100,6 +6100,77 @@ derive_parser!(
     stmatrix <= { stmatrix(stream) }
     movmatrix <= { movmatrix(stream) }
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-async
+    // st.async and red.async to shared::cluster memory, completing their bytes on an mbarrier there
+    st.async{.weak}{.sem}{.scope}{.ss}{.completion_mechanism}{.vec}.type [a], b, [mbar] => {
+        let _ = (weak, sem, scope, ss, completion_mechanism);
+        Instruction::StAsync {
+            data: ast::StAsyncDetails { type_: ast::Type::maybe_vector(vec, type_), red: None, scalar: type_ },
+            arguments: StAsyncArgs { src_addr: a, src_value: b, src_mbarrier: mbar }
+        }
+    }
+    .sem: StAsyncSem = { .relaxed };
+    .scope: MemScope = { .cluster };
+    .ss: StateSpace = { .shared{::cluster} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .vec: VectorPrefix = { .v2, .v4 };
+    .type: ScalarType = { .b32, .b64, .u32, .u64, .s32, .s64, .f32, .f64 };
+
+    red.async{.sem}{.scope}{.ss}{.completion_mechanism}.op.type [a], b, [mbar] => {
+        let _ = (sem, scope, ss, completion_mechanism);
+        Instruction::StAsync {
+            data: ast::StAsyncDetails {
+                type_: ast::Type::Scalar(type_),
+                red: Some(ast::AtomicOp::new(op, type_.kind())),
+                scalar: type_,
+            },
+            arguments: StAsyncArgs { src_addr: a, src_value: b, src_mbarrier: mbar }
+        }
+    }
+    .sem: StAsyncSem = { .relaxed };
+    .scope: MemScope = { .cluster };
+    .ss: StateSpace = { .shared{::cluster} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .op: RawAtomicOp = { .and, .or, .xor, .add, .inc, .dec, .min, .max };
+    .type: ScalarType = { .b32, .b64, .u32, .u64, .s32, .s64 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-bulk
+    st.bulk{.weak}{.ss} [a], size, initval => {
+        let _ = weak;
+        Instruction::StBulk {
+            data: ast::StBulkDetails { space: shared_space(ss) },
+            arguments: StBulkArgs { src_addr: a, src_size: size, src_init: initval }
+        }
+    }
+    .ss: StateSpace = { .shared{::cta} };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#miscellaneous-instructions-setmaxnreg
+    // a register count hint: the backend allocates registers per kernel
+    setmaxnreg.action.sync.aligned.u32 imm => {
+        let _ = (action, imm);
+        Instruction::SetMaxNReg { data: 0 }
+    }
+    .action: SetMaxNRegAction = { .inc, .dec };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol
+    // No cluster is ever canceled (a valid outcome of try_cancel): the response says so
+    clusterlaunchcontrol.try_cancel.async{.space}.completion_mechanism{.multicast}.b128 [addr], [mbar] => {
+        let _ = (space, multicast);
+        Instruction::ClusterLaunchTryCancel {
+            arguments: ClusterLaunchTryCancelArgs { src_addr: addr, src_mbarrier: mbar }
+        }
+    }
+    .space: StateSpace = { .shared{::cta} };
+    .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .multicast = { .multicast::cluster::all };
+
+    clusterlaunchcontrol.query_cancel.is_canceled.pred.b128 p, [resp] => {
+        Instruction::ClusterLaunchQuery {
+            data: ast::ClusterLaunchQueryDetails { ctaid: None, space: StateSpace::Shared },
+            arguments: ClusterLaunchQueryArgs { dst: p, src: resp }
+        }
+    }
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-barrier-cluster
     barrier.cluster.arrive{.sem}{.aligned} => {
         let _ = aligned;

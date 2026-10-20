@@ -1419,6 +1419,70 @@ ptx_parser_macros::generate_instruction_type!(
         BarrierCluster {
             data: BarrierClusterDetails,
         },
+        StAsync {
+            type: { &data.type_ },
+            data: StAsyncDetails,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_value: T,
+                src_mbarrier: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        StBulk {
+            type: Type::Scalar(ScalarType::B8),
+            data: StBulkDetails,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { data.space },
+                    relaxed_type_check: true,
+                },
+                src_size: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                },
+                src_init: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U64),
+                },
+            }
+        },
+        SetMaxNReg {
+            data: u32,
+        },
+        ClusterLaunchTryCancel {
+            type: Type::Scalar(ScalarType::B128),
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_mbarrier: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        ClusterLaunchQuery {
+            type: { Type::from(data.dst_type()) },
+            data: ClusterLaunchQueryDetails,
+            arguments<T>: {
+                dst: T,
+                src: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B128),
+                    space: { data.space },
+                },
+            }
+        },
         Mapa {
             type: Type::Scalar(data.type_),
             data: MapaDetails,
@@ -2804,6 +2868,38 @@ pub struct SlctDetails {
     pub type_: ScalarType,
     pub ctype: ScalarType,
     pub flush_to_zero: bool,
+}
+
+/// st.async (red: None) / red.async: a store, or an atomic operation, on shared::cluster memory that completes
+/// its bytes on an mbarrier
+#[derive(Clone)]
+pub struct StAsyncDetails {
+    pub type_: Type,
+    pub red: Option<AtomicOp>,
+    pub scalar: ScalarType,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct StBulkDetails {
+    pub space: StateSpace,
+}
+
+/// clusterlaunchcontrol.query_cancel: is_canceled (a predicate), or get_first_ctaid (x, y, z or all as v4.b32)
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ClusterLaunchQueryDetails {
+    pub ctaid: Option<Option<u8>>,
+    /// where the response is: a .b128 register, or shared memory
+    pub space: StateSpace,
+}
+
+impl ClusterLaunchQueryDetails {
+    pub fn dst_type(&self) -> Type {
+        match self.ctaid {
+            None => Type::Scalar(ScalarType::Pred),
+            Some(Some(_)) => Type::Scalar(ScalarType::B32),
+            Some(None) => Type::Vector(4, ScalarType::B32),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

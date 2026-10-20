@@ -2174,6 +2174,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Mapa { .. }
         | ast::Instruction::Getctarank { .. }
         | ast::Instruction::BarrierCluster { .. }
+        | ast::Instruction::StAsync { .. }
+        | ast::Instruction::StBulk { .. }
+        | ast::Instruction::SetMaxNReg { .. }
+        | ast::Instruction::ClusterLaunchTryCancel { .. }
+        | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
         | ast::Instruction::ElectSync { .. }

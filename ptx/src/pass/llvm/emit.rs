@@ -853,6 +853,26 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Slct { data, arguments } => self.emit_slct(data, arguments),
             // expanded by insert_post_saturation
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
+            ast::Instruction::StAsync { data, arguments } => self.emit_st_async(data, arguments),
+            ast::Instruction::StBulk { arguments, .. } => {
+                let to = self.resolver.value(arguments.src_addr)?;
+                let size = self.resolver.value(arguments.src_size)?;
+                let init = self.resolver.value(arguments.src_init)?;
+                let init = unsafe {
+                    LLVMBuildTrunc(self.builder, init, LLVMInt8TypeInContext(self.context), LLVM_UNNAMED.as_ptr())
+                };
+                unsafe { LLVMBuildMemSet(self.builder, to, init, size, 8) };
+                Ok(())
+            }
+            // a register budget hint: registers are allocated per kernel
+            ast::Instruction::SetMaxNReg { .. } => Ok(()),
+            ast::Instruction::ClusterLaunchTryCancel { arguments } => self.emit_cluster_launch_try_cancel(arguments),
+            ast::Instruction::ClusterLaunchQuery { data, arguments } => {
+                // no cluster is ever canceled
+                let dst_type = get_type(self.context, &data.dst_type())?;
+                self.resolver.register(arguments.dst, unsafe { LLVMConstNull(dst_type) });
+                Ok(())
+            }
             // calls (replace_instructions_with_functions)
             ast::Instruction::Mapa { .. }
             | ast::Instruction::Getctarank { .. }
@@ -5739,6 +5759,59 @@ impl<'a> MethodEmitContext<'a> {
             Some(ast::ScalarType::B64),
             &[mbarrier, one, zero],
         )?;
+        Ok(())
+    }
+
+    // st.async / red.async: the store or the atomic operation, then its bytes complete on the mbarrier
+    fn emit_st_async(
+        &mut self,
+        data: ast::StAsyncDetails,
+        arguments: ast::StAsyncArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let bytes = match &data.type_ {
+            ast::Type::Vector(n, t) => *n as u64 * t.size_of() as u64,
+            _ => data.scalar.size_of() as u64,
+        };
+        match data.red {
+            None => {
+                let to = self.resolver.value(arguments.src_addr)?;
+                let value = self.resolver.value(arguments.src_value)?;
+                unsafe { LLVMBuildStore(self.builder, value, to) };
+            }
+            Some(op) => {
+                self.emit_atom_impl(
+                    ast::AtomDetails {
+                        semantics: ast::AtomSemantics::Relaxed,
+                        scope: ast::MemScope::Gpu,
+                        space: ast::StateSpace::Shared,
+                        op,
+                        type_: ast::Type::Scalar(data.scalar),
+                    },
+                    arguments.src_addr,
+                    arguments.src_value,
+                )?;
+            }
+        }
+        let mbarrier = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbarrier)?;
+        let bytes = self.const_u32(bytes);
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_mbarrier_complete_tx", None, None, &[mbarrier, bytes])?;
+        Ok(())
+    }
+
+    // clusterlaunchcontrol.try_cancel never cancels a cluster: the response (16 bytes) is 0, and completes
+    fn emit_cluster_launch_try_cancel(
+        &mut self,
+        arguments: ast::ClusterLaunchTryCancelArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let to = self.resolver.value(arguments.src_addr)?;
+        unsafe {
+            let zero = LLVMConstInt(LLVMInt8TypeInContext(self.context), 0, 0);
+            let size = LLVMConstInt(LLVMInt32TypeInContext(self.context), 16, 0);
+            LLVMBuildMemSet(self.builder, to, zero, size, 16);
+        }
+        let mbarrier = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbarrier)?;
+        let bytes = self.const_u32(16);
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_mbarrier_complete_tx", None, None, &[mbarrier, bytes])?;
         Ok(())
     }
 
