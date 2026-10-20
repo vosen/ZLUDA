@@ -517,11 +517,26 @@ for agx-g13g and agx-g14c, and the plans' launch sequences (ping-pong
 buffers, in-place copies, the passes of each dimension) are checked in unit
 tests against a direct DFT.
 
+## cuSPARSE (`zluda_sparse_agx`)
+
+`libcusparse` on `agx_libs/kernels/sparse.mlir` (one source for every chip).
+The generic API with f32 values and 32- or 64-bit indices (the row offsets and
+the columns of one type), zero- or one-based: `cusparseSpMV` on CSR and COO
+matrices, non-transposed or transposed, and `cusparseSpMM` on CSR matrices with
+`opA` non-transposed and `opB` either way, on column- or row-major dense
+matrices. Non-transposed CSR SpMV and SpMM use one thread per output element;
+the transposed and COO products scale `y` by `beta` first and then add with
+atomic f32 adds. No external buffer is needed (`*_bufferSize` returns 0).
+Handles, streams, host and device pointer modes and the legacy matrix
+descriptor are supported. Other functions (sparse formats beyond CSR and COO,
+SpGEMM, SpSV, the legacy level 2 and 3 routines, other value types) return
+`CUSPARSE_STATUS_NOT_SUPPORTED`.
+
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT), with their library symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT, cuSPARSE), with their library symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -539,7 +554,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, the rest of cuDNN, double precision cuFFT, cuSPARSE (to be written as MLIR kernels) |
+| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, the rest of cuDNN, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

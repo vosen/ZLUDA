@@ -75,7 +75,7 @@ def run(a, obj, name, args, grid, wg, tmp):
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
     cmd = [a.agx_run, code, "--grid", "%d,%d,1" % grid, "--wg", "%d,%d,1" % wg]
-    uniforms, dumps, bases = {}, [], [OUT, IN_A, IN_B]
+    uniforms, dumps, bases = {}, [], [0x1000000 * (k + 1) for k in range(16)][::-1]
     for (kind, value, *rest), (_k, nbytes, half) in zip(args, slots):
         u = half // 2
         if kind == "buf":
@@ -359,6 +359,73 @@ def case_fft_packing(a, obj, tmp, n, batch, rnd):
     return bad
 
 
+def random_csr(rows, cols, rnd, density=0.3):
+    rowptr, col, val = [0], [], []
+    for _ in range(rows):
+        for c in range(cols):
+            if rnd.random() < density:
+                col.append(c)
+                val.append(rnd.uniform(-1, 1))
+        rowptr.append(len(col))
+    return rowptr, col, rounded(val, "f")
+
+
+def case_sparse(a, obj, tmp, what, I, base, rnd):
+    it = "i" if I == "i32" else "q"
+    rows, cols = 13, 9
+    rowptr, col, val = random_csr(rows, cols, rnd)
+    nnz = len(col)
+    rp = pack([r + base for r in rowptr], it)
+    ci = pack([c + base for c in col], it)
+    dense = {(i, col[k]): val[k] for i in range(rows) for k in range(rowptr[i], rowptr[i + 1])}
+    alpha, beta = 1.5, 0.5
+    if what in ("csr", "csr_t", "coo", "coo_t"):
+        trans = what.endswith("_t")
+        xn, yn = (rows, cols) if trans else (cols, rows)
+        x = rounded([rnd.uniform(-1, 1) for _ in range(xn)], "f")
+        y = rounded([rnd.uniform(-1, 1) for _ in range(yn)], "f")
+        want = [alpha * sum(dense.get((j, i) if trans else (i, j), 0.0) * x[j] for j in range(xn)) + beta * y[i]
+                for i in range(yn)]
+        if what == "csr":
+            (got,) = run(a, obj, "agx_csr_spmv_" + I,
+                         [("buf", rp), ("buf", ci), ("buf", pack(val)), ("buf", pack(x)), ("buf", pack(y), True),
+                          ("i64", rows), ("i64", base), ("f32", alpha), ("f32", beta)], (-(-rows // 32) * 32, 1), (32, 1), tmp)
+        else:
+            (scaled,) = run(a, obj, "agx_sparse_scale", [("buf", pack(y), True), ("i64", yn), ("i64", 1), ("f32", beta)],
+                            (-(-yn // 32) * 32, 1), (32, 1), tmp)
+            if what == "csr_t":
+                (got,) = run(a, obj, "agx_csr_spmv_t_" + I,
+                             [("buf", rp), ("buf", ci), ("buf", pack(val)), ("buf", pack(x)), ("buf", scaled, True),
+                              ("i64", rows), ("i64", base), ("f32", alpha)], (-(-rows // 32) * 32, 1), (32, 1), tmp)
+            else:
+                ri = pack([i + base for i in range(rows) for _ in range(rowptr[i], rowptr[i + 1])], it)
+                (got,) = run(a, obj, "agx_coo_spmv_" + I,
+                             [("buf", ri), ("buf", ci), ("buf", pack(val)), ("buf", pack(x)), ("buf", scaled, True),
+                              ("i64", nnz), ("i64", base), ("i64", int(trans)), ("f32", alpha)],
+                             (-(-nnz // 32) * 32, 1), (32, 1), tmp)
+        return close(unpack(got), want, range(yn), 1e-5)
+    # SpMM: C (rows x n) = alpha A B + beta C, B (cols x n); column-major or row-major dense matrices
+    n = 5
+    col_major = what == "spmm_col"
+    ldb, ldc = (cols + 2, rows + 1) if col_major else (n + 2, n + 1)
+    bs = (1, ldb) if col_major else (ldb, 1)
+    cs = (1, ldc) if col_major else (ldc, 1)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * (n if col_major else cols))], "f")
+    C = rounded([rnd.uniform(-1, 1) for _ in range(ldc * (n if col_major else rows))], "f")
+    (got,) = run(a, obj, "agx_csr_spmm_" + I,
+                 [("buf", rp), ("buf", ci), ("buf", pack(val)), ("buf", pack(B)), ("buf", pack(C), True),
+                  ("i64", rows), ("i64", n), ("i64", base), ("i64", bs[0]), ("i64", bs[1]), ("i64", cs[0]), ("i64", cs[1]),
+                  ("f32", alpha), ("f32", beta)], (-(-rows // 16) * 16, -(-n // 4) * 4), (16, 4), tmp)
+    want = list(C)
+    idx = []
+    for i in range(rows):
+        for j in range(n):
+            o = i * cs[0] + j * cs[1]
+            idx.append(o)
+            want[o] = alpha * sum(dense.get((i, k), 0.0) * B[k * bs[0] + j * bs[1]] for k in range(cols)) + beta * C[o]
+    return close(unpack(got), want, idx, 1e-5)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -375,7 +442,14 @@ def main():
         for chip in chips:
             obj = entries[chip]
             records = kernel_records(obj, a, tmp)
-            if "agx_fft_radix2" in records:
+            if "agx_csr_spmv_i32" in records:
+                cases = []
+                for I in ("i32", "i64"):
+                    for base in (0, 1):
+                        for what in ("csr", "csr_t", "coo", "coo_t", "spmm_col", "spmm_row"):
+                            cases.append(("sparse %s %s base %d" % (what, I, base),
+                                          lambda w=what, I=I, b=base: case_sparse(a, obj, tmp, w, I, b, rnd)))
+            elif "agx_fft_radix2" in records:
                 cases = []
                 for inv in (0, 1):
                     cases += [
