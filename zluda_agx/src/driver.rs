@@ -691,6 +691,8 @@ pub(crate) unsafe fn cuGetProcAddress_v2(
     r
 }
 
+pub(crate) use crate::dark::cuGetExportTable;
+
 pub(crate) unsafe fn cuGetProcAddress(symbol: *const c_char, pfn: *mut *mut c_void, version: c_int, flags: cuuint64_t) -> CUresult {
     cuGetProcAddress_v2(symbol, pfn, version, flags, std::ptr::null_mut())
 }

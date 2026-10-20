@@ -7,6 +7,7 @@
 //! Supported so far: one device and context, device memory, synchronous copies and fills, modules from PTX (or an
 //! AGX object), kernel launches with `kernelParams`, streams, events, device `printf` and `assert`.
 
+mod dark;
 mod driver;
 
 use cuda_types::cuda::*;
@@ -79,6 +80,7 @@ cuda_macros::cuda_function_declarations!(
             cuFuncSetCacheConfig,
             cuGetErrorName,
             cuGetErrorString,
+            cuGetExportTable,
             cuGetProcAddress,
             cuGetProcAddress_v2,
             cuInit,
