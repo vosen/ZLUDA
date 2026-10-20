@@ -25,6 +25,12 @@ static KNOWN_CUDA_VERSIONS: &[&'static str] = &[
 
 fn main() {
     let crate_root = PathBuf::from_str(env!("CARGO_MANIFEST_DIR")).unwrap();
+    // `zluda_bindgen asahi` regenerates only the Asahi bindings, which need no ROCm or CUDA headers
+    if std::env::args().nth(1).as_deref() == Some("asahi") {
+        generate_asahi(&crate_root, &["..", "ext", "asahi-sys", "src", "lib.rs"]);
+        return;
+    }
+    generate_asahi(&crate_root, &["..", "ext", "asahi-sys", "src", "lib.rs"]);
     generate_hip_runtime(
         &crate_root,
         &["..", "ext", "hip_runtime-sys", "src", "lib.rs"],
@@ -1491,6 +1497,34 @@ fn generate_rocm_smi(output: &PathBuf, path: &[&str]) {
     let mut converter = ConvertIntoRustResult::new(result_options);
     module.items = converter.convert(module.items).collect();
     converter.flush(&mut module.items);
+    let mut output = output.clone();
+    output.extend(path);
+    write_rust_to_file(output, &prettyplease::unparse(&module))
+}
+
+fn generate_asahi(output: &PathBuf, path: &[&str]) {
+    let mut include = output.clone();
+    include.extend(["..", "ext", "asahi-sys", "include"]);
+    let mut header = include.clone();
+    header.push("asahi_drm.h");
+    let asahi_header = new_builder()
+        .header(header.to_str().unwrap())
+        .allowlist_type("^drm_asahi.*")
+        .allowlist_var("^DRM_ASAHI.*")
+        .allowlist_var("^DRM_IOCTL_ASAHI.*")
+        .allowlist_var("^DRM_COMMAND_BASE$")
+        // the ioctl numbers are enumerators of an anonymous enum: keep them as plain constants
+        .default_enum_style(bindgen::EnumVariation::Consts)
+        .layout_tests(true)
+        // drm.h includes drm_mode.h, which the system provides
+        .clang_args([
+            format!("-I{}", include.to_str().unwrap()),
+            "-I/usr/include/drm".to_string(),
+        ])
+        .generate()
+        .unwrap()
+        .to_string();
+    let module: syn::File = syn::parse_str(&asahi_header).unwrap();
     let mut output = output.clone();
     output.extend(path);
     write_rust_to_file(output, &prettyplease::unparse(&module))

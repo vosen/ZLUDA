@@ -9,6 +9,7 @@ members = [
     "cuda_types",
     "dark_api",
     "detours-sys",
+    "ext/asahi-sys",
     "ext/highs-sys",
     "ext/hip_runtime-sys",
     "ext/hipblaslt-sys",
