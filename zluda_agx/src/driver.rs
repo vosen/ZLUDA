@@ -660,6 +660,345 @@ pub(crate) unsafe fn cuEventElapsedTime(ms: *mut f32, start: CUevent, end: CUeve
     out(ms, t)
 }
 
+// ---- entry points the CUDA runtime (libcudart) uses at start-up and for every launch
+
+fn raw_match(name: &[u8], flag: u64, version: i32) -> *mut c_void {
+    #[allow(unused_imports)]
+    use crate::*;
+    include!("../../zluda_bindgen/src/process_table.rs")
+}
+
+pub(crate) unsafe fn cuGetProcAddress_v2(
+    symbol: *const c_char,
+    pfn: *mut *mut c_void,
+    version: c_int,
+    flags: cuuint64_t,
+    status: *mut CUdriverProcAddressQueryResult,
+) -> CUresult {
+    if symbol.is_null() || pfn.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let f = raw_match(CStr::from_ptr(symbol).to_bytes(), flags, version);
+    let (r, st) = match f as usize {
+        0 => (Err(CUerror::NOT_FOUND), CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SYMBOL_NOT_FOUND),
+        usize::MAX => (Err(CUerror::NOT_FOUND), CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_VERSION_NOT_SUFFICIENT),
+        _ => (Ok(()), CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS),
+    };
+    *pfn = if r.is_ok() { f } else { std::ptr::null_mut() };
+    if !status.is_null() {
+        *status = st;
+    }
+    r
+}
+
+pub(crate) unsafe fn cuGetProcAddress(symbol: *const c_char, pfn: *mut *mut c_void, version: c_int, flags: cuuint64_t) -> CUresult {
+    cuGetProcAddress_v2(symbol, pfn, version, flags, std::ptr::null_mut())
+}
+
+// Libraries are modules, and kernels are functions.
+pub(crate) unsafe fn cuLibraryLoadData(
+    library: *mut CUlibrary,
+    code: *const c_void,
+    _jit_options: *mut CUjit_option,
+    _jit_values: *mut *mut c_void,
+    _num_jit: c_uint,
+    _lib_options: *mut CUlibraryOption,
+    _lib_values: *mut *mut c_void,
+    _num_lib: c_uint,
+) -> CUresult {
+    let mut m = CUmodule(std::ptr::null_mut());
+    cuModuleLoadData(&mut m, code)?;
+    out(library, CUlibrary(m.0 as *mut _))
+}
+
+pub(crate) unsafe fn cuLibraryUnload(library: CUlibrary) -> CUresult {
+    cuModuleUnload(CUmodule(library.0 as *mut _))
+}
+
+pub(crate) unsafe fn cuLibraryGetModule(pmod: *mut CUmodule, library: CUlibrary) -> CUresult {
+    out(pmod, CUmodule(library.0 as *mut _))
+}
+
+pub(crate) unsafe fn cuLibraryGetKernel(pkernel: *mut CUkernel, library: CUlibrary, name: *const c_char) -> CUresult {
+    let mut f = CUfunction(std::ptr::null_mut());
+    cuModuleGetFunction(&mut f, CUmodule(library.0 as *mut _), name)?;
+    out(pkernel, f.0 as CUkernel)
+}
+
+pub(crate) unsafe fn cuKernelGetFunction(pfunc: *mut CUfunction, kernel: CUkernel) -> CUresult {
+    out(pfunc, CUfunction(kernel as *mut _))
+}
+
+pub(crate) unsafe fn cuKernelGetAttribute(pi: *mut c_int, attrib: CUfunction_attribute, kernel: CUkernel, dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    cuFuncGetAttribute(pi, attrib, CUfunction(kernel as *mut _))
+}
+
+pub(crate) unsafe fn cuFuncSetAttribute(hfunc: CUfunction, attrib: CUfunction_attribute, value: c_int) -> CUresult {
+    with(|d| {
+        d.functions.get(&(hfunc.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        // Dynamic threadgroup memory is up to the device's 64 KiB without opting in.
+        if attrib == CUfunction_attribute_enum::CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES && value > 65536 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuFuncSetCacheConfig(hfunc: CUfunction, _config: CUfunc_cache) -> CUresult {
+    with(|d| d.functions.get(&(hfunc.0 as usize)).map(|_| ()).ok_or(CUerror::INVALID_HANDLE))
+}
+
+pub(crate) unsafe fn cuModuleGetLoadingMode(mode: *mut CUmoduleLoadingMode) -> CUresult {
+    out(mode, CUmoduleLoadingMode_enum::CU_MODULE_EAGER_LOADING)
+}
+
+pub(crate) unsafe fn cuCtxGetApiVersion(_ctx: CUcontext, version: *mut c_uint) -> CUresult {
+    out(version, 12040)
+}
+
+pub(crate) unsafe fn cuCtxGetFlags(flags: *mut c_uint) -> CUresult {
+    out(flags, 0)
+}
+
+pub(crate) unsafe fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
+    cuCtxSetCurrent(ctx)
+}
+
+pub(crate) unsafe fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
+    if pctx.is_null() {
+        return Ok(());
+    }
+    cuCtxGetCurrent(pctx)
+}
+
+pub(crate) unsafe fn cuDevicePrimaryCtxGetState(dev: CUdevice, flags: *mut c_uint, active: *mut c_int) -> CUresult {
+    check_device(dev)?;
+    out(flags, 0)?;
+    out(active, with(|_| Ok(1)).unwrap_or(0))
+}
+
+pub(crate) unsafe fn cuDevicePrimaryCtxSetFlags_v2(dev: CUdevice, _flags: c_uint) -> CUresult {
+    check_device(dev)
+}
+
+pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *mut c_int) -> CUresult {
+    if !least.is_null() {
+        *least = 0;
+    }
+    if !greatest.is_null() {
+        *greatest = 0;
+    }
+    Ok(())
+}
+
+/// Stack size per thread (scratch is not set up yet, ptx-re-blockers B1), the printf buffer of the runtime
+/// library (64 KiB per module) and the device heap (none).
+pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
+    let v = match limit {
+        CUlimit_enum::CU_LIMIT_STACK_SIZE => 0,
+        CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
+        CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
+        _ => return Err(CUerror::UNSUPPORTED_LIMIT),
+    };
+    out(pvalue, v)
+}
+
+pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, _value: usize) -> CUresult {
+    match limit {
+        CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => Ok(()),
+        _ => Err(CUerror::UNSUPPORTED_LIMIT),
+    }
+}
+
+pub(crate) unsafe fn cuDeviceGetUuid_v2(uuid: *mut CUuuid, dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    let chip = with(|d| Ok(d.ctx.device.params.chip_id))?;
+    let mut bytes = *b"AGX-ZLUDA\0\0\0\0\0\0\0";
+    bytes[12..16].copy_from_slice(&chip.to_le_bytes());
+    out(uuid, CUuuid { bytes })
+}
+
+pub(crate) unsafe fn cuDeviceGetUuid(uuid: *mut CUuuid, dev: CUdevice) -> CUresult {
+    cuDeviceGetUuid_v2(uuid, dev)
+}
+
+pub(crate) unsafe fn cuDeviceGetPCIBusId(bus: *mut c_char, len: c_int, dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    // An integrated GPU has no PCI address; report a fixed one so tools that print it work.
+    let id = b"0000:00:00.0\0";
+    if bus.is_null() || (len as usize) < id.len() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    std::ptr::copy_nonoverlapping(id.as_ptr() as *const c_char, bus, id.len());
+    Ok(())
+}
+
+pub(crate) unsafe fn cuStreamCreateWithPriority(ph: *mut CUstream, flags: c_uint, _priority: c_int) -> CUresult {
+    cuStreamCreate(ph, flags)
+}
+
+pub(crate) unsafe fn cuStreamGetFlags(_s: CUstream, flags: *mut c_uint) -> CUresult {
+    out(flags, 0)
+}
+
+pub(crate) unsafe fn cuStreamDestroy(s: CUstream) -> CUresult {
+    cuStreamDestroy_v2(s)
+}
+
+pub(crate) unsafe fn cuStreamQuery(s: CUstream) -> CUresult {
+    with(|d| {
+        let q = d.queue(s.0 as usize)?.0;
+        let last = q.last();
+        if q.is_done(last).map_err(from_io)? {
+            Ok(())
+        } else {
+            Err(CUerror::NOT_READY)
+        }
+    })
+}
+
+pub(crate) unsafe fn cuEventRecordWithFlags(e: CUevent, s: CUstream, _flags: c_uint) -> CUresult {
+    cuEventRecord(e, s)
+}
+
+pub(crate) unsafe fn cuCtxSynchronize_v2(_ctx: CUcontext) -> CUresult {
+    cuCtxSynchronize()
+}
+
+pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfunction, params: *mut *mut c_void, extra: *mut *mut c_void) -> CUresult {
+    let c = config.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    if c.numAttrs != 0 {
+        // cluster dimensions, cooperative launch and the other attributes are not supported
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    cuLaunchKernel(f, c.gridDimX, c.gridDimY, c.gridDimZ, c.blockDimX, c.blockDimY, c.blockDimZ, c.sharedMemBytes, c.hStream, params, extra)
+}
+
+/// Occupancy from the G14 register budget: up to 96 SIMD-groups per core, fewer when each thread needs more
+/// registers (2 * floor(3328 / (2 * register halves)) SIMD-groups), and 64 KiB of threadgroup memory per core.
+pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
+    n: *mut c_int,
+    f: CUfunction,
+    block: c_int,
+    dynamic_shared: usize,
+    _flags: c_uint,
+) -> CUresult {
+    let v = with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        let k = &d.modules[m].module.kernels[name];
+        if block <= 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        let groups_per_block = (block as u32).div_ceil(32);
+        let halves = k.gpr_halves();
+        let simd_groups = (2 * (3328 / (2 * halves))).min(96);
+        let mut blocks = simd_groups / groups_per_block;
+        let shared = k.threadgroup_bytes as usize + dynamic_shared;
+        if shared > 0 {
+            blocks = blocks.min((65536 / shared) as u32);
+        }
+        Ok(blocks as c_int)
+    })?;
+    out(n, v)
+}
+
+pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, f: CUfunction, block: c_int, dynamic_shared: usize) -> CUresult {
+    cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(n, f, block, dynamic_shared, 0)
+}
+
+// Copies are CPU copies of shared memory after the stream's earlier work, so the asynchronous forms are synchronous.
+pub(crate) unsafe fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> CUresult {
+    let (dd, sd) = with(|d| Ok((d.ctx.address_range(dst.0 as u64).is_some(), d.ctx.address_range(src.0 as u64).is_some())))?;
+    match (dd, sd) {
+        (true, true) => cuMemcpyDtoD_v2(dst, src, n),
+        (true, false) => cuMemcpyHtoD_v2(dst, src.0, n),
+        (false, true) => cuMemcpyDtoH_v2(dst.0, src, n),
+        (false, false) => {
+            with(|d| d.sync_all())?;
+            std::ptr::copy(src.0 as *const u8, dst.0 as *mut u8, n);
+            Ok(())
+        }
+    }
+}
+
+pub(crate) unsafe fn cuMemcpyAsync(dst: CUdeviceptr, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+    cuMemcpy(dst, src, n)
+}
+
+pub(crate) unsafe fn cuMemcpyHtoDAsync_v2(dst: CUdeviceptr, src: *const c_void, n: usize, _s: CUstream) -> CUresult {
+    cuMemcpyHtoD_v2(dst, src, n)
+}
+
+pub(crate) unsafe fn cuMemcpyDtoHAsync_v2(dst: *mut c_void, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+    cuMemcpyDtoH_v2(dst, src, n)
+}
+
+pub(crate) unsafe fn cuMemcpyDtoDAsync_v2(dst: CUdeviceptr, src: CUdeviceptr, n: usize, _s: CUstream) -> CUresult {
+    cuMemcpyDtoD_v2(dst, src, n)
+}
+
+pub(crate) unsafe fn cuMemsetD8Async(dst: CUdeviceptr, uc: u8, n: usize, _s: CUstream) -> CUresult {
+    cuMemsetD8_v2(dst, uc, n)
+}
+
+pub(crate) unsafe fn cuMemsetD16_v2(dst: CUdeviceptr, us: u16, n: usize) -> CUresult {
+    with(|d| {
+        d.sync_all()?;
+        d.ctx.memset(dst.0 as u64, &us.to_le_bytes(), n as u64).map_err(from_io)
+    })
+}
+
+pub(crate) unsafe fn cuMemsetD16Async(dst: CUdeviceptr, us: u16, n: usize, _s: CUstream) -> CUresult {
+    cuMemsetD16_v2(dst, us, n)
+}
+
+pub(crate) unsafe fn cuMemsetD32Async(dst: CUdeviceptr, ui: c_uint, n: usize, _s: CUstream) -> CUresult {
+    cuMemsetD32_v2(dst, ui, n)
+}
+
+/// Page-locked host memory is ordinary host memory: copies are CPU copies anyway. The GPU cannot address it
+/// (cuMemHostGetDevicePointer fails).
+pub(crate) unsafe fn cuMemAllocHost_v2(pp: *mut *mut c_void, bytes: usize) -> CUresult {
+    let mut p = std::ptr::null_mut();
+    if libc_posix_memalign(&mut p, 4096, bytes.max(1)) != 0 {
+        return Err(CUerror::OUT_OF_MEMORY);
+    }
+    out(pp, p)
+}
+
+pub(crate) unsafe fn cuMemHostAlloc(pp: *mut *mut c_void, bytes: usize, _flags: c_uint) -> CUresult {
+    cuMemAllocHost_v2(pp, bytes)
+}
+
+pub(crate) unsafe fn cuMemFreeHost(p: *mut c_void) -> CUresult {
+    libc_free(p);
+    Ok(())
+}
+
+extern "C" {
+    #[link_name = "posix_memalign"]
+    fn libc_posix_memalign(p: *mut *mut c_void, align: usize, size: usize) -> c_int;
+    #[link_name = "free"]
+    fn libc_free(p: *mut c_void);
+}
+
+pub(crate) unsafe fn cuPointerGetAttribute(data: *mut c_void, attribute: CUpointer_attribute, ptr: CUdeviceptr) -> CUresult {
+    let device = with(|d| Ok(d.ctx.address_range(ptr.0 as u64).is_some()))?;
+    use CUpointer_attribute_enum as P;
+    match attribute {
+        P::CU_POINTER_ATTRIBUTE_MEMORY_TYPE => {
+            if !device {
+                return Err(CUerror::INVALID_VALUE);
+            }
+            out(data as *mut CUmemorytype, CUmemorytype_enum::CU_MEMORYTYPE_DEVICE)
+        }
+        P::CU_POINTER_ATTRIBUTE_DEVICE_POINTER if device => out(data as *mut CUdeviceptr, ptr),
+        P::CU_POINTER_ATTRIBUTE_CONTEXT if device => out(data as *mut CUcontext, CUcontext(CTX as *mut _)),
+        _ => Err(CUerror::INVALID_VALUE),
+    }
+}
+
 fn error_name(code: u32) -> &'static CStr {
     match code {
         0 => c"CUDA_SUCCESS",
@@ -767,6 +1106,17 @@ mod tests {
             filename_or_fatbins: std::ptr::null(),
         };
         assert_eq!(unsafe { ptx_in_fatbin(&wrapper as *const _ as *const u8) }.unwrap(), b"new\0");
+    }
+
+    #[test]
+    fn get_proc_address_resolves_versioned_names() {
+        let mut f = std::ptr::null_mut();
+        let mut st = CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SYMBOL_NOT_FOUND;
+        unsafe { cuGetProcAddress_v2(c"cuMemAlloc".as_ptr(), &mut f, 12000, 0, &mut st) }.unwrap();
+        assert_eq!(f as usize, crate::cuMemAlloc_v2 as *const () as usize);
+        assert_eq!(st, CUdriverProcAddressQueryResult::CU_GET_PROC_ADDRESS_SUCCESS);
+        assert!(unsafe { cuGetProcAddress_v2(c"cuNoSuchFunction".as_ptr(), &mut f, 12000, 0, &mut st) }.is_err());
+        assert!(f.is_null());
     }
 
     #[test]
