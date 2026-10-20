@@ -244,6 +244,7 @@ fn run_statement<'input>(
                     flush_to_zero,
                     kind: ast::DivFloatKind::Rounding(rnd),
                     type_,
+                    ..
                 }),
             arguments,
         }) => {

@@ -3574,6 +3574,8 @@ pub struct RcpData {
     pub kind: RcpKind,
     pub flush_to_zero: Option<bool>,
     pub type_: ScalarType,
+    /// .sat of sqrt.rnd.f32 (accepted by PTX-formalization): the result clamped to [0, 1]
+    pub saturate: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -3684,6 +3686,8 @@ pub struct DivFloatDetails {
     pub type_: ScalarType,
     pub flush_to_zero: Option<bool>,
     pub kind: DivFloatKind,
+    /// .sat (PTX-formalization accepts it on div.rnd.f32): the result clamped to [0, 1]
+    pub saturate: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

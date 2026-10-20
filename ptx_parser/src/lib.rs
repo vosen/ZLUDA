@@ -4843,7 +4843,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Approx,
                 flush_to_zero: Some(ftz),
-                type_
+                type_,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -4853,7 +4854,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -4863,7 +4865,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
-                type_: f64
+                type_: f64,
+                saturate: false,
             },
             arguments: RcpArgs { dst: d, src: a  }
         }
@@ -4878,17 +4881,19 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Approx,
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: false,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
     }
-    sqrt.rnd{.ftz}.f32     d, a => {
+    sqrt.rnd{.ftz}{.sat}.f32     d, a => {
         ast::Instruction::Sqrt {
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: Some(ftz),
-                type_: f32
+                type_: f32,
+                saturate: sat,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
@@ -4898,7 +4903,8 @@ derive_parser!(
             data: ast::RcpData {
                 kind: ast::RcpKind::Compliant(rnd.into()),
                 flush_to_zero: None,
-                type_: f64
+                type_: f64,
+                saturate: false,
             },
             arguments: SqrtArgs { dst: d, src: a  }
         }
@@ -5226,7 +5232,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::Approx
+                kind: ast::DivFloatKind::Approx,
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,
@@ -5240,7 +5247,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::ApproxFull
+                kind: ast::DivFloatKind::ApproxFull,
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,
@@ -5249,12 +5257,13 @@ derive_parser!(
             },
         }
     }
-    div.rnd{.ftz}.f32     d, a, b => {
+    div.rnd{.ftz}{.sat}.f32     d, a, b => {
         ast::Instruction::Div {
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f32,
                 flush_to_zero: Some(ftz),
-                kind: ast::DivFloatKind::Rounding(rnd.into())
+                kind: ast::DivFloatKind::Rounding(rnd.into()),
+                saturate: sat,
             }),
             arguments: DivArgs {
                 dst: d,
@@ -5268,7 +5277,8 @@ derive_parser!(
             data: ast::DivDetails::Float(ast::DivFloatDetails{
                 type_: f64,
                 flush_to_zero: None,
-                kind: ast::DivFloatKind::Rounding(rnd.into())
+                kind: ast::DivFloatKind::Rounding(rnd.into()),
+                saturate: false
             }),
             arguments: DivArgs {
                 dst: d,

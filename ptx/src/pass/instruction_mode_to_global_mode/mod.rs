@@ -2379,6 +2379,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                     type_,
                     flush_to_zero,
                     kind,
+                    ..
                 }),
             ..
         } => {
@@ -2404,6 +2405,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 type_: data.type_,
                 flush_to_zero: data.flush_to_zero,
                 kind: ast::RcpKind::Approx,
+                saturate: false,
             };
             InstructionModes::from_rtz_special(data)
         },
@@ -2412,6 +2414,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
                 type_: ast::ScalarType::F32,
                 flush_to_zero: Some(data.flush_to_zero),
                 kind: ast::RcpKind::Approx,
+                saturate: false,
             };
             InstructionModes::from_rtz_special(data)
         },

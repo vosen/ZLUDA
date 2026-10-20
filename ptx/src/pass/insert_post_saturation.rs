@@ -61,6 +61,24 @@ fn run_instruction<'input>(
         ast::Instruction::MixedFloat { data, arguments } => {
             return expand_mixed_float(resolver, result, data, arguments);
         }
+        ast::Instruction::Sqrt {
+            data: ast::RcpData { saturate: true, type_, .. },
+            arguments: ast::SqrtArgs { ref mut dst, .. },
+        } => {
+            let sat = get_post_saturation(resolver, type_, dst)?;
+            result.push(Statement::Instruction(instruction));
+            result.push(sat);
+            return Ok(());
+        }
+        ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails { saturate: true, type_, .. }),
+            arguments: ast::DivArgs { ref mut dst, .. },
+        } => {
+            let sat = get_post_saturation(resolver, type_, dst)?;
+            result.push(Statement::Instruction(instruction));
+            result.push(sat);
+            return Ok(());
+        }
         ast::Instruction::Add { data: ast::ArithDetails::Float(ref mut f), .. }
         | ast::Instruction::Sub { data: ast::ArithDetails::Float(ref mut f), .. }
         | ast::Instruction::Mul { data: ast::MulDetails::Float(ref mut f), .. }
@@ -163,7 +181,14 @@ fn run_instruction<'input>(
         | ast::Instruction::StackSave { .. }
         | ast::Instruction::StackRestore { .. }
         | ast::Instruction::Cvta { .. }
-        | ast::Instruction::Div { .. }
+        | ast::Instruction::Div {
+            data: ast::DivDetails::Unsigned(..) | ast::DivDetails::Signed(..),
+            ..
+        }
+        | ast::Instruction::Div {
+            data: ast::DivDetails::Float(ast::DivFloatDetails { saturate: false, .. }),
+            ..
+        }
         | ast::Instruction::Dp4a { .. }
         | ast::Instruction::Ex2 { .. }
         | ast::Instruction::Fma {

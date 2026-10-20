@@ -425,6 +425,7 @@ fn run_instruction<'input>(
                     kind: ast::RcpKind::Approx,
                     type_: ast::ScalarType::F32,
                     flush_to_zero: None | Some(false),
+                    ..
                 },
             ..
         } => to_call(resolver, fn_declarations, "sqrt_approx_f32".into(), i)?,
@@ -442,6 +443,7 @@ fn run_instruction<'input>(
                     kind: ast::RcpKind::Approx,
                     type_: ast::ScalarType::F32,
                     flush_to_zero: None | Some(false),
+                    ..
                 },
             ..
         } => to_call(resolver, fn_declarations, "rcp_approx_f32".into(), i)?,
