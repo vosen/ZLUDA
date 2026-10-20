@@ -78,7 +78,7 @@ const REQUIRED: &[&str] = &[
 /// Kernels that are not compiled because the backend aborts on them: they
 /// convert shared memory addresses to generic ones (`cvta.shared`), and AGX
 /// has no generic addressing of threadgroup memory.
-const SKIPPED: &[&str] = &["ldmatrix", "ldmatrix_trans"];
+const SKIPPED: &[&str] = &[];
 
 #[test]
 fn spirv_run_kernels_compile() {
