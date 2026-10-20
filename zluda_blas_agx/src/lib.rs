@@ -72,6 +72,7 @@ cuda_macros::cublas_function_declarations!(
 /// The fat AGX objects of the kernels (build.rs).
 static SGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sgemm.agxfat"));
 static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
+static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxfat"));
 
 /// Element types of A and B, and of C.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -140,9 +141,21 @@ pub fn f16_to_f32(h: u16) -> f32 {
     f32::from_bits(bits)
 }
 
-mod imp {
+/// The GEMM engine shared with zluda_blaslt_agx: the driver API of the process's libcuda, the kernels (loaded once
+/// per context) and their launches.
+pub mod engine {
     use super::*;
     use std::sync::{Mutex, OnceLock};
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Error {
+        /// No libcuda, or no current context.
+        NotInitialized,
+        /// The fat objects have no code for this device.
+        ArchMismatch,
+        /// A driver call failed.
+        Failed,
+    }
 
     type ModuleLoadData = unsafe extern "system" fn(*mut CUmodule, *const c_void) -> CUresult;
     type ModuleGetFunction = unsafe extern "system" fn(*mut CUfunction, CUmodule, *const c_char) -> CUresult;
@@ -160,6 +173,7 @@ mod imp {
         *mut *mut c_void,
     ) -> CUresult;
     type MemcpyDtoH = unsafe extern "system" fn(*mut c_void, CUdeviceptr, usize) -> CUresult;
+    type MemcpyDtoDAsync = unsafe extern "system" fn(CUdeviceptr, CUdeviceptr, usize, CUstream) -> CUresult;
     type CtxGetCurrent = unsafe extern "system" fn(*mut CUcontext) -> CUresult;
 
     /// The driver API of the process's libcuda (zluda_agx).
@@ -169,10 +183,11 @@ mod imp {
         function: ModuleGetFunction,
         launch: LaunchKernel,
         dtoh: MemcpyDtoH,
+        dtod: MemcpyDtoDAsync,
         current: CtxGetCurrent,
     }
 
-    fn driver() -> Result<&'static Driver, cublasError_t> {
+    fn driver() -> Result<&'static Driver, Error> {
         static D: OnceLock<Option<Driver>> = OnceLock::new();
         D.get_or_init(|| unsafe {
             let name = std::env::var_os("ZLUDA_AGX_LIBCUDA").unwrap_or_else(|| "libcuda.so.1".into());
@@ -182,36 +197,40 @@ mod imp {
                 function: *lib.get(b"cuModuleGetFunction\0").ok()?,
                 launch: *lib.get(b"cuLaunchKernel\0").ok()?,
                 dtoh: *lib.get(b"cuMemcpyDtoH_v2\0").ok()?,
+                dtod: *lib.get(b"cuMemcpyDtoDAsync_v2\0").ok()?,
                 current: *lib.get(b"cuCtxGetCurrent\0").ok()?,
                 _lib: lib,
             })
         })
         .as_ref()
-        .ok_or(cublasError_t::NOT_INITIALIZED)
+        .ok_or(Error::NotInitialized)
     }
 
-    /// The kernels, loaded once per context.
+    /// Whether libcuda can be used.
+    pub fn available() -> bool {
+        driver().is_ok()
+    }
+
+    /// The kernels of one context.
     #[derive(Clone, Copy)]
     struct Kernels {
         ctx: usize,
         /// By `Types::index`.
         tile: [CUfunction; 3],
         generic: [CUfunction; 3],
+        /// f32 and f16 D.
+        epilogue: [CUfunction; 2],
     }
     unsafe impl Send for Kernels {}
 
-    struct Handle {
-        stream: CUstream,
-        pointer_mode: cublasPointerMode_t,
-        math_mode: cublasMath_t,
-        kernels: Option<Kernels>,
-    }
-
     static LOADED: Mutex<Vec<Kernels>> = Mutex::new(Vec::new());
 
-    unsafe fn kernels(d: &Driver) -> Result<Kernels, cublasError_t> {
+    unsafe fn kernels(d: &Driver) -> Result<Kernels, Error> {
         let mut ctx = CUcontext(std::ptr::null_mut());
-        (d.current)(&mut ctx).map_err(|_| cublasError_t::NOT_INITIALIZED)?;
+        (d.current)(&mut ctx).map_err(|_| Error::NotInitialized)?;
+        if ctx.0.is_null() {
+            return Err(Error::NotInitialized);
+        }
         let key = ctx.0 as usize;
         let mut loaded = LOADED.lock().unwrap();
         if let Some(k) = loaded.iter().find(|k| k.ctx == key) {
@@ -219,12 +238,12 @@ mod imp {
         }
         let load = |image: &[u8]| {
             let mut m = CUmodule(std::ptr::null_mut());
-            (d.load)(&mut m, image.as_ptr() as *const c_void).map(|_| m).map_err(|_| cublasError_t::ARCH_MISMATCH)
+            (d.load)(&mut m, image.as_ptr() as *const c_void).map(|_| m).map_err(|_| Error::ArchMismatch)
         };
-        let (sm, hm) = (load(SGEMM)?, load(HGEMM)?);
+        let (sm, hm, em) = (load(SGEMM)?, load(HGEMM)?, load(EPILOGUE)?);
         let get = |m: CUmodule, name: &[u8]| {
             let mut f = CUfunction(std::ptr::null_mut());
-            (d.function)(&mut f, m, name.as_ptr() as *const c_char).map(|_| f).map_err(|_| cublasError_t::INTERNAL_ERROR)
+            (d.function)(&mut f, m, name.as_ptr() as *const c_char).map(|_| f).map_err(|_| Error::Failed)
         };
         let k = Kernels {
             ctx: key,
@@ -234,9 +253,149 @@ mod imp {
                 get(hm, b"agx_hgemm_generic_cf16\0")?,
                 get(hm, b"agx_hgemm_generic_cf32\0")?,
             ],
+            epilogue: [get(em, b"agx_epilogue_f32\0")?, get(em, b"agx_epilogue_f16\0")?],
         };
         loaded.push(k);
         Ok(k)
+    }
+
+    /// Reads `n` bytes of device memory (alpha and beta in device pointer mode).
+    pub unsafe fn read(dst: *mut c_void, src: *const c_void, n: usize) -> Result<(), Error> {
+        (driver()?.dtoh)(dst, CUdeviceptr_v2(src as *mut c_void), n).map_err(|_| Error::Failed)
+    }
+
+    /// Copies `n` bytes of device memory on `stream`.
+    pub unsafe fn copy(dst: *mut c_void, src: *const c_void, n: usize, stream: CUstream) -> Result<(), Error> {
+        (driver()?.dtod)(CUdeviceptr_v2(dst), CUdeviceptr_v2(src as *mut c_void), n, stream).map_err(|_| Error::Failed)
+    }
+
+    /// Column-major `C = alpha op(A) op(B) + beta C` for `batch` matrices `stride_*` elements apart. The arguments
+    /// must be valid (the callers check them as cuBLAS specifies).
+    pub struct Gemm {
+        pub types: Types,
+        pub ta: bool,
+        pub tb: bool,
+        pub m: u64,
+        pub n: u64,
+        pub k: u64,
+        pub alpha: f32,
+        pub beta: f32,
+        pub a: *const c_void,
+        pub lda: u64,
+        pub stride_a: i64,
+        pub b: *const c_void,
+        pub ldb: u64,
+        pub stride_b: i64,
+        pub c: *mut c_void,
+        pub ldc: u64,
+        pub stride_c: i64,
+        pub batch: u64,
+    }
+
+    unsafe fn launch(d: &Driver, f: CUfunction, grid: [u32; 2], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
+        (d.launch)(f, grid[0], grid[1], 1, block[0], block[1], 1, 0, stream, params.as_mut_ptr(), std::ptr::null_mut())
+            .map_err(|_| Error::Failed)
+    }
+
+    pub unsafe fn gemm(g: &Gemm, stream: CUstream) -> Result<(), Error> {
+        if g.m == 0 || g.n == 0 || g.batch == 0 {
+            return Ok(());
+        }
+        let d = driver()?;
+        let kernels = kernels(d)?;
+        let (types, (a, b, c)) = (g.types, (g.a, g.b, g.c));
+        let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
+            && [g.stride_a, g.stride_b, g.stride_c].iter().all(|s| s % 2 == 0);
+        let p = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned);
+        for i in 0..g.batch as isize {
+            let (ab, cb) = (types.ab_bytes(), types.c_bytes());
+            let (mut pa, mut pb, mut pc) = (
+                a.byte_offset(i * g.stride_a as isize * ab),
+                b.byte_offset(i * g.stride_b as isize * ab),
+                c.byte_offset(i * g.stride_c as isize * cb),
+            );
+            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &p {
+                Plan::Tile { swap, dims, groups } => {
+                    if *swap {
+                        std::mem::swap(&mut pa, &mut pb);
+                    }
+                    (kernels.tile[types.index()], &dims[..], [*groups, 1], [128, 1])
+                }
+                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
+            };
+            let mut dims = dims.to_vec();
+            let (mut alpha, mut beta) = (g.alpha, g.beta);
+            let mut params: Vec<*mut c_void> = vec![
+                &mut pa as *mut _ as *mut c_void,
+                &mut pb as *mut _ as *mut c_void,
+                &mut pc as *mut _ as *mut c_void,
+            ];
+            params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
+            params.push(&mut alpha as *mut f32 as *mut c_void);
+            params.push(&mut beta as *mut f32 as *mut c_void);
+            launch(d, f, grid, block, &mut params, stream)?;
+        }
+        Ok(())
+    }
+
+    /// What `epilogue` applies to each element of D after the product.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Activation {
+        None,
+        Relu,
+        /// The tanh approximation, as cuBLASLt's CUBLASLT_EPILOGUE_GELU.
+        Gelu,
+    }
+
+    /// `D[i, j] = act(D[i, j] + bias[i])` for column-major m x n matrices (bias has m elements of D's type, or none),
+    /// for `batch` matrices `stride` elements apart.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn epilogue(
+        half: bool,
+        d_ptr: *mut c_void,
+        m: u64,
+        n: u64,
+        ld: u64,
+        stride: i64,
+        batch: u64,
+        bias: *const c_void,
+        act: Activation,
+        stream: CUstream,
+    ) -> Result<(), Error> {
+        if m == 0 || n == 0 || batch == 0 || (bias.is_null() && act == Activation::None) {
+            return Ok(());
+        }
+        let d = driver()?;
+        let f = kernels(d)?.epilogue[half as usize];
+        let size = if half { 2 } else { 4 };
+        for i in 0..batch as isize {
+            let mut p = d_ptr.byte_offset(i * stride as isize * size);
+            let mut bp = bias;
+            let mut dims = [m, n, ld, !bias.is_null() as u64, act as u64];
+            let mut params: Vec<*mut c_void> = vec![&mut p as *mut _ as *mut c_void, &mut bp as *mut _ as *mut c_void];
+            params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
+            launch(d, f, [m.div_ceil(16) as u32, n.div_ceil(8) as u32], [16, 8], &mut params, stream)?;
+        }
+        Ok(())
+    }
+}
+
+mod imp {
+    use super::*;
+    use engine::Error as E;
+
+    fn status(e: E) -> cublasError_t {
+        match e {
+            E::NotInitialized => cublasError_t::NOT_INITIALIZED,
+            E::ArchMismatch => cublasError_t::ARCH_MISMATCH,
+            E::Failed => cublasError_t::EXECUTION_FAILED,
+        }
+    }
+
+    struct Handle {
+        stream: CUstream,
+        pointer_mode: cublasPointerMode_t,
+        math_mode: cublasMath_t,
     }
 
     unsafe fn handle<'a>(h: cublasHandle_t) -> Result<&'a mut Handle, cublasError_t> {
@@ -244,13 +403,14 @@ mod imp {
     }
 
     pub(crate) unsafe fn cublasCreate_v2(out: *mut cublasHandle_t) -> cublasStatus_t {
-        driver()?;
+        if !engine::available() {
+            return Err(cublasError_t::NOT_INITIALIZED);
+        }
         let out = out.as_mut().ok_or(cublasError_t::INVALID_VALUE)?;
         let h = Box::new(Handle {
             stream: CUstream(std::ptr::null_mut()),
             pointer_mode: cublasPointerMode_t::CUBLAS_POINTER_MODE_HOST,
             math_mode: cublasMath_t::CUBLAS_DEFAULT_MATH,
-            kernels: None,
         });
         *out = cublasHandle_t(Box::into_raw(h) as *mut cublasContext);
         Ok(())
@@ -337,15 +497,14 @@ mod imp {
     }
 
     /// alpha or beta (an f32, or an f16 when `half`), from host or device memory as the handle's pointer mode says.
-    unsafe fn scalar(d: &Driver, h: &Handle, p: *const c_void, half: bool) -> Result<f32, cublasError_t> {
+    unsafe fn scalar(h: &Handle, p: *const c_void, half: bool) -> Result<f32, cublasError_t> {
         if p.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
         let mut v = [0u8; 4];
         let n = if half { 2 } else { 4 };
         if h.pointer_mode == cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE {
-            (d.dtoh)(v.as_mut_ptr() as *mut c_void, CUdeviceptr_v2(p as *mut c_void), n)
-                .map_err(|_| cublasError_t::EXECUTION_FAILED)?;
+            engine::read(v.as_mut_ptr() as *mut c_void, p, n).map_err(status)?;
         } else {
             std::ptr::copy_nonoverlapping(p as *const u8, v.as_mut_ptr(), n);
         }
@@ -384,7 +543,6 @@ mod imp {
         stride_c: c_longlong,
         batch: c_int,
     ) -> cublasStatus_t {
-        let d = driver()?;
         let h = handle(h)?;
         let (ta, tb) = (op(transa)?, op(transb)?);
         let rows_a = if ta { k } else { m };
@@ -395,44 +553,28 @@ mod imp {
         if m == 0 || n == 0 || batch == 0 {
             return Ok(());
         }
-        let (alpha, beta) = (scalar(d, h, alpha, half_scalars)?, scalar(d, h, beta, half_scalars)?);
-        let kernels = match h.kernels {
-            Some(k) => k,
-            None => *h.kernels.insert(kernels(d)?),
+        let (alpha, beta) = (scalar(h, alpha, half_scalars)?, scalar(h, beta, half_scalars)?);
+        let g = engine::Gemm {
+            types,
+            ta,
+            tb,
+            m: m as u64,
+            n: n as u64,
+            k: k as u64,
+            alpha,
+            beta,
+            a,
+            lda: lda as u64,
+            stride_a,
+            b,
+            ldb: ldb as u64,
+            stride_b,
+            c,
+            ldc: ldc as u64,
+            stride_c,
+            batch: batch as u64,
         };
-        let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
-            && [stride_a, stride_b, stride_c].iter().all(|s| s % 2 == 0);
-        let p = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, aligned);
-        for i in 0..batch as i64 {
-            let (ab, cb) = (types.ab_bytes(), types.c_bytes());
-            let (mut pa, mut pb, mut pc) = (
-                a.byte_offset(i as isize * stride_a as isize * ab),
-                b.byte_offset(i as isize * stride_b as isize * ab),
-                c.byte_offset(i as isize * stride_c as isize * cb),
-            );
-            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &p {
-                Plan::Tile { swap, dims, groups } => {
-                    if *swap {
-                        std::mem::swap(&mut pa, &mut pb);
-                    }
-                    (kernels.tile[types.index()], &dims[..], [*groups, 1], [128, 1])
-                }
-                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
-            };
-            let mut dims = dims.to_vec();
-            let (mut alpha, mut beta) = (alpha, beta);
-            let mut params: Vec<*mut c_void> = vec![
-                &mut pa as *mut _ as *mut c_void,
-                &mut pb as *mut _ as *mut c_void,
-                &mut pc as *mut _ as *mut c_void,
-            ];
-            params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
-            params.push(&mut alpha as *mut f32 as *mut c_void);
-            params.push(&mut beta as *mut f32 as *mut c_void);
-            (d.launch)(f, grid[0], grid[1], 1, block[0], block[1], 1, 0, h.stream, params.as_mut_ptr(), std::ptr::null_mut())
-                .map_err(|_| cublasError_t::EXECUTION_FAILED)?;
-        }
-        Ok(())
+        engine::gemm(&g, h.stream).map_err(status)
     }
 
     pub(crate) unsafe fn cublasSgemm_v2(

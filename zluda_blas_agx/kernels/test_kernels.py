@@ -166,6 +166,27 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
                  1e-4 if c == "f" else 2e-3)
 
 
+def gelu(x):
+    return 0.5 * x * (1 + math.tanh(0.7978845608 * (x + 0.044715 * x ** 3)))
+
+
+def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f"):
+    ld = M + 3
+    D = rounded([rnd.uniform(-3, 3) for _ in range(ld * N)], t)
+    bias = rounded([rnd.uniform(-1, 1) for _ in range(M)], t)
+    kernel = "agx_epilogue_f32" if t == "f" else "agx_epilogue_f16"
+    (got,) = run(a, obj, kernel,
+                 [("buf", pack(D, t), True), ("buf", pack(bias, t)), ("i64", M), ("i64", N), ("i64", ld),
+                  ("i64", has_bias), ("i64", act)],
+                 (-(-M // 16) * 16, -(-N // 8) * 8), (16, 8), tmp)
+    want = list(D)
+    for j in range(N):
+        for i in range(M):
+            x = D[j * ld + i] + (bias[i] if has_bias else 0.0)
+            want[j * ld + i] = max(x, 0.0) if act == 1 else gelu(x) if act == 2 else x
+    return close(unpack(got, t), want, [j * ld + i for j in range(N) for i in range(M)], 2e-5 if t == "f" else 2e-3)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -181,7 +202,14 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         for chip in chips:
             obj = entries[chip]
-            if "agx_sgemm_tile64" in kernel_records(obj, a, tmp):
+            records = kernel_records(obj, a, tmp)
+            if "agx_epilogue_f32" in records:
+                cases = []
+                for t in ("f", "e"):
+                    for has_bias, act, label in ((1, 0, "bias"), (0, 1, "relu"), (1, 1, "bias+relu"), (1, 2, "bias+gelu"), (0, 2, "gelu")):
+                        cases.append(("epilogue %s %s 37x11" % ("f32" if t == "f" else "f16", label),
+                                      lambda t=t, hb=has_bias, ac=act: case_epilogue(a, obj, tmp, 37, 11, hb, ac, rnd, t)))
+            elif "agx_sgemm_tile64" in records:
                 cases = [
                     ("tile64 128x64x40 a=1.5 b=0.5", lambda: case_tile(a, obj, tmp, 128, 64, 40, 1.5, 0.5, rnd)),
                     ("tile64 64x128x16 a=1 b=0 (C NaN)", lambda: case_tile(a, obj, tmp, 64, 128, 16, 1.0, 0.0, rnd)),
