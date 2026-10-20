@@ -7,30 +7,162 @@ pub const DRM_ASAHI_BARRIER_NONE: u32 = 65535;
 pub type __u8 = ::core::ffi::c_uchar;
 pub type __u16 = ::core::ffi::c_ushort;
 pub type __u32 = ::core::ffi::c_uint;
+pub type __s64 = ::core::ffi::c_longlong;
 pub type __u64 = ::core::ffi::c_ulonglong;
+/** struct drm_gem_close - Argument for &DRM_IOCTL_GEM_CLOSE ioctl.
+ @handle: Handle of the object to be closed.
+ @pad: Padding.
+
+ Releases the handle to an mm object.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_gem_close {
+    pub handle: __u32,
+    pub pad: __u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of drm_gem_close"][::core::mem::size_of::<drm_gem_close>() - 8usize];
+    ["Alignment of drm_gem_close"][::core::mem::align_of::<drm_gem_close>() - 4usize];
+    [
+        "Offset of field: drm_gem_close::handle",
+    ][::core::mem::offset_of!(drm_gem_close, handle) - 0usize];
+    [
+        "Offset of field: drm_gem_close::pad",
+    ][::core::mem::offset_of!(drm_gem_close, pad) - 4usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_create {
+    pub handle: __u32,
+    pub flags: __u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    [
+        "Size of drm_syncobj_create",
+    ][::core::mem::size_of::<drm_syncobj_create>() - 8usize];
+    [
+        "Alignment of drm_syncobj_create",
+    ][::core::mem::align_of::<drm_syncobj_create>() - 4usize];
+    [
+        "Offset of field: drm_syncobj_create::handle",
+    ][::core::mem::offset_of!(drm_syncobj_create, handle) - 0usize];
+    [
+        "Offset of field: drm_syncobj_create::flags",
+    ][::core::mem::offset_of!(drm_syncobj_create, flags) - 4usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_destroy {
+    pub handle: __u32,
+    pub pad: __u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    [
+        "Size of drm_syncobj_destroy",
+    ][::core::mem::size_of::<drm_syncobj_destroy>() - 8usize];
+    [
+        "Alignment of drm_syncobj_destroy",
+    ][::core::mem::align_of::<drm_syncobj_destroy>() - 4usize];
+    [
+        "Offset of field: drm_syncobj_destroy::handle",
+    ][::core::mem::offset_of!(drm_syncobj_destroy, handle) - 0usize];
+    [
+        "Offset of field: drm_syncobj_destroy::pad",
+    ][::core::mem::offset_of!(drm_syncobj_destroy, pad) - 4usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_wait {
+    pub handles: __u64,
+    pub timeout_nsec: __s64,
+    pub count_handles: __u32,
+    pub flags: __u32,
+    pub first_signaled: __u32,
+    pub pad: __u32,
+    /** @deadline_nsec - fence deadline hint
+
+ Deadline hint, in absolute CLOCK_MONOTONIC, to set on backing
+ fence(s) if the DRM_SYNCOBJ_WAIT_FLAGS_WAIT_DEADLINE flag is
+ set.*/
+    pub deadline_nsec: __u64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of drm_syncobj_wait"][::core::mem::size_of::<drm_syncobj_wait>() - 40usize];
+    [
+        "Alignment of drm_syncobj_wait",
+    ][::core::mem::align_of::<drm_syncobj_wait>() - 8usize];
+    [
+        "Offset of field: drm_syncobj_wait::handles",
+    ][::core::mem::offset_of!(drm_syncobj_wait, handles) - 0usize];
+    [
+        "Offset of field: drm_syncobj_wait::timeout_nsec",
+    ][::core::mem::offset_of!(drm_syncobj_wait, timeout_nsec) - 8usize];
+    [
+        "Offset of field: drm_syncobj_wait::count_handles",
+    ][::core::mem::offset_of!(drm_syncobj_wait, count_handles) - 16usize];
+    [
+        "Offset of field: drm_syncobj_wait::flags",
+    ][::core::mem::offset_of!(drm_syncobj_wait, flags) - 20usize];
+    [
+        "Offset of field: drm_syncobj_wait::first_signaled",
+    ][::core::mem::offset_of!(drm_syncobj_wait, first_signaled) - 24usize];
+    [
+        "Offset of field: drm_syncobj_wait::pad",
+    ][::core::mem::offset_of!(drm_syncobj_wait, pad) - 28usize];
+    [
+        "Offset of field: drm_syncobj_wait::deadline_nsec",
+    ][::core::mem::offset_of!(drm_syncobj_wait, deadline_nsec) - 32usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_array {
+    pub handles: __u64,
+    pub count_handles: __u32,
+    pub pad: __u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of drm_syncobj_array"][::core::mem::size_of::<drm_syncobj_array>() - 16usize];
+    [
+        "Alignment of drm_syncobj_array",
+    ][::core::mem::align_of::<drm_syncobj_array>() - 8usize];
+    [
+        "Offset of field: drm_syncobj_array::handles",
+    ][::core::mem::offset_of!(drm_syncobj_array, handles) - 0usize];
+    [
+        "Offset of field: drm_syncobj_array::count_handles",
+    ][::core::mem::offset_of!(drm_syncobj_array, count_handles) - 8usize];
+    [
+        "Offset of field: drm_syncobj_array::pad",
+    ][::core::mem::offset_of!(drm_syncobj_array, pad) - 12usize];
+};
 /// @DRM_ASAHI_GET_PARAMS: Query device properties.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_GET_PARAMS: drm_asahi_ioctl_id = 0;
+pub const DRM_ASAHI_GET_PARAMS: drm_asahi_ioctl_id = 0;
 /// @DRM_ASAHI_GET_TIME: Query device time.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_GET_TIME: drm_asahi_ioctl_id = 1;
+pub const DRM_ASAHI_GET_TIME: drm_asahi_ioctl_id = 1;
 /// @DRM_ASAHI_VM_CREATE: Create a GPU VM address space.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_VM_CREATE: drm_asahi_ioctl_id = 2;
+pub const DRM_ASAHI_VM_CREATE: drm_asahi_ioctl_id = 2;
 /// @DRM_ASAHI_VM_DESTROY: Destroy a VM.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_VM_DESTROY: drm_asahi_ioctl_id = 3;
+pub const DRM_ASAHI_VM_DESTROY: drm_asahi_ioctl_id = 3;
 /// @DRM_ASAHI_VM_BIND: Bind/unbind memory to a VM.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_VM_BIND: drm_asahi_ioctl_id = 4;
+pub const DRM_ASAHI_VM_BIND: drm_asahi_ioctl_id = 4;
 /// @DRM_ASAHI_GEM_CREATE: Create a buffer object.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_GEM_CREATE: drm_asahi_ioctl_id = 5;
+pub const DRM_ASAHI_GEM_CREATE: drm_asahi_ioctl_id = 5;
 /** @DRM_ASAHI_GEM_MMAP_OFFSET: Get offset to pass to mmap() to map a
  given GEM handle.*/
-pub const drm_asahi_ioctl_id_DRM_ASAHI_GEM_MMAP_OFFSET: drm_asahi_ioctl_id = 6;
+pub const DRM_ASAHI_GEM_MMAP_OFFSET: drm_asahi_ioctl_id = 6;
 /// @DRM_ASAHI_GEM_BIND_OBJECT: Bind memory as a special object
-pub const drm_asahi_ioctl_id_DRM_ASAHI_GEM_BIND_OBJECT: drm_asahi_ioctl_id = 7;
+pub const DRM_ASAHI_GEM_BIND_OBJECT: drm_asahi_ioctl_id = 7;
 /// @DRM_ASAHI_QUEUE_CREATE: Create a scheduling queue.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_QUEUE_CREATE: drm_asahi_ioctl_id = 8;
+pub const DRM_ASAHI_QUEUE_CREATE: drm_asahi_ioctl_id = 8;
 /// @DRM_ASAHI_QUEUE_DESTROY: Destroy a scheduling queue.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_QUEUE_DESTROY: drm_asahi_ioctl_id = 9;
+pub const DRM_ASAHI_QUEUE_DESTROY: drm_asahi_ioctl_id = 9;
 /// @DRM_ASAHI_SUBMIT: Submit commands to a queue.
-pub const drm_asahi_ioctl_id_DRM_ASAHI_SUBMIT: drm_asahi_ioctl_id = 10;
+pub const DRM_ASAHI_SUBMIT: drm_asahi_ioctl_id = 10;
 /** enum drm_asahi_ioctl_id - IOCTL IDs
 
  Place new ioctls at the end, don't re-order, don't replace or remove entries.
@@ -173,7 +305,7 @@ const _: () = {
  toggled. Therefore, it is exposed as a feature bit and not a
  userspace-settable flag on the VM. When soft fault is enabled,
  userspace can speculate memory accesses more aggressively.*/
-pub const drm_asahi_feature_DRM_ASAHI_FEATURE_SOFT_FAULTS: drm_asahi_feature = 1;
+pub const DRM_ASAHI_FEATURE_SOFT_FAULTS: drm_asahi_feature = 1;
 /** enum drm_asahi_feature - Feature bits
 
  This covers only features that userspace cannot infer from the architecture
@@ -288,9 +420,9 @@ const _: () = {
 
  Map as writeback instead of write-combine. This optimizes for CPU
  reads.*/
-pub const drm_asahi_gem_flags_DRM_ASAHI_GEM_WRITEBACK: drm_asahi_gem_flags = 1;
+pub const DRM_ASAHI_GEM_WRITEBACK: drm_asahi_gem_flags = 1;
 /// @DRM_ASAHI_GEM_VM_PRIVATE: BO is private to this GPU VM (no exports).
-pub const drm_asahi_gem_flags_DRM_ASAHI_GEM_VM_PRIVATE: drm_asahi_gem_flags = 2;
+pub const DRM_ASAHI_GEM_VM_PRIVATE: drm_asahi_gem_flags = 2;
 /// enum drm_asahi_gem_flags - Flags for GEM creation
 pub type drm_asahi_gem_flags = ::core::ffi::c_uint;
 /// struct drm_asahi_gem_create - Arguments passed to DRM_IOCTL_ASAHI_GEM_CREATE
@@ -364,17 +496,17 @@ const _: () = {
 };
 /** @DRM_ASAHI_BIND_UNBIND: Instead of binding a GEM object to the range,
  simply unbind the GPU VMA range.*/
-pub const drm_asahi_bind_flags_DRM_ASAHI_BIND_UNBIND: drm_asahi_bind_flags = 1;
+pub const DRM_ASAHI_BIND_UNBIND: drm_asahi_bind_flags = 1;
 /// @DRM_ASAHI_BIND_READ: Map BO with GPU read permission
-pub const drm_asahi_bind_flags_DRM_ASAHI_BIND_READ: drm_asahi_bind_flags = 2;
+pub const DRM_ASAHI_BIND_READ: drm_asahi_bind_flags = 2;
 /// @DRM_ASAHI_BIND_WRITE: Map BO with GPU write permission
-pub const drm_asahi_bind_flags_DRM_ASAHI_BIND_WRITE: drm_asahi_bind_flags = 4;
+pub const DRM_ASAHI_BIND_WRITE: drm_asahi_bind_flags = 4;
 /** @DRM_ASAHI_BIND_SINGLE_PAGE: Map a single page of the BO repeatedly
  across the VA range.
 
  This is useful to fill a VA range with scratch pages or zero pages.
  It is intended as a mechanism to accelerate sparse.*/
-pub const drm_asahi_bind_flags_DRM_ASAHI_BIND_SINGLE_PAGE: drm_asahi_bind_flags = 8;
+pub const DRM_ASAHI_BIND_SINGLE_PAGE: drm_asahi_bind_flags = 8;
 /// enum drm_asahi_bind_flags - Flags for GEM binding
 pub type drm_asahi_bind_flags = ::core::ffi::c_uint;
 /// struct drm_asahi_gem_bind_op - Description of a single GEM bind operation.
@@ -469,14 +601,14 @@ const _: () = {
     ][::core::mem::offset_of!(drm_asahi_vm_bind, userptr) - 16usize];
 };
 /// @DRM_ASAHI_BIND_OBJECT_OP_BIND: Bind a BO as a special GPU object
-pub const drm_asahi_bind_object_op_DRM_ASAHI_BIND_OBJECT_OP_BIND: drm_asahi_bind_object_op = 0;
+pub const DRM_ASAHI_BIND_OBJECT_OP_BIND: drm_asahi_bind_object_op = 0;
 /// @DRM_ASAHI_BIND_OBJECT_OP_UNBIND: Unbind a special GPU object
-pub const drm_asahi_bind_object_op_DRM_ASAHI_BIND_OBJECT_OP_UNBIND: drm_asahi_bind_object_op = 1;
+pub const DRM_ASAHI_BIND_OBJECT_OP_UNBIND: drm_asahi_bind_object_op = 1;
 /// enum drm_asahi_bind_object_op - Special object bind operation
 pub type drm_asahi_bind_object_op = ::core::ffi::c_uint;
 /** @DRM_ASAHI_BIND_OBJECT_USAGE_TIMESTAMPS: Map a BO as a timestamp
  buffer.*/
-pub const drm_asahi_bind_object_flags_DRM_ASAHI_BIND_OBJECT_USAGE_TIMESTAMPS: drm_asahi_bind_object_flags = 1;
+pub const DRM_ASAHI_BIND_OBJECT_USAGE_TIMESTAMPS: drm_asahi_bind_object_flags = 1;
 /// enum drm_asahi_bind_object_flags - Special object bind flags
 pub type drm_asahi_bind_object_flags = ::core::ffi::c_uint;
 /** struct drm_asahi_gem_bind_object - Arguments passed to
@@ -538,40 +670,40 @@ const _: () = {
  subqueue. Combined vertex and fragment operation.
 
  Followed by a @drm_asahi_cmd_render payload.*/
-pub const drm_asahi_cmd_type_DRM_ASAHI_CMD_RENDER: drm_asahi_cmd_type = 0;
+pub const DRM_ASAHI_CMD_RENDER: drm_asahi_cmd_type = 0;
 /** @DRM_ASAHI_CMD_COMPUTE: Compute command on the compute subqueue.
 
  Followed by a @drm_asahi_cmd_compute payload.*/
-pub const drm_asahi_cmd_type_DRM_ASAHI_CMD_COMPUTE: drm_asahi_cmd_type = 1;
+pub const DRM_ASAHI_CMD_COMPUTE: drm_asahi_cmd_type = 1;
 /** @DRM_ASAHI_SET_VERTEX_ATTACHMENTS: Software command to set
  attachments for subsequent vertex shaders in the same submit.
 
  Followed by (possibly multiple) @drm_asahi_attachment payloads.*/
-pub const drm_asahi_cmd_type_DRM_ASAHI_SET_VERTEX_ATTACHMENTS: drm_asahi_cmd_type = 2;
+pub const DRM_ASAHI_SET_VERTEX_ATTACHMENTS: drm_asahi_cmd_type = 2;
 /** @DRM_ASAHI_SET_FRAGMENT_ATTACHMENTS: Software command to set
  attachments for subsequent fragment shaders in the same submit.
 
  Followed by (possibly multiple) @drm_asahi_attachment payloads.*/
-pub const drm_asahi_cmd_type_DRM_ASAHI_SET_FRAGMENT_ATTACHMENTS: drm_asahi_cmd_type = 3;
+pub const DRM_ASAHI_SET_FRAGMENT_ATTACHMENTS: drm_asahi_cmd_type = 3;
 /** @DRM_ASAHI_SET_COMPUTE_ATTACHMENTS: Software command to set
  attachments for subsequent compute shaders in the same submit.
 
  Followed by (possibly multiple) @drm_asahi_attachment payloads.*/
-pub const drm_asahi_cmd_type_DRM_ASAHI_SET_COMPUTE_ATTACHMENTS: drm_asahi_cmd_type = 4;
+pub const DRM_ASAHI_SET_COMPUTE_ATTACHMENTS: drm_asahi_cmd_type = 4;
 /// enum drm_asahi_cmd_type - Command type
 pub type drm_asahi_cmd_type = ::core::ffi::c_uint;
 /// @DRM_ASAHI_PRIORITY_LOW: Low priority queue.
-pub const drm_asahi_priority_DRM_ASAHI_PRIORITY_LOW: drm_asahi_priority = 0;
+pub const DRM_ASAHI_PRIORITY_LOW: drm_asahi_priority = 0;
 /// @DRM_ASAHI_PRIORITY_MEDIUM: Medium priority queue.
-pub const drm_asahi_priority_DRM_ASAHI_PRIORITY_MEDIUM: drm_asahi_priority = 1;
+pub const DRM_ASAHI_PRIORITY_MEDIUM: drm_asahi_priority = 1;
 /** @DRM_ASAHI_PRIORITY_HIGH: High priority queue.
 
  Reserved for future extension.*/
-pub const drm_asahi_priority_DRM_ASAHI_PRIORITY_HIGH: drm_asahi_priority = 2;
+pub const DRM_ASAHI_PRIORITY_HIGH: drm_asahi_priority = 2;
 /** @DRM_ASAHI_PRIORITY_REALTIME: Real-time priority queue.
 
  Reserved for future extension.*/
-pub const drm_asahi_priority_DRM_ASAHI_PRIORITY_REALTIME: drm_asahi_priority = 3;
+pub const DRM_ASAHI_PRIORITY_REALTIME: drm_asahi_priority = 3;
 /** enum drm_asahi_priority - Scheduling queue priority.
 
  These priorities are forwarded to the firmware to influence firmware
@@ -655,9 +787,9 @@ const _: () = {
     ][::core::mem::offset_of!(drm_asahi_queue_destroy, pad) - 4usize];
 };
 /// @DRM_ASAHI_SYNC_SYNCOBJ: Binary sync object
-pub const drm_asahi_sync_type_DRM_ASAHI_SYNC_SYNCOBJ: drm_asahi_sync_type = 0;
+pub const DRM_ASAHI_SYNC_SYNCOBJ: drm_asahi_sync_type = 0;
 /// @DRM_ASAHI_SYNC_TIMELINE_SYNCOBJ: Timeline sync object
-pub const drm_asahi_sync_type_DRM_ASAHI_SYNC_TIMELINE_SYNCOBJ: drm_asahi_sync_type = 1;
+pub const DRM_ASAHI_SYNC_TIMELINE_SYNCOBJ: drm_asahi_sync_type = 1;
 /// enum drm_asahi_sync_type - Sync item type
 pub type drm_asahi_sync_type = ::core::ffi::c_uint;
 /// struct drm_asahi_sync - Sync item
@@ -867,16 +999,16 @@ const _: () = {
 };
 /** @DRM_ASAHI_RENDER_VERTEX_SCRATCH: A vertex stage shader uses scratch
  memory.*/
-pub const drm_asahi_render_flags_DRM_ASAHI_RENDER_VERTEX_SCRATCH: drm_asahi_render_flags = 1;
+pub const DRM_ASAHI_RENDER_VERTEX_SCRATCH: drm_asahi_render_flags = 1;
 /** @DRM_ASAHI_RENDER_PROCESS_EMPTY_TILES: Process even empty tiles.
  This must be set when clearing render targets.*/
-pub const drm_asahi_render_flags_DRM_ASAHI_RENDER_PROCESS_EMPTY_TILES: drm_asahi_render_flags = 2;
+pub const DRM_ASAHI_RENDER_PROCESS_EMPTY_TILES: drm_asahi_render_flags = 2;
 /** @DRM_ASAHI_RENDER_NO_VERTEX_CLUSTERING: Run vertex stage on a single
  cluster (on multi-cluster GPUs)
 
  This harms performance but can workaround certain sync/coherency
  bugs, and therefore is useful for debugging.*/
-pub const drm_asahi_render_flags_DRM_ASAHI_RENDER_NO_VERTEX_CLUSTERING: drm_asahi_render_flags = 4;
+pub const DRM_ASAHI_RENDER_NO_VERTEX_CLUSTERING: drm_asahi_render_flags = 4;
 /** @DRM_ASAHI_RENDER_DBIAS_IS_INT: Use integer depth bias formula.
 
  Graphics specifications contain two alternate formulas for depth
@@ -887,7 +1019,7 @@ pub const drm_asahi_render_flags_DRM_ASAHI_RENDER_NO_VERTEX_CLUSTERING: drm_asah
 
  This corresponds to bit 18 of the relevant hardware control register,
  so we match that here for efficiency.*/
-pub const drm_asahi_render_flags_DRM_ASAHI_RENDER_DBIAS_IS_INT: drm_asahi_render_flags = 262144;
+pub const DRM_ASAHI_RENDER_DBIAS_IS_INT: drm_asahi_render_flags = 262144;
 pub type drm_asahi_render_flags = ::core::ffi::c_uint;
 /** struct drm_asahi_zls_buffer - Describe a depth or stencil buffer.
 
