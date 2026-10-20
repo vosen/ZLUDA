@@ -1,6 +1,8 @@
-//! `agx_cuda_smoke [kernel.ptx]`: runs vectorAdd through the CUDA driver API of zluda_agx on the GPU, the way a
+//! `agx_cuda_smoke [vectoradd.o]`: runs vectorAdd through the CUDA driver API of zluda_agx on the GPU, the way a
 //! CUDA application would (cuInit ... cuModuleLoadData, cuLaunchKernel, cuMemcpyDtoH, events), and checks the
-//! result. Needs zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH). Prints one JSON line.
+//! result. Without an argument the PTX is compiled by zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH); with
+//! one, that AGX object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Prints one JSON
+//! line.
 
 use cuda_types::cuda::*;
 use nvcuda_agx::*;
@@ -29,7 +31,9 @@ fn main() {
         let mut ctx = CUcontext(null_mut());
         check("cuCtxCreate", cuCtxCreate_v2(&mut ctx, 0, dev));
         let mut module = CUmodule(null_mut());
-        check("cuModuleLoadData", cuModuleLoadData(&mut module, PTX.as_ptr() as *const c_void));
+        let object = std::env::args().nth(1).map(|p| std::fs::read(&p).unwrap_or_else(|e| panic!("{p}: {e}")));
+        let image = object.as_deref().map_or(PTX.as_ptr(), |o| o.as_ptr());
+        check("cuModuleLoadData", cuModuleLoadData(&mut module, image as *const c_void));
         let mut f = CUfunction(null_mut());
         check("cuModuleGetFunction", cuModuleGetFunction(&mut f, module, c"_Z9vectorAddPKfS0_Pfi".as_ptr()));
 
