@@ -911,6 +911,12 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::CpAsyncMbarrierArrive { data, arguments } => {
                 self.emit_cp_async_mbarrier_arrive(data, arguments)
             }
+            ast::Instruction::CpAsyncBulkTensor { data, arguments } => {
+                self.emit_cp_async_bulk_tensor(data, arguments)
+            }
+            ast::Instruction::TensormapReplace { data, arguments } => {
+                self.emit_tensormap_replace(data, arguments)
+            }
             ast::Instruction::CpAsyncBulk { data, arguments } => {
                 self.emit_cp_async_bulk(data, arguments)
             }
@@ -5887,6 +5893,187 @@ impl<'a> MethodEmitContext<'a> {
                 &[mbarrier, size],
             )?;
         }
+        Ok(())
+    }
+
+    fn emit_cp_async_bulk_tensor(
+        &mut self,
+        data: ast::CpAsyncBulkTensorDetails,
+        arguments: ast::CpAsyncBulkTensorArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let _ = arguments.src_cache_policy;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let smem = self.resolver.value(arguments.src_smem)?;
+        let tmap = self.resolver.value(arguments.src_tmap)?;
+        let tmap = unsafe {
+            LLVMBuildIntToPtr(
+                self.builder,
+                tmap,
+                get_pointer_type(self.context, ast::StateSpace::Generic)?,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        // .override: a patched copy of the tensor map, in private memory
+        let tmap = match arguments.src_ov_addr {
+            Some(address) => {
+                let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+                let i1_type = unsafe { LLVMInt1TypeInContext(self.context) };
+                let copy = unsafe {
+                    LLVMZludaBuildAlloca(
+                        self.variables_builder.get(),
+                        LLVMArrayType2(i64_type, 16),
+                        get_state_space(ast::StateSpace::Local)?,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                let copy = unsafe {
+                    LLVMBuildAddrSpaceCast(
+                        self.builder,
+                        copy,
+                        get_pointer_type(self.context, ast::StateSpace::Generic)?,
+                        LLVM_UNNAMED.as_ptr(),
+                    )
+                };
+                let address = self.resolver.value(address)?;
+                let values = |ids: &[Option<SpirvWord>]| -> Result<(LLVMValueRef, Vec<LLVMValueRef>), TranslateError> {
+                    let count = ids.iter().filter(|i| i.is_some()).count();
+                    let mut values = Vec::new();
+                    for id in ids {
+                        values.push(match id {
+                            Some(id) => {
+                                let v = self.resolver.value(*id)?;
+                                unsafe { LLVMBuildZExtOrBitCast(self.builder, v, i32_type, LLVM_UNNAMED.as_ptr()) }
+                            }
+                            None => self.const_u32(0),
+                        });
+                    }
+                    Ok((self.const_u32(count as u64), values))
+                };
+                // without .override::global_address the address operand is the map's own
+                let (nd, dims) = values(&[
+                    arguments.src_ov_d0,
+                    arguments.src_ov_d1,
+                    arguments.src_ov_d2,
+                    arguments.src_ov_d3,
+                    arguments.src_ov_d4,
+                ])?;
+                let (ns, strides) = values(&[
+                    arguments.src_ov_s0,
+                    arguments.src_ov_s1,
+                    arguments.src_ov_s2,
+                    arguments.src_ov_s3,
+                ])?;
+                let (_, up) = values(&[arguments.src_ov_up])?;
+                let has_address = unsafe { LLVMConstInt(i1_type, data.override_address as u64, 0) };
+                let mut args = vec![copy, tmap, has_address, address, nd];
+                args.extend(dims);
+                args.push(ns);
+                args.extend(strides);
+                args.extend(up);
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_tma_override", None, None, &args)?;
+                copy
+            }
+            None => tmap,
+        };
+        let mut coords = vec![self.resolver.value(arguments.src_c0)?];
+        for c in [arguments.src_c1, arguments.src_c2, arguments.src_c3, arguments.src_c4] {
+            coords.push(match c {
+                Some(c) => self.resolver.value(c)?,
+                None => self.const_u32(0),
+            });
+        }
+        let mut info = Vec::new();
+        for i in [arguments.src_i0, arguments.src_i1, arguments.src_i2] {
+            info.push(match i {
+                Some(i) => {
+                    let i = self.resolver.value(i)?;
+                    unsafe { LLVMBuildSExtOrBitCast(self.builder, i, i32_type, LLVM_UNNAMED.as_ptr()) }
+                }
+                None => self.const_u32(0),
+            });
+        }
+        let imode = self.const_u32(data.im2col.map_or(u32::MAX, u32::from) as u64);
+        let mut args = Vec::new();
+        match data.kind {
+            ast::TensorCopyKind::Load => {
+                let mbarrier = arguments.src_mbarrier.ok_or_else(error_unreachable)?;
+                let mbarrier = self.mbarrier_pointer(data.smem_space, mbarrier)?;
+                let mask = match arguments.src_cta_mask {
+                    Some(mask) => {
+                        let mask = self.resolver.value(mask)?;
+                        unsafe { LLVMBuildZExtOrBitCast(self.builder, mask, i32_type, LLVM_UNNAMED.as_ptr()) }
+                    }
+                    None => self.const_u32(0),
+                };
+                let flags = data.multicast as u64 | (data.cta_group2 as u64) << 1;
+                args.push(smem);
+                args.push(tmap);
+                args.extend(coords);
+                args.extend([mbarrier, mask, self.const_u32(flags), imode]);
+                args.extend(info);
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_tma_load", None, None, &args)?;
+            }
+            ast::TensorCopyKind::Store | ast::TensorCopyKind::Reduce(_) => {
+                // tma_red's operations; signedness and float come from the tensor map
+                let op: i64 = match data.kind {
+                    ast::TensorCopyKind::Reduce(op) => match op {
+                        ast::AtomicOp::Add | ast::AtomicOp::FloatAdd => 0,
+                        ast::AtomicOp::And => 1,
+                        ast::AtomicOp::Or => 2,
+                        ast::AtomicOp::Xor => 3,
+                        ast::AtomicOp::IncrementWrap => 4,
+                        ast::AtomicOp::DecrementWrap => 5,
+                        ast::AtomicOp::SignedMin | ast::AtomicOp::UnsignedMin | ast::AtomicOp::FloatMin => 6,
+                        ast::AtomicOp::SignedMax | ast::AtomicOp::UnsignedMax | ast::AtomicOp::FloatMax => 8,
+                        ast::AtomicOp::Exchange => return Err(error_unreachable()),
+                    },
+                    _ => -2,
+                };
+                args.push(tmap);
+                args.extend(coords);
+                args.push(smem);
+                args.push(self.const_u32(op as u32 as u64));
+                args.push(imode);
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_tma_store", None, None, &args)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_tensormap_replace(
+        &mut self,
+        data: ast::TensormapReplaceDetails,
+        arguments: ast::TensormapReplaceArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let tmap = self.resolver.value(arguments.src_tmap)?;
+        let tmap = unsafe {
+            LLVMBuildAddrSpaceCast(
+                self.builder,
+                tmap,
+                get_pointer_type(self.context, ast::StateSpace::Generic)?,
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let ord = match arguments.src_ord {
+            Some(ord) => self.resolver.value(ord)?,
+            None => self.const_u32(0),
+        };
+        let value = self.resolver.value(arguments.src_value)?;
+        let value = unsafe {
+            LLVMBuildZExtOrBitCast(
+                self.builder,
+                value,
+                LLVMInt64TypeInContext(self.context),
+                LLVM_UNNAMED.as_ptr(),
+            )
+        };
+        let field = self.const_u32(data.field as u64);
+        self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_tensormap_replace",
+            None,
+            None,
+            &[tmap, field, ord, value],
+        )?;
         Ok(())
     }
 

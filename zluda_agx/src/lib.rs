@@ -180,6 +180,9 @@ cuda_macros::cuda_function_declarations!(
             cuStreamQuery,
             cuStreamSynchronize,
             cuStreamWaitEvent,
+            cuTensorMapEncodeIm2col,
+            cuTensorMapEncodeTiled,
+            cuTensorMapReplaceAddress,
             cuThreadExchangeStreamCaptureMode,
         ]
 );

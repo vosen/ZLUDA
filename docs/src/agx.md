@@ -305,6 +305,36 @@ up to 128 registers (`n256` with `f32`). A vector operand can now hold up to
 256 elements. All 34 `wg-*` and `wgsp-*` programs of PTX-formalization
 match the formal semantics on agx-g13g and agx-g14c.
 
+### Tensor memory accelerator (`cp.async.bulk.tensor`)
+
+The TMA copies are emulated by the issuing thread, element by element, and
+complete at once (the mbarrier transaction completes when the copy is
+issued). Supported:
+
+* tile loads, stores and reductions (`add`, `min`, `max`, `inc`, `dec`,
+  `and`, `or`, `xor`; signedness and float from the tensor map's element
+  type), 1D to 5D, with element strides, out-of-bounds zero or NaN fill and
+  the shared-memory swizzles (32B, 64B, 128B, and 128B with 32B, 32B + 8-byte
+  flip and 64B atomicity), by the CTA-relative shared address;
+* `.multicast::cluster` (16- and 32-bit masks) and `.cta_group::2`;
+* the im2col modes `.im2col`, `.im2col::w`, `.im2col::w::128` and stores with
+  `.im2col_no_offs::w`;
+* `.override::global_address` and `.override::global_dim{_stride}` (the
+  patched map is a private copy);
+* the packed sub-byte types (`16U4_ALIGN8B`, `16U4_ALIGN16B`,
+  `16U6_ALIGN16B`);
+* `tensormap.replace` (every field).
+
+The 128-byte tensor map is opaque to PTX. `cuTensorMapEncodeTiled`,
+`cuTensorMapEncodeIm2col` and `cuTensorMapReplaceAddress` write the encoding
+of PTX-formalization's model (16 64-bit words: element type, rank, address,
+dims, strides, box, swizzle, fill, interleave, element strides, im2col
+corners), and the emulation reads the same one. All 28 `tma*` and `tma-*`
+programs of PTX-formalization match the formal semantics on agx-g13g and
+agx-g14c. The interleaved layouts are plain copies of the dims, as in the
+model. `cp.async.bulk.prefetch.tensor` and `.tile::gather4` / `scatter4` are
+not supported yet.
+
 ## Asynchronous copies and mbarriers
 
 The hardware has no asynchronous copy engine and no transaction barriers, so
@@ -475,16 +505,15 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
 ```
 
 Kernels with statements that ZLUDA's front end does not support (`tcgen05`,
-TMA tensor maps, textures and surfaces, the sm_107 conversions) are skipped,
-together with the checks that follow their launch. Of the 1658 checks of the
-286 programs (2026-10-20, agx-g14c), 1306 run. With `--strict-fp` all 1306
-match the formal semantics (214 programs pass completely). Without it 1131
-match and the other 175 are the floating point differences listed above
-(denormal `f32` operands and results, NaN bit patterns, `-0.0` under `.sat`,
-`div` and `sqrt` precision). The 352 skipped checks follow kernels using
-`tcgen05`, TMA (`cp.async.bulk.tensor` with a `.tensormap`), textures, the
-sm_107 conversions (`.scaled`, `ue5m3x2`, `s2f6x2`),
-`mul.rz.f16x2.f32x2.f32x2` and the non-PTX `coll_test`. A full run takes about 100 seconds
+textures and surfaces, the sm_107 conversions) are skipped, together with the
+checks that follow their launch. Of the 1716 checks of the 286 programs
+(2026-10-20, agx-g14c), 1363 run. With `--strict-fp` all 1363 match the
+formal semantics (242 programs pass completely). Without it 1188 match and
+the other 175 are the floating point differences listed above (denormal
+`f32` operands and results, NaN bit patterns, `-0.0` under `.sat`, `div`
+and `sqrt` precision). The 353 skipped checks follow kernels using
+`tcgen05`, textures, the sm_107 conversions (`.scaled`, `ue5m3x2`,
+`s2f6x2`), `mul.rz.f16x2.f32x2.f32x2` and the non-PTX `coll_test`. A full run takes about 100 seconds
 with `-j 8`.
 
 All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`

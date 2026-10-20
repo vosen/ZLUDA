@@ -1616,6 +1616,177 @@ pub(crate) unsafe fn cuGetErrorString(e: CUresult, p: *mut *const c_char) -> CUr
     out(p, error_name(code(e)).as_ptr())
 }
 
+// ---------------------------------------------------------------- tensor maps
+
+/// The 16 64-bit words of a tensor map, in the encoding the AGX emulation of
+/// cp.async.bulk.tensor reads (PTX-formalization's, see the TMA helpers of
+/// zluda_ptx_impl_agx.ll): 0 magic | 1 element type (tensormap.replace
+/// numbering; im2col lower corners at bit 8) | 2 rank (im2col upper corners at
+/// bit 8) | 3 global address | 4..8 dims | 9..12 byte strides of dims 1..4 |
+/// 13 box dims 0..3 | 14 box dim 4, swizzle_mode << 16, fill << 24,
+/// interleave << 32, im2col << 40, swizzle_atomicity << 48 | 15 element strides.
+struct TensorMapDesc<'a> {
+    data_type: CUtensorMapDataType,
+    rank: u32,
+    address: *mut c_void,
+    dims: &'a [u64],
+    strides: &'a [u64],
+    boxes: &'a [u32],
+    element_strides: &'a [u32],
+    interleave: CUtensorMapInterleave,
+    swizzle: CUtensorMapSwizzle,
+    fill: CUtensorMapFloatOOBfill,
+    // lower and upper corners of the spatial dims
+    im2col: Option<(&'a [c_int], &'a [c_int])>,
+}
+
+const TENSOR_MAP_MAGIC: u64 = 0x5448_4150;
+
+fn encode_tensor_map(d: &TensorMapDesc) -> Result<[u64; 16], CUerror> {
+    // CUtensorMapDataType -> tensormap.replace.elemtype
+    let element_type = match d.data_type.0 {
+        t @ 0..=7 => t as u64,
+        8 => 9,  // FLOAT64
+        9 => 10, // BFLOAT16
+        10 => 8, // FLOAT32_FTZ
+        t @ 11..=15 => t as u64,
+        _ => return Err(CUerror::INVALID_VALUE),
+    };
+    let rank = d.rank as usize;
+    let address = d.address as u64;
+    if !(1..=5).contains(&rank) || address % 16 != 0 || d.swizzle.0 > 6 || d.interleave.0 > 2 || d.fill.0 > 1 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    if d.dims.iter().any(|&n| n == 0 || n > 1 << 32)
+        || d.strides.iter().any(|&s| s % 16 != 0 || s >= 1 << 40)
+        || d.boxes.iter().any(|&b| b == 0 || b > 256)
+        || d.element_strides.iter().any(|&e| e == 0 || e > 8)
+    {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let z = d.swizzle.0 as u64;
+    let (mode, atomicity) = if (4..=6).contains(&z) { (3, z - 3) } else { (z, 0) };
+    let mut w = [0u64; 16];
+    w[0] = TENSOR_MAP_MAGIC;
+    w[1] = element_type;
+    w[2] = rank as u64;
+    w[3] = address;
+    w[4..4 + rank].copy_from_slice(d.dims);
+    w[9..9 + rank - 1].copy_from_slice(d.strides);
+    for (i, &b) in d.boxes.iter().enumerate() {
+        if i < 4 {
+            w[13] |= (b as u64) << (16 * i);
+        } else {
+            w[14] |= b as u64;
+        }
+    }
+    w[14] |= mode << 16 | (d.fill.0 as u64) << 24 | (d.interleave.0 as u64) << 32 | atomicity << 48;
+    for (i, &e) in d.element_strides.iter().enumerate() {
+        w[15] |= (e as u64) << (8 * i);
+    }
+    if let Some((lower, upper)) = d.im2col {
+        let pack = |corners: &[c_int]| -> u64 {
+            corners
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| (((c + 32768) as u64) & 0xffff) << (16 * i))
+                .sum()
+        };
+        w[1] |= pack(lower) << 8;
+        w[2] |= pack(upper) << 8;
+        w[14] |= 1 << 40;
+    }
+    Ok(w)
+}
+
+unsafe fn slice<'a, T>(p: *const T, n: usize) -> Result<&'a [T], CUerror> {
+    if p.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    Ok(std::slice::from_raw_parts(p, n))
+}
+
+pub(crate) unsafe fn cuTensorMapEncodeTiled(
+    tensor_map: *mut CUtensorMap,
+    data_type: CUtensorMapDataType,
+    rank: cuuint32_t,
+    address: *mut c_void,
+    dims: *const cuuint64_t,
+    strides: *const cuuint64_t,
+    boxes: *const cuuint32_t,
+    element_strides: *const cuuint32_t,
+    interleave: CUtensorMapInterleave,
+    swizzle: CUtensorMapSwizzle,
+    _l2_promotion: CUtensorMapL2promotion,
+    fill: CUtensorMapFloatOOBfill,
+) -> CUresult {
+    if tensor_map.is_null() || !(1..=5).contains(&rank) {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let n = rank as usize;
+    let words = encode_tensor_map(&TensorMapDesc {
+        data_type,
+        rank,
+        address,
+        dims: slice(dims, n)?,
+        strides: if n > 1 { slice(strides, n - 1)? } else { &[] },
+        boxes: slice(boxes, n)?,
+        element_strides: slice(element_strides, n)?,
+        interleave,
+        swizzle,
+        fill,
+        im2col: None,
+    })?;
+    (*tensor_map).opaque = words;
+    Ok(())
+}
+
+pub(crate) unsafe fn cuTensorMapEncodeIm2col(
+    tensor_map: *mut CUtensorMap,
+    data_type: CUtensorMapDataType,
+    rank: cuuint32_t,
+    address: *mut c_void,
+    dims: *const cuuint64_t,
+    strides: *const cuuint64_t,
+    lower: *const c_int,
+    upper: *const c_int,
+    channels_per_pixel: cuuint32_t,
+    pixels_per_column: cuuint32_t,
+    element_strides: *const cuuint32_t,
+    interleave: CUtensorMapInterleave,
+    swizzle: CUtensorMapSwizzle,
+    _l2_promotion: CUtensorMapL2promotion,
+    fill: CUtensorMapFloatOOBfill,
+) -> CUresult {
+    if tensor_map.is_null() || !(3..=5).contains(&rank) {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let n = rank as usize;
+    let words = encode_tensor_map(&TensorMapDesc {
+        data_type,
+        rank,
+        address,
+        dims: slice(dims, n)?,
+        strides: slice(strides, n - 1)?,
+        boxes: &[channels_per_pixel, pixels_per_column],
+        element_strides: slice(element_strides, n)?,
+        interleave,
+        swizzle,
+        fill,
+        im2col: Some((slice(lower, n - 2)?, slice(upper, n - 2)?)),
+    })?;
+    (*tensor_map).opaque = words;
+    Ok(())
+}
+
+pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, address: *mut c_void) -> CUresult {
+    if tensor_map.is_null() || (*tensor_map).opaque[0] != TENSOR_MAP_MAGIC || address as u64 % 16 != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    (*tensor_map).opaque[3] = address as u64;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1741,4 +1912,36 @@ mod link_tests {
         // alone, the call has no definition
         assert!(super::compile_ptx(main, "agx-g14c").is_err());
     }
+
+    #[test]
+    fn tensor_map_encoding() {
+        use cuda_types::cuda::*;
+        use std::ffi::c_void;
+        let mut map = CUtensorMap { opaque: [0; 16] };
+        let (dims, strides, boxes, estrides) = ([16u64, 8], [64u64], [8u32, 4], [1u32, 1]);
+        unsafe {
+            super::cuTensorMapEncodeTiled(
+                &mut map,
+                CUtensorMapDataType::CU_TENSOR_MAP_DATA_TYPE_FLOAT32,
+                2,
+                0x1000 as *mut c_void,
+                dims.as_ptr(),
+                strides.as_ptr(),
+                boxes.as_ptr(),
+                estrides.as_ptr(),
+                CUtensorMapInterleave(0),
+                CUtensorMapSwizzle::CU_TENSOR_MAP_SWIZZLE_128B_ATOM_32B,
+                CUtensorMapL2promotion(0),
+                CUtensorMapFloatOOBfill(1),
+            )
+            .unwrap();
+        }
+        // the words of PTX-formalization's `.tensormap .f32 ... .swizzle 260`
+        let w = map.opaque;
+        assert_eq!((w[0], w[1], w[2], w[3], w[4], w[5], w[9]), (0x54484150, 7, 2, 0x1000, 16, 8, 64));
+        assert_eq!((w[13], w[14], w[15]), (8 | 4 << 16, 3 << 16 | 1 << 24 | 1 << 48, 0x0101));
+        unsafe { super::cuTensorMapReplaceAddress(&mut map, 0x2000 as *mut c_void).unwrap() };
+        assert_eq!(map.opaque[3], 0x2000);
+    }
+
 }

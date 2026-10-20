@@ -2210,6 +2210,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::CpAsyncWaitAll { .. }
         | ast::Instruction::CpAsyncMbarrierArrive { .. }
         | ast::Instruction::CpAsyncBulk { .. }
+        | ast::Instruction::CpAsyncBulkTensor { .. }
+        | ast::Instruction::TensormapReplace { .. }
         | ast::Instruction::CpReduceAsyncBulk { .. }
         | ast::Instruction::MbarrierInit { .. }
         | ast::Instruction::MbarrierInval { .. }

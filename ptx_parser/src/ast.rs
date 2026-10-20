@@ -1538,6 +1538,157 @@ ptx_parser_macros::generate_instruction_type!(
         WgmmaFence {
             data: WgmmaControl,
         },
+        // cp.async.bulk.tensor / cp.reduce.async.bulk.tensor in tile mode
+        CpAsyncBulkTensor {
+            type: Type::Scalar(ScalarType::B8),
+            data: CpAsyncBulkTensorDetails,
+            arguments<T>: {
+                // the shared-memory image: the destination of loads, the source of stores
+                src_smem: {
+                    repr: T,
+                    space: { data.smem_space },
+                },
+                // the generic address of the tensor map
+                src_tmap: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                src_c0: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_c4: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                // .override::global_address / .override::global_dim{_stride}:
+                // the new address, dims, and strides (low 32 bits, then the
+                // upper 4 bits of each in one 16-bit register)
+                src_ov_addr: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                src_ov_d0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_d4: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_s3: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_ov_up: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_mbarrier: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { data.smem_space },
+                },
+                // im2col offsets (im2col) or {wHalo, wOffset} (im2col::w)
+                src_i0: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_i1: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_i2: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B16),
+                    relaxed_type_check: true,
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(data.mask_type()) },
+                    relaxed_type_check: true,
+                },
+                src_cache_policy: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tensormap.replace.tile.field.space.b1024.type [tmap], {ord,} value
+        TensormapReplace {
+            type: Type::Scalar(ScalarType::B8),
+            data: TensormapReplaceDetails,
+            arguments<T>: {
+                src_tmap: {
+                    repr: T,
+                    space: { data.space },
+                },
+                src_ord: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
+                src_value: {
+                    repr: T,
+                    type: { Type::Scalar(data.type_) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
         Mma {
             data: MmaDetails,
             arguments<T>: {
@@ -4478,3 +4629,58 @@ pub struct BfindDetails {
     pub shift_amount: bool,
 }
 
+
+#[derive(Copy, Clone)]
+pub enum TensorCopyKind {
+    Load,
+    Store,
+    Reduce(AtomicOp),
+}
+
+pub struct CpAsyncBulkTensorDetails {
+    pub dims: u8,
+    pub kind: TensorCopyKind,
+    // shared::cluster (loads) or shared::cta
+    pub smem_space: StateSpace,
+    pub multicast: bool,
+    // .multicast::cluster::32b: a 32-bit CTA mask
+    pub mask32: bool,
+    pub cta_group2: bool,
+    // None for tile mode; im2col modes: 0 .im2col / .im2col_no_offs, 1 .im2col::w,
+    // 2 .im2col::w::128, 3 .im2col_no_offs::w
+    pub im2col: Option<u8>,
+    // .override::global_address (the address operand replaces the map's)
+    pub override_address: bool,
+}
+
+impl CpAsyncBulkTensorDetails {
+    pub fn mask_type(&self) -> ScalarType {
+        if self.mask32 {
+            ScalarType::B32
+        } else {
+            ScalarType::B16
+        }
+    }
+}
+
+/// The fields of tensormap.replace, numbered as the AGX runtime helper takes them.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TensormapField {
+    GlobalAddress = 0,
+    Rank = 1,
+    BoxDim = 2,
+    GlobalDim = 3,
+    GlobalStride = 4,
+    ElementStride = 5,
+    Elemtype = 6,
+    InterleaveLayout = 7,
+    SwizzleMode = 8,
+    SwizzleAtomicity = 9,
+    FillMode = 10,
+}
+
+pub struct TensormapReplaceDetails {
+    pub field: TensormapField,
+    pub space: StateSpace,
+    pub type_: ScalarType,
+}

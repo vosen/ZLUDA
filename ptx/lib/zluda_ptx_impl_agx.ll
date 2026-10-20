@@ -1858,7 +1858,1173 @@ exit:
 }
 
 
+; ---------------------------------------------------------------- TMA (cp.async.bulk.tensor)
+; A tensor map is 16 little-endian 64-bit words (the encoding of
+; PTX-formalization's tmBlob, which the AGX runtime also uses):
+;   0 magic | 1 element type (tensormap.replace.elemtype numbering) | 2 rank |
+;   3 global address | 4..8 dims | 9..12 byte strides of dims 1..4 |
+;   13 box dims 0..3 (16 bits each) | 14 box dim 4, swizzle_mode << 16,
+;   fill_mode << 24, interleave << 32, swizzle_atomicity << 48 |
+;   15 element strides (8 bits each)
+; Copies run element by element in the issuing thread and complete at once.
+
+define i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %i) #3 {
+  %p = getelementptr inbounds i64, ptr %tm, i32 %i
+  %v = load i64, ptr %p, align 8
+  ret i64 %v
+}
+
+; bytes of an element type
+define i32 @__zluda_ptx_impl_agx_tma_bytes(i32 %et) #0 {
+  switch i32 %et, label %one [ i32 1, label %two i32 6, label %two i32 10, label %two
+                               i32 2, label %four i32 3, label %four i32 7, label %four i32 8, label %four i32 11, label %four i32 12, label %four
+                               i32 4, label %eight i32 5, label %eight i32 9, label %eight ]
+one:
+  ret i32 1
+two:
+  ret i32 2
+four:
+  ret i32 4
+eight:
+  ret i32 8
+}
+
+; the swizzle of a shared-memory byte address: 1 128B, 2 64B, 3 32B (Swizzle<B,4,3>),
+; 4 128B with 32B atomicity, 5 the same with an 8-byte flip on odd 128-byte lines,
+; 6 128B with 64B atomicity
+define i32 @__zluda_ptx_impl_agx_tma_swizzle(i32 %mode, i32 %a) #0 {
+entry:
+  %line = lshr i32 %a, 7
+  switch i32 %mode, label %none [ i32 1, label %b3 i32 2, label %b2 i32 3, label %b1 i32 4, label %m4 i32 5, label %m5 i32 6, label %m6 ]
+b3:
+  %x3 = and i32 %line, 7
+  br label %chunks
+b2:
+  %x2 = and i32 %line, 3
+  br label %chunks
+b1:
+  %x1 = and i32 %line, 1
+  br label %chunks
+chunks:
+  %x = phi i32 [ %x3, %b3 ], [ %x2, %b2 ], [ %x1, %b1 ]
+  %xs = shl i32 %x, 4
+  %r = xor i32 %a, %xs
+  ret i32 %r
+m4:
+  %l4 = and i32 %line, 3
+  %s4 = shl i32 %l4, 5
+  %r4 = xor i32 %a, %s4
+  ret i32 %r4
+m5:
+  %l5 = and i32 %line, 3
+  %s5 = shl i32 %l5, 5
+  %t5 = xor i32 %a, %s5
+  %o5 = and i32 %line, 1
+  %f5 = shl i32 %o5, 3
+  %r5 = xor i32 %t5, %f5
+  ret i32 %r5
+m6:
+  %l6 = and i32 %line, 1
+  %s6 = shl i32 %l6, 6
+  %r6 = xor i32 %a, %s6
+  ret i32 %r6
+none:
+  ret i32 %a
+}
+
+define i64 @__zluda_ptx_impl_agx_tma_load_global(i64 %a, i32 %n) #3 {
+entry:
+  %p = inttoptr i64 %a to ptr addrspace(1)
+  switch i32 %n, label %b1 [ i32 2, label %b2 i32 4, label %b4 i32 8, label %b8 ]
+b1:
+  %v1 = load i8, ptr addrspace(1) %p, align 1
+  %r1 = zext i8 %v1 to i64
+  ret i64 %r1
+b2:
+  %v2 = load i16, ptr addrspace(1) %p, align 2
+  %r2 = zext i16 %v2 to i64
+  ret i64 %r2
+b4:
+  %v4 = load i32, ptr addrspace(1) %p, align 4
+  %r4 = zext i32 %v4 to i64
+  ret i64 %r4
+b8:
+  %v8 = load i64, ptr addrspace(1) %p, align 8
+  ret i64 %v8
+}
+
+define void @__zluda_ptx_impl_agx_tma_store_global(i64 %a, i32 %n, i64 %v) #3 {
+entry:
+  %p = inttoptr i64 %a to ptr addrspace(1)
+  switch i32 %n, label %b1 [ i32 2, label %b2 i32 4, label %b4 i32 8, label %b8 ]
+b1:
+  %v1 = trunc i64 %v to i8
+  store i8 %v1, ptr addrspace(1) %p, align 1
+  ret void
+b2:
+  %v2 = trunc i64 %v to i16
+  store i16 %v2, ptr addrspace(1) %p, align 2
+  ret void
+b4:
+  %v4 = trunc i64 %v to i32
+  store i32 %v4, ptr addrspace(1) %p, align 4
+  ret void
+b8:
+  store i64 %v, ptr addrspace(1) %p, align 8
+  ret void
+}
+
+define i64 @__zluda_ptx_impl_agx_tma_load_shared(i32 %a, i32 %n) #3 {
+entry:
+  %p = inttoptr i32 %a to ptr addrspace(3)
+  switch i32 %n, label %b1 [ i32 2, label %b2 i32 4, label %b4 i32 8, label %b8 ]
+b1:
+  %v1 = load i8, ptr addrspace(3) %p, align 1
+  %r1 = zext i8 %v1 to i64
+  ret i64 %r1
+b2:
+  %v2 = load i16, ptr addrspace(3) %p, align 2
+  %r2 = zext i16 %v2 to i64
+  ret i64 %r2
+b4:
+  %v4 = load i32, ptr addrspace(3) %p, align 4
+  %r4 = zext i32 %v4 to i64
+  ret i64 %r4
+b8:
+  %v8 = load i64, ptr addrspace(3) %p, align 8
+  ret i64 %v8
+}
+
+define void @__zluda_ptx_impl_agx_tma_store_shared(i32 %a, i32 %n, i64 %v) #3 {
+entry:
+  %p = inttoptr i32 %a to ptr addrspace(3)
+  switch i32 %n, label %b1 [ i32 2, label %b2 i32 4, label %b4 i32 8, label %b8 ]
+b1:
+  %v1 = trunc i64 %v to i8
+  store i8 %v1, ptr addrspace(3) %p, align 1
+  ret void
+b2:
+  %v2 = trunc i64 %v to i16
+  store i16 %v2, ptr addrspace(3) %p, align 2
+  ret void
+b4:
+  %v4 = trunc i64 %v to i32
+  store i32 %v4, ptr addrspace(3) %p, align 4
+  ret void
+b8:
+  store i64 %v, ptr addrspace(3) %p, align 8
+  ret void
+}
+
+; An atomic (relaxed) reduction of one element of type %et into global memory.
+; %op: 0 add, 1 and, 2 or, 3 xor, 4 inc, 5 dec, 6 min, 8 max (signedness and
+; float from the element type)
+define void @__zluda_ptx_impl_agx_tma_red(i64 %a, i32 %et, i32 %op, i64 %v) #3 {
+entry:
+  %p = inttoptr i64 %a to ptr addrspace(1)
+  %v32 = trunc i64 %v to i32
+  %v16 = trunc i64 %v to i16
+  %h = bitcast i16 %v16 to half
+  %bf = bitcast i16 %v16 to bfloat
+  %f = bitcast i32 %v32 to float
+  %n = call i32 @__zluda_ptx_impl_agx_tma_bytes(i32 %et)
+  %wide = icmp eq i32 %n, 8
+  %is_f16 = icmp eq i32 %et, 6
+  %is_bf16 = icmp eq i32 %et, 10
+  %is_f32 = icmp eq i32 %et, 7
+  %is_f32ftz = icmp eq i32 %et, 8
+  %is_float32 = or i1 %is_f32, %is_f32ftz
+  %signed32 = icmp eq i32 %et, 3
+  %signed64 = icmp eq i32 %et, 5
+  %signed = or i1 %signed32, %signed64
+  switch i32 %op, label %exit [ i32 0, label %add i32 1, label %and i32 2, label %or i32 3, label %xor
+                                i32 4, label %inc i32 5, label %dec i32 6, label %min i32 8, label %max ]
+add:
+  br i1 %is_f16, label %add_h, label %add_1
+add_1:
+  br i1 %is_bf16, label %add_bf, label %add_2
+add_2:
+  br i1 %is_float32, label %add_f, label %add_3
+add_3:
+  br i1 %wide, label %add_64, label %add_32
+add_h:
+  %o0 = atomicrmw fadd ptr addrspace(1) %p, half %h monotonic, align 2
+  br label %exit
+add_bf:
+  %o1 = atomicrmw fadd ptr addrspace(1) %p, bfloat %bf monotonic, align 2
+  br label %exit
+add_f:
+  %o2 = atomicrmw fadd ptr addrspace(1) %p, float %f monotonic, align 4
+  br label %exit
+add_64:
+  %o3 = atomicrmw add ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+add_32:
+  %o4 = atomicrmw add ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+and:
+  br i1 %wide, label %and_64, label %and_32
+and_64:
+  %o5 = atomicrmw and ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+and_32:
+  %o6 = atomicrmw and ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+or:
+  br i1 %wide, label %or_64, label %or_32
+or_64:
+  %o7 = atomicrmw or ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+or_32:
+  %o8 = atomicrmw or ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+xor:
+  br i1 %wide, label %xor_64, label %xor_32
+xor_64:
+  %o9 = atomicrmw xor ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+xor_32:
+  %o10 = atomicrmw xor ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+inc:
+  %o11 = atomicrmw uinc_wrap ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+dec:
+  %o12 = atomicrmw udec_wrap ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+min:
+  br i1 %is_f16, label %min_h, label %min_1
+min_1:
+  br i1 %is_bf16, label %min_bf, label %min_2
+min_2:
+  br i1 %wide, label %min_64, label %min_32
+min_h:
+  %o13 = atomicrmw fmin ptr addrspace(1) %p, half %h monotonic, align 2
+  br label %exit
+min_bf:
+  %o14 = atomicrmw fmin ptr addrspace(1) %p, bfloat %bf monotonic, align 2
+  br label %exit
+min_64:
+  br i1 %signed, label %min_s64, label %min_u64
+min_s64:
+  %o15 = atomicrmw min ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+min_u64:
+  %o16 = atomicrmw umin ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+min_32:
+  br i1 %signed, label %min_s32, label %min_u32
+min_s32:
+  %o17 = atomicrmw min ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+min_u32:
+  %o18 = atomicrmw umin ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+max:
+  br i1 %is_f16, label %max_h, label %max_1
+max_1:
+  br i1 %is_bf16, label %max_bf, label %max_2
+max_2:
+  br i1 %wide, label %max_64, label %max_32
+max_h:
+  %o19 = atomicrmw fmax ptr addrspace(1) %p, half %h monotonic, align 2
+  br label %exit
+max_bf:
+  %o20 = atomicrmw fmax ptr addrspace(1) %p, bfloat %bf monotonic, align 2
+  br label %exit
+max_64:
+  br i1 %signed, label %max_s64, label %max_u64
+max_s64:
+  %o21 = atomicrmw max ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+max_u64:
+  %o22 = atomicrmw umax ptr addrspace(1) %p, i64 %v monotonic, align 8
+  br label %exit
+max_32:
+  br i1 %signed, label %max_s32, label %max_u32
+max_s32:
+  %o23 = atomicrmw max ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+max_u32:
+  %o24 = atomicrmw umax ptr addrspace(1) %p, i32 %v32 monotonic, align 4
+  br label %exit
+exit:
+  ret void
+}
+
+; The box of a tile-mode copy at coordinates c0..c4 (0 beyond the rank),
+; element e (dim 0 fastest) at global coordinates c_i + q_i * element stride_i.
+; %dir: -1 load (global -> shared image at %smem, out-of-bounds elements
+; filled), -2 store (shared -> global, out-of-bounds elements dropped), >= 0
+; reduce with that operation. The shared image is dense, swizzled by the
+; CTA-relative address. Returns the bytes of the box.
+define i32 @__zluda_ptx_impl_agx_tma_tile(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %smem, i32 %dir) #3 {
+entry:
+  %w1 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 1)
+  %w1t = trunc i64 %w1 to i32
+  %et = and i32 %w1t, 255
+  %packed = icmp uge i32 %et, 13
+  br i1 %packed, label %sub, label %elements
+sub:
+  %sub_bytes = call i32 @__zluda_ptx_impl_agx_tma_tile_sub(ptr %tm, i32 %et, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %smem, i32 %dir)
+  ret i32 %sub_bytes
+elements:
+  %eb = call i32 @__zluda_ptx_impl_agx_tma_bytes(i32 %et)
+  %eb64 = zext i32 %eb to i64
+  %w2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 2)
+  %w2t = trunc i64 %w2 to i32
+  %rank = and i32 %w2t, 255
+  %base = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 3)
+  %d0 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 4)
+  %d1 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 5)
+  %d2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 6)
+  %d3 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 7)
+  %d4 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 8)
+  %s1 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 9)
+  %s2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 10)
+  %s3 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 11)
+  %s4 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 12)
+  %w13 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 13)
+  %w14 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 14)
+  %w15 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 15)
+  %r1 = icmp ugt i32 %rank, 1
+  %r2 = icmp ugt i32 %rank, 2
+  %r3 = icmp ugt i32 %rank, 3
+  %r4 = icmp ugt i32 %rank, 4
+  %w13t = trunc i64 %w13 to i32
+  %w13h = lshr i64 %w13, 32
+  %w13ht = trunc i64 %w13h to i32
+  %w14t = trunc i64 %w14 to i32
+  %bx0 = and i32 %w13t, 65535
+  %bx1s = lshr i32 %w13t, 16
+  %bx2 = and i32 %w13ht, 65535
+  %bx3s = lshr i32 %w13ht, 16
+  %bx4 = and i32 %w14t, 65535
+  %b1r = select i1 %r1, i32 %bx1s, i32 1
+  %b2r = select i1 %r2, i32 %bx2, i32 1
+  %b3r = select i1 %r3, i32 %bx3s, i32 1
+  %b4r = select i1 %r4, i32 %bx4, i32 1
+  %w15t = trunc i64 %w15 to i32
+  %e0 = and i32 %w15t, 255
+  %e1s = lshr i32 %w15t, 8
+  %e1 = and i32 %e1s, 255
+  %e2s = lshr i32 %w15t, 16
+  %e2 = and i32 %e2s, 255
+  %e3 = lshr i32 %w15t, 24
+  %w15h = lshr i64 %w15, 32
+  %w15ht = trunc i64 %w15h to i32
+  %e4 = and i32 %w15ht, 255
+  ; swizzle mode from swizzle_mode / swizzle_atomicity
+  %swz = lshr i32 %w14t, 16
+  %swzm = and i32 %swz, 255
+  %w14h = lshr i64 %w14, 48
+  %w14ht = trunc i64 %w14h to i32
+  %atom = and i32 %w14ht, 255
+  %is128 = icmp eq i32 %swzm, 3
+  %m128 = select i1 %is128, i32 1, i32 0
+  %is64 = icmp eq i32 %swzm, 2
+  %is32 = icmp eq i32 %swzm, 1
+  %m64 = select i1 %is64, i32 2, i32 %m128
+  %m32 = select i1 %is32, i32 3, i32 %m64
+  %atomic = add i32 %atom, 3
+  %has_atom = icmp ne i32 %atom, 0
+  %atom128 = and i1 %is128, %has_atom
+  %mode = select i1 %atom128, i32 %atomic, i32 %m32
+  ; out-of-bounds fill: zero, or (fill_mode != 0) a NaN of the element type
+  %fm = lshr i32 %w14t, 24
+  %fm8 = and i32 %fm, 255
+  %nan_fill = icmp ne i32 %fm8, 0
+  %f4 = icmp eq i32 %eb, 4
+  %fh = icmp eq i32 %et, 6
+  %fbf = icmp eq i32 %et, 10
+  %fd = icmp eq i32 %et, 9
+  %n0 = select i1 %fd, i64 9221120237041090560, i64 0
+  %n1 = select i1 %fbf, i64 32704, i64 %n0
+  %n2 = select i1 %fh, i64 32256, i64 %n1
+  %n3 = select i1 %f4, i64 2143289344, i64 %n2
+  %fill = select i1 %nan_fill, i64 %n3, i64 0
+  ; the shared image is swizzled by its CTA-relative address
+  %smem_rel = call i32 @__zluda_agx_cluster_mapa(i32 %smem, i32 0)
+  %window = sub i32 %smem, %smem_rel
+  %v01 = mul i32 %bx0, %b1r
+  %v012 = mul i32 %v01, %b2r
+  %v0123 = mul i32 %v012, %b3r
+  %count = mul i32 %v0123, %b4r
+  %bytes = mul i32 %count, %eb
+  %empty = icmp eq i32 %count, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %e = phi i32 [ 0, %elements ], [ %e.next, %next ]
+  %q0 = phi i32 [ 0, %elements ], [ %q0.n, %next ]
+  %q1 = phi i32 [ 0, %elements ], [ %q1.n, %next ]
+  %q2 = phi i32 [ 0, %elements ], [ %q2.n, %next ]
+  %q3 = phi i32 [ 0, %elements ], [ %q3.n, %next ]
+  %q4 = phi i32 [ 0, %elements ], [ %q4.n, %next ]
+  %t0 = mul i32 %q0, %e0
+  %g0 = add i32 %c0, %t0
+  %t1 = mul i32 %q1, %e1
+  %g1 = add i32 %c1, %t1
+  %t2 = mul i32 %q2, %e2
+  %g2 = add i32 %c2, %t2
+  %t3 = mul i32 %q3, %e3
+  %g3 = add i32 %c3, %t3
+  %t4 = mul i32 %q4, %e4
+  %g4 = add i32 %c4, %t4
+  %g0w = sext i32 %g0 to i64
+  %g1w = sext i32 %g1 to i64
+  %g2w = sext i32 %g2 to i64
+  %g3w = sext i32 %g3 to i64
+  %g4w = sext i32 %g4 to i64
+  ; unsigned compares also catch negative coordinates
+  %o0 = icmp uge i64 %g0w, %d0
+  %o1a = icmp uge i64 %g1w, %d1
+  %o1 = and i1 %o1a, %r1
+  %o2a = icmp uge i64 %g2w, %d2
+  %o2 = and i1 %o2a, %r2
+  %o3a = icmp uge i64 %g3w, %d3
+  %o3 = and i1 %o3a, %r3
+  %o4a = icmp uge i64 %g4w, %d4
+  %o4 = and i1 %o4a, %r4
+  %oo1 = or i1 %o0, %o1
+  %oo2 = or i1 %oo1, %o2
+  %oo3 = or i1 %oo2, %o3
+  %oob = or i1 %oo3, %o4
+  %a0 = mul i64 %g0w, %eb64
+  %a1 = mul i64 %g1w, %s1
+  %a2 = mul i64 %g2w, %s2
+  %a3 = mul i64 %g3w, %s3
+  %a4 = mul i64 %g4w, %s4
+  %a01 = add i64 %a0, %a1
+  %a012 = add i64 %a01, %a2
+  %a0123 = add i64 %a012, %a3
+  %off = add i64 %a0123, %a4
+  %gaddr = add i64 %base, %off
+  %eoff = mul i32 %e, %eb
+  %rel = add i32 %smem_rel, %eoff
+  %swizzled = call i32 @__zluda_ptx_impl_agx_tma_swizzle(i32 %mode, i32 %rel)
+  %saddr = add i32 %window, %swizzled
+  %is_load = icmp eq i32 %dir, -1
+  br i1 %is_load, label %load, label %out
+load:
+  br i1 %oob, label %load_fill, label %load_mem
+load_mem:
+  %lv = call i64 @__zluda_ptx_impl_agx_tma_load_global(i64 %gaddr, i32 %eb)
+  br label %load_fill
+load_fill:
+  %value = phi i64 [ %fill, %load ], [ %lv, %load_mem ]
+  call void @__zluda_ptx_impl_agx_tma_store_shared(i32 %saddr, i32 %eb, i64 %value)
+  br label %next
+out:
+  br i1 %oob, label %next, label %out_elem
+out_elem:
+  %sv = call i64 @__zluda_ptx_impl_agx_tma_load_shared(i32 %saddr, i32 %eb)
+  %is_store = icmp eq i32 %dir, -2
+  br i1 %is_store, label %store, label %reduce
+store:
+  call void @__zluda_ptx_impl_agx_tma_store_global(i64 %gaddr, i32 %eb, i64 %sv)
+  br label %next
+reduce:
+  call void @__zluda_ptx_impl_agx_tma_red(i64 %gaddr, i32 %et, i32 %dir, i64 %sv)
+  br label %next
+next:
+  ; advance (q0, ..., q4) through the box, dim 0 fastest
+  %q0.i = add i32 %q0, 1
+  %w0 = icmp eq i32 %q0.i, %bx0
+  %q0.n = select i1 %w0, i32 0, i32 %q0.i
+  %k0 = zext i1 %w0 to i32
+  %q1.i = add i32 %q1, %k0
+  %w1c = icmp eq i32 %q1.i, %b1r
+  %q1.n = select i1 %w1c, i32 0, i32 %q1.i
+  %k1 = zext i1 %w1c to i32
+  %q2.i = add i32 %q2, %k1
+  %w2c = icmp eq i32 %q2.i, %b2r
+  %q2.n = select i1 %w2c, i32 0, i32 %q2.i
+  %k2 = zext i1 %w2c to i32
+  %q3.i = add i32 %q3, %k2
+  %w3c = icmp eq i32 %q3.i, %b3r
+  %q3.n = select i1 %w3c, i32 0, i32 %q3.i
+  %k3 = zext i1 %w3c to i32
+  %q4.n = add i32 %q4, %k3
+  %e.next = add i32 %e, 1
+  %more = icmp ult i32 %e.next, %count
+  br i1 %more, label %loop, label %exit
+exit:
+  ret i32 %bytes
+}
+
+; The packed sub-byte element types (elemtype 13 b4x16, 14 b4x16_p64,
+; 15 b6x16_p32): dim 0 counts elements, a group of 16 takes 8 (4-bit) or 12
+; (6-bit) bytes in global memory and 8 (b4x16) or 16 bytes (data, then zero
+; padding) in shared memory; groups are laid out like the elements of a tile,
+; and a group outside the tensor reads as zeros. Returns the bytes of the box.
+define i32 @__zluda_ptx_impl_agx_tma_tile_sub(ptr %tm, i32 %et, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %smem, i32 %dir) #3 {
+entry:
+  %six = icmp eq i32 %et, 15
+  %gb = select i1 %six, i32 12, i32 8
+  %nb = select i1 %six, i64 6, i64 4
+  %dense = icmp eq i32 %et, 13
+  %sb = select i1 %dense, i32 8, i32 16
+  %w2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 2)
+  %w2t = trunc i64 %w2 to i32
+  %rank = and i32 %w2t, 255
+  %base = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 3)
+  %w13 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 13)
+  %w14 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 14)
+  %r1 = icmp ugt i32 %rank, 1
+  %r2 = icmp ugt i32 %rank, 2
+  %r3 = icmp ugt i32 %rank, 3
+  %r4 = icmp ugt i32 %rank, 4
+  %w13t = trunc i64 %w13 to i32
+  %w13h = lshr i64 %w13, 32
+  %w13ht = trunc i64 %w13h to i32
+  %w14t = trunc i64 %w14 to i32
+  %bx0 = and i32 %w13t, 65535
+  %g0n = lshr i32 %bx0, 4
+  %bx1 = lshr i32 %w13t, 16
+  %bx2 = and i32 %w13ht, 65535
+  %bx3 = lshr i32 %w13ht, 16
+  %bx4 = and i32 %w14t, 65535
+  %b1 = select i1 %r1, i32 %bx1, i32 1
+  %b2 = select i1 %r2, i32 %bx2, i32 1
+  %b3 = select i1 %r3, i32 %bx3, i32 1
+  %b4 = select i1 %r4, i32 %bx4, i32 1
+  %e1 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 1)
+  %e2 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 2)
+  %e3 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 3)
+  %e4 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 4)
+  %mode = call i32 @__zluda_ptx_impl_agx_tma_swizzle_mode(i64 %w14)
+  %smem_rel = call i32 @__zluda_agx_cluster_mapa(i32 %smem, i32 0)
+  %window = sub i32 %smem, %smem_rel
+  %v01 = mul i32 %g0n, %b1
+  %v012 = mul i32 %v01, %b2
+  %v0123 = mul i32 %v012, %b3
+  %groups = mul i32 %v0123, %b4
+  %bytes = mul i32 %groups, %sb
+  %empty = icmp eq i32 %groups, 0
+  br i1 %empty, label %exit, label %loop
+loop:
+  %q = phi i32 [ 0, %entry ], [ %q.next, %next ]
+  %q0 = phi i32 [ 0, %entry ], [ %q0.n, %next ]
+  %q1 = phi i32 [ 0, %entry ], [ %q1.n, %next ]
+  %q2 = phi i32 [ 0, %entry ], [ %q2.n, %next ]
+  %q3 = phi i32 [ 0, %entry ], [ %q3.n, %next ]
+  %q4 = phi i32 [ 0, %entry ], [ %q4.n, %next ]
+  %t0 = shl i32 %q0, 4
+  %col = add i32 %c0, %t0
+  %o0 = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 0, i32 %col, i32 1)
+  %t1 = mul i32 %q1, %e1
+  %g1 = add i32 %c1, %t1
+  %o1 = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 1, i32 %g1, i32 1)
+  %t2 = mul i32 %q2, %e2
+  %g2 = add i32 %c2, %t2
+  %o2 = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 2, i32 %g2, i32 1)
+  %t3 = mul i32 %q3, %e3
+  %g3 = add i32 %c3, %t3
+  %o3 = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 3, i32 %g3, i32 1)
+  %t4 = mul i32 %q4, %e4
+  %g4 = add i32 %c4, %t4
+  %o4 = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 4, i32 %g4, i32 1)
+  %bad0 = icmp slt i64 %o0, 0
+  %bad1a = icmp slt i64 %o1, 0
+  %bad1 = and i1 %bad1a, %r1
+  %bad2a = icmp slt i64 %o2, 0
+  %bad2 = and i1 %bad2a, %r2
+  %bad3a = icmp slt i64 %o3, 0
+  %bad3 = and i1 %bad3a, %r3
+  %bad4a = icmp slt i64 %o4, 0
+  %bad4 = and i1 %bad4a, %r4
+  %bb1 = or i1 %bad0, %bad1
+  %bb2 = or i1 %bb1, %bad2
+  %bb3 = or i1 %bb2, %bad3
+  %oob = or i1 %bb3, %bad4
+  ; the group's first byte: its first element (col bits from the start), then the strided dims
+  %colw = sext i32 %col to i64
+  %bits = mul i64 %colw, %nb
+  %a0 = lshr i64 %bits, 3
+  %s1 = select i1 %r1, i64 %o1, i64 0
+  %s2 = select i1 %r2, i64 %o2, i64 0
+  %s3 = select i1 %r3, i64 %o3, i64 0
+  %s4 = select i1 %r4, i64 %o4, i64 0
+  %a01 = add i64 %a0, %s1
+  %a012 = add i64 %a01, %s2
+  %a0123 = add i64 %a012, %s3
+  %a = add i64 %a0123, %s4
+  %gaddr = add i64 %base, %a
+  %gstart = mul i32 %q, %sb
+  br label %byte
+byte:
+  %j = phi i32 [ 0, %loop ], [ %j.next, %byte ]
+  %data = icmp ult i32 %j, %gb
+  %jw = zext i32 %j to i64
+  %ba = add i64 %gaddr, %jw
+  %rel0 = add i32 %smem_rel, %gstart
+  %rel = add i32 %rel0, %j
+  %swizzled = call i32 @__zluda_ptx_impl_agx_tma_swizzle(i32 %mode, i32 %rel)
+  %saddr = add i32 %window, %swizzled
+  ; padding bytes: zeros when loading, nothing when storing
+  %skip = xor i1 %data, true
+  %elem_oob = or i1 %oob, %skip
+  call void @__zluda_ptx_impl_agx_tma_elem(i64 %ba, i1 %elem_oob, i32 %saddr, i32 1, i32 0, i64 0, i32 %dir)
+  %j.next = add i32 %j, 1
+  %jmore = icmp ult i32 %j.next, %sb
+  br i1 %jmore, label %byte, label %next
+next:
+  %q0.i = add i32 %q0, 1
+  %w0 = icmp eq i32 %q0.i, %g0n
+  %q0.n = select i1 %w0, i32 0, i32 %q0.i
+  %k0 = zext i1 %w0 to i32
+  %q1.i = add i32 %q1, %k0
+  %w1c = icmp eq i32 %q1.i, %b1
+  %q1.n = select i1 %w1c, i32 0, i32 %q1.i
+  %k1 = zext i1 %w1c to i32
+  %q2.i = add i32 %q2, %k1
+  %w2c = icmp eq i32 %q2.i, %b2
+  %q2.n = select i1 %w2c, i32 0, i32 %q2.i
+  %k2 = zext i1 %w2c to i32
+  %q3.i = add i32 %q3, %k2
+  %w3c = icmp eq i32 %q3.i, %b3
+  %q3.n = select i1 %w3c, i32 0, i32 %q3.i
+  %k3 = zext i1 %w3c to i32
+  %q4.n = add i32 %q4, %k3
+  %q.next = add i32 %q, 1
+  %more = icmp ult i32 %q.next, %groups
+  br i1 %more, label %loop, label %exit
+exit:
+  ret i32 %bytes
+}
+
+; cp.async.bulk.tensor tile loads. %flags: bit 0 .multicast::cluster (to the
+; same CTA-relative offset of every CTA in %mask), bit 1 .cta_group::2 (the
+; signal for CTA d goes to the CTA of d's pair with the rank parity of the
+; CTA holding %mbar)
+define void @__zluda_ptx_impl_agx_tma_load(ptr addrspace(3) %dst, ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, ptr addrspace(3) %mbar, i32 %mask, i32 %flags, i32 %imode, i32 %i0, i32 %i1, i32 %i2) #3 {
+entry:
+  %dst_a = ptrtoint ptr addrspace(3) %dst to i32
+  %mbar_a = ptrtoint ptr addrspace(3) %mbar to i32
+  %mc_bit = and i32 %flags, 1
+  %mc = icmp ne i32 %mc_bit, 0
+  br i1 %mc, label %multicast, label %single
+single:
+  %bytes = call i32 @__zluda_ptx_impl_agx_tma_copy(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %imode, i32 %i0, i32 %i1, i32 %i2, i32 %dst_a, i32 -1)
+  call void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %mbar, i32 %bytes)
+  ret void
+multicast:
+  %g2_bit = and i32 %flags, 2
+  %g2 = icmp ne i32 %g2_bit, 0
+  %mbar_rank = call i32 @__zluda_agx_cluster_rank_of(i32 %mbar_a)
+  %parity = and i32 %mbar_rank, 1
+  br label %loop
+loop:
+  %rank = phi i32 [ 0, %multicast ], [ %next, %latch ]
+  %bit = lshr i32 %mask, %rank
+  %set = trunc i32 %bit to i1
+  br i1 %set, label %copy, label %latch
+copy:
+  %to_a = call i32 @__zluda_agx_cluster_mapa(i32 %dst_a, i32 %rank)
+  %n = call i32 @__zluda_ptx_impl_agx_tma_copy(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %imode, i32 %i0, i32 %i1, i32 %i2, i32 %to_a, i32 -1)
+  %pair = and i32 %rank, -2
+  %pair_rank = or i32 %pair, %parity
+  %bar_rank = select i1 %g2, i32 %pair_rank, i32 %rank
+  %bar_a = call i32 @__zluda_agx_cluster_mapa(i32 %mbar_a, i32 %bar_rank)
+  %bar = inttoptr i32 %bar_a to ptr addrspace(3)
+  call void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %bar, i32 %n)
+  br label %latch
+latch:
+  %next = add i32 %rank, 1
+  %done = icmp eq i32 %next, 32
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; cp.async.bulk.tensor tile stores (%op = -2) and cp.reduce.async.bulk.tensor
+; (%op = the reduction, see tma_red)
+define void @__zluda_ptx_impl_agx_tma_store(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, ptr addrspace(3) %src, i32 %op, i32 %imode) #3 {
+  %src_a = ptrtoint ptr addrspace(3) %src to i32
+  %n = call i32 @__zluda_ptx_impl_agx_tma_copy(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %imode, i32 0, i32 0, i32 0, i32 %src_a, i32 %op)
+  ret void
+}
+
+; ---------------------------------------------------------------- TMA im2col modes
+; (the pixel enumeration of PTX-formalization's ptx-exec-tma.k: tensor dim 0
+; = channels, dims 1..S = W, H, D, dim S + 1 = N; the corners of spatial dim k
+; are offset-binary in bits 8 + 16 (k - 1) of words 1 (lower) and 2 (upper),
+; the traversal strides are the element strides)
+
+define i32 @__zluda_ptx_impl_agx_tma_sel(i32 %i, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4) #0 {
+entry:
+  switch i32 %i, label %d0 [ i32 1, label %d1 i32 2, label %d2 i32 3, label %d3 i32 4, label %d4 ]
+d0:
+  ret i32 %c0
+d1:
+  ret i32 %c1
+d2:
+  ret i32 %c2
+d3:
+  ret i32 %c3
+d4:
+  ret i32 %c4
+}
+
+define i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 %k) #3 {
+  %w = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 15)
+  %sh = shl i32 %k, 3
+  %sh64 = zext i32 %sh to i64
+  %v = lshr i64 %w, %sh64
+  %t = trunc i64 %v to i32
+  %r = and i32 %t, 255
+  ret i32 %r
+}
+
+; the lower (%word 1) or upper (%word 2) corner of spatial dim %k + 1
+define i32 @__zluda_ptx_impl_agx_tma_corner(ptr %tm, i32 %word, i32 %k) #3 {
+  %w = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %word)
+  %k16 = shl i32 %k, 4
+  %sh = add i32 %k16, 8
+  %sh64 = zext i32 %sh to i64
+  %v = lshr i64 %w, %sh64
+  %t = trunc i64 %v to i32
+  %u = and i32 %t, 65535
+  %r = sub i32 %u, 32768
+  ret i32 %r
+}
+
+; floor(a / b) for b > 0
+define i32 @__zluda_ptx_impl_agx_tma_floordiv(i32 %a, i32 %b) #0 {
+  %q = sdiv i32 %a, %b
+  %r = srem i32 %a, %b
+  %has_r = icmp ne i32 %r, 0
+  %neg = icmp slt i32 %a, 0
+  %adj = and i1 %has_r, %neg
+  %d = zext i1 %adj to i32
+  %f = sub i32 %q, %d
+  ret i32 %f
+}
+
+; the number of filter-base positions along spatial dim %k (1..S)
+define i32 @__zluda_ptx_impl_agx_tma_nk(ptr %tm, i32 %k) #3 {
+  %wi = add i32 %k, 4
+  %dw = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %wi)
+  %dim = trunc i64 %dw to i32
+  %k1 = sub i32 %k, 1
+  %lo = call i32 @__zluda_ptx_impl_agx_tma_corner(ptr %tm, i32 1, i32 %k1)
+  %up = call i32 @__zluda_ptx_impl_agx_tma_corner(ptr %tm, i32 2, i32 %k1)
+  %st = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 %k)
+  %a = add i32 %dim, %up
+  %b = sub i32 %a, %lo
+  %num = sub i32 %b, 1
+  %q = sdiv i32 %num, %st
+  %n = add i32 %q, 1
+  %r = call i32 @llvm.smax.i32(i32 %n, i32 1)
+  ret i32 %r
+}
+
+; whether coordinate %v is outside dim %i, and its byte offset (dim 0: in elements of %eb bytes)
+define i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %i, i32 %v, i32 %eb) #3 {
+entry:
+  %wi = add i32 %i, 4
+  %dim = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %wi)
+  %vw = sext i32 %v to i64
+  %oob = icmp uge i64 %vw, %dim
+  br i1 %oob, label %out, label %in
+out:
+  ret i64 -1
+in:
+  %is0 = icmp eq i32 %i, 0
+  br i1 %is0, label %first, label %strided
+first:
+  %eb64 = zext i32 %eb to i64
+  %o0 = mul i64 %vw, %eb64
+  ret i64 %o0
+strided:
+  %si = add i32 %i, 8
+  %stride = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %si)
+  %o = mul i64 %vw, %stride
+  ret i64 %o
+}
+
+; the global address of element %e (pixel %e / channels, channel %e mod channels)
+; of an im2col copy, or -1 outside the tensor. %mode: 0 im2col (offsets
+; %i0..%i2), 1 im2col::w, 2 im2col::w::128 ({wHalo, wOffset} = {%i0, %i1}),
+; 3 im2col_no_offs::w
+define i64 @__zluda_ptx_impl_agx_tma_im2col_addr(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %i0, i32 %i1, i32 %i2, i32 %mode, i32 %e, i32 %eb) #3 {
+entry:
+  %w2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 2)
+  %w2t = trunc i64 %w2 to i32
+  %rank = and i32 %w2t, 255
+  %last = sub i32 %rank, 1
+  %base = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 3)
+  %w13 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 13)
+  %w13t = trunc i64 %w13 to i32
+  %box0 = and i32 %w13t, 65535
+  %ch_i = urem i32 %e, %box0
+  %pixel = udiv i32 %e, %box0
+  %est0 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 0)
+  %cht = mul i32 %ch_i, %est0
+  %ch = add i32 %c0, %cht
+  %choff = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 0, i32 %ch, i32 %eb)
+  %chbad = icmp slt i64 %choff, 0
+  br i1 %chbad, label %outside, label %spatial
+spatial:
+  %acc0 = add i64 %base, %choff
+  %is_w = icmp ne i32 %mode, 0
+  br i1 %is_w, label %wmode, label %start
+start:
+  ; the box index of the first pixel, in (N, D, H, W) order
+  %sk = phi i32 [ 1, %spatial ], [ %sk.n, %start_k ]
+  %smu = phi i32 [ 1, %spatial ], [ %smu.n, %start_k ]
+  %sacc = phi i32 [ 0, %spatial ], [ %sacc.n, %start_k ]
+  %smore = icmp slt i32 %sk, %last
+  br i1 %smore, label %start_k, label %start_n
+start_k:
+  %sc = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %sk, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
+  %sk1 = sub i32 %sk, 1
+  %slo = call i32 @__zluda_ptx_impl_agx_tma_corner(ptr %tm, i32 1, i32 %sk1)
+  %sst = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 %sk)
+  %sdiff = sub i32 %sc, %slo
+  %sq = call i32 @__zluda_ptx_impl_agx_tma_floordiv(i32 %sdiff, i32 %sst)
+  %sterm = mul i32 %sq, %smu
+  %sacc.n = add i32 %sacc, %sterm
+  %snk = call i32 @__zluda_ptx_impl_agx_tma_nk(ptr %tm, i32 %sk)
+  %smu.n = mul i32 %smu, %snk
+  %sk.n = add i32 %sk, 1
+  br label %start
+start_n:
+  %scn = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %last, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
+  %sn = mul i32 %scn, %smu
+  %first = add i32 %sacc, %sn
+  %idx0 = add i32 %first, %pixel
+  br label %pos
+pos:
+  ; spatial dim k at lower corner + (idx mod nk) * stride + offset
+  %k = phi i32 [ 1, %start_n ], [ %k.n, %pos_k ]
+  %idx = phi i32 [ %idx0, %start_n ], [ %idx.n, %pos_k ]
+  %acc = phi i64 [ %acc0, %start_n ], [ %acc.n, %pos_k ]
+  %more = icmp slt i32 %k, %last
+  br i1 %more, label %pos_k, label %pos_n
+pos_k:
+  %nk = call i32 @__zluda_ptx_impl_agx_tma_nk(ptr %tm, i32 %k)
+  %k1 = sub i32 %k, 1
+  %lo = call i32 @__zluda_ptx_impl_agx_tma_corner(ptr %tm, i32 1, i32 %k1)
+  %st = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 %k)
+  %im = srem i32 %idx, %nk
+  %imt = mul i32 %im, %st
+  %pa = add i32 %lo, %imt
+  %io = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %k1, i32 %i0, i32 %i1, i32 %i2, i32 0, i32 0)
+  %p = add i32 %pa, %io
+  %po = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %k, i32 %p, i32 %eb)
+  %pbad = icmp slt i64 %po, 0
+  %acc.n = add i64 %acc, %po
+  %idx.n = sdiv i32 %idx, %nk
+  %k.n = add i32 %k, 1
+  br i1 %pbad, label %outside, label %pos
+pos_n:
+  %no = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %last, i32 %idx, i32 %eb)
+  br label %finish
+wmode:
+  ; only W varies: c_W + q * stride + wOffset
+  %w128 = icmp eq i32 %mode, 2
+  %period = add i32 %i0, 32
+  %pq = udiv i32 %pixel, %period
+  %pr = urem i32 %pixel, %period
+  %pq32 = mul i32 %pq, 32
+  %q128 = add i32 %pq32, %pr
+  %q = select i1 %w128, i32 %q128, i32 %pixel
+  %st1 = call i32 @__zluda_ptx_impl_agx_tma_est(ptr %tm, i32 1)
+  %qs = mul i32 %q, %st1
+  %no_offs = icmp eq i32 %mode, 3
+  %woff = select i1 %no_offs, i32 0, i32 %i1
+  %shift = add i32 %qs, %woff
+  br label %wpos
+wpos:
+  %wk = phi i32 [ 1, %wmode ], [ %wk.n, %wpos_k ]
+  %wacc = phi i64 [ %acc0, %wmode ], [ %wacc.n, %wpos_k ]
+  %wmore = icmp slt i32 %wk, %last
+  br i1 %wmore, label %wpos_k, label %wpos_n
+wpos_k:
+  %wc = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %wk, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
+  %is_w1 = icmp eq i32 %wk, 1
+  %wsh = select i1 %is_w1, i32 %shift, i32 0
+  %wp = add i32 %wc, %wsh
+  %wo = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %wk, i32 %wp, i32 %eb)
+  %wbad = icmp slt i64 %wo, 0
+  %wacc.n = add i64 %wacc, %wo
+  %wk.n = add i32 %wk, 1
+  br i1 %wbad, label %outside, label %wpos
+wpos_n:
+  %wcn = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %last, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
+  %wno = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %last, i32 %wcn, i32 %eb)
+  br label %finish
+finish:
+  %fo = phi i64 [ %no, %pos_n ], [ %wno, %wpos_n ]
+  %facc = phi i64 [ %acc, %pos_n ], [ %wacc, %wpos_n ]
+  %fbad = icmp slt i64 %fo, 0
+  %fa = add i64 %facc, %fo
+  %r = select i1 %fbad, i64 -1, i64 %fa
+  ret i64 %r
+outside:
+  ret i64 -1
+}
+
+; An im2col copy (see tma_tile for %dir). The column holds `pixels` pixels of
+; box dim 0 channels: box dim 1 pixels, plus wHalo (im2col::w), or 128 plus
+; 4 wHalo (::128). im2col_no_offs::w stores stop at the first pixel outside
+; the tensor.
+define i32 @__zluda_ptx_impl_agx_tma_im2col(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %i0, i32 %i1, i32 %i2, i32 %mode, i32 %smem, i32 %dir) #3 {
+entry:
+  %w1 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 1)
+  %w1t = trunc i64 %w1 to i32
+  %et = and i32 %w1t, 255
+  %eb = call i32 @__zluda_ptx_impl_agx_tma_bytes(i32 %et)
+  %w13 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 13)
+  %w13t = trunc i64 %w13 to i32
+  %box0 = and i32 %w13t, 65535
+  %box1 = lshr i32 %w13t, 16
+  %halo4 = shl i32 %i0, 2
+  %p128 = add i32 %halo4, 128
+  %pw = add i32 %box1, %i0
+  %is1 = icmp eq i32 %mode, 1
+  %is2 = icmp eq i32 %mode, 2
+  %pa = select i1 %is1, i32 %pw, i32 %box1
+  %pixels = select i1 %is2, i32 %p128, i32 %pa
+  %count = mul i32 %pixels, %box0
+  %bytes = mul i32 %count, %eb
+  %w14 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 14)
+  %mode_s = call i32 @__zluda_ptx_impl_agx_tma_swizzle_mode(i64 %w14)
+  %fill = call i64 @__zluda_ptx_impl_agx_tma_fill(i64 %w14, i32 %et, i32 %eb)
+  %smem_rel = call i32 @__zluda_agx_cluster_mapa(i32 %smem, i32 0)
+  %window = sub i32 %smem, %smem_rel
+  ; im2col_no_offs::w: a W start outside the tensor stores nothing
+  %is3 = icmp eq i32 %mode, 3
+  %neg_w = icmp slt i32 %c1, 0
+  %none = and i1 %is3, %neg_w
+  %empty = icmp eq i32 %count, 0
+  %skip = or i1 %empty, %none
+  br i1 %skip, label %exit, label %loop
+loop:
+  %e = phi i32 [ 0, %entry ], [ %e.next, %loop ]
+  %gaddr = call i64 @__zluda_ptx_impl_agx_tma_im2col_addr(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %i0, i32 %i1, i32 %i2, i32 %mode, i32 %e, i32 %eb)
+  %oob = icmp slt i64 %gaddr, 0
+  %eoff = mul i32 %e, %eb
+  %rel = add i32 %smem_rel, %eoff
+  %swizzled = call i32 @__zluda_ptx_impl_agx_tma_swizzle(i32 %mode_s, i32 %rel)
+  %saddr = add i32 %window, %swizzled
+  call void @__zluda_ptx_impl_agx_tma_elem(i64 %gaddr, i1 %oob, i32 %saddr, i32 %eb, i32 %et, i64 %fill, i32 %dir)
+  %e.next = add i32 %e, 1
+  %more = icmp ult i32 %e.next, %count
+  br i1 %more, label %loop, label %exit
+exit:
+  ret i32 %bytes
+}
+
+; the swizzle (see tma_swizzle) of swizzle_mode / swizzle_atomicity in word 14
+define i32 @__zluda_ptx_impl_agx_tma_swizzle_mode(i64 %w14) #0 {
+  %w14t = trunc i64 %w14 to i32
+  %swz = lshr i32 %w14t, 16
+  %swzm = and i32 %swz, 255
+  %w14h = lshr i64 %w14, 48
+  %w14ht = trunc i64 %w14h to i32
+  %atom = and i32 %w14ht, 255
+  %is128 = icmp eq i32 %swzm, 3
+  %m128 = select i1 %is128, i32 1, i32 0
+  %is64 = icmp eq i32 %swzm, 2
+  %is32 = icmp eq i32 %swzm, 1
+  %m64 = select i1 %is64, i32 2, i32 %m128
+  %m32 = select i1 %is32, i32 3, i32 %m64
+  %atomic = add i32 %atom, 3
+  %has_atom = icmp ne i32 %atom, 0
+  %atom128 = and i1 %is128, %has_atom
+  %mode = select i1 %atom128, i32 %atomic, i32 %m32
+  ret i32 %mode
+}
+
+; the out-of-bounds fill: zero, or (fill_mode != 0) a NaN of the element type
+define i64 @__zluda_ptx_impl_agx_tma_fill(i64 %w14, i32 %et, i32 %eb) #0 {
+  %w14t = trunc i64 %w14 to i32
+  %fm = lshr i32 %w14t, 24
+  %fm8 = and i32 %fm, 255
+  %nan_fill = icmp ne i32 %fm8, 0
+  %f4 = icmp eq i32 %eb, 4
+  %fh = icmp eq i32 %et, 6
+  %fbf = icmp eq i32 %et, 10
+  %fd = icmp eq i32 %et, 9
+  %n0 = select i1 %fd, i64 9221120237041090560, i64 0
+  %n1 = select i1 %fbf, i64 32704, i64 %n0
+  %n2 = select i1 %fh, i64 32256, i64 %n1
+  %n3 = select i1 %f4, i64 2143289344, i64 %n2
+  %fill = select i1 %nan_fill, i64 %n3, i64 0
+  ret i64 %fill
+}
+
+; one element of a copy (see tma_tile for %dir)
+define void @__zluda_ptx_impl_agx_tma_elem(i64 %gaddr, i1 %oob, i32 %saddr, i32 %eb, i32 %et, i64 %fill, i32 %dir) #3 {
+entry:
+  %is_load = icmp eq i32 %dir, -1
+  br i1 %is_load, label %load, label %out
+load:
+  br i1 %oob, label %load_fill, label %load_mem
+load_mem:
+  %lv = call i64 @__zluda_ptx_impl_agx_tma_load_global(i64 %gaddr, i32 %eb)
+  br label %load_fill
+load_fill:
+  %value = phi i64 [ %fill, %load ], [ %lv, %load_mem ]
+  call void @__zluda_ptx_impl_agx_tma_store_shared(i32 %saddr, i32 %eb, i64 %value)
+  ret void
+out:
+  br i1 %oob, label %exit, label %out_elem
+out_elem:
+  %sv = call i64 @__zluda_ptx_impl_agx_tma_load_shared(i32 %saddr, i32 %eb)
+  %is_store = icmp eq i32 %dir, -2
+  br i1 %is_store, label %store, label %reduce
+store:
+  call void @__zluda_ptx_impl_agx_tma_store_global(i64 %gaddr, i32 %eb, i64 %sv)
+  ret void
+reduce:
+  call void @__zluda_ptx_impl_agx_tma_red(i64 %gaddr, i32 %et, i32 %dir, i64 %sv)
+  ret void
+exit:
+  ret void
+}
+
+; a tile (%imode = -1) or im2col (%imode = its mode) copy
+define i32 @__zluda_ptx_impl_agx_tma_copy(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %imode, i32 %i0, i32 %i1, i32 %i2, i32 %smem, i32 %dir) #3 {
+entry:
+  %tile = icmp slt i32 %imode, 0
+  br i1 %tile, label %t, label %i
+t:
+  %nt = call i32 @__zluda_ptx_impl_agx_tma_tile(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %smem, i32 %dir)
+  ret i32 %nt
+i:
+  %ni = call i32 @__zluda_ptx_impl_agx_tma_im2col(ptr %tm, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %i0, i32 %i1, i32 %i2, i32 %imode, i32 %smem, i32 %dir)
+  ret i32 %ni
+}
+
+; The tensor map at %tm patched by the .override forms into the 16 words at
+; %dst: the global address (word 3, if %has_address), the first %nd dims
+; (words 4..) and the first %ns strides (words 9..; stride i is
+; (low_i + (((%up >> 4 i) & 15) << 32)) << 4)
+define void @__zluda_ptx_impl_agx_tma_override(ptr %dst, ptr %tm, i1 %has_address, i64 %address, i32 %nd, i32 %d0, i32 %d1, i32 %d2, i32 %d3, i32 %d4, i32 %ns, i32 %s0, i32 %s1, i32 %s2, i32 %s3, i32 %up) #3 {
+entry:
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %dst, ptr align 8 %tm, i32 128, i1 false)
+  br i1 %has_address, label %address_w, label %dims
+address_w:
+  %pa = getelementptr inbounds i64, ptr %dst, i32 3
+  store i64 %address, ptr %pa, align 8
+  br label %dims
+dims:
+  %i = phi i32 [ 0, %entry ], [ 0, %address_w ], [ %i.n, %dim ]
+  %dmore = icmp ult i32 %i, %nd
+  br i1 %dmore, label %dim, label %strides
+dim:
+  %dv = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %i, i32 %d0, i32 %d1, i32 %d2, i32 %d3, i32 %d4)
+  %dw = zext i32 %dv to i64
+  %di = add i32 %i, 4
+  %pd = getelementptr inbounds i64, ptr %dst, i32 %di
+  store i64 %dw, ptr %pd, align 8
+  %i.n = add i32 %i, 1
+  br label %dims
+strides:
+  %j = phi i32 [ 0, %dims ], [ %j.n, %stride ]
+  %smore = icmp ult i32 %j, %ns
+  br i1 %smore, label %stride, label %exit
+stride:
+  %sv = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %j, i32 %s0, i32 %s1, i32 %s2, i32 %s3, i32 0)
+  %sl = zext i32 %sv to i64
+  %ush = shl i32 %j, 2
+  %u = lshr i32 %up, %ush
+  %u4 = and i32 %u, 15
+  %uw = zext i32 %u4 to i64
+  %uh = shl i64 %uw, 32
+  %sum = add i64 %sl, %uh
+  %bytes = shl i64 %sum, 4
+  %si = add i32 %j, 9
+  %ps = getelementptr inbounds i64, ptr %dst, i32 %si
+  store i64 %bytes, ptr %ps, align 8
+  %j.n = add i32 %j, 1
+  br label %strides
+exit:
+  ret void
+}
+
+; tensormap.replace.tile: %field 0 global_address, 1 rank, 2 box_dim,
+; 3 global_dim, 4 global_stride, 5 element_stride, 6 elemtype,
+; 7 interleave_layout, 8 swizzle_mode, 9 swizzle_atomicity, 10 fill_mode
+define void @__zluda_ptx_impl_agx_tensormap_replace(ptr %tm, i32 %field, i32 %ord, i64 %v) #3 {
+entry:
+  %ord8 = shl i32 %ord, 3
+  %ord16 = shl i32 %ord, 4
+  %v32 = trunc i64 %v to i32
+  switch i32 %field, label %exit [ i32 0, label %address i32 1, label %rank i32 2, label %box i32 3, label %dim
+                                   i32 4, label %stride i32 5, label %estride i32 6, label %elemtype
+                                   i32 7, label %interleave i32 8, label %swizzle i32 9, label %atomicity i32 10, label %fill ]
+address:
+  br label %set_word
+rank:
+  ; the operand holds rank - 1
+  %r = add i64 %v, 1
+  %r8 = and i64 %r, 255
+  br label %low_byte2
+low_byte2:
+  %w2 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 2)
+  %w2c = and i64 %w2, -256
+  %w2n = or i64 %w2c, %r8
+  br label %set_word_at
+elemtype:
+  %et8 = and i64 %v, 255
+  %w1 = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 1)
+  %w1c = and i64 %w1, -256
+  %w1n = or i64 %w1c, %et8
+  br label %set_word_at
+dim:
+  %dim_i = add i32 %ord, 4
+  br label %set_word_at
+stride:
+  %stride_i = add i32 %ord, 9
+  br label %set_word_at
+box:
+  %low_box = icmp ult i32 %ord, 4
+  %box_i = select i1 %low_box, i32 13, i32 14
+  %box_sh = select i1 %low_box, i32 %ord16, i32 0
+  br label %field_bits
+estride:
+  br label %field_bits
+interleave:
+  br label %field_bits
+swizzle:
+  br label %field_bits
+atomicity:
+  br label %field_bits
+fill:
+  br label %field_bits
+field_bits:
+  ; word, shift and width of a bit field
+  %fw = phi i32 [ %box_i, %box ], [ 15, %estride ], [ 14, %interleave ], [ 14, %swizzle ], [ 14, %atomicity ], [ 14, %fill ]
+  %fs = phi i32 [ %box_sh, %box ], [ %ord8, %estride ], [ 32, %interleave ], [ 16, %swizzle ], [ 48, %atomicity ], [ 24, %fill ]
+  %fm = phi i64 [ 65535, %box ], [ 255, %estride ], [ 255, %interleave ], [ 255, %swizzle ], [ 255, %atomicity ], [ 255, %fill ]
+  %old = call i64 @__zluda_ptx_impl_agx_tma_word(ptr %tm, i32 %fw)
+  %fs64 = zext i32 %fs to i64
+  %mask = shl i64 %fm, %fs64
+  %keep = xor i64 %mask, -1
+  %cleared = and i64 %old, %keep
+  %vm = and i64 %v, %fm
+  %vs = shl i64 %vm, %fs64
+  %new = or i64 %cleared, %vs
+  br label %set_word_at
+set_word:
+  br label %set_word_at
+set_word_at:
+  %wi = phi i32 [ 3, %set_word ], [ 2, %low_byte2 ], [ 1, %elemtype ], [ %dim_i, %dim ], [ %stride_i, %stride ], [ %fw, %field_bits ]
+  %wv = phi i64 [ %v, %set_word ], [ %w2n, %low_byte2 ], [ %w1n, %elemtype ], [ %v, %dim ], [ %v, %stride ], [ %new, %field_bits ]
+  %p = getelementptr inbounds i64, ptr %tm, i32 %wi
+  store i64 %wv, ptr %p, align 8
+  br label %exit
+exit:
+  ret void
+}
+
 declare float @llvm.fabs.f32(float)
+declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)
+declare i32 @llvm.smax.i32(i32, i32)
 declare i32 @llvm.umin.i32(i32, i32)
 declare i32 @llvm.ctpop.i32(i32)
 declare float @llvm.copysign.f32(float, float)

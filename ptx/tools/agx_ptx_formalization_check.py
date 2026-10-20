@@ -33,7 +33,7 @@ HARNESS = ('.buffer', '.launch', '.cooplaunch', '.print', '.expect', '.patch', '
            '.tensormap', '.texture', '.sampler', '.surface', '.multimem', '.fabric',
            '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
 IGNORED = ('.print', '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
-UNSUPPORTED = ('.tensormap', '.texture', '.sampler', '.surface', '.multimem', '.fabric')
+UNSUPPORTED = ('.texture', '.sampler', '.surface', '.multimem', '.fabric')
 
 SIZES = {'b8': 1, 'u8': 1, 's8': 1, 'b16': 2, 'u16': 2, 's16': 2, 'f16': 2, 'bf16': 2,
          'b32': 4, 'u32': 4, 's32': 4, 'f32': 4, 'f16x2': 4, 'bf16x2': 4,
@@ -46,6 +46,38 @@ GLOBALS_BASE = 0x04000000  # global data buffer (.agx.globals)
 
 class Unsupported(Exception):
     pass
+
+
+# tensormap.replace.elemtype numbering (PTX-formalization's tensor-map encoding)
+TM_ELEMTYPE = {'u8': 0, 'u16': 1, 'u32': 2, 's32': 3, 'u64': 4, 's64': 5, 'f16': 6, 'f32': 7,
+               'f64': 9, 'bf16': 10, 'tf32': 11}
+
+
+def tensormap_words(t, addr, dims, strides, box, swizzle, im2col=None):
+    """The 16 64-bit words of a tensor map in the encoding of PTX-formalization (tmBlob /
+    tmBlobI of semantics/ptx-harness.k), which is also the one ZLUDA's AGX runtime uses:
+    0 magic | 1 element type | 2 rank | 3 global address | 4..8 dims | 9..12 byte strides of
+    dims 1..4 | 13 box dims 0..3 (16 bits each) | 14 box dim 4, swizzle_mode << 16,
+    fill << 24, interleave << 32, swizzle_atomicity << 48 | 15 element strides (8 bits each)."""
+    if t not in TM_ELEMTYPE:
+        raise Unsupported('tensormap type .' + t)
+    nth = lambda l, i: l[i] if i < len(l) else 0
+    z = swizzle & 255
+    mode = 3 if 3 <= z <= 6 else z
+    atom = z - 3 if 4 <= z <= 6 else 0
+    w = [0x54484150, TM_ELEMTYPE[t], len(dims), addr] + [nth(dims, i) for i in range(5)]
+    w += [nth(strides, i) for i in range(4)]
+    w.append(nth(box, 0) | nth(box, 1) << 16 | nth(box, 2) << 32 | nth(box, 3) << 48)
+    w.append(nth(box, 4) | mode << 16 | (swizzle >> 8) << 24 | atom << 48)
+    w.append(0x0101010101010101)
+    if im2col is not None:
+        lower, upper, estrides = im2col
+        pack = lambda vs: sum((v + 32768) << (16 * i) for i, v in enumerate(vs))
+        w[1] |= pack(lower) << 8
+        w[2] |= pack(upper) << 8
+        w[14] |= 1 << 40
+        w[15] = sum(v << (8 * i) for i, v in enumerate(estrides))
+    return [x & (2**64 - 1) for x in w]
 
 
 # ------------------------------------------------------------------ parsing
@@ -411,6 +443,21 @@ def run_test(path, args):
                 last = m.group(1)
                 for k, v in enumerate(vals):
                     mem.write(addr + k * SIZES[t], SIZES[t], lit_bits(v, t, syms))
+            elif kw == '.tensormap':
+                m = re.fullmatch(r'\.tensormap ([\w$.]+) \.(\w+) ([\w$.]+) \.dims \{(.*?)\} \.strides \{(.*?)\} '
+                                 r'\.box \{(.*?)\} \.swizzle (\d+)(?: \.im2col \{(.*?)\} \{(.*?)\} \.estrides \{(.*?)\})?\s*;?', d)
+                if not m:
+                    raise Unsupported(d)
+                ints = lambda g: [int(v, 0) for v in split_vals(g)] if g and g.strip() else []
+                im2col = None if m.group(8) is None else (ints(m.group(8)), ints(m.group(9)), ints(m.group(10)))
+                words = tensormap_words(m.group(2), syms[m.group(3)], ints(m.group(4)), ints(m.group(5)),
+                                        ints(m.group(6)), int(m.group(7)), im2col)
+                addr = BASE + ((mem.top + 255) & ~255)
+                mem.top = (addr - BASE) + 128
+                syms[m.group(1)] = addr
+                bufs[m.group(1)] = [addr, 'u64', 16]
+                for k, v in enumerate(words):
+                    mem.write(addr + 8 * k, 8, v)
             elif kw in ('.patch', '.append'):
                 m = re.fullmatch(r'\.(patch|append) ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = ty_of(m.group(3))

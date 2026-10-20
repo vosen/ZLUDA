@@ -1468,7 +1468,7 @@ fn predicated_instruction<'a, 'input>(
     let errors_before = stream.state.errors.len();
     let statement = trace(
         "predicated_instruction",
-        (opt(pred_at), parse_instruction, Token::Semicolon)
+        (opt(pred_at), alt((tensor_instruction, parse_instruction)), Token::Semicolon)
             .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
     )
     .parse_next(stream)?;
@@ -2261,6 +2261,290 @@ fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
 }
 
 // wgmma.fence / commit_group / wait_group N, and
+// The tensor-map instructions, whose `[tensorMap, {coords}]` operand the
+// instruction grammar cannot express:
+// cp.async.bulk.tensor.dim.dst.src{.tile}.mbarrier::complete_tx::bytes{.multicast::cluster{::32b}}{.cta_group::2}{.L2::cache_hint}
+//     [dstMem], [tensorMap, {coords}], [mbar]{, ctaMask}{, cache-policy}
+// cp.async.bulk.tensor.dim.global.shared::cta{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
+// cp.reduce.async.bulk.tensor.dim.global.shared::cta.redOp{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
+// tensormap.replace.tile.field{.space}.b1024.type [tensorMap], {ord,} value
+fn tensor_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let Some((_, span)) = stream.input.first() else {
+        return backtrack();
+    };
+    let opcode = &stream.state.text[span.clone()];
+    if opcode != "cp" && opcode != "tensormap" {
+        return backtrack();
+    }
+    stream.input = &stream.input[1..];
+    let mut modifiers = matrix_modifiers(stream);
+    if opcode == "tensormap" {
+        return tensormap_replace(stream, modifiers);
+    }
+    let reduce = take_modifier(&mut modifiers, "reduce");
+    if !take_modifier(&mut modifiers, "async")
+        || !take_modifier(&mut modifiers, "bulk")
+        || !take_modifier(&mut modifiers, "tensor")
+    {
+        return backtrack();
+    }
+    let dims = match modifiers.first().and_then(|m| m.strip_suffix('d')).and_then(|d| d.parse::<u8>().ok()) {
+        Some(d @ 1..=5) => d,
+        _ => return backtrack(),
+    };
+    modifiers.remove(0);
+    // the destination space comes first
+    let load = match modifiers.first() {
+        Some(&"shared::cluster") | Some(&"shared::cta") => true,
+        Some(&"global") => false,
+        _ => return backtrack(),
+    };
+    // shared::cluster addresses are shared addresses of the cluster's threadgroup
+    if !take_modifier(&mut modifiers, "shared::cluster") && !take_modifier(&mut modifiers, "shared::cta") {
+        return backtrack();
+    }
+    let smem_space = StateSpace::Shared;
+    if !take_modifier(&mut modifiers, "global") {
+        return backtrack();
+    }
+    take_modifier(&mut modifiers, "tile");
+    let im2col = [("im2col", 0u8), ("im2col_no_offs", 0), ("im2col::w", 1), ("im2col::w::128", 2), ("im2col_no_offs::w", 3)]
+        .iter()
+        .find(|(name, _)| take_modifier(&mut modifiers, name))
+        .map(|&(_, mode)| mode);
+    // the im2col offsets are an operand of loads only
+    let no_offs = !load || im2col.is_none();
+    let cache_hint = take_modifier(&mut modifiers, "L2::cache_hint");
+    let multicast32 = take_modifier(&mut modifiers, "multicast::cluster::32b");
+    let multicast = multicast32 || take_modifier(&mut modifiers, "multicast::cluster");
+    let ov_addr = take_modifier(&mut modifiers, "override::global_address");
+    let ov_dim_stride = take_modifier(&mut modifiers, "override::global_dim_stride");
+    let ov_dim = ov_dim_stride || take_modifier(&mut modifiers, "override::global_dim");
+    let cta_group2 = take_modifier(&mut modifiers, "cta_group::2");
+    take_modifier(&mut modifiers, "cta_group::1");
+    let op = if reduce {
+        let op = match modifiers.first() {
+            Some(&"add") => ast::AtomicOp::Add,
+            Some(&"min") => ast::AtomicOp::SignedMin,
+            Some(&"max") => ast::AtomicOp::SignedMax,
+            Some(&"inc") => ast::AtomicOp::IncrementWrap,
+            Some(&"dec") => ast::AtomicOp::DecrementWrap,
+            Some(&"and") => ast::AtomicOp::And,
+            Some(&"or") => ast::AtomicOp::Or,
+            Some(&"xor") => ast::AtomicOp::Xor,
+            _ => return backtrack(),
+        };
+        modifiers.remove(0);
+        Some(op)
+    } else {
+        None
+    };
+    let completion = if load { "mbarrier::complete_tx::bytes" } else { "bulk_group" };
+    if !take_modifier(&mut modifiers, completion) || !modifiers.is_empty() || (reduce && load) || (multicast && !load) {
+        return backtrack();
+    }
+    let address = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+    };
+    fn elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<ParsedOperandStr<'input>>> {
+        let ast::ParsedOperand::VecPack(values) = operand else {
+            return backtrack();
+        };
+        values
+            .into_iter()
+            .map(|c| match c {
+                Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
+                Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
+                None => backtrack(),
+            })
+            .collect()
+    }
+    // [tensorMap{, newAddress{, {dims}{, {strides}, upperStrideBits}}}, {coords}]
+    struct Tensor<'input> {
+        tmap: ParsedOperandStr<'input>,
+        address: Option<ParsedOperandStr<'input>>,
+        dims: Vec<ParsedOperandStr<'input>>,
+        strides: Vec<ParsedOperandStr<'input>>,
+        upper: Option<ParsedOperandStr<'input>>,
+        coords: Vec<ParsedOperandStr<'input>>,
+    }
+    let tensor = |stream: &mut PtxParser<'a, 'input>| -> PResult<Tensor<'input>> {
+        let (tmap, rest) = delimited(
+            Token::LBracket,
+            (ParsedOperandStr::parse, repeat(1.., preceded(Token::Comma, ParsedOperandStr::parse))),
+            Token::RBracket,
+        )
+        .parse_next(stream)?;
+        let mut rest: Vec<ParsedOperandStr<'input>> = rest;
+        let coords = elements(rest.pop().unwrap())?;
+        let expected = (ov_addr || ov_dim) as usize + ov_dim as usize + 2 * ov_dim_stride as usize;
+        if rest.len() != expected {
+            return backtrack();
+        }
+        let mut rest = rest.into_iter();
+        let address = if ov_addr || ov_dim { rest.next() } else { None };
+        let dims = if ov_dim { elements(rest.next().unwrap())? } else { Vec::new() };
+        let strides = if ov_dim_stride { elements(rest.next().unwrap())? } else { Vec::new() };
+        let upper = rest.next();
+        if dims.len() > 5 || strides.len() > 4 {
+            return backtrack();
+        }
+        Ok(Tensor { tmap, address, dims, strides, upper, coords })
+    };
+    let (smem, tensor, mbarrier) = if load {
+        let smem = address(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let tensor = tensor(stream)?;
+        Token::Comma.parse_next(stream)?;
+        (smem, tensor, Some(address(stream)?))
+    } else {
+        let tensor = tensor(stream)?;
+        Token::Comma.parse_next(stream)?;
+        (address(stream)?, tensor, None)
+    };
+    let Tensor { tmap, address: ov_address, dims: ov_dims, strides: ov_strides, upper: ov_upper, coords } = tensor;
+    if coords.len() != dims as usize || (im2col.is_some() && dims < 3) {
+        return backtrack();
+    }
+    let mut info = Vec::new();
+    if !no_offs {
+        Token::Comma.parse_next(stream)?;
+        let ast::ParsedOperand::VecPack(values) = ParsedOperandStr::parse.parse_next(stream)? else {
+            return backtrack();
+        };
+        for v in values {
+            info.push(match v {
+                Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+                Some(ast::RegOrImmediate::Imm(i)) => ast::ParsedOperand::Imm(i),
+                None => return backtrack(),
+            });
+        }
+        if info.len() > 3 {
+            return backtrack();
+        }
+    }
+    let mut info = info.into_iter();
+    let mut ov_dims = ov_dims.into_iter();
+    let mut ov_strides = ov_strides.into_iter();
+    let src_cta_mask = if multicast {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let src_cache_policy = if cache_hint {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let mut coords = coords.into_iter();
+    let src_c0 = coords.next().unwrap();
+    let kind = match op {
+        Some(op) => ast::TensorCopyKind::Reduce(op),
+        None if load => ast::TensorCopyKind::Load,
+        None => ast::TensorCopyKind::Store,
+    };
+    Ok(ast::Instruction::CpAsyncBulkTensor {
+        data: ast::CpAsyncBulkTensorDetails {
+            dims,
+            kind,
+            smem_space,
+            multicast,
+            mask32: multicast32,
+            cta_group2,
+            im2col,
+            override_address: ov_addr || ov_dim,
+        },
+        arguments: ast::CpAsyncBulkTensorArgs {
+            src_smem: smem,
+            src_tmap: tmap,
+            src_c0,
+            src_c1: coords.next(),
+            src_c2: coords.next(),
+            src_c3: coords.next(),
+            src_c4: coords.next(),
+            src_mbarrier: mbarrier,
+            src_ov_addr: ov_address,
+            src_ov_d0: ov_dims.next(),
+            src_ov_d1: ov_dims.next(),
+            src_ov_d2: ov_dims.next(),
+            src_ov_d3: ov_dims.next(),
+            src_ov_d4: ov_dims.next(),
+            src_ov_s0: ov_strides.next(),
+            src_ov_s1: ov_strides.next(),
+            src_ov_s2: ov_strides.next(),
+            src_ov_s3: ov_strides.next(),
+            src_ov_up: ov_upper,
+            src_i0: info.next(),
+            src_i1: info.next(),
+            src_i2: info.next(),
+            src_cta_mask,
+            src_cache_policy,
+        },
+    })
+}
+
+fn tensormap_replace<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    use ast::TensormapField::*;
+    if !take_modifier(&mut modifiers, "replace") || !take_modifier(&mut modifiers, "tile") || !take_modifier(&mut modifiers, "b1024")
+    {
+        return backtrack();
+    }
+    let fields = [
+        ("global_address", GlobalAddress),
+        ("rank", Rank),
+        ("box_dim", BoxDim),
+        ("global_dim", GlobalDim),
+        ("global_stride", GlobalStride),
+        ("element_stride", ElementStride),
+        ("elemtype", Elemtype),
+        ("interleave_layout", InterleaveLayout),
+        ("swizzle_mode", SwizzleMode),
+        ("swizzle_atomicity", SwizzleAtomicity),
+        ("fill_mode", FillMode),
+    ];
+    let Some(&(_, field)) = fields.iter().find(|(name, _)| take_modifier(&mut modifiers, name)) else {
+        return backtrack();
+    };
+    let space = if take_modifier(&mut modifiers, "shared::cta") {
+        StateSpace::Shared
+    } else {
+        take_modifier(&mut modifiers, "global");
+        StateSpace::Global
+    };
+    let type_ = if take_modifier(&mut modifiers, "b32") {
+        ScalarType::B32
+    } else if take_modifier(&mut modifiers, "b64") {
+        ScalarType::B64
+    } else {
+        return backtrack();
+    };
+    if !modifiers.is_empty() {
+        return backtrack();
+    }
+    let tmap = delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let first = ParsedOperandStr::parse.parse_next(stream)?;
+    let (src_ord, src_value) = if opt(Token::Comma).parse_next(stream)?.is_some() {
+        (Some(first), ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        (None, first)
+    };
+    if src_ord.is_some() != matches!(field, BoxDim | GlobalDim | GlobalStride | ElementStride) {
+        return backtrack();
+    }
+    Ok(ast::Instruction::TensormapReplace {
+        data: ast::TensormapReplaceDetails { field, space, type_ },
+        arguments: ast::TensormapReplaceArgs { src_tmap: tmap, src_ord, src_value },
+    })
+}
+
 // wgmma.mma_async{.sp}.sync.aligned.m64nNkK.dtype.atype.btype{.satfinite}{.bop.popc}
 //     d, a | a-desc, b-desc{, sp-meta, sp-sel}, scale-d{, imm-scale-a, imm-scale-b{, imm-trans-a,} imm-trans-b}
 fn wgmma<'a, 'input>(
