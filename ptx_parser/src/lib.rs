@@ -324,10 +324,10 @@ fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
     .parse_next(stream)
 }
 
-fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
+fn s64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i64> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
-        match i32::from_str_radix(text, radix) {
+        match i64::from_str_radix(text, radix) {
             Ok(x) => Ok(if sign.is_some() { -x } else { x }),
             Err(err) => Err((0, PtxError::from(err))),
         }
@@ -1533,7 +1533,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
         ) -> PResult<ast::ParsedOperand<&'input str>> {
             let main_ident = ident.parse_next(stream)?;
             alt((
-                preceded(Token::Plus, s32)
+                preceded(Token::Plus, s64)
                     .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset)),
                 take_error(dot_ident.map(move |suffix| {
                     let vector_index = vector_index(suffix)
@@ -4147,14 +4147,17 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync
 
-    vote.sync.mode.pred  d, {!}a, membermask => {
+    vote{.sync}.mode.pred  d, {!}a{, membermask} => {
+        if sync != membermask.is_some() {
+            state.errors.push(PtxError::SyntaxError("vote instruction with inconsistent sync and membermask".to_string()));
+        }
         let (negate, a) = a;
         Instruction::Vote {
             data: VoteDetails {
                 mode,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
+            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
         }
     }
     vote.ballot.b32 d, {!}a => {

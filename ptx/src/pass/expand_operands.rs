@@ -89,7 +89,7 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
     fn reg_offset(
         &mut self,
         reg: SpirvWord,
-        offset: i32,
+        offset: i64,
         type_space: Option<(&ast::Type, ast::StateSpace)>,
         _is_dst: bool,
     ) -> Result<SpirvWord, TranslateError> {
@@ -114,7 +114,7 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             self.result.push(Statement::Constant(ConstantDefinition {
                 dst: id_constant_stmt,
                 typ: reg_scalar_type,
-                value: ast::ImmediateValue::S64(offset as i64),
+                value: ast::ImmediateValue::S64(offset),
             }));
             let arith_details = match reg_scalar_type.kind() {
                 ast::ScalarKind::Signed => ast::ArithDetails::Integer(ast::ArithInteger {

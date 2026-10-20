@@ -1394,8 +1394,11 @@ pub mod dnn8 {
 
     pub(crate) unsafe fn get_property(
         property_type: libraryPropertyType,
-        value: &mut i32,
+        value: *mut i32,
     ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
         let version = match property_type {
             libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn8::CUDNN_MAJOR,
             libraryPropertyType::MINOR_VERSION => cuda_types::cudnn8::CUDNN_MINOR,
@@ -1557,8 +1560,11 @@ pub mod dnn9 {
 
     pub(crate) unsafe fn get_property(
         property_type: libraryPropertyType,
-        value: &mut i32,
+        value: *mut i32,
     ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
         let version = match property_type {
             libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn9::CUDNN_MAJOR,
             libraryPropertyType::MINOR_VERSION => cuda_types::cudnn9::CUDNN_MINOR,

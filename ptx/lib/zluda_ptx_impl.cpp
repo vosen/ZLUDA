@@ -714,6 +714,16 @@ extern "C"
         return ballot(value, true) != 0;
     }
 
+    bool FUNC(vote_any_pred)(bool value)
+    {
+        return FUNC_CALL(vote_sync_any_pred)(value, UINT32_MAX);
+    }
+
+    bool FUNC(vote_any_pred_negate)(bool value)
+    {
+        return FUNC_CALL(vote_sync_any_pred_negate)(value, UINT32_MAX);
+    }
+
     // IMPORTANT: exec mask must be a subset of membermask, the behavior is undefined otherwise
     bool FUNC(vote_sync_all_pred)(bool value, uint32_t membermask __attribute__((unused)))
     {
@@ -724,6 +734,16 @@ extern "C"
     bool FUNC(vote_sync_all_pred_negate)(bool value, uint32_t membermask __attribute__((unused)))
     {
         return ballot(value, false) == 0;
+    }
+
+    bool FUNC(vote_all_pred)(bool value)
+    {
+        return FUNC_CALL(vote_sync_all_pred)(value, UINT32_MAX);
+    }
+
+    bool FUNC(vote_all_pred_negate)(bool value)
+    {
+        return FUNC_CALL(vote_sync_all_pred_negate)(value, UINT32_MAX);
     }
 
     uint32_t FUNC(vote_sync_ballot_b32)(bool value, uint32_t membermask __attribute__((unused)))
