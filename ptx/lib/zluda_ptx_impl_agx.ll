@@ -1450,6 +1450,40 @@ define void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %mbar, i
 }
 
 ; Whether the phase of the given parity has completed.
+; The .multicast::cluster::32b mbarrier operations: on the mbarrier at the
+; same offset of each CTA of the cluster in the mask. op: 0 expect_tx,
+; 1 complete_tx, 2 arrive (count arrivals and tx expected bytes)
+define void @__zluda_ptx_impl_agx_mbarrier_multicast(ptr addrspace(3) %mbar, i32 %op, i32 %count, i32 %tx, i32 %mask) #3 {
+entry:
+  %mbar_a = ptrtoint ptr addrspace(3) %mbar to i32
+  br label %loop
+loop:
+  %rank = phi i32 [ 0, %entry ], [ %next, %latch ]
+  %bit = lshr i32 %mask, %rank
+  %set = trunc i32 %bit to i1
+  br i1 %set, label %apply, label %latch
+apply:
+  %bar_a = call i32 @__zluda_agx_cluster_mapa(i32 %mbar_a, i32 %rank)
+  %bar = inttoptr i32 %bar_a to ptr addrspace(3)
+  switch i32 %op, label %arrive [i32 0, label %expect
+                                  i32 1, label %complete]
+expect:
+  call void @__zluda_ptx_impl_agx_mbarrier_expect_tx(ptr addrspace(3) %bar, i32 %tx)
+  br label %latch
+complete:
+  call void @__zluda_ptx_impl_agx_mbarrier_complete_tx(ptr addrspace(3) %bar, i32 %tx)
+  br label %latch
+arrive:
+  %state = call i64 @__zluda_ptx_impl_agx_mbarrier_arrive(ptr addrspace(3) %bar, i32 %count, i32 %tx)
+  br label %latch
+latch:
+  %next = add i32 %rank, 1
+  %done = icmp eq i32 %next, 16
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
 define zeroext i1 @__zluda_ptx_impl_agx_mbarrier_test_wait(ptr addrspace(3) %mbar, i32 %parity) #3 {
   %word0 = load atomic i32, ptr addrspace(3) %mbar syncscope("workgroup") monotonic, align 4
   fence syncscope("workgroup") acquire

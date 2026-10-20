@@ -639,12 +639,6 @@ namespace
         return shape;
     }
 
-    bool zludaIsCalled(const CallInst *CI, StringRef name)
-    {
-        const Function *callee = CI->getCalledFunction();
-        return callee && callee->getName() == name;
-    }
-
     // with ids: also the thread and threadgroup ids a cluster changes
     bool zludaUsesClusterState(const Function &F, bool ids)
     {

@@ -2607,9 +2607,17 @@ fn mbarrier_arrive<'input>(
     space: Option<StateSpace>,
     addr: ParsedOperandStr<'input>,
     count: Option<ParsedOperandStr<'input>>,
+    extra: Option<ParsedOperandStr<'input>>,
+    multicast: bool,
 ) -> ast::Instruction<ParsedOperandStr<'input>> {
     // .noComplete takes a count (it only marks that the arrival must not complete the phase)
     let _ = no_complete;
+    // .multicast::cluster::32b: the CTA mask is the last operand
+    let (count, cta_mask) = match (multicast, count, extra) {
+        (true, Some(count), Some(mask)) => (Some(count), Some(mask)),
+        (true, mask, None) => (None, mask),
+        (_, count, _) => (count, None),
+    };
     let (count, tx_count) = if expect_tx { (None, count) } else { (count, None) };
     ast::Instruction::MbarrierArrive {
         data: ast::MbarrierArriveDetails {
@@ -2621,6 +2629,7 @@ fn mbarrier_arrive<'input>(
             src_mbarrier: addr,
             src_count: count,
             src_tx_count: tx_count,
+            src_cta_mask: cta_mask,
         },
     }
 }
@@ -5900,31 +5909,32 @@ derive_parser!(
             arguments: MbarrierInvalArgs { src_mbarrier: addr }
         }
     }
-    mbarrier.expect_tx{.sem}{.scope}{.space}.b64 [addr], txcount => {
-        let _ = (sem, scope);
+    // .multicast::cluster::32b: the operation on the mbarrier at the same offset of each CTA in the mask
+    mbarrier.expect_tx{.sem}{.scope}{.space}{.multicast}.b64 [addr], txcount{, ctamask} => {
+        let _ = (sem, scope, multicast);
         Instruction::MbarrierTx {
             data: MbarrierTxDetails { space: shared_space(space), complete: false },
-            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount }
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount, src_cta_mask: ctamask }
         }
     }
-    mbarrier.complete_tx{.sem}{.scope}{.space}.b64 [addr], txcount => {
-        let _ = (sem, scope);
+    mbarrier.complete_tx{.sem}{.scope}{.space}{.multicast}.b64 [addr], txcount{, ctamask} => {
+        let _ = (sem, scope, multicast);
         Instruction::MbarrierTx {
             data: MbarrierTxDetails { space: shared_space(space), complete: true },
-            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount }
+            arguments: MbarrierTxArgs { src_mbarrier: addr, src_tx_count: txcount, src_cta_mask: ctamask }
         }
     }
     // mbarrier.arrive{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr]{, count};
     // mbarrier.arrive{.sem}{.scope}{.shared::cluster}.b64 _, [addr]{, count};
     // mbarrier.arrive.expect_tx{.sem}{.scope}{.shared{::cta}}.b64 mbstate, [addr], txCount;
     // mbarrier.arrive.noComplete{.release}{.cta}{.shared{::cta}}.b64 mbstate, [addr], count;
-    mbarrier.arrive{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}.b64 mbstate, [addr]{, count} => {
+    mbarrier.arrive{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}{.multicast}.b64 mbstate, [addr]{, count}{, extra} => {
         let _ = (sem, scope);
-        mbarrier_arrive(mbstate, false, expect_tx, nocomplete, space, addr, count)
+        mbarrier_arrive(mbstate, false, expect_tx, nocomplete, space, addr, count, extra, multicast)
     }
-    mbarrier.arrive_drop{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}.b64 mbstate, [addr]{, count} => {
+    mbarrier.arrive_drop{.expect_tx}{.nocomplete}{.sem}{.scope}{.space}{.multicast}.b64 mbstate, [addr]{, count}{, extra} => {
         let _ = (sem, scope);
-        mbarrier_arrive(mbstate, true, expect_tx, nocomplete, space, addr, count)
+        mbarrier_arrive(mbstate, true, expect_tx, nocomplete, space, addr, count, extra, multicast)
     }
     // mbarrier.test_wait{.parity}{.sem}{.scope}{.shared{::cta}}.b64 waitcomplete, [addr], mbstate|phaseParity;
     mbarrier.test_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate => {
@@ -5950,6 +5960,7 @@ derive_parser!(
     .sem: RawMbarrierSemantics = { .release, .acquire, .relaxed };
     .scope: MemScope = { .cta, .cluster };
     .space: StateSpace = { .shared{::cta, ::cluster} };
+    .multicast = { .multicast::cluster::32b };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-reduce-async-bulk
     // cp.reduce.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes.redOp.type [dstmem], [srcmem], size, [mbar]

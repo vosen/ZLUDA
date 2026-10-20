@@ -331,8 +331,9 @@ section; cluster scope fences are GPU scope ones):
 Limitations: an mbarrier counts at most 4095 pending arrivals and
 transaction counts between -2^18 and 2^18 - 1 bytes; phases are only
 distinguished by their parity; the `.multicast::cluster::32b` mbarrier
-operations, tensor copies (`cp.async.bulk.tensor`) and `elect.sync` are not
-supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
+operations (`expect_tx`, `complete_tx`, `arrive` and `arrive.expect_tx`)
+apply to the mbarrier at the same offset of each CTA in the mask. Tensor
+copies (`cp.async.bulk.tensor`) are not supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
 reductions and the mbarrier operations with two SIMD-groups.
 
 ## Thread block clusters
@@ -370,10 +371,10 @@ cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
 grid must be a multiple of the cluster (else `CUDA_ERROR_INVALID_CLUSTER_SIZE`);
 a function that reads thread ids and is not inlined cannot be shared by kernels
 of different cluster shapes; cluster dimensions set at launch
-(`cuLaunchKernelEx` attributes), `clusterlaunchcontrol` and the
-`.multicast::cluster` mbarrier operations are not supported. PTX-formalization
-`cluster.ptx`, `cluster-exit.ptx`, `cluster-generic.ptx`,
-`mbarrier-cluster.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
+(`cuLaunchKernelEx` attributes) and `clusterlaunchcontrol` are not
+supported. PTX-formalization `cluster.ptx`, `cluster-exit.ptx`,
+`cluster-generic.ptx`, `mbarrier-cluster.ptx`, `mbar-mc.ptx` and `bulk.ptx`
+pass. On AMD GPUs clusters still have a
 single CTA.
 
 ## Strict floating point mode
@@ -456,13 +457,13 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
 Kernels with statements that ZLUDA's front end does not support (many of the
 tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05` and clusters of
 several CTAs) are skipped, together with the checks that follow their launch.
-Of the 1659 checks of the 286 programs (2026-10-20, agx-g14c), 1228 run. With
-`--strict-fp` all 1228 match the formal semantics (171 programs pass
-completely). Without it 1056 match and the other 172 are the floating point
+Of the 1659 checks of the 286 programs (2026-10-20, agx-g14c), 1236 run. With
+`--strict-fp` all 1236 match the formal semantics (177 programs pass
+completely). Without it 1064 match and the other 172 are the floating point
 differences listed above (denormal `f32` operands and results, NaN bit
-patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 431 skipped
+patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 423 skipped
 checks follow kernels using `wgmma` and `tcgen05` (emulation not written),
-multi-CTA clusters, `ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
+`clusterlaunchcontrol`, `ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
 `s2f6x2`) and `mul.rz.f16x2.f32x2.f32x2`. A full run takes about 100 seconds
 with `-j 8`.
 

@@ -5903,6 +5903,20 @@ impl<'a> MethodEmitContext<'a> {
             Some(tx_count) => self.resolver.value(tx_count)?,
             None => self.const_u32(0),
         };
+        if let Some(mask) = arguments.src_cta_mask {
+            if data.drop || arguments.dst_state.is_some() {
+                return Err(error_todo_msg("multicast mbarrier.arrive_drop or with a state"));
+            }
+            let mask = self.resolver.value(mask)?;
+            let op = self.const_u32(2);
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_mbarrier_multicast",
+                None,
+                None,
+                &[mbarrier, op, count, tx_count, mask],
+            )?;
+            return Ok(());
+        }
         let name = if data.drop {
             c"__zluda_ptx_impl_agx_mbarrier_arrive_drop"
         } else {
@@ -5924,6 +5938,17 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
         let tx_count = self.resolver.value(arguments.src_tx_count)?;
+        if let Some(mask) = arguments.src_cta_mask {
+            let mask = self.resolver.value(mask)?;
+            let (op, zero) = (self.const_u32(data.complete as u64), self.const_u32(0));
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_mbarrier_multicast",
+                None,
+                None,
+                &[mbarrier, op, zero, tx_count, mask],
+            )?;
+            return Ok(());
+        }
         let name = if data.complete {
             c"__zluda_ptx_impl_agx_mbarrier_complete_tx"
         } else {

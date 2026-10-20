@@ -789,6 +789,10 @@ ptx_parser_macros::generate_instruction_type!(
                 src_tx_count: {
                     repr: Option<T>,
                     type: Type::Scalar(ScalarType::U32),
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::U32),
                 }
             }
         },
@@ -802,6 +806,10 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src_tx_count: {
                     repr: T,
+                    type: Type::Scalar(ScalarType::U32),
+                },
+                src_cta_mask: {
+                    repr: Option<T>,
                     type: Type::Scalar(ScalarType::U32),
                 }
             }
