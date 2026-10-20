@@ -267,6 +267,11 @@ impl Vm {
         let ksize = p.vm_kernel_min_size.max(32 << 30);
         let mut vc = drm_asahi_vm_create { kernel_start: p.vm_end - ksize, kernel_end: p.vm_end, vm_id: 0, pad: 0 };
         let data_base = usc_base + USC_HEAP_SIZE;
+        // Generic pointers to threadgroup memory carry bit 63 (LLVM AGX, AGXLowerGenericAddresses), so device
+        // addresses must stay below it.
+        if p.vm_end > 1 << 63 {
+            return Err(io::Error::new(io::ErrorKind::Other, "address-layout: VM reaches bit 63"));
+        }
         if data_base + (1 << 30) >= vc.kernel_start {
             return Err(io::Error::new(io::ErrorKind::Other, "address-layout: VM too small"));
         }
