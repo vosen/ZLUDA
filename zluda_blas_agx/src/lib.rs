@@ -6,7 +6,9 @@
 //!
 //! Supported so far: handles, streams, pointer and math modes, and GEMM in single and half precision (`cublasSgemm`,
 //! `cublasHgemm`, their strided batched forms, and `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C,
-//! or f16 A and B and f16 or f32 C), always accumulated in f32. Other functions return
+//! or f16 A and B and f16 or f32 C), always accumulated in f32; and the single precision level 1 routines (axpy, scal,
+//! copy, swap, dot, asum, nrm2, amax, amin) and level 2 `cublasSgemv` and `cublasSger`, with their `_64` forms.
+//! Reductions are deterministic: fixed per-thread partial sums combined in order. Other functions return
 //! `CUBLAS_STATUS_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
@@ -60,12 +62,34 @@ cuda_macros::cublas_function_declarations!(
             cublasGetVersion_v2,
             cublasHgemm,
             cublasHgemmStridedBatched,
+            cublasIsamax_v2,
+            cublasIsamax_v2_64,
+            cublasIsamin_v2,
+            cublasIsamin_v2_64,
+            cublasSasum_v2,
+            cublasSasum_v2_64,
+            cublasSaxpy_v2,
+            cublasSaxpy_v2_64,
+            cublasScopy_v2,
+            cublasScopy_v2_64,
+            cublasSdot_v2,
+            cublasSdot_v2_64,
             cublasSetMathMode,
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
+            cublasSgemv_v2,
+            cublasSgemv_v2_64,
+            cublasSger_v2,
+            cublasSger_v2_64,
+            cublasSnrm2_v2,
+            cublasSnrm2_v2_64,
+            cublasSscal_v2,
+            cublasSscal_v2_64,
+            cublasSswap_v2,
+            cublasSswap_v2_64,
             cublasXerbla,
         ]
 );
@@ -86,6 +110,8 @@ mod imp {
         stream: CUstream,
         pointer_mode: cublasPointerMode_t,
         math_mode: cublasMath_t,
+        /// The partial sums of reductions and their result (`level1::WORKSPACE` bytes), allocated on first use.
+        ws: *mut c_void,
     }
 
     unsafe fn handle<'a>(h: cublasHandle_t) -> Result<&'a mut Handle, cublasError_t> {
@@ -101,6 +127,7 @@ mod imp {
             stream: CUstream(std::ptr::null_mut()),
             pointer_mode: cublasPointerMode_t::CUBLAS_POINTER_MODE_HOST,
             math_mode: cublasMath_t::CUBLAS_DEFAULT_MATH,
+            ws: std::ptr::null_mut(),
         });
         *out = cublasHandle_t(Box::into_raw(h) as *mut cublasContext);
         Ok(())
@@ -110,7 +137,8 @@ mod imp {
         if h.0.is_null() {
             return Err(cublasError_t::NOT_INITIALIZED);
         }
-        drop(Box::from_raw(h.0 as *mut Handle));
+        let h = Box::from_raw(h.0 as *mut Handle);
+        engine::free(h.ws).map_err(status)?;
         Ok(())
     }
 
@@ -452,5 +480,257 @@ mod imp {
         let (t, half) = ex_types([a_type, b_type, c_type], compute)?;
         gemm(t, half, h, transa, transb, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b, beta, c, ldc, stride_c, batch)
     }
-}
+    // ---- level 1 and 2 (agx_libs/kernels/blas.mlir)
 
+    pub(crate) mod level1 {
+        /// Threads of the partial reductions.
+        pub const THREADS: i64 = 1024;
+        /// The partials (two f32 per thread) and the result word.
+        pub const WORKSPACE: usize = 8 * THREADS as usize + 16;
+        pub const AXPY: i64 = 0;
+        pub const SCAL: i64 = 1;
+        pub const COPY: i64 = 2;
+        pub const SWAP: i64 = 3;
+        pub const DOT: i64 = 0;
+        pub const ASUM: i64 = 1;
+        pub const NRM2: i64 = 2;
+        pub const AMAX: i64 = 3;
+        pub const AMIN: i64 = 4;
+    }
+
+    fn arg<T>(v: &mut T) -> *mut c_void {
+        v as *mut T as *mut c_void
+    }
+
+    unsafe fn blas_launch(h: &Handle, name: &'static std::ffi::CStr, params: &mut [*mut c_void], grid: [i64; 2], block: [u32; 2]) -> cublasStatus_t {
+        let groups = |n: i64, b: u32| u32::try_from((n.max(1) as u64).div_ceil(b as u64)).map_err(|_| cublasError_t::NOT_SUPPORTED);
+        let grid = [groups(grid[0], block[0])?, groups(grid[1], block[1])?];
+        let f = engine::function(agx_libs::BLAS, name).map_err(status)?;
+        engine::launch_kernel(f, grid, block, params, h.stream).map_err(status)
+    }
+
+    unsafe fn vec_op(h: cublasHandle_t, op: i64, mut n: i64, alpha: *const f32, mut x: *const f32, mut incx: i64, mut y: *const f32, mut incy: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let mut alpha = if alpha.is_null() { 0.0 } else { scalar(h, alpha as *const c_void, false)? };
+        if n <= 0 || (op == level1::AXPY && alpha == 0.0) {
+            return Ok(());
+        }
+        if x.is_null() || (op != level1::SCAL && y.is_null()) {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if op == level1::SCAL {
+            // cuBLAS ignores a non-positive increment for scal
+            if incx <= 0 {
+                return Ok(());
+            }
+            y = x;
+            incy = incx;
+        }
+        let mut op = op;
+        blas_launch(
+            h,
+            c"agx_blas_vec",
+            &mut [arg(&mut x), arg(&mut y), arg(&mut n), arg(&mut incx), arg(&mut incy), arg(&mut op), arg(&mut alpha)],
+            [n, 1],
+            [64, 1],
+        )
+    }
+
+    /// Runs a reduction; the result is an f32 (or a 1-based i32 index) in device memory at `result` in device
+    /// pointer mode, else copied to the host.
+    unsafe fn reduce(h: cublasHandle_t, op: i64, n: i64, mut x: *const f32, incx: i64, mut y: *const f32, incy: i64, result: *mut c_void, wide_index: bool) -> cublasStatus_t {
+        let h = handle(h)?;
+        if result.is_null() {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        // BLAS: no elements for n <= 0, and for a non-positive increment except in dot
+        let mut n = if n <= 0 || (op != level1::DOT && incx <= 0) { 0 } else { n };
+        if n > 0 && (x.is_null() || (op == level1::DOT && y.is_null())) {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if op != level1::DOT {
+            y = x;
+        }
+        let device = h.pointer_mode == cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE;
+        if h.ws.is_null() {
+            h.ws = engine::alloc(level1::WORKSPACE).map_err(status)?;
+        }
+        let mut part = h.ws;
+        let slot = (h.ws as *mut u8).add(8 * level1::THREADS as usize) as *mut c_void;
+        let mut out = if device && !wide_index { result } else { slot };
+        let mut threads = n.clamp(1, level1::THREADS);
+        let (mut op, mut incx, mut incy) = (op, incx, incy);
+        blas_launch(
+            h,
+            c"agx_blas_reduce",
+            &mut [arg(&mut x), arg(&mut y), arg(&mut part), arg(&mut n), arg(&mut incx), arg(&mut incy), arg(&mut op), arg(&mut threads)],
+            [threads, 1],
+            [64, 1],
+        )?;
+        blas_launch(h, c"agx_blas_reduce_final", &mut [arg(&mut part), arg(&mut out), arg(&mut threads), arg(&mut op)], [1, 1], [32, 1])?;
+        if device && !wide_index {
+            return Ok(());
+        }
+        engine::synchronize(h.stream).map_err(status)?;
+        let mut v = 0i32;
+        engine::read(arg(&mut v), slot, 4).map_err(status)?;
+        if !wide_index {
+            *(result as *mut i32) = v;
+        } else if device {
+            let mut w = v as i64;
+            engine::write(result, arg(&mut w), 8).map_err(status)?;
+        } else {
+            *(result as *mut i64) = v as i64;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn sgemv(h: cublasHandle_t, trans: cublasOperation_t, mut m: i64, mut n: i64, alpha: *const f32, mut a: *const f32, mut lda: i64, mut x: *const f32, mut incx: i64, beta: *const f32, mut y: *mut f32, mut incy: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let t = op(trans)?;
+        if m < 0 || n < 0 || lda < m.max(1) || incx == 0 || incy == 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        let mut beta = scalar(h, beta as *const c_void, false)?;
+        if m == 0 || n == 0 || (alpha == 0.0 && beta == 1.0) {
+            return Ok(());
+        }
+        if a.is_null() || x.is_null() || y.is_null() {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let mut trans = t as i64;
+        let ylen = if t { n } else { m };
+        blas_launch(
+            h,
+            c"agx_sgemv",
+            &mut [
+                arg(&mut a),
+                arg(&mut x),
+                arg(&mut y),
+                arg(&mut m),
+                arg(&mut n),
+                arg(&mut lda),
+                arg(&mut incx),
+                arg(&mut incy),
+                arg(&mut trans),
+                arg(&mut alpha),
+                arg(&mut beta),
+            ],
+            [ylen, 1],
+            [64, 1],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn sger(h: cublasHandle_t, mut m: i64, mut n: i64, alpha: *const f32, mut x: *const f32, mut incx: i64, mut y: *const f32, mut incy: i64, mut a: *mut f32, mut lda: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        if m < 0 || n < 0 || lda < m.max(1) || incx == 0 || incy == 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        if m == 0 || n == 0 || alpha == 0.0 {
+            return Ok(());
+        }
+        if a.is_null() || x.is_null() || y.is_null() {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        blas_launch(
+            h,
+            c"agx_sger",
+            &mut [arg(&mut a), arg(&mut x), arg(&mut y), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut incx), arg(&mut incy), arg(&mut alpha)],
+            [m, n],
+            [16, 4],
+        )
+    }
+
+    /// Widens the integer arguments of the 32-bit entry points to the i64 of the `_64` ones.
+    trait Wide {
+        type W;
+        fn wide(self) -> Self::W;
+    }
+    macro_rules! wide {
+        ($($t:ty => $w:ty),*) => { $(impl Wide for $t { type W = $w; fn wide(self) -> $w { self as $w } })* };
+    }
+    wide!(c_int => i64, i64 => i64, *const f32 => *const f32, *mut f32 => *mut f32);
+    impl Wide for cublasHandle_t {
+        type W = cublasHandle_t;
+        fn wide(self) -> cublasHandle_t {
+            self
+        }
+    }
+    impl Wide for cublasOperation_t {
+        type W = cublasOperation_t;
+        fn wide(self) -> cublasOperation_t {
+            self
+        }
+    }
+
+    /// The 32-bit (`I` = c_int) and `_64` (`I` = i64) entry points of the level 1 and 2 routines.
+    macro_rules! level12 {
+        ($($name:ident, $name64:ident: ($($a:ident: $t:ty),*) => $body:expr;)*) => {
+            mod l32 {
+                use super::*;
+                type I = c_int;
+                $(
+                    #[allow(clippy::too_many_arguments)]
+                    pub(crate) unsafe fn $name($($a: $t),*) -> cublasStatus_t {
+                        $(let $a = $a.wide();)*
+                        $body
+                    }
+                )*
+            }
+            mod l64 {
+                use super::*;
+                type I = i64;
+                $(
+                    #[allow(clippy::too_many_arguments)]
+                    pub(crate) unsafe fn $name64($($a: $t),*) -> cublasStatus_t {
+                        $(let $a = $a.wide();)*
+                        $body
+                    }
+                )*
+            }
+            pub(crate) use l32::{$($name),*};
+            pub(crate) use l64::{$($name64),*};
+        };
+    }
+
+    level12! {
+        cublasSaxpy_v2, cublasSaxpy_v2_64: (h: cublasHandle_t, n: I, alpha: *const f32, x: *const f32, incx: I, y: *mut f32, incy: I)
+            => vec_op(h, level1::AXPY, n, alpha, x, incx, y, incy);
+        cublasSscal_v2, cublasSscal_v2_64: (h: cublasHandle_t, n: I, alpha: *const f32, x: *mut f32, incx: I)
+            => vec_op(h, level1::SCAL, n, alpha, x, incx, std::ptr::null(), 0);
+        cublasScopy_v2, cublasScopy_v2_64: (h: cublasHandle_t, n: I, x: *const f32, incx: I, y: *mut f32, incy: I)
+            => vec_op(h, level1::COPY, n, std::ptr::null(), x, incx, y, incy);
+        cublasSswap_v2, cublasSswap_v2_64: (h: cublasHandle_t, n: I, x: *mut f32, incx: I, y: *mut f32, incy: I)
+            => vec_op(h, level1::SWAP, n, std::ptr::null(), x, incx, y, incy);
+        cublasSdot_v2, cublasSdot_v2_64: (h: cublasHandle_t, n: I, x: *const f32, incx: I, y: *const f32, incy: I, result: *mut f32)
+            => reduce(h, level1::DOT, n, x, incx, y, incy, result as *mut c_void, false);
+        cublasSasum_v2, cublasSasum_v2_64: (h: cublasHandle_t, n: I, x: *const f32, incx: I, result: *mut f32)
+            => reduce(h, level1::ASUM, n, x, incx, std::ptr::null(), 0, result as *mut c_void, false);
+        cublasSnrm2_v2, cublasSnrm2_v2_64: (h: cublasHandle_t, n: I, x: *const f32, incx: I, result: *mut f32)
+            => reduce(h, level1::NRM2, n, x, incx, std::ptr::null(), 0, result as *mut c_void, false);
+        cublasSgemv_v2, cublasSgemv_v2_64: (h: cublasHandle_t, trans: cublasOperation_t, m: I, n: I, alpha: *const f32, a: *const f32, lda: I, x: *const f32, incx: I, beta: *const f32, y: *mut f32, incy: I)
+            => sgemv(h, trans, m, n, alpha, a, lda, x, incx, beta, y, incy);
+        cublasSger_v2, cublasSger_v2_64: (h: cublasHandle_t, m: I, n: I, alpha: *const f32, x: *const f32, incx: I, y: *const f32, incy: I, a: *mut f32, lda: I)
+            => sger(h, m, n, alpha, x, incx, y, incy, a, lda);
+    }
+
+    pub(crate) unsafe fn cublasIsamax_v2(h: cublasHandle_t, n: c_int, x: *const f32, incx: c_int, result: *mut c_int) -> cublasStatus_t {
+        reduce(h, level1::AMAX, n as i64, x, incx as i64, std::ptr::null(), 0, result as *mut c_void, false)
+    }
+
+    pub(crate) unsafe fn cublasIsamax_v2_64(h: cublasHandle_t, n: i64, x: *const f32, incx: i64, result: *mut i64) -> cublasStatus_t {
+        reduce(h, level1::AMAX, n, x, incx, std::ptr::null(), 0, result as *mut c_void, true)
+    }
+
+    pub(crate) unsafe fn cublasIsamin_v2(h: cublasHandle_t, n: c_int, x: *const f32, incx: c_int, result: *mut c_int) -> cublasStatus_t {
+        reduce(h, level1::AMIN, n as i64, x, incx as i64, std::ptr::null(), 0, result as *mut c_void, false)
+    }
+
+    pub(crate) unsafe fn cublasIsamin_v2_64(h: cublasHandle_t, n: i64, x: *const f32, incx: i64, result: *mut i64) -> cublasStatus_t {
+        reduce(h, level1::AMIN, n, x, incx, std::ptr::null(), 0, result as *mut c_void, true)
+    }
+}

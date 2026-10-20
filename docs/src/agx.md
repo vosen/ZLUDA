@@ -461,6 +461,14 @@ it), as NVIDIA's does.
   `agx.mma_tile` (`agx_libs/kernels/sgemm.mlir`; the f16 forms are in
   `hgemm.mlir`). Everything else runs on a generic kernel, one
   thread per element with arbitrary strides.
+* Level 1 and 2 in single precision, with their `_64` forms
+  (`agx_libs/kernels/blas.mlir`): `cublasSaxpy`, `Sscal`, `Scopy`, `Sswap`,
+  `Sdot`, `Sasum`, `Snrm2`, `Isamax`, `Isamin`, `Sgemv` and `Sger`, with
+  negative increments as BLAS defines them. Reductions are deterministic:
+  1024 threads keep fixed partials that one thread combines in order. `nrm2`
+  keeps a scaled sum of squares (LAPACK's `slassq`), so it does not overflow
+  when the squares would. In host pointer mode a reduction waits for the
+  handle's stream.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).
@@ -554,7 +562,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, the rest of cuDNN, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
+| Libraries | cuBLAS: f32 and f16 GEMM, f32 level 1 and gemv / ger (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS level 3 beyond GEMM and double precision, the rest of cuDNN, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

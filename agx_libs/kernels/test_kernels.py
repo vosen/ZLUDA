@@ -89,7 +89,7 @@ def run(a, obj, name, args, grid, wg, tmp):
                 dumps.append(o)
             uniforms[u], uniforms[u + 1] = base, 0
         elif kind == "i64":
-            uniforms[u], uniforms[u + 1] = value & 0xFFFFFFFF, value >> 32
+            uniforms[u], uniforms[u + 1] = value & 0xFFFFFFFF, (value >> 32) & 0xFFFFFFFF
         elif kind == "i32":
             uniforms[u] = value & 0xFFFFFFFF
         else:
@@ -426,6 +426,107 @@ def case_sparse(a, obj, tmp, what, I, base, rnd):
     return close(unpack(got), want, idx, 1e-5)
 
 
+def blas_pos(i, n, inc):
+    return i * inc if inc >= 0 else (n - 1 - i) * -inc
+
+
+def case_blas_vec(a, obj, tmp, op, n, incx, incy, rnd):
+    alpha = 1.75
+    lx, ly = 1 + (n - 1) * abs(incx), 1 + (n - 1) * abs(incy)
+    x = rounded([rnd.uniform(-1, 1) for _ in range(lx)], "f")
+    y = rounded([rnd.uniform(-1, 1) for _ in range(ly)], "f")
+    gx, gy = run(a, obj, "agx_blas_vec", [("buf", pack(x), True), ("buf", pack(y), True), ("i64", n), ("i64", incx),
+                                          ("i64", incy), ("i64", op), ("f32", alpha)], (-(-n // 32) * 32, 1), (32, 1), tmp)
+    wx, wy = list(x), list(y)
+    for i in range(n):
+        px, py = blas_pos(i, n, incx), blas_pos(i, n, incy)
+        if op == 0:
+            wy[py] = alpha * x[px] + y[py]
+        elif op == 1:
+            wx[px] = alpha * x[px]
+        elif op == 2:
+            wy[py] = x[px]
+        else:
+            wx[px], wy[py] = y[py], x[px]
+    return close(unpack(gx), wx, range(lx), 1e-6) + close(unpack(gy), wy, range(ly), 1e-6)
+
+
+def case_blas_reduce(a, obj, tmp, op, n, incx, incy, threads, rnd):
+    lx, ly = 1 + max(n - 1, 0) * abs(incx), 1 + max(n - 1, 0) * abs(incy)
+    x = rounded([rnd.uniform(-4, 4) for _ in range(lx)], "f")
+    if op >= 3 and n > 3:
+        x[blas_pos(n - 2, n, incx)] = 9.5   # the extreme twice: the first index wins
+        x[blas_pos(n - 1, n, incx)] = -9.5
+        x[blas_pos(1, n, incx)] = 0.0
+        x[blas_pos(2, n, incx)] = -0.0
+    y = rounded([rnd.uniform(-1, 1) for _ in range(ly)], "f")
+    (part,) = run(a, obj, "agx_blas_reduce", [("buf", pack(x)), ("buf", pack(y)), ("buf", bytes(8 * threads), True),
+                                              ("i64", n), ("i64", incx), ("i64", incy), ("i64", op), ("i64", threads)],
+                  (-(-threads // 32) * 32, 1), (32, 1), tmp)
+    (res,) = run(a, obj, "agx_blas_reduce_final", [("buf", part), ("buf", bytes(4), True), ("i64", threads), ("i64", op)],
+                 (32, 1), (32, 1), tmp)
+    xs = [x[blas_pos(i, n, incx)] for i in range(n)]
+    if op >= 3:
+        got = unpack(res, "i")[0]
+        if n == 0:
+            want = 0
+        else:
+            ext = max(map(abs, xs)) if op == 3 else min(map(abs, xs))
+            want = 1 + [abs(v) for v in xs].index(ext)
+        return [] if got == want else [("index", got, want)]
+    got = unpack(res)[0]
+    if op == 0:
+        want = sum(v * y[blas_pos(i, n, incy)] for i, v in enumerate(xs))
+    elif op == 1:
+        want = sum(map(abs, xs))
+    else:
+        want = math.sqrt(sum(v * v for v in xs))
+    return close([got], [want], [0], 1e-5)
+
+
+def case_blas_nrm2_scaled(a, obj, tmp, rnd):
+    # values whose squares overflow f32: the scaled sum keeps the norm finite
+    n = 50
+    x = rounded([rnd.uniform(1, 2) * 1e25 for _ in range(n)], "f")
+    (part,) = run(a, obj, "agx_blas_reduce", [("buf", pack(x)), ("buf", pack(x)), ("buf", bytes(8 * 7), True),
+                                              ("i64", n), ("i64", 1), ("i64", 1), ("i64", 2), ("i64", 7)], (32, 1), (32, 1), tmp)
+    (res,) = run(a, obj, "agx_blas_reduce_final", [("buf", part), ("buf", bytes(4), True), ("i64", 7), ("i64", 2)],
+                 (32, 1), (32, 1), tmp)
+    return close(unpack(res), [math.sqrt(sum(v * v for v in x))], [0], 1e-5)
+
+
+def case_sgemv(a, obj, tmp, m, n, trans, incx, incy, beta, rnd):
+    lda, alpha = m + 3, -1.25
+    xlen, ylen = (m, n) if trans else (n, m)
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * n)], "f")
+    x = rounded([rnd.uniform(-1, 1) for _ in range(1 + (xlen - 1) * abs(incx))], "f")
+    y = rounded([rnd.uniform(-1, 1) for _ in range(1 + (ylen - 1) * abs(incy))], "f")
+    (got,) = run(a, obj, "agx_sgemv", [("buf", pack(A)), ("buf", pack(x)), ("buf", pack(y), True), ("i64", m), ("i64", n),
+                                       ("i64", lda), ("i64", incx), ("i64", incy), ("i64", trans), ("f32", alpha),
+                                       ("f32", beta)], (-(-ylen // 32) * 32, 1), (32, 1), tmp)
+    want = list(y)
+    for i in range(ylen):
+        s = sum((A[k + i * lda] if trans else A[i + k * lda]) * x[blas_pos(k, xlen, incx)] for k in range(xlen))
+        p = blas_pos(i, ylen, incy)
+        want[p] = alpha * s + (beta * y[p] if beta != 0 else 0.0)
+    return close(unpack(got), want, range(len(y)), 1e-5)
+
+
+def case_sger(a, obj, tmp, m, n, incx, incy, rnd):
+    lda, alpha = m + 2, 0.75
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * n)], "f")
+    x = rounded([rnd.uniform(-1, 1) for _ in range(1 + (m - 1) * abs(incx))], "f")
+    y = rounded([rnd.uniform(-1, 1) for _ in range(1 + (n - 1) * abs(incy))], "f")
+    (got,) = run(a, obj, "agx_sger", [("buf", pack(A), True), ("buf", pack(x)), ("buf", pack(y)), ("i64", m), ("i64", n),
+                                      ("i64", lda), ("i64", incx), ("i64", incy), ("f32", alpha)],
+                 (-(-m // 16) * 16, -(-n // 4) * 4), (16, 4), tmp)
+    want = list(A)
+    for j in range(n):
+        for i in range(m):
+            want[i + j * lda] += alpha * x[blas_pos(i, m, incx)] * y[blas_pos(j, n, incy)]
+    return close(unpack(got), want, range(len(A)), 1e-5)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -442,7 +543,27 @@ def main():
         for chip in chips:
             obj = entries[chip]
             records = kernel_records(obj, a, tmp)
-            if "agx_csr_spmv_i32" in records:
+            if "agx_blas_vec" in records:
+                cases = []
+                for op, label in ((0, "axpy"), (1, "scal"), (2, "copy"), (3, "swap")):
+                    for n, incx, incy in ((37, 1, 1), (20, 3, -2), (9, -1, 4)):
+                        cases.append(("blas %s n=%d inc %d,%d" % (label, n, incx, incy),
+                                      lambda op=op, n=n, ix=incx, iy=incy: case_blas_vec(a, obj, tmp, op, n, ix, iy, rnd)))
+                for op, label in ((0, "dot"), (1, "asum"), (2, "nrm2"), (3, "amax"), (4, "amin")):
+                    for n, incx, incy, threads in ((100, 1, 1, 7), (33, 2, -3, 64), (5, -1, 1, 3), (0, 1, 1, 4)):
+                        cases.append(("blas %s n=%d inc %d,%d threads %d" % (label, n, incx, incy, threads),
+                                      lambda op=op, n=n, ix=incx, iy=incy, t=threads:
+                                      case_blas_reduce(a, obj, tmp, op, n, ix, iy, t, rnd)))
+                cases.append(("blas nrm2 without overflow", lambda: case_blas_nrm2_scaled(a, obj, tmp, rnd)))
+                for trans in (0, 1):
+                    for beta in (0.0, 0.5):
+                        cases.append(("sgemv 13x9 trans %d beta %g inc -2,3" % (trans, beta),
+                                      lambda t=trans, b=beta: case_sgemv(a, obj, tmp, 13, 9, t, -2, 3, b, rnd)))
+                    cases.append(("sgemv 40x5 trans %d inc 1,1" % trans,
+                                  lambda t=trans: case_sgemv(a, obj, tmp, 40, 5, t, 1, 1, 1.0, rnd)))
+                cases += [("sger 11x7 inc 1,1", lambda: case_sger(a, obj, tmp, 11, 7, 1, 1, rnd)),
+                          ("sger 6x13 inc -3,2", lambda: case_sger(a, obj, tmp, 6, 13, -3, 2, rnd))]
+            elif "agx_csr_spmv_i32" in records:
                 cases = []
                 for I in ("i32", "i64"):
                     for base in (0, 1):

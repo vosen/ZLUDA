@@ -17,6 +17,8 @@ static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxf
 pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
 /// The FFT kernels of zluda_fft_agx (`kernels/fft.mlir`).
 pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
+/// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
+pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
 /// The sparse kernels of zluda_sparse_agx (`kernels/sparse.mlir`).
 pub static SPARSE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sparse.agxfat"));
 
@@ -139,6 +141,7 @@ pub mod engine {
     type MemAlloc = unsafe extern "system" fn(*mut CUdeviceptr, usize) -> CUresult;
     type MemFree = unsafe extern "system" fn(CUdeviceptr) -> CUresult;
     type MemcpyHtoD = unsafe extern "system" fn(CUdeviceptr, *const c_void, usize) -> CUresult;
+    type StreamSynchronize = unsafe extern "system" fn(CUstream) -> CUresult;
 
     /// The driver API of the process's libcuda (zluda_agx).
     struct Driver {
@@ -152,6 +155,7 @@ pub mod engine {
         alloc: MemAlloc,
         free: MemFree,
         htod: MemcpyHtoD,
+        sync: StreamSynchronize,
     }
 
     fn driver() -> Result<&'static Driver, Error> {
@@ -169,6 +173,7 @@ pub mod engine {
                 alloc: *lib.get(b"cuMemAlloc_v2\0").ok()?,
                 free: *lib.get(b"cuMemFree_v2\0").ok()?,
                 htod: *lib.get(b"cuMemcpyHtoD_v2\0").ok()?,
+                sync: *lib.get(b"cuStreamSynchronize\0").ok()?,
                 _lib: lib,
             })
         })
@@ -290,6 +295,11 @@ pub mod engine {
     /// Reads `n` bytes of device memory (alpha and beta in device pointer mode).
     pub unsafe fn read(dst: *mut c_void, src: *const c_void, n: usize) -> Result<(), Error> {
         (driver()?.dtoh)(dst, CUdeviceptr_v2(src as *mut c_void), n).map_err(|_| Error::Failed)
+    }
+
+    /// Waits for the work queued on `stream` (results returned to host memory).
+    pub unsafe fn synchronize(stream: CUstream) -> Result<(), Error> {
+        (driver()?.sync)(stream).map_err(|_| Error::Failed)
     }
 
     /// Copies `n` bytes of device memory on `stream`.
