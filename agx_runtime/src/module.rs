@@ -54,6 +54,8 @@ pub struct Module {
     pub text: Vec<u8>,
     pub globals: Vec<u8>,
     pub kernels: HashMap<String, KernelInfo>,
+    /// Offset and size of each named object in the global data buffer.
+    pub global_symbols: HashMap<String, (u64, u64)>,
 }
 
 struct Elf<'a> {
@@ -113,7 +115,14 @@ impl<'a> Elf<'a> {
 
     /// `FUNC` symbols defined in `.text`: (name, value, size).
     fn functions(&self) -> Result<Vec<(String, u64, u64)>, Error> {
-        let text = self.sections.iter().position(|s| s.0 == ".text").ok_or_else(|| Error("no .text".into()))?;
+        self.symbols(".text", 2)
+    }
+
+    /// Symbols of type `kind` (2 = FUNC, 1 = OBJECT) defined in section `section`: (name, value, size).
+    fn symbols(&self, section: &str, kind: u64) -> Result<Vec<(String, u64, u64)>, Error> {
+        let Some(text) = self.sections.iter().position(|s| s.0 == section) else {
+            return if kind == 2 { err("no .text") } else { Ok(Vec::new()) };
+        };
         let mut out = Vec::new();
         for s in self.sections.iter().filter(|s| s.1 == 2) {
             let strtab = self.sections.get(s.4 as usize).ok_or_else(|| Error("bad symbol string table".into()))?.2;
@@ -121,7 +130,7 @@ impl<'a> Elf<'a> {
             for i in 0..n {
                 let e = s.2 + i * s.5;
                 let (name, info, shndx) = (rd(self.data, e, 4)?, rd(self.data, e + 4, 1)?, rd(self.data, e + 6, 2)?);
-                if info & 0xf == 2 && shndx as usize == text {
+                if info & 0xf == kind && shndx as usize == text {
                     out.push((cstr(self.data, strtab + name)?, rd(self.data, e + 8, 8)?, rd(self.data, e + 16, 8)?));
                 }
             }
@@ -200,7 +209,8 @@ impl Module {
         if kernels.is_empty() {
             return err("no kernels with resource comments");
         }
-        Ok(Module { text, globals, kernels })
+        let global_symbols = elf.symbols(".agx.globals", 1)?.into_iter().map(|(n, v, s)| (n, (v, s))).collect();
+        Ok(Module { text, globals, kernels, global_symbols })
     }
 }
 
@@ -267,6 +277,31 @@ mod tests {
 
     const TGREV_O: &[u8] = include_bytes!("../tests/data/tgrev.o");
     const TGREV_S: &str = include_str!("../tests/data/tgrev.s");
+
+    // A kernel that appends one printf record the way the runtime library's vprintf does.
+    #[test]
+    fn printf_records_resolve_through_the_global_data_buffer() {
+        let m = Module::load(include_bytes!("../tests/data/printf.o"), include_str!("../tests/data/printf.s")).unwrap();
+        let (off, size) = m.global_symbols[crate::printf::BUFFER_SYMBOL];
+        assert_eq!(size, 256);
+        assert!(m.kernels["say"].global_data_uniform.is_some());
+        // What the device would leave after one thread with tid 1: the format string is the first object.
+        let va = 0x1_0000_0000u64;
+        let fmt = va + m.globals.windows(4).position(|w| w == b"%d\n\0").unwrap() as u64;
+        let mut g = m.globals.clone();
+        let b = &mut g[off as usize..(off + size) as usize];
+        b[0..4].copy_from_slice(&24u32.to_le_bytes());
+        b[8..12].copy_from_slice(&24u32.to_le_bytes());
+        b[12..16].copy_from_slice(&4u32.to_le_bytes());
+        b[16..24].copy_from_slice(&fmt.to_le_bytes());
+        b[24..28].copy_from_slice(&42u32.to_le_bytes());
+        let read = |a: u64| {
+            let s = g.get((a - va) as usize..)?;
+            Some(s[..s.iter().position(|&c| c == 0)?].to_vec())
+        };
+        let d = crate::printf::drain(&g[off as usize..(off + size) as usize], read);
+        assert_eq!(d.text, b"42\n");
+    }
 
     #[test]
     fn loads_a_backend_module() {

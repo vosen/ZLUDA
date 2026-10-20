@@ -16,6 +16,7 @@
 pub mod cache;
 pub mod error;
 pub mod module;
+pub mod printf;
 
 use asahi_sys::*;
 use std::ffi::CString;
@@ -780,6 +781,31 @@ impl LoadedModule {
     /// The current contents of the global data buffer (device variables).
     pub fn globals(&self) -> &[u8] {
         self.globals.as_ref().map_or(&[], |g| &g.as_slice()[..self.module.globals.len()])
+    }
+
+    /// GPU address of the global data buffer, if the module has one.
+    pub fn globals_va(&self) -> Option<u64> {
+        self.globals.as_ref().map(|g| g.va)
+    }
+
+    /// Formats and clears the device `printf` records written since the last drain. Strings outside the module's
+    /// global data buffer (`%s` of a device buffer) are read through `read_other`. `None` if the module does not use
+    /// `printf`. Call it after the launches that printed have finished.
+    pub fn drain_printf(&mut self, read_other: impl Fn(u64) -> Option<Vec<u8>>) -> Option<printf::Drained> {
+        let &(off, size) = self.module.global_symbols.get(printf::BUFFER_SYMBOL)?;
+        let g = self.globals.as_mut()?;
+        let (va, data) = (g.va, &g.as_slice()[..self.module.globals.len()]);
+        let read_str = |addr: u64| -> Option<Vec<u8>> {
+            if addr >= va && addr < va + data.len() as u64 {
+                let s = &data[(addr - va) as usize..];
+                Some(s[..s.iter().position(|&c| c == 0)?].to_vec())
+            } else {
+                read_other(addr)
+            }
+        };
+        let out = printf::drain(data.get(off as usize..(off + size) as usize)?, read_str);
+        printf::reset(&mut g.as_mut_slice()[off as usize..(off + size) as usize]);
+        Some(out)
     }
 
     /// Runs `kernel` over `threadgroups` workgroups of `local` threads and waits for it.
