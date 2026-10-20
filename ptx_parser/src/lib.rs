@@ -1415,12 +1415,27 @@ fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Scalar
 fn predicated_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Statement<ParsedOperandStr<'input>>> {
-    trace(
+    let start = stream.input.first().map(|(_, span)| span.start);
+    let errors_before = stream.state.errors.len();
+    let statement = trace(
         "predicated_instruction",
         (opt(pred_at), parse_instruction, Token::Semicolon)
             .map(|(p, i, _)| ast::Statement::Instruction(p, i)),
     )
-    .parse_next(stream)
+    .parse_next(stream)?;
+    // name the statement in the "not yet implemented" errors its rule raised, so that they can be traced back to it
+    if let Some(start) = start {
+        let end = stream.input.first().map(|(_, span)| span.start).unwrap_or(stream.state.text.len());
+        let text = stream.state.text[start..end].trim();
+        for e in stream.state.errors[errors_before..].iter_mut() {
+            if let PtxError::Todo(message) = e {
+                if !message.ends_with(';') {
+                    *message = format!("{message}: {text}");
+                }
+            }
+        }
+    }
+    Ok(statement)
 }
 
 fn pred_at<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::PredAt<&'input str>> {
@@ -4366,19 +4381,17 @@ derive_parser!(
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =            { .f16 };
-    //fma.rnd{.ftz}{.sat}.f16x2   d, a, b, c;
-    //fma.rnd{.ftz}.relu.f16      d, a, b, c;
-    //fma.rnd{.ftz}.relu.f16x2    d, a, b, c;
-    //fma.rnd{.relu}.bf16         d, a, b, c;
-    fma.rnd{.relu}.type_x2       d, a, b, c => {
+    fma.rnd{.ftz}{.sat}{.relu}.type_x2       d, a, b, c => {
+        if type_x2 != ScalarType::F16x2 && (ftz || sat) {
+            state.errors.push(PtxError::Todo(".ftz and .sat of bf16 fma".to_string()));
+        }
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: type_x2,
                 rounding: rnd.into(),
-                // f16x2 keeps denormals, the bf16x2 denormal mode is not
-                // the f16 one
-                flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(false) } else { None },
-                saturate: false,
+                // the bf16 denormal mode is not the f16 one
+                flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(ftz) } else { None },
+                saturate: sat,
                 is_fusable: false,
                 relu,
             },

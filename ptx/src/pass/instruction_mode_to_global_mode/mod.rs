@@ -222,6 +222,11 @@ impl InstructionModes {
             )
         {
             modes.rounding_f32 = rounding;
+            // the f32 computation must also keep the denormals of the 16-bit operands (all of bf16's and, without
+            // .ftz, f16's), which are f32 denormals once widened
+            if arith.flush_to_zero != Some(true) {
+                modes.denormal_f32 = Some(DenormalMode::Preserve);
+            }
         }
         modes
     }

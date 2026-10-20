@@ -216,6 +216,9 @@ def tainted_functions(module, rejected):
     norm = {n: ' '.join(b.split()) for n, b in bodies.items()}
     tainted = set()
     for stmt in rejected:
+        # "Not yet implemented: <what>: <statement>" names the statement after the last ": "
+        if stmt.startswith('Not yet implemented:') and stmt.rstrip().endswith(';'):
+            stmt = stmt.rsplit(': ', 1)[-1]
         key = ' '.join(stmt.split()).rstrip(';')
         hits = [n for n, b in norm.items() if key and key in b]
         if not hits:
