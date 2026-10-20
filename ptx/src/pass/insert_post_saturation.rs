@@ -250,6 +250,7 @@ fn run_instruction<'input>(
         | ast::Instruction::Nanosleep { .. }
         | ast::Instruction::Neg { .. }
         | ast::Instruction::Not { .. }
+        | ast::Instruction::Cnot { .. }
         | ast::Instruction::Or { .. }
         | ast::Instruction::Popc { .. }
         | ast::Instruction::Prmt { .. }

@@ -1198,6 +1198,37 @@ define half @__zluda_ptx_impl_tanh_f16(half %x) #0 {
   ret half %r
 }
 
+define <2 x half> @__zluda_ptx_impl_tanh_f16x2(<2 x half> %x) #0 {
+  %f = fpext <2 x half> %x to <2 x float>
+  %f0 = extractelement <2 x float> %f, i32 0
+  %f1 = extractelement <2 x float> %f, i32 1
+  %t0 = call float @__zluda_ptx_impl_tanh_f32(float %f0)
+  %t1 = call float @__zluda_ptx_impl_tanh_f32(float %f1)
+  %v0 = insertelement <2 x float> poison, float %t0, i32 0
+  %v1 = insertelement <2 x float> %v0, float %t1, i32 1
+  %r = fptrunc <2 x float> %v1 to <2 x half>
+  ret <2 x half> %r
+}
+
+define bfloat @__zluda_ptx_impl_tanh_bf16(bfloat %x) #0 {
+  %f = fpext bfloat %x to float
+  %t = call float @__zluda_ptx_impl_tanh_f32(float %f)
+  %r = fptrunc float %t to bfloat
+  ret bfloat %r
+}
+
+define <2 x bfloat> @__zluda_ptx_impl_tanh_bf16x2(<2 x bfloat> %x) #0 {
+  %f = fpext <2 x bfloat> %x to <2 x float>
+  %f0 = extractelement <2 x float> %f, i32 0
+  %f1 = extractelement <2 x float> %f, i32 1
+  %t0 = call float @__zluda_ptx_impl_tanh_f32(float %f0)
+  %t1 = call float @__zluda_ptx_impl_tanh_f32(float %f1)
+  %v0 = insertelement <2 x float> poison, float %t0, i32 0
+  %v1 = insertelement <2 x float> %v0, float %t1, i32 1
+  %r = fptrunc <2 x float> %v1 to <2 x bfloat>
+  ret <2 x bfloat> %r
+}
+
 ; dp2a: the two 16-bit halves of a times two bytes of b (bytes 0-1 for lo,
 ; 2-3 for hi), plus c.
 define i32 @__zluda_ptx_impl_dp2a_lo_u32_u32(i32 %a, i32 %b, i32 %c) #0 {

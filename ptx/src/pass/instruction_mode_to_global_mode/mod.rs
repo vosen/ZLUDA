@@ -290,12 +290,18 @@ impl InstructionModes {
                     (true, Some(true)) => DenormalMode::FlushToZero,
                     _ => DenormalMode::Preserve,
                 };
-                Self::from_typed_denormal_rounding(
+                let mut modes = Self::from_typed_denormal_rounding(
                     cvt.from,
                     cvt.to,
                     denormal_mode,
                     RoundingMode::from_ast(rounding),
-                )
+                );
+                // f16 <-> bf16 goes through f32 (emit_cvt_float_to_float_impl),
+                // whose denormals must survive
+                if cvt.from.size_of() == 2 && cvt.to.size_of() == 2 {
+                    modes.denormal_f32 = Some(DenormalMode::Preserve);
+                }
+                modes
             }
             ast::CvtMode::FPRound { flush_to_zero, .. } => Self::from_typed_denormal(
                 cvt.from,
@@ -2188,6 +2194,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Trap {}
         | ast::Instruction::Exit {}
         | ast::Instruction::Not { .. }
+        | ast::Instruction::Cnot { .. }
         | ast::Instruction::Or { .. }
         | ast::Instruction::And { .. }
         | ast::Instruction::Bra { .. }

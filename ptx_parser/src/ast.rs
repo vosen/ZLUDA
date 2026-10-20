@@ -731,7 +731,7 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         Ex2 {
-            type: Type::Scalar(ScalarType::F32),
+            type: Type::Scalar(data.type_),
             data: TypeFtz,
             arguments<T>: {
                 dst: T,
@@ -971,6 +971,14 @@ ptx_parser_macros::generate_instruction_type!(
             arguments<T>: {
                 dst: T,
                 src: T
+            }
+        },
+        Cnot {
+            data: ScalarType,
+            type: { Type::Scalar(data.clone()) },
+            arguments<T>: {
+                dst: T,
+                src: T,
             }
         },
         Not {

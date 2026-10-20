@@ -832,6 +832,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Setp { data, arguments } => self.emit_setp(data, arguments),
             ast::Instruction::SetpBool { data, arguments } => self.emit_setp_bool(data, arguments),
             ast::Instruction::Not { data, arguments } => self.emit_not(data, arguments),
+            ast::Instruction::Cnot { data, arguments } => self.emit_cnot(data, arguments),
             ast::Instruction::Or { data, arguments } => self.emit_or(data, arguments),
             ast::Instruction::And { arguments, .. } => self.emit_and(arguments),
             ast::Instruction::Bra { arguments } => self.emit_bra(arguments),
@@ -2567,6 +2568,24 @@ impl<'a> MethodEmitContext<'a> {
         let type_ = get_scalar_type(self.context, type_);
         let dst = self.emit_not_impl(type_, src);
         self.resolver.register(arguments.dst, dst);
+        Ok(())
+    }
+
+    // cnot: 1 if the source is zero, else 0
+    fn emit_cnot(
+        &mut self,
+        type_: ptx_parser::ScalarType,
+        arguments: ptx_parser::CnotArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let src = self.resolver.value(arguments.src)?;
+        let type_ = get_scalar_type(self.context, type_);
+        let zero = unsafe { LLVMConstInt(type_, 0, 0) };
+        let is_zero = unsafe {
+            LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src, zero, LLVM_UNNAMED.as_ptr())
+        };
+        self.resolver.with_result(arguments.dst, |dst| unsafe {
+            LLVMBuildZExt(self.builder, is_zero, type_, dst)
+        });
         Ok(())
     }
 
@@ -4386,10 +4405,12 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let clamped = self.emit_saturate_integer(from, to, arguments.src)?;
-        let resize_fn = if to.layout().size() >= from.layout().size() {
+        let resize_fn = if to.layout().size() < from.layout().size() {
+            LLVMBuildTrunc
+        } else if from.kind() == ptx_parser::ScalarKind::Signed {
             LLVMBuildSExtOrBitCast
         } else {
-            LLVMBuildTrunc
+            LLVMBuildZExtOrBitCast
         };
         let to_llvm = get_scalar_type(self.context, to);
         self.resolver.with_result(arguments.dst, |dst| unsafe {
@@ -4932,9 +4953,20 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::TypeFtz,
         arguments: ptx_parser::Ex2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
+        let agx_name;
         let intrinsic = match (data.type_, self.fp.mode) {
-            (ast::ScalarType::F16, _) if self.target == Target::Agx => c"llvm.exp2.f16",
-            (ast::ScalarType::F32, _) if self.target == Target::Agx => c"llvm.exp2.f32",
+            (_, _) if self.target == Target::Agx => {
+                let suffix = match data.type_ {
+                    ast::ScalarType::F16 => "f16",
+                    ast::ScalarType::F32 => "f32",
+                    ast::ScalarType::F16x2 => "v2f16",
+                    ast::ScalarType::BF16 => "bf16",
+                    ast::ScalarType::BF16x2 => "v2bf16",
+                    _ => return Err(error_unreachable()),
+                };
+                agx_name = CString::new(format!("llvm.exp2.{suffix}")).map_err(|_| error_unreachable())?;
+                agx_name.as_c_str()
+            }
             (ast::ScalarType::F16, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f16",
             (ast::ScalarType::F16, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.exp2.f16"

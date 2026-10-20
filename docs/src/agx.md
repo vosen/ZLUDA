@@ -548,7 +548,17 @@ explicitly, or keep denormals with the software paths
 (`ptx/tools/agx_tests/mixed-ftz.ptx`, run with
 `agx_ptx_formalization_check.py --strict-fp`, checks this). Approximate
 instructions (`ex2.approx`, `rcp.approx`, ...) keep the hardware's
-approximations.
+approximations; `ex2.approx` and `tanh.approx` also take `.f16x2`, `.bf16` and
+`.bf16x2` (`tanh` through f32).
+
+Known differences from the Sail PTX model (`sail/difftest.sh` in
+PTX-formalization):
+* `.ftz` with `.sat` flushes a negative subnormal result to -0 before
+  saturating, so it gives -0 where the model gives +0;
+* `min.ftz.f32` of a negative and a positive subnormal gives +0, not -0;
+* `atom.add.f32` returns the canonical NaN, not the operand's payload. These
+  last two wait on hardware answers (AGX-Performance-Simulator
+  `tasks/ptx-re-blockers.md`, B3 and B11).
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated

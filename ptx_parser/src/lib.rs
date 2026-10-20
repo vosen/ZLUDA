@@ -5499,6 +5499,15 @@ derive_parser!(
                                   .f32, .f64,
                                   .f16, .f16x2, .bf16, .bf16x2 };
 
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-cnot
+    cnot.type d, a => {
+        ast::Instruction::Cnot {
+            data: type_,
+            arguments: CnotArgs { dst: d, src: a }
+        }
+    }
+    .type: ScalarType = { .b16, .b32, .b64 };
+
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-not
     not.type d, a => {
         ast::Instruction::Not {
@@ -7301,7 +7310,7 @@ derive_parser!(
             arguments: TanhArgs { dst: d, src: a }
         }
     }
-    .type: ScalarType = { .f32, .f16 };
+    .type: ScalarType = { .f32, .f16, .f16x2, .bf16, .bf16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async
     cp.async.cop.space.global{.level::cache_hint}{.level::prefetch_size}
