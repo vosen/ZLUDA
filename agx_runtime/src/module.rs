@@ -1,8 +1,9 @@
 //! Loading what the LLVM AGX backend produces: the kernels of a module, their resources and their argument layout.
 //!
-//! The backend's object is ELF with every kernel's code in `.text` (a `FUNC` symbol per kernel) and the global data
-//! buffer's initial contents in `.agx.globals`. The resources a dispatch needs are only reported as comments before
-//! each kernel in the assembly (llvm/docs/AGXUsage.rst, "Kernel ABI"), so both outputs of a compilation are read.
+//! The backend's object is ELF with every kernel's code in `.text` (a `FUNC` symbol per kernel), the global data
+//! buffer's initial contents in `.agx.globals`, and a record per kernel in `.agx.kernels` with its resources and the
+//! layout of its arguments (llvm/docs/AGXUsage.rst, "Kernel ABI"). Objects from backends without `.agx.kernels` are
+//! read with the resource comments of the assembly instead, and then carry no argument layout.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -39,6 +40,18 @@ pub struct KernelInfo {
     pub gprs: u32,
     pub threadgroup_bytes: u32,
     pub stack_bytes: u32,
+    /// How each source-level argument is passed (from `.agx.kernels`; empty for objects without it).
+    pub args: Vec<ArgSlot>,
+}
+
+/// One argument of the source kernel (a PTX `.param`, a CUDA kernel parameter).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArgSlot {
+    /// The uniforms hold a 64-bit pointer to the bytes rather than the bytes.
+    pub by_pointer: bool,
+    pub bytes: u32,
+    /// First 16-bit uniform half.
+    pub half: u32,
 }
 
 impl KernelInfo {
@@ -113,6 +126,50 @@ impl<'a> Elf<'a> {
             .and_then(|s| self.data.get(s.2 as usize..(s.2 + s.3) as usize))
     }
 
+    /// The records of `.agx.kernels`, by kernel name.
+    fn kernel_records(&self) -> Result<Option<HashMap<String, KernelInfo>>, Error> {
+        let Some(s) = self.section(".agx.kernels") else { return Ok(None) };
+        let word = |i: usize| -> Result<u32, Error> {
+            s.get(4 * i..4 * i + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap())).ok_or_else(|| Error("truncated .agx.kernels".into()))
+        };
+        let mut out = HashMap::new();
+        let mut at = 0;
+        while 4 * at < s.len() {
+            let (size, version, name_len) = (word(at)? as usize, word(at + 1)?, word(at + 2)? as usize);
+            if version != 1 || size % 4 != 0 || size < 12 || 4 * at + size > s.len() {
+                return err(format!("unsupported .agx.kernels record (version {version}, {size} bytes)"));
+            }
+            let name_at = 4 * (at + 3);
+            let name = String::from_utf8_lossy(s.get(name_at..name_at + name_len).ok_or_else(|| Error("bad kernel name".into()))?).into_owned();
+            let f = at + 3 + name_len.div_ceil(4);
+            let nargs = word(f + 6)? as usize;
+            if 4 * (f + 7 + 3 * nargs) > 4 * at + size {
+                return err(format!("{name}: truncated argument table"));
+            }
+            let global = word(f + 2)?;
+            let args = (0..nargs)
+                .map(|i| Ok(ArgSlot { by_pointer: word(f + 7 + 3 * i)? == 1, bytes: word(f + 8 + 3 * i)?, half: word(f + 9 + 3 * i)? }))
+                .collect::<Result<_, Error>>()?;
+            out.insert(
+                name.clone(),
+                KernelInfo {
+                    name,
+                    offset: 0,
+                    size: 0,
+                    uniform_halves: word(f)?,
+                    threadgroups_uniform: word(f + 1)? / 2,
+                    global_data_uniform: (global != u32::MAX).then_some(global / 2),
+                    gprs: word(f + 3)?,
+                    threadgroup_bytes: word(f + 4)?,
+                    stack_bytes: word(f + 5)?,
+                    args,
+                },
+            );
+            at += size / 4;
+        }
+        Ok(Some(out))
+    }
+
     /// `FUNC` symbols defined in `.text`: (name, value, size).
     fn functions(&self) -> Result<Vec<(String, u64, u64)>, Error> {
         self.symbols(".text", 2)
@@ -177,13 +234,27 @@ fn resources(assembly: &str) -> HashMap<String, [Option<u32>; 6]> {
 
 impl Module {
     /// Reads a module from the backend's object file and its assembly.
+    /// Reads a module from an object with `.agx.kernels` alone.
+    pub fn load_object(object: &[u8]) -> Result<Module, Error> {
+        Self::load(object, "")
+    }
+
     pub fn load(object: &[u8], assembly: &str) -> Result<Module, Error> {
         let elf = Elf::parse(object)?;
         let text = elf.section(".text").ok_or_else(|| Error("no .text".into()))?.to_vec();
         let globals = elf.section(".agx.globals").map(|s| s.to_vec()).unwrap_or_default();
+        let records = elf.kernel_records()?;
         let res = resources(assembly);
         let mut kernels = HashMap::new();
         for (name, value, size) in elf.functions()? {
+            if value % 2 != 0 || value + size > text.len() as u64 {
+                return err(format!("{name}: symbol outside .text"));
+            }
+            if let Some(records) = &records {
+                let Some(k) = records.get(&name) else { continue };
+                kernels.insert(name.clone(), KernelInfo { offset: value as u32, size: size as u32, ..k.clone() });
+                continue;
+            }
             let Some(r) = res.get(&name) else { continue };
             let (Some(uniform_halves), Some(threadgroups_uniform), Some(gprs)) = (r[0], r[1], r[3]) else {
                 return err(format!("{name}: incomplete resource comments"));
@@ -203,6 +274,7 @@ impl Module {
                     gprs,
                     threadgroup_bytes: r[4].unwrap_or(0),
                     stack_bytes: r[5].unwrap_or(0),
+                    args: Vec::new(),
                 },
             );
         }
@@ -212,6 +284,60 @@ impl Module {
         let global_symbols = elf.symbols(".agx.globals", 1)?.into_iter().map(|(n, v, s)| (n, (v, s))).collect();
         Ok(Module { text, globals, kernels, global_symbols })
     }
+}
+
+/// The uniforms of a launch from the bytes of each source-level argument (`cuLaunchKernel`'s `kernelParams`), and
+/// the contents of the parameter block that holds the arguments passed by pointer. `param_block` is the GPU address
+/// the block will have; its size is `param_block_size(k)`.
+pub fn pack_params(
+    k: &KernelInfo,
+    params: &[&[u8]],
+    threadgroups: [u32; 3],
+    global_data: Option<u64>,
+    param_block: u64,
+) -> Result<(Vec<u16>, Vec<u8>), Error> {
+    if params.len() != k.args.len() {
+        return err(format!("{}: {} arguments given, {} expected", k.name, params.len(), k.args.len()));
+    }
+    let mut u = vec![0u16; k.uniform_halves as usize];
+    let mut block = Vec::new();
+    let put = |u: &mut Vec<u16>, half: u32, bytes: &[u8]| -> Result<(), Error> {
+        for (i, pair) in bytes.chunks(2).enumerate() {
+            let h = u.get_mut(half as usize + i).ok_or_else(|| Error(format!("{}: argument outside the uniforms", k.name)))?;
+            *h = pair[0] as u16 | (*pair.get(1).unwrap_or(&0) as u16) << 8;
+        }
+        Ok(())
+    };
+    for (i, (slot, p)) in k.args.iter().zip(params).enumerate() {
+        if p.len() != slot.bytes as usize {
+            return err(format!("{}: argument {i} has {} bytes, {} expected", k.name, p.len(), slot.bytes));
+        }
+        if slot.half == u32::MAX {
+            continue; // unused by the kernel
+        }
+        if slot.by_pointer {
+            let at = block.len().next_multiple_of(16);
+            block.resize(at, 0);
+            block.extend_from_slice(p);
+            put(&mut u, slot.half, &(param_block + at as u64).to_le_bytes())?;
+        } else {
+            put(&mut u, slot.half, p)?;
+        }
+    }
+    for (d, t) in threadgroups.iter().enumerate() {
+        put(&mut u, 2 * k.threadgroups_uniform + 2 * d as u32, &t.to_le_bytes())?;
+    }
+    match (k.global_data_uniform, global_data) {
+        (Some(at), Some(va)) => put(&mut u, 2 * at, &va.to_le_bytes())?,
+        (Some(_), None) => return err(format!("{}: the module has globals but no global data buffer was given", k.name)),
+        _ => {}
+    }
+    Ok((u, block))
+}
+
+/// Bytes of the parameter block `pack_params` fills.
+pub fn param_block_size(k: &KernelInfo) -> u64 {
+    k.args.iter().filter(|a| a.by_pointer && a.half != u32::MAX).fold(0, |n, a| n.next_multiple_of(16) + a.bytes as u64)
 }
 
 /// One kernel argument, as the backend splits it.
@@ -303,6 +429,34 @@ mod tests {
         assert_eq!(d.text, b"42\n");
     }
 
+    // tests/data/byref.ll: the backend's .agx.kernels records, and packing cuLaunchKernel-style parameters.
+    #[test]
+    fn packs_parameters_from_the_kernel_records() {
+        let m = Module::load_object(include_bytes!("../tests/data/byref.o")).unwrap();
+        let k = &m.kernels["byref"];
+        let v = |bytes, half| ArgSlot { by_pointer: false, bytes, half };
+        assert_eq!(k.args, [v(8, 0), v(12, 4), v(4, 10)]);
+        assert_eq!((k.uniform_halves, k.threadgroups_uniform, k.gprs), (18, 6, 3));
+        assert!(k.size > 0);
+        let s = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let (u, block) = pack_params(k, &[&0x1122_3344_5566_7788u64.to_le_bytes(), &s, &7u32.to_le_bytes()], [5, 1, 1], None, 0).unwrap();
+        assert!(block.is_empty());
+        assert_eq!(&u[0..4], &[0x7788, 0x5566, 0x3344, 0x1122]);
+        assert_eq!(&u[4..10], &[0x0201, 0x0403, 0x0605, 0x0807, 0x0a09, 0x0c0b]);
+        assert_eq!(&u[10..12], &[7, 0]);
+        assert_eq!(&u[12..18], &[5, 0, 1, 0, 1, 0]);
+        assert!(pack_params(k, &[&[0u8; 8], &s], [1, 1, 1], None, 0).is_err());
+
+        let d = &m.kernels["dynamic"];
+        assert_eq!(d.args, [v(8, 0), ArgSlot { by_pointer: true, bytes: 16, half: 4 }, v(4, 8)]);
+        assert_eq!(param_block_size(d), 16);
+        let t: Vec<u8> = (0..16).collect();
+        let (u, block) = pack_params(d, &[&[0u8; 8], &t, &3u32.to_le_bytes()], [1, 1, 1], None, 0x5_0000_0000).unwrap();
+        assert_eq!(block, t);
+        assert_eq!(&u[4..8], &[0, 0, 5, 0]);
+        assert_eq!(&u[8..10], &[3, 0]);
+    }
+
     #[test]
     fn loads_a_backend_module() {
         let m = Module::load(TGREV_O, TGREV_S).unwrap();
@@ -319,6 +473,7 @@ mod tests {
                 gprs: 5,
                 threadgroup_bytes: 256,
                 stack_bytes: 0,
+                args: vec![],
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -338,6 +493,7 @@ mod tests {
             gprs: 3,
             threadgroup_bytes: 0,
             stack_bytes: 0,
+            args: vec![],
         };
         let u = pack_uniforms(
             &k,

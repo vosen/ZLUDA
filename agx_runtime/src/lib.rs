@@ -776,6 +776,10 @@ mod tests {
     }
 }
 
+fn invalid(m: String) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, m)
+}
+
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
 pub struct LoadedModule {
     pub module: module::Module,
@@ -892,28 +896,80 @@ impl LoadedModule {
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         queue.collect()?;
-        let invalid = |m: String| io::Error::new(io::ErrorKind::InvalidInput, m);
+        let k = self.kernel(kernel, dynamic_shared)?;
+        let halves = module::pack_uniforms(k, args, threadgroups, self.globals_va()).map_err(|e| invalid(e.to_string()))?;
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+    }
+
+    /// `launch_async` with the bytes of each source-level argument, as cuLaunchKernel's `kernelParams` point to
+    /// them. Needs a module whose object has `.agx.kernels`. Arguments the kernel reads through a pointer are
+    /// copied to a parameter block that lives until the launch has finished.
+    pub fn launch_params_async(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        kernel: &str,
+        params: &[&[u8]],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
+        queue.collect()?;
+        let k = self.kernel(kernel, dynamic_shared)?;
+        let mut keep = Vec::new();
+        let block_size = module::param_block_size(k);
+        let block_va = if block_size > 0 {
+            let b = vm.alloc_data(block_size)?;
+            let va = b.va;
+            keep.push(b);
+            va
+        } else {
+            0
+        };
+        let (halves, block) =
+            module::pack_params(k, params, threadgroups, self.globals_va(), block_va).map_err(|e| invalid(e.to_string()))?;
+        if let Some(b) = keep.first_mut() {
+            b.as_mut_slice()[..block.len()].copy_from_slice(&block);
+        }
+        self.dispatch(vm, queue, g14x, k, &halves, keep, threadgroups, local, dynamic_shared, wait_for)
+    }
+
+    fn kernel(&self, kernel: &str, dynamic_shared: u32) -> io::Result<&module::KernelInfo> {
         let k = self.module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
         if k.stack_bytes > 0 {
             // per-thread scratch for direct-DRM dispatches is not measured yet (ptx-re-blockers B1)
             return Err(io::Error::new(io::ErrorKind::Unsupported, format!("{kernel} needs {} bytes of stack", k.stack_bytes)));
         }
-        let shared = k.threadgroup_bytes + dynamic_shared;
-        if shared > 65536 {
-            return Err(invalid(format!("{kernel} needs {shared} bytes of threadgroup memory")));
+        if k.threadgroup_bytes + dynamic_shared > 65536 {
+            return Err(invalid(format!("{kernel} needs {} bytes of threadgroup memory", k.threadgroup_bytes + dynamic_shared)));
         }
-        let halves = module::pack_uniforms(k, args, threadgroups, self.globals.as_ref().map(|g| g.va))
-            .map_err(|e| invalid(e.to_string()))?;
+        Ok(k)
+    }
+
+    fn dispatch(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        k: &module::KernelInfo,
+        halves: &[u16],
+        mut keep: Vec<Bo>,
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
         let mut unif = vm.alloc_data((2 * halves.len()).max(4) as u64)?;
         for (i, h) in halves.iter().enumerate() {
             unif.as_mut_slice()[2 * i..2 * i + 2].copy_from_slice(&h.to_le_bytes());
         }
-        let code_off = self.entries[kernel];
         let pipeline = Pipeline {
-            code: code_off,
+            code: self.entries[&k.name],
             gpr_halves: k.gpr_halves(),
             uniforms: if halves.is_empty() { vec![] } else { vec![(0, halves.len() as u32, unif.va)] },
-            shared_bytes: shared,
+            shared_bytes: k.threadgroup_bytes + dynamic_shared,
         };
         let words = pipeline.usc_words();
         let mut pw = vm.alloc_usc(words.len() as u64)?;
@@ -923,7 +979,8 @@ impl LoadedModule {
         let mut cdm = vm.alloc_data(stream.len() as u64)?;
         cdm.as_mut_slice()[..stream.len()].copy_from_slice(&stream);
         let fence = queue.submit_compute(cdm.va, cdm.va + stream.len() as u64, wait_for)?;
-        queue.retire_after(fence, vec![unif, pw, cdm]);
+        keep.extend([unif, pw, cdm]);
+        queue.retire_after(fence, keep);
         Ok(fence)
     }
 }
