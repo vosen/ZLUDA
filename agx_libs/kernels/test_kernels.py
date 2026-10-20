@@ -92,6 +92,9 @@ def run(a, obj, name, args, grid, wg, tmp):
             uniforms[u], uniforms[u + 1] = value & 0xFFFFFFFF, (value >> 32) & 0xFFFFFFFF
         elif kind == "i32":
             uniforms[u] = value & 0xFFFFFFFF
+        elif kind == "f64":
+            bits = struct.unpack("<Q", struct.pack("<d", value))[0]
+            uniforms[u], uniforms[u + 1] = bits & 0xFFFFFFFF, bits >> 32
         else:
             uniforms[u] = struct.unpack("<I", struct.pack("<f", value))[0]
     for d in range(3):
@@ -161,11 +164,11 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
     (got,) = run(a, obj, kernel,
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
                   ("i64", K), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]),
-                  ("i64", sc[1]), ("f32", alpha), ("f32", beta)],
+                  ("i64", sc[1]), ("f64" if c == "d" else "f32", alpha), ("f64" if c == "d" else "f32", beta)],
                  (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta)
     return close(unpack(got, c), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)],
-                 1e-4 if c == "f" else 2e-3)
+                 {"f": 1e-4, "d": 1e-13}.get(c, 2e-3))
 
 
 def gelu(x):
@@ -1060,6 +1063,15 @@ def main():
                     ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
                     ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
                     ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
+                ]
+                dk = "agx_dgemm_generic"
+                cases += [
+                    ("d generic 13x11x9 NN b=0.25",
+                     lambda: case_generic(a, obj, tmp, 13, 11, 9, 0, 0, 1.0, 0.25, rnd, dk, "d", "d")),
+                    ("d generic 9x14x5 TN", lambda: case_generic(a, obj, tmp, 9, 14, 5, 1, 0, -2.0, 1.0, rnd, dk, "d", "d")),
+                    ("d generic 7x6x11 NT b=0 (C NaN)",
+                     lambda: case_generic(a, obj, tmp, 7, 6, 11, 0, 1, 0.5, 0.0, rnd, dk, "d", "d")),
+                    ("d generic 4x10x3 TT", lambda: case_generic(a, obj, tmp, 4, 10, 3, 1, 1, 1.0, -1.0, rnd, dk, "d", "d")),
                 ]
             else:
                 cases = []

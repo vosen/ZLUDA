@@ -81,6 +81,8 @@ cuda_macros::cublas_function_declarations!(
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
+            cublasDgemmStridedBatched,
+            cublasDgemm_v2,
             cublasSgeam,
             cublasSgeam_64,
             cublasSgemmBatched,
@@ -217,6 +219,20 @@ mod imp {
     }
 
     /// alpha or beta (an f32, or an f16 when `half`), from host or device memory as the handle's pointer mode says.
+    // a double precision alpha or beta
+    unsafe fn scalar64(h: &Handle, p: *const c_void) -> Result<f64, cublasError_t> {
+        if p.is_null() {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let mut v = [0u8; 8];
+        if h.pointer_mode == cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE {
+            engine::read(v.as_mut_ptr() as *mut c_void, p, 8).map_err(status)?;
+        } else {
+            std::ptr::copy_nonoverlapping(p as *const u8, v.as_mut_ptr(), 8);
+        }
+        Ok(f64::from_le_bytes(v))
+    }
+
     unsafe fn scalar(h: &Handle, p: *const c_void, half: bool) -> Result<f32, cublasError_t> {
         if p.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
@@ -273,7 +289,11 @@ mod imp {
         if m == 0 || n == 0 || batch == 0 {
             return Ok(());
         }
-        let (alpha, beta) = (scalar(h, alpha, half_scalars)?, scalar(h, beta, half_scalars)?);
+        let (alpha, beta) = if types == Types::D {
+            (scalar64(h, alpha)?, scalar64(h, beta)?)
+        } else {
+            (scalar(h, alpha, half_scalars)? as f64, scalar(h, beta, half_scalars)? as f64)
+        };
         let g = engine::Gemm {
             types,
             ta,
@@ -314,6 +334,69 @@ mod imp {
         ldc: c_int,
     ) -> cublasStatus_t {
         gemm(Types::S, false, h, transa, transb, m, n, k, alpha.cast(), a.cast(), lda, 0, b.cast(), ldb, 0, beta.cast(), c.cast(), ldc, 0, 1)
+    }
+
+    pub(crate) unsafe fn cublasDgemm_v2(
+        h: cublasHandle_t,
+        transa: cublasOperation_t,
+        transb: cublasOperation_t,
+        m: c_int,
+        n: c_int,
+        k: c_int,
+        alpha: *const f64,
+        a: *const f64,
+        lda: c_int,
+        b: *const f64,
+        ldb: c_int,
+        beta: *const f64,
+        c: *mut f64,
+        ldc: c_int,
+    ) -> cublasStatus_t {
+        gemm(Types::D, false, h, transa, transb, m, n, k, alpha.cast(), a.cast(), lda, 0, b.cast(), ldb, 0, beta.cast(), c.cast(), ldc, 0, 1)
+    }
+
+    pub(crate) unsafe fn cublasDgemmStridedBatched(
+        h: cublasHandle_t,
+        transa: cublasOperation_t,
+        transb: cublasOperation_t,
+        m: c_int,
+        n: c_int,
+        k: c_int,
+        alpha: *const f64,
+        a: *const f64,
+        lda: c_int,
+        stride_a: c_longlong,
+        b: *const f64,
+        ldb: c_int,
+        stride_b: c_longlong,
+        beta: *const f64,
+        c: *mut f64,
+        ldc: c_int,
+        stride_c: c_longlong,
+        batch: c_int,
+    ) -> cublasStatus_t {
+        gemm(
+            Types::D,
+            false,
+            h,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha.cast(),
+            a.cast(),
+            lda,
+            stride_a,
+            b.cast(),
+            ldb,
+            stride_b,
+            beta.cast(),
+            c.cast(),
+            ldc,
+            stride_c,
+            batch,
+        )
     }
 
     pub(crate) unsafe fn cublasSgemmStridedBatched(
@@ -432,9 +515,12 @@ mod imp {
             [a, b, c] if a == f32_ && b == f32_ && c == f32_ => Types::S,
             [a, b, c] if a == f16_ && b == f16_ && c == f16_ => Types::H,
             [a, b, c] if a == f16_ && b == f16_ && c == f32_ => Types::HtoS,
+            [a, b, c] if [a, b, c].iter().all(|t| *t == cudaDataType::CUDA_R_64F) => Types::D,
             _ => return Err(cublasError_t::NOT_SUPPORTED),
         };
         match compute {
+            K::CUBLAS_COMPUTE_64F | K::CUBLAS_COMPUTE_64F_PEDANTIC if t == Types::D => Ok((t, false)),
+            _ if t == Types::D => Err(cublasError_t::NOT_SUPPORTED),
             K::CUBLAS_COMPUTE_32F | K::CUBLAS_COMPUTE_32F_PEDANTIC | K::CUBLAS_COMPUTE_32F_FAST_TF32 => Ok((t, false)),
             K::CUBLAS_COMPUTE_32F_FAST_16F | K::CUBLAS_COMPUTE_32F_FAST_16BF => Ok((t, false)),
             K::CUBLAS_COMPUTE_16F | K::CUBLAS_COMPUTE_16F_PEDANTIC if t == Types::H => Ok((t, true)),

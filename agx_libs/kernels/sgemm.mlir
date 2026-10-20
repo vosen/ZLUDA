@@ -157,4 +157,60 @@ gpu.module @agx_blas {
     }
     gpu.return
   }
+
+  // agx_sgemm_generic in double precision (cublasDgemm; f64 is software arithmetic on AGX).
+  // C = alpha * A * B + beta * C for M x K, K x N and M x N matrices with
+  // arbitrary element strides (row stride, column stride) for each, which
+  // covers transposed operands and column-major storage. One thread per
+  // element of C: launch an N x M grid (x along columns) in any threadgroups.
+  // C is not read when beta is 0.
+  gpu.func @agx_dgemm_generic(%a0: memref<1xf64, 1>, %b0: memref<1xf64, 1>,
+                              %c0: memref<1xf64, 1>, %M: index, %N: index,
+                              %K: index, %sar: index, %sac: index,
+                              %sbr: index, %sbc: index, %scr: index,
+                              %scc: index, %alpha: f64, %beta: f64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %big = arith.constant 4611686018427387904 : index
+    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %j = gpu.global_id x
+    %i = gpu.global_id y
+    %in_m = arith.cmpi ult, %i, %M : index
+    %in_n = arith.cmpi ult, %j, %N : index
+    %in = arith.andi %in_m, %in_n : i1
+    scf.if %in {
+      %f0 = arith.constant 0.0 : f64
+      %ia = arith.muli %i, %sar : index
+      %jb = arith.muli %j, %sbc : index
+      %sum = scf.for %k = %i0 to %K step %i1 iter_args(%s = %f0) -> f64 {
+        %ka = arith.muli %k, %sac : index
+        %kb = arith.muli %k, %sbr : index
+        %pa = arith.addi %ia, %ka : index
+        %pb = arith.addi %kb, %jb : index
+        %x = memref.load %A[%pa] : memref<?xf64, strided<[1]>, 1>
+        %y = memref.load %B[%pb] : memref<?xf64, strided<[1]>, 1>
+        %s1 = math.fma %x, %y, %s : f64
+        scf.yield %s1 : f64
+      }
+      %ic = arith.muli %i, %scr : index
+      %jc = arith.muli %j, %scc : index
+      %pc = arith.addi %ic, %jc : index
+      %scaled = arith.mulf %sum, %alpha : f64
+      %no_c = arith.cmpf oeq, %beta, %f0 : f64
+      %out = scf.if %no_c -> f64 {
+        scf.yield %scaled : f64
+      } else {
+        %old = memref.load %C[%pc] : memref<?xf64, strided<[1]>, 1>
+        %r = math.fma %old, %beta, %scaled : f64
+        scf.yield %r : f64
+      }
+      memref.store %out, %C[%pc] : memref<?xf64, strided<[1]>, 1>
+    }
+    gpu.return
+  }
 }

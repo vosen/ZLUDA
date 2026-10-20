@@ -33,6 +33,8 @@ pub enum Types {
     H,
     /// f16 A and B, f32 C.
     HtoS,
+    /// f64 A, B and C (the generic kernel only; f64 is software arithmetic on AGX).
+    D,
 }
 
 impl Types {
@@ -40,10 +42,18 @@ impl Types {
         self as usize
     }
     fn ab_bytes(self) -> isize {
-        if self == Types::S { 4 } else { 2 }
+        match self {
+            Types::S => 4,
+            Types::D => 8,
+            _ => 2,
+        }
     }
     fn c_bytes(self) -> isize {
-        if self == Types::H { 2 } else { 4 }
+        match self {
+            Types::H => 2,
+            Types::D => 8,
+            _ => 4,
+        }
     }
 }
 
@@ -194,7 +204,7 @@ pub mod engine {
         ctx: usize,
         /// By `Types::index`.
         tile: [CUfunction; 3],
-        generic: [CUfunction; 3],
+        generic: [CUfunction; 4],
         /// f32 and f16 D.
         epilogue: [CUfunction; 2],
     }
@@ -229,6 +239,7 @@ pub mod engine {
                 get(sm, b"agx_sgemm_generic\0")?,
                 get(hm, b"agx_hgemm_generic_cf16\0")?,
                 get(hm, b"agx_hgemm_generic_cf32\0")?,
+                get(sm, b"agx_dgemm_generic\0")?,
             ],
             epilogue: [get(em, b"agx_epilogue_f32\0")?, get(em, b"agx_epilogue_f16\0")?],
         };
@@ -318,8 +329,9 @@ pub mod engine {
         pub m: u64,
         pub n: u64,
         pub k: u64,
-        pub alpha: f32,
-        pub beta: f32,
+        /// f32 values exactly, but for `Types::D`
+        pub alpha: f64,
+        pub beta: f64,
         pub a: *const c_void,
         pub lda: u64,
         pub stride_a: i64,
@@ -346,7 +358,7 @@ pub mod engine {
         let (types, (a, b, c)) = (g.types, (g.a, g.b, g.c));
         let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
             && [g.stride_a, g.stride_b, g.stride_c].iter().all(|s| s % 2 == 0);
-        let p = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned);
+        let p = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned && types != Types::D);
         for i in 0..g.batch as isize {
             let (ab, cb) = (types.ab_bytes(), types.c_bytes());
             let (mut pa, mut pb, mut pc) = (
@@ -364,15 +376,21 @@ pub mod engine {
                 Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
             };
             let mut dims = dims.to_vec();
-            let (mut alpha, mut beta) = (g.alpha, g.beta);
+            let (mut alpha, mut beta) = (g.alpha as f32, g.beta as f32);
+            let (mut alpha64, mut beta64) = (g.alpha, g.beta);
             let mut params: Vec<*mut c_void> = vec![
                 &mut pa as *mut _ as *mut c_void,
                 &mut pb as *mut _ as *mut c_void,
                 &mut pc as *mut _ as *mut c_void,
             ];
             params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
-            params.push(&mut alpha as *mut f32 as *mut c_void);
-            params.push(&mut beta as *mut f32 as *mut c_void);
+            if types == Types::D {
+                params.push(&mut alpha64 as *mut f64 as *mut c_void);
+                params.push(&mut beta64 as *mut f64 as *mut c_void);
+            } else {
+                params.push(&mut alpha as *mut f32 as *mut c_void);
+                params.push(&mut beta as *mut f32 as *mut c_void);
+            }
             launch(d, f, grid, block, &mut params, stream)?;
         }
         Ok(())
@@ -499,7 +517,7 @@ mod tests {
     #[test]
     fn the_fat_objects_have_the_kernels_for_the_m2_max() {
         for (fat, names) in [
-            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_generic"][..]),
+            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_generic", "agx_dgemm_generic"][..]),
             (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
         ] {
             assert_eq!(&fat[..8], b"ZAGXFAT1");
