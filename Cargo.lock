@@ -794,6 +794,7 @@ dependencies = [
  "bit-vec",
  "cglue",
  "cuda_types",
+ "flate2",
  "format",
  "lz4-sys",
  "paste",
