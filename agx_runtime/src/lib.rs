@@ -18,6 +18,7 @@ pub mod context;
 pub mod error;
 pub mod module;
 pub mod printf;
+pub mod ring;
 
 use asahi_sys::*;
 use std::ffi::CString;
@@ -482,6 +483,21 @@ pub struct Queue {
     pub timeout: Duration,
     /// Objects the GPU may still read, freed once their fence has signalled.
     in_flight: std::collections::VecDeque<(u64, Vec<Bo>)>,
+    /// Rings for the per-launch objects: data (uniforms, control streams, parameter blocks) and USC (pipeline
+    /// words). A launch costs no buffer object creation, mapping or binding.
+    data_ring: (Bo, ring::RingAlloc),
+    usc_ring: (Bo, ring::RingAlloc),
+}
+
+/// Ring sizes: enough for hundreds of launches in flight.
+pub const DATA_RING_BYTES: u64 = 4 << 20;
+pub const USC_RING_BYTES: u64 = 256 << 10;
+
+/// Which ring of a queue.
+#[derive(Clone, Copy)]
+pub enum RingKind {
+    Data,
+    Usc,
 }
 
 fn monotonic_deadline(timeout: Duration) -> i64 {
@@ -524,6 +540,8 @@ impl Queue {
             ts_handle: bind.object_handle,
             timeout: Duration::from_secs(3),
             in_flight: Default::default(),
+            data_ring: (vm.alloc_data(DATA_RING_BYTES)?, ring::RingAlloc::new(DATA_RING_BYTES)),
+            usc_ring: (vm.alloc_usc(USC_RING_BYTES)?, ring::RingAlloc::new(USC_RING_BYTES)),
         })
     }
 
@@ -620,6 +638,45 @@ impl Queue {
         Some((u64::from_le_bytes(t[0..8].try_into().unwrap()), u64::from_le_bytes(t[8..16].try_into().unwrap())))
     }
 
+    /// Copies `bytes` into a ring for the next command to submit, waiting for older commands if the ring is full.
+    /// Returns the GPU address.
+    pub fn stage(&mut self, kind: RingKind, bytes: &[u8], align: u64) -> io::Result<u64> {
+        let point = self.submitted + 1;
+        loop {
+            let (bo, alloc) = match kind {
+                RingKind::Data => &mut self.data_ring,
+                RingKind::Usc => &mut self.usc_ring,
+            };
+            if let Some(at) = alloc.alloc(bytes.len() as u64, align, point) {
+                bo.as_mut_slice()[at as usize..at as usize + bytes.len()].copy_from_slice(bytes);
+                return Ok(bo.va + at);
+            }
+            let Some(oldest) = alloc.oldest().filter(|&p| p < point) else {
+                return Err(io::Error::new(io::ErrorKind::OutOfMemory, "launch objects larger than the ring"));
+            };
+            let fence = Fence { syncobj: self.timeline, point: oldest };
+            self.wait(fence, self.timeout)?;
+            self.retire_rings(oldest);
+        }
+    }
+
+    fn retire_rings(&mut self, done: u64) {
+        self.data_ring.1.retire(done);
+        self.usc_ring.1.retire(done);
+    }
+
+    /// Frees what `stage` reserved for a command that was not submitted.
+    pub fn unstage(&mut self) {
+        let point = self.submitted + 1;
+        self.data_ring.1.rollback(point);
+        self.usc_ring.1.rollback(point);
+    }
+
+    /// USC offset of a USC-ring address.
+    pub fn usc_offset(&self, va: u64, usc_base: u64) -> u32 {
+        (va - usc_base) as u32
+    }
+
     /// Keeps `objects` alive until `fence` (a point of this queue) has signalled.
     pub fn retire_after(&mut self, fence: Fence, objects: Vec<Bo>) {
         debug_assert_eq!(fence.syncobj, self.timeline);
@@ -628,7 +685,12 @@ impl Queue {
 
     /// Frees the objects of finished commands. Points finish in order, so this stops at the first unfinished one.
     pub fn collect(&mut self) -> io::Result<()> {
-        let Some(&(last, _)) = self.in_flight.back() else { return Ok(()) };
+        let rings_busy = self.data_ring.1.oldest().is_some() || self.usc_ring.1.oldest().is_some();
+        let last = match self.in_flight.back() {
+            Some(&(last, _)) => last,
+            None if rings_busy => 0,
+            None => return Ok(()),
+        };
         let mut done = 0u64;
         let mut q = drm_syncobj_timeline_array {
             handles: &self.timeline as *const _ as u64,
@@ -640,6 +702,7 @@ impl Queue {
         while self.in_flight.front().is_some_and(|&(p, _)| p <= done.min(last)) {
             self.in_flight.pop_front();
         }
+        self.retire_rings(done);
         Ok(())
     }
 
@@ -649,6 +712,7 @@ impl Queue {
         let r = self.wait(last, self.timeout);
         if r.is_ok() {
             self.in_flight.clear();
+            self.retire_rings(last.point);
         }
         r
     }
@@ -918,22 +982,14 @@ impl LoadedModule {
     ) -> io::Result<Fence> {
         queue.collect()?;
         let k = self.kernel(kernel, dynamic_shared)?;
-        let mut keep = Vec::new();
-        let block_size = module::param_block_size(k);
-        let block_va = if block_size > 0 {
-            let b = vm.alloc_data(block_size)?;
-            let va = b.va;
-            keep.push(b);
-            va
-        } else {
-            0
-        };
-        let (halves, block) =
-            module::pack_params(k, params, threadgroups, self.globals_va(), block_va).map_err(|e| invalid(e.to_string()))?;
-        if let Some(b) = keep.first_mut() {
-            b.as_mut_slice()[..block.len()].copy_from_slice(&block);
+        let (mut halves, block) =
+            module::pack_params(k, params, threadgroups, self.globals_va(), 0).map_err(|e| invalid(e.to_string()))?;
+        if !block.is_empty() {
+            // the pointers in the uniforms depend on where the block lands
+            let va = queue.stage(RingKind::Data, &block, 16)?;
+            halves = module::pack_params(k, params, threadgroups, self.globals_va(), va).map_err(|e| invalid(e.to_string()))?.0;
         }
-        self.dispatch(vm, queue, g14x, k, &halves, keep, threadgroups, local, dynamic_shared, wait_for)
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
     }
 
     fn kernel(&self, kernel: &str, dynamic_shared: u32) -> io::Result<&module::KernelInfo> {
@@ -955,32 +1011,32 @@ impl LoadedModule {
         g14x: bool,
         k: &module::KernelInfo,
         halves: &[u16],
-        mut keep: Vec<Bo>,
+        keep: Vec<Bo>,
         threadgroups: [u32; 3],
         local: [u32; 3],
         dynamic_shared: u32,
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
-        let mut unif = vm.alloc_data((2 * halves.len()).max(4) as u64)?;
-        for (i, h) in halves.iter().enumerate() {
-            unif.as_mut_slice()[2 * i..2 * i + 2].copy_from_slice(&h.to_le_bytes());
+        let r = (|| {
+            let bytes: Vec<u8> = halves.iter().flat_map(|h| h.to_le_bytes()).collect();
+            let unif = if bytes.is_empty() { 0 } else { queue.stage(RingKind::Data, &bytes, 64)? };
+            let pipeline = Pipeline {
+                code: self.entries[&k.name],
+                gpr_halves: k.gpr_halves(),
+                uniforms: if halves.is_empty() { vec![] } else { vec![(0, halves.len() as u32, unif)] },
+                shared_bytes: k.threadgroup_bytes + dynamic_shared,
+            };
+            // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
+            let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
+            let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
+            let stream = cdm_dispatch((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
+            let cdm = queue.stage(RingKind::Data, &stream, 64)?;
+            queue.submit_compute(cdm, cdm + stream.len() as u64, wait_for)
+        })();
+        let fence = r.inspect_err(|_| queue.unstage())?;
+        if !keep.is_empty() {
+            queue.retire_after(fence, keep);
         }
-        let pipeline = Pipeline {
-            code: self.entries[&k.name],
-            gpr_halves: k.gpr_halves(),
-            uniforms: if halves.is_empty() { vec![] } else { vec![(0, halves.len() as u32, unif.va)] },
-            shared_bytes: k.threadgroup_bytes + dynamic_shared,
-        };
-        let words = pipeline.usc_words();
-        let mut pw = vm.alloc_usc(words.len() as u64)?;
-        pw.as_mut_slice()[..words.len()].copy_from_slice(&words);
-        let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-        let stream = cdm_dispatch((pw.va - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
-        let mut cdm = vm.alloc_data(stream.len() as u64)?;
-        cdm.as_mut_slice()[..stream.len()].copy_from_slice(&stream);
-        let fence = queue.submit_compute(cdm.va, cdm.va + stream.len() as u64, wait_for)?;
-        keep.extend([unif, pw, cdm]);
-        queue.retire_after(fence, keep);
         Ok(fence)
     }
 }
