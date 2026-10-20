@@ -327,10 +327,12 @@ fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
 fn s64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i64> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
-        match i64::from_str_radix(text, radix) {
-            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
-            Err(err) => Err((0, PtxError::from(err))),
-        }
+        let signed_text = if sign.is_some() {
+            Cow::Owned(format!("-{text}"))
+        } else {
+            Cow::Borrowed(text)
+        };
+        i64::from_str_radix(&signed_text, radix).map_err(|err| (0, PtxError::from(err)))
     }))
     .parse_next(stream)
 }
