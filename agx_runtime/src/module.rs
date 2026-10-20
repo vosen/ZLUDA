@@ -340,6 +340,48 @@ impl Module {
     }
 }
 
+/// Magic of a fat AGX object: one AGX object per chip, as packed by the LLVM fork's
+/// `mlir/utils/agx-kernels/agx-build-fatbin.py` for library kernels written once for every generation. Layout
+/// (little-endian): the magic, a `u32` entry count, a `u32` 0, then per entry 32 bytes of NUL-padded chip name (an
+/// LLVM AGX -mcpu) and the `u64` offset and size of its object.
+pub const FAT_MAGIC: &[u8; 8] = b"ZAGXFAT1";
+
+/// The size of the fat AGX object at `p` (from its entry table).
+///
+/// # Safety
+/// `p` must point at a fat AGX object (starting with [`FAT_MAGIC`]).
+pub unsafe fn fat_object_len(p: *const u8) -> usize {
+    let n = u32::from_le_bytes(std::slice::from_raw_parts(p.add(8), 4).try_into().unwrap()) as usize;
+    let table = std::slice::from_raw_parts(p, 16 + 48 * n);
+    (0..n)
+        .map(|i| {
+            let e = &table[16 + 48 * i + 32..16 + 48 * (i + 1)];
+            (u64::from_le_bytes(e[..8].try_into().unwrap()) + u64::from_le_bytes(e[8..].try_into().unwrap())) as usize
+        })
+        .max()
+        .unwrap_or(0)
+        .max(16 + 48 * n)
+}
+
+/// The object for `chip` in a fat AGX object.
+pub fn fat_object_entry<'a>(fat: &'a [u8], chip: &str) -> Result<&'a [u8], Error> {
+    if fat.len() < 16 || &fat[..8] != FAT_MAGIC {
+        return err("not a fat AGX object");
+    }
+    let n = u32::from_le_bytes(fat[8..12].try_into().unwrap()) as usize;
+    let mut chips = Vec::new();
+    for i in 0..n {
+        let e = fat.get(16 + 48 * i..16 + 48 * (i + 1)).ok_or_else(|| Error("truncated fat AGX object".into()))?;
+        let name = String::from_utf8_lossy(&e[..32]).trim_end_matches('\0').to_string();
+        let (off, size) = (u64::from_le_bytes(e[32..40].try_into().unwrap()), u64::from_le_bytes(e[40..48].try_into().unwrap()));
+        if name == chip {
+            return fat.get(off as usize..(off + size) as usize).ok_or_else(|| Error("truncated fat AGX object".into()));
+        }
+        chips.push(name);
+    }
+    err(format!("the fat AGX object has no code for {chip} (it has {})", chips.join(", ")))
+}
+
 /// The uniforms of a launch from the bytes of each source-level argument (`cuLaunchKernel`'s `kernelParams`), and
 /// the contents of the parameter block that holds the arguments passed by pointer. `param_block` is the GPU address
 /// the block will have; its size is `param_block_size(k)`.
@@ -494,6 +536,26 @@ mod tests {
         assert_eq!(k(82).max_threads_per_threadgroup(), 576);
         assert_eq!(k(128).max_threads_per_threadgroup(), 384);
         assert_eq!(k(4).simd_groups_per_core(), 96);
+    }
+
+    #[test]
+    fn picks_the_chip_of_a_fat_object() {
+        let mut fat = FAT_MAGIC.to_vec();
+        fat.extend(2u32.to_le_bytes());
+        fat.extend(0u32.to_le_bytes());
+        for (name, off, size) in [("agx-g13g", 112u64, 3u64), ("agx-g14c", 128, 2)] {
+            fat.extend(format!("{name:\0<32}").as_bytes());
+            fat.extend(off.to_le_bytes());
+            fat.extend(size.to_le_bytes());
+        }
+        fat.resize(112, 0);
+        fat.extend(b"abc");
+        fat.resize(128, 0);
+        fat.extend(b"xy");
+        assert_eq!(fat_object_entry(&fat, "agx-g14c").unwrap(), b"xy");
+        assert_eq!(fat_object_entry(&fat, "agx-g13g").unwrap(), b"abc");
+        assert!(fat_object_entry(&fat, "agx-g14g").unwrap_err().0.contains("agx-g13g, agx-g14c"));
+        assert_eq!(unsafe { fat_object_len(fat.as_ptr()) }, 130);
     }
 
     // tests/data/global-relocs.ll: a global array of addresses of other globals.

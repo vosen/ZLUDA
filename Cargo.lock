@@ -5154,6 +5154,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_blas_agx"
+version = "0.0.0"
+dependencies = [
+ "cuda_macros",
+ "cuda_types",
+ "libloading",
+]
+
+[[package]]
 name = "zluda_blaslt"
 version = "0.0.0"
 dependencies = [

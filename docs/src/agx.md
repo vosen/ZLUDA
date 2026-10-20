@@ -436,11 +436,39 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 * There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
   the first one that answers the Asahi parameter query.
 
+## cuBLAS (`zluda_blas_agx`)
+
+`libcublas` for zluda_agx. Its kernels are MLIR (`zluda_blas_agx/kernels/*.mlir`:
+standard dialects and `agx` operations, no chip names), compiled at build time
+for every G13/G14 chip by the LLVM fork's
+`mlir/utils/agx-kernels/agx-build-fatbin.py` into one fat AGX object
+(`ZAGXFAT1`). `cuModuleLoadData` picks the entry for the device's chip
+(`CUDA_ERROR_NO_BINARY_FOR_GPU` if there is none). The library calls the
+driver API of the process's `libcuda.so.1` (`ZLUDA_AGX_LIBCUDA` overrides
+it), as NVIDIA's does.
+
+* Handles, streams, pointer modes (host and device alpha / beta), math modes
+  (all compute in f32) and workspaces (unused).
+* `cublasSgemm`, `cublasSgemmStridedBatched`, and `cublasGemmEx` /
+  `cublasGemmStridedBatchedEx` with `CUDA_R_32F` matrices and an f32
+  computation. Without transposes, with m and n multiples of 64, k a multiple
+  of 8, even leading dimensions and 8-byte aligned matrices, the column-major
+  product runs on the row-major tile kernel `agx_sgemm_tile64` (A and B
+  swapped): 64 x 64 tiles per threadgroup of 2 x 2 SIMD-groups built on
+  `agx.mma_tile`. Everything else runs on `agx_sgemm_generic`, one thread
+  per element with arbitrary strides.
+* Both kernels are tested on the simulator for agx-g13g and agx-g14c
+  (`zluda_blas_agx/kernels/test_kernels.py`: tile sizes, all four transpose
+  combinations, `beta = 0` with NaN in C).
+
+Building needs `ZLUDA_LLVM_BUILD_DIR` (mlir-opt, mlir-translate and llc of
+the LLVM fork).
+
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and zluda_ml_agx, with libcuda / libnvidia-ml symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx, zluda_ml_agx and zluda_blas_agx, with libcuda / libnvidia-ml / libcublas symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -458,6 +486,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Not yet | per-thread scratch (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, unified memory APIs, libraries (cuBLAS, cuDNN, cuFFT, cuSPARSE: in progress as MLIR kernels) |
+| Libraries | cuBLAS: single precision GEMM (`zluda_blas_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond SGEMM, cuBLASLt, cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

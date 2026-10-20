@@ -539,6 +539,15 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
         let image: &[u8] = if magic == 0x466243b1 || magic == 0xba55ed50 {
             unpacked = ptx_in_fatbin(bytes)?;
             &unpacked[..unpacked.len() - 1]
+        } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
+            // a fat AGX object (library kernels): the object for this device's chip
+            let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
+            module::fat_object_entry(fat, &cpu).map_err(|e| {
+                if crate::log_enabled() {
+                    eprintln!("[zluda_agx] {}", e.0);
+                }
+                CUerror::NO_BINARY_FOR_GPU
+            })?
         } else if std::slice::from_raw_parts(bytes, 4) == b"\x7fELF" {
             let h = std::slice::from_raw_parts(bytes, 64);
             let shoff = u64::from_le_bytes(h[40..48].try_into().unwrap());
