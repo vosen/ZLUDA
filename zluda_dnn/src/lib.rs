@@ -84,6 +84,7 @@ dual_function_declarations! {
         cudnnGetConvolutionBackwardFilterAlgorithm_v7,
         cudnnGetConvolutionForwardAlgorithm_v7,
         cudnnGetErrorString,
+        cudnnGetProperty,
         cudnnGetVersion
     ],
     implemented_no_conversion <= [
@@ -110,7 +111,6 @@ dual_function_declarations! {
         cudnnGetConvolutionBackwardFilterWorkspaceSize,
         cudnnGetConvolutionForwardWorkspaceSize,
         cudnnGetFilterNdDescriptor,
-        cudnnGetProperty,
         cudnnGetStream,
         cudnnGetTensorNdDescriptor,
         cudnnRestoreDropoutDescriptor,
