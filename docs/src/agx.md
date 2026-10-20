@@ -397,6 +397,19 @@ cargo build -p zluda_agx
 ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 ```
 
+* Memory: the GPU shares system memory, and allocations are mapped on the CPU
+  at their GPU address when that range is free (it normally is: GPU data
+  addresses start above 64 GiB). So `cuMemAllocManaged` and `cuMemHostAlloc`
+  return one pointer for both sides (`cuMemHostGetDevicePointer` returns it
+  unchanged); if the range is taken, managed allocation fails with
+  `CUDA_ERROR_NOT_SUPPORTED` and host allocations fall back to ordinary
+  memory the GPU cannot address. The CPU must not touch managed memory while
+  kernels using it run (`CONCURRENT_MANAGED_ACCESS` is 0); prefetch and advice
+  are no-ops. `cuMemAllocPitch` aligns rows to 128 bytes; 2D copies and fills,
+  `cuMemGetAddressRange`, peer copies and stream-ordered allocation
+  (`cuMemAllocAsync`, which allocates at once, and `cuMemFreeAsync`, which
+  waits for all work) are supported. `cuMemHostRegister` is not: Asahi cannot
+  map existing user memory into the GPU.
 * Modules: `cuModuleLoadData` takes PTX text, a fat binary (its PTX for the
   newest architecture is used; SASS-only fat binaries cannot load) or an AGX
   object. PTX is compiled by `zoc` (found through `ZLUDA_AGX_ZOC`, next to the

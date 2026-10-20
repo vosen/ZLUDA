@@ -49,6 +49,10 @@ struct Driver {
     /// Graphs and their instantiations: both are operation lists.
     graphs: HashMap<usize, Vec<Op>>,
     execs: HashMap<usize, Vec<Op>>,
+    /// Host allocations the GPU can address (their pointer is their GPU address), with their cuMemHostAlloc flags.
+    host_allocs: HashMap<u64, c_uint>,
+    /// cuMemAllocManaged allocations.
+    managed: std::collections::HashSet<u64>,
 }
 
 fn stream_key(s: CUstream) -> usize {
@@ -322,6 +326,8 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
             capturing: HashMap::new(),
             graphs: HashMap::new(),
             execs: HashMap::new(),
+            host_allocs: HashMap::new(),
+            managed: Default::default(),
         });
     }
     Ok(())
@@ -403,6 +409,9 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
             A::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR => CC.0,
             A::CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR => CC.1,
             A::CU_DEVICE_ATTRIBUTE_INTEGRATED | A::CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING => 1,
+            // managed and mapped host memory are GPU allocations mapped at their GPU address
+            A::CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY | A::CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY => 1,
+            A::CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS | A::CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS => 0,
             A::CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS => 1,
             A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 1,
             A::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY => 65536,
@@ -1060,9 +1069,22 @@ pub(crate) unsafe fn cuMemsetD32Async(dst: CUdeviceptr, ui: c_uint, n: usize, s:
     cuMemsetD32_v2(dst, ui, n)
 }
 
-/// Page-locked host memory is ordinary host memory: copies are CPU copies anyway. The GPU cannot address it
-/// (cuMemHostGetDevicePointer fails).
+/// Page-locked host memory is a GPU allocation mapped at its GPU address, so the host pointer is also the device
+/// pointer (the CPU and GPU share memory). If that CPU range is taken, it is ordinary host memory that the GPU cannot
+/// address (cuMemHostGetDevicePointer fails); copies work either way.
 pub(crate) unsafe fn cuMemAllocHost_v2(pp: *mut *mut c_void, bytes: usize) -> CUresult {
+    cuMemHostAlloc(pp, bytes, 0)
+}
+
+pub(crate) unsafe fn cuMemHostAlloc(pp: *mut *mut c_void, bytes: usize, flags: c_uint) -> CUresult {
+    let unified = with(|d| {
+        Ok(d.ctx.mem_alloc_unified(bytes as u64).ok().inspect(|&va| {
+            d.host_allocs.insert(va, flags);
+        }))
+    })?;
+    if let Some(va) = unified {
+        return out(pp, va as *mut c_void);
+    }
     let mut p = std::ptr::null_mut();
     if libc_posix_memalign(&mut p, 4096, bytes.max(1)) != 0 {
         return Err(CUerror::OUT_OF_MEMORY);
@@ -1070,13 +1092,205 @@ pub(crate) unsafe fn cuMemAllocHost_v2(pp: *mut *mut c_void, bytes: usize) -> CU
     out(pp, p)
 }
 
-pub(crate) unsafe fn cuMemHostAlloc(pp: *mut *mut c_void, bytes: usize, _flags: c_uint) -> CUresult {
-    cuMemAllocHost_v2(pp, bytes)
+pub(crate) unsafe fn cuMemFreeHost(p: *mut c_void) -> CUresult {
+    let gpu = with(|d| {
+        if d.host_allocs.remove(&(p as u64)).is_none() {
+            return Ok(false);
+        }
+        d.sync_all()?;
+        d.ctx.mem_free(p as u64).map_err(from_io)?;
+        Ok(true)
+    })?;
+    if !gpu {
+        libc_free(p);
+    }
+    Ok(())
 }
 
-pub(crate) unsafe fn cuMemFreeHost(p: *mut c_void) -> CUresult {
-    libc_free(p);
+pub(crate) unsafe fn cuMemHostGetDevicePointer_v2(pdptr: *mut CUdeviceptr, p: *mut c_void, flags: c_uint) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let ok = with(|d| Ok(d.ctx.is_unified(p as u64)))?;
+    if !ok {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    out(pdptr, CUdeviceptr_v2(p))
+}
+
+pub(crate) unsafe fn cuMemHostGetFlags(pflags: *mut c_uint, p: *mut c_void) -> CUresult {
+    let f = with(|d| d.host_allocs.get(&(p as u64)).copied().ok_or(CUerror::INVALID_VALUE))?;
+    out(pflags, f)
+}
+
+/// Managed memory is a GPU allocation mapped at its GPU address. The CPU must not touch it while kernels that use
+/// it run (CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS is 0, as on GPUs before Pascal); synchronize first.
+pub(crate) unsafe fn cuMemAllocManaged(dptr: *mut CUdeviceptr, bytesize: usize, _flags: c_uint) -> CUresult {
+    let va = with(|d| {
+        let va = d.ctx.mem_alloc_unified(bytesize as u64).map_err(|e| {
+            if e.kind() == io::ErrorKind::Unsupported { CUerror::NOT_SUPPORTED } else { from_io(e) }
+        })?;
+        d.managed.insert(va);
+        Ok(va)
+    })?;
+    out(dptr, CUdeviceptr_v2(va as *mut c_void))
+}
+
+pub(crate) unsafe fn cuMemGetAddressRange_v2(pbase: *mut CUdeviceptr, psize: *mut usize, dptr: CUdeviceptr) -> CUresult {
+    let (base, size) = with(|d| d.ctx.address_range(dptr.0 as u64).ok_or(CUerror::NOT_FOUND))?;
+    if !pbase.is_null() {
+        out(pbase, CUdeviceptr_v2(base as *mut c_void))?;
+    }
+    if !psize.is_null() {
+        out(psize, size as usize)?;
+    }
     Ok(())
+}
+
+/// Rows are aligned to 128 bytes (the texture row alignment G13/G14 drivers use).
+pub(crate) unsafe fn cuMemAllocPitch_v2(
+    dptr: *mut CUdeviceptr,
+    pitch: *mut usize,
+    width: usize,
+    height: usize,
+    element: c_uint,
+) -> CUresult {
+    if !matches!(element, 4 | 8 | 16) || width == 0 || height == 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let p = width.next_multiple_of(128);
+    cuMemAlloc_v2(dptr, p * height)?;
+    out(pitch, p)
+}
+
+/// The CPU address of one side of a 2D copy, after checking that its whole extent is in one allocation.
+unsafe fn copy_side(
+    d: &mut Driver,
+    kind: CUmemorytype,
+    host: *const c_void,
+    dev: CUdeviceptr,
+    x: usize,
+    y: usize,
+    pitch: usize,
+    width: usize,
+    height: usize,
+) -> Result<*mut u8, CUerror> {
+    use CUmemorytype_enum as T;
+    let device = match kind {
+        T::CU_MEMORYTYPE_HOST => false,
+        T::CU_MEMORYTYPE_DEVICE => true,
+        // a unified pointer is in an allocation or is host memory
+        T::CU_MEMORYTYPE_UNIFIED => d.ctx.address_range(dev.0 as u64).is_some(),
+        _ => return Err(CUerror::NOT_SUPPORTED),
+    };
+    let start = y * pitch + x;
+    let extent = if height == 0 { 0 } else { (height - 1) * pitch + width };
+    if !device {
+        let base = if kind == T::CU_MEMORYTYPE_UNIFIED { dev.0 as *const u8 } else { host as *const u8 };
+        return Ok(base.add(start) as *mut u8);
+    }
+    d.ctx.cpu_ptr(dev.0 as u64 + start as u64, extent as u64).map_err(|_| CUerror::INVALID_VALUE)
+}
+
+unsafe fn memcpy_2d(c: *const CUDA_MEMCPY2D) -> CUresult {
+    let c = c.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    let (w, h) = (c.WidthInBytes, c.Height);
+    if h > 1 && (c.srcPitch < w || c.dstPitch < w) {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        d.sync_all()?;
+        let src = copy_side(d, c.srcMemoryType, c.srcHost, c.srcDevice, c.srcXInBytes, c.srcY, c.srcPitch, w, h)?;
+        let dst = copy_side(d, c.dstMemoryType, c.dstHost, c.dstDevice, c.dstXInBytes, c.dstY, c.dstPitch, w, h)?;
+        for row in 0..h {
+            std::ptr::copy(src.add(row * c.srcPitch), dst.add(row * c.dstPitch), w);
+        }
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuMemcpy2D_v2(c: *const CUDA_MEMCPY2D) -> CUresult {
+    memcpy_2d(c)
+}
+
+pub(crate) unsafe fn cuMemcpy2DUnaligned_v2(c: *const CUDA_MEMCPY2D) -> CUresult {
+    memcpy_2d(c)
+}
+
+// Copies are CPU copies after the earlier work, so the asynchronous forms are synchronous.
+pub(crate) unsafe fn cuMemcpy2DAsync_v2(c: *const CUDA_MEMCPY2D, _s: CUstream) -> CUresult {
+    memcpy_2d(c)
+}
+
+unsafe fn memset_2d(dst: CUdeviceptr, pitch: usize, pattern: &[u8], width: usize, height: usize) -> CUresult {
+    let row = width * pattern.len();
+    if height > 1 && pitch < row {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        for y in 0..height {
+            d.ctx.memset(dst.0 as u64 + (y * pitch) as u64, pattern, width as u64).map_err(from_io)?;
+        }
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuMemsetD2D8_v2(dst: CUdeviceptr, pitch: usize, v: u8, w: usize, h: usize) -> CUresult {
+    memset_2d(dst, pitch, &[v], w, h)
+}
+
+pub(crate) unsafe fn cuMemsetD2D16_v2(dst: CUdeviceptr, pitch: usize, v: u16, w: usize, h: usize) -> CUresult {
+    memset_2d(dst, pitch, &v.to_le_bytes(), w, h)
+}
+
+pub(crate) unsafe fn cuMemsetD2D32_v2(dst: CUdeviceptr, pitch: usize, v: c_uint, w: usize, h: usize) -> CUresult {
+    memset_2d(dst, pitch, &v.to_le_bytes(), w, h)
+}
+
+pub(crate) unsafe fn cuMemsetD2D8Async(dst: CUdeviceptr, pitch: usize, v: u8, w: usize, h: usize, _s: CUstream) -> CUresult {
+    memset_2d(dst, pitch, &[v], w, h)
+}
+
+pub(crate) unsafe fn cuMemsetD2D16Async(dst: CUdeviceptr, pitch: usize, v: u16, w: usize, h: usize, _s: CUstream) -> CUresult {
+    memset_2d(dst, pitch, &v.to_le_bytes(), w, h)
+}
+
+pub(crate) unsafe fn cuMemsetD2D32Async(dst: CUdeviceptr, pitch: usize, v: c_uint, w: usize, h: usize, _s: CUstream) -> CUresult {
+    memset_2d(dst, pitch, &v.to_le_bytes(), w, h)
+}
+
+/// Stream-ordered allocation: the memory is allocated at once; a free waits for all work first.
+pub(crate) unsafe fn cuMemAllocAsync(dptr: *mut CUdeviceptr, bytesize: usize, _s: CUstream) -> CUresult {
+    cuMemAlloc_v2(dptr, bytesize)
+}
+
+pub(crate) unsafe fn cuMemFreeAsync(dptr: CUdeviceptr, _s: CUstream) -> CUresult {
+    cuMemFree_v2(dptr)
+}
+
+/// The CPU and GPU share memory: there is nothing to migrate.
+pub(crate) unsafe fn cuMemPrefetchAsync(p: CUdeviceptr, count: usize, _dev: CUdevice, _s: CUstream) -> CUresult {
+    with(|d| if d.managed.contains(&(p.0 as u64)) || d.ctx.address_range(p.0 as u64).is_some() || count == 0 { Ok(()) } else { Err(CUerror::INVALID_VALUE) })
+}
+
+pub(crate) unsafe fn cuMemAdvise(_p: CUdeviceptr, _count: usize, _advice: CUmem_advise, _dev: CUdevice) -> CUresult {
+    Ok(())
+}
+
+// One device: peer copies are device copies.
+pub(crate) unsafe fn cuMemcpyPeer(dst: CUdeviceptr, _dc: CUcontext, src: CUdeviceptr, _sc: CUcontext, n: usize) -> CUresult {
+    cuMemcpyDtoD_v2(dst, src, n)
+}
+
+pub(crate) unsafe fn cuMemcpyPeerAsync(
+    dst: CUdeviceptr,
+    _dc: CUcontext,
+    src: CUdeviceptr,
+    _sc: CUcontext,
+    n: usize,
+    s: CUstream,
+) -> CUresult {
+    cuMemcpyDtoDAsync_v2(dst, src, n, s)
 }
 
 extern "C" {
@@ -1087,15 +1301,26 @@ extern "C" {
 }
 
 pub(crate) unsafe fn cuPointerGetAttribute(data: *mut c_void, attribute: CUpointer_attribute, ptr: CUdeviceptr) -> CUresult {
-    let device = with(|d| Ok(d.ctx.address_range(ptr.0 as u64).is_some()))?;
+    let (device, host, managed, unified) = with(|d| {
+        let base = d.ctx.address_range(ptr.0 as u64).map(|r| r.0);
+        Ok((
+            base.is_some(),
+            base.is_some_and(|b| d.host_allocs.contains_key(&b)),
+            base.is_some_and(|b| d.managed.contains(&b)),
+            d.ctx.is_unified(ptr.0 as u64),
+        ))
+    })?;
     use CUpointer_attribute_enum as P;
     match attribute {
         P::CU_POINTER_ATTRIBUTE_MEMORY_TYPE => {
             if !device {
                 return Err(CUerror::INVALID_VALUE);
             }
-            out(data as *mut CUmemorytype, CUmemorytype_enum::CU_MEMORYTYPE_DEVICE)
+            let t = if host { CUmemorytype_enum::CU_MEMORYTYPE_HOST } else { CUmemorytype_enum::CU_MEMORYTYPE_DEVICE };
+            out(data as *mut CUmemorytype, t)
         }
+        P::CU_POINTER_ATTRIBUTE_IS_MANAGED if device => out(data as *mut c_uint, managed as c_uint),
+        P::CU_POINTER_ATTRIBUTE_HOST_POINTER if unified => out(data as *mut *mut c_void, ptr.0),
         P::CU_POINTER_ATTRIBUTE_DEVICE_POINTER if device => out(data as *mut CUdeviceptr, ptr),
         P::CU_POINTER_ATTRIBUTE_CONTEXT if device => out(data as *mut CUcontext, CUcontext(CTX as *mut _)),
         _ => Err(CUerror::INVALID_VALUE),

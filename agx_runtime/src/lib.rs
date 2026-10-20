@@ -208,6 +208,11 @@ pub struct Bo {
 }
 
 impl Bo {
+    /// Whether the CPU mapping is at the GPU address, so that the GPU address is also a valid CPU pointer.
+    pub fn unified(&self) -> bool {
+        self.va != 0 && self.map as u64 == self.va
+    }
+
     pub fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.map, self.size as usize) }
     }
@@ -293,16 +298,27 @@ impl Vm {
         let mut mo = drm_asahi_gem_mmap_offset { handle: gc.handle, flags: 0, offset: 0 };
         let mut bo = Bo { dev: self.dev.clone(), handle: gc.handle, size, va: 0, map: std::ptr::null_mut(), binding: None };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET as u64, &mut mo, "gem-mmap-offset")?;
-        let map = unsafe {
+        // Bound objects are mapped at their GPU address when that CPU range is free, so that one pointer works on
+        // both sides (unified memory: cuMemAllocManaged, GPU-visible host allocations).
+        let mmap = |at: u64, flags| unsafe {
             libc::mmap(
-                std::ptr::null_mut(),
+                at as *mut libc::c_void,
                 size as usize,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_SHARED,
+                libc::MAP_SHARED | flags,
                 self.dev.fd.as_raw_fd(),
                 mo.offset as libc::off_t,
             )
         };
+        let mut map = if va != 0 { mmap(va, libc::MAP_FIXED_NOREPLACE) } else { libc::MAP_FAILED };
+        if map != libc::MAP_FAILED && map as u64 != va {
+            // a kernel without MAP_FIXED_NOREPLACE takes the address as a hint only
+            unsafe { libc::munmap(map, size as usize) };
+            map = libc::MAP_FAILED;
+        }
+        if map == libc::MAP_FAILED {
+            map = mmap(0, 0);
+        }
         if map == libc::MAP_FAILED {
             return Err(stage_error("mmap", io::Error::last_os_error()));
         }

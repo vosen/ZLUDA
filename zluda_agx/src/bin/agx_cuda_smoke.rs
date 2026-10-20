@@ -1,8 +1,8 @@
 //! `agx_cuda_smoke [vectoradd.o]`: runs vectorAdd through the CUDA driver API of zluda_agx on the GPU, the way a
 //! CUDA application would (cuInit ... cuModuleLoadData, cuLaunchKernel, cuMemcpyDtoH, events), and checks the
-//! result. Without an argument the PTX is compiled by zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH); with
-//! one, that AGX object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Prints one JSON
-//! line.
+//! result; then replays it as a CUDA graph, runs it on managed and mapped host memory, and does a 2D copy. Without
+//! an argument the PTX is compiled by zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH); with one, that AGX
+//! object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Prints one JSON line.
 
 use cuda_types::cuda::*;
 use nvcuda_agx::*;
@@ -86,8 +86,63 @@ fn main() {
             check("cuMemcpyDtoH", cuMemcpyDtoH_v2(c.as_mut_ptr() as *mut c_void, dc, bytes));
             graph_wrong += (0..n as usize).filter(|&i| c[i] != a[i] + b[i]).count();
         }
+
+        // Unified memory: managed A and B written by the CPU, C in mapped host memory read by the CPU directly.
+        let (mut ma, mut mb) = (CUdeviceptr_v2(null_mut()), CUdeviceptr_v2(null_mut()));
+        let managed = cuMemAllocManaged(&mut ma, bytes, 1).is_ok() && cuMemAllocManaged(&mut mb, bytes, 1).is_ok();
+        let mut hc: *mut c_void = null_mut();
+        check("cuMemHostAlloc", cuMemHostAlloc(&mut hc, bytes, 2));
+        let mut dhc = CUdeviceptr_v2(null_mut());
+        let mapped = cuMemHostGetDevicePointer_v2(&mut dhc, hc, 0).is_ok();
+        let mut unified_wrong = -1i64;
+        if managed && mapped {
+            std::ptr::copy_nonoverlapping(a.as_ptr(), ma.0 as *mut f32, n as usize);
+            std::ptr::copy_nonoverlapping(b.as_ptr(), mb.0 as *mut f32, n as usize);
+            let mut up: [*mut c_void; 4] =
+                [&mut ma as *mut _ as *mut c_void, &mut mb as *mut _ as *mut c_void, &mut dhc as *mut _ as *mut c_void, &n as *const i32 as *mut c_void];
+            check("cuLaunchKernel", cuLaunchKernel(f, grid, 1, 1, block, 1, 1, 0, stream, up.as_mut_ptr(), null_mut()));
+            check("cuCtxSynchronize", cuCtxSynchronize());
+            let hcv = std::slice::from_raw_parts(hc as *const f32, n as usize);
+            unified_wrong = (0..n as usize).filter(|&i| hcv[i] != a[i] + b[i]).count() as i64;
+        }
+
+        // A 2D copy of a 7 x 5 window of C (as u32) into a pitched allocation and back.
+        let (w, h) = (7usize, 5usize);
+        let (mut pd, mut pitch) = (CUdeviceptr_v2(null_mut()), 0usize);
+        check("cuMemAllocPitch", cuMemAllocPitch_v2(&mut pd, &mut pitch, w * 4, h, 4));
+        let src: Vec<u32> = (0..64 * 8).collect();
+        let mut cp: CUDA_MEMCPY2D = std::mem::zeroed();
+        cp.srcMemoryType = CUmemorytype_enum::CU_MEMORYTYPE_HOST;
+        cp.srcHost = src.as_ptr() as *const c_void;
+        cp.srcPitch = 64 * 4;
+        cp.srcXInBytes = 3 * 4;
+        cp.srcY = 2;
+        cp.dstMemoryType = CUmemorytype_enum::CU_MEMORYTYPE_DEVICE;
+        cp.dstDevice = pd;
+        cp.dstPitch = pitch;
+        cp.WidthInBytes = w * 4;
+        cp.Height = h;
+        check("cuMemcpy2D", cuMemcpy2D_v2(&cp));
+        let mut back = vec![0u32; w * h];
+        let mut cb: CUDA_MEMCPY2D = std::mem::zeroed();
+        cb.srcMemoryType = CUmemorytype_enum::CU_MEMORYTYPE_DEVICE;
+        cb.srcDevice = pd;
+        cb.srcPitch = pitch;
+        cb.dstMemoryType = CUmemorytype_enum::CU_MEMORYTYPE_HOST;
+        cb.dstHost = back.as_mut_ptr() as *mut c_void;
+        cb.dstPitch = w * 4;
+        cb.WidthInBytes = w * 4;
+        cb.Height = h;
+        check("cuMemcpy2D", cuMemcpy2D_v2(&cb));
+        let copy2d_wrong = (0..w * h).filter(|&i| back[i] != src[(2 + i / w) * 64 + 3 + i % w]).count();
+
         let name = CStr::from_ptr(name.as_ptr()).to_string_lossy();
-        println!("{{\"device\":{name:?},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"kernel_ms\":{ms}}}");
-        std::process::exit(if wrong == 0 && graph_wrong == 0 { 0 } else { 2 });
+        println!(
+            "{{\"device\":{name:?},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"unified\":{},\"unified_wrong\":{unified_wrong},\"copy2d_wrong\":{copy2d_wrong},\"kernel_ms\":{ms}}}",
+            managed && mapped
+        );
+        // unified memory needs the CPU range of the GPU addresses to be free; its absence is reported, not a failure
+        let ok = wrong == 0 && graph_wrong == 0 && unified_wrong <= 0 && copy2d_wrong == 0;
+        std::process::exit(if ok { 0 } else { 2 });
     }
 }

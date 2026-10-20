@@ -110,6 +110,33 @@ impl Context {
         Ok(())
     }
 
+    /// cuMemAllocManaged: an allocation whose GPU address is also its CPU address. Fails if that CPU range is taken.
+    pub fn mem_alloc_unified(&mut self, size: u64) -> io::Result<u64> {
+        let bo = self.vm.alloc_data(size)?;
+        if !bo.unified() {
+            return Err(io::Error::new(io::ErrorKind::Unsupported, "the CPU range of the GPU address is in use"));
+        }
+        let va = bo.va;
+        self.allocs.insert(va, (bo, size.max(1)));
+        Ok(va)
+    }
+
+    /// Whether `va` is in an allocation that the CPU can use at the same address.
+    pub fn is_unified(&self, va: u64) -> bool {
+        find(&self.allocs, va, 0, |a| a.1).is_some_and(|s| self.allocs[&s].0.unified())
+    }
+
+    /// The CPU address of `len` bytes of device memory at `va`, for copies the caller does itself (2D copies).
+    /// Valid until the allocation is freed.
+    pub fn cpu_ptr(&mut self, va: u64, len: u64) -> io::Result<*mut u8> {
+        Ok(self.bytes_mut(va, len)?.as_mut_ptr())
+    }
+
+    /// Waits for the default stream (before the CPU touches memory the GPU may use).
+    pub fn synchronize(&mut self) -> io::Result<()> {
+        self.stream.synchronize()
+    }
+
     /// The allocation's base and size for a pointer into it (cuMemGetAddressRange).
     pub fn address_range(&self, va: u64) -> Option<(u64, u64)> {
         let start = find(&self.allocs, va, 0, |a| a.1)?;
