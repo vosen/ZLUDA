@@ -1511,7 +1511,7 @@ fn generate_asahi(output: &PathBuf, path: &[&str]) {
         .header(header.to_str().unwrap())
         .allowlist_type("^drm_asahi.*")
         // the generic DRM objects a compute runtime uses (their ioctl numbers are function-like macros)
-        .allowlist_type("^drm_syncobj_(create|destroy|wait|array)$")
+        .allowlist_type("^drm_syncobj_(create|destroy|wait|array|timeline_wait|timeline_array)$")
         .allowlist_type("^drm_gem_close$")
         .allowlist_var("^DRM_ASAHI.*")
         .allowlist_var("^DRM_IOCTL_ASAHI.*")

@@ -92,8 +92,10 @@ const IOC_READWRITE: u64 = 3;
 const DRM_IOCTL_GEM_CLOSE: u64 = drm_ioc(IOC_WRITE, 0x09, std::mem::size_of::<drm_gem_close>());
 const DRM_IOCTL_SYNCOBJ_CREATE: u64 = drm_ioc(IOC_READWRITE, 0xbf, std::mem::size_of::<drm_syncobj_create>());
 const DRM_IOCTL_SYNCOBJ_DESTROY: u64 = drm_ioc(IOC_READWRITE, 0xc0, std::mem::size_of::<drm_syncobj_destroy>());
-const DRM_IOCTL_SYNCOBJ_WAIT: u64 = drm_ioc(IOC_READWRITE, 0xc3, std::mem::size_of::<drm_syncobj_wait>());
-const DRM_IOCTL_SYNCOBJ_RESET: u64 = drm_ioc(IOC_READWRITE, 0xc4, std::mem::size_of::<drm_syncobj_array>());
+const DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT: u64 =
+    drm_ioc(IOC_READWRITE, 0xca, std::mem::size_of::<drm_syncobj_timeline_wait>());
+const DRM_IOCTL_SYNCOBJ_QUERY: u64 = drm_ioc(IOC_READWRITE, 0xcb, std::mem::size_of::<drm_syncobj_timeline_array>());
+const DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT: u32 = 1 << 1;
 
 fn stage_error(stage: &str, e: io::Error) -> io::Error {
     io::Error::new(e.kind(), error::StageError { stage: stage.to_owned(), source: e })
@@ -105,6 +107,7 @@ struct drm_syncobj_handle {
     flags: u32,
     fd: i32,
     pad: u32,
+    point: u64,
 }
 const DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE: u32 = 1;
 const DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0xc1, std::mem::size_of::<drm_syncobj_handle>());
@@ -452,14 +455,35 @@ pub struct Timing {
     pub host: Duration,
 }
 
-/// A compute queue with one out-syncobj and a timestamp object.
+/// Number of commands whose timestamps a queue keeps.
+pub const TIMESTAMP_SLOTS: u64 = PAGE / 16;
+
+/// A point on a queue's timeline: signalled when the command submitted with it and every earlier command of the
+/// queue have finished. CUDA events and stream waits are built on these.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fence {
+    pub syncobj: u32,
+    pub point: u64,
+}
+
+/// An in-order compute queue (a CUDA stream): commands run in submission order (`cdm_barrier = 0`) and signal
+/// increasing points of one timeline syncobj.
 pub struct Queue {
     dev: Rc<DeviceInner>,
     pub id: u32,
-    syncobj: u32,
+    timeline: u32,
+    /// The last point submitted.
+    submitted: u64,
     ts: Bo,
     ts_handle: u32,
     pub timeout: Duration,
+}
+
+fn monotonic_deadline(timeout: Duration) -> i64 {
+    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+    let t = now.tv_sec as i64 * 1_000_000_000 + now.tv_nsec as i64;
+    t.saturating_add(timeout.as_nanos().min(i64::MAX as u128) as i64)
 }
 
 impl Queue {
@@ -489,16 +513,26 @@ impl Queue {
         Ok(Queue {
             dev: vm.dev.clone(),
             id: qc.queue_id,
-            syncobj: sc.handle,
+            timeline: sc.handle,
+            submitted: 0,
             ts,
             ts_handle: bind.object_handle,
             timeout: Duration::from_secs(3),
         })
     }
 
-    /// Submits one compute command running the CDM stream at `[base, end)` and waits for it.
-    pub fn run_compute(&mut self, cdm_base: u64, cdm_end: u64) -> io::Result<Timing> {
-        self.ts.as_mut_slice()[..16].fill(0);
+    /// The fence of the last submitted command (point 0, always signalled, before the first).
+    pub fn last(&self) -> Fence {
+        Fence { syncobj: self.timeline, point: self.submitted }
+    }
+
+    /// Submits one compute command running the CDM stream at `[base, end)` after `wait_for` (fences of other
+    /// queues) and the earlier commands of this queue. Does not wait. Its timestamps stay readable with `timing`
+    /// until `TIMESTAMP_SLOTS` more commands are submitted.
+    pub fn submit_compute(&mut self, cdm_base: u64, cdm_end: u64, wait_for: &[Fence]) -> io::Result<Fence> {
+        let point = self.submitted + 1;
+        let slot = (point % TIMESTAMP_SLOTS) as u32 * 16;
+        self.ts.as_mut_slice()[slot as usize..slot as usize + 16].fill(0);
         #[repr(C)]
         struct Cmd {
             h: drm_asahi_cmd_header,
@@ -511,49 +545,94 @@ impl Queue {
         cmd.h.cdm_barrier = 0;
         cmd.c.cdm_ctrl_stream_base = cdm_base;
         cmd.c.cdm_ctrl_stream_end = cdm_end;
-        cmd.c.ts.start = drm_asahi_timestamp { handle: self.ts_handle, offset: 0 };
-        cmd.c.ts.end = drm_asahi_timestamp { handle: self.ts_handle, offset: 8 };
-        let out_sync = drm_asahi_sync { sync_type: DRM_ASAHI_SYNC_SYNCOBJ as u32, handle: self.syncobj, timeline_value: 0 };
+        cmd.c.ts.start = drm_asahi_timestamp { handle: self.ts_handle, offset: slot };
+        cmd.c.ts.end = drm_asahi_timestamp { handle: self.ts_handle, offset: slot + 8 };
+        let sync = |f: &Fence| drm_asahi_sync {
+            sync_type: DRM_ASAHI_SYNC_TIMELINE_SYNCOBJ as u32,
+            handle: f.syncobj,
+            timeline_value: f.point,
+        };
+        let mut syncs: Vec<drm_asahi_sync> = wait_for.iter().filter(|f| f.point != 0).map(sync).collect();
+        let in_count = syncs.len() as u32;
+        let fence = Fence { syncobj: self.timeline, point };
+        syncs.push(sync(&fence));
         let mut sub = drm_asahi_submit {
-            syncs: &out_sync as *const _ as u64,
+            syncs: syncs.as_ptr() as u64,
             cmdbuf: &cmd as *const _ as u64,
             flags: 0,
             queue_id: self.id,
-            in_sync_count: 0,
+            in_sync_count: in_count,
             out_sync_count: 1,
             cmdbuf_size: std::mem::size_of::<Cmd>() as u32,
             pad: 0,
         };
-        let h0 = Instant::now();
         self.dev.ioctl(DRM_IOCTL_ASAHI_SUBMIT as u64, &mut sub, "submit")?;
-        let mut now: libc::timespec = unsafe { std::mem::zeroed() };
-        unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
-        let deadline = now.tv_sec as i64 * 1_000_000_000 + now.tv_nsec as i64 + self.timeout.as_nanos() as i64;
-        let mut wait: drm_syncobj_wait = unsafe { std::mem::zeroed() };
-        wait.handles = &self.syncobj as *const _ as u64;
+        self.submitted = point;
+        Ok(fence)
+    }
+
+    /// Waits up to `timeout` for `fence`, then fails if the kernel failed its command.
+    pub fn wait(&self, fence: Fence, timeout: Duration) -> io::Result<()> {
+        if fence.point == 0 {
+            return Ok(());
+        }
+        let mut wait: drm_syncobj_timeline_wait = unsafe { std::mem::zeroed() };
+        wait.handles = &fence.syncobj as *const _ as u64;
+        wait.points = &fence.point as *const _ as u64;
         wait.count_handles = 1;
-        wait.timeout_nsec = deadline;
-        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_WAIT, &mut wait, "syncobj-wait")?;
-        let host = h0.elapsed();
-        let status = self.fence_status()?;
-        let mut reset = drm_syncobj_array { handles: &self.syncobj as *const _ as u64, count_handles: 1, pad: 0 };
-        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_RESET, &mut reset, "syncobj-reset")?;
+        wait.timeout_nsec = monotonic_deadline(timeout);
+        // Wait for the fence to exist as well, so a point another thread has not submitted yet is not an error.
+        wait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
+        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT, &mut wait, "syncobj-wait")?;
+        let status = self.fence_status(fence)?;
         if status < 0 {
             return Err(io::Error::other(error::GpuError { fence_status: status }));
         }
-        let t = self.ts.as_slice();
-        Ok(Timing {
-            start: u64::from_le_bytes(t[0..8].try_into().unwrap()),
-            end: u64::from_le_bytes(t[8..16].try_into().unwrap()),
-            host,
-        })
+        Ok(())
     }
-}
 
-impl Queue {
-    /// The status of the out-fence: 1 when signalled, negative errno when the kernel failed the job.
-    fn fence_status(&self) -> io::Result<i32> {
-        let mut h = drm_syncobj_handle { handle: self.syncobj, flags: DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE, fd: -1, pad: 0 };
+    /// Whether `fence` has signalled, without waiting (cuEventQuery / cuStreamQuery).
+    pub fn is_done(&self, fence: Fence) -> io::Result<bool> {
+        let mut point = 0u64;
+        let mut q = drm_syncobj_timeline_array {
+            handles: &fence.syncobj as *const _ as u64,
+            points: &mut point as *mut _ as u64,
+            count_handles: 1,
+            flags: 0,
+        };
+        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_QUERY, &mut q, "syncobj-query")?;
+        Ok(point >= fence.point)
+    }
+
+    /// The firmware timestamps of a finished command, if its slot was not reused.
+    pub fn timing(&self, fence: Fence) -> Option<(u64, u64)> {
+        if fence.syncobj != self.timeline || fence.point == 0 || self.submitted - fence.point >= TIMESTAMP_SLOTS {
+            return None;
+        }
+        let slot = (fence.point % TIMESTAMP_SLOTS) as usize * 16;
+        let t = &self.ts.as_slice()[slot..slot + 16];
+        Some((u64::from_le_bytes(t[0..8].try_into().unwrap()), u64::from_le_bytes(t[8..16].try_into().unwrap())))
+    }
+
+    /// Submits one compute command and waits for it.
+    pub fn run_compute(&mut self, cdm_base: u64, cdm_end: u64) -> io::Result<Timing> {
+        let h0 = Instant::now();
+        let fence = self.submit_compute(cdm_base, cdm_end, &[])?;
+        self.wait(fence, self.timeout)?;
+        let host = h0.elapsed();
+        let (start, end) = self.timing(fence).unwrap();
+        Ok(Timing { start, end, host })
+    }
+
+    /// The status of a fence: 1 when signalled, negative errno when the kernel failed the command.
+    fn fence_status(&self, fence: Fence) -> io::Result<i32> {
+        let mut h = drm_syncobj_handle {
+            handle: fence.syncobj,
+            flags: DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE,
+            fd: -1,
+            pad: 0,
+            point: fence.point,
+        };
         self.dev.ioctl(DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &mut h, "syncobj-export")?;
         let fd = unsafe { OwnedFd::from_raw_fd(h.fd) };
         let mut info: sync_file_info = unsafe { std::mem::zeroed() };
@@ -568,7 +647,7 @@ impl Drop for Queue {
     fn drop(&mut self) {
         let mut qd = drm_asahi_queue_destroy { queue_id: self.id, pad: 0 };
         let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_QUEUE_DESTROY as u64, &mut qd, "queue-destroy");
-        let mut sd = drm_syncobj_destroy { handle: self.syncobj, pad: 0 };
+        let mut sd = drm_syncobj_destroy { handle: self.timeline, pad: 0 };
         let _ = self.dev.ioctl(DRM_IOCTL_SYNCOBJ_DESTROY, &mut sd, "syncobj-destroy");
     }
 }
@@ -651,7 +730,10 @@ mod tests {
     fn generic_drm_ioctl_numbers() {
         assert_eq!(DRM_IOCTL_GEM_CLOSE, 0x4008_6409);
         assert_eq!(DRM_IOCTL_SYNCOBJ_CREATE, 0xc008_64bf);
-        assert_eq!(DRM_IOCTL_SYNCOBJ_RESET, 0xc010_64c4);
+        assert_eq!(DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, 0xc018_64c1);
+        assert_eq!(DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT, 0xc030_64ca);
+        assert_eq!(DRM_IOCTL_SYNCOBJ_QUERY, 0xc018_64cb);
+        assert_eq!(SYNC_IOC_FILE_INFO, 0xc038_3e04);
     }
 }
 

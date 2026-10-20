@@ -119,6 +119,56 @@ const _: () = {
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_timeline_wait {
+    pub handles: __u64,
+    pub points: __u64,
+    pub timeout_nsec: __s64,
+    pub count_handles: __u32,
+    pub flags: __u32,
+    pub first_signaled: __u32,
+    pub pad: __u32,
+    /** @deadline_nsec - fence deadline hint
+
+ Deadline hint, in absolute CLOCK_MONOTONIC, to set on backing
+ fence(s) if the DRM_SYNCOBJ_WAIT_FLAGS_WAIT_DEADLINE flag is
+ set.*/
+    pub deadline_nsec: __u64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    [
+        "Size of drm_syncobj_timeline_wait",
+    ][::core::mem::size_of::<drm_syncobj_timeline_wait>() - 48usize];
+    [
+        "Alignment of drm_syncobj_timeline_wait",
+    ][::core::mem::align_of::<drm_syncobj_timeline_wait>() - 8usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::handles",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, handles) - 0usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::points",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, points) - 8usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::timeout_nsec",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, timeout_nsec) - 16usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::count_handles",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, count_handles) - 24usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::flags",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, flags) - 28usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::first_signaled",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, first_signaled) - 32usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::pad",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, pad) - 36usize];
+    [
+        "Offset of field: drm_syncobj_timeline_wait::deadline_nsec",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_wait, deadline_nsec) - 40usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct drm_syncobj_array {
     pub handles: __u64,
     pub count_handles: __u32,
@@ -139,6 +189,35 @@ const _: () = {
     [
         "Offset of field: drm_syncobj_array::pad",
     ][::core::mem::offset_of!(drm_syncobj_array, pad) - 12usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct drm_syncobj_timeline_array {
+    pub handles: __u64,
+    pub points: __u64,
+    pub count_handles: __u32,
+    pub flags: __u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    [
+        "Size of drm_syncobj_timeline_array",
+    ][::core::mem::size_of::<drm_syncobj_timeline_array>() - 24usize];
+    [
+        "Alignment of drm_syncobj_timeline_array",
+    ][::core::mem::align_of::<drm_syncobj_timeline_array>() - 8usize];
+    [
+        "Offset of field: drm_syncobj_timeline_array::handles",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_array, handles) - 0usize];
+    [
+        "Offset of field: drm_syncobj_timeline_array::points",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_array, points) - 8usize];
+    [
+        "Offset of field: drm_syncobj_timeline_array::count_handles",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_array, count_handles) - 16usize];
+    [
+        "Offset of field: drm_syncobj_timeline_array::flags",
+    ][::core::mem::offset_of!(drm_syncobj_timeline_array, flags) - 20usize];
 };
 /// @DRM_ASAHI_GET_PARAMS: Query device properties.
 pub const DRM_ASAHI_GET_PARAMS: drm_asahi_ioctl_id = 0;
