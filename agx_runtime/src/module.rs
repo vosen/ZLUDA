@@ -59,6 +59,18 @@ impl KernelInfo {
     pub fn gpr_halves(&self) -> u32 {
         (2 * self.gprs).clamp(8, 256)
     }
+
+    /// SIMD-groups of this kernel a G13/G14 core holds: 2 * floor(3328 / (2 * H)), at most 96, with H the register
+    /// halves rounded up to the allocation granule of 8 (the USC Registers word counts groups of 8).
+    pub fn simd_groups_per_core(&self) -> u32 {
+        (2 * (1664 / self.gpr_halves().next_multiple_of(8))).min(96)
+    }
+
+    /// The largest threadgroup the kernel's registers allow (a threadgroup runs on one core), at most 1024
+    /// (Mesa's agx_occupancy table; the backend prints it in the resource comments).
+    pub fn max_threads_per_threadgroup(&self) -> u32 {
+        (32 * self.simd_groups_per_core()).min(1024)
+    }
 }
 
 /// A compiled module: its code, the initial global data buffer, and its kernels.
@@ -469,6 +481,19 @@ mod tests {
         };
         let d = crate::printf::drain(&g[off as usize..(off + size) as usize], read);
         assert_eq!(d.text, b"42\n");
+    }
+
+    #[test]
+    fn threadgroup_size_follows_the_register_count() {
+        let k = |gprs| KernelInfo { gprs, ..Module::load_object(include_bytes!("../tests/data/byref.o")).unwrap().kernels["byref"].clone() };
+        assert_eq!(k(4).max_threads_per_threadgroup(), 1024);
+        assert_eq!(k(52).max_threads_per_threadgroup(), 1024);
+        assert_eq!(k(53).max_threads_per_threadgroup(), 896);
+        assert_eq!(k(64).max_threads_per_threadgroup(), 832);
+        assert_eq!(k(80).max_threads_per_threadgroup(), 640);
+        assert_eq!(k(82).max_threads_per_threadgroup(), 576);
+        assert_eq!(k(128).max_threads_per_threadgroup(), 384);
+        assert_eq!(k(4).simd_groups_per_core(), 96);
     }
 
     // tests/data/global-relocs.ll: a global array of addresses of other globals.

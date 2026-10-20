@@ -73,6 +73,14 @@ impl Driver {
 
     fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
         let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        let threads = block.iter().map(|&b| b as u64).product::<u64>();
+        if threads == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        // the kernel's registers do not leave room for this many threads on a core
+        if threads > self.modules[&m].module.kernels[&name].max_threads_per_threadgroup() as u64 {
+            return Err(CUerror::LAUNCH_OUT_OF_RESOURCES);
+        }
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
         let (queue, waits) = if sh <= 2 {
@@ -585,7 +593,7 @@ pub(crate) unsafe fn cuFuncGetAttribute(pi: *mut c_int, attrib: CUfunction_attri
         let (m, name) = d.functions.get(&(hfunc.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         let k = &d.modules[m].module.kernels[name];
         Ok(match attrib {
-            F::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => 1024,
+            F::CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK => k.max_threads_per_threadgroup() as c_int,
             F::CU_FUNC_ATTRIBUTE_NUM_REGS => k.gprs as c_int,
             F::CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES => k.threadgroup_bytes as c_int,
             F::CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES => k.stack_bytes as c_int,
@@ -967,9 +975,7 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
             return Err(CUerror::INVALID_VALUE);
         }
         let groups_per_block = (block as u32).div_ceil(32);
-        let halves = k.gpr_halves();
-        let simd_groups = (2 * (3328 / (2 * halves))).min(96);
-        let mut blocks = simd_groups / groups_per_block;
+        let mut blocks = k.simd_groups_per_core() / groups_per_block;
         let shared = k.threadgroup_bytes as usize + dynamic_shared;
         if shared > 0 {
             blocks = blocks.min((65536 / shared) as u32);

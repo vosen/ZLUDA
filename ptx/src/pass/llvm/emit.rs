@@ -373,6 +373,29 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 
     fn emit_tuning(&self, fn_: LLVMValueRef, tuning_directives: &[ast::TuningDirective]) {
+        if self.target == Target::Agx {
+            // The register budget follows the threads a core must hold: the threadgroup size, times the
+            // threadgroups .minnctapersm asks for.
+            let mut threads = None;
+            let mut ctas = 1;
+            for tuning in tuning_directives {
+                match *tuning {
+                    ptx_parser::TuningDirective::MaxNReg(n) => {
+                        self.emit_fn_attribute_string(fn_, "agx-max-gprs", &n.to_string())
+                    }
+                    ptx_parser::TuningDirective::MaxNtid(x, y, z) | ptx_parser::TuningDirective::ReqNtid(x, y, z) => {
+                        threads = Some(x * y * z)
+                    }
+                    ptx_parser::TuningDirective::MinNCtaPerSm(n) => ctas = n.max(1),
+                    ptx_parser::TuningDirective::NoReturn => {}
+                }
+            }
+            if let Some(t) = threads {
+                let t = t.saturating_mul(ctas).min(1024);
+                self.emit_fn_attribute_string(fn_, "agx-max-threads-per-threadgroup", &t.to_string());
+            }
+            return;
+        }
         for tuning in tuning_directives {
             match tuning {
                 // We could implement it for the completeness sake, but it's

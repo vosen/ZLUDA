@@ -164,6 +164,17 @@ three differences.
   `trap`. What `trap` does on the hardware when executed is not measured yet
   (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
 
+Register use limits the threadgroup size: a threadgroup runs on one core, and
+a core holds 2 * floor(3328 / (2 * H)) SIMD-groups of a kernel that uses H
+16-bit registers (H rounded up to a multiple of 8), so 52 32-bit registers
+allow 1024 threads and 128 allow 384. `.maxntid` / `.reqntid` (times
+`.minnctapersm`) and `.maxnreg` make the backend spill instead of exceeding
+the registers that many threads need. `cuFuncGetAttribute(MAX_THREADS_PER_BLOCK)`
+reports the limit, and a launch with a larger block fails with
+`CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES`, as on NVIDIA GPUs. This register budget
+is Mesa's occupancy table; it is not yet measured on the M2 Max (AGX
+Performance Simulator `tasks/ptx-re-blockers.md`, B26).
+
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 194 of 195 compile. `extern_func` calls a function defined
 in another module, which needs linking (`cuLink*`), not supported yet.
