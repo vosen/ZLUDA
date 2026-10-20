@@ -4,9 +4,10 @@
 //! generation), compiled at build time for each chip into one fat AGX object that zluda_agx's `cuModuleLoadData` picks
 //! from. The library calls the CUDA driver API of the process's libcuda (zluda_agx), like NVIDIA's cuBLAS does.
 //!
-//! Supported so far: handles, streams, pointer and math modes, and single precision GEMM (`cublasSgemm`, the strided
-//! batched form, and `cublasGemmEx` / `cublasGemmStridedBatchedEx` with 32-bit float matrices and compute). Other
-//! functions return `CUBLAS_STATUS_NOT_SUPPORTED`.
+//! Supported so far: handles, streams, pointer and math modes, and GEMM in single and half precision (`cublasSgemm`,
+//! `cublasHgemm`, their strided batched forms, and `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C,
+//! or f16 A and B and f16 or f32 C), always accumulated in f32. Other functions return
+//! `CUBLAS_STATUS_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
 
@@ -56,6 +57,8 @@ cuda_macros::cublas_function_declarations!(
             cublasGetStatusString,
             cublasGetStream_v2,
             cublasGetVersion_v2,
+            cublasHgemm,
+            cublasHgemmStridedBatched,
             cublasSetMathMode,
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
@@ -66,8 +69,32 @@ cuda_macros::cublas_function_declarations!(
         ]
 );
 
-/// The fat AGX object of the kernels (build.rs).
-static KERNELS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sgemm.agxfat"));
+/// The fat AGX objects of the kernels (build.rs).
+static SGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sgemm.agxfat"));
+static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
+
+/// Element types of A and B, and of C.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Types {
+    /// f32 A, B and C.
+    S,
+    /// f16 A and B, f16 C.
+    H,
+    /// f16 A and B, f32 C.
+    HtoS,
+}
+
+impl Types {
+    fn index(self) -> usize {
+        self as usize
+    }
+    fn ab_bytes(self) -> isize {
+        if self == Types::S { 4 } else { 2 }
+    }
+    fn c_bytes(self) -> isize {
+        if self == Types::H { 2 } else { 4 }
+    }
+}
 
 /// How one GEMM runs: which kernel, its launch shape and its arguments after the three matrix pointers.
 #[derive(Debug, PartialEq)]
@@ -95,6 +122,22 @@ pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc:
         dims: [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc],
         grid: [n.div_ceil(GENERIC_BLOCK[0] as u64) as u32, m.div_ceil(GENERIC_BLOCK[1] as u64) as u32],
     }
+}
+
+/// IEEE binary16 to f32 (exact).
+pub fn f16_to_f32(h: u16) -> f32 {
+    let (sign, exp, frac) = ((h as u32 & 0x8000) << 16, (h >> 10) & 0x1f, h as u32 & 0x3ff);
+    let bits = match exp {
+        0 if frac == 0 => sign,
+        0 => {
+            // subnormal: normalize
+            let shift = frac.leading_zeros() - 21;
+            sign | ((113 - shift) << 23) | ((frac << shift) & 0x3ff) << 13
+        }
+        31 => sign | 0x7f80_0000 | frac << 13,
+        e => sign | ((e as u32 + 112) << 23) | frac << 13,
+    };
+    f32::from_bits(bits)
 }
 
 mod imp {
@@ -151,8 +194,9 @@ mod imp {
     #[derive(Clone, Copy)]
     struct Kernels {
         ctx: usize,
-        tile: CUfunction,
-        generic: CUfunction,
+        /// By `Types::index`.
+        tile: [CUfunction; 3],
+        generic: [CUfunction; 3],
     }
     unsafe impl Send for Kernels {}
 
@@ -173,13 +217,24 @@ mod imp {
         if let Some(k) = loaded.iter().find(|k| k.ctx == key) {
             return Ok(*k);
         }
-        let mut m = CUmodule(std::ptr::null_mut());
-        (d.load)(&mut m, KERNELS.as_ptr() as *const c_void).map_err(|_| cublasError_t::ARCH_MISMATCH)?;
-        let get = |name: &[u8]| {
+        let load = |image: &[u8]| {
+            let mut m = CUmodule(std::ptr::null_mut());
+            (d.load)(&mut m, image.as_ptr() as *const c_void).map(|_| m).map_err(|_| cublasError_t::ARCH_MISMATCH)
+        };
+        let (sm, hm) = (load(SGEMM)?, load(HGEMM)?);
+        let get = |m: CUmodule, name: &[u8]| {
             let mut f = CUfunction(std::ptr::null_mut());
             (d.function)(&mut f, m, name.as_ptr() as *const c_char).map(|_| f).map_err(|_| cublasError_t::INTERNAL_ERROR)
         };
-        let k = Kernels { ctx: key, tile: get(b"agx_sgemm_tile64\0")?, generic: get(b"agx_sgemm_generic\0")? };
+        let k = Kernels {
+            ctx: key,
+            tile: [get(sm, b"agx_sgemm_tile64\0")?, get(hm, b"agx_hgemm_tile64_cf16\0")?, get(hm, b"agx_hgemm_tile64_cf32\0")?],
+            generic: [
+                get(sm, b"agx_sgemm_generic\0")?,
+                get(hm, b"agx_hgemm_generic_cf16\0")?,
+                get(hm, b"agx_hgemm_generic_cf32\0")?,
+            ],
+        };
         loaded.push(k);
         Ok(k)
     }
@@ -281,19 +336,20 @@ mod imp {
         eprintln!(" ** On entry to {name} parameter number {info} had an illegal value");
     }
 
-    /// alpha or beta, from host or device memory as the handle's pointer mode says.
-    unsafe fn scalar(d: &Driver, h: &Handle, p: *const f32) -> Result<f32, cublasError_t> {
+    /// alpha or beta (an f32, or an f16 when `half`), from host or device memory as the handle's pointer mode says.
+    unsafe fn scalar(d: &Driver, h: &Handle, p: *const c_void, half: bool) -> Result<f32, cublasError_t> {
         if p.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
+        let mut v = [0u8; 4];
+        let n = if half { 2 } else { 4 };
         if h.pointer_mode == cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE {
-            let mut v = 0f32;
-            (d.dtoh)(&mut v as *mut f32 as *mut c_void, CUdeviceptr_v2(p as *mut c_void), 4)
+            (d.dtoh)(v.as_mut_ptr() as *mut c_void, CUdeviceptr_v2(p as *mut c_void), n)
                 .map_err(|_| cublasError_t::EXECUTION_FAILED)?;
-            Ok(v)
         } else {
-            Ok(*p)
+            std::ptr::copy_nonoverlapping(p as *const u8, v.as_mut_ptr(), n);
         }
+        Ok(if half { f16_to_f32(u16::from_le_bytes([v[0], v[1]])) } else { f32::from_le_bytes(v) })
     }
 
     fn op(o: cublasOperation_t) -> Result<bool, cublasError_t> {
@@ -306,22 +362,24 @@ mod imp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    unsafe fn sgemm(
+    unsafe fn gemm(
+        types: Types,
+        half_scalars: bool,
         h: cublasHandle_t,
         transa: cublasOperation_t,
         transb: cublasOperation_t,
         m: c_int,
         n: c_int,
         k: c_int,
-        alpha: *const f32,
-        a: *const f32,
+        alpha: *const c_void,
+        a: *const c_void,
         lda: c_int,
         stride_a: c_longlong,
-        b: *const f32,
+        b: *const c_void,
         ldb: c_int,
         stride_b: c_longlong,
-        beta: *const f32,
-        c: *mut f32,
+        beta: *const c_void,
+        c: *mut c_void,
         ldc: c_int,
         stride_c: c_longlong,
         batch: c_int,
@@ -337,7 +395,7 @@ mod imp {
         if m == 0 || n == 0 || batch == 0 {
             return Ok(());
         }
-        let (alpha, beta) = (scalar(d, h, alpha)?, scalar(d, h, beta)?);
+        let (alpha, beta) = (scalar(d, h, alpha, half_scalars)?, scalar(d, h, beta, half_scalars)?);
         let kernels = match h.kernels {
             Some(k) => k,
             None => *h.kernels.insert(kernels(d)?),
@@ -346,16 +404,20 @@ mod imp {
             && [stride_a, stride_b, stride_c].iter().all(|s| s % 2 == 0);
         let p = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, aligned);
         for i in 0..batch as i64 {
-            let (mut pa, mut pb, mut pc) =
-                (a.offset((i * stride_a) as isize), b.offset((i * stride_b) as isize), c.offset((i * stride_c) as isize));
+            let (ab, cb) = (types.ab_bytes(), types.c_bytes());
+            let (mut pa, mut pb, mut pc) = (
+                a.byte_offset(i as isize * stride_a as isize * ab),
+                b.byte_offset(i as isize * stride_b as isize * ab),
+                c.byte_offset(i as isize * stride_c as isize * cb),
+            );
             let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &p {
                 Plan::Tile { swap, dims, groups } => {
                     if *swap {
                         std::mem::swap(&mut pa, &mut pb);
                     }
-                    (kernels.tile, &dims[..], [*groups, 1], [128, 1])
+                    (kernels.tile[types.index()], &dims[..], [*groups, 1], [128, 1])
                 }
-                Plan::Generic { dims, grid } => (kernels.generic, &dims[..], *grid, GENERIC_BLOCK),
+                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
             };
             let mut dims = dims.to_vec();
             let (mut alpha, mut beta) = (alpha, beta);
@@ -389,7 +451,7 @@ mod imp {
         c: *mut f32,
         ldc: c_int,
     ) -> cublasStatus_t {
-        sgemm(h, transa, transb, m, n, k, alpha, a, lda, 0, b, ldb, 0, beta, c, ldc, 0, 1)
+        gemm(Types::S, false, h, transa, transb, m, n, k, alpha.cast(), a.cast(), lda, 0, b.cast(), ldb, 0, beta.cast(), c.cast(), ldc, 0, 1)
     }
 
     pub(crate) unsafe fn cublasSgemmStridedBatched(
@@ -412,20 +474,109 @@ mod imp {
         stride_c: c_longlong,
         batch: c_int,
     ) -> cublasStatus_t {
-        sgemm(h, transa, transb, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b, beta, c, ldc, stride_c, batch)
+        gemm(
+            Types::S,
+            false,
+            h,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha.cast(),
+            a.cast(),
+            lda,
+            stride_a,
+            b.cast(),
+            ldb,
+            stride_b,
+            beta.cast(),
+            c.cast(),
+            ldc,
+            stride_c,
+            batch,
+        )
     }
 
-    /// Only 32-bit float matrices with a 32-bit float computation (f16 and bf16 kernels are not written yet).
-    fn f32_only(types: [cudaDataType; 3], compute: cublasComputeType_t) -> cublasStatus_t {
-        let f32_compute = [
-            cublasComputeType_t::CUBLAS_COMPUTE_32F,
-            cublasComputeType_t::CUBLAS_COMPUTE_32F_PEDANTIC,
-            cublasComputeType_t::CUBLAS_COMPUTE_32F_FAST_TF32,
-        ];
-        if types.iter().all(|t| *t == cudaDataType::CUDA_R_32F) && f32_compute.contains(&compute) {
-            Ok(())
-        } else {
-            Err(cublasError_t::NOT_SUPPORTED)
+    pub(crate) unsafe fn cublasHgemm(
+        h: cublasHandle_t,
+        transa: cublasOperation_t,
+        transb: cublasOperation_t,
+        m: c_int,
+        n: c_int,
+        k: c_int,
+        alpha: *const __half,
+        a: *const __half,
+        lda: c_int,
+        b: *const __half,
+        ldb: c_int,
+        beta: *const __half,
+        c: *mut __half,
+        ldc: c_int,
+    ) -> cublasStatus_t {
+        gemm(Types::H, true, h, transa, transb, m, n, k, alpha.cast(), a.cast(), lda, 0, b.cast(), ldb, 0, beta.cast(), c.cast(), ldc, 0, 1)
+    }
+
+    pub(crate) unsafe fn cublasHgemmStridedBatched(
+        h: cublasHandle_t,
+        transa: cublasOperation_t,
+        transb: cublasOperation_t,
+        m: c_int,
+        n: c_int,
+        k: c_int,
+        alpha: *const __half,
+        a: *const __half,
+        lda: c_int,
+        stride_a: c_longlong,
+        b: *const __half,
+        ldb: c_int,
+        stride_b: c_longlong,
+        beta: *const __half,
+        c: *mut __half,
+        ldc: c_int,
+        stride_c: c_longlong,
+        batch: c_int,
+    ) -> cublasStatus_t {
+        gemm(
+            Types::H,
+            true,
+            h,
+            transa,
+            transb,
+            m,
+            n,
+            k,
+            alpha.cast(),
+            a.cast(),
+            lda,
+            stride_a,
+            b.cast(),
+            ldb,
+            stride_b,
+            beta.cast(),
+            c.cast(),
+            ldc,
+            stride_c,
+            batch,
+        )
+    }
+
+    /// The kernel types for GemmEx matrix types, and whether alpha and beta are f16 (a 16-bit computation, which runs
+    /// in f32 here). f32 A, B and C, or f16 A and B with f16 or f32 C; other types are not written yet.
+    fn ex_types(types: [cudaDataType; 3], compute: cublasComputeType_t) -> Result<(Types, bool), cublasError_t> {
+        use cublasComputeType_t as K;
+        let (f32_, f16_) = (cudaDataType::CUDA_R_32F, cudaDataType::CUDA_R_16F);
+        let t = match types {
+            [a, b, c] if a == f32_ && b == f32_ && c == f32_ => Types::S,
+            [a, b, c] if a == f16_ && b == f16_ && c == f16_ => Types::H,
+            [a, b, c] if a == f16_ && b == f16_ && c == f32_ => Types::HtoS,
+            _ => return Err(cublasError_t::NOT_SUPPORTED),
+        };
+        match compute {
+            K::CUBLAS_COMPUTE_32F | K::CUBLAS_COMPUTE_32F_PEDANTIC | K::CUBLAS_COMPUTE_32F_FAST_TF32 => Ok((t, false)),
+            K::CUBLAS_COMPUTE_32F_FAST_16F | K::CUBLAS_COMPUTE_32F_FAST_16BF => Ok((t, false)),
+            K::CUBLAS_COMPUTE_16F | K::CUBLAS_COMPUTE_16F_PEDANTIC if t == Types::H => Ok((t, true)),
+            _ => Err(cublasError_t::NOT_SUPPORTED),
         }
     }
 
@@ -450,8 +601,8 @@ mod imp {
         compute: cublasComputeType_t,
         _algo: cublasGemmAlgo_t,
     ) -> cublasStatus_t {
-        f32_only([a_type, b_type, c_type], compute)?;
-        sgemm(h, transa, transb, m, n, k, alpha.cast(), a.cast(), lda, 0, b.cast(), ldb, 0, beta.cast(), c.cast(), ldc, 0, 1)
+        let (t, half) = ex_types([a_type, b_type, c_type], compute)?;
+        gemm(t, half, h, transa, transb, m, n, k, alpha, a, lda, 0, b, ldb, 0, beta, c, ldc, 0, 1)
     }
 
     pub(crate) unsafe fn cublasGemmStridedBatchedEx(
@@ -479,27 +630,8 @@ mod imp {
         compute: cublasComputeType_t,
         _algo: cublasGemmAlgo_t,
     ) -> cublasStatus_t {
-        f32_only([a_type, b_type, c_type], compute)?;
-        sgemm(
-            h,
-            transa,
-            transb,
-            m,
-            n,
-            k,
-            alpha.cast(),
-            a.cast(),
-            lda,
-            stride_a,
-            b.cast(),
-            ldb,
-            stride_b,
-            beta.cast(),
-            c.cast(),
-            ldc,
-            stride_c,
-            batch,
-        )
+        let (t, half) = ex_types([a_type, b_type, c_type], compute)?;
+        gemm(t, half, h, transa, transb, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b, beta, c, ldc, stride_c, batch)
     }
 }
 
@@ -580,10 +712,25 @@ mod tests {
     }
 
     #[test]
-    fn the_fat_object_has_both_kernels_for_the_m2_max() {
-        assert_eq!(&KERNELS[..8], b"ZAGXFAT1");
-        let s = String::from_utf8_lossy(KERNELS);
-        assert!(s.contains("agx-g14c") && s.contains("agx-g13g"));
-        assert!(s.contains("agx_sgemm_tile64") && s.contains("agx_sgemm_generic"));
+    fn the_fat_objects_have_the_kernels_for_the_m2_max() {
+        for (fat, names) in [
+            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_generic"][..]),
+            (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
+        ] {
+            assert_eq!(&fat[..8], b"ZAGXFAT1");
+            let s = String::from_utf8_lossy(fat);
+            assert!(s.contains("agx-g14c") && s.contains("agx-g13g"));
+            assert!(names.iter().all(|n| s.contains(n)));
+        }
+    }
+
+    #[test]
+    fn converts_f16() {
+        for (h, f) in [(0x3c00, 1.0f32), (0xc000, -2.0), (0x0001, 5.960_464_5e-8), (0x03ff, 6.097_555_2e-5), (0x7bff, 65504.0), (0x3555, 0.333_251_95)] {
+            assert_eq!(f16_to_f32(h), f, "{h:#x}");
+        }
+        assert!(f16_to_f32(0x7e00).is_nan());
+        assert_eq!(f16_to_f32(0xfc00), f32::NEG_INFINITY);
+        assert_eq!(f16_to_f32(0x8000).to_bits(), 0x8000_0000);
     }
 }

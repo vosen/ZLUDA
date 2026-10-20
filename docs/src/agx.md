@@ -449,17 +449,20 @@ it), as NVIDIA's does.
 
 * Handles, streams, pointer modes (host and device alpha / beta), math modes
   (all compute in f32) and workspaces (unused).
-* `cublasSgemm`, `cublasSgemmStridedBatched`, and `cublasGemmEx` /
-  `cublasGemmStridedBatchedEx` with `CUDA_R_32F` matrices and an f32
-  computation. Without transposes, with m and n multiples of 64, k a multiple
+* `cublasSgemm`, `cublasHgemm`, their strided batched forms, and
+  `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C or f16 A
+  and B with f16 or f32 C. All accumulate in f32, including the 16-bit
+  computation types (alpha and beta are then f16, as in cuBLAS); f16 results
+  are rounded once at the end. Without transposes, with m and n multiples of 64, k a multiple
   of 8, even leading dimensions and 8-byte aligned matrices, the column-major
   product runs on the row-major tile kernel `agx_sgemm_tile64` (A and B
   swapped): 64 x 64 tiles per threadgroup of 2 x 2 SIMD-groups built on
-  `agx.mma_tile`. Everything else runs on `agx_sgemm_generic`, one thread
-  per element with arbitrary strides.
-* Both kernels are tested on the simulator for agx-g13g and agx-g14c
+  `agx.mma_tile` (`kernels/sgemm.mlir`; the f16 forms are in
+  `kernels/hgemm.mlir`). Everything else runs on a generic kernel, one
+  thread per element with arbitrary strides.
+* All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`zluda_blas_agx/kernels/test_kernels.py`: tile sizes, all four transpose
-  combinations, `beta = 0` with NaN in C).
+  combinations, `beta = 0` with NaN in C, f16 and f32 C).
 
 Building needs `ZLUDA_LLVM_BUILD_DIR` (mlir-opt, mlir-translate and llc of
 the LLVM fork).
@@ -486,7 +489,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: single precision GEMM (`zluda_blas_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond SGEMM, cuBLASLt, cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
+| Libraries | cuBLAS: f32 and f16 GEMM (`zluda_blas_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS beyond GEMM, cuBLASLt, cuDNN, cuFFT, cuSPARSE (to be written as MLIR kernels) |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

@@ -104,12 +104,17 @@ def run(a, obj, name, args, grid, wg, tmp):
     return [open(o, "rb").read() for o in dumps]
 
 
-def f32s(xs):
-    return struct.pack("<%df" % len(xs), *xs)
+def pack(xs, t="f"):
+    return struct.pack("<%d%s" % (len(xs), t), *xs)
 
 
-def unf32(b):
-    return struct.unpack("<%df" % (len(b) // 4), b)
+def unpack(b, t="f"):
+    return struct.unpack("<%d%s" % (len(b) // struct.calcsize(t), t), b)
+
+
+def rounded(xs, t):
+    """The values as stored in type t ("f" f32, "e" f16)."""
+    return list(unpack(pack(xs, t), t))
 
 
 def reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta):
@@ -122,25 +127,25 @@ def reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta):
     return out
 
 
-def close(got, want, idx):
-    bad = [p for p in idx if not (abs(got[p] - want[p]) <= 1e-4 * (1 + abs(want[p])))]
+def close(got, want, idx, tol=1e-4):
+    bad = [p for p in idx if not (abs(got[p] - want[p]) <= tol * (1 + abs(want[p])))]
     return bad
 
 
-def case_tile(a, obj, tmp, M, N, K, alpha, beta, rnd):
+def case_tile(a, obj, tmp, M, N, K, alpha, beta, rnd, kernel="agx_sgemm_tile64", ab="f", c="f"):
     lda, ldb, ldc = K + 2, N + 2, N + 4
-    A = [rnd.uniform(-1, 1) for _ in range(M * lda)]
-    B = [rnd.uniform(-1, 1) for _ in range(K * ldb)]
-    C = [rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(M * ldc)]
-    (got,) = run(a, obj, "agx_sgemm_tile64",
-                 [("buf", f32s(A)), ("buf", f32s(B)), ("buf", f32s(C), True), ("i64", M), ("i64", N), ("i64", K),
-                  ("i64", lda), ("i64", ldb), ("i64", ldc), ("f32", alpha), ("f32", beta)],
+    A = rounded([rnd.uniform(-1, 1) for _ in range(M * lda)], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(K * ldb)], ab)
+    C = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(M * ldc)], c)
+    (got,) = run(a, obj, kernel,
+                 [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
+                  ("i64", K), ("i64", lda), ("i64", ldb), ("i64", ldc), ("f32", alpha), ("f32", beta)],
                  ((M // 64) * (N // 64) * 128, 1), (128, 1), tmp)
     want = reference(M, N, K, A, (lda, 1), B, (ldb, 1), C, (ldc, 1), alpha, beta)
-    return close(unf32(got), want, [i * ldc + j for i in range(M) for j in range(N)])
+    return close(unpack(got, c), want, [i * ldc + j for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
 
 
-def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd):
+def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sgemm_generic", ab="f", c="f"):
     # column-major storage as cuBLAS has it, with op(X) = X or X^T
     lda = (K if ta else M) + 1
     ldb = (N if tb else K) + 3
@@ -148,16 +153,17 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd):
     sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
     sb = (ldb, 1) if tb else (1, ldb)
     sc = (1, ldc)
-    A = [rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))]
-    B = [rnd.uniform(-1, 1) for _ in range(ldb * (K if tb else N))]
-    C = [rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)]
-    (got,) = run(a, obj, "agx_sgemm_generic",
-                 [("buf", f32s(A)), ("buf", f32s(B)), ("buf", f32s(C), True), ("i64", M), ("i64", N), ("i64", K),
-                  ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]), ("i64", sc[1]),
-                  ("f32", alpha), ("f32", beta)],
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * (K if tb else N))], ab)
+    C = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)], c)
+    (got,) = run(a, obj, kernel,
+                 [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
+                  ("i64", K), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]),
+                  ("i64", sc[1]), ("f32", alpha), ("f32", beta)],
                  (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta)
-    return close(unf32(got), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)])
+    return close(unpack(got, c), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)],
+                 1e-4 if c == "f" else 2e-3)
 
 
 def main():
@@ -175,14 +181,30 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         for chip in chips:
             obj = entries[chip]
-            cases = [
-                ("tile64 128x64x40 a=1.5 b=0.5", lambda: case_tile(a, obj, tmp, 128, 64, 40, 1.5, 0.5, rnd)),
-                ("tile64 64x128x16 a=1 b=0 (C NaN)", lambda: case_tile(a, obj, tmp, 64, 128, 16, 1.0, 0.0, rnd)),
-                ("generic 37x29x13 NN b=0.25", lambda: case_generic(a, obj, tmp, 37, 29, 13, 0, 0, 1.0, 0.25, rnd)),
-                ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
-                ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
-                ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
-            ]
+            if "agx_sgemm_tile64" in kernel_records(obj, a, tmp):
+                cases = [
+                    ("tile64 128x64x40 a=1.5 b=0.5", lambda: case_tile(a, obj, tmp, 128, 64, 40, 1.5, 0.5, rnd)),
+                    ("tile64 64x128x16 a=1 b=0 (C NaN)", lambda: case_tile(a, obj, tmp, 64, 128, 16, 1.0, 0.0, rnd)),
+                    ("generic 37x29x13 NN b=0.25", lambda: case_generic(a, obj, tmp, 37, 29, 13, 0, 0, 1.0, 0.25, rnd)),
+                    ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
+                    ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
+                    ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
+                ]
+            else:
+                cases = []
+                for c in ("e", "f"):
+                    ct = "f16" if c == "e" else "f32"
+                    tk, gk = "agx_hgemm_tile64_c" + ct, "agx_hgemm_generic_c" + ct
+                    cases += [
+                        ("h tile64 C %s 64x128x24 b=0.5" % ct,
+                         lambda tk=tk, c=c: case_tile(a, obj, tmp, 64, 128, 24, 1.0, 0.5, rnd, tk, "e", c)),
+                        ("h tile64 C %s 128x64x8 b=0" % ct,
+                         lambda tk=tk, c=c: case_tile(a, obj, tmp, 128, 64, 8, 2.0, 0.0, rnd, tk, "e", c)),
+                        ("h generic C %s 21x13x9 TN" % ct,
+                         lambda gk=gk, c=c: case_generic(a, obj, tmp, 21, 13, 9, 1, 0, 1.0, 0.5, rnd, gk, "e", c)),
+                        ("h generic C %s 6x30x17 NT b=0" % ct,
+                         lambda gk=gk, c=c: case_generic(a, obj, tmp, 6, 30, 17, 0, 1, -1.0, 0.0, rnd, gk, "e", c)),
+                    ]
             for label, f in cases:
                 try:
                     bad = f()

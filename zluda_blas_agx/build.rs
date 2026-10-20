@@ -22,24 +22,27 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_BUILD_DIR");
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_SOURCE_DIR");
     println!("cargo:rerun-if-changed=kernels/sgemm.mlir");
+    println!("cargo:rerun-if-changed=kernels/hgemm.mlir");
     let build = PathBuf::from(env::var_os("ZLUDA_LLVM_BUILD_DIR").expect(
         "zluda_blas_agx compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
     ));
     let script = llvm_source(&build).join("mlir/utils/agx-kernels/agx-build-fatbin.py");
-    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("sgemm.agxfat");
     let bin = build.join("bin");
-    let status = Command::new("python3")
-        .arg(&script)
-        .arg("--mlir-opt")
-        .arg(bin.join("mlir-opt"))
-        .arg("--mlir-translate")
-        .arg(bin.join("mlir-translate"))
-        .arg("--llc")
-        .arg(bin.join("llc"))
-        .arg("kernels/sgemm.mlir")
-        .arg("-o")
-        .arg(&out)
-        .status()
-        .unwrap_or_else(|e| panic!("{}: {e}", script.display()));
-    assert!(status.success(), "compiling kernels/sgemm.mlir failed");
+    for name in ["sgemm", "hgemm"] {
+        let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join(format!("{name}.agxfat"));
+        let status = Command::new("python3")
+            .arg(&script)
+            .arg("--mlir-opt")
+            .arg(bin.join("mlir-opt"))
+            .arg("--mlir-translate")
+            .arg(bin.join("mlir-translate"))
+            .arg("--llc")
+            .arg(bin.join("llc"))
+            .arg(format!("kernels/{name}.mlir"))
+            .arg("-o")
+            .arg(&out)
+            .status()
+            .unwrap_or_else(|e| panic!("{}: {e}", script.display()));
+        assert!(status.success(), "compiling kernels/{name}.mlir failed");
+    }
 }
