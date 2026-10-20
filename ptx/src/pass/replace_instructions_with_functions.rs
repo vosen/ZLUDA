@@ -679,6 +679,20 @@ fn run_instruction<'input>(
                 "stmatrix, movmatrix, block scaled and sparse mma and wmma on AMD GPUs".to_string(),
             ))
         }
+        i @ ptx_parser::Instruction::Szext { data, .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("szext on AMD GPUs".to_string()));
+            }
+            let mode = if data.clamp { "clamp" } else { "wrap" };
+            let name = format!("szext_{mode}_{}", scalar_to_ptx_name(data.type_));
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
+        i @ ptx_parser::Instruction::Fns { .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("fns on AMD GPUs".to_string()));
+            }
+            to_call(resolver, fn_declarations, "fns_b32".into(), i)?
+        }
         i @ ptx_parser::Instruction::Prmt { data: None, .. } => {
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
         }

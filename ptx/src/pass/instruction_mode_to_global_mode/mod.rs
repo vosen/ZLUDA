@@ -2160,6 +2160,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::Ld { .. }
         | ast::Instruction::St { .. }
         | ast::Instruction::Prmt { .. }
+        | ast::Instruction::Szext { .. }
+        | ast::Instruction::Fns { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Membar { .. }
         | ast::Instruction::Trap {}

@@ -697,6 +697,83 @@ define i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %s) #0 {
   ret i32 %r
 }
 
+; szext.mode.type: the low n bits of a, sign- or zero-extended, n = b mod 32 (wrap) or min(b, 32) (clamp); 0 for
+; n = 0.
+define i32 @__zluda_ptx_impl_szext_wrap_u32(i32 %a, i32 %b) #0 {
+  %n = and i32 %b, 31
+  %r = call i32 @__zluda_szext(i32 %a, i32 %n, i1 false)
+  ret i32 %r
+}
+
+define i32 @__zluda_ptx_impl_szext_wrap_s32(i32 %a, i32 %b) #0 {
+  %n = and i32 %b, 31
+  %r = call i32 @__zluda_szext(i32 %a, i32 %n, i1 true)
+  ret i32 %r
+}
+
+define i32 @__zluda_ptx_impl_szext_clamp_u32(i32 %a, i32 %b) #0 {
+  %n = call i32 @llvm.umin.i32(i32 %b, i32 32)
+  %r = call i32 @__zluda_szext(i32 %a, i32 %n, i1 false)
+  ret i32 %r
+}
+
+define i32 @__zluda_ptx_impl_szext_clamp_s32(i32 %a, i32 %b) #0 {
+  %n = call i32 @llvm.umin.i32(i32 %b, i32 32)
+  %r = call i32 @__zluda_szext(i32 %a, i32 %n, i1 true)
+  ret i32 %r
+}
+
+define internal i32 @__zluda_szext(i32 %a, i32 %n, i1 %signed) #0 {
+  %zero = icmp eq i32 %n, 0
+  %sh = sub i32 32, %n
+  ; n = 32 shifts by 0; n = 0 is handled below (a shift by 32 is poison)
+  %shc = and i32 %sh, 31
+  %up = shl i32 %a, %shc
+  %sx = ashr i32 %up, %shc
+  %zx = lshr i32 %up, %shc
+  %v = select i1 %signed, i32 %sx, i32 %zx
+  %r = select i1 %zero, i32 0, i32 %v
+  ret i32 %r
+}
+
+; fns.b32: the position of the offset-th set bit of mask counting from base (inclusive) toward the most significant
+; bit for a positive offset and toward bit 0 for a negative one; for offset 0, base when its bit is set; 0xffffffff
+; when there is no such bit.
+define i32 @__zluda_ptx_impl_fns_b32(i32 %mask, i32 %base0, i32 %offset) #0 {
+entry:
+  %base = and i32 %base0, 31
+  %is_zero = icmp eq i32 %offset, 0
+  br i1 %is_zero, label %zero, label %search
+zero:
+  %bit0 = lshr i32 %mask, %base
+  %set0 = trunc i32 %bit0 to i1
+  %r0 = select i1 %set0, i32 %base, i32 -1
+  ret i32 %r0
+search:
+  %neg = icmp slt i32 %offset, 0
+  %noff = sub i32 0, %offset
+  %n = select i1 %neg, i32 %noff, i32 %offset
+  %step = select i1 %neg, i32 -1, i32 1
+  br label %loop
+loop:
+  %i = phi i32 [ %base, %search ], [ %next, %cont ]
+  %left = phi i32 [ %n, %search ], [ %left2, %cont ]
+  %bit = lshr i32 %mask, %i
+  %set = trunc i32 %bit to i1
+  %dec = zext i1 %set to i32
+  %left2 = sub i32 %left, %dec
+  %found = icmp eq i32 %left2, 0
+  br i1 %found, label %done, label %cont
+cont:
+  %next = add i32 %i, %step
+  %inside = icmp ult i32 %next, 32
+  br i1 %inside, label %loop, label %missing
+done:
+  ret i32 %i
+missing:
+  ret i32 -1
+}
+
 ; prmt with a mode: c[1:0] picks one of four selectors (PTX's table for the mode, packed 16 bits each),
 ; which then permutes like the default mode.
 define i32 @__zluda_ptx_impl_prmt_f4e_b32(i32 %x, i32 %y, i32 %c) #0 {

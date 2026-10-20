@@ -4457,14 +4457,14 @@ derive_parser!(
             } else {
                 ast::MinMaxDetails::Unsigned(atype)
             },
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     //min{.relu}.btype  d, a, b => { todo!() }
     min.btype  d, a, b => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Signed(btype),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     .atype: ScalarType = { .u16, .u32, .u64,
@@ -4472,7 +4472,8 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //min{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    min{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b => {
+    // the third input is sm_100's three-input form
+    min{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b{, c} => {
         ast::Instruction::Min {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4482,7 +4483,7 @@ derive_parser!(
                     type_: f32
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     min{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
@@ -4495,7 +4496,7 @@ derive_parser!(
                     type_: f64
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f32, .f64 };
@@ -4514,7 +4515,7 @@ derive_parser!(
                     type_: f16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     min{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
@@ -4527,7 +4528,7 @@ derive_parser!(
                     type_: f16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     min{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
@@ -4540,7 +4541,7 @@ derive_parser!(
                     type_: bf16
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     min{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
@@ -4553,7 +4554,7 @@ derive_parser!(
                     type_: bf16x2
                 }
             ),
-            arguments: MinArgs { dst: d, src1: a, src2: b  }
+            arguments: MinArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
@@ -4568,14 +4569,14 @@ derive_parser!(
             } else {
                 ast::MinMaxDetails::Unsigned(atype)
             },
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     //max{.relu}.btype  d, a, b => { todo!() }
     max.btype  d, a, b => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Signed(btype),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     .atype: ScalarType = { .u16, .u32, .u64,
@@ -4583,7 +4584,8 @@ derive_parser!(
     .btype: ScalarType = { .s16x2, .s32 };
 
     //max{.ftz}{.NaN}{.xorsign.abs}.f32  d, a, b;
-    max{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b => {
+    // the third input is sm_100's three-input form
+    max{.ftz}{.NaN}{.xorsign}{.abs}.f32   d, a, b{, c} => {
         ast::Instruction::Max {
             data: ast::MinMaxDetails::Float(
                 MinMaxFloat {
@@ -4593,7 +4595,7 @@ derive_parser!(
                     type_: f32
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: c }
         }
     }
     max{.NaN}{.xorsign}{.abs}.f64   d, a, b => {
@@ -4606,7 +4608,7 @@ derive_parser!(
                     type_: f64
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f32, .f64 };
@@ -4625,7 +4627,7 @@ derive_parser!(
                     type_: f16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     max{.ftz}{.NaN}{.xorsign}{.abs}.f16x2   d, a, b => {
@@ -4638,7 +4640,7 @@ derive_parser!(
                     type_: f16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     max{.NaN}{.xorsign}{.abs}.bf16   d, a, b => {
@@ -4651,7 +4653,7 @@ derive_parser!(
                     type_: bf16
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     max{.NaN}{.xorsign}{.abs}.bf16x2   d, a, b => {
@@ -4664,7 +4666,7 @@ derive_parser!(
                     type_: bf16x2
                 }
             ),
-            arguments: MaxArgs { dst: d, src1: a, src2: b  }
+            arguments: MaxArgs { dst: d, src1: a, src2: b, src3: None }
         }
     }
     ScalarType = { .f16, .f16x2, .bf16, .bf16x2 };
@@ -5368,6 +5370,23 @@ derive_parser!(
         }
     }
     .mode: BmskMode = { .clamp, .wrap };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-szext
+    szext.mode.type  d, a, b => {
+        ast::Instruction::Szext {
+            data: ast::SzextDetails { clamp: mode == BmskMode::Clamp, type_ },
+            arguments: SzextArgs { dst: d, src_a: a, src_b: b },
+        }
+    }
+    .mode: BmskMode = { .clamp, .wrap };
+    .type: ScalarType = { .u32, .s32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-fns
+    fns.b32  d, mask, base, offset => {
+        ast::Instruction::Fns {
+            arguments: FnsArgs { dst: d, src_mask: mask, src_base: base, src_offset: offset },
+        }
+    }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prmt
     // prmt.b32{.mode}  d, a, b, c;
@@ -6192,6 +6211,15 @@ mod tests {
             ".version 7.0\n.target sm_70\n.address_size 64\n.visible .entry k() { .reg .b32 r; prmt.b32.f5e r, r, r, r; ret; }"
         )
         .is_err());
+    }
+
+    #[test]
+    fn szext_fns_min3() {
+        let body = "szext.wrap.s32 r, r, r; szext.clamp.u32 r, r, r; fns.b32 r, r, r, r; min.f32 f, f, f, f; max.NaN.f32 f, f, f, f;";
+        let text = format!(
+            ".version 8.8\n.target sm_100\n.address_size 64\n.visible .entry k() {{ .reg .b32 r; .reg .f32 f; {body} ret; }}"
+        );
+        assert!(parse_module_checked(&text).is_ok());
     }
 
     #[test]

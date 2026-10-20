@@ -908,6 +908,8 @@ impl<'a> MethodEmitContext<'a> {
             | ast::Instruction::WmmaStore { .. }
             | ast::Instruction::WmmaMma { .. }
             | ast::Instruction::Prmt { .. }
+        | ast::Instruction::Szext { .. }
+        | ast::Instruction::Fns { .. }
             | ast::Instruction::Mma { .. }
             | ast::Instruction::Dp2a { .. }
             | ast::Instruction::Tanh { .. }
@@ -4841,7 +4843,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::MinMaxDetails,
         arguments: ptx_parser::MinArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        self.emit_min_max(true, data, arguments.dst, arguments.src1, arguments.src2)
+        self.emit_min_max(true, data, arguments.dst, arguments.src1, arguments.src2, arguments.src3)
     }
 
     fn emit_max(
@@ -4849,7 +4851,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ptx_parser::MinMaxDetails,
         arguments: ptx_parser::MaxArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        self.emit_min_max(false, data, arguments.dst, arguments.src1, arguments.src2)
+        self.emit_min_max(false, data, arguments.dst, arguments.src1, arguments.src2, arguments.src3)
     }
 
     fn emit_min_max(
@@ -4859,6 +4861,7 @@ impl<'a> MethodEmitContext<'a> {
         dst: SpirvWord,
         src1: SpirvWord,
         src2: SpirvWord,
+        src3: Option<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let llvm_prefix = match (data, is_min) {
             (ptx_parser::MinMaxDetails::Signed(..), true) => "llvm.smin",
@@ -4907,6 +4910,19 @@ impl<'a> MethodEmitContext<'a> {
             self.emit_xor_sign(type_, result, original_a, original_b)?
         } else {
             result
+        };
+        // the three-input form: op(op(a, b), c)
+        let result = match src3 {
+            Some(c) => {
+                let c = self.resolver.value(c)?;
+                self.emit_intrinsic(
+                    unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                    None,
+                    vec![&type_.into()],
+                    vec![(result, llvm_type), (c, llvm_type)],
+                )?
+            }
+            None => result,
         };
         self.resolver.register(dst, result);
         Ok(())

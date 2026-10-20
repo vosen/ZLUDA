@@ -205,6 +205,33 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Szext {
+            type: { Type::Scalar(data.type_) },
+            data: SzextDetails,
+            arguments<T>: {
+                dst: T,
+                src_a: T,
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+            }
+        },
+        Fns {
+            type: Type::Scalar(ScalarType::B32),
+            arguments<T>: {
+                dst: T,
+                src_mask: T,
+                src_base: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::U32)
+                },
+                src_offset: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::S32)
+                },
+            }
+        },
         Bmsk {
             type: Type::Scalar(ScalarType::B32),
             data: BmskMode,
@@ -644,6 +671,7 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+                src3: Option<T>,
             }
         },
         Membar {
@@ -747,6 +775,7 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: T,
                 src1: T,
                 src2: T,
+                src3: Option<T>,
             }
         },
         Mov {
@@ -4032,6 +4061,14 @@ pub enum Packed8Op {
 pub struct AllocaDetails {
     pub type_: ScalarType,
     pub align: u32,
+}
+
+/// `szext.mode.type`: the low N bits of a, sign- (.s32) or zero-extended (.u32), N = b mod 32 (.wrap) or
+/// min(b, 32) (.clamp).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SzextDetails {
+    pub clamp: bool,
+    pub type_: ScalarType,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
