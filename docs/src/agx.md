@@ -709,8 +709,10 @@ it), as NVIDIA's does.
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).
 
-Building needs `ZLUDA_LLVM_BUILD_DIR` (mlir-opt, mlir-translate and llc of
-the LLVM fork).
+Building needs `ZLUDA_LLVM_BUILD_DIR` (mlir-opt, mlir-translate, opt and llc
+of the LLVM fork). The translated kernels go through `opt -O3` before `llc`,
+which takes the 64 x 64 GEMM tile from about 11,800 to 6,400 cycles in the
+simulator's cost model.
 
 ## cuBLASLt (`zluda_blaslt_agx`)
 
