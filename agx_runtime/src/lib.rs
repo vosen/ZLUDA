@@ -13,6 +13,8 @@
 //!
 //! USC addresses (shader code, pipeline words) are 32-bit offsets from the queue's `usc_exec_base`.
 
+pub mod module;
+
 use asahi_sys::*;
 use std::ffi::CString;
 use std::io;
@@ -512,5 +514,96 @@ mod tests {
         assert_eq!(DRM_IOCTL_GEM_CLOSE, 0x4008_6409);
         assert_eq!(DRM_IOCTL_SYNCOBJ_CREATE, 0xc008_64bf);
         assert_eq!(DRM_IOCTL_SYNCOBJ_RESET, 0xc010_64c4);
+    }
+}
+
+/// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
+pub struct LoadedModule {
+    pub module: module::Module,
+    /// Owns the kernels' code (the GPU reads it through `entries`).
+    #[allow(dead_code)]
+    code: Bo,
+    /// USC offset of each kernel's copy in `code`.
+    entries: std::collections::HashMap<String, u32>,
+    globals: Option<Bo>,
+}
+
+impl LoadedModule {
+    pub fn new(vm: &mut Vm, module: module::Module) -> io::Result<LoadedModule> {
+        // Every kernel is copied to its own 64-byte aligned slot (the Shader word's code address has only been
+        // measured 64-byte aligned, and the backend aligns kernels to 2 bytes). Kernels are self-contained:
+        // branches are PC-relative and there are no calls between them. 64 bytes of slack follow each one.
+        let mut layout = Vec::new();
+        let mut end = 0u64;
+        for k in module.kernels.values() {
+            layout.push((k.name.clone(), end, k.offset as usize, k.size as usize));
+            end = round_up(end + k.size as u64 + 64, 64);
+        }
+        let mut code = vm.alloc_usc(end.max(64))?;
+        let base = (code.va - vm.usc_base) as u32;
+        let mut entries = std::collections::HashMap::new();
+        for (name, at, off, size) in layout {
+            code.as_mut_slice()[at as usize..at as usize + size].copy_from_slice(&module.text[off..off + size]);
+            entries.insert(name, base + at as u32);
+        }
+        let globals = if module.globals.is_empty() {
+            None
+        } else {
+            let mut g = vm.alloc_data(module.globals.len() as u64)?;
+            g.as_mut_slice()[..module.globals.len()].copy_from_slice(&module.globals);
+            Some(g)
+        };
+        Ok(LoadedModule { module, code, entries, globals })
+    }
+
+    /// The current contents of the global data buffer (device variables).
+    pub fn globals(&self) -> &[u8] {
+        self.globals.as_ref().map_or(&[], |g| &g.as_slice()[..self.module.globals.len()])
+    }
+
+    /// Runs `kernel` over `threadgroups` workgroups of `local` threads and waits for it.
+    /// `dynamic_shared` is added to the kernel's static threadgroup memory.
+    pub fn launch(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        kernel: &str,
+        args: &[module::Arg],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+    ) -> io::Result<Timing> {
+        let invalid = |m: String| io::Error::new(io::ErrorKind::InvalidInput, m);
+        let k = self.module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
+        if k.stack_bytes > 0 {
+            // per-thread scratch for direct-DRM dispatches is not measured yet (ptx-re-blockers B1)
+            return Err(io::Error::new(io::ErrorKind::Unsupported, format!("{kernel} needs {} bytes of stack", k.stack_bytes)));
+        }
+        let shared = k.threadgroup_bytes + dynamic_shared;
+        if shared > 65536 {
+            return Err(invalid(format!("{kernel} needs {shared} bytes of threadgroup memory")));
+        }
+        let halves = module::pack_uniforms(k, args, threadgroups, self.globals.as_ref().map(|g| g.va))
+            .map_err(|e| invalid(e.to_string()))?;
+        let mut unif = vm.alloc_data((2 * halves.len()).max(4) as u64)?;
+        for (i, h) in halves.iter().enumerate() {
+            unif.as_mut_slice()[2 * i..2 * i + 2].copy_from_slice(&h.to_le_bytes());
+        }
+        let code_off = self.entries[kernel];
+        let pipeline = Pipeline {
+            code: code_off,
+            gpr_halves: k.gpr_halves(),
+            uniforms: if halves.is_empty() { vec![] } else { vec![(0, halves.len() as u32, unif.va)] },
+            shared_bytes: shared,
+        };
+        let words = pipeline.usc_words();
+        let mut pw = vm.alloc_usc(words.len() as u64)?;
+        pw.as_mut_slice()[..words.len()].copy_from_slice(&words);
+        let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
+        let stream = cdm_dispatch((pw.va - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
+        let mut cdm = vm.alloc_data(stream.len() as u64)?;
+        cdm.as_mut_slice()[..stream.len()].copy_from_slice(&stream);
+        queue.run_compute(cdm.va, cdm.va + stream.len() as u64)
     }
 }
