@@ -19,7 +19,7 @@ pub(crate) fn run(
             // Functions whose addresses initialize variables
             Directive2::Variable(_, var) => {
                 for init in var.info.array_init.iter() {
-                    if let ast::RegOrImmediate::Reg(name) = init {
+                    if let ast::RegOrImmediate::Reg(name) | ast::RegOrImmediate::RegOffset(name, _) = init {
                         reachable_funcs.insert(*name);
                     }
                 }

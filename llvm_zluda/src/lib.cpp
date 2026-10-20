@@ -699,15 +699,20 @@ namespace
                     if (CI->getCalledFunction())
                         calls.push_back(CI);
 
-        // the shared variables of a cluster kernel, packed into windows
+        // the shared variables of a cluster kernel, packed into windows in the order of the module (PTX
+        // programs compute shared addresses from that layout)
         SmallSetVector<GlobalVariable *, 8> shared;
         if (C > 1)
         {
+            SmallSetVector<GlobalVariable *, 8> used;
             SmallPtrSet<Value *, 32> seen;
             for (BasicBlock &BB : F)
                 for (Instruction &I : BB)
                     for (Value *op : I.operands())
-                        zludaSharedVariables(op, shared, seen);
+                        zludaSharedVariables(op, used, seen);
+            for (GlobalVariable &GV : M.globals())
+                if (used.count(&GV))
+                    shared.insert(&GV);
         }
 
         IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());

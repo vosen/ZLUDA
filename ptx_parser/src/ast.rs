@@ -592,6 +592,72 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        // spcompress.es.ib.sp::2:4.xN mdata, cdata, data, spdesc (PTX ISA 9.4)
+        Spcompress {
+            data: SparseDetails,
+            arguments<T>: {
+                dst_m: {
+                    repr: T,
+                    type: { registers(data.mdata) },
+                },
+                dst_c: {
+                    repr: T,
+                    type: { registers(data.cdata) },
+                },
+                src_data: {
+                    repr: T,
+                    type: { registers(data.data) },
+                },
+                src_desc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // spdecompress.es.ib.sp::S:T.xN data, mdata, cdata
+        Spdecompress {
+            data: SparseDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.data) },
+                },
+                src_m: {
+                    repr: T,
+                    type: { registers(data.mdata) },
+                },
+                src_c: {
+                    repr: T,
+                    type: { registers(data.cdata) },
+                },
+            }
+        },
+        // The PTX ISA 9.x narrow conversions (.pzo, .scaled::n{1,2}::ue8m0, .ue5m3x2, .s2f6x2), in software
+        CvtNarrow {
+            data: CvtNarrowDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src1: {
+                    repr: T,
+                    type: { data.src_type() },
+                    relaxed_type_check: true,
+                },
+                src2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                    relaxed_type_check: true,
+                },
+                src_scale: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B16) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
         CvtTf32 {
             data: CvtTf32Details,
             arguments<T>: {
@@ -1538,6 +1604,183 @@ ptx_parser_macros::generate_instruction_type!(
         WgmmaFence {
             data: WgmmaControl,
         },
+        // tcgen05.fence / wait / relinquish_alloc_permit: the emulated operations complete in program order
+        Tcgen05Sync { },
+        // tcgen05.alloc.cta_group::N.sync.aligned.shared::cta.b32 [dst], ncols
+        Tcgen05Alloc {
+            type: Type::Scalar(ScalarType::B32),
+            data: u8,
+            arguments<T>: {
+                src_addr: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+                src_ncols: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.mma.cta_group::1.kind [d], a-desc | [a], b-desc, idesc{, disable-output-lane}, enable-input-d{, scale}
+        Tcgen05Mma {
+            data: Tcgen05MmaDetails,
+            arguments<T>: {
+                src_d: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(if data.a_tmem { ScalarType::B32 } else { ScalarType::B64 }) },
+                },
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                // .sp: the tensor memory address of the metadata
+                src_meta: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_idesc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                // .block_scale: the tensor memory addresses of the scale factors of A and B
+                src_scale_a: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_scale_b: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_mask: {
+                    repr: Option<T>,
+                    type: Type::Vector(4, ScalarType::B32),
+                },
+                src_enable: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_scale: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                // .ws: the zero-column mask descriptor
+                src_zmask: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tcgen05.cp.cta_group::N.shape{.decompression} [taddr], s-desc: data is the shape, the decompression code and N
+        Tcgen05Cp {
+            data: (u8, u8, u8),
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_desc: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+            }
+        },
+        // tcgen05.shift.cta_group::1.down [taddr]
+        Tcgen05Shift {
+            data: u8,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.commit.cta_group::1.mbarrier::arrive::one{.shared::cluster}.b64 [mbar]
+        Tcgen05Commit {
+            type: Type::Scalar(ScalarType::B64),
+            arguments<T>: {
+                src_mbar: {
+                    repr: T,
+                    space: { StateSpace::Shared },
+                },
+            }
+        },
+        // tcgen05.dealloc.cta_group::N.sync.aligned.b32 taddr, ncols
+        Tcgen05Dealloc {
+            data: u8,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_ncols: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.ld.sync.aligned.shape.num{.pack::16b}.b32 d, [taddr]{, offset}
+        Tcgen05Ld {
+            data: Tcgen05LdStDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.registers) },
+                },
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_offset: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.ld.red / ld.spcompress / ld.red.spcompress: dst is the loaded registers, or the metadata with
+        // .spcompress (then dst_c the kept values); dst_red the reduction
+        Tcgen05LdRed {
+            data: Tcgen05LdRedDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { registers(data.dst_registers) },
+                },
+                dst_c: {
+                    repr: Option<T>,
+                    type: { registers(data.c_registers) },
+                },
+                dst_red: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        // tcgen05.st.sync.aligned.shape.num{.unpack::16b}.b32 [taddr]{, offset}, values
+        Tcgen05St {
+            data: Tcgen05LdStDetails,
+            arguments<T>: {
+                src_taddr: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_offset: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+                src_values: {
+                    repr: T,
+                    type: { registers(data.registers) },
+                },
+            }
+        },
         // tex / tld4 in their full forms (textures sampled in software on AGX)
         TexAgx {
             type: !,
@@ -2237,6 +2480,10 @@ where
                                     (self)(ident, type_space, is_dst, relaxed_type_check)?,
                                 )),
                                 Some(RegOrImmediate::Imm(imm)) => Some(RegOrImmediate::Imm(imm)),
+                                Some(RegOrImmediate::RegOffset(ident, offset)) => Some(RegOrImmediate::RegOffset(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                    offset,
+                                )),
                                 None => None,
                             })
                         })
@@ -2758,6 +3005,9 @@ pub struct ShfDetails {
 pub enum RegOrImmediate<Ident> {
     Reg(Ident),
     Imm(ImmediateValue),
+    /// the address of a variable plus a byte offset (in initializers: `name + 4`)
+    #[display("{_0}+{_1}")]
+    RegOffset(Ident, i64),
 }
 
 #[derive(Clone)]
@@ -4745,6 +4995,129 @@ impl CvtMiniDetails {
             MiniDirection::FromF16x2 | MiniDirection::FromBf16x2 => Type::Scalar(ScalarType::B32),
             MiniDirection::ToF16x2 | MiniDirection::ToBf16x2 => Type::Scalar(ScalarType::B16),
         }
+    }
+}
+
+/// spcompress / spdecompress: element and index bits, the sp::S:T ratio, the iterations and the registers of the
+/// three vectors (data is uncompressed, cdata compressed, mdata the indices)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SparseDetails {
+    pub element_bits: u8,
+    pub index_bits: u8,
+    pub kept: u8,
+    pub group: u8,
+    pub iterations: u8,
+    pub data: u8,
+    pub cdata: u8,
+    pub mdata: u8,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Tcgen05Kind {
+    F16,
+    Tf32,
+    I8,
+    F8f6f4,
+    // block scaled
+    Mxf8f6f4,
+    Mxf4,
+    Mxf4nvf4,
+}
+
+/// tcgen05.mma (one thread computes the whole tile of D in tensor memory; the instruction descriptor gives the
+/// shape and the element types)
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Tcgen05MmaDetails {
+    pub kind: Tcgen05Kind,
+    /// A is in tensor memory (otherwise a shared memory descriptor)
+    pub a_tmem: bool,
+    /// .ashift: the rows of A move down one row
+    pub ashift: bool,
+    pub mask: bool,
+    pub scale: bool,
+    /// .sp: A is 2:4 (1:2 for tf32) structured sparse, with metadata in tensor memory
+    pub sparse: bool,
+    /// .ws (weight stationary), with a zero-column mask descriptor or without
+    pub ws: bool,
+    pub zmask: bool,
+    /// .cta_group::2: the CTA pair of the cluster computes the tile
+    pub pair: bool,
+    /// .block_scale: the scale vector size (0 the default of the kind, 2 for .scale_vec::2X, 4 for .scale_vec::4X,
+    /// 16 for .block16, 32 for .block32)
+    pub block: Option<u8>,
+}
+
+/// The register <-> tensor memory shapes of tcgen05.ld / st
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Tcgen05Shape {
+    S32x32b,
+    S16x64b,
+    S16x128b,
+    S16x256b,
+    S16x32bx2,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Tcgen05LdStDetails {
+    pub shape: Tcgen05Shape,
+    /// the repeat count (.xN)
+    pub num: u8,
+    /// .pack::16b (ld) / .unpack::16b (st): two 16-bit columns per register
+    pub packed: bool,
+    /// the registers of the vector operand
+    pub registers: u8,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Tcgen05LdRedDetails {
+    pub shape: Tcgen05Shape,
+    /// the registers loaded (repeats times the registers per repeat)
+    pub loaded: u8,
+    /// min (otherwise max)
+    pub min: bool,
+    pub abs: bool,
+    pub nan: bool,
+    /// 0 f32, 1 u32, 2 s32
+    pub type_: u8,
+    pub red: bool,
+    pub spcompress: bool,
+    pub dst_registers: u8,
+    pub c_registers: u8,
+}
+
+/// n 32-bit registers: a scalar or a vector
+pub fn registers(n: u8) -> Type {
+    if n == 1 {
+        Type::Scalar(ScalarType::B32)
+    } else {
+        Type::Vector(n, ScalarType::B32)
+    }
+}
+
+/// cvt.rnd{.relu}.satfinite{.pzo}{.scaled::n1::ue8m0|.scaled::n2::ue8m0}.<kind>x2.{f32,f16x2,bf16x2} d, a{, b}{, scale}
+/// and cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CvtNarrowDetails {
+    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6
+    pub kind: u8,
+    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2
+    pub flags: u8,
+    /// narrowing: 0 f32 pair, 1 f16x2, 2 bf16x2; widening: 0 f16x2, 1 bf16x2
+    pub other: u8,
+    pub widen: bool,
+}
+
+impl CvtNarrowDetails {
+    pub fn dst_type(&self) -> Type {
+        Type::Scalar(if self.widen { ScalarType::B32 } else { ScalarType::B16 })
+    }
+
+    pub fn src_type(&self) -> Type {
+        Type::Scalar(match (self.widen, self.other) {
+            (true, _) => ScalarType::B16,
+            (false, 0) => ScalarType::F32,
+            _ => ScalarType::B32,
+        })
     }
 }
 

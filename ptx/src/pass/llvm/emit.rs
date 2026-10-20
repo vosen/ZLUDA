@@ -161,6 +161,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 self.emit_fn_attribute_enum(fn_, "strictfp");
             }
         }
+        // kernels too, whose address `mov.u64 %rd, kernel` takes
+        self.resolver.register(method.name, fn_);
         self.emit_target_features(fn_);
         self.emit_tuning(fn_, &method.tuning);
         if let Some(kernel_attrs) = &method.kernel_attributes {
@@ -175,7 +177,6 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 llvm_ftz(kernel_attrs.flush_to_zero_f16f64),
             );
         } else {
-            self.resolver.register(method.name, fn_);
             self.emit_fn_attribute_string(fn_, "denormal-fp-math-f32", "dynamic");
             self.emit_fn_attribute_string(fn_, "denormal-fp-math", "dynamic");
         }
@@ -342,6 +343,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                         ast::RegOrImmediate::Reg(reg) => {
                             Ok(unsafe { LLVMConstPtrToInt(self.resolver.value(*reg)?, type_) })
                         }
+                        ast::RegOrImmediate::RegOffset(reg, offset) => self.address_init(*reg, *offset, type_),
                         ast::RegOrImmediate::Imm(imm) => {
                             Ok(get_immediate_value(self.context, scalar, imm))
                         }
@@ -350,17 +352,29 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
             }
             ast::Type::Scalar(scalar) => {
-                let initializer = match array_init {
-                    [ast::RegOrImmediate::Imm(init)] => init,
+                let type_ = get_scalar_type(self.context, *scalar);
+                match array_init {
+                    [ast::RegOrImmediate::Imm(init)] => get_immediate_value(self.context, scalar, init),
+                    // the address of a variable (or function), plus an offset
+                    [ast::RegOrImmediate::Reg(reg)] => self.address_init(*reg, 0, type_)?,
+                    [ast::RegOrImmediate::RegOffset(reg, offset)] => self.address_init(*reg, *offset, type_)?,
                     _ => return Err(error_mismatched_type()),
-                };
-                get_immediate_value(self.context, scalar, initializer)
+                }
             }
             _ => {
                 todo!()
             }
         };
         Ok(initializer)
+    }
+
+    fn address_init(&self, reg: SpirvWord, offset: i64, type_: LLVMTypeRef) -> Result<LLVMValueRef, TranslateError> {
+        let address = unsafe { LLVMConstPtrToInt(self.resolver.value(reg)?, type_) };
+        Ok(if offset == 0 {
+            address
+        } else {
+            unsafe { LLVMConstAdd(address, LLVMConstInt(type_, offset as u64, 1)) }
+        })
     }
 
     fn emit_fn_attribute_string(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {
@@ -513,6 +527,19 @@ fn get_immediate_value(
     imm: &ast::ImmediateValue,
 ) -> *mut LLVMValue {
     let type_ = get_scalar_type(context, *scalar_type);
+    // packed types (.u16x2, .f16x2, ...): the bits of the immediate as an integer of the same size
+    if unsafe { LLVMGetTypeKind(type_) } == LLVMTypeKind::LLVMVectorTypeKind {
+        let bits = scalar_type.size_of() as u32 * 8;
+        let int_type = unsafe { LLVMIntTypeInContext(context, bits) };
+        let value = match imm {
+            ast::ImmediateValue::U64(x) => *x,
+            ast::ImmediateValue::S64(x) => *x as u64,
+            ast::ImmediateValue::F32(x) => x.to_bits() as u64,
+            ast::ImmediateValue::F64(x) => x.to_bits(),
+        };
+        let mask = if bits < 64 { (1u64 << bits) - 1 } else { u64::MAX };
+        return unsafe { LLVMConstBitCast(LLVMConstInt(int_type, value & mask, 0), type_) };
+    }
     // PTX immediates are 64-bit; LLVM requires them to fit the type.
     let truncate = |x: u64| {
         let width = unsafe { LLVMGetIntTypeWidth(type_) };
@@ -819,6 +846,45 @@ impl<'a> MethodEmitContext<'a> {
                 };
                 self.emit_cvt_mini(data, dst_type, arguments.dst, arguments.src1, arguments.src2)
             }
+            ast::Instruction::CvtNarrow { data, arguments } => self.emit_cvt_narrow(data, arguments),
+            ast::Instruction::Spcompress { data, arguments } => self.emit_spcompress(data, arguments),
+            ast::Instruction::Tcgen05Sync {} => Ok(()),
+            ast::Instruction::Tcgen05Cp { data: (shape, nb, group), arguments } => {
+                let taddr = self.i32_value(Some(arguments.src_taddr))?;
+                let desc = self.i64_value(arguments.src_desc)?;
+                let shape = self.const_u32(shape as u64);
+                let nb = self.const_u32(nb as u64);
+                let pair = self.const_u32((group == 2) as u64);
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_tcgen05_cp", None, None, &[taddr, desc, shape, nb, pair])?;
+                Ok(())
+            }
+            ast::Instruction::Tcgen05Shift { data: group, arguments } => {
+                let taddr = self.i32_value(Some(arguments.src_taddr))?;
+                let pair = self.const_u32((group == 2) as u64);
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_tcgen05_shift", None, None, &[taddr, pair])?;
+                Ok(())
+            }
+            // the emulated operations are complete: an arrive (count 1) on the mbarrier right away
+            ast::Instruction::Tcgen05Commit { arguments } => {
+                let mbar = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbar)?;
+                let one = self.const_u32(1);
+                let zero = self.const_u32(0);
+                self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_mbarrier_arrive",
+                    None,
+                    Some(ast::ScalarType::B64),
+                    &[mbar, one, zero],
+                )?;
+                Ok(())
+            }
+            // replaced by a call to its agx_matrix helper
+            ast::Instruction::Tcgen05Mma { .. } => Err(error_unreachable()),
+            ast::Instruction::Tcgen05Alloc { arguments, .. } => self.emit_tcgen05_alloc(arguments),
+            ast::Instruction::Tcgen05Dealloc { arguments, .. } => self.emit_tcgen05_dealloc(arguments),
+            ast::Instruction::Tcgen05Ld { data, arguments } => self.emit_tcgen05_ld(data, arguments),
+            ast::Instruction::Tcgen05LdRed { data, arguments } => self.emit_tcgen05_ld_red(data, arguments),
+            ast::Instruction::Tcgen05St { data, arguments } => self.emit_tcgen05_st(data, arguments),
+            ast::Instruction::Spdecompress { data, arguments } => self.emit_spdecompress(data, arguments),
             ast::Instruction::Isspacep { data, arguments } => self.emit_isspacep(data, arguments),
             ast::Instruction::Packed8 { data, arguments } => self.emit_packed8(data, arguments),
             ast::Instruction::Clmad { data, arguments } => self.emit_clmad(data, arguments),
@@ -2865,6 +2931,31 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::CvtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        // between pair types (the mixed-precision forms): lane by lane
+        let lane = |t: ast::ScalarType| match t {
+            ast::ScalarType::F32x2 => Some(ast::ScalarType::F32),
+            ast::ScalarType::F16x2 => Some(ast::ScalarType::F16),
+            ast::ScalarType::BF16x2 => Some(ast::ScalarType::BF16),
+            _ => None,
+        };
+        if let (Some(from_lane), Some(to_lane), None) = (lane(from), lane(to), arguments.src2) {
+            let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+            let mut vector = unsafe { LLVMGetUndef(get_scalar_type(self.context, to)) };
+            for i in 0..2 {
+                let index = unsafe { LLVMConstInt(i32_type, i, 0) };
+                let element = unsafe { LLVMBuildExtractElement(self.builder, src, index, LLVM_UNNAMED.as_ptr()) };
+                let mut converted = self.emit_cvt_float_to_float_impl(truncate, to_lane, None, from_lane, element)?;
+                if relu {
+                    converted = self.emit_relu(to_lane, converted)?;
+                }
+                if satfinite {
+                    converted = self.emit_satfinite(to_lane, converted)?;
+                }
+                vector = unsafe { LLVMBuildInsertElement(self.builder, vector, converted, index, LLVM_UNNAMED.as_ptr()) };
+            }
+            self.resolver.register(arguments.dst, vector);
+            return Ok(());
+        }
         // cvt.frnd2.f16x2.f32 d, a, b;
         if let Some(src2) = arguments.src2 {
             let src2 = self.resolver.value(src2)?;
@@ -6076,10 +6167,13 @@ impl<'a> MethodEmitContext<'a> {
         let ptr = get_pointer_type(self.context, ast::StateSpace::Global)?;
         Ok(match id {
             Some(id) => {
-                let v = self.resolver.value(id)?;
-                let v = unsafe {
-                    LLVMBuildZExtOrBitCast(self.builder, v, LLVMInt64TypeInContext(self.context), LLVM_UNNAMED.as_ptr())
-                };
+                let mut v = self.resolver.value(id)?;
+                let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+                // a .texref / .surfref / .samplerref variable: on AGX it holds the handle
+                if unsafe { LLVMGetTypeKind(LLVMTypeOf(v)) } == LLVMTypeKind::LLVMPointerTypeKind {
+                    v = unsafe { LLVMBuildLoad2(self.builder, i64_type, v, LLVM_UNNAMED.as_ptr()) };
+                }
+                let v = unsafe { LLVMBuildZExtOrBitCast(self.builder, v, i64_type, LLVM_UNNAMED.as_ptr()) };
                 unsafe { LLVMBuildIntToPtr(self.builder, v, ptr, LLVM_UNNAMED.as_ptr()) }
             }
             None => unsafe { LLVMConstNull(ptr) },
@@ -6321,6 +6415,437 @@ impl<'a> MethodEmitContext<'a> {
         });
         args.extend([op, signed, value]);
         self.emit_agx_helper(c"__zluda_ptx_impl_agx_sured", None, None, &args)?;
+        Ok(())
+    }
+
+    // The lowest active lane of the warp performs the warp-collective tcgen05 operations
+    fn emit_is_leader(&mut self) -> Result<(LLVMValueRef, LLVMValueRef), TranslateError> {
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let active = self.emit_active_lanes()?;
+        let false_ = unsafe { LLVMConstInt(LLVMInt1TypeInContext(self.context), 0, 0) };
+        let leader = self.emit_int_intrinsic("llvm.cttz", i32_type, &[active, false_]);
+        let lane = self.emit_lane_id()?;
+        let is = unsafe { LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, lane, leader, LLVM_UNNAMED.as_ptr()) };
+        let is = unsafe { LLVMBuildZExt(self.builder, is, i32_type, LLVM_UNNAMED.as_ptr()) };
+        Ok((leader, is))
+    }
+
+    fn emit_tcgen05_alloc(&mut self, arguments: ast::Tcgen05AllocArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let ncols = self.i32_value(Some(arguments.src_ncols))?;
+        let (leader, is_leader) = self.emit_is_leader()?;
+        let column = self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_tmem_alloc",
+            None,
+            Some(ast::ScalarType::B32),
+            &[ncols, is_leader],
+        )?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let column = self.emit_intrinsic(
+            c"llvm.agx.simd.shuffle.i32",
+            None,
+            vec![&ast::Type::Scalar(ast::ScalarType::B32)],
+            vec![(column, i32_type), (leader, i32_type)],
+        )?;
+        let address = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_addr)?;
+        unsafe { LLVMBuildStore(self.builder, column, address) };
+        Ok(())
+    }
+
+    fn emit_tcgen05_dealloc(&mut self, arguments: ast::Tcgen05DeallocArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let taddr = self.i32_value(Some(arguments.src_taddr))?;
+        let ncols = self.i32_value(Some(arguments.src_ncols))?;
+        let (_, is_leader) = self.emit_is_leader()?;
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_tmem_dealloc", None, None, &[taddr, ncols, is_leader])?;
+        Ok(())
+    }
+
+    // The tensor memory word (lane, column) of register i of this thread (ptx-exec-tc.k tcCell), as a pointer
+    fn tmem_cell(
+        &mut self,
+        base: LLVMValueRef,
+        shape: ast::Tcgen05Shape,
+        taddr: LLVMValueRef,
+        thread: LLVMValueRef,
+        split: LLVMValueRef,
+        i: u32,
+    ) -> LLVMValueRef {
+        let b = self.builder;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let c = |v: u32| unsafe { LLVMConstInt(i32_type, v as u64, 0) };
+        unsafe {
+            let lane0 = LLVMBuildLShr(b, taddr, c(16), LLVM_UNNAMED.as_ptr());
+            let column0 = LLVMBuildAnd(b, taddr, c(0xffff), LLVM_UNNAMED.as_ptr());
+            let t16 = LLVMBuildAnd(b, thread, c(15), LLVM_UNNAMED.as_ptr());
+            let half = LLVMBuildLShr(b, thread, c(4), LLVM_UNNAMED.as_ptr());
+            let (lane, column) = match shape {
+                ast::Tcgen05Shape::S32x32b => (LLVMBuildAdd(b, lane0, thread, LLVM_UNNAMED.as_ptr()), c(i)),
+                ast::Tcgen05Shape::S16x64b => (t16, LLVMBuildAdd(b, c(2 * i), half, LLVM_UNNAMED.as_ptr())),
+                ast::Tcgen05Shape::S16x128b => {
+                    let h = LLVMBuildShl(b, half, c(1), LLVM_UNNAMED.as_ptr());
+                    (t16, LLVMBuildAdd(b, c(4 * (i / 2) + i % 2), h, LLVM_UNNAMED.as_ptr()))
+                }
+                ast::Tcgen05Shape::S16x256b => {
+                    let h = LLVMBuildShl(b, half, c(2), LLVM_UNNAMED.as_ptr());
+                    (t16, LLVMBuildAdd(b, c(8 * (i / 4) + i % 4), h, LLVM_UNNAMED.as_ptr()))
+                }
+                ast::Tcgen05Shape::S16x32bx2 => {
+                    let h = LLVMBuildMul(b, half, split, LLVM_UNNAMED.as_ptr());
+                    (t16, LLVMBuildAdd(b, c(i), h, LLVM_UNNAMED.as_ptr()))
+                }
+            };
+            let lane = if shape == ast::Tcgen05Shape::S32x32b { lane } else { LLVMBuildAdd(b, lane0, lane, LLVM_UNNAMED.as_ptr()) };
+            let column = LLVMBuildAdd(b, column0, column, LLVM_UNNAMED.as_ptr());
+            let lane = LLVMBuildAnd(b, lane, c(127), LLVM_UNNAMED.as_ptr());
+            let column = LLVMBuildAnd(b, column, c(511), LLVM_UNNAMED.as_ptr());
+            let word = LLVMBuildMul(b, lane, c(512), LLVM_UNNAMED.as_ptr());
+            let word = LLVMBuildAdd(b, word, column, LLVM_UNNAMED.as_ptr());
+            let i64_type = LLVMInt64TypeInContext(self.context);
+            let offset = LLVMBuildZExt(b, word, i64_type, LLVM_UNNAMED.as_ptr());
+            let offset = LLVMBuildShl(b, offset, LLVMConstInt(i64_type, 2, 0), LLVM_UNNAMED.as_ptr());
+            let address = LLVMBuildAdd(b, base, offset, LLVM_UNNAMED.as_ptr());
+            let ptr = get_pointer_type(self.context, ast::StateSpace::Global).unwrap();
+            LLVMBuildIntToPtr(b, address, ptr, LLVM_UNNAMED.as_ptr())
+        }
+    }
+
+    fn tmem_access(
+        &mut self,
+        taddr: SpirvWord,
+        offset: Option<SpirvWord>,
+    ) -> Result<(LLVMValueRef, LLVMValueRef, LLVMValueRef, LLVMValueRef), TranslateError> {
+        let base = self.emit_agx_helper(c"__zluda_ptx_impl_agx_tmem_base", None, Some(ast::ScalarType::B64), &[])?;
+        let taddr = self.i32_value(Some(taddr))?;
+        let split = self.i32_value(offset)?;
+        let thread = self.emit_lane_id()?;
+        Ok((base, taddr, thread, split))
+    }
+
+    fn emit_tcgen05_ld(
+        &mut self,
+        data: ast::Tcgen05LdStDetails,
+        arguments: ast::Tcgen05LdArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let (base, taddr, thread, split) = self.tmem_access(arguments.src_taddr, arguments.src_offset)?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let mut words = Vec::new();
+        for i in 0..data.registers as u32 {
+            let word = if data.packed {
+                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i);
+                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i + 1);
+                unsafe {
+                    let lo = LLVMBuildLoad2(self.builder, i32_type, lo, LLVM_UNNAMED.as_ptr());
+                    let hi = LLVMBuildLoad2(self.builder, i32_type, hi, LLVM_UNNAMED.as_ptr());
+                    let lo = LLVMBuildAnd(self.builder, lo, LLVMConstInt(i32_type, 0xffff, 0), LLVM_UNNAMED.as_ptr());
+                    let hi = LLVMBuildShl(self.builder, hi, LLVMConstInt(i32_type, 16, 0), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildOr(self.builder, lo, hi, LLVM_UNNAMED.as_ptr())
+                }
+            } else {
+                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+                unsafe { LLVMBuildLoad2(self.builder, i32_type, p, LLVM_UNNAMED.as_ptr()) }
+            };
+            words.push(word);
+        }
+        self.register_value(arguments.dst, words);
+        Ok(())
+    }
+
+    fn emit_tcgen05_ld_red(
+        &mut self,
+        data: ast::Tcgen05LdRedDetails,
+        arguments: ast::Tcgen05LdRedArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let (base, taddr, thread, split) = self.tmem_access(arguments.src_taddr, None)?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let mut values = Vec::new();
+        for i in 0..data.loaded as u32 {
+            let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+            values.push(unsafe { LLVMBuildLoad2(self.builder, i32_type, p, LLVM_UNNAMED.as_ptr()) });
+        }
+        let c = |this: &Self, v: u64| this.const_u32(v);
+        if let Some(dst_red) = arguments.dst_red {
+            let mode = c(self, data.min as u64 | (data.type_ as u64) << 1 | (data.nan as u64) << 3);
+            let abs = |this: &mut Self, v: LLVMValueRef| {
+                if data.abs {
+                    unsafe { LLVMBuildAnd(this.builder, v, this.const_u32(0x7fff_ffff), LLVM_UNNAMED.as_ptr()) }
+                } else {
+                    v
+                }
+            };
+            let mut acc = abs(self, values[0]);
+            for v in values.iter().skip(1) {
+                let x = abs(self, *v);
+                acc = self.emit_agx_helper(c"__zluda_ptx_impl_agx_tcgen05_red", None, Some(ast::ScalarType::B32), &[mode, acc, x])?;
+            }
+            self.resolver.register(dst_red, acc);
+        }
+        if data.spcompress {
+            // ptx-exec-spc.k spcFin: the kept values in order, their 2-bit indices packed from bit 0
+            let op = c(self, 2 * data.min as u64 + data.abs as u64);
+            let mut kept = Vec::new();
+            let mut meta = c(self, 0);
+            for (g, group) in values.chunks(4).enumerate() {
+                if group.len() < 4 {
+                    break;
+                }
+                let indices = self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_tcgen05_spc_f32",
+                    None,
+                    Some(ast::ScalarType::B32),
+                    &[op, group[0], group[1], group[2], group[3]],
+                )?;
+                for slot in 0..2 {
+                    let index = unsafe {
+                        let x = LLVMBuildLShr(self.builder, indices, c(self, 2 * slot), LLVM_UNNAMED.as_ptr());
+                        LLVMBuildAnd(self.builder, x, c(self, 3), LLVM_UNNAMED.as_ptr())
+                    };
+                    let mut value = group[0];
+                    for j in 1..4 {
+                        let is = unsafe {
+                            LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, index, c(self, j), LLVM_UNNAMED.as_ptr())
+                        };
+                        value = unsafe { LLVMBuildSelect(self.builder, is, group[j as usize], value, LLVM_UNNAMED.as_ptr()) };
+                    }
+                    kept.push(value);
+                    let bit = 2 * (2 * g as u64 + slot);
+                    if bit < 32 {
+                        let shifted = unsafe { LLVMBuildShl(self.builder, index, c(self, bit), LLVM_UNNAMED.as_ptr()) };
+                        meta = unsafe { LLVMBuildOr(self.builder, meta, shifted, LLVM_UNNAMED.as_ptr()) };
+                    }
+                }
+            }
+            let mut m_words = vec![meta];
+            m_words.resize(data.dst_registers as usize, c(self, 0));
+            m_words.truncate(data.dst_registers as usize);
+            self.register_value(arguments.dst, m_words);
+            if let Some(dst_c) = arguments.dst_c {
+                kept.resize(data.c_registers as usize, c(self, 0));
+                self.register_value(dst_c, kept);
+            }
+        } else {
+            values.resize(data.dst_registers as usize, c(self, 0));
+            self.register_value(arguments.dst, values);
+        }
+        Ok(())
+    }
+
+    fn emit_tcgen05_st(
+        &mut self,
+        data: ast::Tcgen05LdStDetails,
+        arguments: ast::Tcgen05StArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let values = self.register_words(arguments.src_values, data.registers)?;
+        let (base, taddr, thread, split) = self.tmem_access(arguments.src_taddr, arguments.src_offset)?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        for (i, value) in values.into_iter().enumerate() {
+            let i = i as u32;
+            if data.packed {
+                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i);
+                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i + 1);
+                unsafe {
+                    let low = LLVMBuildAnd(self.builder, value, LLVMConstInt(i32_type, 0xffff, 0), LLVM_UNNAMED.as_ptr());
+                    let high = LLVMBuildLShr(self.builder, value, LLVMConstInt(i32_type, 16, 0), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildStore(self.builder, low, lo);
+                    LLVMBuildStore(self.builder, high, hi);
+                }
+            } else {
+                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+                unsafe { LLVMBuildStore(self.builder, value, p) };
+            }
+        }
+        Ok(())
+    }
+
+    // the 32-bit registers of a scalar or vector value
+    fn register_words(&mut self, id: SpirvWord, count: u8) -> Result<Vec<LLVMValueRef>, TranslateError> {
+        let value = self.resolver.value(id)?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        if count == 1 {
+            return Ok(vec![self.i32_value(Some(id))?]);
+        }
+        Ok((0..count as u64)
+            .map(|i| unsafe {
+                let element = LLVMBuildExtractElement(self.builder, value, LLVMConstInt(i32_type, i, 0), LLVM_UNNAMED.as_ptr());
+                LLVMBuildZExtOrBitCast(self.builder, element, i32_type, LLVM_UNNAMED.as_ptr())
+            })
+            .collect())
+    }
+
+    fn register_value(&mut self, dst: SpirvWord, words: Vec<LLVMValueRef>) {
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let value = if words.len() == 1 {
+            words[0]
+        } else {
+            let mut vector = unsafe { LLVMGetUndef(LLVMVectorType(i32_type, words.len() as u32)) };
+            for (i, word) in words.into_iter().enumerate() {
+                vector = unsafe {
+                    LLVMBuildInsertElement(self.builder, vector, word, LLVMConstInt(i32_type, i as u64, 0), LLVM_UNNAMED.as_ptr())
+                };
+            }
+            vector
+        };
+        self.resolver.register(dst, value);
+    }
+
+    // bits [offset, offset + width) of a little-endian vector of 32-bit words (width <= 64; missing words are zero)
+    fn extract_bits(&mut self, words: &[LLVMValueRef], offset: u32, width: u32) -> LLVMValueRef {
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let b = self.builder;
+        let mut result = unsafe { LLVMConstInt(i64_type, 0, 0) };
+        for (k, word) in words.iter().enumerate() {
+            let start = k as i64 * 32;
+            if start + 32 <= offset as i64 || start >= (offset + width) as i64 {
+                continue;
+            }
+            let shift = start - offset as i64;
+            unsafe {
+                let wide = LLVMBuildZExt(b, *word, i64_type, LLVM_UNNAMED.as_ptr());
+                let piece = if shift >= 0 {
+                    LLVMBuildShl(b, wide, LLVMConstInt(i64_type, shift as u64, 0), LLVM_UNNAMED.as_ptr())
+                } else {
+                    LLVMBuildLShr(b, wide, LLVMConstInt(i64_type, (-shift) as u64, 0), LLVM_UNNAMED.as_ptr())
+                };
+                result = LLVMBuildOr(b, result, piece, LLVM_UNNAMED.as_ptr());
+            }
+        }
+        if width < 64 {
+            result = unsafe { LLVMBuildAnd(b, result, LLVMConstInt(i64_type, (1u64 << width) - 1, 0), LLVM_UNNAMED.as_ptr()) };
+        }
+        result
+    }
+
+    // ors the low `width` bits of value (i64) into the words at offset
+    fn deposit_bits(&mut self, words: &mut [LLVMValueRef], offset: u32, width: u32, value: LLVMValueRef) {
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let b = self.builder;
+        let value = if width < 64 {
+            unsafe { LLVMBuildAnd(b, value, LLVMConstInt(i64_type, (1u64 << width) - 1, 0), LLVM_UNNAMED.as_ptr()) }
+        } else {
+            value
+        };
+        for (k, word) in words.iter_mut().enumerate() {
+            let start = k as i64 * 32;
+            if start + 32 <= offset as i64 || start >= (offset + width) as i64 {
+                continue;
+            }
+            let shift = start - offset as i64;
+            unsafe {
+                let piece = if shift >= 0 {
+                    LLVMBuildLShr(b, value, LLVMConstInt(i64_type, shift as u64, 0), LLVM_UNNAMED.as_ptr())
+                } else {
+                    LLVMBuildShl(b, value, LLVMConstInt(i64_type, (-shift) as u64, 0), LLVM_UNNAMED.as_ptr())
+                };
+                let piece = LLVMBuildTrunc(b, piece, i32_type, LLVM_UNNAMED.as_ptr());
+                *word = LLVMBuildOr(b, *word, piece, LLVM_UNNAMED.as_ptr());
+            }
+        }
+    }
+
+    // spcompress: one helper call per 64-bit iteration (zluda_ptx_impl_agx_cvt.c)
+    fn emit_spcompress(
+        &mut self,
+        data: ast::SparseDetails,
+        arguments: ast::SpcompressArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let source = self.register_words(arguments.src_data, data.data)?;
+        let desc = self.i32_value(Some(arguments.src_desc))?;
+        let es = data.element_bits as u32;
+        let ib = data.index_bits as u32;
+        // indices per iteration: two of every four elements
+        let index_width = 64 / es / 2 * ib;
+        let mut m = vec![self.const_u32(0); data.mdata as usize];
+        let mut c = vec![self.const_u32(0); data.cdata as usize];
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        for n in 0..data.iterations as u32 {
+            let bits = self.extract_bits(&source, 64 * n, 64);
+            let (lo, hi) = unsafe {
+                (
+                    LLVMBuildTrunc(self.builder, bits, i32_type, LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildTrunc(
+                        self.builder,
+                        LLVMBuildLShr(self.builder, bits, LLVMConstInt(i64_type, 32, 0), LLVM_UNNAMED.as_ptr()),
+                        i32_type,
+                        LLVM_UNNAMED.as_ptr(),
+                    ),
+                )
+            };
+            let es_value = self.const_u32(es as u64);
+            let ib_value = self.const_u32(ib as u64);
+            let result = self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_spc_iter",
+                None,
+                Some(ast::ScalarType::B64),
+                &[desc, es_value, ib_value, lo, hi],
+            )?;
+            self.deposit_bits(&mut c, 32 * n, 32, result);
+            let indices = unsafe { LLVMBuildLShr(self.builder, result, LLVMConstInt(i64_type, 32, 0), LLVM_UNNAMED.as_ptr()) };
+            self.deposit_bits(&mut m, index_width * n, index_width, indices);
+        }
+        self.register_value(arguments.dst_m, m);
+        self.register_value(arguments.dst_c, c);
+        Ok(())
+    }
+
+    fn emit_spdecompress(
+        &mut self,
+        data: ast::SparseDetails,
+        arguments: ast::SpdecompressArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let m_words = self.register_words(arguments.src_m, data.mdata)?;
+        let c_words = self.register_words(arguments.src_c, data.cdata)?;
+        let es = data.element_bits as u32;
+        let ib = data.index_bits as u32;
+        let (ns, nt) = (data.kept as u32, data.group as u32);
+        let mut d = vec![self.const_u32(0); data.data as usize];
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        for n in 0..data.iterations as u32 {
+            let c = self.extract_bits(&c_words, n * ns * es, ns * es);
+            let m = self.extract_bits(&m_words, n * ns * ib, ns * ib);
+            let m = unsafe { LLVMBuildTrunc(self.builder, m, i32_type, LLVM_UNNAMED.as_ptr()) };
+            let args = [es, ib, ns, nt].map(|v| self.const_u32(v as u64));
+            let result = self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_spd_iter",
+                None,
+                Some(ast::ScalarType::B64),
+                &[args[0], args[1], args[2], args[3], c, m],
+            )?;
+            self.deposit_bits(&mut d, n * nt * es, nt * es, result);
+        }
+        self.register_value(arguments.dst, d);
+        Ok(())
+    }
+
+    // in software (zluda_ptx_impl_agx_cvt.c); the scale defaults to 2^0 for each element
+    fn emit_cvt_narrow(
+        &mut self,
+        data: ast::CvtNarrowDetails,
+        arguments: ast::CvtNarrowArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
+        let kind = self.const_u32(data.kind as u64);
+        let flags = self.const_u32(data.flags as u64);
+        let other = self.const_u32(data.other as u64);
+        let a = self.i32_value(Some(arguments.src1))?;
+        let scale = match arguments.src_scale {
+            Some(scale) => self.i32_value(Some(scale))?,
+            None => self.const_u32(0x7f7f),
+        };
+        if data.widen {
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_cvt_widen",
+                Some(arguments.dst),
+                Some(ast::ScalarType::B32),
+                &[kind, other, flags, a, scale],
+            )?;
+        } else {
+            let b = self.i32_value(arguments.src2)?;
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_cvt_narrow",
+                Some(arguments.dst),
+                Some(ast::ScalarType::B16),
+                &[kind, flags, other, a, b, scale],
+            )?;
+        }
         Ok(())
     }
 

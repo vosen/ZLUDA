@@ -226,6 +226,17 @@ fn dot_ident<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<&'input 
     .parse_next(stream)
 }
 
+// The next token if its text is `text` (for the words the lexer has no dedicated token for)
+fn token_text<'a, 'input>(stream: &mut PtxParser<'a, 'input>, text: &str) -> PResult<()> {
+    match stream.input.first() {
+        Some((_, span)) if &stream.state.text[span.clone()] == text => {
+            stream.input = &stream.input[1..];
+            Ok(())
+        }
+        _ => backtrack(),
+    }
+}
+
 fn num<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(&'input str, u32, bool)> {
     trace(
         "num",
@@ -408,6 +419,29 @@ fn reg_or_immediate<'a, 'input>(
         )),
     )
     .parse_next(stream)
+}
+
+// A value in a variable initializer: also `generic(name)` (the address of a
+// variable, the same in the generic space here) and `name + offset`
+fn initializer_value<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::RegOrImmediate<&'input str>> {
+    if token_text(stream, "generic").is_ok() {
+        return delimited(Token::LParen, ident, Token::RParen)
+            .map(ast::RegOrImmediate::Reg)
+            .parse_next(stream);
+    }
+    let value = reg_or_immediate.parse_next(stream)?;
+    match value {
+        ast::RegOrImmediate::Reg(name) => {
+            let offset = opt(preceded(Token::Plus, u32)).parse_next(stream)?;
+            Ok(match offset {
+                Some(offset) => ast::RegOrImmediate::RegOffset(name, offset as i64),
+                None => value,
+            })
+        }
+        _ => Ok(value),
+    }
 }
 
 pub fn parse_for_errors<'input>(text: &'input str) -> Vec<PtxError<'input>> {
@@ -611,6 +645,9 @@ fn directive<'a, 'input>(
                 file.map(|_| None),
                 section.map(|_| None),
                 pragma.map(|_| None),
+                // .alias name, aliasee; (calls go to the aliasee by name)
+                (|stream: &mut PtxParser<'a, 'input>| token_text(stream, ".alias"), ident, Token::Comma, ident, Token::Semicolon)
+                    .map(|_| None),
                 (module_variable, Token::Semicolon)
                     .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
             )),
@@ -643,7 +680,14 @@ fn module_variable<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<(ast::LinkingDirective, ast::Variable<&'input str>)> {
     let linking = linking_directives.parse_next(stream)?;
-    let var = global_space
+    // .attribute(.managed): managed memory is ordinary device memory here
+    let var = terminated(
+        global_space,
+        opt(|stream: &mut PtxParser<'a, 'input>| {
+            token_text(stream, ".attribute")?;
+            (Token::LParen, dot_ident, Token::RParen).void().parse_next(stream)
+        }),
+    )
         .flat_map(|space| multi_variable(linking.contains(LinkingDirective::EXTERN), space))
         // TODO: support multi var in globals
         .verify_map(|multi_var| match multi_var {
@@ -689,8 +733,8 @@ fn section<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
 fn section_dwarf_line<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
     alt((
         (section_label, Token::Colon).void(),
-        (Token::DotB32, section_label, opt((Token::Add, u32))).void(),
-        (Token::DotB64, section_label, opt((Token::Add, u32))).void(),
+        (Token::DotB32, section_label, opt(alt(((Token::Plus, u32).void(), (Token::Minus, section_label).void())))).void(),
+        (Token::DotB64, section_label, opt(alt(((Token::Plus, u32).void(), (Token::Minus, section_label).void())))).void(),
         (
             any_bit_type,
             separated::<_, _, (), _, _, _, _>(1.., u32, Token::Comma),
@@ -722,8 +766,21 @@ fn function<'a, 'input>(
         trace("function", (linking_directives, method_declaration)).parse_next(stream)?;
     // Recorded before the body, which can call the function recursively
     stream.state.record_function(&func_directive);
-    let (tuning, body) =
-        (repeat(0.., tuning_directive), function_body).parse_next(stream)?;
+    prescan_branch_targets(stream);
+    // .pragma can sit among the tuning directives
+    let (tuning, body): (Vec<Option<ast::TuningDirective>>, _) = (
+        // (there without the semicolon too)
+        repeat(
+            0..,
+            alt((
+                tuning_directive.map(Some),
+                (Token::DotPragma, Token::String, opt(Token::Semicolon)).map(|_| None),
+            )),
+        ),
+        function_body,
+    )
+        .parse_next(stream)?;
+    let tuning = tuning.into_iter().flatten().collect();
     Ok((
         linking,
         ast::Function {
@@ -1051,7 +1108,12 @@ enum ParsedType {
 fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
     trace(
         "texref",
-        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+        alt((
+            Token::DotTexref.void(),
+            Token::DotSurfref.void(),
+            |stream: &mut PtxParser<'a, 'input>| token_text(stream, ".samplerref"),
+        ))
+        .map(|_| ParsedType::Texref),
     )
     .parse_next(stream)
 }
@@ -1332,7 +1394,7 @@ fn single_value_append<'b, 'a: 'b, 'input: 'a>(
     trace(
         "single_value_append",
         move |stream: &mut PtxParser<'a, 'input>| {
-            let value = reg_or_immediate.parse_next(stream)?;
+            let value = initializer_value.parse_next(stream)?;
             accumulator.push(value);
             Ok(())
         },
@@ -1430,6 +1492,19 @@ fn vector_prefix<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Opti
 }
 
 fn scalar_type<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ScalarType> {
+    // the storage of the narrow and tf32 types in declarations
+    if let Some((_, span)) = stream.input.first() {
+        let storage = match &stream.state.text[span.clone()] {
+            ".tf32" => Some(ScalarType::B32),
+            ".e2m1x2" => Some(ScalarType::B8),
+            ".e4m3x2" | ".e5m2x2" | ".e2m3x2" | ".e3m2x2" | ".ue8m0x2" => Some(ScalarType::B16),
+            _ => None,
+        };
+        if let Some(storage) = storage {
+            stream.input = &stream.input[1..];
+            return Ok(storage);
+        }
+    }
     token::any
         .verify_map(|(t, _)| {
             Some(match t {
@@ -1564,6 +1639,41 @@ fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PRes
     Ok(())
 }
 
+// The .branchtargets tables of the function body that starts at the stream, which brx.idx
+// can name before they are declared
+fn prescan_branch_targets<'a, 'input>(stream: &mut PtxParser<'a, 'input>) {
+    let tokens = stream.input;
+    let text = stream.state.text;
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < tokens.len() {
+        match tokens[i].0 {
+            Token::LBrace => depth += 1,
+            Token::RBrace => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+            }
+            Token::Colon if i > 0 && i + 1 < tokens.len() && &text[tokens[i + 1].1.clone()] == ".branchtargets" => {
+                let name = &text[tokens[i - 1].1.clone()];
+                let mut targets = Vec::new();
+                let mut j = i + 2;
+                while j < tokens.len() && !matches!(tokens[j].0, Token::Semicolon) {
+                    if !matches!(tokens[j].0, Token::Comma) {
+                        targets.push(&text[tokens[j].1.clone()]);
+                    }
+                    j += 1;
+                }
+                stream.state.branch_targets.insert(name, targets);
+                i = j;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+}
+
 // brx.idx{.uni} index, targets; becomes a branch to each target guarded
 // by a comparison of the index (an index out of range falls through)
 fn brx_idx<'a, 'input>(
@@ -1631,22 +1741,24 @@ fn label<'a, 'input>(
         .parse_next(stream)
 }
 
+// .loc file line column {prologue_end} {, function_name label{+offset}} {, inlined_at file line column}
 fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
     (
         Token::DotLoc,
         u32,
         u32,
         u32,
-        opt((
-            Token::Comma,
-            ident_literal("function_name"),
-            ident,
-            dispatch! { token::any;
-                (Token::Comma, _) => (ident_literal("inlined_at"), u32, u32, u32).void(),
-                (Token::Plus, _) => (u32, Token::Comma, ident_literal("inlined_at"), u32, u32, u32).void(),
-                _ => fail
-            },
-        )),
+        opt(ident_literal("prologue_end")),
+        repeat::<_, _, (), _, _>(
+            0..,
+            preceded(
+                Token::Comma,
+                alt((
+                    (ident_literal("function_name"), ident, opt((Token::Plus, u32))).void(),
+                    (ident_literal("inlined_at"), u32, u32, u32).void(),
+                )),
+            ),
+        ),
     )
         .void()
         .parse_next(stream)
@@ -2276,11 +2388,26 @@ fn tensor_instruction<'a, 'input>(
     };
     let opcode = &stream.state.text[span.clone()];
     let texture = ["tex", "tld4", "txq", "suld", "sust", "sured", "suq", "istypep"].contains(&opcode);
-    if opcode != "cp" && opcode != "tensormap" && !texture {
+    let arith = ["add", "sub", "mul", "fma"].contains(&opcode);
+    let sparse = opcode == "spcompress" || opcode == "spdecompress";
+    let tcgen05 = opcode == "tcgen05";
+    if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05 {
         return backtrack();
     }
     stream.input = &stream.input[1..];
     let mut modifiers = matrix_modifiers(stream);
+    if opcode == "cvt" {
+        return cvt_narrow_instruction(stream, modifiers);
+    }
+    if sparse {
+        return sparse_instruction(stream, opcode, modifiers);
+    }
+    if tcgen05 {
+        return tcgen05_instruction(stream, modifiers);
+    }
+    if arith {
+        return mixed_float_instruction(stream, opcode, modifiers);
+    }
     if opcode == "tensormap" {
         return tensormap_replace(stream, modifiers);
     }
@@ -2361,7 +2488,7 @@ fn tensor_instruction<'a, 'input>(
             .map(|c| match c {
                 Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
                 Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
-                None => backtrack(),
+                _ => backtrack(),
             })
             .collect()
     }
@@ -2422,7 +2549,7 @@ fn tensor_instruction<'a, 'input>(
             info.push(match v {
                 Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
                 Some(ast::RegOrImmediate::Imm(i)) => ast::ParsedOperand::Imm(i),
-                None => return backtrack(),
+                _ => return backtrack(),
             });
         }
         if info.len() > 3 {
@@ -2499,7 +2626,7 @@ fn operand_elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<Pa
             .map(|c| match c {
                 Some(ast::RegOrImmediate::Reg(r)) => Ok(ast::ParsedOperand::Reg(r)),
                 Some(ast::RegOrImmediate::Imm(i)) => Ok(ast::ParsedOperand::Imm(i)),
-                None => backtrack(),
+                _ => backtrack(),
             })
             .collect(),
         other => Ok(vec![other]),
@@ -2516,6 +2643,593 @@ fn take_geometry(modifiers: &mut Vec<&str>) -> Option<ast::TexGeometry> {
 
 fn take_type(modifiers: &mut Vec<&str>, types: &[(&str, ScalarType)]) -> Option<ScalarType> {
     types.iter().find(|(name, _)| take_modifier(modifiers, name)).map(|&(_, t)| t)
+}
+
+// The narrow conversions of PTX ISA 9.1 / 9.4 that the instruction grammar does
+// not have: .pzo, .scaled::n1::ue8m0 / .scaled::n2::ue8m0 and the .ue5m3x2 and
+// .s2f6x2 formats (see ast::CvtNarrowDetails). Every other cvt stays with the grammar.
+fn cvt_narrow_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let new_form = modifiers
+        .iter()
+        .any(|m| matches!(*m, "pzo" | "scaled::n1::ue8m0" | "scaled::n2::ue8m0" | "ue5m3x2" | "s2f6x2"));
+    if !new_form {
+        return backtrack();
+    }
+    let rounding = if take_modifier(&mut modifiers, "rn") {
+        0u8
+    } else if take_modifier(&mut modifiers, "rz") {
+        1
+    } else if take_modifier(&mut modifiers, "rp") {
+        2
+    } else {
+        return backtrack();
+    };
+    let mut flags = rounding;
+    for (name, bit) in [("relu", 4u8), ("pzo", 8), ("scaled::n1::ue8m0", 16), ("scaled::n2::ue8m0", 32)] {
+        if take_modifier(&mut modifiers, name) {
+            flags |= bit;
+        }
+    }
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let kind_of = |m: &str| {
+        Some(match m {
+            "e4m3x2" => 0u8,
+            "e5m2x2" => 1,
+            "e2m3x2" => 2,
+            "e3m2x2" => 3,
+            "e2m1x2" => 4,
+            "ue5m3x2" => 5,
+            "s2f6x2" => 6,
+            _ => return None,
+        })
+    };
+    let half_of = |m: &str| match m {
+        "f16x2" => Some(0u8),
+        "bf16x2" => Some(1u8),
+        _ => None,
+    };
+    let (kind, other, widen) = match modifiers.as_slice() {
+        [d, "f32"] if kind_of(d).is_some() => (kind_of(d).unwrap(), 0u8, false),
+        [d, s] if kind_of(d).is_some() && half_of(s).is_some() => (kind_of(d).unwrap(), half_of(s).unwrap() + 1, false),
+        [d, s] if half_of(d).is_some() && kind_of(s).is_some() => (kind_of(s).unwrap(), half_of(d).unwrap(), true),
+        _ => return backtrack(),
+    };
+    // narrowing needs .satfinite; widening rounds to nearest without the other modifiers
+    if widen == satfinite || (widen && (rounding != 0 || flags & !32 != 0)) {
+        return backtrack();
+    }
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src1 = ParsedOperandStr::parse.parse_next(stream)?;
+    let src2 = if !widen && other == 0 {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    let scale = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+    Ok(ast::Instruction::CvtNarrow {
+        data: ast::CvtNarrowDetails { kind, flags, other, widen },
+        arguments: CvtNarrowArgs { dst, src1, src2, src_scale: scale },
+    })
+}
+
+// tcgen05 (the fifth-generation tensor core of sm_100, emulated on AGX with the tensor memory in device memory)
+fn tcgen05_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let Some(&op) = modifiers.first() else {
+        return backtrack();
+    };
+    modifiers.remove(0);
+    // `.cta_group::1.128x256b` lexes as one piece (`1.128` is a number)
+    modifiers = modifiers
+        .into_iter()
+        .flat_map(|m| match m.strip_prefix("cta_group::").and_then(|rest| rest.split_once('.')) {
+            Some(_) => {
+                let (group, shape) = m.split_at("cta_group::".len() + 1);
+                vec![group, &shape[1..]]
+            }
+            None => vec![m],
+        })
+        .collect();
+    let cta_group = if take_modifier(&mut modifiers, "cta_group::2") {
+        2u8
+    } else {
+        take_modifier(&mut modifiers, "cta_group::1");
+        1
+    };
+    take_modifier(&mut modifiers, "sync");
+    take_modifier(&mut modifiers, "aligned");
+    let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    // [taddr] as a value
+    let bracketed = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+    };
+    let count = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(values) => values.len() as u8,
+        _ => 1,
+    };
+    let single = |o: ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(ref values) if values.len() == 1 => match values[0] {
+            Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+            _ => o,
+        },
+        other => other,
+    };
+    match op {
+        "fence::before_thread_sync" | "fence::after_thread_sync" | "wait::ld" | "wait::st" | "relinquish_alloc_permit" => {
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            Ok(ast::Instruction::Tcgen05Sync {})
+        }
+        "alloc" => {
+            if !take_modifier(&mut modifiers, "shared::cta") || !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let addr = bracketed(stream)?;
+            comma(stream)?;
+            let ncols = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Alloc { data: cta_group, arguments: Tcgen05AllocArgs { src_addr: addr, src_ncols: ncols } })
+        }
+        "mma" => {
+            // .sp and .ws come before .cta_group
+            let sparse_first = take_modifier(&mut modifiers, "sp");
+            let ws_first = take_modifier(&mut modifiers, "ws");
+            let kind = [
+                ("kind::f16", ast::Tcgen05Kind::F16),
+                ("kind::tf32", ast::Tcgen05Kind::Tf32),
+                ("kind::i8", ast::Tcgen05Kind::I8),
+                ("kind::f8f6f4", ast::Tcgen05Kind::F8f6f4),
+                ("kind::mxf8f6f4", ast::Tcgen05Kind::Mxf8f6f4),
+                ("kind::mxf4", ast::Tcgen05Kind::Mxf4),
+                ("kind::mxf4nvf4", ast::Tcgen05Kind::Mxf4nvf4),
+            ]
+            .iter()
+            .find(|(name, _)| take_modifier(&mut modifiers, name))
+            .map(|&(_, k)| k);
+            let Some(kind) = kind else {
+                return backtrack();
+            };
+            let block_scale = take_modifier(&mut modifiers, "block_scale");
+            let block = if !block_scale {
+                None
+            } else if take_modifier(&mut modifiers, "scale_vec::2X") {
+                Some(2u8)
+            } else if take_modifier(&mut modifiers, "scale_vec::4X") {
+                Some(4)
+            } else if take_modifier(&mut modifiers, "block16") {
+                Some(16)
+            } else if take_modifier(&mut modifiers, "block32") {
+                Some(32)
+            } else {
+                take_modifier(&mut modifiers, "scale_vec::1X");
+                Some(0)
+            };
+            let scaled_kind = matches!(kind, ast::Tcgen05Kind::Mxf8f6f4 | ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4);
+            if scaled_kind != block_scale {
+                return backtrack();
+            }
+            let ashift = take_modifier(&mut modifiers, "ashift");
+            let sparse = take_modifier(&mut modifiers, "sp");
+            let ws = take_modifier(&mut modifiers, "ws");
+            // the operand collector hints do not change the result
+            modifiers.retain(|m| !m.starts_with("collector::"));
+            if !modifiers.is_empty() {
+                return backtrack();
+            }
+            let d = bracketed(stream)?;
+            comma(stream)?;
+            let (a, a_tmem) = if matches!(stream.input.first(), Some((Token::LBracket, _))) {
+                (bracketed(stream)?, true)
+            } else {
+                (operand(stream)?, false)
+            };
+            comma(stream)?;
+            let sparse = sparse || sparse_first;
+            let ws = ws || ws_first;
+            let b = operand(stream)?;
+            comma(stream)?;
+            let meta = if sparse {
+                let m = bracketed(stream)?;
+                comma(stream)?;
+                Some(m)
+            } else {
+                None
+            };
+            let idesc = operand(stream)?;
+            comma(stream)?;
+            // .block_scale: [scale-A], [scale-B], enable
+            let (scale_a, scale_b) = if block.is_some() {
+                let sa = bracketed(stream)?;
+                comma(stream)?;
+                let sb = bracketed(stream)?;
+                comma(stream)?;
+                (Some(sa), Some(sb))
+            } else {
+                (None, None)
+            };
+            let first = operand(stream)?;
+            let (mask, enable) = if matches!(first, ast::ParsedOperand::VecPack(_)) {
+                comma(stream)?;
+                (Some(first), operand(stream)?)
+            } else {
+                (None, first)
+            };
+            let last = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+            let (scale, zmask) = if ws { (None, last) } else { (last, None) };
+            let data = ast::Tcgen05MmaDetails {
+                kind,
+                a_tmem,
+                ashift,
+                mask: mask.is_some(),
+                scale: scale.is_some(),
+                sparse,
+                ws,
+                zmask: zmask.is_some(),
+                pair: cta_group == 2,
+                block,
+            };
+            Ok(ast::Instruction::Tcgen05Mma {
+                data,
+                arguments: Tcgen05MmaArgs {
+                    src_d: d,
+                    src_a: a,
+                    src_b: b,
+                    src_meta: meta,
+                    src_idesc: idesc,
+                    src_scale_a: scale_a,
+                    src_scale_b: scale_b,
+                    src_mask: mask,
+                    src_enable: enable,
+                    src_scale: scale,
+                    src_zmask: zmask,
+                },
+            })
+        }
+        "cp" => {
+            let shape = ["128x256b", "4x256b", "128x128b", "64x128b.warpx2::02_13", "64x128b.warpx2::01_23", "32x128b.warpx4"];
+            // the shape is split at the dot into two modifiers for the warpx forms
+            let joined = modifiers.join(".");
+            let decompress = if joined.ends_with(".b8x16.b6x16_p32") {
+                6u8
+            } else if joined.ends_with(".b8x16.b4x16_p64") {
+                4
+            } else {
+                0
+            };
+            let base = joined
+                .trim_end_matches(".b8x16.b6x16_p32")
+                .trim_end_matches(".b8x16.b4x16_p64");
+            let Some(code) = shape.iter().position(|s| *s == base) else {
+                return backtrack();
+            };
+            let taddr = bracketed(stream)?;
+            comma(stream)?;
+            let desc = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Cp {
+                data: (code as u8, decompress, cta_group),
+                arguments: Tcgen05CpArgs { src_taddr: taddr, src_desc: desc },
+            })
+        }
+        "shift" => {
+            if !take_modifier(&mut modifiers, "down") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let taddr = bracketed(stream)?;
+            Ok(ast::Instruction::Tcgen05Shift { data: cta_group, arguments: Tcgen05ShiftArgs { src_taddr: taddr } })
+        }
+        "commit" if cta_group == 1 => {
+            take_modifier(&mut modifiers, "shared::cluster");
+            take_modifier(&mut modifiers, "shared::cta");
+            if !take_modifier(&mut modifiers, "mbarrier::arrive::one") || !take_modifier(&mut modifiers, "b64") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let mbar = bracketed(stream)?;
+            Ok(ast::Instruction::Tcgen05Commit { arguments: Tcgen05CommitArgs { src_mbar: mbar } })
+        }
+        "dealloc" => {
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            let taddr = operand(stream)?;
+            comma(stream)?;
+            let ncols = operand(stream)?;
+            Ok(ast::Instruction::Tcgen05Dealloc { data: cta_group, arguments: Tcgen05DeallocArgs { src_taddr: taddr, src_ncols: ncols } })
+        }
+        "ld" | "st" => {
+            let shape = [
+                ("32x32b", ast::Tcgen05Shape::S32x32b),
+                ("16x64b", ast::Tcgen05Shape::S16x64b),
+                ("16x128b", ast::Tcgen05Shape::S16x128b),
+                ("16x256b", ast::Tcgen05Shape::S16x256b),
+                ("16x32bx2", ast::Tcgen05Shape::S16x32bx2),
+            ]
+            .iter()
+            .find(|(name, _)| take_modifier(&mut modifiers, name))
+            .map(|&(_, s)| s);
+            let Some(shape) = shape else {
+                return backtrack();
+            };
+            let num = modifiers
+                .iter()
+                .position(|m| m.strip_prefix('x').map_or(false, |n| n.parse::<u8>().is_ok()))
+                .map(|i| modifiers.remove(i)[1..].parse::<u8>().unwrap());
+            let Some(num) = num else {
+                return backtrack();
+            };
+            let red = op == "ld" && take_modifier(&mut modifiers, "red");
+            let spcompress = op == "ld" && take_modifier(&mut modifiers, "spcompress");
+            if red || spcompress {
+                let min = take_modifier(&mut modifiers, "min");
+                if !min && !take_modifier(&mut modifiers, "max") {
+                    return backtrack();
+                }
+                let abs = take_modifier(&mut modifiers, "abs");
+                let nan = take_modifier(&mut modifiers, "NaN");
+                if spcompress && (!take_modifier(&mut modifiers, "sp::2:4") || !take_modifier(&mut modifiers, "b2")) {
+                    return backtrack();
+                }
+                let type_ = if take_modifier(&mut modifiers, "f32") {
+                    0u8
+                } else if take_modifier(&mut modifiers, "u32") {
+                    1
+                } else if take_modifier(&mut modifiers, "s32") {
+                    2
+                } else {
+                    return backtrack();
+                };
+                if !modifiers.is_empty() || (spcompress && type_ != 0) {
+                    return backtrack();
+                }
+                let per = match shape {
+                    ast::Tcgen05Shape::S16x256b => 4,
+                    ast::Tcgen05Shape::S16x128b => 2,
+                    _ => 1,
+                };
+                let dst = single(operand(stream)?);
+                comma(stream)?;
+                let dst_c = if spcompress {
+                    let c = single(operand(stream)?);
+                    comma(stream)?;
+                    Some(c)
+                } else {
+                    None
+                };
+                let dst_red = if red {
+                    let r = operand(stream)?;
+                    comma(stream)?;
+                    Some(r)
+                } else {
+                    None
+                };
+                let taddr = bracketed(stream)?;
+                let data = ast::Tcgen05LdRedDetails {
+                    shape,
+                    loaded: num * per,
+                    min,
+                    abs,
+                    nan,
+                    type_,
+                    red,
+                    spcompress,
+                    dst_registers: count(&dst),
+                    c_registers: dst_c.as_ref().map_or(1, |c| count(c)),
+                };
+                return Ok(ast::Instruction::Tcgen05LdRed {
+                    data,
+                    arguments: Tcgen05LdRedArgs { dst, dst_c, dst_red, src_taddr: taddr },
+                });
+            }
+            let packed = take_modifier(&mut modifiers, if op == "ld" { "pack::16b" } else { "unpack::16b" });
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+                return backtrack();
+            }
+            if op == "ld" {
+                let dst = single(operand(stream)?);
+                comma(stream)?;
+                let taddr = bracketed(stream)?;
+                let offset = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+                let data = ast::Tcgen05LdStDetails { shape, num, packed, registers: count(&dst) };
+                Ok(ast::Instruction::Tcgen05Ld { data, arguments: Tcgen05LdArgs { dst, src_taddr: taddr, src_offset: offset } })
+            } else {
+                let taddr = bracketed(stream)?;
+                comma(stream)?;
+                let first = operand(stream)?;
+                let (offset, values) = if matches!(first, ast::ParsedOperand::VecPack(_)) {
+                    (None, first)
+                } else {
+                    comma(stream)?;
+                    (Some(first), operand(stream)?)
+                };
+                let values = single(values);
+                let data = ast::Tcgen05LdStDetails { shape, num, packed, registers: count(&values) };
+                Ok(ast::Instruction::Tcgen05St {
+                    data,
+                    arguments: Tcgen05StArgs { src_taddr: taddr, src_offset: offset, src_values: values },
+                })
+            }
+        }
+        _ => backtrack(),
+    }
+}
+
+// spcompress.{b8,b16}.{b2,b4}.sp::2:4.xN {mdata}, {cdata}, {data}, spdesc
+// spdecompress.{b8,b16}.{b2,b4}.sp::S:T.xN {data}, {mdata}, {cdata}
+fn sparse_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let element_bits = if take_modifier(&mut modifiers, "b8") {
+        8u32
+    } else if take_modifier(&mut modifiers, "b16") {
+        16
+    } else {
+        return backtrack();
+    };
+    let index_bits = if take_modifier(&mut modifiers, "b2") {
+        2u32
+    } else if take_modifier(&mut modifiers, "b4") {
+        4
+    } else {
+        return backtrack();
+    };
+    let (kept, group, iterations) = match modifiers.as_slice() {
+        [ratio, n] => {
+            let Some((s, t)) = ratio.strip_prefix("sp::").and_then(|r| r.split_once(':')) else {
+                return backtrack();
+            };
+            let (Ok(s), Ok(t)) = (s.parse::<u32>(), t.parse::<u32>()) else {
+                return backtrack();
+            };
+            let Some(Ok(n)) = n.strip_prefix('x').map(|n| n.parse::<u32>()) else {
+                return backtrack();
+            };
+            (s, t, n)
+        }
+        _ => return backtrack(),
+    };
+    let compress = opcode == "spcompress";
+    // each iteration of the uncompressed vector is at most 64 bits
+    if !(1..=8).contains(&iterations) || (compress && (kept, group) != (2, 4)) || kept >= group || group * element_bits > 64 {
+        return backtrack();
+    }
+    let operand = |stream: &mut PtxParser<'a, 'input>| -> PResult<ParsedOperandStr<'input>> {
+        let operand = ParsedOperandStr::parse.parse_next(stream)?;
+        Ok(match operand {
+            ast::ParsedOperand::VecPack(ref values) if values.len() == 1 => match values[0] {
+                Some(ast::RegOrImmediate::Reg(r)) => ast::ParsedOperand::Reg(r),
+                _ => return backtrack(),
+            },
+            other => other,
+        })
+    };
+    let first = operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let second = operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let third = operand(stream)?;
+    let count = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::VecPack(values) => values.len() as u32,
+        _ => 1,
+    };
+    // the vectors have the registers the instruction names (the model pads with zeros or truncates)
+    let (m, c, d) = if compress { (&first, &second, &third) } else { (&second, &third, &first) };
+    let data = ast::SparseDetails {
+        element_bits: element_bits as u8,
+        index_bits: index_bits as u8,
+        kept: kept as u8,
+        group: group as u8,
+        iterations: iterations as u8,
+        data: count(d) as u8,
+        cdata: count(c) as u8,
+        mdata: count(m) as u8,
+    };
+    if compress {
+        Token::Comma.parse_next(stream)?;
+        let desc = ParsedOperandStr::parse.parse_next(stream)?;
+        Ok(ast::Instruction::Spcompress {
+            data,
+            arguments: SpcompressArgs { dst_m: first, dst_c: second, src_data: third, src_desc: desc },
+        })
+    } else {
+        Ok(ast::Instruction::Spdecompress {
+            data,
+            arguments: SpdecompressArgs { dst: first, src_m: second, src_c: third },
+        })
+    }
+}
+
+// The mixed-precision forms with packed operands (PTX ISA 8.6 / 9.4), which
+// the instruction grammar cannot express (several types after one another):
+// {add,sub,mul}{.rnd}{.ftz}{.sat}.f32x2.{f16x2,bf16x2}.f32x2       d, a, c
+// fma.rnd{.ftz}{.sat}.f32x2.{f16x2,bf16x2}.f32x2.f32x2              d, a, b, c
+// {add,sub,mul}{.rnd}{.ftz}{.sat}.{f16x2,bf16x2}.f32x2.f32x2       d, a, c   (computed and rounded with rz)
+// mul{.rnd}{.ftz}{.sat}.bf16x2.bf16x2.f16x2 (and f16x2.f16x2.bf16x2) d, a, c   (c converted to the type of a)
+// and the scalar mul{.rnd}{.ftz}{.sat}.f32.{f16,bf16} d, a, c. Every other
+// form stays with the grammar.
+fn mixed_float_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let type_of = |m: &str| match m {
+        "f32" => Some(ScalarType::F32),
+        "f16" => Some(ScalarType::F16),
+        "bf16" => Some(ScalarType::BF16),
+        "f32x2" => Some(ScalarType::F32x2),
+        "f16x2" => Some(ScalarType::F16x2),
+        "bf16x2" => Some(ScalarType::BF16x2),
+        _ => None,
+    };
+    let types: Vec<ScalarType> = modifiers.iter().filter_map(|m| type_of(m)).collect();
+    modifiers.retain(|m| type_of(m).is_none());
+    let rounding = [
+        ("rn", ast::RoundingMode::NearestEven),
+        ("rz", ast::RoundingMode::Zero),
+        ("rm", ast::RoundingMode::NegativeInf),
+        ("rp", ast::RoundingMode::PositiveInf),
+    ]
+    .iter()
+    .find(|(name, _)| take_modifier(&mut modifiers, name))
+    .map(|&(_, r)| r);
+    let flush_to_zero = take_modifier(&mut modifiers, "ftz");
+    let saturate = take_modifier(&mut modifiers, "sat");
+    if !modifiers.is_empty() {
+        return backtrack();
+    }
+    let narrow = |t: ScalarType| matches!(t, ScalarType::F16x2 | ScalarType::BF16x2);
+    use ScalarType::*;
+    let (op, dtype, atype, btype) = match (opcode, types.as_slice()) {
+        ("mul", &[F32, a @ (F16 | BF16)]) => (ast::MixedFloatOp::Mul, F32, a, F32),
+        ("add" | "sub" | "mul", &[F32x2, a, F32x2]) if narrow(a) => (op_of(opcode), F32x2, a, F32x2),
+        ("fma", &[F32x2, a, F32x2, F32x2]) if narrow(a) => (ast::MixedFloatOp::Fma, F32x2, a, a),
+        ("add" | "sub" | "mul", &[d, F32x2, F32x2]) if narrow(d) => (op_of(opcode), d, F32x2, F32x2),
+        ("mul", &[d, a, c]) if narrow(d) && d == a && narrow(c) && c != d => (ast::MixedFloatOp::Mul, d, a, c),
+        _ => return backtrack(),
+    };
+    let fma = op == ast::MixedFloatOp::Fma;
+    if fma && rounding.is_none() {
+        return backtrack();
+    }
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src1 = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src2 = ParsedOperandStr::parse.parse_next(stream)?;
+    let src3 = if fma {
+        Token::Comma.parse_next(stream)?;
+        Some(ParsedOperandStr::parse.parse_next(stream)?)
+    } else {
+        None
+    };
+    Ok(ast::Instruction::MixedFloat {
+        data: ast::MixedFloatDetails {
+            op,
+            dtype,
+            atype,
+            btype,
+            rounding: rounding.unwrap_or(ast::RoundingMode::NearestEven),
+            flush_to_zero,
+            saturate,
+        },
+        arguments: MixedFloatArgs { dst, src1, src2, src3 },
+    })
+}
+
+fn op_of(opcode: &str) -> ast::MixedFloatOp {
+    match opcode {
+        "add" => ast::MixedFloatOp::Add,
+        "sub" => ast::MixedFloatOp::Sub,
+        _ => ast::MixedFloatOp::Mul,
+    }
 }
 
 // The texture and surface instructions in the forms the instruction grammar

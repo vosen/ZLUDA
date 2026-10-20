@@ -179,6 +179,19 @@ fn run_instruction<'input>(
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
         | ast::Instruction::CvtMini { .. }
+        | ast::Instruction::CvtNarrow { .. }
+        | ast::Instruction::Spcompress { .. }
+        | ast::Instruction::Spdecompress { .. }
+        | ast::Instruction::Tcgen05Sync { .. }
+        | ast::Instruction::Tcgen05Alloc { .. }
+        | ast::Instruction::Tcgen05Dealloc { .. }
+        | ast::Instruction::Tcgen05Ld { .. }
+        | ast::Instruction::Tcgen05St { .. }
+        | ast::Instruction::Tcgen05Mma { .. }
+        | ast::Instruction::Tcgen05Cp { .. }
+        | ast::Instruction::Tcgen05Shift { .. }
+        | ast::Instruction::Tcgen05Commit { .. }
+        | ast::Instruction::Tcgen05LdRed { .. }
         | ast::Instruction::Isspacep { .. }
         | ast::Instruction::Packed8 { .. }
         | ast::Instruction::Clmad { .. }
@@ -421,47 +434,66 @@ fn get_post_saturation<'input>(
 }
 
 // The mixed-precision forms: the 16-bit operands are converted to f32 (exactly) and the operation is the f32 one,
-// whose .sat is then handled like any other
+// whose .sat is then handled like any other. A 16-bit pair result of f32x2 operands is computed with rz and rounded
+// to the pair type with rz; mul of two different 16-bit pair types converts c to the type of a.
 fn expand_mixed_float<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
     data: ast::MixedFloatDetails,
     arguments: ast::MixedFloatArgs<SpirvWord>,
 ) -> Result<(), TranslateError> {
-    if data.dtype != ast::ScalarType::F32 {
-        return Err(error_todo_msg("mixed-precision forms with a 16-bit result"));
-    }
-    let mut widen = |src: SpirvWord, from: ast::ScalarType| {
-        if from == ast::ScalarType::F32 {
+    let narrow_pair = |t| matches!(t, ast::ScalarType::F16x2 | ast::ScalarType::BF16x2);
+    let narrowed = narrow_pair(data.dtype) && data.atype == ast::ScalarType::F32x2;
+    let (compute, rounding) = if narrowed {
+        (ast::ScalarType::F32x2, ast::RoundingMode::Zero)
+    } else {
+        (data.dtype, data.rounding)
+    };
+    let mut convert = |src: SpirvWord, from: ast::ScalarType, to: ast::ScalarType, mode: ast::CvtMode| {
+        if from == to {
             return src;
         }
-        let dst = resolver.register_unnamed(Some((ast::ScalarType::F32.into(), ast::StateSpace::Reg)));
+        let dst = resolver.register_unnamed(Some((to.into(), ast::StateSpace::Reg)));
         result.push(Statement::Instruction(ast::Instruction::Cvt {
-            data: ast::CvtDetails {
-                from,
-                to: ast::ScalarType::F32,
-                mode: ast::CvtMode::FPExtend {
-                    flush_to_zero: None,
-                    saturate: false,
-                    relu: false,
-                    satfinite: false,
-                },
-            },
+            data: ast::CvtDetails { from, to, mode },
             arguments: ast::CvtArgs { dst, src, src2: None },
         }));
         dst
     };
-    let src1 = widen(arguments.src1, data.atype);
-    let src2 = widen(arguments.src2, data.btype);
+    let extend = ast::CvtMode::FPExtend {
+        flush_to_zero: None,
+        saturate: false,
+        relu: false,
+        satfinite: false,
+    };
+    let truncate = |rounding| ast::CvtMode::FPTruncate {
+        rounding,
+        is_integer_rounding: false,
+        flush_to_zero: None,
+        saturate: false,
+        relu: false,
+        satfinite: false,
+    };
+    let src1 = convert(arguments.src1, data.atype, compute, extend);
+    let src2 = if narrow_pair(compute) {
+        // f16x2 <-> bf16x2: neither is wider
+        convert(arguments.src2, data.btype, compute, truncate(ast::RoundingMode::NearestEven))
+    } else {
+        convert(arguments.src2, data.btype, compute, extend)
+    };
     let float = ast::ArithFloat {
-        type_: ast::ScalarType::F32,
-        rounding: data.rounding,
+        type_: compute,
+        rounding,
         flush_to_zero: Some(data.flush_to_zero),
         saturate: data.saturate,
         is_fusable: false,
         relu: false,
     };
-    let dst = arguments.dst;
+    let dst = if narrowed {
+        resolver.register_unnamed(Some((compute.into(), ast::StateSpace::Reg)))
+    } else {
+        arguments.dst
+    };
     let instruction = match (data.op, arguments.src3) {
         (ast::MixedFloatOp::Add, None) => ast::Instruction::Add {
             data: ast::ArithDetails::Float(float),
@@ -481,7 +513,18 @@ fn expand_mixed_float<'input>(
         },
         _ => return Err(error_unreachable()),
     };
-    run_instruction(resolver, result, instruction)
+    run_instruction(resolver, result, instruction)?;
+    if narrowed {
+        result.push(Statement::Instruction(ast::Instruction::Cvt {
+            data: ast::CvtDetails {
+                from: compute,
+                to: data.dtype,
+                mode: truncate(ast::RoundingMode::Zero),
+            },
+            arguments: ast::CvtArgs { dst: arguments.dst, src: dst, src2: None },
+        }));
+    }
+    Ok(())
 }
 
 // bf16 has no denormal mode: .ftz flushes the operands and the result (after .sat) explicitly

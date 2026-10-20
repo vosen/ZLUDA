@@ -544,15 +544,20 @@ def run_test(path, args):
                 if len(k['args']) != len(ps_all):
                     raise Unsupported('kernel record argument count')
                 for ((t, n, al), o), (by_pointer, nbytes, half) in zip(ps_all, k['args']):
-                    if n != 1:
-                        raise Unsupported('aggregate kernel parameter')
                     if half == 0xffffffff:
                         continue  # unused by the kernel
-                    value = lit_bits(o, t, syms)
+                    size = SIZES[t] * n
+                    if n != 1:
+                        # an aggregate (.b8 a[16]): the launch value fills its bytes, little-endian
+                        value = (syms[o] if o in syms else int(o, 0)) & ((1 << (8 * size)) - 1)
+                        if not by_pointer and size > nbytes:
+                            raise Unsupported('aggregate kernel parameter')
+                    else:
+                        value = lit_bits(o, t, syms)
                     if by_pointer:
                         off = (len(pmem) + 15) & ~15
                         pmem.extend(b'\0' * (off - len(pmem)))
-                        pmem.extend(value.to_bytes(SIZES[t], 'little'))
+                        pmem.extend(value.to_bytes(size, 'little'))
                         put(half, PARAM_BASE + off, 8)
                     else:
                         put(half, value, nbytes)

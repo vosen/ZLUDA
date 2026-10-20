@@ -45,6 +45,7 @@ enum Helper {
     WmmaStore(ast::WmmaLoadStoreDetails),
     WmmaMma(ast::MmaDetails),
     Wgmma(ast::WgmmaDetails),
+    Tcgen05Mma(ast::Tcgen05MmaDetails),
 }
 
 /// The name (without `__zluda_ptx_impl_`) of the helper function emulating
@@ -61,6 +62,7 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::WmmaStore { data, .. } => Helper::WmmaStore(*data),
         ast::Instruction::WmmaMma { data, .. } => Helper::WmmaMma(*data),
         ast::Instruction::Wgmma { data, .. } => Helper::Wgmma(*data),
+        ast::Instruction::Tcgen05Mma { data, .. } => Helper::Tcgen05Mma(*data),
         _ => return None,
     };
     Some(helper.name())
@@ -96,6 +98,15 @@ const SPACES: [(&str, ast::StateSpace); 3] = [
     ("global", ast::StateSpace::Global),
     ("shared", ast::StateSpace::Shared),
     ("generic", ast::StateSpace::Generic),
+];
+const KINDS: [(&str, ast::Tcgen05Kind); 7] = [
+    ("f16", ast::Tcgen05Kind::F16),
+    ("tf32", ast::Tcgen05Kind::Tf32),
+    ("i8", ast::Tcgen05Kind::I8),
+    ("f8f6f4", ast::Tcgen05Kind::F8f6f4),
+    ("mxf8f6f4", ast::Tcgen05Kind::Mxf8f6f4),
+    ("mxf4", ast::Tcgen05Kind::Mxf4),
+    ("mxf4nvf4", ast::Tcgen05Kind::Mxf4nvf4),
 ];
 const LAYOUTS: [(&str, ast::MatrixLayout); 2] =
     [("row", ast::MatrixLayout::Row), ("col", ast::MatrixLayout::Col)];
@@ -245,6 +256,27 @@ impl Helper {
                 }
                 name
             }
+            Helper::Tcgen05Mma(d) => {
+                let mut name = format!("{AGX_PREFIX}tcgen05_mma_{}", name_of(&KINDS, d.kind));
+                for (flag, on) in [
+                    ("atmem", d.a_tmem),
+                    ("ashift", d.ashift),
+                    ("mask", d.mask),
+                    ("scale", d.scale),
+                    ("sp", d.sparse),
+                    ("ws", d.ws),
+                    ("zm", d.zmask),
+                    ("pair", d.pair),
+                ] {
+                    if on {
+                        write!(name, "_{flag}").unwrap();
+                    }
+                }
+                if let Some(block) = d.block {
+                    write!(name, "_bs{block}").unwrap();
+                }
+                name
+            }
         }
     }
 
@@ -271,6 +303,18 @@ impl Helper {
                 })
             }
             ["movmatrix", ..] => Some(Helper::MovMatrix),
+            ["tcgen05", "mma", kind, ref flags @ ..] => Some(Helper::Tcgen05Mma(ast::Tcgen05MmaDetails {
+                kind: value_of(&KINDS, kind)?,
+                a_tmem: flags.contains(&"atmem"),
+                ashift: flags.contains(&"ashift"),
+                mask: flags.contains(&"mask"),
+                scale: flags.contains(&"scale"),
+                sparse: flags.contains(&"sp"),
+                ws: flags.contains(&"ws"),
+                zmask: flags.contains(&"zm"),
+                pair: flags.contains(&"pair"),
+                block: flags.iter().find_map(|f| f.strip_prefix("bs")).and_then(|b| b.parse().ok()),
+            })),
             ["mma", ref rest @ ..] => parse_mma(rest).map(Helper::Mma),
             ["wmma", "mma", ref rest @ ..] => parse_mma(rest).map(Helper::WmmaMma),
             ["wgmma", ref rest @ ..] => {
@@ -456,6 +500,11 @@ fn define(
                 metadata.as_deref(),
                 declarations,
             )?)
+        }
+        Helper::Tcgen05Mma(d) => {
+            let names = (0..params.len()).map(|i| format!("%p{i}")).collect::<Vec<_>>();
+            tcgen05_mma(&mut ir, &d, &names)?;
+            None
         }
         Helper::WmmaMma(d) => {
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
@@ -1945,6 +1994,7 @@ fn add_limbs(ir: &mut Ir, a: &[String], b: &[String], subtract: bool) -> Vec<Str
 // address, leading and stride offsets (in elements of `bits` bits), swizzle
 // mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56) and the rows of a
 // swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling).
+#[derive(Clone)]
 struct Descriptor {
     start: String,
     leading: String,
@@ -2229,6 +2279,560 @@ fn wgmma(
 
 /// The `mma.sync` tiles of a `wmma.mma`: 16x8 (8x8 for 8-row matrices) by
 /// the whole k.
+/// `tcgen05.mma.cta_group::1` (ptx-exec-tc.k tcMma), issued by one thread: a loop over the M x N elements of D in
+/// tensor memory. The instruction descriptor (an operand, constant in practice) gives M, N, the element types,
+/// negations and majorness; A and B elements are converted to f32 exactly (`__zluda_ptx_impl_agx_mma_elem_f32`) and
+/// each element of D is the exactly rounded sum of its products and of C.
+/// Parameters: d taddr, a (descriptor or taddr), b descriptor, idesc, {mask <4 x i32>}, enable, {scale}.
+fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<(), TranslateError> {
+    ir.declarations.insert("declare i64 @__zluda_ptx_impl_agx_tmem_base()".to_string());
+    ir.declarations.insert("declare i32 @__zluda_ptx_impl_agx_mma_elem_f32(i32, i32)".to_string());
+    let (d_addr, a, b) = (&p[0], &p[1], &p[2]);
+    let mut params = p[3..].iter().cloned();
+    let meta = if d.sparse { params.next() } else { None };
+    let idesc = &params.next().ok_or_else(|| todo("tcgen05.mma operands"))?;
+    let (scale_a, scale_b) = if d.block.is_some() { (params.next(), params.next()) } else { (None, None) };
+    let mask = if d.mask { params.next() } else { None };
+    let enable = params.next().ok_or_else(|| todo("tcgen05.mma operands"))?;
+    let scale = if d.scale { params.next() } else { None };
+    let zmask = if d.zmask { params.next() } else { None };
+    // f8f6f4: K is 64 with bit 29 of the descriptor (the elements past 32 are zero otherwise)
+    let (bits, k) = match d.kind {
+        ast::Tcgen05Kind::F16 => (16u32, 16u32),
+        ast::Tcgen05Kind::Tf32 => (32, 8),
+        ast::Tcgen05Kind::I8 => (8, 32),
+        ast::Tcgen05Kind::F8f6f4 | ast::Tcgen05Kind::Mxf8f6f4 => (8, 64),
+        // two e2m1 elements per byte
+        ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4 => (4, 128),
+    };
+    let block_scaled = d.block.is_some();
+    let fp4x2 = matches!(d.kind, ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4);
+    let f8 = matches!(d.kind, ast::Tcgen05Kind::F8f6f4 | ast::Tcgen05Kind::Mxf8f6f4);
+    let field = |ir: &mut Ir, shift: u32, mask: u32| {
+        let x = ir.op("lshr", "i32", idesc, &shift.to_string());
+        ir.op("and", "i32", &x, &mask.to_string())
+    };
+    // M: bits 24-28 (x16), bits 27-28 (x128) for the block scaled kinds
+    let m = if block_scaled {
+        let m = field(ir, 27, 3);
+        ir.op("mul", "i32", &m, "128")
+    } else {
+        let m = field(ir, 24, 31);
+        ir.op("mul", "i32", &m, "16")
+    };
+    // .cta_group::2: each CTA of the pair holds half the rows of A and D (ptx-exec-tc.k tcMmaG2)
+    let m = if d.pair { ir.op("lshr", "i32", &m, "1") } else { m };
+    let n = field(ir, 17, 63);
+    let n = ir.op("mul", "i32", &n, "8");
+    let d_col = ir.op("and", "i32", d_addr, "65535");
+    let enabled = ir.icmp("ne", "i32", &enable, "0");
+    let a_type = field(ir, 7, 7);
+    let b_type = field(ir, 10, 7);
+    // the element codes of __zluda_ptx_impl_agx_mma_elem_f32
+    let code = |ir: &mut Ir, t: &str| -> String {
+        match d.kind {
+            ast::Tcgen05Kind::F16 => {
+                let bf = ir.icmp("ne", "i32", t, "0");
+                ir.select(&bf, "i32", "1", "0")
+            }
+            ast::Tcgen05Kind::Tf32 => "2".to_string(),
+            ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4 => "7".to_string(),
+            _ => {
+                let mut c = "3".to_string();
+                for (f, v) in [(1, 4), (3, 5), (4, 6), (5, 7)] {
+                    let is = ir.icmp("eq", "i32", t, &f.to_string());
+                    c = ir.select(&is, "i32", &v.to_string(), &c);
+                }
+                c
+            }
+        }
+    };
+    let a_code = code(ir, &a_type);
+    let b_code = code(ir, &b_type);
+    let a_signed = ir.icmp("ne", "i32", &a_type, "0");
+    let b_signed = ir.icmp("ne", "i32", &b_type, "0");
+    // the K of the instruction (ptx-exec-tc.k tcK): f8f6f4 64 with bit 29, mxf8f6f4 64 with bit 31, mxf4 128 with
+    // bit 3 or 96 with bit 31; elements past it are zero
+    let k64 = field(ir, if d.kind == ast::Tcgen05Kind::Mxf8f6f4 { 31 } else { 29 }, 1);
+    let k64 = ir.icmp("ne", "i32", &k64, "0");
+    let k_count = match d.kind {
+        ast::Tcgen05Kind::F8f6f4 | ast::Tcgen05Kind::Mxf8f6f4 => ir.select(&k64, "i32", "64", "32"),
+        ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4 => {
+            let b3 = field(ir, 3, 1);
+            let b3 = ir.icmp("ne", "i32", &b3, "0");
+            let b31 = field(ir, 31, 1);
+            let b31 = ir.icmp("ne", "i32", &b31, "0");
+            let x = ir.select(&b31, "i32", "96", "64");
+            ir.select(&b3, "i32", "128", &x)
+        }
+        _ => k.to_string(),
+    };
+    // block scaling: the block of K each scale factor covers, the scale factor format (0 ue4m3, 1 ue8m0, 2 ue5m3)
+    // and the byte selectors (ptx-exec-tc.k tcBlk, tcScaleTy, tcScalesA, tcScalesB)
+    let block_size = match (d.kind, d.block) {
+        (ast::Tcgen05Kind::Mxf8f6f4, _) => k_count.clone(),
+        (_, Some(16)) => "16".to_string(),
+        (_, Some(4)) => ir.op("lshr", "i32", &k_count, "2"),
+        (_, Some(2)) => ir.op("lshr", "i32", &k_count, "1"),
+        _ => "32".to_string(),
+    };
+    let scale_type = if d.kind == ast::Tcgen05Kind::Mxf4nvf4 { field(ir, 23, 3) } else { "1".to_string() };
+    let sfa_id = field(ir, 29, 3);
+    let sfb_id = field(ir, 4, 3);
+    let satfinite = field(ir, 3, 1);
+    let satfinite = ir.icmp("ne", "i32", &satfinite, "0");
+    // FP6 and FP4 elements (e2m3, e3m2, e2m1) of K-major f8f6f4 tiles are bit-packed in shared memory:
+    // 16 elements in each 16-byte chunk with K 32, contiguous with K 64 (ptx-exec-tc.k tcSE)
+    let sub_byte = |ir: &mut Ir, t: &str| -> (String, String) {
+        let ge = ir.icmp("uge", "i32", t, "3");
+        let le = ir.icmp("ule", "i32", t, "5");
+        let sub = ir.op("and", "i1", &ge, &le);
+        let fp4 = ir.icmp("eq", "i32", t, "5");
+        let nb = ir.select(&fp4, "i32", "4", "6");
+        (sub, nb)
+    };
+    let (a_sub, a_nb) = sub_byte(ir, &a_type);
+    let (b_sub, b_nb) = sub_byte(ir, &b_type);
+    let d_f16 = field(ir, 4, 3);
+    let d_f16 = ir.icmp("eq", "i32", &d_f16, "0");
+    let neg_a = field(ir, 13, 1);
+    let neg_a = ir.op("shl", "i32", &neg_a, "31");
+    let neg_b = field(ir, 14, 1);
+    let neg_b = ir.op("shl", "i32", &neg_b, "31");
+    let a_mn = field(ir, 15, 1);
+    let a_k_major = ir.icmp("eq", "i32", &a_mn, "0");
+    let b_mn = field(ir, 16, 1);
+    let b_k_major = ir.icmp("eq", "i32", &b_mn, "0");
+    // sm_100 descriptors: the swizzle in bits 61-63 (2 128B, 4 64B, 6 32B, 1 128B with 32B atoms) -> sm_90 layout
+    let sm90 = |ir: &mut Ir, desc: &str| -> String {
+        let low = ir.op("and", "i64", desc, &0x3fff_3fff_3fffu64.to_string());
+        let swz = ir.op("lshr", "i64", desc, "61");
+        let mut mode = "0".to_string();
+        for (s, v) in [(2u64, 1u64), (4, 2), (6, 3), (1, 4)] {
+            let is = ir.icmp("eq", "i64", &swz, &s.to_string());
+            mode = ir.select(&is, "i64", &v.to_string(), &mode);
+        }
+        let low2 = ir.op("and", "i64", &mode, "3");
+        let low2 = ir.op("shl", "i64", &low2, "62");
+        let high = ir.op("lshr", "i64", &mode, "2");
+        let high = ir.op("shl", "i64", &high, "56");
+        let x = ir.op("or", "i64", &low, &low2);
+        ir.op("or", "i64", &x, &high)
+    };
+    // .cta_group::2: the thread computes the D of its CTA (t = 0) and of the peer CTA (t = 1), each from its own A,
+    // with columns 0..N/2-1 of B from the even CTA's shared memory and N/2..N-1 from the odd CTA's
+    let (pair_ranks, base) = if d.pair {
+        for decl in [
+            "declare i64 @__zluda_ptx_impl_agx_tmem_base_of(i32)",
+            "declare i32 @__zluda_ptx_impl_agx_cluster_rank()",
+            "declare i64 @__zluda_ptx_impl_agx_desc_to(i64, i32)",
+        ] {
+            ir.declarations.insert(decl.to_string());
+        }
+        let rank = ir.def("call i32 @__zluda_ptx_impl_agx_cluster_rank()");
+        let pre = ir.block.clone();
+        ir.stmt("br label %tc_target");
+        ir.label("tc_target");
+        ir.stmt(&format!("%tc_t = phi i32 [ 0, %{pre} ], [ %tc_t_next, %tc_t_end ]"));
+        let target = ir.op("xor", "i32", &rank, "%tc_t");
+        let base = ir.def(&format!("call i64 @__zluda_ptx_impl_agx_tmem_base_of(i32 {target})"));
+        (Some((rank, target)), base)
+    } else {
+        (None, ir.def("call i64 @__zluda_ptx_impl_agx_tmem_base()"))
+    };
+    let to_rank = |ir: &mut Ir, desc: &str, rank: &str| -> String {
+        ir.def(&format!("call i64 @__zluda_ptx_impl_agx_desc_to(i64 {desc}, i32 {rank})"))
+    };
+    let a_desc = if d.a_tmem {
+        None
+    } else {
+        let a = match &pair_ranks {
+            Some((_, target)) => to_rank(ir, a, target),
+            None => a.clone(),
+        };
+        let x = sm90(ir, &a);
+        Some(descriptor(ir, &x, bits))
+    };
+    let (b_desc, b_odd_start) = match &pair_ranks {
+        Some((rank, _)) => {
+            let even = ir.op("and", "i32", rank, "-2");
+            let odd = ir.op("or", "i32", rank, "1");
+            let be = to_rank(ir, b, &even);
+            let bo = to_rank(ir, b, &odd);
+            let be = sm90(ir, &be);
+            let bo = sm90(ir, &bo);
+            let odd_desc = descriptor(ir, &bo, bits);
+            (descriptor(ir, &be, bits), Some(odd_desc.start))
+        }
+        None => {
+            let b90 = sm90(ir, b);
+            (descriptor(ir, &b90, bits), None)
+        }
+    };
+    let a_col = if d.a_tmem { ir.op("and", "i32", a, "65535") } else { "0".to_string() };
+    let mask_words = match &mask {
+        Some(v) => (0..4).map(|i| ir.def(&format!("extractelement <4 x i32> {v}, i32 {i}"))).collect(),
+        None => vec!["0".to_string(); 4],
+    };
+    let word_ptr = |ir: &mut Ir, row: &str, col: &str| -> String {
+        let col = ir.op("and", "i32", col, "511");
+        let row = ir.op("and", "i32", row, "127");
+        let w = ir.op("mul", "i32", &row, "512");
+        let w = ir.op("add", "i32", &w, &col);
+        let w = ir.cast("zext", "i32", &w, "i64");
+        let w = ir.op("shl", "i64", &w, "2");
+        let address = ir.op("add", "i64", &base, &w);
+        ir.def(&format!("inttoptr i64 {address} to ptr addrspace(1)"))
+    };
+    let entry = ir.block.clone();
+    ir.stmt("br label %tc_row");
+    ir.label("tc_row");
+    ir.stmt(&format!("%tc_r = phi i32 [ 0, %{entry} ], [ %tc_r_next, %tc_row_end ]"));
+    let more = ir.icmp("ult", "i32", "%tc_r", &m);
+    ir.stmt(&format!("br i1 {more}, label %tc_col_start, label %tc_exit"));
+    ir.label("tc_col_start");
+    ir.stmt("br label %tc_col");
+    ir.label("tc_col");
+    ir.stmt("%tc_c = phi i32 [ 0, %tc_col_start ], [ %tc_c_next, %tc_latch ]");
+    let more = ir.icmp("ult", "i32", "%tc_c", &n);
+    ir.stmt(&format!("br i1 {more}, label %tc_body, label %tc_row_end"));
+    ir.label("tc_body");
+    let r = "%tc_r".to_string();
+    let c = "%tc_c".to_string();
+    // .ashift: row r of A is row r - 1 (row 0 stays)
+    let a_row = if d.ashift {
+        let first = ir.icmp("eq", "i32", &r, "0");
+        let prev = ir.op("sub", "i32", &r, "1");
+        ir.select(&first, "i32", "0", &prev)
+    } else {
+        r.clone()
+    };
+    let element_mask = ((1u64 << bits) - 1).to_string();
+    // .ws: the columns of B start at the descriptor's shift, and the zero-column mask clears whole columns
+    // (ptx-exec-tc.k tcZero, tcRun)
+    let (b_col, b_zero) = match &zmask {
+        Some(z) => {
+            let sh = ir.op("lshr", "i64", z, "56");
+            let sh = ir.op("and", "i64", &sh, "63");
+            let sh = ir.cast("trunc", "i64", &sh, "i32");
+            let col = ir.op("add", "i32", &c, &sh);
+            let m1 = ir.intrinsic("umax", "i32", &[&m, "1"]);
+            let sub = ir.op("udiv", "i32", "128", &m1);
+            let sub = ir.intrinsic("umax", "i32", &[&sub, "1"]);
+            let width = ir.op("udiv", "i32", &n, &sub);
+            let valid = ir.icmp("ne", "i32", &width, "0");
+            let width = ir.intrinsic("umax", "i32", &[&width, "1"]);
+            let i = ir.op("udiv", "i32", &c, &width);
+            let pos = ir.op("urem", "i32", &c, &width);
+            let i64v = ir.cast("zext", "i32", &i, "i64");
+            let bit = |ir: &mut Ir, shift: &str, mask: &str| {
+                let x = ir.op("lshr", "i64", z, shift);
+                let x = ir.op("and", "i64", &x, mask);
+                ir.cast("trunc", "i64", &x, "i32")
+            };
+            let enabled39 = bit(ir, "39", "1");
+            let v0_shift = ir.op("add", "i64", &i64v, "32");
+            let v0 = bit(ir, &v0_shift, "1");
+            let sc_shift = ir.op("mul", "i64", &i64v, "8");
+            let sc = bit(ir, &sc_shift, "255");
+            let on = bit(ir, "40", "255");
+            let on = ir.op("add", "i32", &on, "1");
+            let zr = bit(ir, "48", "255");
+            let zr = ir.op("add", "i32", &zr, "1");
+            let period = ir.op("add", "i32", &on, &zr);
+            let q = ir.op("add", "i32", &pos, &sc);
+            let q = ir.op("urem", "i32", &q, &period);
+            let in_ones = ir.icmp("ult", "i32", &q, &on);
+            let in_zeros = ir.icmp("uge", "i32", &q, &zr);
+            let v0_set = ir.icmp("ne", "i32", &v0, "0");
+            let run = ir.select(&v0_set, "i1", &in_ones, &in_zeros);
+            let en = ir.icmp("ne", "i32", &enabled39, "0");
+            let zero = ir.op("and", "i1", &en, &run);
+            let small = ir.icmp("ule", "i32", &m, "128");
+            let zero = ir.op("and", "i1", &zero, &small);
+            (col, Some(ir.op("and", "i1", &zero, &valid)))
+        }
+        None => (c.clone(), None),
+    };
+    // .cta_group::2: the half of B the column is in
+    let (b_col, b_desc) = match &b_odd_start {
+        Some(odd_start) => {
+            let half = ir.op("lshr", "i32", &n, "1");
+            let upper = ir.icmp("uge", "i32", &b_col, &half);
+            let shifted = ir.op("sub", "i32", &b_col, &half);
+            let col = ir.select(&upper, "i32", &shifted, &b_col);
+            let start = ir.select(&upper, "i32", odd_start, &b_desc.start);
+            (col, Descriptor { start, ..b_desc.clone() })
+        }
+        None => (b_col, b_desc.clone()),
+    };
+    let mut a_elements = Vec::new();
+    let mut b_elements = Vec::new();
+    for kk in 0..k {
+        let kk_s = kk.to_string();
+        let a_raw = match &a_desc {
+            Some(desc) => {
+                let x = tile_element(ir, desc, true, bits, &a_row, &kk_s);
+                let y = tile_element(ir, desc, false, bits, &a_row, &kk_s);
+                let plain = ir.select(&a_k_major, "i32", &x, &y);
+                if f8 {
+                    let packed = packed_element(ir, desc, &a_row, &kk_s, &a_nb, &k64);
+                    let use_packed = ir.op("and", "i1", &a_sub, &a_k_major);
+                    ir.select(&use_packed, "i32", &packed, &plain)
+                } else {
+                    plain
+                }
+            }
+            None => {
+                let col = ir.op("add", "i32", &a_col, &(kk * bits / 32).to_string());
+                let ptr = word_ptr(ir, &a_row, &col);
+                let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                let w = ir.op("lshr", "i32", &w, &((kk * bits) % 32).to_string());
+                if bits == 32 { w } else { ir.op("and", "i32", &w, &element_mask) }
+            }
+        };
+        // .sp: the row of B of packed element kk (ptx-exec-tc.k tcSpExp, tcNib)
+        let b_k = match &meta {
+            Some(meta) => {
+                let (cw, nz) = if d.kind == ast::Tcgen05Kind::Tf32 { (2, 1) } else { (4, 2) };
+                let chunk = kk / nz;
+                let single = matches!(d.kind, ast::Tcgen05Kind::F16 | ast::Tcgen05Kind::Tf32);
+                let mc = ir.op("and", "i32", meta, "65535");
+                let col = if single {
+                    let sel = ir.op("and", "i32", idesc, "3");
+                    ir.op("add", "i32", &mc, &sel)
+                } else {
+                    ir.op("add", "i32", &mc, &(chunk / 8).to_string())
+                };
+                let ptr = word_ptr(ir, &a_row, &col);
+                let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                let shift = if single { 4 * chunk } else { 4 * (chunk % 8) };
+                let nib = ir.op("lshr", "i32", &w, &shift.to_string());
+                let nib = ir.op("and", "i32", &nib, "15");
+                let pos = if d.kind == ast::Tcgen05Kind::Tf32 {
+                    let x = ir.op("and", "i32", &nib, "3");
+                    ir.op("lshr", "i32", &x, "1")
+                } else {
+                    let x = ir.op("lshr", "i32", &nib, &(2 * (kk % nz)).to_string());
+                    ir.op("and", "i32", &x, "3")
+                };
+                ir.op("add", "i32", &pos, &(cw * chunk).to_string())
+            }
+            None => kk_s.clone(),
+        };
+        let x = tile_element(ir, &b_desc, true, bits, &b_col, &b_k);
+        let y = tile_element(ir, &b_desc, false, bits, &b_col, &b_k);
+        let mut b_raw = ir.select(&b_k_major, "i32", &x, &y);
+        let mut a_raw = a_raw;
+        if f8 {
+            // the dense K of B is 64 or more for .sp (contiguous)
+            let contiguous = if meta.is_some() { "true".to_string() } else { k64.clone() };
+            let packed = packed_element(ir, &b_desc, &b_col, &b_k, &b_nb, &contiguous);
+            let use_packed = ir.op("and", "i1", &b_sub, &b_k_major);
+            b_raw = ir.select(&use_packed, "i32", &packed, &b_raw);
+        }
+        if fp4x2 {
+            // e2m1 in the central bits of its byte for __zluda_ptx_impl_agx_mma_elem_f32
+            a_raw = ir.op("shl", "i32", &a_raw, "2");
+            b_raw = ir.op("shl", "i32", &b_raw, "2");
+        }
+        if kk >= 32 && (f8 || fp4x2) {
+            let inside = ir.icmp("ult", "i32", &kk_s, &k_count);
+            a_raw = ir.select(&inside, "i32", &a_raw, "0");
+            b_raw = ir.select(&inside, "i32", &b_raw, "0");
+        }
+        if let Some(zero) = &b_zero {
+            b_raw = ir.select(zero, "i32", "0", &b_raw);
+        }
+        a_elements.push(a_raw);
+        b_elements.push(b_raw);
+    }
+    let d_column = ir.op("add", "i32", &d_col, &c);
+    let d_ptr = word_ptr(ir, &r, &d_column);
+    let old = ir.load("i32", &d_ptr, "ptr addrspace(1)", 4);
+    let result = if d.kind == ast::Tcgen05Kind::I8 {
+        // in 64 bits, saturated to s32 with .satfinite (bit 3 of the descriptor), wrapped otherwise
+        let c64 = ir.cast("sext", "i32", &old, "i64");
+        let mut sum = ir.select(&enabled, "i64", &c64, "0");
+        for (x, y) in a_elements.iter().zip(&b_elements) {
+            let xs = ir.cast("trunc", "i32", x, "i8");
+            let ys = ir.cast("trunc", "i32", y, "i8");
+            let xs_s = ir.cast("sext", "i8", &xs, "i32");
+            let ys_s = ir.cast("sext", "i8", &ys, "i32");
+            let x = ir.select(&a_signed, "i32", &xs_s, x);
+            let y = ir.select(&b_signed, "i32", &ys_s, y);
+            let p = ir.op("mul", "i32", &x, &y);
+            let p = ir.cast("sext", "i32", &p, "i64");
+            sum = ir.op("add", "i64", &sum, &p);
+        }
+        let low = ir.intrinsic("smax", "i64", &[&sum, "-2147483648"]);
+        let clamped = ir.intrinsic("smin", "i64", &[&low, "2147483647"]);
+        let sum = ir.select(&satfinite, "i64", &clamped, &sum);
+        ir.cast("trunc", "i64", &sum, "i32")
+    } else {
+        let a32: Vec<String> = a_elements
+            .iter()
+            .map(|x| {
+                let v = ir.def(&format!("call i32 @__zluda_ptx_impl_agx_mma_elem_f32(i32 {a_code}, i32 {x})"));
+                ir.op("xor", "i32", &v, &neg_a)
+            })
+            .collect();
+        let b32: Vec<String> = b_elements
+            .iter()
+            .map(|x| {
+                let v = ir.def(&format!("call i32 @__zluda_ptx_impl_agx_mma_elem_f32(i32 {b_code}, i32 {x})"));
+                ir.op("xor", "i32", &v, &neg_b)
+            })
+            .collect();
+        // the scale factors of row r of A and column c of B for each block of K
+        let scale_term = |ir: &mut Ir, byte: &str| -> Term {
+            let low = ir.op("and", "i32", byte, "7");
+            let e = ir.op("lshr", "i32", byte, "3");
+            let normal = ir.icmp("ne", "i32", &e, "0");
+            let hidden = ir.op("or", "i32", &low, "8");
+            let m3 = ir.select(&normal, "i32", &hidden, &low);
+            let e4 = ir.op("sub", "i32", &e, "10");
+            let e4 = ir.select(&normal, "i32", &e4, "-9");
+            let e5 = ir.op("sub", "i32", &e, "18");
+            let e5 = ir.select(&normal, "i32", &e5, "-17");
+            let is8 = ir.icmp("eq", "i32", &scale_type, "1");
+            let is5 = ir.icmp("eq", "i32", &scale_type, "2");
+            let mantissa = ir.select(&is8, "i32", "1", &m3);
+            let e8 = ir.op("sub", "i32", byte, "127");
+            let exponent = ir.select(&is5, "i32", &e5, &e4);
+            let exponent = ir.select(&is8, "i32", &e8, &exponent);
+            let mantissa = ir.cast("zext", "i32", &mantissa, "i64");
+            let zero = ir.icmp("eq", "i64", &mantissa, "0");
+            Term {
+                sign: "false".to_string(),
+                mantissa,
+                mantissa_type: "i64",
+                exponent,
+                width: 4,
+                nan: "false".to_string(),
+                inf: "false".to_string(),
+                zero,
+            }
+        };
+        let scales: Option<(String, String)> = match (&scale_a, &scale_b) {
+            (Some(sa), Some(sb)) => {
+                let sa_col = ir.op("and", "i32", sa, "65535");
+                let ptr = word_ptr(ir, &r, &sa_col);
+                let wa = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                let sb_col = ir.op("and", "i32", sb, "65535");
+                let lane = ir.op("and", "i32", &c, "31");
+                let col32 = ir.op("lshr", "i32", &c, "5");
+                let sb_col = ir.op("add", "i32", &sb_col, &col32);
+                let ptr = word_ptr(ir, &lane, &sb_col);
+                let wb = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                Some((wa, wb))
+            }
+            _ => None,
+        };
+        let scaled = |ir: &mut Ir, p: Term, kk: usize| -> Term {
+            match &scales {
+                Some((wa, wb)) => {
+                    let blk = ir.op("udiv", "i32", &kk.to_string(), &block_size);
+                    let ia = ir.op("add", "i32", &sfa_id, &blk);
+                    let ia = ir.op("shl", "i32", &ia, "3");
+                    let ia = ir.intrinsic("umin", "i32", &[&ia, "31"]);
+                    let xa = ir.op("lshr", "i32", wa, &ia);
+                    let xa = ir.op("and", "i32", &xa, "255");
+                    let ib = ir.op("add", "i32", &sfb_id, &blk);
+                    let ib = ir.op("shl", "i32", &ib, "3");
+                    let ib = ir.intrinsic("umin", "i32", &[&ib, "31"]);
+                    let xb = ir.op("lshr", "i32", wb, &ib);
+                    let xb = ir.op("and", "i32", &xb, "255");
+                    let ta = scale_term(ir, &xa);
+                    let tb = scale_term(ir, &xb);
+                    let s = product(ir, &ta, &tb);
+                    product(ir, &p, &s)
+                }
+                None => p,
+            }
+        };
+        let mut results = Vec::new();
+        for dtype in [ast::MmaType::F16, ast::MmaType::F32] {
+            let c_bits = if dtype == ast::MmaType::F16 { ir.op("and", "i32", &old, "65535") } else { old.clone() };
+            let c_bits = ir.select(&enabled, "i32", &c_bits, "0");
+            let mut c_term = decode(ir, dtype, &c_bits, "i32")?;
+            // the scale-input-d operand: C times 2^-scale
+            if let Some(s) = &scale {
+                c_term.exponent = ir.op("sub", "i32", &c_term.exponent, s);
+            }
+            let mut terms = vec![c_term];
+            for (kk, (x, y)) in a32.iter().zip(&b32).enumerate() {
+                let x = decode(ir, ast::MmaType::F32, x, "i32")?;
+                let y = decode(ir, ast::MmaType::F32, y, "i32")?;
+                let p = product(ir, &x, &y);
+                terms.push(scaled(ir, p, kk));
+            }
+            results.push(exact_sum(ir, &terms, dtype)?);
+        }
+        if block_scaled {
+            results[1].clone()
+        } else {
+            ir.select(&d_f16, "i32", &results[0], &results[1])
+        }
+    };
+    // the disable-output-lane mask: lanes whose bit is set keep their value
+    let word_index = ir.op("lshr", "i32", &r, "5");
+    let mut mask_word = mask_words[0].clone();
+    for (i, w) in mask_words.iter().enumerate().skip(1) {
+        let is = ir.icmp("eq", "i32", &word_index, &i.to_string());
+        mask_word = ir.select(&is, "i32", w, &mask_word);
+    }
+    let bit = ir.op("and", "i32", &r, "31");
+    let bit = ir.op("lshr", "i32", &mask_word, &bit);
+    let bit = ir.op("and", "i32", &bit, "1");
+    let keep = ir.icmp("ne", "i32", &bit, "0");
+    let value = ir.select(&keep, "i32", &old, &result);
+    ir.store("i32", &value, &d_ptr, "ptr addrspace(1)", 4);
+    ir.stmt("br label %tc_latch");
+    ir.label("tc_latch");
+    ir.stmt("%tc_c_next = add i32 %tc_c, 1");
+    ir.stmt("br label %tc_col");
+    ir.label("tc_row_end");
+    ir.stmt("%tc_r_next = add i32 %tc_r, 1");
+    ir.stmt("br label %tc_row");
+    ir.label("tc_exit");
+    if d.pair {
+        ir.stmt("br label %tc_t_end");
+        ir.label("tc_t_end");
+        ir.stmt("%tc_t_next = add i32 %tc_t, 1");
+        ir.stmt("%tc_t_more = icmp ult i32 %tc_t_next, 2");
+        ir.stmt("br i1 %tc_t_more, label %tc_target, label %tc_done");
+        ir.label("tc_done");
+    }
+    Ok(())
+}
+
+// Element k (FP6 / FP4, `nb` bits) of row `mn` of a bit-packed K-major tile, in its 8-bit container (FP4 in the
+// central 4 bits)
+fn packed_element(ir: &mut Ir, desc: &Descriptor, mn: &str, k: &str, nb: &str, contiguous: &str) -> String {
+    let dense = ir.op("mul", "i32", k, nb);
+    let low = ir.op("and", "i32", k, "15");
+    let chunked = ir.op("mul", "i32", &low, nb);
+    let high = ir.op("lshr", "i32", k, "4");
+    let high = ir.op("shl", "i32", &high, "7");
+    let chunked = ir.op("add", "i32", &chunked, &high);
+    let position = ir.select(contiguous, "i32", &dense, &chunked);
+    let byte = ir.op("lshr", "i32", &position, "3");
+    let next = ir.op("add", "i32", &byte, "1");
+    let b0 = tile_element(ir, desc, true, 8, mn, &byte);
+    let b1 = tile_element(ir, desc, true, 8, mn, &next);
+    let b1 = ir.op("shl", "i32", &b1, "8");
+    let x = ir.op("or", "i32", &b0, &b1);
+    let shift = ir.op("and", "i32", &position, "7");
+    let x = ir.op("lshr", "i32", &x, &shift);
+    let mask = ir.op("shl", "i32", "1", nb);
+    let mask = ir.op("sub", "i32", &mask, "1");
+    let x = ir.op("and", "i32", &x, &mask);
+    let fp4 = ir.icmp("eq", "i32", nb, "4");
+    let central = ir.op("shl", "i32", &x, "2");
+    ir.select(&fp4, "i32", &central, &x)
+}
+
 struct Tiles {
     tile: ast::MmaDetails,
     rows: u32,

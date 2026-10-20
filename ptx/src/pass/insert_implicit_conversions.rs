@@ -383,6 +383,11 @@ pub(crate) fn should_convert_relaxed_src_wrapper(
     (instruction_space, instruction_type): (ast::StateSpace, &ast::Type),
     _is_32bit: bool,
 ) -> Result<Option<ConversionKind>, TranslateError> {
+    // a .texref / .surfref / .samplerref variable where an instruction takes a handle (the AGX texture instructions
+    // read the handle out of it)
+    if matches!(operand_type, ast::Type::Texref) {
+        return Ok(None);
+    }
     if operand_space != instruction_space {
         return Err(error_mismatched_type());
     }

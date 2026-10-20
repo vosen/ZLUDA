@@ -121,6 +121,10 @@ fn run_statement<'input>(
             {
                 if *space == ptx_parser::StateSpace::Param {
                     *space = ptx_parser::StateSpace::Reg;
+                    // a register passed straight to a .param parameter
+                    if is_register(resolver, *ident) {
+                        continue;
+                    }
                     let old_name = *ident;
                     *ident = resolver
                         .register_unnamed(Some((type_.clone(), ptx_parser::StateSpace::Reg)));
@@ -146,6 +150,9 @@ fn run_statement<'input>(
             {
                 if *space == ptx_parser::StateSpace::Param {
                     *space = ptx_parser::StateSpace::Reg;
+                    if is_register(resolver, *ident) {
+                        continue;
+                    }
                     let old_name = *ident;
                     *ident = resolver
                         .register_unnamed(Some((type_.clone(), ptx_parser::StateSpace::Reg)));
@@ -192,4 +199,11 @@ fn run_statement<'input>(
         }
     }
     Ok(())
+}
+
+fn is_register(resolver: &GlobalStringIdentResolver2, ident: SpirvWord) -> bool {
+    matches!(
+        resolver.ident_map.get(&ident).and_then(|entry| entry.type_space.as_ref()),
+        Some((_, ptx_parser::StateSpace::Reg))
+    )
 }

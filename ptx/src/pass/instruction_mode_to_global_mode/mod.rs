@@ -2235,6 +2235,19 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::CvtPack { .. }
         | ast::Instruction::CvtTf32 { .. }
         | ast::Instruction::CvtMini { .. }
+        | ast::Instruction::CvtNarrow { .. }
+        | ast::Instruction::Spcompress { .. }
+        | ast::Instruction::Spdecompress { .. }
+        | ast::Instruction::Tcgen05Sync { .. }
+        | ast::Instruction::Tcgen05Alloc { .. }
+        | ast::Instruction::Tcgen05Dealloc { .. }
+        | ast::Instruction::Tcgen05Ld { .. }
+        | ast::Instruction::Tcgen05St { .. }
+        | ast::Instruction::Tcgen05Mma { .. }
+        | ast::Instruction::Tcgen05Cp { .. }
+        | ast::Instruction::Tcgen05Shift { .. }
+        | ast::Instruction::Tcgen05Commit { .. }
+        | ast::Instruction::Tcgen05LdRed { .. }
         | ast::Instruction::Isspacep { .. }
         | ast::Instruction::Packed8 { .. }
         | ast::Instruction::Clmad { .. }

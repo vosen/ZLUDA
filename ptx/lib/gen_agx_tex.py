@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Compile zluda_ptx_impl_agx_tex.c to LLVM IR and splice it into the
-generated section at the end of zluda_ptx_impl_agx.ll.
+"""Compile zluda_ptx_impl_agx_tex.c and zluda_ptx_impl_agx_cvt.c to LLVM IR
+and splice them into the generated section at the end of zluda_ptx_impl_agx.ll.
 
     python3 ptx/lib/gen_agx_tex.py [clang]
 
@@ -15,27 +15,17 @@ import sys
 from pathlib import Path
 
 LIB = Path(__file__).resolve().parent
-SOURCE = LIB / 'zluda_ptx_impl_agx_tex.c'
+# source, prefix of its internal functions, first metadata number
+SOURCES = [('zluda_ptx_impl_agx_tex.c', '__zluda_agx_tex_', 10000), ('zluda_ptx_impl_agx_cvt.c', '__zluda_agx_cvt_', 20000)]
 TARGET = LIB / 'zluda_ptx_impl_agx.ll'
 BEGIN = '; ---------------------------------------------------------------- BEGIN GENERATED (gen_agx_tex.py)\n'
 END = '; ---------------------------------------------------------------- END GENERATED (gen_agx_tex.py)\n'
-PREFIX = '__zluda_agx_tex_'
-METADATA_BASE = 10000
 
 
-def main():
-    clang = sys.argv[1] if len(sys.argv) > 1 else 'clang'
+def convert(clang, source, prefix, metadata_base, declared, defined):
     ir = subprocess.run([clang, '-O2', '-S', '-emit-llvm', '-target', 'nvptx64-nvidia-cuda', '-std=c11', '-ffreestanding',
-                         '-fno-builtin', '-ffp-contract=off', '-Wall', '-Werror', '-o', '-', str(SOURCE)],
+                         '-fno-builtin', '-ffp-contract=off', '-Wall', '-Werror', '-o', '-', str(LIB / source)],
                         check=True, capture_output=True, text=True).stdout
-    text = TARGET.read_text()
-    if BEGIN in text:
-        head = text[:text.index(BEGIN)]
-        tail = text[text.index(END) + len(END):]
-    else:
-        head, tail = text, ''
-    declared = set(re.findall(r'^declare [^@]*@([\w.$]+)\(', head, re.M))
-    defined = set(re.findall(r'^define [^@]*@([\w.$]+)\(', head, re.M))
     internal = set(re.findall(r'^define internal [^@]*@([\w.$]+)\(', ir, re.M))
     out = []
     for line in ir.splitlines():
@@ -44,8 +34,10 @@ def main():
         if 'llvm.experimental.noalias.scope.decl' in line:
             continue
         m = re.match(r'^declare [^@]*@([\w.$]+)\(', line)
-        if m and (m.group(1) in declared or m.group(1) in defined):
-            continue
+        if m:
+            if m.group(1) in declared or m.group(1) in defined:
+                continue
+            declared.add(m.group(1))
         line = line.replace('spir_func ', '')
         # every helper is always inlined (#3 of the hand-written part), so that the constant
         # arguments fold and the local arrays become registers
@@ -58,16 +50,29 @@ def main():
         if line.startswith('!'):
             if not re.match(r'^!\d+ = ', line):
                 continue
-            line = re.sub(r'!(\d+)', lambda m: '!' + str(int(m.group(1)) + METADATA_BASE), line)
+            line = re.sub(r'!(\d+)', lambda m: '!' + str(int(m.group(1)) + metadata_base), line)
             out.append(line)
             continue
         line = re.sub(r',\s*!(?!llvm\.loop)[a-z][\w.]*\s+!\d+', '', line)
-        line = re.sub(r'!llvm\.loop !(\d+)', lambda m: '!llvm.loop !' + str(int(m.group(1)) + METADATA_BASE), line)
+        line = re.sub(r'!llvm\.loop !(\d+)', lambda m: '!llvm.loop !' + str(int(m.group(1)) + metadata_base), line)
         for name in internal:
-            line = re.sub(r'@' + re.escape(name) + r'\b', '@' + PREFIX + name, line)
+            line = re.sub(r'@' + re.escape(name) + r'\b', '@' + prefix + name, line)
         out.append(line)
-    body = '\n'.join(out).strip() + '\n'
-    TARGET.write_text(head + BEGIN + '; from zluda_ptx_impl_agx_tex.c; regenerate with ptx/lib/gen_agx_tex.py\n\n' + body + END + tail)
+    return '; from ' + source + '\n\n' + '\n'.join(out).strip() + '\n'
+
+
+def main():
+    clang = sys.argv[1] if len(sys.argv) > 1 else 'clang'
+    text = TARGET.read_text()
+    if BEGIN in text:
+        head = text[:text.index(BEGIN)]
+        tail = text[text.index(END) + len(END):]
+    else:
+        head, tail = text, ''
+    declared = set(re.findall(r'^declare [^@]*@([\w.$]+)\(', head, re.M))
+    defined = set(re.findall(r'^define [^@]*@([\w.$]+)\(', head, re.M))
+    bodies = [convert(clang, *source, declared, defined) for source in SOURCES]
+    TARGET.write_text(head + BEGIN + '; regenerate with ptx/lib/gen_agx_tex.py\n\n' + '\n'.join(bodies) + END + tail)
 
 
 if __name__ == '__main__':
