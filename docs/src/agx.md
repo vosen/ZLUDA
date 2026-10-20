@@ -413,15 +413,17 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
 ```
 
 Kernels with statements that ZLUDA's front end does not support (many of the
-tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05`, TMA and
-clusters of several CTAs) are skipped, together with the checks that follow
-their launch, and programs ZLUDA rejects as a whole are not counted. Of the
-1349 checks of the 285 programs, 664 run: 560 match the formal semantics and
-the other 104 are the floating point differences listed above (denormal
-`f32` operands and results, NaN bit patterns, `-0.0` under `.sat`, `div` and
-`sqrt` precision). With `--strict-fp` (the `--strict-fp` option of the
-script), all 664 match. Nine of the `cvt-*.ptx` programs do not compile
-because of a backend error on conversions of sign-extended bytes.
+tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05` and clusters of
+several CTAs) are skipped, together with the checks that follow their launch.
+Of the 1659 checks of the 286 programs (2026-10-20, agx-g14c), 1228 run. With
+`--strict-fp` all 1228 match the formal semantics (171 programs pass
+completely). Without it 1056 match and the other 172 are the floating point
+differences listed above (denormal `f32` operands and results, NaN bit
+patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 431 skipped
+checks follow kernels using `wgmma` and `tcgen05` (emulation not written),
+multi-CTA clusters, `ld.mmio`, the sm_107 conversions (`.scaled`, `ue5m3x2`,
+`s2f6x2`) and `mul.rz.f16x2.f32x2.f32x2`. A full run takes about 100 seconds
+with `-j 8`.
 
 All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`
 (`ldm-*`, `ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal
