@@ -3684,14 +3684,14 @@ derive_parser!(
             }
         }
     }
-    add{.rnd}.bf16              d, a, b => {
+    add{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         Instruction::Add {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }
@@ -3701,14 +3701,14 @@ derive_parser!(
             }
         }
     }
-    add{.rnd}.bf16x2            d, a, b => {
+    add{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         Instruction::Add {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }
@@ -3827,14 +3827,14 @@ derive_parser!(
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    mul{.rnd}.bf16   d, a, b => {
+    mul{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }
@@ -3842,14 +3842,14 @@ derive_parser!(
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
     }
-    mul{.rnd}.bf16x2 d, a, b => {
+    mul{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         ast::Instruction::Mul {
             data: ast::MulDetails::Float (
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }
@@ -4412,15 +4412,12 @@ derive_parser!(
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =            { .f16 };
     fma.rnd{.ftz}{.sat}{.relu}.type_x2       d, a, b, c => {
-        if type_x2 != ScalarType::F16x2 && (ftz || sat) {
-            state.errors.push(PtxError::Todo(".ftz and .sat of bf16 fma".to_string()));
-        }
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: type_x2,
                 rounding: rnd.into(),
-                // the bf16 denormal mode is not the f16 one
-                flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(ftz) } else { None },
+                // bf16's .ftz is applied explicitly (insert_post_saturation), its denormal mode is not the f16 one
+                flush_to_zero: if type_x2 == ScalarType::F16x2 || ftz { Some(ftz) } else { None },
                 saturate: sat,
                 is_fusable: false,
                 relu,
@@ -4556,14 +4553,14 @@ derive_parser!(
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    sub{.rnd}.bf16   d, a, b => {
+    sub{.rnd}{.ftz}{.sat}.bf16 d, a, b => {
         ast::Instruction::Sub {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }
@@ -4571,14 +4568,14 @@ derive_parser!(
             arguments: SubArgs { dst: d, src1: a, src2: b  }
         }
     }
-    sub{.rnd}.bf16x2 d, a, b => {
+    sub{.rnd}{.ftz}{.sat}.bf16x2 d, a, b => {
         ast::Instruction::Sub {
             data: ast::ArithDetails::Float(
                 ast::ArithFloat {
                     type_: bf16x2,
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
-                    flush_to_zero: None,
-                    saturate: false,
+                    flush_to_zero: Some(ftz),
+                    saturate: sat,
                     is_fusable: rnd.is_none(),
                     relu: false,
                 }

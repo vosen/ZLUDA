@@ -591,6 +591,12 @@ enum Statement<I, P: ast::Operand> {
         src: SpirvWord,
         type_: ast::ScalarType,
     },
+    /// Subnormal values become zeros of the same sign (.ftz of the types without a denormal mode, bf16)
+    FpFlush {
+        dst: SpirvWord,
+        src: SpirvWord,
+        type_: ast::ScalarType,
+    },
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -903,6 +909,21 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                     false,
                 )?;
                 Statement::FpSaturate { dst, src, type_ }
+            }
+            Statement::FpFlush { dst, src, type_ } => {
+                let dst = visitor.visit_ident(
+                    dst,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    true,
+                    false,
+                )?;
+                let src = visitor.visit_ident(
+                    src,
+                    Some((&type_.into(), ast::StateSpace::Reg)),
+                    false,
+                    false,
+                )?;
+                Statement::FpFlush { dst, src, type_ }
             }
             Statement::FpModeRequired {
                 ftz_f32,

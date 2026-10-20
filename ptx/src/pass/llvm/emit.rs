@@ -655,6 +655,7 @@ impl<'a> MethodEmitContext<'a> {
             Statement::VectorWrite(vector_write) => self.emit_vector_write(vector_write)?,
             Statement::SetMode(mode_reg) => self.emit_set_mode(mode_reg)?,
             Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
+            Statement::FpFlush { dst, src, type_ } => self.emit_fp_flush(type_, dst, src)?,
             Statement::FpModeRequired { .. } => {}
         })
     }
@@ -5427,6 +5428,53 @@ impl<'a> MethodEmitContext<'a> {
             vec![],
             vec![(hwreg_llvm, llvm_i32), (value_llvm, llvm_i32)],
         )?;
+        Ok(())
+    }
+
+    // Subnormals (exponent field 0) keep only their sign bit
+    fn emit_fp_flush(
+        &mut self,
+        type_: ast::ScalarType,
+        dst: SpirvWord,
+        src: SpirvWord,
+    ) -> Result<(), TranslateError> {
+        let (bits, lanes, exponent): (u32, u32, u64) = match type_ {
+            ast::ScalarType::BF16 => (16, 1, 0x7f80),
+            ast::ScalarType::BF16x2 => (16, 2, 0x7f80),
+            ast::ScalarType::F16 => (16, 1, 0x7c00),
+            ast::ScalarType::F16x2 => (16, 2, 0x7c00),
+            ast::ScalarType::F32 => (32, 1, 0x7f80_0000),
+            _ => return Err(error_unreachable()),
+        };
+        let float_type = get_scalar_type(self.context, type_);
+        let src = self.resolver.value(src)?;
+        unsafe {
+            let element = LLVMIntTypeInContext(self.context, bits);
+            let int_type = if lanes == 1 { element } else { LLVMVectorType(element, lanes) };
+            let splat = |v: u64| {
+                let c = LLVMConstInt(element, v, 0);
+                if lanes == 1 {
+                    c
+                } else {
+                    let mut elems = vec![c; lanes as usize];
+                    LLVMConstVector(elems.as_mut_ptr(), lanes)
+                }
+            };
+            let x = LLVMBuildBitCast(self.builder, src, int_type, LLVM_UNNAMED.as_ptr());
+            let exp = LLVMBuildAnd(self.builder, x, splat(exponent), LLVM_UNNAMED.as_ptr());
+            let subnormal = LLVMBuildICmp(
+                self.builder,
+                LLVMIntPredicate::LLVMIntEQ,
+                exp,
+                splat(0),
+                LLVM_UNNAMED.as_ptr(),
+            );
+            let sign = LLVMBuildAnd(self.builder, x, splat(1 << (bits - 1)), LLVM_UNNAMED.as_ptr());
+            let flushed = LLVMBuildSelect(self.builder, subnormal, sign, x, LLVM_UNNAMED.as_ptr());
+            self.resolver.with_result(dst, |dst| {
+                LLVMBuildBitCast(self.builder, flushed, float_type, dst)
+            });
+        }
         Ok(())
     }
 

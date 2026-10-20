@@ -61,6 +61,17 @@ fn run_instruction<'input>(
         ast::Instruction::MixedFloat { data, arguments } => {
             return expand_mixed_float(resolver, result, data, arguments);
         }
+        ast::Instruction::Add { data: ast::ArithDetails::Float(ref mut f), .. }
+        | ast::Instruction::Sub { data: ast::ArithDetails::Float(ref mut f), .. }
+        | ast::Instruction::Mul { data: ast::MulDetails::Float(ref mut f), .. }
+        | ast::Instruction::Fma { data: ref mut f, .. }
+            if f.flush_to_zero == Some(true)
+                && matches!(f.type_, ast::ScalarType::BF16 | ast::ScalarType::BF16x2) =>
+        {
+            let type_ = f.type_;
+            f.flush_to_zero = None;
+            return expand_bf16_ftz(resolver, result, type_, instruction);
+        }
         ast::Instruction::Abs { .. }
         | ast::Instruction::Activemask { .. }
         | ast::Instruction::Add {
@@ -428,4 +439,36 @@ fn expand_mixed_float<'input>(
         _ => return Err(error_unreachable()),
     };
     run_instruction(resolver, result, instruction)
+}
+
+// bf16 has no denormal mode: .ftz flushes the operands and the result (after .sat) explicitly
+fn expand_bf16_ftz<'input>(
+    resolver: &mut GlobalStringIdentResolver2<'input>,
+    result: &mut Vec<Statement<ast::Instruction<SpirvWord>, SpirvWord>>,
+    type_: ast::ScalarType,
+    mut instruction: ast::Instruction<SpirvWord>,
+) -> Result<(), TranslateError> {
+    let mut flush = |result: &mut Vec<_>, src: &mut SpirvWord| {
+        let dst = resolver.register_unnamed(Some((type_.into(), ast::StateSpace::Reg)));
+        result.push(Statement::FpFlush { dst, src: *src, type_ });
+        *src = dst;
+    };
+    let (dst, sources) = match &mut instruction {
+        ast::Instruction::Add { arguments: ast::AddArgs { dst, src1, src2 }, .. }
+        | ast::Instruction::Sub { arguments: ast::SubArgs { dst, src1, src2 }, .. }
+        | ast::Instruction::Mul { arguments: ast::MulArgs { dst, src1, src2 }, .. } => (dst, vec![src1, src2]),
+        ast::Instruction::Fma { arguments: ast::FmaArgs { dst, src1, src2, src3 }, .. } => {
+            (dst, vec![src1, src2, src3])
+        }
+        _ => return Err(error_unreachable()),
+    };
+    for src in sources {
+        flush(result, src);
+    }
+    let final_dst = *dst;
+    let unflushed = resolver.register_unnamed(Some((type_.into(), ast::StateSpace::Reg)));
+    *dst = unflushed;
+    run_instruction(resolver, result, instruction)?;
+    result.push(Statement::FpFlush { dst: final_dst, src: unflushed, type_ });
+    Ok(())
 }
