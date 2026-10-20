@@ -1,0 +1,28 @@
+// Division by zero ends and gives all ones (remainder: the dividend), as NVIDIA GPUs do.
+.version 7.0
+.target sm_75
+.address_size 64
+.visible .entry k(.param .u64 X, .param .u64 O)
+{
+    .reg .b32 %r<8>;
+    .reg .b64 %rd<8>;
+    mov.u32 %r1, %tid.x;
+    mul.wide.u32 %rd1, %r1, 4;
+    ld.param.u64 %rd2, [X];
+    add.s64 %rd2, %rd2, %rd1;
+    ld.global.u32 %r2, [%rd2];
+    mov.u32 %r3, 0;
+    and.b32 %r4, %r1, 1;
+    mul.lo.u32 %r3, %r4, 7;
+    div.u32 %r5, %r2, %r3;
+    rem.u32 %r6, %r2, %r3;
+    mul.wide.u32 %rd3, %r1, 8;
+    ld.param.u64 %rd4, [O];
+    add.s64 %rd4, %rd4, %rd3;
+    st.global.v2.u32 [%rd4], {%r5, %r6};
+    ret;
+}
+.buffer X .u32 = { 100, 100, 7, 8 };
+.buffer O .u32 [8];
+.launch k <<< 1, 4 >>> (X, O);
+.expect O .u32 = { 4294967295, 100, 14, 2, 4294967295, 7, 1, 1 };
