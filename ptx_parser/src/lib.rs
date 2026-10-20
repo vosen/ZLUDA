@@ -3283,6 +3283,9 @@ derive_parser!(
     pub enum BmskMode { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum PrmtMode { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Tf32Rounding { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
@@ -5371,11 +5374,21 @@ derive_parser!(
     // .mode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
     prmt.b32  d, a, b, c => {
         ast::Instruction::Prmt {
+            data: None,
             arguments: PrmtArgs {
                 dst: d, src1: a, src2: b, src3: c
             }
         }
     }
+    prmt.b32.mode  d, a, b, c => {
+        ast::Instruction::Prmt {
+            data: Some(mode),
+            arguments: PrmtArgs {
+                dst: d, src1: a, src2: b, src3: c
+            }
+        }
+    }
+    .mode: PrmtMode = { .f4e, .b4e, .rc8, .ecl, .ecr, .rc16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-activemask
     activemask.b32 d => {
@@ -6165,6 +6178,20 @@ mod tests {
         let text = "C";
         let result = first_optional::<_, _, _, (), _, _>('A', 'B').parse(text);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn prmt_modes() {
+        for mode in ["", ".f4e", ".b4e", ".rc8", ".ecl", ".ecr", ".rc16"] {
+            let text = format!(
+                ".version 7.0\n.target sm_70\n.address_size 64\n.visible .entry k() {{ .reg .b32 r; prmt.b32{mode} r, r, r, r; ret; }}"
+            );
+            assert!(parse_module_checked(&text).is_ok(), "prmt.b32{mode}");
+        }
+        assert!(parse_module_checked(
+            ".version 7.0\n.target sm_70\n.address_size 64\n.visible .entry k() { .reg .b32 r; prmt.b32.f5e r, r, r, r; ret; }"
+        )
+        .is_err());
     }
 
     #[test]

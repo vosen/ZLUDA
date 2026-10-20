@@ -697,6 +697,69 @@ define i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %s) #0 {
   ret i32 %r
 }
 
+; prmt with a mode: c[1:0] picks one of four selectors (PTX's table for the mode, packed 16 bits each),
+; which then permutes like the default mode.
+define i32 @__zluda_ptx_impl_prmt_f4e_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 7296768396121682448, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_prmt_b4e_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 82032442562664048, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_prmt_rc8_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 3689330049457127424, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_prmt_ecl_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 3689347642196832784, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_prmt_ecr_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 3607420753924849664, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+define i32 @__zluda_ptx_impl_prmt_rc16_b32(i32 %x, i32 %y, i32 %c) #0 {
+  %i = and i32 %c, 3
+  %sh = shl i32 %i, 4
+  %sh64 = zext i32 %sh to i64
+  %t = lshr i64 3616971112479592464, %sh64
+  %t32 = trunc i64 %t to i32
+  %sel = and i32 %t32, 65535
+  %r = call i32 @__zluda_ptx_impl_prmt_b32(i32 %x, i32 %y, i32 %sel)
+  ret i32 %r
+}
+
 define void @__zluda_ptx_impl_nanosleep_u32(i32 %nanoseconds) #0 {
   ret void
 }

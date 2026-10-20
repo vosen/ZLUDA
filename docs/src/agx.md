@@ -89,9 +89,11 @@ an error.
   `bar.red` with a thread count reduces over the SIMD-group when the count
   is 32 (threads arrive at barriers in whole warps) and over the whole
   threadgroup otherwise. `isspacep` is decided at compile time where it can
-  be, and at run time otherwise (see below).
+  be, and at run time otherwise (see below). `prmt` takes every mode
+  (`.f4e`, `.b4e`, `.rc8`, `.ecl`, `.ecr`, `.rc16`; AGX only, the AMD path
+  reports them as not implemented).
 * Not supported yet: `fma.relu` of `f16x2`/`bf16x2`, `add.f32x2` and the
-  other `f32x2` instructions, `set` of packed integer types, `prmt` modes,
+  other `f32x2` instructions, `set` of packed integer types,
   `szext`, `fns`, the 3-input `min`/`max`, `cvt` with `.pzo`, `.scaled`,
   `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
   does not have).

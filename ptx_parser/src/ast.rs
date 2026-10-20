@@ -3,7 +3,7 @@ use super::{
     StateSpace, VectorPrefix,
 };
 use crate::{
-    BmskMode, CacheLevel, EvictionPriority, FunnelShiftMode, Mul24Control, PtxError,
+    BmskMode, PrmtMode, CacheLevel, EvictionPriority, FunnelShiftMode, Mul24Control, PtxError,
     PtxParserState, Reduction, ShiftDirection, ShuffleMode, Tf32Rounding, VoteMode, VshOp,
 };
 use bitflags::bitflags;
@@ -828,6 +828,7 @@ ptx_parser_macros::generate_instruction_type!(
         },
         Prmt {
             type: Type::Scalar(ScalarType::B32),
+            data: Option<PrmtMode>,
             arguments<T>: {
                 dst: T,
                 src1: T,

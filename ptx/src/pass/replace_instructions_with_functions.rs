@@ -679,8 +679,22 @@ fn run_instruction<'input>(
                 "stmatrix, movmatrix, block scaled and sparse mma and wmma on AMD GPUs".to_string(),
             ))
         }
-        i @ ptx_parser::Instruction::Prmt { .. } => {
+        i @ ptx_parser::Instruction::Prmt { data: None, .. } => {
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
+        }
+        i @ ptx_parser::Instruction::Prmt { data: Some(mode), .. } => {
+            if target != Target::Agx {
+                return Err(TranslateError::Todo("prmt modes on AMD GPUs".to_string()));
+            }
+            let mode = match mode {
+                ptx_parser::PrmtMode::F4e => "f4e",
+                ptx_parser::PrmtMode::B4e => "b4e",
+                ptx_parser::PrmtMode::Rc8 => "rc8",
+                ptx_parser::PrmtMode::Ecl => "ecl",
+                ptx_parser::PrmtMode::Ecr => "ecr",
+                ptx_parser::PrmtMode::Rc16 => "rc16",
+            };
+            to_call(resolver, fn_declarations, format!("prmt_{mode}_b32").into(), i)?
         }
         i @ ast::Instruction::MatchSync { data, .. } => {
             let name = format!("match_any_sync_{}", scalar_to_ptx_name(data));
