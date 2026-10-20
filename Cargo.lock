@@ -5119,6 +5119,7 @@ dependencies = [
  "agx_runtime",
  "cuda_macros",
  "cuda_types",
+ "dark_api",
  "tempfile",
 ]
 

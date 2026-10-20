@@ -169,15 +169,47 @@ pub(crate) fn load_image(image: &[u8], cpu: &str) -> Result<module::Module, CUer
     if image.starts_with(b"\x7fELF") {
         return module::Module::load_object(image).map_err(|_| CUerror::INVALID_IMAGE);
     }
-    if image.starts_with(&0xba55ed50u32.to_le_bytes()) || image.starts_with(&0x466243b1u32.to_le_bytes()) {
-        // CUDA fat binaries: not unpacked yet; the PTX inside them can be passed directly.
-        return Err(CUerror::NOT_SUPPORTED);
-    }
     let (object, asm) = compile_ptx(image, cpu).map_err(|e| {
         eprintln!("zluda_agx: {e}");
         CUerror::INVALID_PTX
     })?;
     module::Module::load(&object, &asm).map_err(|_| CUerror::INVALID_IMAGE)
+}
+
+/// The PTX of a CUDA fat binary (a `__fatBinC_Wrapper_t` or a bare fatbin header): of the PTX files it holds, the
+/// one for the newest architecture. NVIDIA machine code (SASS) cannot run here.
+unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
+    use dark_api::fatbin::{Fatbin, FatbinSubmodule};
+    let mut best: Option<(u32, Vec<u8>)> = None;
+    let mut take = |sub: FatbinSubmodule| {
+        let mut files = sub.get_files();
+        while let Some(Ok(f)) = files.next() {
+            if f.header.kind != cuda_types::dark_api::FatbinFileHeader::HEADER_KIND_PTX {
+                continue;
+            }
+            let sm = f.header.sm_version;
+            if best.as_ref().is_some_and(|(b, _)| *b >= sm) {
+                continue;
+            }
+            if let Ok(text) = f.get_or_decompress_content(true) {
+                best = Some((sm, text.into_owned()));
+            }
+        }
+    };
+    let magic = std::ptr::read_unaligned(image as *const u32);
+    if magic == u32::from_le_bytes(cuda_types::dark_api::FatbincWrapper::MAGIC) {
+        let ptr = image as *const c_void;
+        let fatbin = Fatbin::new(&ptr).map_err(|_| CUerror::INVALID_IMAGE)?;
+        let mut subs = fatbin.get_submodules().map_err(|_| CUerror::INVALID_IMAGE)?;
+        while let Some(s) = subs.next() {
+            take(s.map_err(|_| CUerror::INVALID_IMAGE)?);
+        }
+    } else {
+        take(FatbinSubmodule::new(&*(image as *const cuda_types::dark_api::FatbinHeader)));
+    }
+    let (_, mut ptx) = best.ok_or(CUerror::NO_BINARY_FOR_GPU)?;
+    ptx.push(0);
+    Ok(ptx)
 }
 
 unsafe fn out<T>(p: *mut T, v: T) -> CUresult {
@@ -403,7 +435,12 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
     let h = with(|d| {
         let cpu = d.ctx.props.llvm_cpu.clone();
         // An ELF object's size is in its header; PTX is NUL-terminated.
-        let image: &[u8] = if std::slice::from_raw_parts(bytes, 4) == b"\x7fELF" {
+        let magic = std::ptr::read_unaligned(bytes as *const u32);
+        let unpacked;
+        let image: &[u8] = if magic == 0x466243b1 || magic == 0xba55ed50 {
+            unpacked = ptx_in_fatbin(bytes)?;
+            &unpacked[..unpacked.len() - 1]
+        } else if std::slice::from_raw_parts(bytes, 4) == b"\x7fELF" {
             let h = std::slice::from_raw_parts(bytes, 64);
             let shoff = u64::from_le_bytes(h[40..48].try_into().unwrap());
             let (shentsize, shnum) = (u16::from_le_bytes([h[58], h[59]]) as u64, u16::from_le_bytes([h[60], h[61]]) as u64);
@@ -694,6 +731,42 @@ mod tests {
         .unwrap();
         assert!(block.is_empty());
         assert_eq!(&u[0..14], &[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0]);
+    }
+
+    // A fat binary as nvcc lays it out: a wrapper, a fatbin header, then file headers with their payloads.
+    #[test]
+    fn picks_the_newest_ptx_of_a_fat_binary() {
+        fn file(kind: u16, sm: u32, payload: &[u8]) -> Vec<u8> {
+            let mut h = vec![0u8; 64];
+            h[0..2].copy_from_slice(&kind.to_le_bytes());
+            h[2..4].copy_from_slice(&0x101u16.to_le_bytes());
+            h[4..8].copy_from_slice(&64u32.to_le_bytes());
+            h[8..12].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+            h[28..32].copy_from_slice(&sm.to_le_bytes());
+            h.extend_from_slice(payload);
+            h
+        }
+        let mut files = file(1, 52, b"old\0\0\0\0\0");
+        files.extend(file(2, 86, b"SASS....")); // machine code, ignored
+        files.extend(file(1, 86, b"new\0\0\0\0\0"));
+        let mut bin = vec![0u8; 16];
+        bin[0..4].copy_from_slice(&0xba55ed50u32.to_le_bytes());
+        bin[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bin[6..8].copy_from_slice(&16u16.to_le_bytes());
+        bin[8..16].copy_from_slice(&(files.len() as u64).to_le_bytes());
+        bin.extend(files);
+        // 8-byte aligned storage
+        let mut words = vec![0u64; bin.len().div_ceil(8)];
+        unsafe { std::ptr::copy_nonoverlapping(bin.as_ptr(), words.as_mut_ptr() as *mut u8, bin.len()) };
+        let header = words.as_ptr() as *const u8;
+        assert_eq!(unsafe { ptx_in_fatbin(header) }.unwrap(), b"new\0");
+        let wrapper = cuda_types::dark_api::FatbincWrapper {
+            magic: 0x466243b1,
+            version: 1,
+            data: header as *const _,
+            filename_or_fatbins: std::ptr::null(),
+        };
+        assert_eq!(unsafe { ptx_in_fatbin(&wrapper as *const _ as *const u8) }.unwrap(), b"new\0");
     }
 
     #[test]

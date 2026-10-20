@@ -12,4 +12,5 @@ crate-type = ["cdylib", "rlib"]
 agx_runtime = { path = "../agx_runtime" }
 cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
+dark_api = { path = "../dark_api" }
 tempfile = "3"
