@@ -163,7 +163,7 @@ three differences.
   (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
-run tests for AGX: 176 of 195 compile, and the remaining ones use the
+run tests for AGX: 191 of 195 compile, and the remaining ones use the
 features above.
 
 ## Warp-level matrix instructions
@@ -411,7 +411,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Area | Status |
 | --- | --- |
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
-| PTX | 176 of 195 ZLUDA run tests compile. Missing: textures and surfaces, a few warp-level and bulk-copy forms. |
+| PTX | 191 of 195 ZLUDA run tests compile. Missing: textures and surfaces, a few warp-level and bulk-copy forms. |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` / strict mode for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
 | Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
 | Memory model | fences of every scope lower to measured barrier sequences |

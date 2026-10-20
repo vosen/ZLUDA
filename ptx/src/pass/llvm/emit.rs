@@ -4408,11 +4408,18 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::RsqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
+        if self.target == Target::Agx && data.type_ == ast::ScalarType::F64 {
+            // No f64 hardware: 1 / sqrt(x) with the software f64 square root and division, which is more
+            // accurate than PTX's approximation requires.
+            let src = self.resolver.value(arguments.src)?;
+            let root = self.emit_intrinsic(c"llvm.sqrt.f64", None, vec![&data.type_.into()], vec![(src, type_)])?;
+            let one = unsafe { LLVMConstReal(type_, 1.0) };
+            self.fp.fdiv(self.resolver, data.type_, arguments.dst, one, root)?;
+            return Ok(());
+        }
         let intrinsic = match (self.target, data.type_, self.fp.mode) {
             (Target::Agx, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
-            (Target::Agx, _, _) => {
-                return Err(TranslateError::Unsupported("rsqrt.approx.f64 is not supported on AGX".into()))
-            }
+            (Target::Agx, _, _) => return Err(error_unreachable()),
             (_, ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
             (_, ast::ScalarType::F32, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.rsq.f32"
@@ -4489,8 +4496,15 @@ impl<'a> MethodEmitContext<'a> {
             (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
                 c"llvm.agx.rcp.f32"
             }
+            (ast::ScalarType::F64, _, _) if self.target == Target::Agx => {
+                // 1 / x with the software f64 division (exact, so also rcp.rn.f64)
+                let src = self.resolver.value(arguments.src)?;
+                let one = unsafe { LLVMConstReal(type_, 1.0) };
+                self.fp.fdiv(self.resolver, data.type_, arguments.dst, one, src)?;
+                return Ok(());
+            }
             (_, _, _) if self.target == Target::Agx => {
-                return Err(TranslateError::Unsupported("rcp.approx.f64 is not supported on AGX".into()))
+                return Err(TranslateError::Unsupported("rcp of this type is not supported on AGX".into()))
             }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
                 c"llvm.amdgcn.rcp.f32"
