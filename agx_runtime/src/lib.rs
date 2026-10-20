@@ -13,6 +13,7 @@
 //!
 //! USC addresses (shader code, pipeline words) are 32-bit offsets from the queue's `usc_exec_base`.
 
+pub mod error;
 pub mod module;
 
 use asahi_sys::*;
@@ -95,8 +96,31 @@ const DRM_IOCTL_SYNCOBJ_WAIT: u64 = drm_ioc(IOC_READWRITE, 0xc3, std::mem::size_
 const DRM_IOCTL_SYNCOBJ_RESET: u64 = drm_ioc(IOC_READWRITE, 0xc4, std::mem::size_of::<drm_syncobj_array>());
 
 fn stage_error(stage: &str, e: io::Error) -> io::Error {
-    io::Error::new(e.kind(), format!("{stage}: {e}"))
+    io::Error::new(e.kind(), error::StageError { stage: stage.to_owned(), source: e })
 }
+
+#[repr(C)]
+struct drm_syncobj_handle {
+    handle: u32,
+    flags: u32,
+    fd: i32,
+    pad: u32,
+}
+const DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE: u32 = 1;
+const DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0xc1, std::mem::size_of::<drm_syncobj_handle>());
+
+// linux/sync_file.h
+#[repr(C)]
+struct sync_file_info {
+    name: [u8; 32],
+    status: i32,
+    flags: u32,
+    num_fences: u32,
+    pad: u32,
+    sync_fence_info: u64,
+}
+const SYNC_IOC_FILE_INFO: u64 =
+    (IOC_READWRITE << 30) | ((std::mem::size_of::<sync_file_info>() as u64) << 16) | ((b'>' as u64) << 8) | 4;
 
 struct DeviceInner {
     fd: OwnedFd,
@@ -511,14 +535,32 @@ impl Queue {
         wait.timeout_nsec = deadline;
         self.dev.ioctl(DRM_IOCTL_SYNCOBJ_WAIT, &mut wait, "syncobj-wait")?;
         let host = h0.elapsed();
+        let status = self.fence_status()?;
         let mut reset = drm_syncobj_array { handles: &self.syncobj as *const _ as u64, count_handles: 1, pad: 0 };
         self.dev.ioctl(DRM_IOCTL_SYNCOBJ_RESET, &mut reset, "syncobj-reset")?;
+        if status < 0 {
+            return Err(io::Error::other(error::GpuError { fence_status: status }));
+        }
         let t = self.ts.as_slice();
         Ok(Timing {
             start: u64::from_le_bytes(t[0..8].try_into().unwrap()),
             end: u64::from_le_bytes(t[8..16].try_into().unwrap()),
             host,
         })
+    }
+}
+
+impl Queue {
+    /// The status of the out-fence: 1 when signalled, negative errno when the kernel failed the job.
+    fn fence_status(&self) -> io::Result<i32> {
+        let mut h = drm_syncobj_handle { handle: self.syncobj, flags: DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE, fd: -1, pad: 0 };
+        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &mut h, "syncobj-export")?;
+        let fd = unsafe { OwnedFd::from_raw_fd(h.fd) };
+        let mut info: sync_file_info = unsafe { std::mem::zeroed() };
+        if unsafe { libc::ioctl(fd.as_raw_fd(), SYNC_IOC_FILE_INFO as _, &mut info) } != 0 {
+            return Err(stage_error("sync-file-info", io::Error::last_os_error()));
+        }
+        Ok(info.status)
     }
 }
 
