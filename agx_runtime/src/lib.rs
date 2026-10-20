@@ -14,6 +14,7 @@
 //! USC addresses (shader code, pipeline words) are 32-bit offsets from the queue's `usc_exec_base`.
 
 pub mod cache;
+pub mod context;
 pub mod error;
 pub mod module;
 pub mod printf;
@@ -479,6 +480,8 @@ pub struct Queue {
     ts: Bo,
     ts_handle: u32,
     pub timeout: Duration,
+    /// Objects the GPU may still read, freed once their fence has signalled.
+    in_flight: std::collections::VecDeque<(u64, Vec<Bo>)>,
 }
 
 fn monotonic_deadline(timeout: Duration) -> i64 {
@@ -520,6 +523,7 @@ impl Queue {
             ts,
             ts_handle: bind.object_handle,
             timeout: Duration::from_secs(3),
+            in_flight: Default::default(),
         })
     }
 
@@ -614,6 +618,39 @@ impl Queue {
         let slot = (fence.point % TIMESTAMP_SLOTS) as usize * 16;
         let t = &self.ts.as_slice()[slot..slot + 16];
         Some((u64::from_le_bytes(t[0..8].try_into().unwrap()), u64::from_le_bytes(t[8..16].try_into().unwrap())))
+    }
+
+    /// Keeps `objects` alive until `fence` (a point of this queue) has signalled.
+    pub fn retire_after(&mut self, fence: Fence, objects: Vec<Bo>) {
+        debug_assert_eq!(fence.syncobj, self.timeline);
+        self.in_flight.push_back((fence.point, objects));
+    }
+
+    /// Frees the objects of finished commands. Points finish in order, so this stops at the first unfinished one.
+    pub fn collect(&mut self) -> io::Result<()> {
+        let Some(&(last, _)) = self.in_flight.back() else { return Ok(()) };
+        let mut done = 0u64;
+        let mut q = drm_syncobj_timeline_array {
+            handles: &self.timeline as *const _ as u64,
+            points: &mut done as *mut _ as u64,
+            count_handles: 1,
+            flags: 0,
+        };
+        self.dev.ioctl(DRM_IOCTL_SYNCOBJ_QUERY, &mut q, "syncobj-query")?;
+        while self.in_flight.front().is_some_and(|&(p, _)| p <= done.min(last)) {
+            self.in_flight.pop_front();
+        }
+        Ok(())
+    }
+
+    /// Waits for every submitted command (cuStreamSynchronize) and frees their objects.
+    pub fn synchronize(&mut self) -> io::Result<()> {
+        let last = self.last();
+        let r = self.wait(last, self.timeout);
+        if r.is_ok() {
+            self.in_flight.clear();
+        }
+        r
     }
 
     /// Submits one compute command and waits for it.
@@ -831,6 +868,30 @@ impl LoadedModule {
         local: [u32; 3],
         dynamic_shared: u32,
     ) -> io::Result<Timing> {
+        let h0 = Instant::now();
+        let fence = self.launch_async(vm, queue, g14x, kernel, args, threadgroups, local, dynamic_shared, &[])?;
+        queue.wait(fence, queue.timeout)?;
+        let host = h0.elapsed();
+        let (start, end) = queue.timing(fence).unwrap_or_default();
+        queue.collect()?;
+        Ok(Timing { start, end, host })
+    }
+
+    /// Submits `kernel` on `queue` after `wait_for` and returns its fence (cuLaunchKernel). The arguments are copied
+    /// now; the launch's command objects are freed once it has finished.
+    pub fn launch_async(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        kernel: &str,
+        args: &[module::Arg],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
+        queue.collect()?;
         let invalid = |m: String| io::Error::new(io::ErrorKind::InvalidInput, m);
         let k = self.module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
         if k.stack_bytes > 0 {
@@ -861,6 +922,8 @@ impl LoadedModule {
         let stream = cdm_dispatch((pw.va - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
         let mut cdm = vm.alloc_data(stream.len() as u64)?;
         cdm.as_mut_slice()[..stream.len()].copy_from_slice(&stream);
-        queue.run_compute(cdm.va, cdm.va + stream.len() as u64)
+        let fence = queue.submit_compute(cdm.va, cdm.va + stream.len() as u64, wait_for)?;
+        queue.retire_after(fence, vec![unif, pw, cdm]);
+        Ok(fence)
     }
 }
