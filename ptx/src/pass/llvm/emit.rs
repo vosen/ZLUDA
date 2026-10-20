@@ -3951,6 +3951,34 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::Packed8Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        if let ast::Packed8Op::Set { cmp, lanes16 } = data.op {
+            // lane-wise compare, all ones where true
+            let (bits, lanes) = if lanes16 { (16, 2) } else { (8, 4) };
+            let vec_type = unsafe { LLVMVectorType(LLVMIntTypeInContext(self.context, bits), lanes) };
+            let a = self.resolver.value(arguments.src1)?;
+            let b = self.resolver.value(arguments.src2.ok_or_else(error_unreachable)?)?;
+            use LLVMIntPredicate::*;
+            let predicate = match (cmp, data.signed) {
+                (ast::PackedCmp::Eq, _) => LLVMIntEQ,
+                (ast::PackedCmp::Ne, _) => LLVMIntNE,
+                (ast::PackedCmp::Lt, true) => LLVMIntSLT,
+                (ast::PackedCmp::Lt, false) => LLVMIntULT,
+                (ast::PackedCmp::Le, true) => LLVMIntSLE,
+                (ast::PackedCmp::Le, false) => LLVMIntULE,
+                (ast::PackedCmp::Gt, true) => LLVMIntSGT,
+                (ast::PackedCmp::Gt, false) => LLVMIntUGT,
+                (ast::PackedCmp::Ge, true) => LLVMIntSGE,
+                (ast::PackedCmp::Ge, false) => LLVMIntUGE,
+            };
+            unsafe {
+                let a = LLVMBuildBitCast(self.builder, a, vec_type, LLVM_UNNAMED.as_ptr());
+                let b = LLVMBuildBitCast(self.builder, b, vec_type, LLVM_UNNAMED.as_ptr());
+                let mask = LLVMBuildICmp(self.builder, predicate, a, b, LLVM_UNNAMED.as_ptr());
+                let lanes = LLVMBuildSExt(self.builder, mask, vec_type, LLVM_UNNAMED.as_ptr());
+                self.resolver.with_result(arguments.dst, |dst| LLVMBuildBitCast(self.builder, lanes, i32_type, dst));
+            }
+            return Ok(());
+        }
         let vec_type = unsafe { LLVMVectorType(LLVMInt8TypeInContext(self.context), 4) };
         let to_vec = |this: &mut Self, word: SpirvWord| -> Result<LLVMValueRef, TranslateError> {
             let value = this.resolver.value(word)?;
@@ -4010,6 +4038,7 @@ impl<'a> MethodEmitContext<'a> {
                 intrinsic(self, name, vec![a, b_or(b)?])
             }
             ast::Packed8Op::Neg => unsafe { LLVMBuildSub(self.builder, zero, a, LLVM_UNNAMED.as_ptr()) },
+            ast::Packed8Op::Set { .. } => return Err(error_unreachable()),
             ast::Packed8Op::Abs => unsafe {
                 // |-128| wraps to -128
                 let negated = LLVMBuildSub(self.builder, zero, a, LLVM_UNNAMED.as_ptr());

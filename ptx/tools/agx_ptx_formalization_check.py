@@ -252,20 +252,36 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
     text = next((b for n, b in blobs.values() if n == '.text'), b'')
     gdata = next((b for n, b in blobs.values() if n == '.agx.globals'), b'')
     gsec = next((i for i, (n, _) in blobs.items() if n == '.agx.globals'), None)
+    # the kernel records (.agx.kernels): uniform layout, arguments and resources, as agx_runtime reads them
+    records = {}
+    sec = os.path.join(tmp, 'kernels.bin')
+    if subprocess.run([objcopy, '--dump-section', '.agx.kernels=' + sec, obj, os.path.join(tmp, 'unused.o')],
+                      capture_output=True).returncode == 0:
+        d = open(sec, 'rb').read()
+        pos = 0
+        while pos + 12 <= len(d):
+            size, _version, nlen = struct.unpack_from('<III', d, pos)
+            if size == 0:
+                break
+            name = d[pos + 12:pos + 12 + nlen].decode()
+            q = pos + 12 + (nlen + 3) // 4 * 4
+            halves, tg_half, glob, _gprs, tg_bytes, _stack, nargs = struct.unpack_from('<7I', d, q)
+            args = [struct.unpack_from('<3I', d, q + 28 + 12 * i) for i in range(nargs)]
+            records[name] = (halves, tg_half, glob, tg_bytes, args)
+            pos += size
     kernels = {}
-    for m in re.finditer(r'^([\w$.]+):\s*(?://.*)?\n((?:\s*//[^\n]*\n)*)', asm, re.M):
-        name, comments = m.group(1), m.group(2)
+    for name, (halves, tg_half, glob, tg_bytes, args) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
-        u = re.search(r'threadgroups_per_grid at u(\d+)', comments)
-        g = re.search(r'global data buffer at u(\d+)_u\d+', comments)
-        tg = re.search(r'threadgroup memory: (\d+) bytes', comments)
         off, size = syms[name][0], syms[name][1]
         kernels[name] = {
             'code': text[off:off + size],
-            'grid_uniform': int(u.group(1)) if u else None,
-            'globals_uniform': int(g.group(1)) if g else None,
-            'shared': int(tg.group(1)) if tg else 0,
+            'halves': halves,
+            'grid_half': tg_half,
+            'globals_half': None if glob == 0xffffffff else glob,
+            'shared': tg_bytes,
+            # (by pointer, bytes, first 16-bit half) per source-level argument
+            'args': [(bp == 1, nb, h) for bp, nb, h in args],
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
     return kernels, gdata, gsyms
@@ -415,29 +431,39 @@ def run_test(path, args):
                 if len(ops) != len(ps):
                     raise Unsupported('launch argument count')
                 pmem = bytearray()
-                uniforms = []
-                for i, ((t, n, al), o) in enumerate(zip(ps, ops)):
+                halves = {}
+
+                def put(half, value, nbytes):
+                    for j in range((nbytes + 1) // 2):
+                        halves[half + j] = (value >> (16 * j)) & 0xffff
+
+                ps_all = list(zip(ps, ops))
+                if re.search(r'^\s*\.address_size\s+32\b', module, re.M):
+                    # 32-bit modules take the 64-bit base of their 32-bit addresses as a last parameter; the harness
+                    # buffers are below 4 GiB, so it is 0.
+                    ps_all.append((('u64', 1, 8), '0'))
+                if len(k['args']) != len(ps_all):
+                    raise Unsupported('kernel record argument count')
+                for ((t, n, al), o), (by_pointer, nbytes, half) in zip(ps_all, k['args']):
                     if n != 1:
                         raise Unsupported('aggregate kernel parameter')
-                    off = (len(pmem) + 15) & ~15
-                    pmem.extend(b'\0' * (off - len(pmem)))
-                    pmem.extend(lit_bits(o, t, syms).to_bytes(SIZES[t], 'little'))
-                    addr = PARAM_BASE + off
-                    uniforms += [(2 * i, addr & 0xffffffff), (2 * i + 1, addr >> 32)]
-                if re.search(r'^\s*\.address_size\s+32\b', module, re.M):
-                    # 32-bit modules take the 64-bit base of their 32-bit
-                    # addresses as a last parameter; the harness buffers are
-                    # below 4 GiB, so it is 0.
-                    off = (len(pmem) + 15) & ~15
-                    pmem.extend(b'\0' * (off + 8 - len(pmem)))
-                    addr = PARAM_BASE + off
-                    i = len(ps)
-                    uniforms += [(2 * i, addr & 0xffffffff), (2 * i + 1, addr >> 32)]
-                if k['grid_uniform'] is not None:
-                    for j in range(3):
-                        uniforms.append((k['grid_uniform'] + j, grid[j]))
-                if k['globals_uniform'] is not None:
-                    uniforms += [(k['globals_uniform'], GLOBALS_BASE), (k['globals_uniform'] + 1, 0)]
+                    if half == 0xffffffff:
+                        continue  # unused by the kernel
+                    value = lit_bits(o, t, syms)
+                    if by_pointer:
+                        off = (len(pmem) + 15) & ~15
+                        pmem.extend(b'\0' * (off - len(pmem)))
+                        pmem.extend(value.to_bytes(SIZES[t], 'little'))
+                        put(half, PARAM_BASE + off, 8)
+                    else:
+                        put(half, value, nbytes)
+                for j in range(3):
+                    put(k['grid_half'] + 2 * j, grid[j], 4)
+                if k['globals_half'] is not None:
+                    put(k['globals_half'], GLOBALS_BASE, 8)
+                # agx_run takes 32-bit uniforms
+                uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
+                                   for h in halves})
                 f_code = os.path.join(tmp, 'k%d.bin' % launches)
                 f_mem = os.path.join(tmp, 'mem.bin')
                 f_par = os.path.join(tmp, 'par.bin')

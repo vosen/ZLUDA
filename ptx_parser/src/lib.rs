@@ -3291,6 +3291,9 @@ derive_parser!(
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum Packed8Type { }
 
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum PackedSetType { }
+
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash, Debug)]
     pub enum PackedCvtType { }
 
@@ -5412,6 +5415,35 @@ derive_parser!(
         }
     }
     .p8type: Packed8Type = { .u8x4, .s8x4 };
+
+    // set on packed integer lanes (PTX ISA 9.4)
+    set.CmpOp.ptype  d, a, b => {
+        use RawSetpCompareOp as C;
+        let cmp = match cmpop {
+            C::Eq => ast::PackedCmp::Eq,
+            C::Ne => ast::PackedCmp::Ne,
+            C::Lt | C::Lo => ast::PackedCmp::Lt,
+            C::Le | C::Ls => ast::PackedCmp::Le,
+            C::Gt | C::Hi => ast::PackedCmp::Gt,
+            C::Ge | C::Hs => ast::PackedCmp::Ge,
+            _ => {
+                state.errors.push(PtxError::SyntaxError("set on packed lanes takes an integer comparison".to_string()));
+                ast::PackedCmp::Eq
+            }
+        };
+        let lanes16 = matches!(ptype, PackedSetType::U16x2 | PackedSetType::S16x2);
+        ast::Instruction::Packed8 {
+            data: ast::Packed8Details {
+                op: ast::Packed8Op::Set { cmp, lanes16 },
+                signed: matches!(ptype, PackedSetType::S8x4 | PackedSetType::S16x2),
+                saturate: false,
+                relu: false,
+            },
+            arguments: Packed8Args { dst: d, src1: a, src2: Some(b) }
+        }
+    }
+    .CmpOp: RawSetpCompareOp  = { .eq, .ne, .lt, .le, .gt, .ge, .lo, .ls, .hi, .hs };
+    .ptype: PackedSetType = { .u8x4, .s8x4, .u16x2, .s16x2 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-clmad
     clmad.mode.u64  d, a, b, c => {

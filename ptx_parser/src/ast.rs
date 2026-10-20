@@ -4059,6 +4059,19 @@ pub enum Packed8Op {
     Max,
     Neg,
     Abs,
+    /// set.CmpOp on packed lanes (PTX ISA 9.4): all ones in each lane that compares true. `lanes16` selects
+    /// u16x2 / s16x2 instead of the byte lanes.
+    Set { cmp: PackedCmp, lanes16: bool },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PackedCmp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

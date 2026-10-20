@@ -99,10 +99,12 @@ an error.
   denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
   `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (with
   round to nearest; a directed `.relu` fma is not implemented).
+  `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
+  all-ones lanes where the comparison holds.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
 * Not supported yet: the `f32x2` forms of
-  instructions other than `add`/`sub`/`mul`/`fma`, `set` of packed integer types, `cvt` with `.pzo`, `.scaled`,
+  instructions other than `add`/`sub`/`mul`/`fma`, `cvt` with `.pzo`, `.scaled`,
   `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
   does not have).
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
