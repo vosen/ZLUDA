@@ -6,13 +6,27 @@ edition = "2021"
 
 [dependencies]
 cuda_macros = { path = "../cuda_macros" }
-hip_runtime-sys = { path = "../ext/hip_runtime-sys" }
+hip_runtime-sys = { path = "../ext/hip_runtime-sys", optional = true }
 bitflags = "2.9.1"
-rocblas-sys = { path = "../ext/rocblas-sys" }
-hipblaslt-sys = { path = "../ext/hipblaslt-sys" }
-miopen-sys = { path = "../ext/miopen-sys" }
-rocsparse-sys = { path = "../ext/rocsparse-sys" }
-hipfft-sys = { path = "../ext/hipfft-sys" }
+rocblas-sys = { path = "../ext/rocblas-sys", optional = true }
+hipblaslt-sys = { path = "../ext/hipblaslt-sys", optional = true }
+miopen-sys = { path = "../ext/miopen-sys", optional = true }
+rocsparse-sys = { path = "../ext/rocsparse-sys", optional = true }
+hipfft-sys = { path = "../ext/hipfft-sys", optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rocm_smi-sys = { path = "../ext/rocm_smi-sys" }
+rocm_smi-sys = { path = "../ext/rocm_smi-sys", optional = true }
+
+[features]
+default = ["rocm"]
+# Conversions from the ROCm libraries' error types, used by the HIP-based
+# runtime. The AGX runtime (zluda_agx) builds without them, so it needs no ROCm.
+rocm = [
+    "dep:hip_runtime-sys",
+    "dep:rocblas-sys",
+    "dep:hipblaslt-sys",
+    "dep:miopen-sys",
+    "dep:rocsparse-sys",
+    "dep:hipfft-sys",
+    "dep:rocm_smi-sys",
+]

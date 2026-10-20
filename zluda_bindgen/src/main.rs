@@ -375,6 +375,7 @@ fn generate_cufft(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix = "
+#[cfg(feature = \"rocm\")]
 impl From<hipfft_sys::hipfftError> for cufftError_t {
     fn from(error: hipfft_sys::hipfftError) -> Self {
         Self(error.0)
@@ -449,7 +450,8 @@ fn generate_cusparse(crate_root: &PathBuf) {
         hip_types: vec![],
     };
     let suffix =
-"impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
+"#[cfg(feature = \"rocm\")]
+impl From<rocsparse_sys::rocsparse_error> for cusparseError_t {
     fn from(error: rocsparse_sys::rocsparse_error) -> Self {
         match error {
             rocsparse_sys::rocsparse_error::invalid_handle => cusparseError_t::INVALID_VALUE,
@@ -645,6 +647,7 @@ fn write_cudnn9_types(
     let mut text = prettyplease::unparse(&module);
     text.push_str(
         "
+#[cfg(feature = \"rocm\")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {
@@ -774,6 +777,7 @@ impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
         }
     }
 }
+#[cfg(feature = \"rocm\")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {
@@ -1205,6 +1209,7 @@ fn generate_ml(crate_root: &PathBuf) {
     };
     let suffix =
 "#[cfg(unix)]
+#[cfg(feature = \"rocm\")]
 impl From<rocm_smi_sys::rsmi_error> for nvmlError_t {
     fn from(error: rocm_smi_sys::rsmi_error) -> Self {
         match error {
@@ -1772,7 +1777,7 @@ impl ConvertIntoRustResult {
         items.extend(extra_items);
         for hip_error_path in self.options.hip_types {
             items.push(
-                parse_quote! {impl From<#hip_error_path> for #new_error_type {
+                parse_quote! {#[cfg(feature = "rocm")] impl From<#hip_error_path> for #new_error_type {
                     fn from(error: #hip_error_path) -> Self {
                         Self(error.0)
                     }

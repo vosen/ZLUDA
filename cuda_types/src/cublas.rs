@@ -387,11 +387,13 @@ pub type cublasStatus_t = ::core::result::Result<(), cublasError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<cublasStatus_t, u32>;
 };
+#[cfg(feature = "rocm")]
 impl From<rocblas_sys::rocblas_error> for cublasError_t {
     fn from(error: rocblas_sys::rocblas_error) -> Self {
         Self(error.0)
     }
 }
+#[cfg(feature = "rocm")]
 impl From<hipblaslt_sys::hipblasLtError> for cublasError_t {
     fn from(error: hipblaslt_sys::hipblasLtError) -> Self {
         Self(error.0)

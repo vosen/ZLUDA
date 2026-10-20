@@ -669,6 +669,7 @@ impl From<crate::cudnn9::cudnnError_t> for cudnnError_t {
         }
     }
 }
+#[cfg(feature = "rocm")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {

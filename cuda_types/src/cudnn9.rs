@@ -2656,6 +2656,7 @@ const _: fn() = || {
     let _ = std::mem::transmute::<cudnnStatus_t, u32>;
 };
 
+#[cfg(feature = "rocm")]
 impl From<miopen_sys::miopenError_t> for cudnnError_t {
     fn from(error: miopen_sys::miopenError_t) -> Self {
         match error {

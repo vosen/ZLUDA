@@ -487,6 +487,7 @@ const _: fn() = || {
     let _ = std::mem::transmute::<cufftResult, u32>;
 };
 
+#[cfg(feature = "rocm")]
 impl From<hipfft_sys::hipfftError> for cufftError_t {
     fn from(error: hipfft_sys::hipfftError) -> Self {
         Self(error.0)
