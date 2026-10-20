@@ -3575,7 +3575,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }),
             arguments: AddArgs { dst: d, src1: a, src2: b }
         }
@@ -3588,7 +3589,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3604,7 +3606,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3624,7 +3627,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3640,7 +3644,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3656,7 +3661,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3672,7 +3678,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: AddArgs {
@@ -3720,7 +3727,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }),
             arguments: MulArgs { dst: d, src1: a, src2: b }
         }
@@ -3733,7 +3741,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -3747,7 +3756,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -3764,7 +3774,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -3778,7 +3789,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -3792,7 +3804,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -3806,7 +3819,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: MulArgs { dst: d, src1: a, src2: b }
@@ -4249,7 +4263,8 @@ derive_parser!(
                     rounding: ast::RoundingMode::NearestEven,
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -4263,7 +4278,8 @@ derive_parser!(
                     rounding: rnd.into(),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -4277,7 +4293,8 @@ derive_parser!(
                     rounding: rnd.into(),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 }
             ),
             arguments: MadArgs { dst: d, src1: a, src2: b, src3: c  }
@@ -4296,7 +4313,8 @@ derive_parser!(
                     rounding: rnd.into(),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false
+                    is_fusable: false,
+                    relu: false,
                 },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c }
         }
@@ -4308,7 +4326,8 @@ derive_parser!(
                 rounding: rnd.into(),
                 flush_to_zero: Some(ftz),
                 saturate: sat,
-                is_fusable: false
+                is_fusable: false,
+                relu: false,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -4320,7 +4339,8 @@ derive_parser!(
                 rounding: rnd.into(),
                 flush_to_zero: None,
                 saturate: false,
-                is_fusable: false
+                is_fusable: false,
+                relu: false,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -4328,14 +4348,15 @@ derive_parser!(
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
     ScalarType =            { .f32, .f32x2, .f64 };
 
-    fma.rnd{.ftz}{.sat}.f16 d, a, b, c => {
+    fma.rnd{.ftz}{.sat}{.relu}.f16 d, a, b, c => {
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: f16,
                 rounding: rnd.into(),
                 flush_to_zero: Some(ftz),
                 saturate: sat,
-                is_fusable: false
+                is_fusable: false,
+                relu,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
@@ -4347,9 +4368,6 @@ derive_parser!(
     //fma.rnd{.ftz}.relu.f16x2    d, a, b, c;
     //fma.rnd{.relu}.bf16         d, a, b, c;
     fma.rnd{.relu}.type_x2       d, a, b, c => {
-        if relu {
-            state.errors.push(PtxError::Todo("fma instruction with relu modifier for bf16x2/f16x2 types".to_string()));
-        }
         ast::Instruction::Fma {
             data: ast::ArithFloat {
                 type_: type_x2,
@@ -4358,13 +4376,14 @@ derive_parser!(
                 // the f16 one
                 flush_to_zero: if type_x2 == ScalarType::F16x2 { Some(false) } else { None },
                 saturate: false,
-                is_fusable: false
+                is_fusable: false,
+                relu,
             },
             arguments: FmaArgs { dst: d, src1: a, src2: b, src3: c  }
         }
     }
     .rnd: RawRoundingMode = { .rn, .rz, .rm, .rp };
-    .type_x2: ScalarType =            { .bf16x2, .f16x2 };
+    .type_x2: ScalarType =            { .bf16x2, .f16x2, .bf16 };
     //fma.rnd.oob.{relu}.type     d, a, b, c;
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#integer-arithmetic-instructions-sub
@@ -4404,7 +4423,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }),
             arguments: SubArgs { dst: d, src1: a, src2: b }
         }
@@ -4417,7 +4437,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -4431,7 +4452,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -4448,7 +4470,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -4462,7 +4485,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -4476,7 +4500,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }
@@ -4490,7 +4515,8 @@ derive_parser!(
                     rounding: rnd.map(Into::into).unwrap_or(ast::RoundingMode::NearestEven),
                     flush_to_zero: None,
                     saturate: false,
-                    is_fusable: rnd.is_none()
+                    is_fusable: rnd.is_none(),
+                    relu: false,
                 }
             ),
             arguments: SubArgs { dst: d, src1: a, src2: b  }

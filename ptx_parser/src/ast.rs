@@ -2324,6 +2324,8 @@ pub struct ArithFloat {
     pub rounding: RoundingMode,
     pub flush_to_zero: Option<bool>,
     pub saturate: bool,
+    /// `.relu` (fma): negative results become +0, NaN stays NaN
+    pub relu: bool,
     // From PTX documentation: https://docs.nvidia.com/cuda/parallel-thread-execution/#mixed-precision-floating-point-instructions-add
     // Note that an add instruction with an explicit rounding modifier is treated conservatively by
     // the code optimizer. An add instruction with no rounding modifier defaults to

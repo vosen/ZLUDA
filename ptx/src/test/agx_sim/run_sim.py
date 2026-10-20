@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compiles the PTX here with zoc for AGX and runs it on the AGX Performance Simulator's agx_run, checking each
 result against a reference model: prmt modes, szext and fns, the 3-input min/max, f32x2 arithmetic (default and
---strict-fp) and two modules linked with zoc (cuLink).
+--strict-fp), fma.relu of the 16-bit types and two modules linked with zoc (cuLink).
 
   run_sim.py --zoc ZOC --agx-run AGX_RUN --objcopy LLVM_OBJCOPY --readelf LLVM_READELF [--chip agx-g14c]
 
@@ -114,6 +114,22 @@ def f32x2(a, tmp, strict):
     return [k for k in range(16) if got[k] != want[k]]
 
 
+def fma_relu(a, tmp):
+    (out,) = t.run(a, compile_ptx(a, tmp, "fma_relu.ptx"), "fma_relu", [("buf", bytes(20), True)], (1, 1), (1, 1), tmp)
+    w = struct.unpack("<3I4H", out)
+    bad = []
+    if w[0] != 0x40000000:
+        bad.append("f16x2")
+    hi = w[1] >> 16
+    if w[1] & 0xffff != 0 or (hi & 0x7c00) != 0x7c00 or (hi & 0x3ff) == 0:
+        bad.append("f16x2 NaN")
+    if w[2] != 0x40000000:
+        bad.append("bf16x2")
+    if w[3:] != (0x4000, 0x0000, 0x4000, 0xC900):
+        bad.append("scalar %s" % [hex(v) for v in w[3:]])
+    return bad
+
+
 def link(a, tmp):
     obj = compile_ptx(a, tmp, "../spirv_run/extern_func.ptx", "link_lib.ptx")
     (out,) = t.run(a, obj, "extern_func", [("buf", struct.pack("<Q", 7)), ("buf", bytes(8), True)], (1, 1), (1, 1), tmp)
@@ -130,7 +146,7 @@ def main():
     failed = 0
     cases = [("prmt modes", prmt), ("szext and fns", szext_fns), ("3-input min/max", min3),
              ("f32x2", lambda a, tmp: f32x2(a, tmp, False)), ("f32x2 strict", lambda a, tmp: f32x2(a, tmp, True)),
-             ("cuLink extern_func", link)]
+             ("fma.relu", fma_relu), ("cuLink extern_func", link)]
     for label, f in cases:
         with tempfile.TemporaryDirectory() as tmp:
             try:

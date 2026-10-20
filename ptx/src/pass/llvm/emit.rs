@@ -4983,6 +4983,9 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::FmaArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         if self.is_half_directed_rounding(&data) {
+            if data.relu {
+                return Err(TranslateError::Todo("fma.relu with a directed rounding mode".to_string()));
+            }
             let srcs = vec![
                 self.resolver.value(arguments.src1)?,
                 self.resolver.value(arguments.src2)?,
@@ -5003,9 +5006,9 @@ impl<'a> MethodEmitContext<'a> {
             ),
         };
         let intrinsic = format!("{}.{}\0", prefix, LLVMTypeDisplay(data.type_));
-        self.emit_intrinsic_with_metadata(
+        let result = self.emit_intrinsic_with_metadata(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
-            Some(arguments.dst),
+            if data.relu { None } else { Some(arguments.dst) },
             vec![&data.type_.into()],
             vec![
                 (
@@ -5023,6 +5026,11 @@ impl<'a> MethodEmitContext<'a> {
             ],
             metadata,
         )?;
+        if data.relu {
+            // .relu: max(result, +0), keeping NaN
+            let result = self.emit_relu(data.type_, result)?;
+            self.resolver.register(arguments.dst, result);
+        }
         Ok(())
     }
 

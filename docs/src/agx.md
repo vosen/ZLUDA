@@ -95,10 +95,12 @@ an error.
   3-input `min`/`max` of `f32` (sm_100) is two 2-input operations.
   `add`, `sub`, `mul` and `fma` of `f32x2` (sm_100, two f32 in a 64-bit
   register) are `<2 x float>` operations that follow the f32 rounding and
-  denormal modes, directed rounding included.
+  denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
+  `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (with
+  round to nearest; a directed `.relu` fma is not implemented).
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
-* Not supported yet: `fma.relu` of `f16x2`/`bf16x2`, the `f32x2` forms of
+* Not supported yet: the `f32x2` forms of
   instructions other than `add`/`sub`/`mul`/`fma`, `set` of packed integer types, the 3-input
   `min`/`max` of 16-bit types, `cvt` with `.pzo`, `.scaled`,
   `s2f6x2` or `ue5m3x2`, and `.ftz`/`.sat` of `bf16` arithmetic (which PTX
