@@ -296,6 +296,8 @@ fn run_instruction<'input>(
         | ast::Instruction::Dp2a { .. }
         | ast::Instruction::Tex { .. }
         | ast::Instruction::Mma { .. }
+        | ast::Instruction::Wgmma { .. }
+        | ast::Instruction::WgmmaFence { .. }
         | ast::Instruction::Vshr { .. } => result.push(Statement::Instruction(instruction)),
         ast::Instruction::Add {
             data:

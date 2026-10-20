@@ -286,7 +286,24 @@ they need more registers than the hardware has), 7,000 to 15,000 for fp8,
 Not supported: `mma.m8n8k4` with `f16` A and B (its four quad-pair
 products), `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
 rounding mode other than `.rn`, register selectors of block scaled and
-sparse `mma`, and `wgmma`/`tcgen05`.
+sparse `mma`, and `tcgen05`.
+
+### Warpgroup MMA (`wgmma`)
+
+`wgmma.mma_async` (dense and `.sp`, f16, bf16, tf32, fp8 and integer types) runs
+as `mma.sync` tiles. Warp `w % 4` of the warpgroup computes rows
+`16w..16w+15` of D as `n / 8` tiles of `m16n8kK`, through one tile helper
+that is inlined at each use (AGX has no calls). A comes from the registers or,
+like B, from shared memory through its matrix descriptor (start address, LBO,
+SBO and swizzle modes 0 to 6, following `ptx-exec-wg.k`), K-major or
+transposed with `.trans`. Sparse A in shared memory is the packed
+`M x K/2` tile, read in the element order of the `mma.sp` fragment.
+`imm-scale-a/b` = -1 negate the elements, and `scale-d` is either an
+immediate or a predicate. Every `wgmma` is synchronous on AGX, so
+`wgmma.fence`, `commit_group` and `wait_group` compile to nothing. D can have
+up to 128 registers (`n256` with `f32`). A vector operand can now hold up to
+256 elements. All 34 `wg-*` and `wgsp-*` programs of PTX-formalization
+match the formal semantics on agx-g13g and agx-g14c.
 
 ## Asynchronous copies and mbarriers
 
@@ -457,17 +474,17 @@ python3 ptx/tools/agx_ptx_formalization_check.py --zoc target/debug/zoc \
     PTX-formalization/tests/*.ptx
 ```
 
-Kernels with statements that ZLUDA's front end does not support (many of the
-tests use sm_90 and sm_100 features such as `wgmma`, `tcgen05` and clusters of
-several CTAs) are skipped, together with the checks that follow their launch.
-Of the 1659 checks of the 286 programs (2026-10-20, agx-g14c), 1236 run. With
-`--strict-fp` all 1236 match the formal semantics (177 programs pass
-completely). Without it 1064 match and the other 172 are the floating point
-differences listed above (denormal `f32` operands and results, NaN bit
-patterns, `-0.0` under `.sat`, `div` and `sqrt` precision). The 423 skipped
-checks follow kernels using `wgmma` and `tcgen05` (emulation not written),
-the sm_107 conversions (`.scaled`, `ue5m3x2`,
-`s2f6x2`) and `mul.rz.f16x2.f32x2.f32x2`. A full run takes about 100 seconds
+Kernels with statements that ZLUDA's front end does not support (`tcgen05`,
+TMA tensor maps, textures and surfaces, the sm_107 conversions) are skipped,
+together with the checks that follow their launch. Of the 1658 checks of the
+286 programs (2026-10-20, agx-g14c), 1306 run. With `--strict-fp` all 1306
+match the formal semantics (214 programs pass completely). Without it 1131
+match and the other 175 are the floating point differences listed above
+(denormal `f32` operands and results, NaN bit patterns, `-0.0` under `.sat`,
+`div` and `sqrt` precision). The 352 skipped checks follow kernels using
+`tcgen05`, TMA (`cp.async.bulk.tensor` with a `.tensormap`), textures, the
+sm_107 conversions (`.scaled`, `ue5m3x2`, `s2f6x2`),
+`mul.rz.f16x2.f32x2.f32x2` and the non-PTX `coll_test`. A full run takes about 100 seconds
 with `-j 8`.
 
 All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`

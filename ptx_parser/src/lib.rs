@@ -1753,7 +1753,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
             delimited(
                 Token::LBrace,
                 separated(
-                    1..=8,
+                    1..=256,
                     alt((Token::Sink.value(None), reg_or_immediate.map(Some))),
                     Token::Comma,
                 ),
@@ -2034,7 +2034,7 @@ fn matrix_modifiers<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> Vec<&'inp
     let text = stream.state.text;
     let mut modifiers = Vec::new();
     let mut current: Option<(usize, usize)> = None;
-    while let Some((_, span)) = stream.input.first() {
+    while let Some((token, span)) = stream.input.first() {
         let piece = &text[span.clone()];
         match current {
             _ if piece.starts_with('.') && piece.len() > 1 => {
@@ -2043,7 +2043,10 @@ fn matrix_modifiers<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> Vec<&'inp
                 }
                 current = Some((span.start, span.end));
             }
-            Some((start, end)) if span.start == end => current = Some((start, span.end)),
+            // pieces of a modifier (`::`, digits), not the end of an instruction without operands
+            Some((start, end)) if span.start == end && !matches!(token, Token::Semicolon | Token::Comma) => {
+                current = Some((start, span.end))
+            }
             _ => break,
         }
         stream.input = &stream.input[1..];
@@ -2255,6 +2258,135 @@ fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
     } else {
         None
     }
+}
+
+// wgmma.fence / commit_group / wait_group N, and
+// wgmma.mma_async{.sp}.sync.aligned.m64nNkK.dtype.atype.btype{.satfinite}{.bop.popc}
+//     d, a | a-desc, b-desc{, sp-meta, sp-sel}, scale-d{, imm-scale-a, imm-scale-b{, imm-trans-a,} imm-trans-b}
+fn wgmma<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = matrix_modifiers(stream);
+    if !take_modifier(&mut modifiers, "sync") || !take_modifier(&mut modifiers, "aligned") {
+        return backtrack();
+    }
+    let control = if take_modifier(&mut modifiers, "fence") {
+        Some(ast::WgmmaControl::Fence)
+    } else if take_modifier(&mut modifiers, "commit_group") {
+        Some(ast::WgmmaControl::CommitGroup)
+    } else if take_modifier(&mut modifiers, "wait_group") {
+        let n = match ParsedOperandStr::parse.parse_next(stream)? {
+            ast::ParsedOperand::Imm(value) => match value.as_u64() {
+                Some(n) => n as u32,
+                None => return backtrack(),
+            },
+            _ => return backtrack(),
+        };
+        Some(ast::WgmmaControl::WaitGroup(n))
+    } else {
+        None
+    };
+    if let Some(control) = control {
+        if !modifiers.is_empty() {
+            return backtrack();
+        }
+        return Ok(ast::Instruction::WgmmaFence { data: control });
+    }
+    if !take_modifier(&mut modifiers, "mma_async") {
+        return backtrack();
+    }
+    let sparse = take_modifier(&mut modifiers, "sp");
+    let Some((m, n, k)) = take_mma_shape(&mut modifiers) else {
+        return backtrack();
+    };
+    let satfinite = take_modifier(&mut modifiers, "satfinite");
+    let b1_op = take_b1_op(&mut modifiers);
+    let types = modifiers
+        .iter()
+        .filter_map(|m| ast::MmaType::from_name(m))
+        .collect::<Vec<_>>();
+    modifiers.retain(|m| ast::MmaType::from_name(m).is_none());
+    let [dtype, atype, btype] = types[..] else {
+        return backtrack();
+    };
+    if !modifiers.is_empty() || m != 64 || n == 0 || n > 256 || n % 8 != 0 {
+        return backtrack();
+    }
+    let mut operands = vec![ParsedOperandStr::parse.parse_next(stream)?];
+    while opt(Token::Comma).parse_next(stream)?.is_some() {
+        operands.push(ParsedOperandStr::parse.parse_next(stream)?);
+    }
+    let imm = |o: &ParsedOperandStr<'input>| match o {
+        ast::ParsedOperand::Imm(value) => value.as_u64().map(|v| v as i64),
+        _ => None,
+    };
+    let mut rest = operands.into_iter();
+    let (Some(dst), Some(src_a), Some(src_b)) = (rest.next(), rest.next(), rest.next()) else {
+        return backtrack();
+    };
+    let a_descriptor = !matches!(src_a, ast::ParsedOperand::VecPack(_));
+    let (src_metadata, selector) = if sparse {
+        let (Some(meta), Some(sel)) = (rest.next(), rest.next()) else {
+            return backtrack();
+        };
+        match imm(&sel) {
+            Some(sel) if (0..4).contains(&sel) => (Some(meta), Some(sel as u32)),
+            _ => return backtrack(),
+        }
+    } else {
+        (None, None)
+    };
+    let Some(scale_d) = rest.next() else {
+        return backtrack();
+    };
+    let (scale_d, src_scale_d) = match imm(&scale_d) {
+        Some(v) => (Some(v != 0), None),
+        None => (None, Some(scale_d)),
+    };
+    let mut immediates = Vec::new();
+    for operand in rest {
+        match imm(&operand) {
+            Some(v) => immediates.push(v),
+            None => return backtrack(),
+        }
+    }
+    // imm-scale-a, imm-scale-b (floating point types), then the transposes of the 16-bit types (only B's when A
+    // is in registers)
+    let (negate_a, negate_b) = (immediates.first() == Some(&-1), immediates.get(1) == Some(&-1));
+    let transposes = immediates.get(2..).unwrap_or(&[]);
+    let (transpose_a, transpose_b) = match (a_descriptor, transposes) {
+        (true, [a, b]) => (*a != 0, *b != 0),
+        (false, [b]) => (false, *b != 0),
+        (_, []) => (false, false),
+        _ => return backtrack(),
+    };
+    let mma = ast::MmaDetails {
+        m,
+        n,
+        k,
+        alayout: ast::MatrixLayout::Row,
+        blayout: ast::MatrixLayout::Col,
+        dtype,
+        atype,
+        btype,
+        ctype: dtype,
+        satfinite,
+        b1_op,
+        block_scale: None,
+        sparse: selector,
+    };
+    Ok(ast::Instruction::Wgmma {
+        data: ast::WgmmaDetails {
+            mma,
+            a_descriptor,
+            negate_a,
+            negate_b,
+            transpose_a,
+            transpose_b,
+            scale_d,
+        },
+        arguments: WgmmaArgs { src_c: dst.clone(), dst, src_a, src_b, src_scale_d, src_metadata },
+    })
 }
 
 // mma.sync.aligned.shape.row.col{.satfinite}{.kind::f8f6f4}{.bop.popc}.dtype.atype.btype.ctype d, a, b, c;
@@ -6266,6 +6398,8 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-wmma
     mma <= { mma(stream) }
     wmma <= { wmma(stream) }
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#asynchronous-warpgroup-level-matrix-instructions
+    wgmma <= { wgmma(stream) }
 
     copysign.type  d, a, b => {
         ast::Instruction::Copysign {

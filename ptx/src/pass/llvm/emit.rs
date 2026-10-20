@@ -880,6 +880,8 @@ impl<'a> MethodEmitContext<'a> {
             }
             // a register budget hint: registers are allocated per kernel
             ast::Instruction::SetMaxNReg { .. } => Ok(()),
+            // the emulated wgmma completes when it is executed: fences and waits have nothing to order
+            ast::Instruction::WgmmaFence { .. } => Ok(()),
             ast::Instruction::ClusterLaunchTryCancel { arguments } => self.emit_cluster_launch_try_cancel(arguments),
             ast::Instruction::ClusterLaunchQuery { data, arguments } => {
                 // no cluster is ever canceled
@@ -971,6 +973,7 @@ impl<'a> MethodEmitContext<'a> {
         | ast::Instruction::Szext { .. }
         | ast::Instruction::Fns { .. }
             | ast::Instruction::Mma { .. }
+            | ast::Instruction::Wgmma { .. }
             | ast::Instruction::Dp2a { .. }
             | ast::Instruction::Tanh { .. }
             | ast::Instruction::Tex { .. } => return Err(error_unreachable()),

@@ -2254,6 +2254,8 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::WmmaStore { .. }
         | ast::Instruction::WmmaMma { .. }
         | ast::Instruction::Mma { .. }
+        | ast::Instruction::Wgmma { .. }
+        | ast::Instruction::WgmmaFence { .. }
         | ast::Instruction::Prefetch { .. }
         | ast::Instruction::CreatePolicyFractional { .. }
         | ast::Instruction::Dp2a { .. }

@@ -1505,6 +1505,39 @@ ptx_parser_macros::generate_instruction_type!(
                 },
             }
         },
+        Wgmma {
+            data: WgmmaDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.d_type() },
+                },
+                src_a: {
+                    repr: T,
+                    type: { data.a_type() },
+                },
+                src_b: {
+                    repr: T,
+                    type: Type::Scalar(ScalarType::B64),
+                },
+                // the incoming values of D (the same registers as dst)
+                src_c: {
+                    repr: T,
+                    type: { data.d_type() },
+                },
+                src_scale_d: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                src_metadata: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                },
+            }
+        },
+        WgmmaFence {
+            data: WgmmaControl,
+        },
         Mma {
             data: MmaDetails,
             arguments<T>: {
@@ -4067,6 +4100,49 @@ fn fragment_scalar(type_: MmaType) -> ScalarType {
     } else {
         ScalarType::B32
     }
+}
+
+/// `wgmma.mma_async{.sp}`: the warpgroup (4 warps) computes a 64 x n x k product. `mma` holds the shape and
+/// types (m = 64, ctype = dtype, sparse = the selector of .sp); A is in registers (the m16n8kK fragment of each
+/// warp) or in shared memory (a matrix descriptor), B in shared memory.
+#[derive(Copy, Clone)]
+pub struct WgmmaDetails {
+    pub mma: MmaDetails,
+    pub a_descriptor: bool,
+    /// imm-scale-a / imm-scale-b of -1: the elements are negated
+    pub negate_a: bool,
+    pub negate_b: bool,
+    /// imm-trans-a / imm-trans-b (16-bit types): the descriptor's tile is MN-major instead of K-major
+    pub transpose_a: bool,
+    pub transpose_b: bool,
+    /// scale-d as an immediate (false: D = A * B); None when it is a predicate operand
+    pub scale_d: Option<bool>,
+}
+
+impl WgmmaDetails {
+    /// D: n / 2 elements per thread, 32-bit registers
+    pub fn d_type(&self) -> Type {
+        let elements = self.mma.n / 2;
+        let per = if self.mma.dtype.bits() == 16 { 2 } else { 1 };
+        Type::Vector((elements / per) as u8, ScalarType::B32)
+    }
+
+    pub fn a_type(&self) -> Type {
+        if self.a_descriptor {
+            Type::Scalar(ScalarType::B64)
+        } else {
+            // the m16n8kK A fragment (sparse: of the compressed matrix)
+            let k = if self.mma.sparse.is_some() { self.mma.k / 2 } else { self.mma.k };
+            Type::Vector((16 * k * self.mma.atype.bits() / 32 / 32) as u8, ScalarType::B32)
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum WgmmaControl {
+    Fence,
+    CommitGroup,
+    WaitGroup(u32),
 }
 
 /// `wmma.load` and `wmma.store`: one fragment of a `wmma.mma` of shape

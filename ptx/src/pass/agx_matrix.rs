@@ -44,6 +44,7 @@ enum Helper {
     WmmaLoad(ast::WmmaLoadStoreDetails),
     WmmaStore(ast::WmmaLoadStoreDetails),
     WmmaMma(ast::MmaDetails),
+    Wgmma(ast::WgmmaDetails),
 }
 
 /// The name (without `__zluda_ptx_impl_`) of the helper function emulating
@@ -59,6 +60,7 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::WmmaLoad { data, .. } => Helper::WmmaLoad(*data),
         ast::Instruction::WmmaStore { data, .. } => Helper::WmmaStore(*data),
         ast::Instruction::WmmaMma { data, .. } => Helper::WmmaMma(*data),
+        ast::Instruction::Wgmma { data, .. } => Helper::Wgmma(*data),
         _ => return None,
     };
     Some(helper.name())
@@ -223,6 +225,26 @@ impl Helper {
             Helper::WmmaLoad(d) => wmma("load", d),
             Helper::WmmaStore(d) => wmma("store", d),
             Helper::WmmaMma(d) => format!("{AGX_PREFIX}wmma_mma_{}", mma_name(d)),
+            Helper::Wgmma(d) => {
+                let mut name = format!("{AGX_PREFIX}wgmma_{}", mma_name(&d.mma));
+                for (flag, on) in [
+                    ("adesc", d.a_descriptor),
+                    ("nega", d.negate_a),
+                    ("negb", d.negate_b),
+                    ("ta", d.transpose_a),
+                    ("tb", d.transpose_b),
+                ] {
+                    if on {
+                        write!(name, "_{flag}").unwrap();
+                    }
+                }
+                match d.scale_d {
+                    Some(true) => name.push_str("_d1"),
+                    Some(false) => name.push_str("_d0"),
+                    None => name.push_str("_dp"),
+                }
+                name
+            }
         }
     }
 
@@ -251,6 +273,24 @@ impl Helper {
             ["movmatrix", ..] => Some(Helper::MovMatrix),
             ["mma", ref rest @ ..] => parse_mma(rest).map(Helper::Mma),
             ["wmma", "mma", ref rest @ ..] => parse_mma(rest).map(Helper::WmmaMma),
+            ["wgmma", ref rest @ ..] => {
+                let flags = &rest[5..];
+                Some(Helper::Wgmma(ast::WgmmaDetails {
+                    mma: parse_mma(rest)?,
+                    a_descriptor: flags.contains(&"adesc"),
+                    negate_a: flags.contains(&"nega"),
+                    negate_b: flags.contains(&"negb"),
+                    transpose_a: flags.contains(&"ta"),
+                    transpose_b: flags.contains(&"tb"),
+                    scale_d: if flags.contains(&"d1") {
+                        Some(true)
+                    } else if flags.contains(&"d0") {
+                        Some(false)
+                    } else {
+                        None
+                    },
+                }))
+            }
             ["wmma", op @ ("load" | "store"), matrix, layout, shape, type_, space] => {
                 let (m, n, k) = parse_shape(shape)?;
                 let details = ast::WmmaLoadStoreDetails {
@@ -332,6 +372,7 @@ unsafe fn type_name(type_: LLVMTypeRef) -> String {
 
 const DECLARATIONS: &str = r#"
 declare i32 @llvm.agx.thread.index.in.simdgroup()
+declare i32 @llvm.agx.thread.index.in.threadgroup()
 declare i32 @llvm.agx.simd.shuffle.i32(i32, i32)
 declare i32 @llvm.agx.quad.shuffle.i32(i32, i32)
 declare i64 @__zluda_ptx_impl_agx_round_pack(i1, i64, i1, i32, i32, i32)
@@ -396,6 +437,25 @@ fn define(
             } else {
                 Some(mma_tile(&mut ir, &lane, &d, &a, &b, &c, scales)?)
             }
+        }
+        Helper::Wgmma(d) => {
+            let mut index = 3;
+            let mut next = || {
+                index += 1;
+                index - 1
+            };
+            let scale_d = if d.scale_d.is_none() { Some(param(next())?.0) } else { None };
+            let metadata = if d.mma.sparse.is_some() { Some(param(next())?.0) } else { None };
+            Some(wgmma(
+                &mut ir,
+                &d,
+                param(0)?,
+                &param(1)?.0,
+                param(2)?,
+                scale_d.as_deref(),
+                metadata.as_deref(),
+                declarations,
+            )?)
         }
         Helper::WmmaMma(d) => {
             let a = ir.unpack(&param(0)?.0, param(0)?.1)?;
@@ -1877,6 +1937,292 @@ fn add_limbs(ir: &mut Ir, a: &[String], b: &[String], subtract: bool) -> Vec<Str
         result.push(r2);
     }
     result
+}
+
+// ---------------------------------------------------------------- wgmma
+
+// The fields of a matrix descriptor (an i64 value), as i32 values: start
+// address, leading and stride offsets (in elements of `bits` bits), swizzle
+// mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56) and the rows of a
+// swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling).
+struct Descriptor {
+    start: String,
+    leading: String,
+    stride: String,
+    mode: String,
+    atom: String,
+}
+
+fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
+    let mut field = |shift: u32, mask: u64| {
+        let x = ir.op("lshr", "i64", desc, &shift.to_string());
+        let x = ir.op("and", "i64", &x, &mask.to_string());
+        ir.cast("trunc", "i64", &x, "i32")
+    };
+    let start = field(0, 0x3fff);
+    let lbo = field(16, 0x3fff);
+    let sbo = field(32, 0x3fff);
+    let mode = field(62, 3);
+    let sub = field(56, 1);
+    let start = ir.op("shl", "i32", &start, "4");
+    // bytes (16 * field) to elements: 128 / bits elements per 16 bytes
+    let elements = |ir: &mut Ir, f: &str| {
+        let bytes = ir.op("shl", "i32", f, "4");
+        let bitsv = ir.op("mul", "i32", &bytes, "8");
+        ir.op("udiv", "i32", &bitsv, &bits.to_string())
+    };
+    let leading = elements(ir, &lbo);
+    let stride = elements(ir, &sbo);
+    let sub4 = ir.op("shl", "i32", &sub, "2");
+    let mode = ir.op("add", "i32", &mode, &sub4);
+    // atom rows: 1 -> 8, 2 -> 4, 3 -> 2, 4..6 -> 8, 0 -> 1
+    let mut atom = "1".to_string();
+    for (m, rows) in [(1, 8), (2, 4), (3, 2), (4, 8), (5, 8), (6, 8)] {
+        let c = ir.icmp("eq", "i32", &mode, &m.to_string());
+        atom = ir.select(&c, "i32", &rows.to_string(), &atom);
+    }
+    Descriptor { start, leading, stride, mode, atom }
+}
+
+// The swizzled byte address of byte `a` of a tile (PTX ISA canonical layouts)
+fn swizzle(ir: &mut Ir, mode: &str, a: &str) -> String {
+    let line = ir.op("lshr", "i32", a, "7");
+    // modes 1 to 3: Swizzle<B, 4, 3> with B = 3, 2, 1
+    let mut result = a.to_string();
+    for (m, b) in [(1u32, 3u32), (2, 2), (3, 1)] {
+        let mask = ((1u32 << b) - 1) << 7;
+        let x = ir.op("and", "i32", a, &mask.to_string());
+        let x = ir.op("lshr", "i32", &x, "3");
+        let v = ir.op("xor", "i32", a, &x);
+        let c = ir.icmp("eq", "i32", mode, &m.to_string());
+        result = ir.select(&c, "i32", &v, &result);
+    }
+    // 128B with 32B atomicity (4), with an 8-byte flip on odd lines (5), with 64B atomicity (6)
+    let l3 = ir.op("and", "i32", &line, "3");
+    let l3 = ir.op("shl", "i32", &l3, "5");
+    let v4 = ir.op("xor", "i32", a, &l3);
+    let l1 = ir.op("and", "i32", &line, "1");
+    let l1s = ir.op("shl", "i32", &l1, "3");
+    let v5 = ir.op("xor", "i32", &v4, &l1s);
+    let l1t = ir.op("shl", "i32", &l1, "6");
+    let v6 = ir.op("xor", "i32", a, &l1t);
+    for (m, v) in [(4, v4), (5, v5), (6, v6)] {
+        let c = ir.icmp("eq", "i32", mode, &m.to_string());
+        result = ir.select(&c, "i32", &v, &result);
+    }
+    result
+}
+
+// Element (mn, k) (i32 values) of a tile in shared memory, K-major or MN-major,
+// zero extended to i32 (ptx-exec-wg.k: wgEO, wgAddr, wgRead)
+fn tile_element(ir: &mut Ir, d: &Descriptor, k_major: bool, bits: u32, mn: &str, k: &str) -> String {
+    let t = (128 / bits).to_string();
+    let swizzled = ir.icmp("ne", "i32", &d.mode, "0");
+    let offset = if k_major {
+        // mn % 8 * (swizzled ? atom * T : T) + mn / 8 * SBO + k % T + k / T * (swizzled ? T : LBO)
+        let atom_t = ir.op("mul", "i32", &d.atom, &t);
+        let row_stride = ir.select(&swizzled, "i32", &atom_t, &t);
+        let k_stride = ir.select(&swizzled, "i32", &t, &d.leading);
+        let a = ir.op("urem", "i32", mn, "8");
+        let a = ir.op("mul", "i32", &a, &row_stride);
+        let b = ir.op("udiv", "i32", mn, "8");
+        let b = ir.op("mul", "i32", &b, &d.stride);
+        let c = ir.op("urem", "i32", k, &t);
+        let e = ir.op("udiv", "i32", k, &t);
+        let e = ir.op("mul", "i32", &e, &k_stride);
+        let x = ir.op("add", "i32", &a, &b);
+        let x = ir.op("add", "i32", &x, &c);
+        ir.op("add", "i32", &x, &e)
+    } else {
+        // no swizzle: mn % T + mn / T * SBO + k % 8 * T + k / 8 * LBO
+        let a = ir.op("urem", "i32", mn, &t);
+        let b = ir.op("udiv", "i32", mn, &t);
+        let b0 = ir.op("mul", "i32", &b, &d.stride);
+        let c = ir.op("urem", "i32", k, "8");
+        let c0 = ir.op("mul", "i32", &c, &t);
+        let e = ir.op("udiv", "i32", k, "8");
+        let e0 = ir.op("mul", "i32", &e, &d.leading);
+        let x = ir.op("add", "i32", &a, &b0);
+        let x = ir.op("add", "i32", &x, &c0);
+        let plain = ir.op("add", "i32", &x, &e0);
+        // swizzled: mn % T + mn / T % atom * T + mn / (T * atom) * LBO + k % 8 * atom * T + k / 8 * SBO
+        let b1 = ir.op("urem", "i32", &b, &d.atom);
+        let b1 = ir.op("mul", "i32", &b1, &t);
+        let ta = ir.op("mul", "i32", &d.atom, &t);
+        let f = ir.op("udiv", "i32", mn, &ta);
+        let f = ir.op("mul", "i32", &f, &d.leading);
+        let c1 = ir.op("mul", "i32", &c0, &d.atom);
+        let e1 = ir.op("mul", "i32", &e, &d.stride);
+        let x = ir.op("add", "i32", &a, &b1);
+        let x = ir.op("add", "i32", &x, &f);
+        let x = ir.op("add", "i32", &x, &c1);
+        let swz = ir.op("add", "i32", &x, &e1);
+        ir.select(&swizzled, "i32", &swz, &plain)
+    };
+    let bit_offset = ir.op("mul", "i32", &offset, &bits.to_string());
+    let byte = ir.op("lshr", "i32", &bit_offset, "3");
+    let byte = ir.op("add", "i32", &d.start, &byte);
+    let address = swizzle(ir, &d.mode, &byte);
+    let p = ir.def(&format!("inttoptr i32 {address} to ptr addrspace(3)"));
+    let (ty, align) = match bits {
+        32 => ("i32", 4),
+        16 => ("i16", 2),
+        _ => ("i8", 1),
+    };
+    let x = ir.load(ty, &p, "ptr addrspace(3)", align);
+    let x = ir.cast("zext", ty, &x, "i32");
+    if bits >= 8 {
+        return x;
+    }
+    let bit = ir.op("and", "i32", &bit_offset, "7");
+    let x = ir.op("lshr", "i32", &x, &bit);
+    ir.op("and", "i32", &x, &((1u32 << bits) - 1).to_string())
+}
+
+// The registers of a fragment from its elements (`bits` bits each)
+fn pack_elements(ir: &mut Ir, elements: &[String], bits: u32) -> Vec<String> {
+    let per = (32 / bits) as usize;
+    elements
+        .chunks(per)
+        .map(|chunk| {
+            let mut value = "0".to_string();
+            for (i, e) in chunk.iter().enumerate() {
+                let x = ir.op("shl", "i32", e, &(i as u32 * bits).to_string());
+                value = ir.op("or", "i32", &value, &x);
+            }
+            value
+        })
+        .collect()
+}
+
+// The sign bits of every element of a 32-bit register of `bits`-bit floats
+fn sign_mask(bits: u32) -> u32 {
+    (0..32 / bits).fold(0u32, |m, e| m | (1u32 << (e * bits + bits - 1)))
+}
+
+fn vector_type(count: u8) -> String {
+    format!("<{count} x i32>")
+}
+
+/// `wgmma.mma_async`: the 16 rows of the thread's warp (16 * (warp % 4)) of
+/// D = A * B + D, as n / 8 m16n8kK `mma` tiles. The tiles of B, and A from a
+/// descriptor, are read from shared memory through the canonical layouts.
+fn wgmma(
+    ir: &mut Ir,
+    d: &ast::WgmmaDetails,
+    (a, a_type): (String, &String),
+    b_desc: &str,
+    (c, c_type): (String, &String),
+    scale_d: Option<&str>,
+    metadata: Option<&str>,
+    declarations: &mut BTreeSet<String>,
+) -> Result<Vec<String>, TranslateError> {
+    let w = &d.mma;
+    let tile = ast::MmaDetails { m: 16, n: 8, ..*w };
+    let tile_name = format!("{ZLUDA_PTX_PREFIX}{}_wgmma", Helper::Mma(tile).name());
+    let tile_types = [ast::MmaMatrix::A, ast::MmaMatrix::B, ast::MmaMatrix::C].map(|m| match tile.mma_type(m) {
+        ast::Type::Vector(n, _) => vector_type(n),
+        _ => vector_type(1),
+    });
+    let mut params = tile_types.to_vec();
+    if tile.sparse.is_some() {
+        params.push("i32".to_string());
+    }
+    // the tile helper, defined once and inlined at each of the n / 8 calls (AGX has no calls)
+    let mut tile_declarations = BTreeSet::new();
+    let text = define(Helper::Mma(tile), &tile_name, &tile_types[2], &params, &mut tile_declarations)?;
+    declarations.extend(tile_declarations);
+    declarations.insert(text);
+
+    let ab_bits = w.atype.bits();
+    let lane = ir.def("call i32 @llvm.agx.thread.index.in.simdgroup()");
+    let g = ir.def(&format!("lshr i32 {lane}, 2"));
+    let t = ir.def(&format!("and i32 {lane}, 3"));
+    let linear = ir.def("call i32 @llvm.agx.thread.index.in.threadgroup()");
+    let warp = ir.op("lshr", "i32", &linear, "5");
+    let warp = ir.op("and", "i32", &warp, "3");
+    let row0 = ir.op("mul", "i32", &warp, "16");
+    let sparse_k = if w.sparse.is_some() { w.k / 2 } else { w.k };
+    // A: the warp's m16n8kK fragment
+    let a_regs = if d.a_descriptor {
+        let desc = descriptor(ir, &a, ab_bits);
+        let count = 16 * sparse_k / 32;
+        let mut elements = Vec::new();
+        if w.sparse.is_some() {
+            // the packed M x (K/2) tile: element i of thread (g, t) is the
+            // (i % nz)-th kept element of a chunk, as in sparse_tile
+            let nz = match ab_bits {
+                32 => 1,
+                4 => 4,
+                _ => 2,
+            };
+            for i in 0..count {
+                let u = i / nz;
+                let (rh, chunk) = if ab_bits >= 16 {
+                    (u % 2, (1, 4 * (u / 2)))
+                } else {
+                    ((u / 2) % 2, (2, u % 2 + 8 * (u / 4)))
+                };
+                let row = ir.linear(1, &g, 0, &t, 8 * rh);
+                let row = ir.op("add", "i32", &row, &row0);
+                let col = ir.linear(0, &g, chunk.0 * nz, &t, chunk.1 * nz + i % nz);
+                elements.push(tile_element(ir, &desc, !d.transpose_a, ab_bits, &row, &col));
+            }
+        }
+        for i in (0..count).filter(|_| w.sparse.is_none()) {
+            let la = Layout::new(ast::MmaMatrix::A, 16, w.k, ab_bits, count)?;
+            let row = ir.linear(la.rg, &g, la.rt, &t, la.row[i as usize]);
+            let row = ir.op("add", "i32", &row, &row0);
+            let col = ir.linear(la.cg, &g, la.ct, &t, la.col[i as usize]);
+            elements.push(tile_element(ir, &desc, !d.transpose_a, ab_bits, &row, &col));
+        }
+        pack_elements(ir, &elements, ab_bits)
+    } else {
+        ir.unpack(&a, a_type)?
+    };
+    let a_regs = if d.negate_a && w.atype.is_float() {
+        let mask = sign_mask(ab_bits).to_string();
+        a_regs.iter().map(|r| ir.op("xor", "i32", r, &mask)).collect()
+    } else {
+        a_regs
+    };
+    let a_vec = ir.pack(&a_regs, &tile_types[0])?;
+    // B: the tile of columns 8j..8j+7
+    let b_bits = w.btype.bits();
+    let desc = descriptor(ir, b_desc, b_bits);
+    let nb = w.k * 8 / 32;
+    let lb = Layout::new(ast::MmaMatrix::B, 16, w.k, b_bits, nb)?;
+    let c_regs = ir.unpack(&c, c_type)?;
+    let per_tile = c_regs.len() / (w.n / 8) as usize;
+    let mut d_regs = Vec::new();
+    for j in 0..w.n / 8 {
+        let mut elements = Vec::new();
+        for i in 0..nb {
+            let k = ir.linear(lb.rg, &g, lb.rt, &t, lb.row[i as usize]);
+            let n = ir.linear(lb.cg, &g, lb.ct, &t, lb.col[i as usize] + 8 * j);
+            elements.push(tile_element(ir, &desc, !d.transpose_b, b_bits, &n, &k));
+        }
+        let mut b_regs = pack_elements(ir, &elements, b_bits);
+        if d.negate_b && w.btype.is_float() {
+            let mask = sign_mask(b_bits).to_string();
+            b_regs = b_regs.iter().map(|r| ir.op("xor", "i32", r, &mask)).collect();
+        }
+        let b_vec = ir.pack(&b_regs, &tile_types[1])?;
+        let c_tile = &c_regs[j as usize * per_tile..(j as usize + 1) * per_tile];
+        let c_tile: Vec<String> = match (d.scale_d, scale_d) {
+            (Some(false), _) => vec!["0".to_string(); per_tile],
+            (None, Some(p)) => c_tile.iter().map(|r| ir.select(p, "i32", r, "0")).collect(),
+            _ => c_tile.to_vec(),
+        };
+        let c_vec = ir.pack(&c_tile, &tile_types[2])?;
+        let meta = metadata.map(|m| format!(", i32 {m}")).unwrap_or_default();
+        let result = ir.def(&format!(
+            "call {} @{tile_name}({} {a_vec}, {} {b_vec}, {} {c_vec}{meta})",
+            tile_types[2], tile_types[0], tile_types[1], tile_types[2]
+        ));
+        d_regs.extend(ir.unpack(&result, &tile_types[2])?);
+    }
+    Ok(d_regs)
 }
 
 // ---------------------------------------------------------------- wmma
