@@ -33,6 +33,8 @@ fn main() {
         "agx_libs compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
     ));
     let script = llvm_source(&build).join("mlir/utils/agx-kernels/agx-build-fatbin.py");
+    // the pipeline (mlir-opt, opt -O3, llc) lives in the script
+    println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "dnn"] {
         let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join(format!("{name}.agxfat"));
