@@ -7,7 +7,8 @@
 //! Supported so far: handles, streams, pointer and math modes, and GEMM in single and half precision (`cublasSgemm`,
 //! `cublasHgemm`, their strided batched forms, and `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C,
 //! or f16 A and B and f16 or f32 C), always accumulated in f32; and the single precision level 1 routines (axpy, scal,
-//! copy, swap, dot, asum, nrm2, amax, amin) and level 2 `cublasSgemv` and `cublasSger`, with their `_64` forms.
+//! copy, swap, dot, asum, nrm2, amax, amin), level 2 `cublasSgemv` and `cublasSger`, and level 3 `cublasSgeam`,
+//! `Sdgmm`, `Ssyrk`, `Ssymm`, `Strmm`, `Strsm` and `cublasSgemmBatched`, with their `_64` forms.
 //! Reductions are deterministic: fixed per-thread partial sums combined in order. Other functions return
 //! `CUBLAS_STATUS_NOT_SUPPORTED`.
 
@@ -72,12 +73,18 @@ cuda_macros::cublas_function_declarations!(
             cublasSaxpy_v2_64,
             cublasScopy_v2,
             cublasScopy_v2_64,
+            cublasSdgmm,
+            cublasSdgmm_64,
             cublasSdot_v2,
             cublasSdot_v2_64,
             cublasSetMathMode,
             cublasSetPointerMode_v2,
             cublasSetStream_v2,
             cublasSetWorkspace_v2,
+            cublasSgeam,
+            cublasSgeam_64,
+            cublasSgemmBatched,
+            cublasSgemmBatched_64,
             cublasSgemmStridedBatched,
             cublasSgemm_v2,
             cublasSgemv_v2,
@@ -90,6 +97,14 @@ cuda_macros::cublas_function_declarations!(
             cublasSscal_v2_64,
             cublasSswap_v2,
             cublasSswap_v2_64,
+            cublasSsymm_v2,
+            cublasSsymm_v2_64,
+            cublasSsyrk_v2,
+            cublasSsyrk_v2_64,
+            cublasStrmm_v2,
+            cublasStrmm_v2_64,
+            cublasStrsm_v2,
+            cublasStrsm_v2_64,
             cublasXerbla,
         ]
 );
@@ -732,5 +747,269 @@ mod imp {
 
     pub(crate) unsafe fn cublasIsamin_v2_64(h: cublasHandle_t, n: i64, x: *const f32, incx: i64, result: *mut i64) -> cublasStatus_t {
         reduce(h, level1::AMIN, n, x, incx, std::ptr::null(), 0, result as *mut c_void, true)
+    }
+    // ---- level 3 beyond GEMM (agx_libs/kernels/blas.mlir)
+
+    fn fill(u: cublasFillMode_t) -> Result<bool, cublasError_t> {
+        match u {
+            cublasFillMode_t::CUBLAS_FILL_MODE_LOWER => Ok(false),
+            cublasFillMode_t::CUBLAS_FILL_MODE_UPPER => Ok(true),
+            _ => Err(cublasError_t::INVALID_VALUE),
+        }
+    }
+
+    fn side(s: cublasSideMode_t) -> Result<bool, cublasError_t> {
+        match s {
+            cublasSideMode_t::CUBLAS_SIDE_LEFT => Ok(false),
+            cublasSideMode_t::CUBLAS_SIDE_RIGHT => Ok(true),
+            _ => Err(cublasError_t::INVALID_VALUE),
+        }
+    }
+
+    fn unit_diag(d: cublasDiagType_t) -> Result<bool, cublasError_t> {
+        match d {
+            cublasDiagType_t::CUBLAS_DIAG_NON_UNIT => Ok(false),
+            cublasDiagType_t::CUBLAS_DIAG_UNIT => Ok(true),
+            _ => Err(cublasError_t::INVALID_VALUE),
+        }
+    }
+
+    /// A column-major matrix of `rows` rows needs `ld >= max(1, rows)`.
+    fn ld_ok(ld: i64, rows: i64) -> Result<(), cublasError_t> {
+        if ld < rows.max(1) {
+            Err(cublasError_t::INVALID_VALUE)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn sgeam(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, mut m: i64, mut n: i64, alpha: *const f32, mut a: *const f32, mut lda: i64, beta: *const f32, mut b: *const f32, mut ldb: i64, mut c: *mut f32, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (ta, tb) = (op(transa)?, op(transb)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if ta { n } else { m })?;
+        ld_ok(ldb, if tb { n } else { m })?;
+        ld_ok(ldc, m)?;
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        let mut beta = scalar(h, beta as *const c_void, false)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        // in place, C may be A or B only untransposed with the same leading dimension
+        if (c as *const f32 == a && (ta || lda != ldc)) || (c as *const f32 == b && (tb || ldb != ldc)) {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let (mut ta, mut tb) = (ta as i64, tb as i64);
+        blas_launch(
+            h,
+            c"agx_sgeam",
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut ta), arg(&mut tb), arg(&mut alpha), arg(&mut beta)],
+            [m, n],
+            [16, 4],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn sdgmm(h: cublasHandle_t, mode: cublasSideMode_t, mut m: i64, mut n: i64, mut a: *const f32, mut lda: i64, mut x: *const f32, mut incx: i64, mut c: *mut f32, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let mut right = side(mode)? as i64;
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, m)?;
+        ld_ok(ldc, m)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        blas_launch(
+            h,
+            c"agx_sdgmm",
+            &mut [arg(&mut a), arg(&mut x), arg(&mut c), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut incx), arg(&mut ldc), arg(&mut right)],
+            [m, n],
+            [16, 4],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn ssyrk(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, mut n: i64, mut k: i64, alpha: *const f32, mut a: *const f32, mut lda: i64, beta: *const f32, mut c: *mut f32, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (upper, t) = (fill(uplo)?, op(trans)?);
+        if n < 0 || k < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if t { k } else { n })?;
+        ld_ok(ldc, n)?;
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        let mut beta = scalar(h, beta as *const c_void, false)?;
+        if n == 0 || ((alpha == 0.0 || k == 0) && beta == 1.0) {
+            return Ok(());
+        }
+        let (mut upper, mut t) = (upper as i64, t as i64);
+        blas_launch(
+            h,
+            c"agx_ssyrk",
+            &mut [arg(&mut a), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            [n, n],
+            [16, 4],
+        )
+    }
+
+    /// symm (`sym`, with beta) and the out-of-place trmm (beta 0).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn symm_trmm(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, sym: bool, mut m: i64, mut n: i64, alpha: *const f32, mut a: *const f32, mut lda: i64, mut b: *const f32, mut ldb: i64, beta: *const f32, mut c: *mut f32, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (right, upper, t, unit) = (side(sd)?, fill(uplo)?, op(trans)?, unit_diag(diag)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if right { n } else { m })?;
+        ld_ok(ldb, m)?;
+        ld_ok(ldc, m)?;
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        let mut beta = if sym { scalar(h, beta as *const c_void, false)? } else { 0.0 };
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        // each element of C reads a row or column of B: in place, read a copy
+        let mut copy = std::ptr::null_mut();
+        if c as *const f32 == b {
+            let bytes = 4 * ((n - 1) * ldb + m) as usize;
+            copy = engine::alloc(bytes).map_err(status)?;
+            engine::copy(copy, b as *const c_void, bytes, h.stream).map_err(status)?;
+            b = copy as *const f32;
+        }
+        let (mut right, mut upper, mut t, mut unit, mut sym) = (right as i64, upper as i64, (t && !sym) as i64, (unit && !sym) as i64, sym as i64);
+        let r = blas_launch(
+            h,
+            c"agx_ssymm_trmm",
+            &mut [
+                arg(&mut a),
+                arg(&mut b),
+                arg(&mut c),
+                arg(&mut m),
+                arg(&mut n),
+                arg(&mut lda),
+                arg(&mut ldb),
+                arg(&mut ldc),
+                arg(&mut right),
+                arg(&mut upper),
+                arg(&mut t),
+                arg(&mut unit),
+                arg(&mut sym),
+                arg(&mut alpha),
+                arg(&mut beta),
+            ],
+            [m, n],
+            [16, 4],
+        );
+        if !copy.is_null() {
+            engine::synchronize(h.stream).map_err(status)?;
+            engine::free(copy).map_err(status)?;
+        }
+        r
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn strsm(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const f32, mut a: *const f32, mut lda: i64, mut b: *mut f32, mut ldb: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (right, upper, t, unit) = (side(sd)?, fill(uplo)?, op(trans)?, unit_diag(diag)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if right { n } else { m })?;
+        ld_ok(ldb, m)?;
+        let mut alpha = scalar(h, alpha as *const c_void, false)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        // the per-thread system is lower triangular when an even number of the stored lower triangle, the
+        // transpose and the right side flip it
+        let mut lower = (!upper ^ t ^ right) as i64;
+        let (mut right, mut upper, mut t, mut unit) = (right as i64, upper as i64, t as i64, unit as i64);
+        let threads = if right == 1 { m } else { n };
+        blas_launch(
+            h,
+            c"agx_strsm",
+            &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut t), arg(&mut unit), arg(&mut lower), arg(&mut alpha)],
+            [threads, 1],
+            [64, 1],
+        )
+    }
+
+    /// GEMM over arrays of device pointers to the matrices (read back after the stream is idle).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn sgemm_batched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const f32, a: *const *const f32, lda: i64, b: *const *const f32, ldb: i64, beta: *const f32, c: *const *mut f32, ldc: i64, batch: i64) -> cublasStatus_t {
+        let hh = handle(h)?;
+        if batch < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if batch == 0 || m == 0 || n == 0 {
+            return Ok(());
+        }
+        let int = |v: i64| c_int::try_from(v).map_err(|_| cublasError_t::NOT_SUPPORTED);
+        let (m, n, k, lda, ldb, ldc) = (int(m)?, int(n)?, int(k)?, int(lda)?, int(ldb)?, int(ldc)?);
+        // alpha and beta stay where they are: gemm reads them in the handle's pointer mode
+        let fetch = |p: *const c_void| -> Result<Vec<usize>, cublasError_t> {
+            if p.is_null() {
+                return Err(cublasError_t::INVALID_VALUE);
+            }
+            let mut v = vec![0usize; batch as usize];
+            engine::read(v.as_mut_ptr() as *mut c_void, p, 8 * batch as usize).map_err(status)?;
+            Ok(v)
+        };
+        engine::synchronize(hh.stream).map_err(status)?;
+        let (pa, pb, pc) = (fetch(a as *const c_void)?, fetch(b as *const c_void)?, fetch(c as *const c_void)?);
+        for i in 0..batch as usize {
+            gemm(Types::S, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta as *const c_void, pc[i] as *mut c_void, ldc, 0, 1)?;
+        }
+        Ok(())
+    }
+
+    macro_rules! both_widths {
+        ($($name:ident, $name64:ident => $f:ident($($a:ident: $t:ty $(as $w:ty)?),*);)*) => {
+            $(
+                #[allow(clippy::too_many_arguments)]
+                pub(crate) unsafe fn $name($($a: $t),*) -> cublasStatus_t {
+                    $f($($a $(as $w)?),*)
+                }
+                #[allow(clippy::too_many_arguments)]
+                pub(crate) unsafe fn $name64($($a: both_widths!(@w $t $(, $w)?)),*) -> cublasStatus_t {
+                    $f($($a),*)
+                }
+            )*
+        };
+        (@w $t:ty, $w:ty) => { $w };
+        (@w $t:ty) => { $t };
+    }
+
+    both_widths! {
+        cublasSgeam, cublasSgeam_64 => sgeam(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int as i64, n: c_int as i64, alpha: *const f32, a: *const f32, lda: c_int as i64, beta: *const f32, b: *const f32, ldb: c_int as i64, c: *mut f32, ldc: c_int as i64);
+        cublasSdgmm, cublasSdgmm_64 => sdgmm(h: cublasHandle_t, mode: cublasSideMode_t, m: c_int as i64, n: c_int as i64, a: *const f32, lda: c_int as i64, x: *const f32, incx: c_int as i64, c: *mut f32, ldc: c_int as i64);
+        cublasSsyrk_v2, cublasSsyrk_v2_64 => ssyrk(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, n: c_int as i64, k: c_int as i64, alpha: *const f32, a: *const f32, lda: c_int as i64, beta: *const f32, c: *mut f32, ldc: c_int as i64);
+        cublasStrsm_v2, cublasStrsm_v2_64 => strsm(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int as i64, n: c_int as i64, alpha: *const f32, a: *const f32, lda: c_int as i64, b: *mut f32, ldb: c_int as i64);
+        cublasSgemmBatched, cublasSgemmBatched_64 => sgemm_batched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int as i64, n: c_int as i64, k: c_int as i64, alpha: *const f32, a: *const *const f32, lda: c_int as i64, b: *const *const f32, ldb: c_int as i64, beta: *const f32, c: *const *mut f32, ldc: c_int as i64, batch: c_int as i64);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasSsymm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, m: c_int, n: c_int, alpha: *const f32, a: *const f32, lda: c_int, b: *const f32, ldb: c_int, beta: *const f32, c: *mut f32, ldc: c_int) -> cublasStatus_t {
+        symm_trmm(h, sd, uplo, cublasOperation_t::CUBLAS_OP_N, cublasDiagType_t::CUBLAS_DIAG_NON_UNIT, true, m as i64, n as i64, alpha, a, lda as i64, b, ldb as i64, beta, c, ldc as i64)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasSsymm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, m: i64, n: i64, alpha: *const f32, a: *const f32, lda: i64, b: *const f32, ldb: i64, beta: *const f32, c: *mut f32, ldc: i64) -> cublasStatus_t {
+        symm_trmm(h, sd, uplo, cublasOperation_t::CUBLAS_OP_N, cublasDiagType_t::CUBLAS_DIAG_NON_UNIT, true, m, n, alpha, a, lda, b, ldb, beta, c, ldc)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasStrmm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const f32, a: *const f32, lda: c_int, b: *const f32, ldb: c_int, c: *mut f32, ldc: c_int) -> cublasStatus_t {
+        symm_trmm(h, sd, uplo, trans, diag, false, m as i64, n as i64, alpha, a, lda as i64, b, ldb as i64, std::ptr::null(), c, ldc as i64)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasStrmm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const f32, a: *const f32, lda: i64, b: *const f32, ldb: i64, c: *mut f32, ldc: i64) -> cublasStatus_t {
+        symm_trmm(h, sd, uplo, trans, diag, false, m, n, alpha, a, lda, b, ldb, std::ptr::null(), c, ldc)
     }
 }

@@ -352,4 +352,290 @@ gpu.module @agx_blas {
     }
     gpu.return
   }
+  // The element (r, c) of op(A) for a column-major A (op transposes when t).
+  func.func private @agx_blas_at(%a0: memref<1xf32, 1>, %r: index, %c: index, %lda: index, %t: i1) -> f32 {
+    %big = arith.constant 4611686018427387904 : index
+    %a = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %row = arith.select %t, %c, %r : index
+    %col = arith.select %t, %r, %c : index
+    %cl = arith.muli %col, %lda : index
+    %p = arith.addi %cl, %row : index
+    %v = memref.load %a[%p] : memref<?xf32, strided<[1]>, 1>
+    return %v : f32
+  }
+
+  // The element (r, c) of the symmetric or triangular matrix held in the upper
+  // (or lower) triangle of A: symmetric mirrors the other triangle, triangular
+  // gives 0 there (and 1 on a unit diagonal).
+  func.func private @agx_blas_tri(%a0: memref<1xf32, 1>, %r: index, %c: index, %lda: index,
+                                  %upper: i1, %sym: i1, %unit: i1) -> f32 {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %false = arith.constant false
+    %le = arith.cmpi ule, %r, %c : index
+    %ge = arith.cmpi uge, %r, %c : index
+    %diag = arith.cmpi eq, %r, %c : index
+    %inside = arith.select %upper, %le, %ge : i1
+    // symmetric outside the triangle: read (c, r)
+    %notin = arith.cmpi eq, %inside, %false : i1
+    %use_t = arith.andi %sym, %notin : i1
+    %v = func.call @agx_blas_at(%a0, %r, %c, %lda, %use_t) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+    %zero_out = arith.cmpi eq, %sym, %false : i1
+    %tri_out = arith.andi %zero_out, %notin : i1
+    %unit_diag = arith.andi %unit, %diag : i1
+    %v1 = arith.select %tri_out, %f0, %v : f32
+    %v2 = arith.select %unit_diag, %f1, %v1 : f32
+    return %v2 : f32
+  }
+
+  // alpha r + beta C[p], C not read when beta is 0
+  func.func private @agx_blas_blend(%c0: memref<1xf32, 1>, %p: index, %r: f32, %alpha: f32, %beta: f32) {
+    %big = arith.constant 4611686018427387904 : index
+    %f0 = arith.constant 0.0 : f32
+    %c = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %ar = arith.mulf %r, %alpha : f32
+    %zero = arith.cmpf oeq, %beta, %f0 : f32
+    %v = scf.if %zero -> f32 {
+      scf.yield %ar : f32
+    } else {
+      %old = memref.load %c[%p] : memref<?xf32, strided<[1]>, 1>
+      %s = math.fma %old, %beta, %ar : f32
+      scf.yield %s : f32
+    }
+    memref.store %v, %c[%p] : memref<?xf32, strided<[1]>, 1>
+    return
+  }
+
+  // C = alpha op(A) + beta op(B), m x n; A is not read when alpha is 0, nor B
+  // when beta is 0. 2-D grid, x along rows.
+  gpu.func @agx_sgeam(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %ldb: index, %ldc: index,
+                      %ta_: i64, %tb_: i64, %alpha: f32, %beta: f32) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %f0 = arith.constant 0.0 : f32
+    %z = arith.constant 0 : i64
+    %c = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %ta = arith.cmpi ne, %ta_, %z : i64
+    %tb = arith.cmpi ne, %tb_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_m = arith.cmpi ult, %i, %m : index
+    %in_n = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_m, %in_n : i1
+    scf.if %in {
+      %az = arith.cmpf oeq, %alpha, %f0 : f32
+      %va = scf.if %az -> f32 {
+        scf.yield %f0 : f32
+      } else {
+        %v = func.call @agx_blas_at(%a0, %i, %j, %lda, %ta) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %s = arith.mulf %v, %alpha : f32
+        scf.yield %s : f32
+      }
+      %bz = arith.cmpf oeq, %beta, %f0 : f32
+      %vb = scf.if %bz -> f32 {
+        scf.yield %f0 : f32
+      } else {
+        %v = func.call @agx_blas_at(%b0, %i, %j, %ldb, %tb) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %s = arith.mulf %v, %beta : f32
+        scf.yield %s : f32
+      }
+      %r = arith.addf %va, %vb : f32
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      memref.store %r, %c[%p] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // C = diag(x) A (left) or A diag(x), m x n. 2-D grid.
+  gpu.func @agx_sdgmm(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %incx: i64, %ldc: index,
+                      %right_: i64) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %z = arith.constant 0 : i64
+    %a = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %x = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %c = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %right = arith.cmpi ne, %right_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_m = arith.cmpi ult, %i, %m : index
+    %in_n = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_m, %in_n : i1
+    scf.if %in {
+      %k = arith.select %right, %j, %i : index
+      %len = arith.select %right, %n, %m : index
+      %ix = func.call @agx_blas_pos(%k, %len, %incx) : (index, index, i64) -> index
+      %vx = memref.load %x[%ix] : memref<?xf32, strided<[1]>, 1>
+      %jl = arith.muli %j, %lda : index
+      %pa = arith.addi %jl, %i : index
+      %va = memref.load %a[%pa] : memref<?xf32, strided<[1]>, 1>
+      %r = arith.mulf %va, %vx : f32
+      %jc = arith.muli %j, %ldc : index
+      %pc = arith.addi %jc, %i : index
+      memref.store %r, %c[%pc] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // C = alpha op(A) op(A)^T + beta C on the upper (or lower) triangle of the
+  // n x n C, op(A) n x k. 2-D grid over C.
+  gpu.func @agx_ssyrk(%a0: memref<1xf32, 1>, %c0: memref<1xf32, 1>, %n: index, %k: index,
+                      %lda: index, %ldc: index, %upper_: i64, %trans_: i64,
+                      %alpha: f32, %beta: f32) kernel {
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %trans = arith.cmpi ne, %trans_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %n : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %le = arith.cmpi ule, %i, %j : index
+    %ge = arith.cmpi uge, %i, %j : index
+    %tri = arith.select %upper, %le, %ge : i1
+    %in0 = arith.andi %in_i, %in_j : i1
+    %in = arith.andi %in0, %tri : i1
+    scf.if %in {
+      %s = scf.for %l = %i0 to %k step %i1 iter_args(%acc = %f0) -> f32 {
+        %u = func.call @agx_blas_at(%a0, %i, %l, %lda, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %v = func.call @agx_blas_at(%a0, %j, %l, %lda, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %acc2 = math.fma %u, %v, %acc : f32
+        scf.yield %acc2 : f32
+      }
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      func.call @agx_blas_blend(%c0, %p, %s, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // C = alpha A B + beta C (left) or alpha B A + beta C (right) for a
+  // symmetric A held in one triangle (sym 1), or C = alpha op(A) B / alpha B
+  // op(A) for a triangular A (sym 0, trmm; beta 0), C m x n. 2-D grid.
+  gpu.func @agx_ssymm_trmm(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                           %m: index, %n: index, %lda: index, %ldb: index, %ldc: index,
+                           %right_: i64, %upper_: i64, %trans_: i64, %unit_: i64, %sym_: i64,
+                           %alpha: f32, %beta: f32) kernel {
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %false = arith.constant false
+    %right = arith.cmpi ne, %right_, %z : i64
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %trans = arith.cmpi ne, %trans_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %sym = arith.cmpi ne, %sym_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_m = arith.cmpi ult, %i, %m : index
+    %in_n = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_m, %in_n : i1
+    scf.if %in {
+      %len = arith.select %right, %n, %m : index
+      %s = scf.for %l = %i0 to %len step %i1 iter_args(%acc = %f0) -> f32 {
+        // left: op(A)(i, l) B(l, j); right: B(i, l) op(A)(l, j)
+        %ar = arith.select %right, %l, %i : index
+        %ac = arith.select %right, %j, %l : index
+        %sr = arith.select %trans, %ac, %ar : index
+        %sc = arith.select %trans, %ar, %ac : index
+        %va = func.call @agx_blas_tri(%a0, %sr, %sc, %lda, %upper, %sym, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i1) -> f32
+        %br = arith.select %right, %i, %l : index
+        %bc = arith.select %right, %l, %j : index
+        %vb = func.call @agx_blas_at(%b0, %br, %bc, %ldb, %false) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %acc2 = math.fma %va, %vb, %acc : f32
+        scf.yield %acc2 : f32
+      }
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      func.call @agx_blas_blend(%c0, %p, %s, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // Solves op(A) X = alpha B (left; one thread per column of B) or
+  // X op(A) = alpha B (right; one thread per row), X overwriting B (m x n).
+  // M(r, c), the matrix of the per-thread system, is op(A)(r, c) for left
+  // and op(A)(c, r) for right; lower says whether M is lower triangular.
+  gpu.func @agx_strsm(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %ldb: index,
+                      %right_: i64, %upper_: i64, %trans_: i64, %unit_: i64, %lower_: i64,
+                      %alpha: f32) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %false = arith.constant false
+    %b = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %right = arith.cmpi ne, %right_, %z : i64
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %trans = arith.cmpi ne, %trans_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %lower = arith.cmpi ne, %lower_, %z : i64
+    %t = gpu.global_id x
+    %count = arith.select %right, %m, %n : index
+    %len = arith.select %right, %n, %m : index
+    %live = arith.cmpi ult, %t, %count : index
+    scf.if %live {
+      // element e of this thread's vector: B(e, t) (left) or B(t, e) (right)
+      %vs = arith.select %right, %ldb, %i1 : index
+      %bs0 = arith.muli %t, %ldb : index
+      %base = arith.select %right, %t, %bs0 : index
+      scf.for %e = %i0 to %len step %i1 {
+        %eo = arith.muli %e, %vs : index
+        %p = arith.addi %base, %eo : index
+        %v = memref.load %b[%p] : memref<?xf32, strided<[1]>, 1>
+        %s = arith.mulf %v, %alpha : f32
+        memref.store %s, %b[%p] : memref<?xf32, strided<[1]>, 1>
+      }
+      scf.for %step = %i0 to %len step %i1 {
+        // forward for lower M, backward for upper
+        %lm1 = arith.subi %len, %i1 : index
+        %back = arith.subi %lm1, %step : index
+        %r = arith.select %lower, %step, %back : index
+        %ro = arith.muli %r, %vs : index
+        %pr = arith.addi %base, %ro : index
+        %br = memref.load %b[%pr] : memref<?xf32, strided<[1]>, 1>
+        // M(r, r)
+        %d = func.call @agx_strsm_m(%a0, %r, %r, %lda, %right, %upper, %trans, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i1, i1) -> f32
+        %x = arith.divf %br, %d : f32
+        memref.store %x, %b[%pr] : memref<?xf32, strided<[1]>, 1>
+        // the rows still to solve: after r for lower, before r for upper
+        %r1 = arith.addi %r, %i1 : index
+        %lo = arith.select %lower, %r1, %i0 : index
+        %hi = arith.select %lower, %len, %r : index
+        scf.for %s2 = %lo to %hi step %i1 {
+          %mv = func.call @agx_strsm_m(%a0, %s2, %r, %lda, %right, %upper, %trans, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i1, i1) -> f32
+          %so = arith.muli %s2, %vs : index
+          %ps = arith.addi %base, %so : index
+          %old = memref.load %b[%ps] : memref<?xf32, strided<[1]>, 1>
+          %nx = arith.negf %x : f32
+          %nv = math.fma %mv, %nx, %old : f32
+          memref.store %nv, %b[%ps] : memref<?xf32, strided<[1]>, 1>
+        }
+      }
+    }
+    gpu.return
+  }
+
+  func.func private @agx_strsm_m(%a0: memref<1xf32, 1>, %r: index, %c: index, %lda: index,
+                                 %right: i1, %upper: i1, %trans: i1, %unit: i1) -> f32 {
+    %false = arith.constant false
+    %rr = arith.select %right, %c, %r : index
+    %cc = arith.select %right, %r, %c : index
+    %sr = arith.select %trans, %cc, %rr : index
+    %sc = arith.select %trans, %rr, %cc : index
+    %v = func.call @agx_blas_tri(%a0, %sr, %sc, %lda, %upper, %false, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i1) -> f32
+    return %v : f32
+  }
 }

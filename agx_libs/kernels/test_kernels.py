@@ -831,6 +831,113 @@ def case_bn(a, obj, tmp, spatial, what, rnd):
     return bad + close(unpack(got), want, dx.positions(), 1e-4)
 
 
+def mat(rows, cols, ld, rnd, lo=-1, hi=1):
+    return rounded([rnd.uniform(lo, hi) for _ in range(ld * cols)], "f")
+
+
+def at(A, r, c, ld, t=False):
+    return A[c + r * ld] if t else A[r + c * ld]
+
+
+def tri(A, r, c, ld, upper, sym, unit):
+    inside = r <= c if upper else r >= c
+    if sym:
+        return at(A, r, c, ld) if inside else at(A, c, r, ld)
+    if unit and r == c:
+        return 1.0
+    return at(A, r, c, ld) if inside else 0.0
+
+
+def case_level3(a, obj, tmp, what, opts, rnd):
+    m, n, k = 7, 5, 4
+    alpha, beta = 1.5, 0.5 if opts.get("beta", True) else 0.0
+    if what == "geam":
+        ta, tb = opts["ta"], opts["tb"]
+        lda, ldb, ldc = (n if ta else m) + 1, (n if tb else m) + 2, m + 3
+        A, B = mat(0, m if ta else n, lda, rnd), mat(0, m if tb else n, ldb, rnd)
+        C = mat(0, n, ldc, rnd)
+        (got,) = run(a, obj, "agx_sgeam", [("buf", pack(A)), ("buf", pack(B)), ("buf", pack(C), True), ("i64", m), ("i64", n),
+                                           ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", ta), ("i64", tb), ("f32", alpha),
+                                           ("f32", beta)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = alpha * at(A, i, j, lda, ta) + beta * at(B, i, j, ldb, tb)
+        return close(unpack(got), want, range(len(C)), 1e-6)
+    if what == "dgmm":
+        right, incx = opts["right"], opts["incx"]
+        lda, ldc = m + 1, m + 2
+        A, C = mat(0, n, lda, rnd), mat(0, n, ldc, rnd)
+        L = n if right else m
+        x = rounded([rnd.uniform(-1, 1) for _ in range(1 + (L - 1) * abs(incx))], "f")
+        (got,) = run(a, obj, "agx_sdgmm", [("buf", pack(A)), ("buf", pack(x)), ("buf", pack(C), True), ("i64", m), ("i64", n),
+                                           ("i64", lda), ("i64", incx), ("i64", ldc), ("i64", right)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = A[i + j * lda] * x[blas_pos(j if right else i, L, incx)]
+        return close(unpack(got), want, range(len(C)), 1e-6)
+    if what == "syrk":
+        upper, trans = opts["upper"], opts["trans"]
+        lda, ldc = (k if trans else n) + 1, n + 2
+        A, C = mat(0, n if trans else k, lda, rnd), mat(0, n, ldc, rnd)
+        (got,) = run(a, obj, "agx_ssyrk", [("buf", pack(A)), ("buf", pack(C), True), ("i64", n), ("i64", k), ("i64", lda),
+                                           ("i64", ldc), ("i64", upper), ("i64", trans), ("f32", alpha), ("f32", beta)],
+                     (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(n):
+                if (i <= j) if upper else (i >= j):
+                    s = sum(at(A, i, l, lda, trans) * at(A, j, l, lda, trans) for l in range(k))
+                    want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
+        return close(unpack(got), want, range(len(C)), 1e-5)
+    right, upper = opts["right"], opts["upper"]
+    na = n if right else m
+    lda, ldb = na + 1, m + 2
+    A, B = mat(0, na, lda, rnd), mat(0, n, ldb, rnd)
+    if what in ("symm", "trmm"):
+        sym = what == "symm"
+        trans, unit = (0, 0) if sym else (opts["trans"], opts["unit"])
+        ldc = m + 3
+        C = mat(0, n, ldc, rnd)
+        be = beta if sym else 0.0
+        (got,) = run(a, obj, "agx_ssymm_trmm", [("buf", pack(A)), ("buf", pack(B)), ("buf", pack(C), True), ("i64", m), ("i64", n),
+                                                ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", right), ("i64", upper),
+                                                ("i64", trans), ("i64", unit), ("i64", int(sym)), ("f32", alpha), ("f32", be)],
+                     (16, 8), (16, 4), tmp)
+        opA = lambda r, c: tri(A, c, r, lda, upper, sym, unit) if trans else tri(A, r, c, lda, upper, sym, unit)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                if right:
+                    s = sum(B[i + l * ldb] * opA(l, j) for l in range(n))
+                else:
+                    s = sum(opA(i, l) * B[l + j * ldb] for l in range(m))
+                want[i + j * ldc] = alpha * s + (be * C[i + j * ldc] if be else 0.0)
+        return close(unpack(got), want, range(len(C)), 1e-5)
+    # trsm: a well-conditioned triangle
+    trans, unit = opts["trans"], opts["unit"]
+    for d in range(na):
+        A[d + d * lda] = 2.0 + d * 0.25
+    opA = lambda r, c: tri(A, c, r, lda, upper, False, unit) if trans else tri(A, r, c, lda, upper, False, unit)
+    lower = int((not upper) ^ bool(trans) ^ bool(right))
+    (got,) = run(a, obj, "agx_strsm", [("buf", pack(A)), ("buf", pack(B), True), ("i64", m), ("i64", n), ("i64", lda),
+                                       ("i64", ldb), ("i64", right), ("i64", upper), ("i64", trans), ("i64", unit),
+                                       ("i64", lower), ("f32", alpha)], (32, 1), (32, 1), tmp)
+    X = unpack(got)
+    # check op(A) X = alpha B (left) or X op(A) = alpha B (right)
+    bad = []
+    for j in range(n):
+        for i in range(m):
+            if right:
+                s = sum(X[i + l * ldb] * opA(l, j) for l in range(n))
+            else:
+                s = sum(opA(i, l) * X[l + j * ldb] for l in range(m))
+            if abs(s - alpha * B[i + j * ldb]) > 1e-4 * (1 + abs(alpha * B[i + j * ldb])):
+                bad.append(i + j * ldb)
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -888,6 +995,23 @@ def main():
                                       lambda t=trans, b=beta: case_sgemv(a, obj, tmp, 13, 9, t, -2, 3, b, rnd)))
                     cases.append(("sgemv 40x5 trans %d inc 1,1" % trans,
                                   lambda t=trans: case_sgemv(a, obj, tmp, 40, 5, t, 1, 1, 1.0, rnd)))
+                for ta in (0, 1):
+                    for tb in (0, 1):
+                        cases.append(("sgeam ta %d tb %d" % (ta, tb), lambda ta=ta, tb=tb: case_level3(a, obj, tmp, "geam", {"ta": ta, "tb": tb}, rnd)))
+                for right in (0, 1):
+                    cases.append(("sdgmm right %d inc -2" % right, lambda r=right: case_level3(a, obj, tmp, "dgmm", {"right": r, "incx": -2}, rnd)))
+                for upper in (0, 1):
+                    for trans in (0, 1):
+                        cases.append(("ssyrk upper %d trans %d" % (upper, trans),
+                                      lambda u=upper, t=trans: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t}, rnd)))
+                    for right in (0, 1):
+                        cases.append(("ssymm right %d upper %d" % (right, upper),
+                                      lambda u=upper, r=right: case_level3(a, obj, tmp, "symm", {"upper": u, "right": r}, rnd)))
+                        for trans in (0, 1):
+                            for unit in (0, 1):
+                                o = {"upper": upper, "right": right, "trans": trans, "unit": unit}
+                                cases.append(("strmm %s" % o, lambda o=o: case_level3(a, obj, tmp, "trmm", o, rnd)))
+                                cases.append(("strsm %s" % o, lambda o=o: case_level3(a, obj, tmp, "trsm", o, rnd)))
                 cases += [("sger 11x7 inc 1,1", lambda: case_sger(a, obj, tmp, 11, 7, 1, 1, rnd)),
                           ("sger 6x13 inc -3,2", lambda: case_sger(a, obj, tmp, 6, 13, -3, 2, rnd))]
             elif "agx_csr_spmv_i32" in records:
