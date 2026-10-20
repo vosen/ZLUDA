@@ -1,8 +1,8 @@
 [package]
-name = "agx_blas"
+name = "agx_libs"
 version = "0.0.0"
 edition = "2021"
-description = "GEMM engine and MLIR kernels shared by zluda_blas_agx and zluda_blaslt_agx"
+description = "Engine and MLIR kernels of the AGX library replacements (cuBLAS, cuBLASLt, cuDNN)"
 
 [lib]
 crate-type = ["rlib"]

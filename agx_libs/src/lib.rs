@@ -1,4 +1,5 @@
-//! The GEMM engine of zluda_blas_agx and zluda_blaslt_agx (cuBLAS and cuBLASLt on Apple GPUs, Asahi Linux).
+//! The engine of the AGX library replacements (zluda_blas_agx, zluda_blaslt_agx, zluda_dnn_agx: cuBLAS, cuBLASLt and
+//! cuDNN on Apple GPUs, Asahi Linux).
 //!
 //! The kernels are MLIR (`kernels/*.mlir`: standard dialects and `agx` operations, written once for every AGX
 //! generation), compiled at build time for each chip into fat AGX objects that zluda_agx's `cuModuleLoadData` picks
@@ -12,6 +13,8 @@ use std::ffi::{c_char, c_void};
 static SGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sgemm.agxfat"));
 static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
 static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxfat"));
+/// The 2-D convolution kernels of zluda_dnn_agx (`kernels/conv.mlir`).
+pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
 
 /// Element types of A and B, and of C.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -211,6 +214,45 @@ pub mod engine {
         };
         loaded.push(k);
         Ok(k)
+    }
+
+    /// The kernel `name` of a fat AGX object (one of this crate's), loaded once per context.
+    pub unsafe fn function(image: &'static [u8], name: &'static std::ffi::CStr) -> Result<CUfunction, Error> {
+        #[derive(Clone, Copy)]
+        struct F(CUfunction);
+        unsafe impl Send for F {}
+        static FUNCTIONS: Mutex<Vec<((usize, usize, &'static std::ffi::CStr), F)>> = Mutex::new(Vec::new());
+        static MODULES: Mutex<Vec<((usize, usize), usize)>> = Mutex::new(Vec::new());
+        let d = driver()?;
+        let mut ctx = CUcontext(std::ptr::null_mut());
+        (d.current)(&mut ctx).map_err(|_| Error::NotInitialized)?;
+        if ctx.0.is_null() {
+            return Err(Error::NotInitialized);
+        }
+        let key = (ctx.0 as usize, image.as_ptr() as usize, name);
+        let mut functions = FUNCTIONS.lock().unwrap();
+        if let Some((_, f)) = functions.iter().find(|(k, _)| *k == key) {
+            return Ok(f.0);
+        }
+        let mut modules = MODULES.lock().unwrap();
+        let m = match modules.iter().find(|(k, _)| *k == (key.0, key.1)) {
+            Some(&(_, m)) => CUmodule(m as *mut _),
+            None => {
+                let mut m = CUmodule(std::ptr::null_mut());
+                (d.load)(&mut m, image.as_ptr() as *const c_void).map_err(|_| Error::ArchMismatch)?;
+                modules.push(((key.0, key.1), m.0 as usize));
+                m
+            }
+        };
+        let mut f = CUfunction(std::ptr::null_mut());
+        (d.function)(&mut f, m, name.as_ptr()).map_err(|_| Error::Failed)?;
+        functions.push((key, F(f)));
+        Ok(f)
+    }
+
+    /// Launches `f` on `stream` with `params` (pointers to each argument's value).
+    pub unsafe fn launch_kernel(f: CUfunction, grid: [u32; 2], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
+        launch(driver()?, f, grid, block, params, stream)
     }
 
     /// Reads `n` bytes of device memory (alpha and beta in device pointer mode).

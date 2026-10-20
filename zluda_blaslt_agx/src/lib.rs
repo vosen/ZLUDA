@@ -1,4 +1,4 @@
-//! cuBLASLt on Apple GPUs for zluda_agx (Asahi Linux), on the GEMM engine and MLIR kernels of agx_blas (shared with
+//! cuBLASLt on Apple GPUs for zluda_agx (Asahi Linux), on the GEMM engine and MLIR kernels of agx_libs (shared with
 //! zluda_blas_agx).
 //!
 //! `cublasLtMatmul` computes `D = alpha op(A) op(B) + beta C` for column-major matrices with f32 A, B, C and D, or f16
@@ -12,8 +12,8 @@ use cuda_types::cublas::*;
 use cuda_types::cublaslt::*;
 use cuda_types::cuda::CUstream;
 use std::ffi::{c_char, c_int, c_void};
-use agx_blas::engine::{self, Activation};
-use agx_blas::Types;
+use agx_libs::engine::{self, Activation};
+use agx_libs::Types;
 
 macro_rules! unimplemented_fn {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
@@ -212,11 +212,11 @@ mod imp {
     }
 
     pub(crate) unsafe fn cublasLtGetStatusName(s: cublasStatus_t) -> *const c_char {
-        agx_blas::status_text(s).0.as_ptr()
+        agx_libs::status_text(s).0.as_ptr()
     }
 
     pub(crate) unsafe fn cublasLtGetStatusString(s: cublasStatus_t) -> *const c_char {
-        agx_blas::status_text(s).1.as_ptr()
+        agx_libs::status_text(s).1.as_ptr()
     }
 
     unsafe fn desc<'a>(d: cublasLtMatmulDesc_t) -> Result<&'a mut Desc, cublasError_t> {
@@ -476,7 +476,7 @@ mod imp {
             // per-row alpha vectors are not supported
             return Err(cublasError_t::NOT_SUPPORTED);
         }
-        Ok(if half { agx_blas::f16_to_f32(u16::from_le_bytes([v[0], v[1]])) } else { f32::from_le_bytes(v) })
+        Ok(if half { agx_libs::f16_to_f32(u16::from_le_bytes([v[0], v[1]])) } else { f32::from_le_bytes(v) })
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -90,6 +90,8 @@ def run(a, obj, name, args, grid, wg, tmp):
             uniforms[u], uniforms[u + 1] = base, 0
         elif kind == "i64":
             uniforms[u], uniforms[u + 1] = value & 0xFFFFFFFF, value >> 32
+        elif kind == "i32":
+            uniforms[u] = value & 0xFFFFFFFF
         else:
             uniforms[u] = struct.unpack("<I", struct.pack("<f", value))[0]
     for d in range(3):
@@ -187,6 +189,82 @@ def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f"):
     return close(unpack(got, t), want, [j * ld + i for j in range(N) for i in range(M)], 2e-5 if t == "f" else 2e-3)
 
 
+class Conv:
+    """A convolution problem with NCHW x (strides xs) and y (strides ys) and a packed K x C/G x R x S filter."""
+
+    def __init__(self, N, C, H, W, K, R, S, pad, stride, dil, G, flip, x_w_pad=0):
+        self.__dict__.update(locals())
+        self.P = (H + 2 * pad[0] - dil[0] * (R - 1) - 1) // stride[0] + 1
+        self.Q = (W + 2 * pad[1] - dil[1] * (S - 1) - 1) // stride[1] + 1
+        Wx = W + x_w_pad  # x rows padded to show that strides are honoured
+        self.xs = (C * H * Wx, H * Wx, Wx, 1)
+        self.ys = (K * self.P * self.Q, self.P * self.Q, self.Q, 1)
+        self.xlen, self.ylen, self.wlen = N * C * H * Wx, N * K * self.P * self.Q, K * (C // G) * R * S
+
+    def args(self):
+        c = self
+        return [("i32", v) for v in (c.N, c.C, c.H, c.W, c.K, c.R, c.S, c.P, c.Q, c.pad[0], c.pad[1], c.stride[0],
+                                     c.stride[1], c.dil[0], c.dil[1], c.G, c.flip) + c.xs + c.ys]
+
+    def taps(self):
+        """(n, k, p, q, c, cc, r, s, h, w, wi) of every product term of the forward convolution."""
+        c, cpg, kpg = self, self.C // self.G, self.K // self.G
+        for n in range(c.N):
+            for k in range(c.K):
+                g = k // kpg
+                for p in range(c.P):
+                    for q in range(c.Q):
+                        for cc in range(cpg):
+                            for r in range(c.R):
+                                for s_ in range(c.S):
+                                    h = p * c.stride[0] - c.pad[0] + r * c.dil[0]
+                                    w = q * c.stride[1] - c.pad[1] + s_ * c.dil[1]
+                                    if 0 <= h < c.H and 0 <= w < c.W:
+                                        rf, sf = (c.R - 1 - r, c.S - 1 - s_) if c.flip else (r, s_)
+                                        wi = ((k * cpg + cc) * c.R + rf) * c.S + sf
+                                        yield n, k, p, q, g * cpg + cc, r, s_, h, w, wi
+
+    def xi(self, n, c, h, w):
+        return n * self.xs[0] + c * self.xs[1] + h * self.xs[2] + w * self.xs[3]
+
+    def yi(self, n, k, p, q):
+        return n * self.ys[0] + k * self.ys[1] + p * self.ys[2] + q * self.ys[3]
+
+
+def case_conv(a, obj, tmp, which, conv, alpha, beta, rnd, t="f"):
+    c = conv
+    X = rounded([rnd.uniform(-1, 1) for _ in range(c.xlen)], t)
+    Wt = rounded([rnd.uniform(-1, 1) for _ in range(c.wlen)], t)
+    Y = rounded([rnd.uniform(-1, 1) for _ in range(c.ylen)], t)
+    T = "f32" if t == "f" else "f16"
+    out_idx = {"fwd": 2, "bwd_data": 0, "bwd_filter": 1}[which]
+    bufs = [X, Wt, Y]
+    if beta == 0:
+        bufs[out_idx] = [math.nan] * len(bufs[out_idx])
+    total = {"fwd": c.ylen, "bwd_data": c.N * c.C * c.H * c.W, "bwd_filter": c.wlen}[which]
+    args = [("buf", pack(b, t), i == out_idx) for i, b in enumerate(bufs)] + c.args() + [("f32", alpha), ("f32", beta)]
+    (got,) = run(a, obj, "agx_conv2d_%s_%s" % (which, T), args, (-(-total // 256) * 256, 1), (256, 1), tmp)
+    want = list(bufs[out_idx])
+    acc = {}
+    for n, k, p, q, ch, r, s_, h, w, wi in c.taps():
+        if which == "fwd":
+            key, v = c.yi(n, k, p, q), X[c.xi(n, ch, h, w)] * Wt[wi]
+        elif which == "bwd_data":
+            key, v = c.xi(n, ch, h, w), Y[c.yi(n, k, p, q)] * Wt[wi]
+        else:
+            key, v = wi, Y[c.yi(n, k, p, q)] * X[c.xi(n, ch, h, w)]
+        acc[key] = acc.get(key, 0.0) + v
+    if which == "fwd":
+        idx = [c.yi(n, k, p, q) for n in range(c.N) for k in range(c.K) for p in range(c.P) for q in range(c.Q)]
+    elif which == "bwd_data":
+        idx = [c.xi(n, ch, h, w) for n in range(c.N) for ch in range(c.C) for h in range(c.H) for w in range(c.W)]
+    else:
+        idx = list(range(c.wlen))
+    for i in idx:
+        want[i] = alpha * acc.get(i, 0.0) + (beta * bufs[out_idx][i] if beta != 0 else 0.0)
+    return close(unpack(got, t), want, idx, 1e-4 if t == "f" else 3e-3)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -203,7 +281,20 @@ def main():
         for chip in chips:
             obj = entries[chip]
             records = kernel_records(obj, a, tmp)
-            if "agx_epilogue_f32" in records:
+            if "agx_conv2d_fwd_f32" in records:
+                convs = [
+                    ("3x2 pad 1,0 stride 2,1 dil 1,2 G2", Conv(2, 4, 7, 6, 6, 3, 2, (1, 0), (2, 1), (1, 2), 2, 0, x_w_pad=3)),
+                    ("3x3 pad 1 conv mode", Conv(1, 3, 5, 5, 2, 3, 3, (1, 1), (1, 1), (1, 1), 1, 1)),
+                    ("1x1 stride 2 depthwise", Conv(2, 4, 6, 5, 4, 1, 1, (0, 0), (2, 2), (1, 1), 4, 0)),
+                ]
+                cases = []
+                for t in ("f", "e"):
+                    for which in ("fwd", "bwd_data", "bwd_filter"):
+                        for label, cv in convs:
+                            for alpha, beta in ((1.0, 0.0), (1.5, 0.5)):
+                                cases.append(("conv %s %s %s a=%g b=%g" % (which, "f32" if t == "f" else "f16", label, alpha, beta),
+                                              lambda t=t, w=which, cv=cv, al=alpha, be=beta: case_conv(a, obj, tmp, w, cv, al, be, rnd, t)))
+            elif "agx_epilogue_f32" in records:
                 cases = []
                 for t in ("f", "e"):
                     for has_bias, act, label in ((1, 0, "bias"), (0, 1, "relu"), (1, 1, "bias+relu"), (1, 2, "bias+gelu"), (0, 2, "gelu")):

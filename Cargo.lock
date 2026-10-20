@@ -9,7 +9,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
-name = "agx_blas"
+name = "agx_libs"
 version = "0.0.0"
 dependencies = [
  "cuda_types",
@@ -5165,7 +5165,7 @@ dependencies = [
 name = "zluda_blas_agx"
 version = "0.0.0"
 dependencies = [
- "agx_blas",
+ "agx_libs",
  "cuda_macros",
  "cuda_types",
 ]
@@ -5189,7 +5189,7 @@ dependencies = [
 name = "zluda_blaslt_agx"
 version = "0.0.0"
 dependencies = [
- "agx_blas",
+ "agx_libs",
  "cuda_macros",
  "cuda_types",
 ]
@@ -5265,6 +5265,15 @@ dependencies = [
  "zluda_common",
  "zluda_dnn",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_dnn_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_macros",
+ "cuda_types",
 ]
 
 [[package]]

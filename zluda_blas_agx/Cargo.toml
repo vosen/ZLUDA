@@ -9,7 +9,7 @@ name = "cublas_agx"
 crate-type = ["cdylib"]
 
 [dependencies]
-agx_blas = { path = "../agx_blas" }
+agx_libs = { path = "../agx_libs" }
 cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
 

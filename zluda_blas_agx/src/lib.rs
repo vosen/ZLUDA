@@ -1,6 +1,6 @@
 //! cuBLAS on Apple GPUs for zluda_agx (Asahi Linux).
 //!
-//! The work is done by the `agx_blas` engine: MLIR kernels (`agx_blas/kernels/*.mlir`, written once for every AGX
+//! The work is done by the `agx_libs` engine: MLIR kernels (`agx_libs/kernels/*.mlir`, written once for every AGX
 //! generation) in fat AGX objects that zluda_agx's `cuModuleLoadData` picks from, launched through the driver API of
 //! the process's libcuda (zluda_agx), as NVIDIA's cuBLAS does.
 //!
@@ -11,7 +11,7 @@
 
 #![allow(non_snake_case)]
 
-use agx_blas::{engine, f16_to_f32, Types};
+use agx_libs::{engine, f16_to_f32, Types};
 use cuda_types::cublas::*;
 use cuda_types::cuda::*;
 use std::ffi::{c_char, c_int, c_longlong, c_void};
@@ -161,11 +161,11 @@ mod imp {
     }
 
     pub(crate) unsafe fn cublasGetStatusName(s: cublasStatus_t) -> *const c_char {
-        agx_blas::status_text(s).0.as_ptr()
+        agx_libs::status_text(s).0.as_ptr()
     }
 
     pub(crate) unsafe fn cublasGetStatusString(s: cublasStatus_t) -> *const c_char {
-        agx_blas::status_text(s).1.as_ptr()
+        agx_libs::status_text(s).1.as_ptr()
     }
 
     pub(crate) unsafe fn cublasXerbla(name: *const c_char, info: c_int) {

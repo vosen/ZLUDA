@@ -3,7 +3,7 @@
 resolver = "2"
 
 members = [
-    "agx_blas",
+    "agx_libs",
     "agx_runtime",
     "compiler",
     "cuda_check",
@@ -44,6 +44,7 @@ members = [
     "zluda_ml_agx",
     "zluda_blas_agx",
     "zluda_blaslt_agx",
+    "zluda_dnn_agx",
     "zluda_precompile",
     "zluda_redirect",
     "zluda_server_common",
