@@ -527,6 +527,310 @@ def case_sger(a, obj, tmp, m, n, incx, incy, rnd):
     return close(unpack(got), want, range(len(A)), 1e-5)
 
 
+class T4:
+    """A 4-D f32 tensor N C H W with padded (or permuted) strides."""
+
+    def __init__(self, dims, rnd, pad=1, nhwc=False, lo=-2, hi=2):
+        N, C, H, W = dims
+        self.dims = dims
+        if nhwc:
+            self.strides = (H * W * C + pad, 1, W * C, C)
+        else:
+            self.strides = ((C * H * (W + pad)), H * (W + pad), W + pad, 1)
+        self.len = sum((d - 1) * s for d, s in zip(dims, self.strides)) + 1
+        self.data = rounded([rnd.uniform(lo, hi) for _ in range(self.len)], "f")
+
+    def off(self, n, c, h, w):
+        s = self.strides
+        return n * s[0] + c * s[1] + h * s[2] + w * s[3]
+
+    def idx(self):
+        N, C, H, W = self.dims
+        return [(n, c, h, w) for n in range(N) for c in range(C) for h in range(H) for w in range(W)]
+
+    def positions(self):
+        return [self.off(*i) for i in self.idx()]
+
+
+def dnn_shape(t):
+    return [("i64", t.dims[1]), ("i64", t.dims[2]), ("i64", t.dims[3])]
+
+
+def dnn_strides(t):
+    return [("i64", v) for v in t.strides]
+
+
+def act_ref(x, mode, coef):
+    if mode == 0:
+        return 1 / (1 + math.exp(-x))
+    if mode == 1:
+        return max(x, 0.0)
+    if mode == 2:
+        return math.tanh(x)
+    if mode == 3:
+        return min(max(x, 0.0), coef)
+    if mode == 4:
+        return x if x > 0 else coef * math.expm1(x)
+    if mode == 5:
+        return x
+    return x / (1 + math.exp(-coef * x))
+
+
+def act_grad_ref(x, y, dy, mode, coef):
+    if mode == 0:
+        return dy * y * (1 - y)
+    if mode == 1:
+        return dy if x > 0 else 0.0
+    if mode == 2:
+        return dy * (1 - y * y)
+    if mode == 3:
+        return dy if 0 < x < coef else 0.0
+    if mode == 4:
+        return dy if x > 0 else dy * (y + coef)
+    if mode == 5:
+        return dy
+    s = 1 / (1 + math.exp(-coef * x))
+    return dy * (s + coef * x * s * (1 - s))
+
+
+def blend(r, old, alpha, beta):
+    return alpha * r + (beta * old if beta != 0 else 0.0)
+
+
+def case_act(a, obj, tmp, mode, bwd, beta, rnd):
+    dims, coef, alpha = (2, 3, 4, 5), 1.5, 1.25
+    x, y = T4(dims, rnd, 1), T4(dims, rnd, 0, nhwc=True)
+    # values near 0 too, for the series of tanh and elu
+    for k in range(0, x.len, 7):
+        x.data[k] = rounded([x.data[k] * 1e-3], "f")[0]
+    total = 2 * 3 * 4 * 5
+    if not bwd:
+        (got,) = run(a, obj, "agx_dnn_act_fwd", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("i64", total)]
+                     + dnn_shape(x) + dnn_strides(x) + dnn_strides(y) + [("i64", mode), ("f32", coef), ("f32", alpha),
+                                                                         ("f32", beta)], (-(-total // 32) * 32, 1), (32, 1), tmp)
+        want = list(y.data)
+        for i in x.idx():
+            want[y.off(*i)] = blend(act_ref(x.data[x.off(*i)], mode, coef), y.data[y.off(*i)], alpha, beta)
+        return close(unpack(got), want, y.positions(), 2e-6)
+    yv = T4(dims, rnd, 2)
+    for i in x.idx():
+        yv.data[yv.off(*i)] = act_ref(x.data[x.off(*i)], mode, coef)
+    yv.data = rounded(yv.data, "f")
+    dy, dx = T4(dims, rnd, 0), T4(dims, rnd, 3)
+    (got,) = run(a, obj, "agx_dnn_act_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(x.data)),
+                                             ("buf", pack(dx.data), True), ("i64", total)] + dnn_shape(x)
+                 + dnn_strides(yv) + dnn_strides(dy) + dnn_strides(x) + dnn_strides(dx)
+                 + [("i64", mode), ("f32", coef), ("f32", alpha), ("f32", beta)], (-(-total // 32) * 32, 1), (32, 1), tmp)
+    want = list(dx.data)
+    for i in x.idx():
+        g = act_grad_ref(x.data[x.off(*i)], yv.data[yv.off(*i)], dy.data[dy.off(*i)], mode, coef)
+        want[dx.off(*i)] = blend(g, dx.data[dx.off(*i)], alpha, beta)
+    return close(unpack(got), want, dx.positions(), 2e-5)
+
+
+def case_pointwise(a, obj, tmp, op, rnd):
+    dims = (2, 3, 4, 5)
+    c = T4(dims, rnd, 1)
+    bias = T4((1, 3, 1, 1), rnd, 0)
+    astr = (0, bias.strides[1], 0, 0)
+    alpha, beta = 0.75, 0.5
+    total = 120
+    (got,) = run(a, obj, "agx_dnn_pointwise", [("buf", pack(bias.data)), ("buf", pack(c.data), True), ("i64", total)]
+                 + dnn_shape(c) + [("i64", v) for v in astr] + dnn_strides(c) + [("i64", op), ("f32", alpha), ("f32", beta)],
+                 (128, 1), (32, 1), tmp)
+    want = list(c.data)
+    for (n, ch, h, w) in c.idx():
+        o = c.off(n, ch, h, w)
+        want[o] = [alpha * bias.data[ch * astr[1]] + beta * c.data[o], alpha, alpha * c.data[o]][op]
+    return close(unpack(got), want, c.positions(), 1e-6)
+
+
+def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
+    dims, alpha, beta = (2, 5, 3, 2), 1.0, 0.25
+    N, C, H, W = dims
+    x, y = T4(dims, rnd, 1, lo=-4, hi=4), T4(dims, rnd, 0, nhwc=True)
+    groups = ([[(n, c, h, w) for c in range(C) for h in range(H) for w in range(W)] for n in range(N)] if instance else
+              [[(n, c, h, w) for c in range(C)] for n in range(N) for h in range(H) for w in range(W)])
+    rows, K = (N, C * H * W) if instance else (N * H * W, C)
+    tail = [("i64", instance), ("i64", algo), ("f32", alpha), ("f32", beta)]
+    if not bwd:
+        (got,) = run(a, obj, "agx_dnn_softmax_fwd", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("i64", rows),
+                                                     ("i64", K)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(y) + tail,
+                     (32, 1), (32, 1), tmp)
+        want = list(y.data)
+        for g in groups:
+            vs = [x.data[x.off(*i)] for i in g]
+            m = max(vs)
+            s = sum(math.exp(v - m) for v in vs)
+            for i, v in zip(g, vs):
+                r = (v - m) - math.log(s) if algo == 2 else math.exp(v - m) / s
+                want[y.off(*i)] = blend(r, y.data[y.off(*i)], alpha, beta)
+        return close(unpack(got), want, y.positions(), 1e-5)
+    yv, dy, dx = T4(dims, rnd, 2), T4(dims, rnd, 0), T4(dims, rnd, 1, nhwc=True)
+    for g in groups:
+        vs = [x.data[x.off(*i)] for i in g]
+        m, s = max(vs), sum(math.exp(v - max(vs)) for v in vs)
+        for i, v in zip(g, vs):
+            yv.data[yv.off(*i)] = (v - m) - math.log(s) if algo == 2 else math.exp(v - m) / s
+    yv.data = rounded(yv.data, "f")
+    (got,) = run(a, obj, "agx_dnn_softmax_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(dx.data), True),
+                                                 ("i64", rows), ("i64", K)] + dnn_shape(x) + dnn_strides(yv)
+                 + dnn_strides(dy) + dnn_strides(dx) + tail, (32, 1), (32, 1), tmp)
+    want = list(dx.data)
+    for g in groups:
+        ys = [yv.data[yv.off(*i)] for i in g]
+        ds = [dy.data[dy.off(*i)] for i in g]
+        if algo == 2:
+            s = sum(ds)
+            rs = [d - math.exp(v) * s for v, d in zip(ys, ds)]
+        else:
+            s = sum(v * d for v, d in zip(ys, ds))
+            rs = [v * (d - s) for v, d in zip(ys, ds)]
+        for i, r in zip(g, rs):
+            want[dx.off(*i)] = blend(r, dx.data[dx.off(*i)], alpha, beta)
+    return close(unpack(got), want, dx.positions(), 1e-5)
+
+
+def pool_ref(x, dims, P, Q, R, S, pad, st, mode):
+    N, C, H, W = dims
+    out, arg = {}, {}
+    for n in range(N):
+        for c in range(C):
+            for p in range(P):
+                for q in range(Q):
+                    cells = [(p * st[0] - pad[0] + r, q * st[1] - pad[1] + s) for r in range(R) for s in range(S)]
+                    inside = [(h, w) for h, w in cells if 0 <= h < H and 0 <= w < W]
+                    if mode in (0, 3):
+                        best = None
+                        for h, w in inside:
+                            if best is None or x.data[x.off(n, c, h, w)] > x.data[x.off(n, c, *best)]:
+                                best = (h, w)
+                        arg[(n, c, p, q)] = best
+                        out[(n, c, p, q)] = x.data[x.off(n, c, *best)] if best else 0.0
+                    else:
+                        cnt = R * S if mode == 1 else max(len(inside), 1)
+                        arg[(n, c, p, q)] = cnt
+                        out[(n, c, p, q)] = sum(x.data[x.off(n, c, h, w)] for h, w in inside) / cnt
+    return out, arg
+
+
+def case_pool(a, obj, tmp, mode, bwd, R, S, pad, st, rnd):
+    dims, alpha, beta = (2, 2, 7, 6), 1.0, 0.5
+    N, C, H, W = dims
+    P = (H + 2 * pad[0] - R) // st[0] + 1
+    Q = (W + 2 * pad[1] - S) // st[1] + 1
+    x = T4(dims, rnd, 1)
+    win = [("i64", v) for v in (C, H, W, P, Q, R, S, pad[0], pad[1], st[0], st[1])]
+    out, arg = pool_ref(x, dims, P, Q, R, S, pad, st, mode)
+    if not bwd:
+        y = T4((N, C, P, Q), rnd, 2)
+        total = N * C * P * Q
+        (got,) = run(a, obj, "agx_dnn_pool_fwd", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("i64", total)] + win
+                     + dnn_strides(x) + dnn_strides(y) + [("i64", mode), ("f32", alpha), ("f32", beta)],
+                     (-(-total // 32) * 32, 1), (32, 1), tmp)
+        want = list(y.data)
+        for i, v in out.items():
+            want[y.off(*i)] = blend(v, y.data[y.off(*i)], alpha, beta)
+        return close(unpack(got), want, y.positions(), 1e-6)
+    dy, dx = T4((N, C, P, Q), rnd, 0), T4(dims, rnd, 2, nhwc=True)
+    total = N * C * H * W
+    (got,) = run(a, obj, "agx_dnn_pool_bwd", [("buf", pack(dy.data)), ("buf", pack(x.data)), ("buf", pack(dx.data), True),
+                                              ("i64", total)] + win + dnn_strides(x) + dnn_strides(dy) + dnn_strides(dx)
+                 + [("i64", mode), ("f32", alpha), ("f32", beta)], (-(-total // 32) * 32, 1), (32, 1), tmp)
+    acc = {i: 0.0 for i in x.idx()}
+    for (n, c, p, q), v in arg.items():
+        g = dy.data[dy.off(n, c, p, q)]
+        if mode in (0, 3):
+            if v:
+                acc[(n, c) + v] += g
+        else:
+            for r in range(R):
+                for s in range(S):
+                    h, w = p * st[0] - pad[0] + r, q * st[1] - pad[1] + s
+                    if 0 <= h < H and 0 <= w < W:
+                        acc[(n, c, h, w)] += g / v
+    want = list(dx.data)
+    for i, v in acc.items():
+        want[dx.off(*i)] = blend(v, dx.data[dx.off(*i)], alpha, beta)
+    return close(unpack(got), want, dx.positions(), 1e-5)
+
+
+def case_bn(a, obj, tmp, spatial, what, rnd):
+    dims = (3, 4, 2, 3)
+    N, C, H, W = dims
+    params = C if spatial else C * H * W
+    M = N * H * W if spatial else N
+    x = T4(dims, rnd, 1, lo=-3, hi=5)
+    pidx = lambda n, c, h, w: c if spatial else (c * H + h) * W + w
+    groups = {}
+    for i in x.idx():
+        groups.setdefault(pidx(*i), []).append(i)
+    mean = [sum(x.data[x.off(*i)] for i in groups[p]) / M for p in range(params)]
+    var = [sum((x.data[x.off(*i)] - mean[p]) ** 2 for i in groups[p]) / M for p in range(params)]
+    eps = 1e-3
+    inv = [1 / math.sqrt(v + eps) for v in var]
+    P = lambda lo, hi: rounded([rnd.uniform(lo, hi) for _ in range(params)], "f")
+    if what == "stats":
+        rmean, rvar, factor = P(-1, 1), P(0.5, 2), 0.25
+        rm, rv, sm, si = run(a, obj, "agx_dnn_bn_stats",
+                             [("buf", pack(x.data)), ("buf", pack(rmean), True), ("buf", pack(rvar), True),
+                              ("buf", bytes(4 * params), True), ("buf", bytes(4 * params), True), ("i64", params), ("i64", M)]
+                             + dnn_shape(x) + dnn_strides(x) + [("i64", spatial), ("i64", 1), ("f32", factor), ("f32", eps)],
+                             (32, 1), (32, 1), tmp)
+        wrm = [(1 - factor) * o + factor * m for o, m in zip(rmean, mean)]
+        wrv = [(1 - factor) * o + factor * v * M / (M - 1) for o, v in zip(rvar, var)]
+        r = range(params)
+        return (close(unpack(rm), wrm, r, 1e-5) + close(unpack(rv), wrv, r, 1e-5) + close(unpack(sm), mean, r, 1e-5)
+                + close(unpack(si), inv, r, 1e-4))
+    scale, bias = P(0.5, 1.5), P(-1, 1)
+    alpha, beta = 1.0, 0.5
+    total = N * C * H * W
+    if what in ("infer", "apply_inv"):
+        given = what == "apply_inv"
+        y = T4(dims, rnd, 0, nhwc=True)
+        mv = rounded(mean, "f")
+        vv = rounded(inv if given else var, "f")
+        (got,) = run(a, obj, "agx_dnn_bn_apply", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("buf", pack(scale)),
+                                                  ("buf", pack(bias)), ("buf", pack(mv)), ("buf", pack(vv)), ("i64", total)]
+                     + dnn_shape(x) + dnn_strides(x) + dnn_strides(y)
+                     + [("i64", spatial), ("i64", int(given)), ("f32", eps), ("f32", alpha), ("f32", beta)],
+                     (-(-total // 32) * 32, 1), (32, 1), tmp)
+        want = list(y.data)
+        for i in x.idx():
+            p = pidx(*i)
+            istd = vv[p] if given else 1 / math.sqrt(vv[p] + eps)
+            r = scale[p] * (x.data[x.off(*i)] - mv[p]) * istd + bias[p]
+            want[y.off(*i)] = blend(r, y.data[y.off(*i)], alpha, beta)
+        return close(unpack(got), want, y.positions(), 1e-5)
+    # backward
+    dy, dx = T4(dims, rnd, 2), T4(dims, rnd, 1, nhwc=True)
+    mv, iv = rounded(mean, "f"), rounded(inv, "f")
+    ds0, db0 = P(-1, 1), P(-1, 1)
+    ds, db, sums = run(a, obj, "agx_dnn_bn_bwd_params",
+                       [("buf", pack(x.data)), ("buf", pack(dy.data)), ("buf", pack(mv)), ("buf", pack(iv)),
+                        ("buf", pack(ds0), True), ("buf", pack(db0), True), ("buf", bytes(8 * params), True),
+                        ("i64", params), ("i64", M)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(dy)
+                       + [("i64", spatial), ("f32", alpha), ("f32", beta)], (32, 1), (32, 1), tmp)
+    sdy = [sum(dy.data[dy.off(*i)] for i in groups[p]) for p in range(params)]
+    sdyx = [sum(dy.data[dy.off(*i)] * (x.data[x.off(*i)] - mv[p]) * iv[p] for i in groups[p]) for p in range(params)]
+    r = range(params)
+    bad = (close(unpack(ds), [blend(v, o, alpha, beta) for v, o in zip(sdyx, ds0)], r, 1e-4)
+           + close(unpack(db), [blend(v, o, alpha, beta) for v, o in zip(sdy, db0)], r, 1e-4))
+    (got,) = run(a, obj, "agx_dnn_bn_bwd_data",
+                 [("buf", pack(x.data)), ("buf", pack(dy.data)), ("buf", pack(dx.data), True), ("buf", pack(scale)),
+                  ("buf", pack(mv)), ("buf", pack(iv)), ("buf", sums), ("i64", total), ("i64", M)] + dnn_shape(x)
+                 + dnn_strides(x) + dnn_strides(dy) + dnn_strides(dx) + [("i64", spatial), ("f32", alpha), ("f32", beta)],
+                 (-(-total // 32) * 32, 1), (32, 1), tmp)
+    sv = unpack(sums)
+    want = list(dx.data)
+    for i in x.idx():
+        p = pidx(*i)
+        xh = (x.data[x.off(*i)] - mv[p]) * iv[p]
+        g = scale[p] * iv[p] / M * (M * dy.data[dy.off(*i)] - sv[2 * p] - xh * sv[2 * p + 1])
+        want[dx.off(*i)] = blend(g, dx.data[dx.off(*i)], alpha, beta)
+    return bad + close(unpack(got), want, dx.positions(), 1e-4)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -543,7 +847,30 @@ def main():
         for chip in chips:
             obj = entries[chip]
             records = kernel_records(obj, a, tmp)
-            if "agx_blas_vec" in records:
+            if "agx_dnn_act_fwd" in records:
+                cases = []
+                for mode in range(7):
+                    for bwd in (0, 1):
+                        for beta in (0.0, 0.5):
+                            cases.append(("dnn act mode %d %s beta %g" % (mode, "bwd" if bwd else "fwd", beta),
+                                          lambda m=mode, b=bwd, be=beta: case_act(a, obj, tmp, m, b, be, rnd)))
+                for op, label in ((0, "add bias"), (1, "set"), (2, "scale")):
+                    cases.append(("dnn %s" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd)))
+                for inst in (0, 1):
+                    for algo in (0, 1, 2):
+                        for bwd in (0, 1):
+                            cases.append(("dnn softmax %s algo %d %s" % ("instance" if inst else "channel", algo, "bwd" if bwd else "fwd"),
+                                          lambda i=inst, al=algo, b=bwd: case_softmax(a, obj, tmp, i, al, b, rnd)))
+                for mode in (0, 1, 2):
+                    for bwd in (0, 1):
+                        for R, S, pad, st in ((3, 3, (1, 1), (2, 2)), (2, 3, (0, 1), (1, 2))):
+                            cases.append(("dnn pool mode %d %s %dx%d pad %s stride %s" % (mode, "bwd" if bwd else "fwd", R, S, pad, st),
+                                          lambda m=mode, b=bwd, R=R, S=S, p=pad, s=st: case_pool(a, obj, tmp, m, b, R, S, p, s, rnd)))
+                for sp in (1, 0):
+                    for what in ("stats", "infer", "apply_inv", "bwd"):
+                        cases.append(("dnn batchnorm %s %s" % ("spatial" if sp else "per-activation", what),
+                                      lambda sp=sp, w=what: case_bn(a, obj, tmp, sp, w, rnd)))
+            elif "agx_blas_vec" in records:
                 cases = []
                 for op, label in ((0, "axpy"), (1, "scal"), (2, "copy"), (3, "swap")):
                     for n, incx, incy in ((37, 1, 1), (20, 3, -2), (9, -1, 4)):

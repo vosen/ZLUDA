@@ -17,6 +17,8 @@ static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxf
 pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
 /// The FFT kernels of zluda_fft_agx (`kernels/fft.mlir`).
 pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
+/// The pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx (`kernels/dnn.mlir`).
+pub static DNN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn.agxfat"));
 /// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
 pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
 /// The sparse kernels of zluda_sparse_agx (`kernels/sparse.mlir`).

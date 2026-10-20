@@ -505,8 +505,28 @@ f32, with `alpha` / `beta`. The algorithm queries (`Get*_v7`, `Find*`,
 `Find*Ex`) report one deterministic algorithm per direction that needs no
 workspace. The kernels compute one output element per thread; they are
 tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
-`test_kernels.py`). The backend (graph) API, pooling, normalization and
-the other operations are not implemented yet.
+`test_kernels.py`).
+
+The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
+f32 tensors of up to 4 dimensions with any strides:
+
+* activations (`cudnnActivationForward` / `Backward`: sigmoid, ReLU, tanh,
+  clipped ReLU, ELU, identity and swish, with their descriptors);
+* `cudnnAddTensor` (broadcasting dimensions of 1), `cudnnSetTensor` and
+  `cudnnScaleTensor`;
+* softmax forward and backward (fast, accurate and log; instance and channel
+  modes), one thread per softmax row;
+* 2-D pooling forward and backward (max, average including or excluding
+  padding). Max-pooling gradients go to the first maximum of each window, the
+  deterministic choice, for both max modes;
+* batch normalization (`ForwardInference`, `ForwardTraining`, `Backward`,
+  `cudnnDeriveBNTensorDescriptor`), spatial and per-activation. The batch
+  statistics take two passes (the mean, then the variance), and the running
+  variance is the unbiased one, as in cuDNN.
+
+These kernels are tested on the simulator for agx-g13g and agx-g14c (63
+cases per chip). The backend (graph) API, f16 for these operations, RNNs,
+LRN, dropout and the fused operations are not implemented yet.
 
 ## cuFFT (`zluda_fft_agx`)
 
@@ -562,7 +582,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32 and f16 GEMM, f32 level 1 and gemv / ger (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, forward and backward (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS level 3 beyond GEMM and double precision, the rest of cuDNN, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
+| Libraries | cuBLAS: f32 and f16 GEMM, f32 level 1 and gemv / ger (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
+| Not yet | per-thread scratch on hardware (`.local`, spills, recursion), textures, cooperative launches, peer access, IPC, cuBLAS level 3 beyond GEMM and double precision, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |
