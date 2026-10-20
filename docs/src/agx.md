@@ -368,3 +368,29 @@ because of a backend error on conversions of sign-extended bytes.
 All 74 programs of `ldmatrix`, `stmatrix`, `mma`, `mma.sp` and `wmma`
 (`ldm-*`, `ldm2-*`, `mma-*`, `mma-bs-*`, `sp-*`, `wmma-*`) match the formal
 semantics, with and without `--strict-fp`.
+
+## The CUDA driver on Asahi (`zluda_agx`)
+
+`zluda_agx` builds `libnvcuda_agx.so`, the CUDA driver API on Apple GPUs. It
+exports every CUDA driver function (unimplemented ones return
+`CUDA_ERROR_NOT_SUPPORTED`) and needs no ROCm: it uses `agx_runtime` for
+direct DRM submission, and `cuda_types` without its `rocm` feature.
+
+```
+ZLUDA_LLVM_BUILD_DIR=/path/to/build cargo build -p compiler --no-default-features --features agx
+cargo build -p zluda_agx
+ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
+```
+
+* Modules: `cuModuleLoadData` takes PTX text (compiled by `zoc`, found through
+  `ZLUDA_AGX_ZOC`, next to the executable or on `PATH`, and cached in
+  `ZLUDA_CACHE_DIR`) or an AGX object. Fat binaries are not unpacked yet.
+* Launches: `cuLaunchKernel` packs `kernelParams` with the argument layout of
+  the object's `.agx.kernels` section. Most parameters travel in uniform
+  registers; the others go in a parameter block.
+* Streams are in-order queues on timeline syncobjs. Events record a queue's
+  last fence and time with the firmware's command timestamps.
+* At every synchronisation, device `printf` output is printed, and a failed
+  device `assert` is returned as `CUDA_ERROR_ASSERT`.
+* There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
+  the first one that answers the Asahi parameter query.

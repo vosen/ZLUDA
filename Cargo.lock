@@ -5113,6 +5113,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_runtime",
+ "cuda_macros",
+ "cuda_types",
+ "tempfile",
+]
+
+[[package]]
 name = "zluda_bindgen"
 version = "0.1.0"
 dependencies = [

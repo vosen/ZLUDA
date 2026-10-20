@@ -1,0 +1,15 @@
+[package]
+name = "zluda_agx"
+version = "0.0.0"
+edition = "2021"
+description = "CUDA driver API on Apple GPUs (Asahi Linux, AGX G13/G14) through agx_runtime"
+
+[lib]
+name = "nvcuda_agx"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+agx_runtime = { path = "../agx_runtime" }
+cuda_types = { path = "../cuda_types", default-features = false }
+cuda_macros = { path = "../cuda_macros" }
+tempfile = "3"
