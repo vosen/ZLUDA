@@ -110,6 +110,16 @@ fn drop_finished(launches: &mut std::collections::VecDeque<LaunchRecord>, syncob
     launches.retain(|r| !(r.fence.syncobj == syncobj && r.fence.point <= point));
 }
 
+/// Nanoseconds the GPU spent on this process's finished launches, by their firmware timestamps.
+pub(crate) static GPU_BUSY_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `GPU_BUSY_NS` for ZLUDA's NVML (`zluda_ml_agx`), which finds it in the process by name: the Asahi driver exposes
+/// no device-wide utilisation to userspace (ptx-re-blockers B25).
+#[no_mangle]
+pub extern "C" fn zluda_agx_gpu_busy_ns() -> u64 {
+    GPU_BUSY_NS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// At most this many launch records are kept; older ones are dropped.
 const MAX_LAUNCH_RECORDS: usize = 1024;
 
@@ -258,6 +268,23 @@ impl Driver {
 
     /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
     fn finished(&mut self, syncobj: u32, point: u64) {
+        // the GPU time of the launches that finished, from their firmware timestamps (NVML utilisation)
+        let freq = self.ctx.device.params.command_timestamp_frequency_hz.max(1) as u128;
+        let queue = if self.ctx.stream.last().syncobj == syncobj {
+            Some(&self.ctx.stream)
+        } else {
+            self.streams.values().map(|s| &s.queue).find(|q| q.last().syncobj == syncobj)
+        };
+        if let Some(q) = queue {
+            let busy: u64 = self
+                .launches
+                .iter()
+                .filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point)
+                .filter_map(|r| q.timing(r.fence))
+                .map(|(start, end)| end.saturating_sub(start))
+                .sum();
+            GPU_BUSY_NS.fetch_add((busy as u128 * 1_000_000_000 / freq) as u64, std::sync::atomic::Ordering::Relaxed);
+        }
         drop_finished(&mut self.launches, syncobj, point);
     }
 

@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 agx_runtime = { path = "../agx_runtime" }
 cuda_types = { path = "../cuda_types", default-features = false }
 cuda_macros = { path = "../cuda_macros" }
+libc = "0.2"
 
 [package.metadata.zluda]
 agx = true

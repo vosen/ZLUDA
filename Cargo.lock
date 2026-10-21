@@ -5341,6 +5341,7 @@ dependencies = [
  "agx_runtime",
  "cuda_macros",
  "cuda_types",
+ "libc",
 ]
 
 [[package]]
