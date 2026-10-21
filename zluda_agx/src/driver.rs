@@ -826,14 +826,12 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             &unpacked[..unpacked.len() - 1]
         } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
             // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
-            // "+agx-strict" build, in checked mode its "+agx-checked" one
+            // "+agx-strict" build, in checked mode its "+agx-checked" one if it has one
             let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
-            let entry = format!(
-                "{cpu}{}{}",
-                if agx_strict() { "+agx-strict" } else { "" },
-                if agx_checked() { "+agx-checked" } else { "" }
-            );
-            module::fat_object_entry(fat, &entry).map_err(|e| {
+            let entry = format!("{cpu}{}", if agx_strict() { "+agx-strict" } else { "" });
+            // library kernels without a checked build run unchecked
+            let checked = agx_checked().then(|| module::fat_object_entry(fat, &format!("{entry}+agx-checked")).ok()).flatten();
+            checked.map_or_else(|| module::fat_object_entry(fat, &entry), Ok).map_err(|e| {
                 if crate::log_enabled() {
                     eprintln!("[zluda_agx] {}", e.0);
                 }

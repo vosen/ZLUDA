@@ -638,6 +638,64 @@ Results (2026-10-21, simulator):
 - Cost (agx-bench in the LLVM fork): 6.0% more code from the long memory forms, and 0.4% more estimated cycles, all of
   it the float atomic add on M2.
 
+## Checked mode (`agx-checked`)
+
+`zoc --agx-checked` (and `ZLUDA_AGX_CHECKED=1` for `zluda_agx`) builds kernels that check their own memory accesses, as
+compute-sanitizer's memcheck does on NVIDIA GPUs: the LLVM backend's `agx-checked` feature (`llvm/docs/AGXUsage.rst`
+in the LLVM fork, "Checked mode"). Before each access that could go wrong, the kernel checks
+
+- device memory: that the address is inside the allocation its pointer argument points into, and aligned;
+- `.shared` memory, static and dynamic: that the address is below the block's threadgroup memory size;
+- `.local` memory with a variable offset: that the offset is inside the variable.
+
+Accesses at constant offsets from the same base in the same block share a check. The first bad access of any thread
+fills the module's 64-byte error record (the kind, the address and size, a check site, the thread and block) and that
+thread returns; every later checked launch of the module returns at once. The kernel does not touch the bad address, so
+nothing faults: without checked mode, the same bug reads or writes whatever is mapped there, or faults the command.
+
+`zluda_agx` passes what the kernel needs as hidden arguments after the PTX ones (the `.agx.kernels` record tells
+where): the error record, the threadgroup memory size, and for each pointer the kernel bounds-checks (a pointer
+parameter, or a pointer inside a `.param` struct) the start and end of the allocation it points into, found with
+`cuMemGetAddressRange`'s table or among the modules' global data (`cuModuleGetGlobal`). A pointer into neither gets an
+empty range, so any access through it is reported. At the next synchronisation the record is printed, with the launch
+it came from:
+
+```
+zluda_agx: out of bounds store of 4 bytes at 0x10000000080 by thread (32, 0, 0) of block (0, 0, 0)
+    at k
+  in kernel k grid (1, 1, 1) block (33, 1, 1) shared 0 bytes, stream 0, command 7, arguments [0x10000000000, ...]
+```
+
+and the context is left with `CUDA_ERROR_ILLEGAL_ADDRESS` (`CUDA_ERROR_MISALIGNED_ADDRESS` for a misaligned access),
+returned by every call until `cuCtxDestroy`, which also clears the records. A site names the kernel and, for code with
+LLVM debug locations, the file, line and column of each inlined frame; ZLUDA does not turn PTX `.loc` into debug
+locations yet, so PTX sites name only the kernel. The mode is part of the compilation cache key; a library fat object
+is used in its `CHIP+agx-checked` build if it has one and unchecked otherwise.
+
+Cost (agx-bench in the LLVM fork): about 1.5 times the estimated cycles and 5 times the code; most of it is a fixed part
+per kernel (the report and the entry check). Validation (simulator):
+`llvm/utils/agx-checked/zluda_tests.py` compiles PTX kernels with `zoc --agx-checked` on `agx-g14c` and on `agx-g13g`
+with `--agx-strict`, and checks that each bug is reported with the right kind, address, thread and block, that correct
+kernels report nothing and compute what their unchecked builds compute, and that unchecked builds miss the bugs (30
+cases and 7 controls pass). It is the `zchecked` stage of `llvm/utils/agx-mesa-isa/tools/check-all.sh`.
+
+### Fault dumps
+
+A command that faults (both of its timestamps still 0) is reported with its launch record (kernel, grid, block, dynamic
+shared memory, stream, command and argument bytes), and the error (`CUDA_ERROR_LAUNCH_FAILED`) is sticky until
+`cuCtxDestroy`, as in CUDA. Faults in earlier commands of the same queue are found too, not just in the one waited for.
+With `ZLUDA_AGX_DUMP=DIR`, the launch is also saved to `DIR/<pid>-<command>` for replaying in the AGX Performance
+Simulator:
+
+- `code.bin`, the kernel's code;
+- `m<i>.bin`, the memory the launch can reach, listed with its GPU address in `regions.txt`: the allocations its
+  arguments point into, the module's global data, the parameter block and the error record. It is the memory as the
+  fault left it, not as the launch found it;
+- `replay.sh`, which runs the launch in `agx_run` (`$AGX_RUN` or `agx_run` on the `PATH`) with the same uniforms,
+  grid and threadgroup memory, and leaves each region's final contents in `m<i>.out`.
+
+Kernels that use stack memory are noted in `replay.sh`; `agx_run` does not set up scratch memory as the driver does.
+
 ## Checking against PTX-formalization
 
 `ptx/tools/agx_ptx_formalization_check.py` runs the test programs of
@@ -722,7 +780,8 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   last fence and time with the firmware's command timestamps. The firmware
   signals a faulted compute command with success but writes neither timestamp,
   so a command whose timestamps are both still 0 is returned as
-  `CUDA_ERROR_LAUNCH_FAILED`.
+  `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
+  is sticky until `cuCtxDestroy` (see "Fault dumps").
 * At every synchronisation, device `printf` output is printed, and a failed
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
 * There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
@@ -888,6 +947,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), linking (`cuLink*`), CUDA arrays, launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
+| Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 level 1, gemv / ger, geam / dgmm / syrk / symm / trmm / trsm and batched GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
 | Not yet | recursion and non-inlined calls, cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
