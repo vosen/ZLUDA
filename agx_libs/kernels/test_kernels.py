@@ -891,6 +891,88 @@ def case_solver(a, obj, tmp, what, rnd):
     return bad[:4]
 
 
+def jacobi(a, obj, tmp, abuf, m, n, lda, vbuf, ldv, tol):
+    """Sweeps of agx_jacobi_round until a sweep rotates nothing; returns A, V and the sweep count."""
+    t = BT
+    for sweep in range(40):
+        count = pack([0], "i")
+        nn = n + n % 2
+        for r in range(nn - 1):
+            abuf, vbuf, count = run(a, obj, K("agx_jacobi_round"), [("buf", abuf, True), ("i64", m), ("i64", n), ("i64", lda),
+                                                                    ("buf", vbuf, True), ("i64", n), ("i64", ldv), ("i64", r),
+                                                                    ("buf", count, True), (S(), tol)], (32, 1), (32, 1), tmp)
+        if unpack(count, "i")[0] == 0:
+            return abuf, vbuf, sweep
+    return abuf, vbuf, None
+
+
+def case_eigsvd(a, obj, tmp, what, rnd):
+    t = BT
+    tol = 1e-6 if t == "f" else 1e-14
+    check = TOL(1e-4) * 10
+
+    def matmul(A, B):
+        return [[sum(A[i][k] * B[k][j] for k in range(len(B))) for j in range(len(B[0]))] for i in range(len(A))]
+
+    def col(flat, rows, cols, ld):
+        return [[flat[i + j * ld] for j in range(cols)] for i in range(rows)]
+
+    if what == "svd":
+        m, n, lda = 8, 5, 9
+        A = [[rounded([rnd.uniform(-1, 1)], t)[0] for _ in range(n)] for _ in range(m)]
+        flat = [0.0] * (lda * n)
+        for i in range(m):
+            for j in range(n):
+                flat[i + j * lda] = A[i][j]
+        eye = [1.0 if i == j else 0.0 for j in range(n) for i in range(n)]
+        abuf, vbuf, sweeps = jacobi(a, obj, tmp, pack(flat, t), m, n, lda, pack(eye, t), n, tol)
+        if sweeps is None:
+            return ["no convergence"]
+        abuf, sbuf = run(a, obj, K("agx_jacobi_norms"), [("buf", abuf, True), ("i64", m), ("i64", n), ("i64", lda),
+                                                        ("buf", pack([0.0] * n, t), True)], (32, 1), (32, 1), tmp)
+        sbuf, abuf, vbuf = run(a, obj, K("agx_jacobi_sort"), [("buf", sbuf, True), ("i64", n), ("buf", abuf, True), ("i64", m),
+                                                             ("i64", lda), ("buf", vbuf, True), ("i64", n), ("i64", n), ("i64", 0)],
+                               (1, 1), (1, 1), tmp)
+        S_, U, V = unpack(sbuf, t), col(unpack(abuf, t), m, n, lda), col(unpack(vbuf, t), n, n, n)
+        if list(S_) != sorted(S_, reverse=True):
+            return ["not sorted: %s" % (S_,)]
+        USVt = matmul([[U[i][j] * S_[j] for j in range(n)] for i in range(m)], [list(r) for r in zip(*V)])
+        bad = ["U S V^T != A at %d,%d" % (i, j) for i in range(m) for j in range(n) if abs(USVt[i][j] - A[i][j]) > check]
+        UtU = matmul([list(r) for r in zip(*U)], U)
+        bad += ["U^T U at %d,%d" % (i, j) for i in range(n) for j in range(n) if abs(UtU[i][j] - (i == j)) > check]
+        return bad[:4]
+    # symmetric eigenvalues of the triangle what[-1] ("l" or "u")
+    upper = what.endswith("u")
+    n, lda = 6, 7
+    M = [[rnd.uniform(-1, 1) for _ in range(n)] for _ in range(n)]
+    A = [[rounded([(M[i][j] + M[j][i]) / 2], t)[0] for j in range(n)] for i in range(n)]
+    flat = [5e3] * (lda * n)
+    for i in range(n):
+        for j in range(n):
+            if (i <= j) if upper else (i >= j):
+                flat[i + j * lda] = A[i][j]
+    abuf = pack(flat, t)
+    (slot,) = run(a, obj, K("agx_eig_shift"), [("buf", abuf), ("i64", lda), ("i64", n), ("i64", int(upper)), ("buf", pack([0.0], t), True)],
+                  (1, 1), (1, 1), tmp)
+    w, v = run(a, obj, K("agx_eig_prep"), [("buf", abuf), ("i64", lda), ("i64", n), ("i64", int(upper)), ("buf", pack([0.0] * n * n, t), True),
+                                          ("buf", pack([0.0] * n * n, t), True), ("buf", slot)], (16, 16), (16, 4), tmp)
+    w, v, sweeps = jacobi(a, obj, tmp, w, n, n, n, v, n, tol)
+    if sweeps is None:
+        return ["no convergence"]
+    (lam,) = run(a, obj, K("agx_eig_values"), [("buf", abuf), ("i64", lda), ("i64", n), ("i64", int(upper)), ("buf", v),
+                                              ("buf", pack([0.0] * n, t), True)], (32, 1), (32, 1), tmp)
+    lam, v = run(a, obj, K("agx_jacobi_sort"), [("buf", lam, True), ("i64", n), ("buf", pack([0.0], t)), ("i64", 0), ("i64", 1),
+                                               ("buf", v, True), ("i64", n), ("i64", n), ("i64", 1)], (1, 1), (1, 1), tmp)
+    L, V = unpack(lam, t), col(unpack(v, t), n, n, n)
+    if list(L) != sorted(L):
+        return ["not ascending: %s" % (L,)]
+    AV = matmul(A, V)
+    bad = ["A v != lambda v at %d,%d" % (i, j) for i in range(n) for j in range(n) if abs(AV[i][j] - L[j] * V[i][j]) > check]
+    VtV = matmul([list(r) for r in zip(*V)], V)
+    bad += ["V^T V at %d,%d" % (i, j) for i in range(n) for j in range(n) if abs(VtV[i][j] - (i == j)) > check]
+    return bad[:4]
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1854,6 +1936,7 @@ def main():
             elif "agx_lu_pivot" in records:
                 cases = [("solver %s" % w, lambda w=w: case_solver(a, obj, tmp, w, rnd))
                          for w in ("lu", "lu_t", "chol_l", "chol_u", "chol_fail", "qr")]
+                cases += [("solver %s" % w, lambda w=w: case_eigsvd(a, obj, tmp, w, rnd)) for w in ("svd", "eig_l", "eig_u")]
                 if "agx_lu_pivot_f64" in records:
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
             elif "agx_rand32" in records:
