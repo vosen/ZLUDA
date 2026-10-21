@@ -381,3 +381,158 @@
     }
     gpu.return
   }
+
+  // SpGEMM C = alpha A B for CSR matrices A and B, in three steps; the work
+  // arrays (ub, cnt, tcol) have 64-bit entries whatever the index type.
+  // 1. ub[i + 1] = the number of products of row i (one thread per row; then
+  //    agx_sparse_scan_i64 makes ub the start of each row's products)
+  gpu.func @agx_spgemm_ub_IX(%arp0: memref<1xIXT, 1>, %acol0: memref<1xIXT, 1>, %brp0: memref<1xIXT, 1>,
+                             %ub0: memref<1xi64, 1>, %rows_: i64, %base_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %rows = arith.index_cast %rows_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %rows : index
+    scf.if %live {
+      %lo = func.call @agx_sp_ix_IX(%arp0, %i, %base) : (memref<1xIXT, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ix_IX(%arp0, %i_1, %base) : (memref<1xIXT, 1>, index, index) -> index
+      %n = scf.for %k = %lo to %hi step %i1 iter_args(%s = %i0) -> index {
+        %r = func.call @agx_sp_ix_IX(%acol0, %k, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %blo = func.call @agx_sp_ix_IX(%brp0, %r, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %r_1 = arith.addi %r, %i1 : index
+        %bhi = func.call @agx_sp_ix_IX(%brp0, %r_1, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %len = arith.subi %bhi, %blo : index
+        %s1 = arith.addi %s, %len : index
+        scf.yield %s1 : index
+      }
+      func.call @agx_sp_six_i64(%ub0, %i_1, %n, %i0) : (memref<1xi64, 1>, index, index, index) -> ()
+    }
+    gpu.return
+  }
+  // 2. the products of row i, sorted by column with equal columns added, at
+  //    ub[i] in tcol (zero-based) and tval; cnt[i + 1] = their number (one
+  //    thread per row; then agx_sparse_scan_i64 makes cnt the row offsets)
+  gpu.func @agx_spgemm_row_IX(%arp0: memref<1xIXT, 1>, %acol0: memref<1xIXT, 1>, %aval0: memref<1xf32, 1>,
+                              %brp0: memref<1xIXT, 1>, %bcol0: memref<1xIXT, 1>, %bval0: memref<1xf32, 1>,
+                              %ub0: memref<1xi64, 1>, %tcol0: memref<1xi64, 1>, %tval0: memref<1xf32, 1>,
+                              %cnt0: memref<1xi64, 1>, %rows_: i64, %base_: i64, %alpha: f32) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %false = arith.constant false
+    %rows = arith.index_cast %rows_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %rows : index
+    scf.if %live {
+      %start = func.call @agx_sp_ix_i64(%ub0, %i, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %lo = func.call @agx_sp_ix_IX(%arp0, %i, %base) : (memref<1xIXT, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ix_IX(%arp0, %i_1, %base) : (memref<1xIXT, 1>, index, index) -> index
+      %len = scf.for %k = %lo to %hi step %i1 iter_args(%n = %i0) -> index {
+        %r = func.call @agx_sp_ix_IX(%acol0, %k, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %av = func.call @agx_sp_ld(%aval0, %k) : (memref<1xf32, 1>, index) -> f32
+        %aa = arith.mulf %av, %alpha : f32
+        %blo = func.call @agx_sp_ix_IX(%brp0, %r, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %r_1 = arith.addi %r, %i1 : index
+        %bhi = func.call @agx_sp_ix_IX(%brp0, %r_1, %base) : (memref<1xIXT, 1>, index, index) -> index
+        %n2 = scf.for %kb = %blo to %bhi step %i1 iter_args(%m = %n) -> index {
+          %c = func.call @agx_sp_ix_IX(%bcol0, %kb, %base) : (memref<1xIXT, 1>, index, index) -> index
+          %bv = func.call @agx_sp_ld(%bval0, %kb) : (memref<1xf32, 1>, index) -> f32
+          %p = arith.mulf %aa, %bv : f32
+          // the first of the m sorted entries with a column >= c, from the back
+          %q = scf.while (%q0 = %m) : (index) -> index {
+            %more = arith.cmpi ugt, %q0, %i0 : index
+            %go = scf.if %more -> i1 {
+              %qm = arith.subi %q0, %i1 : index
+              %o = arith.addi %start, %qm : index
+              %cc = func.call @agx_sp_ix_i64(%tcol0, %o, %i0) : (memref<1xi64, 1>, index, index) -> index
+              %gt = arith.cmpi ugt, %cc, %c : index
+              scf.yield %gt : i1
+            } else {
+              scf.yield %false : i1
+            }
+            scf.condition(%go) %q0 : index
+          } do {
+          ^bb0(%q1: index):
+            %qm = arith.subi %q1, %i1 : index
+            scf.yield %qm : index
+          }
+          // an entry of column c just before q: add to it
+          %has = arith.cmpi ugt, %q, %i0 : index
+          %same = scf.if %has -> i1 {
+            %qm = arith.subi %q, %i1 : index
+            %o = arith.addi %start, %qm : index
+            %cc = func.call @agx_sp_ix_i64(%tcol0, %o, %i0) : (memref<1xi64, 1>, index, index) -> index
+            %eq = arith.cmpi eq, %cc, %c : index
+            scf.yield %eq : i1
+          } else {
+            scf.yield %false : i1
+          }
+          %m1 = scf.if %same -> index {
+            %qm = arith.subi %q, %i1 : index
+            %o = arith.addi %start, %qm : index
+            %old = func.call @agx_sp_ld(%tval0, %o) : (memref<1xf32, 1>, index) -> f32
+            %s = arith.addf %old, %p : f32
+            func.call @agx_sp_st(%tval0, %o, %s) : (memref<1xf32, 1>, index, f32) -> ()
+            scf.yield %m : index
+          } else {
+            // shift [q, m) up by one and insert at q
+            scf.for %t = %q to %m step %i1 {
+              %mq = arith.addi %m, %q : index
+              %rt = arith.subi %mq, %t : index
+              %src = arith.addi %start, %rt : index
+              %from = arith.subi %src, %i1 : index
+              %cc = func.call @agx_sp_ix_i64(%tcol0, %from, %i0) : (memref<1xi64, 1>, index, index) -> index
+              %vv = func.call @agx_sp_ld(%tval0, %from) : (memref<1xf32, 1>, index) -> f32
+              func.call @agx_sp_six_i64(%tcol0, %src, %cc, %i0) : (memref<1xi64, 1>, index, index, index) -> ()
+              func.call @agx_sp_st(%tval0, %src, %vv) : (memref<1xf32, 1>, index, f32) -> ()
+            }
+            %o = arith.addi %start, %q : index
+            func.call @agx_sp_six_i64(%tcol0, %o, %c, %i0) : (memref<1xi64, 1>, index, index, index) -> ()
+            func.call @agx_sp_st(%tval0, %o, %p) : (memref<1xf32, 1>, index, f32) -> ()
+            %mn = arith.addi %m, %i1 : index
+            scf.yield %mn : index
+          }
+          scf.yield %m1 : index
+        }
+        scf.yield %n2 : index
+      }
+      func.call @agx_sp_six_i64(%cnt0, %i_1, %len, %i0) : (memref<1xi64, 1>, index, index, index) -> ()
+    }
+    gpu.return
+  }
+  // 3. C's row offsets, columns and values from cnt and the sorted products
+  //    (one thread per row)
+  gpu.func @agx_spgemm_copy_IX(%ub0: memref<1xi64, 1>, %tcol0: memref<1xi64, 1>, %tval0: memref<1xf32, 1>,
+                               %cnt0: memref<1xi64, 1>, %crp0: memref<1xIXT, 1>, %ccol0: memref<1xIXT, 1>,
+                               %cval0: memref<1xf32, 1>, %rows_: i64, %base_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %rows = arith.index_cast %rows_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %rows : index
+    scf.if %live {
+      %start = func.call @agx_sp_ix_i64(%ub0, %i, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %lo = func.call @agx_sp_ix_i64(%cnt0, %i, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ix_i64(%cnt0, %i_1, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %first = arith.cmpi eq, %i, %i0 : index
+      scf.if %first {
+        func.call @agx_sp_six_IX(%crp0, %i0, %i0, %base) : (memref<1xIXT, 1>, index, index, index) -> ()
+      }
+      func.call @agx_sp_six_IX(%crp0, %i_1, %hi, %base) : (memref<1xIXT, 1>, index, index, index) -> ()
+      %n = arith.subi %hi, %lo : index
+      scf.for %t = %i0 to %n step %i1 {
+        %src = arith.addi %start, %t : index
+        %dst = arith.addi %lo, %t : index
+        %c = func.call @agx_sp_ix_i64(%tcol0, %src, %i0) : (memref<1xi64, 1>, index, index) -> index
+        %v = func.call @agx_sp_ld(%tval0, %src) : (memref<1xf32, 1>, index) -> f32
+        func.call @agx_sp_six_IX(%ccol0, %dst, %c, %base) : (memref<1xIXT, 1>, index, index, index) -> ()
+        func.call @agx_sp_st(%cval0, %dst, %v) : (memref<1xf32, 1>, index, f32) -> ()
+      }
+    }
+    gpu.return
+  }

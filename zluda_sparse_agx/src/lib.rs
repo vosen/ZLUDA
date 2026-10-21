@@ -6,8 +6,8 @@
 //! offsets and columns of the same type), zero- or one-based: `cusparseSpMV` on CSR and COO matrices
 //! (non-transposed and transposed), `cusparseSpMM` on CSR matrices (`opA` non-transposed, `opB` non-transposed or
 //! transposed, column- or row-major dense matrices), sparse vectors (SpVV, Axpby, Gather, Scatter, Rot),
-//! SparseToDense, DenseToSparse to CSR, Csr2cscEx2, SDDMM and the triangular solves SpSV and SpSM on CSR matrices.
-//! Only SpVV and Csr2cscEx2 need a workspace. Other functions return `CUSPARSE_STATUS_NOT_SUPPORTED`.
+//! SparseToDense, DenseToSparse to CSR, Csr2cscEx2, SpGEMM, SDDMM and the triangular solves SpSV and SpSM on CSR
+//! matrices (CSC ones through the CSR matrix of their transpose). Only SpVV, Csr2cscEx2 and SpGEMM need workspace. Other functions return `CUSPARSE_STATUS_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
 
@@ -96,6 +96,12 @@ cuda_macros::cusparse_function_declarations!(
             cusparseSetMatType,
             cusparseSetPointerMode,
             cusparseSetStream,
+            cusparseSpGEMM_compute,
+            cusparseSpGEMM_copy,
+            cusparseSpGEMM_createDescr,
+            cusparseSpGEMM_destroyDescr,
+            cusparseSpGEMM_getNumProducts,
+            cusparseSpGEMM_workEstimation,
             cusparseSpMM,
             cusparseSpMM_bufferSize,
             cusparseSpMM_preprocess,
@@ -1527,6 +1533,202 @@ mod imp {
             )?;
         }
         Ok(())
+    }
+
+    // ---- SpGEMM
+
+    /// The state between the SpGEMM steps: the products of each row (in the first buffer) and the sorted products
+    /// (in the second).
+    struct SpGemm {
+        products: i64,
+        buffer1: *mut c_void,
+        buffer2: *mut c_void,
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_createDescr(d: *mut cusparseSpGEMMDescr_t) -> cusparseStatus_t {
+        new(d, SpGemm { products: 0, buffer1: std::ptr::null_mut(), buffer2: std::ptr::null_mut() })
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_destroyDescr(d: cusparseSpGEMMDescr_t) -> cusparseStatus_t {
+        destroy::<SpGemm, _>(d)
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_getNumProducts(d: cusparseSpGEMMDescr_t, n: *mut i64) -> cusparseStatus_t {
+        out(n, obj::<SpGemm>(d)?.products)
+    }
+
+    /// C = alpha A B with CSR matrices of one index width, base and value type, and beta 0.
+    unsafe fn spgemm_check(
+        h: &Handle,
+        op_a: cusparseOperation_t,
+        op_b: cusparseOperation_t,
+        a: &SpMat,
+        b: &SpMat,
+        beta: *const c_void,
+        c: &SpMat,
+        compute: cudaDataType_t,
+    ) -> cusparseStatus_t {
+        if transposes(op_a)? || transposes(op_b)? || a.format != Format::Csr || b.format != Format::Csr || c.format != Format::Csr {
+            return Err(cusparseError_t::NOT_SUPPORTED);
+        }
+        if (b.wide, b.base, b.double) != (a.wide, a.base, a.double) || (c.wide, c.base, c.double) != (a.wide, a.base, a.double) {
+            return Err(cusparseError_t::NOT_SUPPORTED);
+        }
+        if value_type(compute)? != a.double || scalar(h, beta, a.double)? != 0.0 {
+            return Err(cusparseError_t::NOT_SUPPORTED);
+        }
+        if a.cols != b.rows || c.rows != a.rows || c.cols != b.cols {
+            return Err(cusparseError_t::INVALID_VALUE);
+        }
+        Ok(())
+    }
+
+    /// The last entry of an i64 array in device memory, once the stream is done.
+    unsafe fn last_i64(h: &Handle, p: *const c_void, n: i64) -> Result<i64, cusparseError_t> {
+        engine::synchronize(h.stream).map_err(status)?;
+        let mut v = 0i64;
+        engine::read(arg(&mut v), p.cast::<u8>().add(n as usize * 8).cast(), 8).map_err(status)?;
+        Ok(v)
+    }
+
+    unsafe fn scan_i64(h: &Handle, p: *mut c_void, n: i64) -> cusparseStatus_t {
+        let (mut p, mut n, mut base) = (p, n, 0i64);
+        run(h, c"agx_sparse_scan_i64", &mut [arg(&mut p), arg(&mut n), arg(&mut base)], [1, 1], [1, 1])
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_workEstimation(
+        h: cusparseHandle_t,
+        op_a: cusparseOperation_t,
+        op_b: cusparseOperation_t,
+        _alpha: *const c_void,
+        a: cusparseConstSpMatDescr_t,
+        b: cusparseConstSpMatDescr_t,
+        beta: *const c_void,
+        c: cusparseSpMatDescr_t,
+        compute: cudaDataType,
+        _alg: cusparseSpGEMMAlg_t,
+        d: cusparseSpGEMMDescr_t,
+        size1: *mut usize,
+        buffer1: *mut c_void,
+    ) -> cusparseStatus_t {
+        let h = obj::<Handle>(h)?;
+        let (a, b, c, d) = (obj::<SpMat>(a)?, obj::<SpMat>(b)?, obj::<SpMat>(c)?, obj::<SpGemm>(d)?);
+        spgemm_check(h, op_a, op_b, a, b, beta, c, compute)?;
+        if buffer1.is_null() {
+            return out(size1, 8 * (a.rows as usize + 1));
+        }
+        let (mut arp, mut acol, mut brp, mut ub, mut rows, mut base) = (ptr(a.a), ptr(a.col), ptr(b.a), buffer1, a.rows, a.base);
+        run(
+            h,
+            if a.wide { c"agx_spgemm_ub_i64" } else { c"agx_spgemm_ub_i32" },
+            &mut [arg(&mut arp), arg(&mut acol), arg(&mut brp), arg(&mut ub), arg(&mut rows), arg(&mut base)],
+            [a.rows, 1],
+            [64, 1],
+        )?;
+        scan_i64(h, buffer1, a.rows)?;
+        d.products = last_i64(h, buffer1, a.rows)?;
+        d.buffer1 = buffer1;
+        Ok(())
+    }
+
+    /// The second buffer: the products' columns, the row counts (rows + 1) and the products' values.
+    fn spgemm_layout(products: i64, rows: i64, double: bool) -> (usize, usize, usize) {
+        let (p, r) = (products as usize, rows as usize + 1);
+        (8 * p, 8 * (p + r), 8 * (p + r) + p * if double { 8 } else { 4 })
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_compute(
+        h: cusparseHandle_t,
+        op_a: cusparseOperation_t,
+        op_b: cusparseOperation_t,
+        alpha: *const c_void,
+        a: cusparseConstSpMatDescr_t,
+        b: cusparseConstSpMatDescr_t,
+        beta: *const c_void,
+        c: cusparseSpMatDescr_t,
+        compute: cudaDataType,
+        _alg: cusparseSpGEMMAlg_t,
+        d: cusparseSpGEMMDescr_t,
+        size2: *mut usize,
+        buffer2: *mut c_void,
+    ) -> cusparseStatus_t {
+        let h = obj::<Handle>(h)?;
+        let (a, b, c, d) = (obj::<SpMat>(a)?, obj::<SpMat>(b)?, obj::<SpMat>(c)?, obj::<SpGemm>(d)?);
+        spgemm_check(h, op_a, op_b, a, b, beta, c, compute)?;
+        if d.buffer1.is_null() {
+            return Err(cusparseError_t::INVALID_VALUE);
+        }
+        let (cnt_at, val_at, size) = spgemm_layout(d.products, a.rows, a.double);
+        if buffer2.is_null() {
+            return out(size2, size);
+        }
+        let at = |o: usize| buffer2.cast::<u8>().add(o).cast::<c_void>();
+        let (mut arp, mut acol, mut aval, mut brp, mut bcol, mut bval) = (ptr(a.a), ptr(a.col), ptr(a.val), ptr(b.a), ptr(b.col), ptr(b.val));
+        let (mut ub, mut tcol, mut tval, mut cnt, mut rows, mut base) = (d.buffer1, buffer2, at(val_at), at(cnt_at), a.rows, a.base);
+        let mut alpha = Val::new(scalar(h, alpha, a.double)?);
+        run(
+            h,
+            kernel(a.wide, a.double, [c"agx_spgemm_row_i32", c"agx_spgemm_row_i64", c"agx_spgemm_row_i32_f64", c"agx_spgemm_row_i64_f64"]),
+            &mut [
+                arg(&mut arp),
+                arg(&mut acol),
+                arg(&mut aval),
+                arg(&mut brp),
+                arg(&mut bcol),
+                arg(&mut bval),
+                arg(&mut ub),
+                arg(&mut tcol),
+                arg(&mut tval),
+                arg(&mut cnt),
+                arg(&mut rows),
+                arg(&mut base),
+                alpha.arg(a.double),
+            ],
+            [a.rows, 1],
+            [64, 1],
+        )?;
+        scan_i64(h, cnt, a.rows)?;
+        c.nnz = last_i64(h, cnt, a.rows)?;
+        d.buffer2 = buffer2;
+        Ok(())
+    }
+
+    pub(crate) unsafe fn cusparseSpGEMM_copy(
+        h: cusparseHandle_t,
+        op_a: cusparseOperation_t,
+        op_b: cusparseOperation_t,
+        _alpha: *const c_void,
+        a: cusparseConstSpMatDescr_t,
+        b: cusparseConstSpMatDescr_t,
+        beta: *const c_void,
+        c: cusparseSpMatDescr_t,
+        compute: cudaDataType,
+        _alg: cusparseSpGEMMAlg_t,
+        d: cusparseSpGEMMDescr_t,
+    ) -> cusparseStatus_t {
+        let h = obj::<Handle>(h)?;
+        let (a, b, c, d) = (obj::<SpMat>(a)?, obj::<SpMat>(b)?, obj::<SpMat>(c)?, obj::<SpGemm>(d)?);
+        spgemm_check(h, op_a, op_b, a, b, beta, c, compute)?;
+        if d.buffer2.is_null() || c.a.is_null() || (c.nnz > 0 && (c.col.is_null() || c.val.is_null())) {
+            return Err(cusparseError_t::INVALID_VALUE);
+        }
+        let (cnt_at, val_at, _) = spgemm_layout(d.products, a.rows, a.double);
+        let at = |o: usize| d.buffer2.cast::<u8>().add(o).cast::<c_void>();
+        let (mut ub, mut tcol, mut tval, mut cnt) = (d.buffer1, d.buffer2, at(val_at), at(cnt_at));
+        let (mut crp, mut ccol, mut cval, mut rows, mut base) = (ptr(c.a), ptr(c.col), ptr(c.val), c.rows, c.base);
+        if c.rows == 0 {
+            // only the first row offset
+            let mut zero = [0u8; 8];
+            zero[..8].copy_from_slice(&c.base.to_le_bytes());
+            return engine::write(crp, zero.as_ptr().cast(), if c.wide { 8 } else { 4 }).map_err(status);
+        }
+        run(
+            h,
+            kernel(a.wide, a.double, [c"agx_spgemm_copy_i32", c"agx_spgemm_copy_i64", c"agx_spgemm_copy_i32_f64", c"agx_spgemm_copy_i64_f64"]),
+            &mut [arg(&mut ub), arg(&mut tcol), arg(&mut tval), arg(&mut cnt), arg(&mut crp), arg(&mut ccol), arg(&mut cval), arg(&mut rows), arg(&mut base)],
+            [c.rows, 1],
+            [64, 1],
+        )
     }
 
     // ---- SDDMM

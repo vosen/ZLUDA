@@ -616,6 +616,55 @@ def case_csr2csc(a, obj, tmp, base, words, rnd):
     return close(unpack(dst, BT), want, range(nnz * words), 0)
 
 
+def case_spgemm(a, obj, tmp, I, base, rnd):
+    """C = alpha A B in CSR: product bounds, scan, sorted row products, scan, copy."""
+    it = "i" if I == "i32" else "q"
+    m, k, n = 9, 7, 8
+    arp, acol, aval = random_csr(m, k, rnd, 0.35)
+    brp, bcol, bval = random_csr(k, n, rnd, 0.35)
+    alpha = 1.5
+    sh = lambda xs: pack([x + base for x in xs], it)
+    (ub,) = run(a, obj, "agx_spgemm_ub_" + I, [("buf", sh(arp)), ("buf", sh(acol)), ("buf", sh(brp)),
+                                               ("buf", pack([0] * (m + 1), "q"), True), ("i64", m), ("i64", base)],
+                grid1(m), (32, 1), tmp)
+    (ub,) = run(a, obj, "agx_sparse_scan_i64", [("buf", ub, True), ("i64", m), ("i64", 0)], (32, 1), (32, 1), tmp)
+    ubl = unpack(ub, "q")
+    want_ub = [0]
+    for i in range(m):
+        want_ub.append(want_ub[-1] + sum(brp[acol[t] + 1] - brp[acol[t]] for t in range(arp[i], arp[i + 1])))
+    if list(ubl) != want_ub:
+        return ["ub %s, want %s" % (list(ubl), want_ub)]
+    total = max(1, ubl[-1])
+    tcol, tval, cnt = run(a, obj, K("agx_spgemm_row_" + I),
+                          [("buf", sh(arp)), ("buf", sh(acol)), ("buf", pack(aval, BT)), ("buf", sh(brp)), ("buf", sh(bcol)),
+                           ("buf", pack(bval, BT)), ("buf", ub), ("buf", pack([0] * total, "q"), True),
+                           ("buf", pack([0.0] * total, BT), True), ("buf", pack([0] * (m + 1), "q"), True),
+                           ("i64", m), ("i64", base), (S(), alpha)], grid1(m), (32, 1), tmp)
+    (cnt,) = run(a, obj, "agx_sparse_scan_i64", [("buf", cnt, True), ("i64", m), ("i64", 0)], (32, 1), (32, 1), tmp)
+    want = []
+    for i in range(m):
+        row = {}
+        for t in range(arp[i], arp[i + 1]):
+            r = acol[t]
+            for u in range(brp[r], brp[r + 1]):
+                row[bcol[u]] = row.get(bcol[u], 0.0) + alpha * aval[t] * bval[u]
+        want.append(sorted(row.items()))
+    nnz = sum(len(r) for r in want)
+    crp, ccol, cval = run(a, obj, K("agx_spgemm_copy_" + I),
+                          [("buf", ub), ("buf", tcol), ("buf", tval), ("buf", cnt), ("buf", pack([-1] * (m + 1), it), True),
+                           ("buf", pack([-1] * max(1, nnz), it), True), ("buf", pack([0.0] * max(1, nnz), BT), True),
+                           ("i64", m), ("i64", base)], grid1(m), (32, 1), tmp)
+    want_rp = [base]
+    for r in want:
+        want_rp.append(want_rp[-1] + len(r))
+    if list(unpack(crp, it)) != want_rp:
+        return ["rowptr %s, want %s" % (list(unpack(crp, it)), want_rp)]
+    flat = [e for r in want for e in r]
+    if list(unpack(ccol, it))[:nnz] != [c + base for c, _ in flat]:
+        return ["columns %s, want %s" % (list(unpack(ccol, it)), [c for c, _ in flat])]
+    return close(unpack(cval, BT), [v for _, v in flat], range(nnz), TOL(1e-5))
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1588,6 +1637,7 @@ def main():
                         for what in ops:
                             cases.append(("sparse %s %s base %d" % (what, I, base),
                                           lambda w=what, I=I, b=base: case_sparse_ops(a, obj, tmp, w, I, b, rnd)))
+                        cases.append(("sparse spgemm %s base %d" % (I, base), lambda I=I, b=base: case_spgemm(a, obj, tmp, I, b, rnd)))
                 for base in (0, 1):
                     for words in (1, 2):
                         cases.append(("sparse csr2csc base %d %d words" % (base, words),

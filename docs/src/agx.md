@@ -973,15 +973,19 @@ of their transpose:
   type of 4, 8 or 16 bytes, or `CUSPARSE_ACTION_SYMBOLIC`): columns are counted
   and filled with atomics, then each column is sorted, so the row indices of a
   column are in order like cuSPARSE's.
+- `cusparseSpGEMM` (workEstimation, compute, copy) for `C = alpha A B` with
+  CSR matrices, non-transposed, `beta` 0: the work estimation counts each
+  row's products, the compute step forms them sorted by column with equal
+  columns added (one thread per row) and sets C's nnz, and the copy writes C.
 - `cusparseSDDMM` on CSR output, `opA` and `opB` either way, one thread per row.
 - `cusparseSpSV` and `cusparseSpSM` on CSR matrices with the fill mode and
   diagonal type of `cusparseSpMatSetAttribute`, `opA` non-transposed or
   transposed (and `opB` either way for SpSM): one thread per right-hand side
   substitutes row after row, so a single SpSV runs on one thread.
 
-Only SpVV and Csr2cscEx2 need an external buffer. Handles, streams, host and
+Only SpVV, Csr2cscEx2 and SpGEMM need external buffers. Handles, streams, host and
 device pointer modes and the legacy matrix descriptor are supported. Other
-functions (SpGEMM, BSR and the blocked formats, the legacy level 2 and 3 routines,
+functions (SpGEMM reuse, BSR and the blocked formats, the legacy level 2 and 3 routines,
 complex and f16 values) return `CUSPARSE_STATUS_NOT_SUPPORTED`.
 
 ## Building a release for Asahi
