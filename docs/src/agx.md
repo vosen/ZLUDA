@@ -193,8 +193,14 @@ three differences.
   thread: [x,y,z] Assertion `+"`expr`"+` failed.`) as a printf record, sets
   `__zluda_agx_trap_flag` (which `agx_runtime` reports as
   `CUDA_ERROR_ASSERT`), orders its stores with a release fence and executes
-  `trap`. What `trap` does on the hardware when executed is not measured yet
-  (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
+  `trap`. On the M2 Max an executed `trap` does nothing (AGX Performance
+  Simulator `tasks/ptx-re-blockers.md`, B21): the stores after it land and the
+  command ends normally, so the flag word is what reports the assertion, and
+  the kernel keeps running after a failed `assert`.
+* Lanes of one warp run one side of a divergent branch to completion before
+  the other side (B4), so a lane that spins waiting for a lane of its own warp
+  on the other side of a branch never finishes. This is the pre-Volta (`sm_6x`)
+  behaviour; independent thread scheduling is not available.
 
 Register use limits the threadgroup size: a threadgroup runs on one core, and
 a core holds 2 * floor(3328 / (2 * H)) SIMD-groups of a kernel that uses H
@@ -205,9 +211,24 @@ the registers that many threads need. `cuFuncGetAttribute(MAX_THREADS_PER_BLOCK)
 reports the limit, and a launch with a larger block fails with
 `CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES`, as on NVIDIA GPUs. The per-core budget is
 measured on the M2 Max (AGX Performance Simulator `tasks/safe-11`) and agrees
-with Mesa's occupancy table; that a single threadgroup must fit in it, and
-that the Registers word encodes 256 halves as 0, are Mesa's and not yet
-confirmed there (`tasks/ptx-re-blockers.md`, B26).
+with Mesa's occupancy table. That a single threadgroup must fit in it, and
+that the Registers word encodes 256 halves as 0, are measured too
+(`tasks/ptx-re-blockers.md`, B26): one granule over the budget, a 1024-thread
+threadgroup with a barrier hangs.
+
+Launches take at most 1024 threads in a block, along any of x, y and z (B22;
+a 2048-thread threadgroup runs nothing). The launch words count threads, so
+`gridDim * blockDim` must also be below 2^32 in each dimension; the grid is at
+most 2^31 - 1 CTAs along x and 65535 along y and z, as on NVIDIA GPUs. A launch
+outside these limits fails with `CUDA_ERROR_INVALID_VALUE`.
+
+`cuOccupancyMaxActiveBlocksPerMultiprocessor` reports the CTAs per core that
+are resident together: min(15, floor(S / g) - 1) for a kernel of which a core
+holds S SIMD-groups and g per CTA, and less with shared memory (B5). Only a
+grid of at most that many CTAs times the core count is resident as a whole:
+beyond it, later CTAs start when earlier ones exit (B5, B30), so a software
+grid barrier or a CTA that spins until a later CTA writes needs a grid within
+the limit. Cooperative launches are not supported.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 194 of 195 compile on their own. The other, `extern_func`,
@@ -304,7 +325,10 @@ of device memory: a pool of 4 slabs is a module global
 again by every later instruction), allocates columns first fit from the slab's
 map of 32-column granules, and gives the slab back with its last
 `tcgen05.dealloc`. A CTA that finds no free slab waits for one, so at most four
-CTAs that use tensor memory run at once. `alloc` and `dealloc` are done by the
+CTAs that use tensor memory run at once. The wait cannot deadlock: a CTA that
+holds a slab is running, and a resident CTA is not preempted by the ones
+spinning (B30), so it reaches its `dealloc` unless it waits on a CTA that has
+not started. `alloc` and `dealloc` are done by the
 lowest active lane of the warp; `relinquish_alloc_permit`, `fence` and `wait`
 do nothing (every operation completes before the next instruction).
 

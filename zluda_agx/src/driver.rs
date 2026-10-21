@@ -80,7 +80,12 @@ impl Driver {
     fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
         let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let threads = block.iter().map(|&b| b as u64).product::<u64>();
-        if threads == 0 {
+        let p = &self.ctx.props;
+        // the launch words hold a 32-bit thread count per dimension
+        let too_large = (0..3).any(|i| {
+            block[i] > p.max_block_dim[i] || grid[i] > p.max_grid_dim[i] || grid[i] as u64 * block[i] as u64 > u32::MAX as u64
+        });
+        if threads == 0 || grid.contains(&0) || threads > p.max_threads_per_block as u64 || too_large {
             return Err(CUerror::INVALID_VALUE);
         }
         let k = &self.modules[&m].module.kernels[&name];
@@ -1166,6 +1171,11 @@ pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfuncti
 
 /// Occupancy from the G14 register budget: up to 96 SIMD-groups per core, fewer when each thread needs more
 /// registers (2 * floor(3328 / (2 * register halves)) SIMD-groups), and 64 KiB of threadgroup memory per core.
+///
+/// The count is the number of CTAs per core that are resident together, which persistent kernels and software grid
+/// barriers rely on. Measured on the M2 Max (AGX Performance Simulator tasks/ptx-re-blockers.md, B5): a whole grid is
+/// resident only up to min(15, floor(S / g) - 1) threadgroups per core, for S SIMD-groups per core and g per
+/// threadgroup; above that, later threadgroups start only when earlier ones exit.
 pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     n: *mut c_int,
     f: CUfunction,
@@ -1180,7 +1190,7 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
             return Err(CUerror::INVALID_VALUE);
         }
         let groups_per_block = (block as u32).div_ceil(32);
-        let mut blocks = k.simd_groups_per_core() / groups_per_block;
+        let mut blocks = co_resident_threadgroups(k.simd_groups_per_core() / groups_per_block);
         let shared = k.threadgroup_bytes as usize + dynamic_shared;
         if shared > 0 {
             blocks = blocks.min((65536 / shared) as u32);
@@ -1188,6 +1198,16 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
         Ok(blocks as c_int)
     })?;
     out(n, v)
+}
+
+/// Threadgroups per core that are resident together, of `fit` that fit in the register budget (B5): one less, at most
+/// 15. One threadgroup that fits always runs (B26).
+fn co_resident_threadgroups(fit: u32) -> u32 {
+    if fit <= 1 {
+        fit
+    } else {
+        (fit - 1).min(15)
+    }
 }
 
 pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, f: CUfunction, block: c_int, dynamic_shared: usize) -> CUresult {
@@ -1818,6 +1838,15 @@ pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, add
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn co_resident_threadgroups_follow_the_measured_rule() {
+        // B5 on the M2 Max (38 cores): 32-thread CTAs, 576 resident; 128-thread CTAs at 13 per core, 456 = 38 * 12
+        assert_eq!(co_resident_threadgroups(96), 15);
+        assert_eq!(co_resident_threadgroups(13), 12);
+        assert_eq!(co_resident_threadgroups(1), 1);
+        assert_eq!(co_resident_threadgroups(0), 0);
+    }
 
     // Needs zoc built with the agx feature: target/debug/zoc, or ZLUDA_AGX_ZOC.
     #[test]
