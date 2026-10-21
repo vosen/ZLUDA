@@ -1,10 +1,11 @@
 //! cuFFT on Apple GPUs for zluda_agx (Asahi Linux), on the FFT kernels of agx_libs (`agx_libs/kernels/fft.mlir`,
 //! written once for every AGX generation).
 //!
-//! Single precision: complex to complex transforms of rank 1, 2 and 3 (strided and batched for rank 1), and real to
-//! complex / complex to real transforms of rank 1. Power-of-two lengths run on radix-2 Stockham passes, others on a
-//! direct transform; the twiddles are computed on the host in double precision. Like cuFFT, inverse transforms are not
-//! normalized. Double precision (Z2Z, D2Z, Z2D) and multi-GPU (Xt) functions return `CUFFT_NOT_SUPPORTED`.
+//! Single and double precision: complex to complex transforms (C2C, Z2Z) of rank 1, 2 and 3 (strided and batched for
+//! rank 1), and real to complex / complex to real transforms (R2C, C2R, D2Z, Z2D) of rank 1. Power-of-two lengths run
+//! on radix-2 Stockham passes, others on a direct transform; the twiddles are computed on the host in double precision.
+//! Double precision runs the same kernels built for f64 (`<kernel>_f64`, in the backend's software double precision).
+//! Like cuFFT, inverse transforms are not normalized. Multi-GPU (Xt) functions return `CUFFT_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
 
@@ -52,7 +53,10 @@ cuda_macros::cufft_function_declarations!(
             cufftEstimateMany,
             cufftExecC2C,
             cufftExecC2R,
+            cufftExecD2Z,
             cufftExecR2C,
+            cufftExecZ2D,
+            cufftExecZ2Z,
             cufftGetProperty,
             cufftGetSize,
             cufftGetSize1d,
@@ -111,6 +115,8 @@ pub struct Shape {
     /// cuFFT order: the first dimension varies slowest.
     pub dims: Vec<usize>,
     pub batch: usize,
+    /// Double precision (Z2Z, D2Z, Z2D): complex elements of 16 bytes, reals of 8.
+    pub double: bool,
     /// Element strides and sequence distances (rank 1; contiguous for higher ranks).
     pub istride: usize,
     pub idist: usize,
@@ -129,7 +135,12 @@ impl Shape {
             Kind::R2C => (total, half),
             Kind::C2R => (half, total),
         };
-        Shape { kind, dims: dims.to_vec(), batch, istride: 1, idist, ostride: 1, odist }
+        Shape { kind, dims: dims.to_vec(), batch, double: false, istride: 1, idist, ostride: 1, odist }
+    }
+
+    /// Bytes of a complex element.
+    pub fn complex_bytes(&self) -> usize {
+        if self.double { 16 } else { 8 }
     }
 
     pub fn total(&self) -> usize {
@@ -148,7 +159,7 @@ impl Shape {
         if self.dims.is_empty() || self.dims.len() > 3 || self.dims.iter().any(|&n| n == 0) || self.batch == 0 {
             return Err(cufftError_t::INVALID_SIZE);
         }
-        if self.dims.len() > 1 && *self != Shape::contiguous(self.kind, &self.dims, self.batch) {
+        if self.dims.len() > 1 && *self != (Shape { double: self.double, ..Shape::contiguous(self.kind, &self.dims, self.batch) }) {
             return Err(cufftError_t::NOT_SUPPORTED);
         }
         match self.kind {
@@ -262,6 +273,17 @@ pub fn steps(s: &Shape, in_place: bool) -> Vec<Step> {
     out
 }
 
+/// exp(-2 pi i t / n) for t = 0 ... n - 1, interleaved, in double precision.
+pub fn twiddles_f64(n: usize) -> Vec<f64> {
+    let mut out = Vec::with_capacity(2 * n);
+    for t in 0..n {
+        let a = -2.0 * std::f64::consts::PI * (t as f64) / (n as f64);
+        out.push(a.cos());
+        out.push(a.sin());
+    }
+    out
+}
+
 /// exp(-2 pi i t / n) for t = 0 ... n - 1, interleaved, rounded from double precision.
 pub fn twiddles(n: usize) -> Vec<f32> {
     let mut out = Vec::with_capacity(2 * n);
@@ -320,14 +342,22 @@ mod imp {
         Ok(())
     }
 
-    fn kind(t: cufftType) -> Result<Kind, cufftError_t> {
+    /// The kind of a transform type and whether it is double precision.
+    fn kind(t: cufftType) -> Result<(Kind, bool), cufftError_t> {
         match t {
-            cufftType::CUFFT_C2C => Ok(Kind::C2C),
-            cufftType::CUFFT_R2C => Ok(Kind::R2C),
-            cufftType::CUFFT_C2R => Ok(Kind::C2R),
-            cufftType::CUFFT_Z2Z | cufftType::CUFFT_D2Z | cufftType::CUFFT_Z2D => Err(cufftError_t::NOT_SUPPORTED),
+            cufftType::CUFFT_C2C => Ok((Kind::C2C, false)),
+            cufftType::CUFFT_R2C => Ok((Kind::R2C, false)),
+            cufftType::CUFFT_C2R => Ok((Kind::C2R, false)),
+            cufftType::CUFFT_Z2Z => Ok((Kind::C2C, true)),
+            cufftType::CUFFT_D2Z => Ok((Kind::R2C, true)),
+            cufftType::CUFFT_Z2D => Ok((Kind::C2R, true)),
             _ => Err(cufftError_t::INVALID_TYPE),
         }
+    }
+
+    fn contiguous(t: cufftType, dims: &[usize], batch: usize) -> Result<Shape, cufftError_t> {
+        let (k, double) = kind(t)?;
+        Ok(Shape { double, ..Shape::contiguous(k, dims, batch) })
     }
 
     pub(crate) unsafe fn cufftCreate(h: *mut cufftHandle) -> cufftResult {
@@ -356,17 +386,24 @@ mod imp {
 
     unsafe fn make(h: cufftHandle, s: Shape, work: *mut usize) -> cufftResult {
         s.check()?;
-        let bytes = 8 * s.work_elements();
+        let bytes = s.complex_bytes() * s.work_elements();
         with(h, |p| {
             p.release();
             for w in &mut p.work {
                 *w = engine::alloc(bytes).map_err(|_| cufftError_t::ALLOC_FAILED)?;
             }
             for &n in &s.dims {
-                let t = twiddles(n);
-                let d = engine::alloc(4 * t.len()).map_err(|_| cufftError_t::ALLOC_FAILED)?;
+                let (t32, t64);
+                let (ptr, len) = if s.double {
+                    t64 = twiddles_f64(n);
+                    (t64.as_ptr() as *const c_void, 8 * t64.len())
+                } else {
+                    t32 = twiddles(n);
+                    (t32.as_ptr() as *const c_void, 4 * t32.len())
+                };
+                let d = engine::alloc(len).map_err(|_| cufftError_t::ALLOC_FAILED)?;
                 p.tw.push(d);
-                engine::write(d, t.as_ptr() as *const c_void, 4 * t.len()).map_err(status)?;
+                engine::write(d, ptr, len).map_err(status)?;
             }
             p.shape = Some(s);
             Ok(())
@@ -379,8 +416,7 @@ mod imp {
             return Err(cufftError_t::INVALID_VALUE);
         }
         let dims: Vec<usize> = unsafe { std::slice::from_raw_parts(n, rank as usize) }.iter().map(|&d| d.max(0) as usize).collect();
-        let k = kind(t)?;
-        let mut s = Shape::contiguous(k, &dims, batch as usize);
+        let mut s = contiguous(t, &dims, batch as usize)?;
         // with both embedding arrays NULL the layout is contiguous and the strides and distances are ignored
         if !inembed.is_null() || !onembed.is_null() {
             if istride < 1 || ostride < 1 || idist < 1 || odist < 1 {
@@ -398,21 +434,21 @@ mod imp {
         if nx < 1 || batch < 1 {
             return Err(cufftError_t::INVALID_SIZE);
         }
-        make(h, Shape::contiguous(kind(t)?, &[nx as usize], batch as usize), work)
+        make(h, contiguous(t, &[nx as usize], batch as usize)?, work)
     }
 
     pub(crate) unsafe fn cufftMakePlan2d(h: cufftHandle, nx: c_int, ny: c_int, t: cufftType, work: *mut usize) -> cufftResult {
         if nx < 1 || ny < 1 {
             return Err(cufftError_t::INVALID_SIZE);
         }
-        make(h, Shape::contiguous(kind(t)?, &[nx as usize, ny as usize], 1), work)
+        make(h, contiguous(t, &[nx as usize, ny as usize], 1)?, work)
     }
 
     pub(crate) unsafe fn cufftMakePlan3d(h: cufftHandle, nx: c_int, ny: c_int, nz: c_int, t: cufftType, work: *mut usize) -> cufftResult {
         if nx < 1 || ny < 1 || nz < 1 {
             return Err(cufftError_t::INVALID_SIZE);
         }
-        make(h, Shape::contiguous(kind(t)?, &[nx as usize, ny as usize, nz as usize], 1), work)
+        make(h, contiguous(t, &[nx as usize, ny as usize, nz as usize], 1)?, work)
     }
 
     pub(crate) unsafe fn cufftMakePlanMany(
@@ -471,19 +507,19 @@ mod imp {
     // Workspace sizes: three complex buffers of the output's extent.
     fn work_of(s: Shape, work: *mut usize) -> cufftResult {
         s.check()?;
-        unsafe { out(work, 3 * 8 * s.work_elements()) }
+        unsafe { out(work, 3 * s.complex_bytes() * s.work_elements()) }
     }
 
     pub(crate) unsafe fn cufftEstimate1d(nx: c_int, t: cufftType, batch: c_int, work: *mut usize) -> cufftResult {
-        work_of(Shape::contiguous(kind(t)?, &[nx.max(0) as usize], batch.max(0) as usize), work)
+        work_of(contiguous(t, &[nx.max(0) as usize], batch.max(0) as usize)?, work)
     }
 
     pub(crate) unsafe fn cufftEstimate2d(nx: c_int, ny: c_int, t: cufftType, work: *mut usize) -> cufftResult {
-        work_of(Shape::contiguous(kind(t)?, &[nx.max(0) as usize, ny.max(0) as usize], 1), work)
+        work_of(contiguous(t, &[nx.max(0) as usize, ny.max(0) as usize], 1)?, work)
     }
 
     pub(crate) unsafe fn cufftEstimate3d(nx: c_int, ny: c_int, nz: c_int, t: cufftType, work: *mut usize) -> cufftResult {
-        work_of(Shape::contiguous(kind(t)?, &[nx.max(0) as usize, ny.max(0) as usize, nz.max(0) as usize], 1), work)
+        work_of(contiguous(t, &[nx.max(0) as usize, ny.max(0) as usize, nz.max(0) as usize], 1)?, work)
     }
 
     pub(crate) unsafe fn cufftEstimateMany(
@@ -565,13 +601,14 @@ mod imp {
         out(v, x)
     }
 
-    unsafe fn exec(h: cufftHandle, input: *mut c_void, output: *mut c_void, want: Kind, inverse: bool) -> cufftResult {
+    unsafe fn exec(h: cufftHandle, input: *mut c_void, output: *mut c_void, want: Kind, double: bool, inverse: bool) -> cufftResult {
         let (shape, stream, work, tw) = with(h, |p| {
             Ok((p.shape.clone().ok_or(cufftError_t::INVALID_PLAN)?, p.stream, p.work, p.tw.clone()))
         })?;
-        if shape.kind != want {
+        if shape.kind != want || shape.double != double {
             return Err(cufftError_t::INVALID_TYPE);
         }
+        let cb = shape.complex_bytes();
         if input.is_null() || output.is_null() {
             return Err(cufftError_t::INVALID_VALUE);
         }
@@ -585,7 +622,10 @@ mod imp {
                 Buf::Tw(k) => tw[k],
             }
         };
-        let func = |name: &'static std::ffi::CStr| engine::function(agx_libs::FFT, name).map_err(status);
+        // the single precision kernel, or its double precision copy
+        let func = |name: &'static std::ffi::CStr, name64: &'static std::ffi::CStr| {
+            engine::function(agx_libs::FFT, if double { name64 } else { name }).map_err(status)
+        };
         let groups = |threads: usize, block: u32| (threads.div_ceil(block as usize)) as u32;
         let inv = inverse as i32;
         for step in steps(&shape, input == output) {
@@ -594,43 +634,43 @@ mod imp {
                 Step::Radix2 { src, dst, tw, n, ns, count, stride, dist, offset } => {
                     let bx = (n / 2).clamp(1, 64) as u32;
                     (
-                        func(c"agx_fft_radix2")?,
-                        vec![ptr(src).byte_add(8 * offset), ptr(dst).byte_add(8 * offset), ptr(Buf::Tw(tw))],
+                        func(c"agx_fft_radix2", c"agx_fft_radix2_f64")?,
+                        vec![ptr(src).byte_add(cb * offset), ptr(dst).byte_add(cb * offset), ptr(Buf::Tw(tw))],
                         vec![n as i32, ns as i32, count as i32, stride as i32, dist as i32, inv],
                         [groups(n / 2, bx), count as u32],
                         [bx, 1],
                     )
                 }
                 Step::Dft { src, dst, tw, n, count, stride, dist, offset } => (
-                    func(c"agx_dft")?,
-                    vec![ptr(src).byte_add(8 * offset), ptr(dst).byte_add(8 * offset), ptr(Buf::Tw(tw))],
+                    func(c"agx_dft", c"agx_dft_f64")?,
+                    vec![ptr(src).byte_add(cb * offset), ptr(dst).byte_add(cb * offset), ptr(Buf::Tw(tw))],
                     vec![n as i32, count as i32, stride as i32, dist as i32, inv],
                     [groups(n, 16), count as u32],
                     [16, 1],
                 ),
                 Step::Copy { src, dst, m, count, istride, idist, ostride, odist, ioffset, ooffset } => (
-                    func(c"agx_fft_copy")?,
-                    vec![ptr(src).byte_add(8 * ioffset), ptr(dst).byte_add(8 * ooffset)],
+                    func(c"agx_fft_copy", c"agx_fft_copy_f64")?,
+                    vec![ptr(src).byte_add(cb * ioffset), ptr(dst).byte_add(cb * ooffset)],
                     vec![m as i32, count as i32, istride as i32, idist as i32, ostride as i32, odist as i32],
                     [groups(m, 16), count as u32],
                     [16, 1],
                 ),
                 Step::RealToComplex { src, dst, n, count, idist } => (
-                    func(c"agx_fft_real_to_complex")?,
+                    func(c"agx_fft_real_to_complex", c"agx_fft_real_to_complex_f64")?,
                     vec![ptr(src), ptr(dst)],
                     vec![n as i32, count as i32, idist as i32],
                     [groups(n, 16), count as u32],
                     [16, 1],
                 ),
                 Step::Hermitian { src, dst, n, count, idist } => (
-                    func(c"agx_fft_hermitian")?,
+                    func(c"agx_fft_hermitian", c"agx_fft_hermitian_f64")?,
                     vec![ptr(src), ptr(dst)],
                     vec![n as i32, count as i32, idist as i32],
                     [groups(n, 16), count as u32],
                     [16, 1],
                 ),
                 Step::RealPart { src, dst, n, count, odist } => (
-                    func(c"agx_fft_real_part")?,
+                    func(c"agx_fft_real_part", c"agx_fft_real_part_f64")?,
                     vec![ptr(src), ptr(dst)],
                     vec![n as i32, count as i32, odist as i32],
                     [groups(n, 16), count as u32],
@@ -652,15 +692,37 @@ mod imp {
             d if d == CUFFT_INVERSE as c_int => true,
             _ => return Err(cufftError_t::INVALID_VALUE),
         };
-        exec(h, i.cast(), o.cast(), Kind::C2C, inverse)
+        exec(h, i.cast(), o.cast(), Kind::C2C, false, inverse)
     }
 
     pub(crate) unsafe fn cufftExecR2C(h: cufftHandle, i: *mut cufftReal, o: *mut cufftComplex) -> cufftResult {
-        exec(h, i.cast(), o.cast(), Kind::R2C, false)
+        exec(h, i.cast(), o.cast(), Kind::R2C, false, false)
     }
 
     pub(crate) unsafe fn cufftExecC2R(h: cufftHandle, i: *mut cufftComplex, o: *mut cufftReal) -> cufftResult {
-        exec(h, i.cast(), o.cast(), Kind::C2R, true)
+        exec(h, i.cast(), o.cast(), Kind::C2R, false, true)
+    }
+
+    pub(crate) unsafe fn cufftExecZ2Z(
+        h: cufftHandle,
+        i: *mut cufftDoubleComplex,
+        o: *mut cufftDoubleComplex,
+        direction: c_int,
+    ) -> cufftResult {
+        let inverse = match direction {
+            CUFFT_FORWARD => false,
+            d if d == CUFFT_INVERSE as c_int => true,
+            _ => return Err(cufftError_t::INVALID_VALUE),
+        };
+        exec(h, i.cast(), o.cast(), Kind::C2C, true, inverse)
+    }
+
+    pub(crate) unsafe fn cufftExecD2Z(h: cufftHandle, i: *mut cufftDoubleReal, o: *mut cufftDoubleComplex) -> cufftResult {
+        exec(h, i.cast(), o.cast(), Kind::R2C, true, false)
+    }
+
+    pub(crate) unsafe fn cufftExecZ2D(h: cufftHandle, i: *mut cufftDoubleComplex, o: *mut cufftDoubleReal) -> cufftResult {
+        exec(h, i.cast(), o.cast(), Kind::C2R, true, true)
     }
 
 }
@@ -849,7 +911,7 @@ mod tests {
     fn in_place_and_strided_rank_1() {
         // in place: In and Out are the same buffer, which the emulation models by steps reading Out after writing it
         for &(n, batch, stride, dist) in &[(8usize, 3usize, 1usize, 8usize), (2, 2, 1, 2), (6, 2, 3, 1), (16, 4, 4, 1)] {
-            let s = Shape { kind: Kind::C2C, dims: vec![n], batch, istride: stride, idist: dist, ostride: stride, odist: dist };
+            let s = Shape { kind: Kind::C2C, dims: vec![n], batch, double: false, istride: stride, idist: dist, ostride: stride, odist: dist };
             s.check().unwrap();
             let mut seed = 5;
             let size = s.work_elements();
@@ -997,5 +1059,29 @@ mod tests {
         let st = steps(&Shape::contiguous(Kind::C2C, &[8], 1), false);
         assert_eq!(st.iter().filter(|s| matches!(s, Step::Radix2 { .. })).count(), 3);
         assert!(matches!(st.last(), Some(Step::Radix2 { dst: Buf::Out, .. })));
+    }
+
+    #[test]
+    fn double_precision_plans() {
+        let work = |t: cufftType, dims: &[c_int]| {
+            let mut w = 0usize;
+            let r = unsafe {
+                match dims {
+                    [x] => cufftEstimate1d(*x, t, 2, &mut w),
+                    [x, y] => cufftEstimate2d(*x, *y, t, &mut w),
+                    _ => unreachable!(),
+                }
+            };
+            r.map(|_| w)
+        };
+        // the same plans as single precision, with 16-byte complex elements
+        assert_eq!(work(cufftType::CUFFT_Z2Z, &[64]), work(cufftType::CUFFT_C2C, &[64]).map(|w| 2 * w));
+        assert_eq!(work(cufftType::CUFFT_D2Z, &[30]), work(cufftType::CUFFT_R2C, &[30]).map(|w| 2 * w));
+        assert_eq!(work(cufftType::CUFFT_Z2D, &[30]), work(cufftType::CUFFT_C2R, &[30]).map(|w| 2 * w));
+        assert_eq!(work(cufftType::CUFFT_Z2Z, &[8, 6]), work(cufftType::CUFFT_C2C, &[8, 6]).map(|w| 2 * w));
+        assert_eq!(work(cufftType::CUFFT_D2Z, &[8, 6]), Err(cufftError_t::NOT_SUPPORTED), "real transforms are rank 1");
+        let t = twiddles_f64(12);
+        assert_eq!((t[0], t[1]), (1.0, -0.0));
+        assert!((t[6] - 0.0).abs() < 1e-15 && (t[7] + 1.0).abs() < 1e-15, "exp(-2 pi i 3 / 12) = -i");
     }
 }

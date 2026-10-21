@@ -292,75 +292,77 @@ def interleave(zs):
     return out
 
 
-def case_fft(a, obj, tmp, n, batch, stride, dist, inverse, radix2, rnd):
+def case_fft(a, obj, tmp, n, batch, stride, dist, inverse, radix2, rnd, t="f"):
+    sfx, tol = ("_f64", 1e-12) if t == "d" else ("", 1e-4)
     total = max((b * dist + (n - 1) * stride for b in range(batch)), default=0) + 1
     data = [complex(rnd.uniform(-1, 1), rnd.uniform(-1, 1)) for _ in range(total)]
-    tw = pack(twiddles(n))
-    buf = pack(interleave(data))
+    tw = pack(twiddles(n), t)
+    buf = pack(interleave(data), t)
     if radix2:
         ns = 1
         while ns < n:
-            (buf,) = run(a, obj, "agx_fft_radix2",
-                         [("buf", buf), ("buf", pack([0.0] * (2 * total)), True), ("buf", tw), ("i32", n), ("i32", ns),
+            (buf,) = run(a, obj, "agx_fft_radix2" + sfx,
+                         [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", ns),
                           ("i32", batch), ("i32", stride), ("i32", dist), ("i32", inverse)],
                          (n // 2, batch), (min(n // 2, 64), 1), tmp)
             ns *= 2
     else:
-        (buf,) = run(a, obj, "agx_dft",
-                     [("buf", buf), ("buf", pack([0.0] * (2 * total)), True), ("buf", tw), ("i32", n), ("i32", batch),
+        (buf,) = run(a, obj, "agx_dft" + sfx,
+                     [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", batch),
                       ("i32", stride), ("i32", dist), ("i32", inverse)],
                      (-(-n // 16) * 16, batch), (16, 1), tmp)
-    got = unpack(buf)
+    got = unpack(buf, t)
     bad = []
     for b in range(batch):
         idx = [b * dist + i * stride for i in range(n)]
         want = dft([data[i] for i in idx], n, inverse)
         for i, w in zip(idx, want):
             g = complex(got[2 * i], got[2 * i + 1])
-            if abs(g - w) > 1e-4 * (1 + abs(w)) * max(1, math.log2(n)):
+            if abs(g - w) > tol * (1 + abs(w)) * max(1, math.log2(n)):
                 bad.append(i)
     return bad
 
 
-def case_fft_packing(a, obj, tmp, n, batch, rnd):
+def case_fft_packing(a, obj, tmp, n, batch, rnd, t="f"):
     """The real / complex packing kernels around the complex transforms."""
+    sfx = "_f64" if t == "d" else ""
     bad = []
     idist = n + 3
-    real = rounded([rnd.uniform(-1, 1) for _ in range(batch * idist)], "f")
-    (c,) = run(a, obj, "agx_fft_real_to_complex",
-               [("buf", pack(real)), ("buf", pack([math.nan] * (2 * n * batch)), True), ("i32", n), ("i32", batch),
+    real = rounded([rnd.uniform(-1, 1) for _ in range(batch * idist)], t)
+    (c,) = run(a, obj, "agx_fft_real_to_complex" + sfx,
+               [("buf", pack(real, t)), ("buf", pack([math.nan] * (2 * n * batch), t), True), ("i32", n), ("i32", batch),
                 ("i32", idist)], (-(-n // 16) * 16, batch), (16, 1), tmp)
-    c = unpack(c)
+    c = unpack(c, t)
     bad += [i for i in range(n * batch) if c[2 * i] != real[(i // n) * idist + i % n] or c[2 * i + 1] != 0.0]
     m, odist = n // 2 + 1, n // 2 + 3
-    src = rounded([rnd.uniform(-1, 1) for _ in range(2 * n * batch)], "f")
+    src = rounded([rnd.uniform(-1, 1) for _ in range(2 * n * batch)], t)
     ostride, codist = 2, 2 * m + 1
     size = codist * batch
-    (cp,) = run(a, obj, "agx_fft_copy",
-                [("buf", pack(src)), ("buf", pack([0.0] * (2 * size)), True), ("i32", m), ("i32", batch),
+    (cp,) = run(a, obj, "agx_fft_copy" + sfx,
+                [("buf", pack(src, t)), ("buf", pack([0.0] * (2 * size), t), True), ("i32", m), ("i32", batch),
                  ("i32", 1), ("i32", n), ("i32", ostride), ("i32", codist)], (-(-m // 16) * 16, batch), (16, 1), tmp)
-    cp = unpack(cp)
+    cp = unpack(cp, t)
     want = [0.0] * (2 * size)
     for b in range(batch):
         for i in range(m):
             d, s_ = b * codist + i * ostride, b * n + i
             want[2 * d], want[2 * d + 1] = src[2 * s_], src[2 * s_ + 1]
     bad += ["copy%d" % k for k in range(2 * size) if cp[k] != want[k]]
-    half = rounded([rnd.uniform(-1, 1) for _ in range(2 * odist * batch)], "f")
-    (full,) = run(a, obj, "agx_fft_hermitian",
-                  [("buf", pack(half)), ("buf", pack([0.0] * (2 * n * batch)), True), ("i32", n), ("i32", batch),
+    half = rounded([rnd.uniform(-1, 1) for _ in range(2 * odist * batch)], t)
+    (full,) = run(a, obj, "agx_fft_hermitian" + sfx,
+                  [("buf", pack(half, t)), ("buf", pack([0.0] * (2 * n * batch), t), True), ("i32", n), ("i32", batch),
                    ("i32", odist)], (-(-n // 16) * 16, batch), (16, 1), tmp)
-    full = unpack(full)
+    full = unpack(full, t)
     for b in range(batch):
         for k in range(n):
             j = k if k <= n // 2 else n - k
             sign = 1 if k <= n // 2 else -1
             if full[2 * (b * n + k)] != half[2 * (b * odist + j)] or full[2 * (b * n + k) + 1] != sign * half[2 * (b * odist + j) + 1]:
                 bad.append("herm%d" % k)
-    (re_,) = run(a, obj, "agx_fft_real_part",
-                 [("buf", pack(src)), ("buf", pack([0.0] * (idist * batch)), True), ("i32", n), ("i32", batch),
+    (re_,) = run(a, obj, "agx_fft_real_part" + sfx,
+                 [("buf", pack(src, t)), ("buf", pack([0.0] * (idist * batch), t), True), ("i32", n), ("i32", batch),
                   ("i32", idist)], (-(-n // 16) * 16, batch), (16, 1), tmp)
-    re_ = unpack(re_)
+    re_ = unpack(re_, t)
     bad += ["re%d" % i for b in range(batch) for i in range(n) if re_[b * idist + i] != src[2 * (b * n + i)]]
     return bad
 
@@ -1035,16 +1037,18 @@ def main():
                                           lambda w=what, I=I, b=base: case_sparse(a, obj, tmp, w, I, b, rnd)))
             elif "agx_fft_radix2" in records:
                 cases = []
-                for inv in (0, 1):
-                    cases += [
-                        ("fft radix2 n=16 x3 inverse=%d" % inv, lambda inv=inv: case_fft(a, obj, tmp, 16, 3, 1, 16, inv, True, rnd)),
-                        ("fft radix2 n=64 x2 inverse=%d" % inv, lambda inv=inv: case_fft(a, obj, tmp, 64, 2, 1, 64, inv, True, rnd)),
-                        ("fft radix2 n=8 columns of 8x4 inverse=%d" % inv, lambda inv=inv: case_fft(a, obj, tmp, 8, 4, 4, 1, inv, True, rnd)),
-                        ("dft n=12 x2 inverse=%d" % inv, lambda inv=inv: case_fft(a, obj, tmp, 12, 2, 1, 12, inv, False, rnd)),
-                        ("dft n=7 columns of 7x3 inverse=%d" % inv, lambda inv=inv: case_fft(a, obj, tmp, 7, 3, 3, 1, inv, False, rnd)),
-                    ]
-                cases += [("fft packing n=10 x2", lambda: case_fft_packing(a, obj, tmp, 10, 2, rnd)),
-                          ("fft packing n=9 x1", lambda: case_fft_packing(a, obj, tmp, 9, 1, rnd))]
+                for t in ("f", "d") if "agx_fft_radix2_f64" in records else ("f",):
+                    p = " f64" if t == "d" else ""
+                    for inv in (0, 1):
+                        cases += [
+                            ("fft%s radix2 n=16 x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 16, 3, 1, 16, inv, True, rnd, t)),
+                            ("fft%s radix2 n=64 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 64, 2, 1, 64, inv, True, rnd, t)),
+                            ("fft%s radix2 n=8 columns of 8x4 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 8, 4, 4, 1, inv, True, rnd, t)),
+                            ("dft%s n=12 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 12, 2, 1, 12, inv, False, rnd, t)),
+                            ("dft%s n=7 columns of 7x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 7, 3, 3, 1, inv, False, rnd, t)),
+                        ]
+                    cases += [("fft%s packing n=10 x2" % p, lambda t=t: case_fft_packing(a, obj, tmp, 10, 2, rnd, t)),
+                              ("fft%s packing n=9 x1" % p, lambda t=t: case_fft_packing(a, obj, tmp, 9, 1, rnd, t))]
             elif "agx_conv2d_fwd_f32" in records:
                 convs = [
                     ("3x2 pad 1,0 stride 2,1 dil 1,2 G2", Conv(2, 4, 7, 6, 6, 3, 2, (1, 0), (2, 1), (1, 2), 2, 0, x_w_pad=3)),

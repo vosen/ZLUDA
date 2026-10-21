@@ -18,6 +18,29 @@ fn llvm_source(build: &Path) -> PathBuf {
     Path::new(llvm).parent().unwrap().to_path_buf()
 }
 
+/// fft.mlir with a double precision copy of each kernel (`<name>_f64`) in the same module: the kernels are written
+/// for any float type, so the copy only changes f32 to f64.
+fn fft_with_f64(src: &Path, out: &Path) {
+    let text = fs::read_to_string(src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
+    let open = text.find("gpu.module @agx_fft {").expect("fft.mlir has no gpu.module @agx_fft");
+    let body_start = text[open..].find('{').unwrap() + open + 1;
+    let body_end = text.rfind('}').expect("fft.mlir: unterminated module");
+    let body = &text[body_start..body_end];
+    let mut f64_body = String::new();
+    for line in body.lines() {
+        let mut l = line.replace("f32", "f64");
+        if let Some(at) = l.find("gpu.func @") {
+            let name_start = at + "gpu.func @".len();
+            let name_end = l[name_start..].find('(').map(|i| name_start + i).expect("gpu.func without arguments");
+            l.insert_str(name_end, "_f64");
+        }
+        f64_body.push_str(&l);
+        f64_body.push('\n');
+    }
+    let all = format!("{}\n  // double precision copies\n{}{}", &text[..body_end], f64_body, &text[body_end..]);
+    fs::write(out, all).unwrap();
+}
+
 fn main() {
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_BUILD_DIR");
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_SOURCE_DIR");
@@ -36,8 +59,12 @@ fn main() {
     // the pipeline (mlir-opt, opt -O3, llc) lives in the script
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let fft = out_dir.join("fft.mlir");
+    fft_with_f64(Path::new("kernels/fft.mlir"), &fft);
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "dnn"] {
-        let out = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join(format!("{name}.agxfat"));
+        let out = out_dir.join(format!("{name}.agxfat"));
+        let src = if name == "fft" { fft.clone() } else { PathBuf::from(format!("kernels/{name}.mlir")) };
         let status = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
@@ -46,7 +73,7 @@ fn main() {
             .arg(bin.join("mlir-translate"))
             .arg("--llc")
             .arg(bin.join("llc"))
-            .arg(format!("kernels/{name}.mlir"))
+            .arg(&src)
             .arg("-o")
             .arg(&out)
             .status()
