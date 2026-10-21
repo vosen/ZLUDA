@@ -692,6 +692,8 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
             A::CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY | A::CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY => 1,
             A::CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS | A::CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS => 0,
             A::CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS => 1,
+            // grids up to the co-resident limit (B5); thread block clusters as compiled (B28)
+            A::CU_DEVICE_ATTRIBUTE_COOPERATIVE_LAUNCH | A::CU_DEVICE_ATTRIBUTE_CLUSTER_LAUNCH => 1,
             // no run time limit on kernels (ptx-re-blockers B6)
             A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 0,
             A::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY => 65536,
@@ -1418,13 +1420,94 @@ pub(crate) unsafe fn cuCtxSynchronize_v2(_ctx: CUcontext) -> CUresult {
     cuCtxSynchronize()
 }
 
+/// Launch attributes `cuLaunchKernelEx` takes: a cluster size equal to the kernel's compiled one (`.reqnctapercluster`;
+/// a cluster runs as one threadgroup, which is safe because the threadgroup barrier does not wait for ended
+/// SIMD-groups: ptx-re-blockers B28), the cluster scheduling preference (a hint), and cooperative launches.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct LaunchAttrs {
+    cluster: Option<[u32; 3]>,
+    cooperative: bool,
+}
+
+unsafe fn launch_attrs(c: &CUlaunchConfig) -> Result<LaunchAttrs, CUerror> {
+    let mut out = LaunchAttrs::default();
+    if c.numAttrs == 0 {
+        return Ok(out);
+    }
+    let attrs = std::slice::from_raw_parts(c.attrs.as_ref().ok_or(CUerror::INVALID_VALUE)?, c.numAttrs as usize);
+    for a in attrs {
+        match a.id {
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION => {
+                let d = a.value.clusterDim;
+                out.cluster = Some([d.x, d.y, d.z]);
+            }
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {}
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_COOPERATIVE => out.cooperative = a.value.cooperative != 0,
+            _ => return Err(CUerror::NOT_SUPPORTED),
+        }
+    }
+    Ok(out)
+}
+
+/// Whether `attrs` can be honoured for kernel `k`, launched as `grid` of `block` with `shared` dynamic bytes on a
+/// device of `cores` cores.
+fn check_launch_attrs(k: &module::KernelInfo, attrs: LaunchAttrs, grid: [u32; 3], block: [u32; 3], shared: u32, cores: u32) -> Result<(), CUerror> {
+    if let Some(c) = attrs.cluster {
+        if c.contains(&0) {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        // The cluster size is part of the code (the CTA rank within the cluster is computed from it).
+        if c != k.cluster && c != [1, 1, 1] {
+            return Err(if k.cluster == [1, 1, 1] { CUerror::NOT_SUPPORTED } else { CUerror::INVALID_CLUSTER_SIZE });
+        }
+    }
+    if attrs.cooperative {
+        let blocks: u64 = grid.iter().map(|&g| g as u64).product();
+        let threads = block.iter().product::<u32>();
+        if blocks > cooperative_limit(k, threads, shared as usize, cores) as u64 {
+            return Err(CUerror::COOPERATIVE_LAUNCH_TOO_LARGE);
+        }
+    }
+    Ok(())
+}
+
+/// Threadgroups of `k` that are resident together on the whole device (B5), which a cooperative launch may use.
+fn cooperative_limit(k: &module::KernelInfo, threads: u32, dynamic_shared: usize, cores: u32) -> u32 {
+    let per_core = co_resident_threadgroups(k.simd_groups_per_core() / threads.div_ceil(32).max(1));
+    let shared = k.threadgroup_bytes as usize + dynamic_shared;
+    let per_core = if shared > 0 { per_core.min((65536 / shared) as u32) } else { per_core };
+    per_core * cores
+}
+
 pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfunction, params: *mut *mut c_void, extra: *mut *mut c_void) -> CUresult {
     let c = config.as_ref().ok_or(CUerror::INVALID_VALUE)?;
-    if c.numAttrs != 0 {
-        // cluster dimensions, cooperative launch and the other attributes are not supported
-        return Err(CUerror::NOT_SUPPORTED);
-    }
+    let attrs = launch_attrs(c)?;
+    let (grid, block) = ([c.gridDimX, c.gridDimY, c.gridDimZ], [c.blockDimX, c.blockDimY, c.blockDimZ]);
+    with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        check_launch_attrs(&d.modules[m].module.kernels[name], attrs, grid, block, c.sharedMemBytes, d.ctx.props.cores)
+    })?;
     cuLaunchKernel(f, c.gridDimX, c.gridDimY, c.gridDimZ, c.blockDimX, c.blockDimY, c.blockDimZ, c.sharedMemBytes, c.hStream, params, extra)
+}
+
+pub(crate) unsafe fn cuLaunchCooperativeKernel(
+    f: CUfunction,
+    gx: c_uint,
+    gy: c_uint,
+    gz: c_uint,
+    bx: c_uint,
+    by: c_uint,
+    bz: c_uint,
+    shared: c_uint,
+    stream: CUstream,
+    params: *mut *mut c_void,
+) -> CUresult {
+    let attrs = LaunchAttrs { cooperative: true, ..Default::default() };
+    with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        check_launch_attrs(&d.modules[m].module.kernels[name], attrs, [gx, gy, gz], [bx, by, bz], shared, d.ctx.props.cores)
+    })?;
+    cuLaunchKernel(f, gx, gy, gz, bx, by, bz, shared, stream, params, std::ptr::null_mut())
 }
 
 /// Occupancy from the G14 register budget: up to 96 SIMD-groups per core, fewer when each thread needs more
@@ -2168,6 +2251,31 @@ mod tests {
         let t = &m.globals[off as usize..(off + size) as usize];
         let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
         assert_eq!((e.kind, e.store, e.address, e.site_text.as_str()), (1, true, out + 20, "store 4\tput put.cu:4:3"));
+    }
+
+    #[test]
+    fn launch_attributes_are_checked_against_the_kernel() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/checked.o")).unwrap();
+        let plain = m.kernels["put"].clone();
+        let clustered = module::KernelInfo { cluster: [2, 1, 1], ..plain.clone() };
+        let none = LaunchAttrs::default();
+        let cluster = |c| LaunchAttrs { cluster: Some(c), ..none };
+        let coop = LaunchAttrs { cooperative: true, ..none };
+        let (g, b) = ([4, 1, 1], [32, 1, 1]);
+        assert_eq!(check_launch_attrs(&plain, none, g, b, 0, 38), Ok(()));
+        // a cluster is the compiled one, or 1
+        assert_eq!(check_launch_attrs(&clustered, cluster([2, 1, 1]), g, b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&plain, cluster([1, 1, 1]), g, b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&clustered, cluster([4, 1, 1]), g, b, 0, 38), Err(CUerror::INVALID_CLUSTER_SIZE));
+        assert_eq!(check_launch_attrs(&plain, cluster([2, 1, 1]), g, b, 0, 38), Err(CUerror::NOT_SUPPORTED));
+        assert_eq!(check_launch_attrs(&plain, cluster([0, 1, 1]), g, b, 0, 38), Err(CUerror::INVALID_VALUE));
+        // cooperative: up to the co-resident threadgroups of the device
+        let limit = cooperative_limit(&plain, 32, 0, 38);
+        assert_eq!(limit, 38 * co_resident_threadgroups(plain.simd_groups_per_core()));
+        assert_eq!(check_launch_attrs(&plain, coop, [limit, 1, 1], b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&plain, coop, [limit + 1, 1, 1], b, 0, 38), Err(CUerror::COOPERATIVE_LAUNCH_TOO_LARGE));
+        // threadgroup memory lowers it: 32 KiB per block leaves 2 per core
+        assert_eq!(cooperative_limit(&plain, 32, 32768, 38), 2 * 38);
     }
 
     #[test]

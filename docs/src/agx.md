@@ -790,6 +790,12 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   seen without it (simulator `tasks/ptx-re-blockers.md`, B8), and it costs
   about 1.8 us per command. `ZLUDA_AGX_USC_BARRIER=1` emits it on every
   command, as Mesa does.
+* `cuLaunchCooperativeKernel` and `cuLaunchKernelEx`'s cooperative attribute
+  take grids up to the threadgroups resident together on the device (the
+  co-residency limit `cuOccupancyMaxActiveBlocksPerMultiprocessor` reports,
+  times the cores; B5), and return `CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE`
+  beyond. `cuLaunchKernelEx`'s cluster dimension must be the kernel's compiled
+  `.reqnctapercluster` (or 1); the scheduling preference is ignored.
 * Kernels have no run time limit (`CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT` is
   0): one command ran 79.9 s correctly on the M2 Max (simulator
   `tasks/ptx-re-blockers.md`, B6), and a synchronisation waits as long as the
@@ -962,7 +968,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 level 1, gemv / ger, geam / dgmm / syrk / symm / trmm / trsm and batched GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
-| Not yet | recursion and non-inlined calls, cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
+| Not yet | recursion and non-inlined calls, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | M2 Max (G14C, Asahi), 2026-10-20, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md`: the direct-DRM runner and `agx_cuda_smoke` pass (B2); scratch with Mesa's helper (B1), forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), code rewrites (B8), the whole uniform file (B9), barriers (B16, B28), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), masked instruction cost (B31), submit cost (B32), vector alignment (B33) and stack cost (B34) are measured and used. Open: float atomic add under contention (B3), hardware calls (B14), async copies (B17), lane-offset fmadd recording (B18), native textures (B29), a real CUDA program (B23, B41), and B35-B45 (shader clock, IPC, checked mode, VMs and queues, allocation limits, cost model, context teardown, multiple VMs) |

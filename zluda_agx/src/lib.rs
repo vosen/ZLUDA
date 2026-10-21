@@ -113,6 +113,7 @@ cuda_macros::cuda_function_declarations!(
             cuInit,
             cuKernelGetAttribute,
             cuKernelGetFunction,
+            cuLaunchCooperativeKernel,
             cuLaunchKernel,
             cuLaunchKernelEx,
             cuLibraryGetKernel,
