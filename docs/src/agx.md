@@ -908,7 +908,9 @@ tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
 `test_kernels.py`).
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
-f32 tensors of up to 4 dimensions with any strides:
+tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16
+through packed f32 copies (converted in and out by `agx_dnn_to_f32` /
+`agx_dnn_from_f32`):
 
 * activations (`cudnnActivationForward` / `Backward`: sigmoid, ReLU, tanh,
   clipped ReLU, ELU, identity and swish, with their descriptors);
@@ -924,9 +926,25 @@ f32 tensors of up to 4 dimensions with any strides:
   statistics take two passes (the mean, then the variance), and the running
   variance is the unbiased one, as in cuDNN.
 
-These kernels are tested on the simulator for agx-g13g and agx-g14c (63
-cases per chip). The backend (graph) API, f16 for these operations, RNNs,
-LRN, dropout and the fused operations are not implemented yet.
+These kernels are tested on the simulator for agx-g13g and agx-g14c.
+
+The backend (graph) API (`cudnnBackend*`, what cudnn-frontend and PyTorch
+use) runs operation graphs of 2-D convolutions (forward, backward data and
+backward filter, any group count, symmetric padding), matmuls (2-D or batched
+3-D, broadcast batches), pointwise operations (every mode but atan2 and index
+generation: arithmetic, math functions, activations and their backward forms,
+comparisons, logic and binary select, with broadcasting) and reductions, on
+tensors of up to 4 dimensions in f32, f16 or bf16 (`zluda_dnn_agx/src/imp/graph.rs`).
+Finalizing a graph takes a snapshot of it; heuristics return one engine
+configuration when every operation is supported and none otherwise, so
+cudnn-frontend falls back or reports the graph unsupported. An execution plan
+runs the operations in dependency order in f32 on packed tensors: packed f32
+tensors are used in place, everything else (f16 and bf16 tensors, other
+strides, virtual tensors, by-value scalars) through f32 copies in the
+workspace the plan reports. The pointwise and reduction kernels are tested
+for every mode and operator against Python references. Normalization,
+attention (SDPA), resampling and the statistics operations of the graph API,
+RNNs, LRN and dropout are not implemented yet.
 
 ## cuFFT (`zluda_fft_agx`)
 

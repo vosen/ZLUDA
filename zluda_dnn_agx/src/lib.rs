@@ -6,7 +6,8 @@
 //! `cudnnConvolutionForward`, `cudnnConvolutionBackwardData` and `cudnnConvolutionBackwardFilter` for f32 and f16
 //! tensors (accumulated in f32), with the algorithm queries (one algorithm per direction, no workspace); and, on
 //! `agx_libs/kernels/dnn.mlir`, activations, add / set / scale tensor, softmax, 2-D pooling and batch normalization,
-//! forward and backward, for f32 tensors and for f16 and bf16 ones through packed f32 copies. Other functions return `CUDNN_STATUS_NOT_SUPPORTED`.
+//! forward and backward, for f32 tensors and for f16 and bf16 ones through packed f32 copies. The backend (graph)
+//! API runs graphs of convolutions, matmuls, pointwise operations and reductions (`imp/graph.rs`). Other functions return `CUDNN_STATUS_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
 
@@ -44,6 +45,13 @@ cuda_macros::cudnn9_function_declarations!(
     unimplemented_fn,
     implemented_fn
         <= [
+            cudnnBackendSetAttribute,
+            cudnnBackendInitialize,
+            cudnnBackendGetAttribute,
+            cudnnBackendFinalize,
+            cudnnBackendExecute,
+            cudnnBackendDestroyDescriptor,
+            cudnnBackendCreateDescriptor,
             cudnnActivationBackward,
             cudnnActivationForward,
             cudnnAddTensor,
@@ -1019,6 +1027,59 @@ mod imp {
         let (s, half) = problem(xd, dwd, cd, dyd)?;
         let elements = s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64;
         run(h, "bwd_filter", s, half, elements, x, dw, dy, alpha, beta)
+    }
+
+    // ---- the backend (graph) API
+
+    mod graph;
+
+    unsafe fn backend<'a>(d: cudnnBackendDescriptor_t) -> Result<&'a mut graph::Desc, cudnnError_t> {
+        (d as *mut graph::Desc).as_mut().ok_or(cudnnError_t::BAD_PARAM)
+    }
+
+    pub(crate) unsafe fn cudnnBackendCreateDescriptor(ty: cudnnBackendDescriptorType_t, d: *mut cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        let desc = graph::create(ty.0)?;
+        out(d, Box::into_raw(desc) as cudnnBackendDescriptor_t)
+    }
+
+    pub(crate) unsafe fn cudnnBackendDestroyDescriptor(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        if !d.is_null() {
+            drop(Box::from_raw(d as *mut graph::Desc));
+        }
+        Ok(())
+    }
+
+    pub(crate) unsafe fn cudnnBackendInitialize(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        backend(d).map(|_| ())
+    }
+
+    pub(crate) unsafe fn cudnnBackendFinalize(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        graph::finalize(backend(d)?)
+    }
+
+    pub(crate) unsafe fn cudnnBackendSetAttribute(
+        d: cudnnBackendDescriptor_t,
+        name: cudnnBackendAttributeName_t,
+        ty: cudnnBackendAttributeType_t,
+        count: i64,
+        data: *const c_void,
+    ) -> cudnnStatus_t {
+        graph::set_attribute(backend(d)?, name.0, ty.0, count, data)
+    }
+
+    pub(crate) unsafe fn cudnnBackendGetAttribute(
+        d: cudnnBackendDescriptor_t,
+        name: cudnnBackendAttributeName_t,
+        ty: cudnnBackendAttributeType_t,
+        requested: i64,
+        count: *mut i64,
+        data: *mut c_void,
+    ) -> cudnnStatus_t {
+        graph::get_attribute(backend(d)?, name.0, ty.0, requested, count, data)
+    }
+
+    pub(crate) unsafe fn cudnnBackendExecute(h: cudnnHandle_t, plan: cudnnBackendDescriptor_t, pack: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        graph::execute(h, backend(plan)?, backend(pack)?)
     }
 
     // ---- pointwise, softmax, pooling and batch normalization (agx_libs/kernels/dnn.mlir), f32 tensors
