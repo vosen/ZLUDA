@@ -5345,6 +5345,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_nccl_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_precompile"
 version = "0.0.0"
 dependencies = [

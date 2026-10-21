@@ -1,0 +1,18 @@
+[package]
+name = "zluda_nccl_agx"
+version = "0.0.0"
+edition = "2021"
+description = "NCCL for one Apple GPU (Asahi Linux) for zluda_agx: single-rank communicators"
+
+[lib]
+name = "nccl_agx"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+agx_libs = { path = "../agx_libs" }
+cuda_types = { path = "../cuda_types", default-features = false }
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = ["libnccl.so", "libnccl.so.2"]

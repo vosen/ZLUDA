@@ -50,6 +50,7 @@ members = [
     "zluda_rand_agx",
     "zluda_solver_agx",
     "zluda_rtc_agx",
+    "zluda_nccl_agx",
     "zluda_precompile",
     "zluda_redirect",
     "zluda_server_common",
