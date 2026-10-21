@@ -988,6 +988,241 @@ def case_level3(a, obj, tmp, what, opts, rnd):
     return bad
 
 
+# ---- complex BLAS (blasc.mlir; BT selects the C kernels or their f64 Z copies)
+
+def crand(n, rnd):
+    zs = [complex(rnd.uniform(-1, 1), rnd.uniform(-1, 1)) for _ in range(n)]
+    re = rounded(interleave(zs), BT)
+    return [complex(re[2 * i], re[2 * i + 1]) for i in range(n)]
+
+
+def cpack(zs):
+    return pack(interleave(zs), BT)
+
+
+def cunpack(b):
+    v = unpack(b, BT)
+    return [complex(v[2 * i], v[2 * i + 1]) for i in range(len(v) // 2)]
+
+
+def cclose(got, want, idx, tol):
+    bad = []
+    for i in idx:
+        if abs(got[i] - want[i]) > tol * (1 + abs(want[i])):
+            bad.append((i, got[i], want[i]))
+    return bad
+
+
+def cop(A, r, c, ld, op):
+    if op == 0:
+        return A[r + c * ld]
+    v = A[c + r * ld]
+    return v.conjugate() if op == 2 else v
+
+
+def cherm(A, r, c, ld, upper, herm):
+    inside = r <= c if upper else r >= c
+    if inside:
+        v = A[r + c * ld]
+    else:
+        v = A[c + r * ld]
+        if herm:
+            v = v.conjugate()
+    if herm and r == c:
+        v = complex(v.real, 0)
+    return v
+
+
+def cs(z):
+    return [(S(), z.real), (S(), z.imag)]
+
+
+def case_cblas(a, obj, tmp, what, o, rnd):
+    alpha, beta = complex(1.5, -0.5), complex(0.5, 0.25) if o.get("beta", True) else 0j
+    tol = TOL(2e-5)
+    if what == "gemm":
+        m, n, k = 5, 4, 3
+        opa, opb = o["opa"], o["opb"]
+        lda, ldb, ldc = (k if opa else m) + 1, (n if opb else k) + 2, m + 1
+        A, B, C = crand(lda * (m if opa else k), rnd), crand(ldb * (k if opb else n), rnd), crand(ldc * n, rnd)
+        (got,) = run(a, obj, K("agx_cgemm"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", m), ("i64", n),
+                                              ("i64", k), ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", opa), ("i64", opb)]
+                     + cs(alpha) + cs(beta), (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = alpha * sum(cop(A, i, l, lda, opa) * cop(B, l, j, ldb, opb) for l in range(k)) + beta * C[i + j * ldc]
+        return cclose(cunpack(got), want, range(len(C)), tol)
+    if what == "hemm":
+        m, n = 5, 4
+        right, upper, herm = o["right"], o["upper"], o["herm"]
+        na = n if right else m
+        lda, ldb, ldc = na + 1, m + 2, m + 1
+        A, B, C = crand(lda * na, rnd), crand(ldb * n, rnd), crand(ldc * n, rnd)
+        (got,) = run(a, obj, K("agx_chemm"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", m), ("i64", n),
+                                              ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", right), ("i64", upper), ("i64", herm)]
+                     + cs(alpha) + cs(beta), (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                if right:
+                    v = sum(B[i + l * ldb] * cherm(A, l, j, lda, upper, herm) for l in range(n))
+                else:
+                    v = sum(cherm(A, i, l, lda, upper, herm) * B[l + j * ldb] for l in range(m))
+                want[i + j * ldc] = alpha * v + beta * C[i + j * ldc]
+        return cclose(cunpack(got), want, range(len(C)), tol)
+    if what == "rankk":
+        n, k = 5, 3
+        upper, op, herm, two = o["upper"], o["op"], o["herm"], o["two"]
+        a1 = complex(alpha.real, 0) if herm and not two else alpha
+        a2 = (alpha.conjugate() if herm else alpha) if two else 0j
+        b = complex(beta.real, 0) if herm else beta
+        lda, ldb, ldc = (k if op else n) + 1, (k if op else n) + 2, n + 1
+        A, B, C = crand(lda * (n if op else k), rnd), crand(ldb * (n if op else k), rnd), crand(ldc * n, rnd)
+        if not two:
+            B, ldb = A, lda
+        (got,) = run(a, obj, K("agx_crankk"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", n), ("i64", k),
+                                               ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", upper), ("i64", op), ("i64", herm),
+                                               ("i64", two)] + cs(a1) + cs(a2) + cs(b), (16, 8), (16, 4), tmp)
+        cj = (lambda z: z.conjugate()) if herm else (lambda z: z)
+        want = list(C)
+        for j in range(n):
+            for i in range(n):
+                if (i <= j) if upper else (i >= j):
+                    v = a1 * sum(cop(A, i, l, lda, op) * cj(cop(B, j, l, ldb, op)) for l in range(k))
+                    if two:
+                        v += a2 * sum(cop(B, i, l, ldb, op) * cj(cop(A, j, l, lda, op)) for l in range(k))
+                    old = C[i + j * ldc]
+                    if herm and i == j:
+                        old = complex(old.real, 0)
+                    r = v + b * old
+                    want[i + j * ldc] = complex(r.real, 0) if herm and i == j else r
+        return cclose(cunpack(got), want, range(len(C)), tol)
+    if what == "gemv":
+        m, n, op, hmode, incx, incy = 6, 4, o["op"], o.get("hmode", 0), o["incx"], o["incy"]
+        if hmode:
+            m = n
+        lda = m + 2
+        ylen, xlen = (n, n) if hmode else ((n, m) if op else (m, n))
+        A = crand(lda * n, rnd)
+        x, y = crand(1 + (xlen - 1) * abs(incx), rnd), crand(1 + (ylen - 1) * abs(incy), rnd)
+        (got,) = run(a, obj, K("agx_cgemv"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True), ("i64", m), ("i64", n),
+                                              ("i64", lda), ("i64", incx), ("i64", incy), ("i64", op), ("i64", hmode)]
+                     + cs(alpha) + cs(beta), (32, 1), (32, 1), tmp)
+        want = list(y)
+        for i in range(ylen):
+            elem = (lambda l: cherm(A, i, l, lda, hmode == 1, True)) if hmode else (lambda l: cop(A, i, l, lda, op))
+            v = sum(elem(l) * x[blas_pos(l, xlen, incx)] for l in range(xlen))
+            p = blas_pos(i, ylen, incy)
+            want[p] = alpha * v + beta * y[p]
+        return cclose(cunpack(got), want, range(len(y)), tol)
+    if what == "ger":
+        m, n, conj, tri, herm, two, incx, incy = 5, 5 if o["tri"] else 4, o["conj"], o["tri"], o["herm"], o["two"], o["incx"], o["incy"]
+        lda = m + 1
+        A = crand(lda * n, rnd)
+        x = crand(1 + (max(m, n) - 1) * abs(incx), rnd)
+        y = crand(1 + (max(m, n) - 1) * abs(incy), rnd)
+        a1 = complex(alpha.real, 0) if herm and not two else alpha
+        a2 = alpha.conjugate() if two else 0j
+        if herm and not two:
+            y, incy = x, incx
+        (got,) = run(a, obj, K("agx_cger"), [("buf", cpack(A), True), ("buf", cpack(x)), ("buf", cpack(y)), ("i64", m), ("i64", n),
+                                             ("i64", lda), ("i64", incx), ("i64", incy), ("i64", conj), ("i64", tri), ("i64", herm)]
+                     + cs(a1) + cs(a2), (16, 8), (16, 4), tmp)
+        cj = (lambda z: z.conjugate()) if conj else (lambda z: z)
+        want = list(A)
+        for j in range(n):
+            for i in range(m):
+                if tri == 1 and i > j or tri == 2 and i < j:
+                    continue
+                v = a1 * x[blas_pos(i, m, incx)] * cj(y[blas_pos(j, n, incy)])
+                if two:
+                    v += a2 * y[blas_pos(i, m, incy)] * cj(x[blas_pos(j, n, incx)])
+                r = A[i + j * lda] + v
+                want[i + j * lda] = complex(r.real, 0) if herm and i == j else r
+        return cclose(cunpack(got), want, range(len(A)), tol)
+    if what == "vec":
+        op, n, incx, incy = o["op"], 9, o["incx"], o["incy"]
+        x, y = crand(1 + (n - 1) * abs(incx), rnd), crand(1 + (n - 1) * abs(incy), rnd)
+        gx, gy = run(a, obj, K("agx_cblas_vec"), [("buf", cpack(x), True), ("buf", cpack(y), True), ("i64", n), ("i64", incx),
+                                                 ("i64", incy), ("i64", op)] + cs(alpha), (32, 1), (32, 1), tmp)
+        wx, wy = list(x), list(y)
+        for i in range(n):
+            px, py = blas_pos(i, n, incx), blas_pos(i, n, incy)
+            if op == 0:
+                wy[py] = alpha * x[px] + y[py]
+            elif op == 1:
+                wx[px] = alpha * x[px]
+            elif op == 2:
+                wy[py] = x[px]
+            else:
+                wx[px], wy[py] = y[py], x[px]
+        return cclose(cunpack(gx), wx, range(len(x)), tol) + cclose(cunpack(gy), wy, range(len(y)), tol)
+    # reductions
+    op, n, incx, incy, threads = o["op"], o["n"], o["incx"], o["incy"], o["threads"]
+    x = crand(1 + max(n - 1, 0) * abs(incx), rnd)
+    y = crand(1 + max(n - 1, 0) * abs(incy), rnd)
+    if op >= 4 and n > 3:
+        x[blas_pos(n - 2, n, incx)] = complex(3.0, -2.0)   # the extreme twice: the first index wins
+        x[blas_pos(n - 1, n, incx)] = complex(-2.0, 3.0)
+    width = 16 if BT == "d" else 8
+    (part,) = run(a, obj, K("agx_cblas_reduce"), [("buf", cpack(x)), ("buf", cpack(y)), ("buf", bytes(width * threads), True),
+                                                 ("i64", n), ("i64", incx), ("i64", incy), ("i64", op), ("i64", threads)],
+                  (-(-threads // 32) * 32, 1), (32, 1), tmp)
+    (res,) = run(a, obj, K("agx_cblas_reduce_final"), [("buf", part), ("buf", bytes(width), True), ("i64", threads), ("i64", op)],
+                 (32, 1), (32, 1), tmp)
+    xs = [x[blas_pos(i, n, incx)] for i in range(n)]
+    if op >= 4:
+        got = unpack(res, "q" if BT == "d" else "i")[0]
+        mags = [abs(v.real) + abs(v.imag) for v in xs]
+        want = 0 if n == 0 else 1 + mags.index(max(mags) if op == 4 else min(mags))
+        return [] if got == want else [("index", got, want)]
+    got = cunpack(res)[0]
+    if op in (0, 1):
+        want = sum((v.conjugate() if op == 1 else v) * y[blas_pos(i, n, incy)] for i, v in enumerate(xs))
+    elif op == 2:
+        want = complex(sum(abs(v.real) + abs(v.imag) for v in xs), 0)
+    else:
+        want = complex(math.sqrt(sum(v.real ** 2 + v.imag ** 2 for v in xs)), 0)
+    return cclose([got], [want], [0], tol)
+
+
+def cblas_cases(a, obj, tmp, rnd):
+    cases = []
+    for opa in (0, 1, 2):
+        for opb in (0, 1, 2):
+            cases.append(("cgemm op %d,%d" % (opa, opb), lambda o={"opa": opa, "opb": opb}: case_cblas(a, obj, tmp, "gemm", o, rnd)))
+    cases.append(("cgemm beta 0", lambda: case_cblas(a, obj, tmp, "gemm", {"opa": 2, "opb": 0, "beta": False}, rnd)))
+    for right in (0, 1):
+        for upper in (0, 1):
+            for herm in (0, 1):
+                cases.append(("c%smm right %d upper %d" % ("he" if herm else "sy", right, upper),
+                              lambda o={"right": right, "upper": upper, "herm": herm}: case_cblas(a, obj, tmp, "hemm", o, rnd)))
+    for upper in (0, 1):
+        for name, op, herm, two in (("herk N", 0, 1, 0), ("herk C", 2, 1, 0), ("syrk N", 0, 0, 0), ("syrk T", 1, 0, 0),
+                                    ("her2k N", 0, 1, 1), ("her2k C", 2, 1, 1), ("syr2k N", 0, 0, 1), ("syr2k T", 1, 0, 1)):
+            cases.append(("c%s upper %d" % (name, upper),
+                          lambda o={"upper": upper, "op": op, "herm": herm, "two": two}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
+    for op in (0, 1, 2):
+        cases.append(("cgemv op %d inc -2,3" % op, lambda o={"op": op, "incx": -2, "incy": 3}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
+    for hmode in (1, 2):
+        cases.append(("chemv %s inc 1,-1" % ("upper" if hmode == 1 else "lower"),
+                      lambda o={"op": 0, "hmode": hmode, "incx": 1, "incy": -1}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
+    for name, conj, tri, herm, two in (("geru", 0, 0, 0, 0), ("gerc", 1, 0, 0, 0), ("her upper", 1, 1, 1, 0),
+                                       ("her lower", 1, 2, 1, 0), ("her2 upper", 1, 1, 1, 1), ("her2 lower", 1, 2, 1, 1)):
+        cases.append(("c%s inc 2,-1" % name, lambda o={"conj": conj, "tri": tri, "herm": herm, "two": two, "incx": 2, "incy": -1}:
+                      case_cblas(a, obj, tmp, "ger", o, rnd)))
+    for op, name in ((0, "axpy"), (1, "scal"), (2, "copy"), (3, "swap")):
+        cases.append(("c%s inc 2,-3" % name, lambda o={"op": op, "incx": 2, "incy": -3}: case_cblas(a, obj, tmp, "vec", o, rnd)))
+    for op, name in ((0, "dotu"), (1, "dotc"), (2, "asum"), (3, "nrm2"), (4, "amax"), (5, "amin")):
+        for n, incx, incy, threads in ((40, 1, 1, 7), (9, -2, 3, 4), (0, 1, 1, 2)):
+            cases.append(("c%s n=%d inc %d,%d threads %d" % (name, n, incx, incy, threads),
+                          lambda o={"op": op, "n": n, "incx": incx, "incy": incy, "threads": threads}: case_cblas(a, obj, tmp, "reduce", o, rnd)))
+    if "agx_cgemm_f64" in kernel_records(obj, a, tmp):
+        cases += [("z" + label[1:], lambda f=f: with_t("d", f)) for label, f in list(cases)]
+    return cases
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agx-run", required=True)
@@ -1075,6 +1310,8 @@ def main():
                 if "agx_blas_vec_f64" in records:
                     # the same cases on the f64 copies
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
+            elif "agx_cgemm" in records:
+                cases = cblas_cases(a, obj, tmp, rnd)
             elif "agx_csr_spmv_i32" in records:
                 cases = []
                 for I in ("i32", "i64"):

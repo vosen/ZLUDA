@@ -21,6 +21,8 @@ pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 pub static DNN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn.agxfat"));
 /// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
 pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
+/// The complex BLAS kernels of zluda_blas_agx (`kernels/blasc.mlir`, with f64 copies for the Z routines).
+pub static BLASC: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blasc.agxfat"));
 /// The sparse kernels of zluda_sparse_agx (`kernels/sparse.mlir`).
 pub static SPARSE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sparse.agxfat"));
 

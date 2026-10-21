@@ -55,6 +55,7 @@ fn main() {
     println!("cargo:rerun-if-changed=kernels/fft.mlir");
     println!("cargo:rerun-if-changed=kernels/sparse.mlir");
     println!("cargo:rerun-if-changed=kernels/blas.mlir");
+    println!("cargo:rerun-if-changed=kernels/blasc.mlir");
     println!("cargo:rerun-if-changed=kernels/dnn.mlir");
     let build = PathBuf::from(env::var_os("ZLUDA_LLVM_BUILD_DIR").expect(
         "agx_libs compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
@@ -64,12 +65,12 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    for (name, wide) in [("fft", false), ("blas", true)] {
+    for (name, wide) in [("fft", false), ("blas", true), ("blasc", true)] {
         with_f64_copy(Path::new(&format!("kernels/{name}.mlir")), &out_dir.join(format!("{name}.mlir")), wide);
     }
-    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "dnn"] {
+    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if matches!(name, "fft" | "blas") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
+        let src = if matches!(name, "fft" | "blas" | "blasc") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
         let status = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
