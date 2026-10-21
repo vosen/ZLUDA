@@ -237,9 +237,9 @@ fn zoc_path() -> std::path::PathBuf {
     "zoc".into()
 }
 
-/// `ZLUDA_AGX_MESA_ISA=1`: compile only to the instructions Mesa's asahi compiler emits (zoc --mesa-isa).
-pub(crate) fn mesa_isa() -> bool {
-    std::env::var("ZLUDA_AGX_MESA_ISA").is_ok_and(|v| !v.is_empty() && v != "0")
+/// `ZLUDA_AGX_STRICT=1`: compile only to the instructions Mesa's asahi compiler emits (zoc --agx-strict).
+pub(crate) fn agx_strict() -> bool {
+    std::env::var("ZLUDA_AGX_STRICT").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
@@ -264,13 +264,13 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         joined = sources.iter().flat_map(|s| (s.len() as u64).to_le_bytes().into_iter().chain(s.iter().copied())).collect::<Vec<u8>>();
         &joined
     };
-    let mesa = mesa_isa();
+    let mesa = agx_strict();
     let mut options: Vec<&str> = Vec::new();
     if sources.len() > 1 {
         options.push("link");
     }
     if mesa {
-        options.push("mesa-isa");
+        options.push("agx-strict");
     }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
@@ -283,7 +283,7 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         }
         let out = std::process::Command::new(&zoc)
             .args(["--target", "agx", "--arch", cpu])
-            .args(mesa.then_some("--mesa-isa"))
+            .args(mesa.then_some("--agx-strict"))
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -585,10 +585,10 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             unpacked = ptx_in_fatbin(bytes)?;
             &unpacked[..unpacked.len() - 1]
         } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
-            // a fat AGX object (library kernels): the object for this device's chip, in Mesa ISA mode its
-            // "+mesa-isa" build
+            // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
+            // "+agx-strict" build
             let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
-            let entry = if mesa_isa() { format!("{cpu}+mesa-isa") } else { cpu.clone() };
+            let entry = if agx_strict() { format!("{cpu}+agx-strict") } else { cpu.clone() };
             module::fat_object_entry(fat, &entry).map_err(|e| {
                 if crate::log_enabled() {
                     eprintln!("[zluda_agx] {}", e.0);

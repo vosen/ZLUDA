@@ -42,18 +42,18 @@ pub const AGX_DEFAULT_CPU: &str = "agx-g14g";
 /// differs.
 pub const AGX_STRICT_FP_FEATURES: &CStr = c"+ieee-fp32,+canonical-nan";
 
-/// Target feature of the Mesa ISA mode: the backend emits only the
+/// Target feature of the strict mode: the backend emits only the
 /// instruction forms Mesa's asahi compiler emits for the same GPU (G13 and
 /// G14), and reports any other.
-pub const AGX_MESA_ISA_FEATURE: &str = "+mesa-isa";
+pub const AGX_STRICT_FEATURE: &str = "+agx-strict";
 
 /// Code generation choices beyond the processor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AgxOptions {
     /// Exact PTX floating point semantics (`AGX_STRICT_FP_FEATURES`).
     pub strict_fp: bool,
-    /// Only instructions Mesa emits (`AGX_MESA_ISA_FEATURE`).
-    pub mesa_isa: bool,
+    /// Only instructions Mesa emits (`AGX_STRICT_FEATURE`).
+    pub agx_strict: bool,
 }
 
 impl AgxOptions {
@@ -63,8 +63,8 @@ impl AgxOptions {
         if self.strict_fp {
             f.push(AGX_STRICT_FP_FEATURES.to_str().unwrap());
         }
-        if self.mesa_isa {
-            f.push(AGX_MESA_ISA_FEATURE);
+        if self.agx_strict {
+            f.push(AGX_STRICT_FEATURE);
         }
         f.join(",")
     }

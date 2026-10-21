@@ -15,7 +15,7 @@ fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilati
 fn compile_with(
     ptx: &str,
     cpu: &str,
-    mesa_isa: bool,
+    agx_strict: bool,
 ) -> Result<llvm_zluda::compile_agx::AgxCompilation, String> {
     let ast = ast::parse_module_checked(ptx).map_err(|e| format!("parse: {e:?}"))?;
     let attributes = pass::Attributes {
@@ -27,7 +27,7 @@ fn compile_with(
     llvm_zluda::compile_agx(
         &module.context,
         cpu,
-        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, mesa_isa },
+        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, agx_strict },
         module.llvm_ir,
         impl_ir,
         None,
@@ -135,10 +135,10 @@ fn spirv_run_kernels_compile() {
     assert!(missing.is_empty(), "required kernels failed: {missing:?}");
 }
 
-/// In Mesa ISA mode (`zoc --mesa-isa`) the backend reports any instruction that Mesa's asahi compiler would not
+/// In strict mode (`zoc --agx-strict`) the backend reports any instruction that Mesa's asahi compiler would not
 /// emit: every run test that compiles must also compile in that mode, for M1 and M2.
 #[test]
-fn spirv_run_kernels_compile_mesa_isa() {
+fn spirv_run_kernels_compile_agx_strict() {
     let mut entries: Vec<_> = std::fs::read_dir(spirv_run_dir())
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -163,7 +163,7 @@ fn spirv_run_kernels_compile_mesa_isa() {
             }
         }
     }
-    eprintln!("AGX Mesa ISA mode: {} of {checked} compilations", checked - failures.len());
+    eprintln!("AGX strict mode: {} of {checked} compilations", checked - failures.len());
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
