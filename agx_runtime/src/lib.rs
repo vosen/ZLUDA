@@ -491,6 +491,11 @@ pub struct Timing {
 /// Number of commands whose timestamps a queue keeps.
 pub const TIMESTAMP_SLOTS: u64 = PAGE / 16;
 
+/// Whether the timestamps of a signalled command say it faulted: the firmware writes none for a faulted command.
+fn job_faulted((start, end): (u64, u64)) -> bool {
+    start == 0 && end == 0
+}
+
 /// A point on a queue's timeline: signalled when the command submitted with it and every earlier command of the
 /// queue have finished. CUDA events and stream waits are built on these.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -641,6 +646,11 @@ impl Queue {
         if status < 0 {
             return Err(io::Error::other(error::GpuError { fence_status: status }));
         }
+        // The firmware signals a faulted compute command with success but writes neither of its timestamps (the slot
+        // was zeroed at submit), so a command that ended at time 0 failed.
+        if self.timing(fence).is_some_and(job_faulted) {
+            return Err(io::Error::other(error::GpuError { fence_status: -libc::EFAULT }));
+        }
         Ok(())
     }
 
@@ -787,6 +797,14 @@ impl Drop for Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unstamped_commands_faulted() {
+        assert!(job_faulted((0, 0)));
+        assert!(!job_faulted((5, 9)));
+        let e = io::Error::other(error::GpuError { fence_status: -libc::EFAULT });
+        assert_eq!(error::cuda_error(&e), 719);
+    }
 
     #[test]
     fn range_allocator_reuses_and_merges_freed_ranges() {

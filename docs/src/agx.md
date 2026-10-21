@@ -683,7 +683,10 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   the object's `.agx.kernels` section. Most parameters travel in uniform
   registers; the others go in a parameter block.
 * Streams are in-order queues on timeline syncobjs. Events record a queue's
-  last fence and time with the firmware's command timestamps.
+  last fence and time with the firmware's command timestamps. The firmware
+  signals a faulted compute command with success but writes neither timestamp,
+  so a command whose timestamps are both still 0 is returned as
+  `CUDA_ERROR_LAUNCH_FAILED`.
 * At every synchronisation, device `printf` output is printed, and a failed
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
 * There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
