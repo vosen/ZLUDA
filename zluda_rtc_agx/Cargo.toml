@@ -1,0 +1,17 @@
+[package]
+name = "zluda_rtc_agx"
+version = "0.0.0"
+edition = "2021"
+description = "NVRTC and nvJitLink for zluda_agx (Asahi Linux): CUDA C++ to PTX with clang, linking through the driver"
+
+[lib]
+name = "nvrtc_agx"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+libloading = "0.8"
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = ["libnvrtc.so", "libnvrtc.so.12", "libnvJitLink.so", "libnvJitLink.so.12"]

@@ -3,6 +3,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::contexts;
 use agx_runtime::cache::{Cache, Key};
 use agx_runtime::context::Context;
 use agx_runtime::{error, module, Fence, LoadedModule, Queue};
@@ -45,7 +46,8 @@ pub(crate) struct Driver {
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
     events: HashMap<usize, Event>,
-    next_handle: usize,
+    /// cuCtxSetLimit values of this context.
+    limits: HashMap<u32, usize>,
     /// Streams being captured (0 is the default stream) and their operations so far.
     capturing: HashMap<usize, Vec<Op>>,
     /// Graphs and their instantiations: both are operation lists.
@@ -55,7 +57,73 @@ pub(crate) struct Driver {
     host_allocs: HashMap<u64, c_uint>,
     /// cuMemAllocManaged allocations.
     managed: std::collections::HashSet<u64>,
+    /// An error that makes the context unusable until it is destroyed, as in CUDA: a failed device assert
+    /// (CUDA_ERROR_ASSERT). Every call returns it meanwhile.
+    sticky: Option<CUerror>,
+    /// The launches whose commands have not been seen to finish, oldest first: what a failed command was.
+    launches: std::collections::VecDeque<LaunchRecord>,
+    /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
+    /// followed: the launches a reported bad access may come from.
+    checked_launches: HashMap<(usize, String), (String, u32)>,
 }
+
+/// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
+#[derive(Clone, Debug)]
+pub(crate) struct LaunchRecord {
+    pub fence: Fence,
+    pub stream: usize,
+    pub module: usize,
+    pub kernel: String,
+    pub grid: [u32; 3],
+    pub block: [u32; 3],
+    pub shared: u32,
+    pub params: Vec<Vec<u8>>,
+}
+
+impl LaunchRecord {
+    pub fn describe(&self) -> String {
+        let args: Vec<String> = self
+            .params
+            .iter()
+            .map(|p| match p.len() {
+                8 => format!("{:#x}", u64::from_le_bytes(p[..].try_into().unwrap())),
+                4 => format!("{:#x}", u32::from_le_bytes(p[..].try_into().unwrap())),
+                _ => p.iter().map(|b| format!("{b:02x}")).collect(),
+            })
+            .collect();
+        format!(
+            "kernel {} grid ({}, {}, {}) block ({}, {}, {}) shared {} bytes, stream {}, command {}, arguments [{}]",
+            self.kernel,
+            self.grid[0],
+            self.grid[1],
+            self.grid[2],
+            self.block[0],
+            self.block[1],
+            self.block[2],
+            self.shared,
+            self.stream,
+            self.fence.point,
+            args.join(", ")
+        )
+    }
+}
+
+fn drop_finished(launches: &mut std::collections::VecDeque<LaunchRecord>, syncobj: u32, point: u64) {
+    launches.retain(|r| !(r.fence.syncobj == syncobj && r.fence.point <= point));
+}
+
+/// Nanoseconds the GPU spent on this process's finished launches, by their firmware timestamps.
+pub(crate) static GPU_BUSY_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `GPU_BUSY_NS` for ZLUDA's NVML (`zluda_ml_agx`), which finds it in the process by name: the Asahi driver exposes
+/// no device-wide utilisation to userspace (ptx-re-blockers B25).
+#[no_mangle]
+pub extern "C" fn zluda_agx_gpu_busy_ns() -> u64 {
+    GPU_BUSY_NS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// At most this many launch records are kept; older ones are dropped.
+const MAX_LAUNCH_RECORDS: usize = 1024;
 
 fn stream_key(s: CUstream) -> usize {
     if (s.0 as usize) <= 2 {
@@ -80,7 +148,12 @@ impl Driver {
     fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
         let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let threads = block.iter().map(|&b| b as u64).product::<u64>();
-        if threads == 0 {
+        let p = &self.ctx.props;
+        // the launch words hold a 32-bit thread count per dimension
+        let too_large = (0..3).any(|i| {
+            block[i] > p.max_block_dim[i] || grid[i] > p.max_grid_dim[i] || grid[i] as u64 * block[i] as u64 > u32::MAX as u64
+        });
+        if threads == 0 || grid.contains(&0) || threads > p.max_threads_per_block as u64 || too_large {
             return Err(CUerror::INVALID_VALUE);
         }
         let k = &self.modules[&m].module.kernels[&name];
@@ -92,6 +165,14 @@ impl Driver {
         if (0..3).any(|i| grid[i] % k.cluster[i] != 0) {
             return Err(CUerror::INVALID_CLUSTER_SIZE);
         }
+        let bounds = match k.checked {
+            Some(_) => {
+                let pointers = module::checked_pointers(k, args).map_err(|_| CUerror::INVALID_VALUE)?;
+                pointers.iter().map(|&p| self.allocation_bounds(p)).collect()
+            }
+            None => Vec::new(),
+        };
+        let allocations = if k.checked.as_ref().is_some_and(|c| c.table.is_some()) { self.live_allocations() } else { Vec::new() };
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
         let (queue, waits) = if sh <= 2 {
@@ -101,10 +182,123 @@ impl Driver {
             (&mut s.queue, &mut s.waits)
         };
         let w = std::mem::take(waits);
-        modules[&m]
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &w)
-            .map(|_| ())
-            .map_err(from_io)
+        let fence = modules[&m]
+            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
+            .map_err(from_io)?;
+        if self.launches.len() == MAX_LAUNCH_RECORDS {
+            self.launches.pop_front();
+        }
+        let record = LaunchRecord {
+            fence,
+            stream: sh,
+            module: m,
+            kernel: name,
+            grid,
+            block,
+            shared,
+            params: args.iter().map(|a| a.to_vec()).collect(),
+        };
+        if self.modules[&m].module.kernels[&record.kernel].checked.is_some() {
+            self.checked_launches.entry((m, record.kernel.clone())).or_insert_with(|| (record.describe(), 0)).1 += 1;
+        }
+        self.launches.push_back(record);
+        Ok(())
+    }
+
+    /// Every allocation a pointer can point into, for a checked kernel's allocation table: device memory and the
+    /// modules' global data buffers.
+    fn live_allocations(&self) -> Vec<(u64, u64)> {
+        let mut all = self.ctx.allocation_ranges();
+        all.extend(self.modules.values().filter_map(|m| m.globals_va().map(|va| (va, va + m.globals().len() as u64))));
+        all
+    }
+
+    /// `[lo, hi)` of the allocation `p` points into, for a checked kernel's bounds: device memory, or a module's
+    /// global data buffer (`cuModuleGetGlobal`); `lo = hi = p` (every access fails) if it points into neither.
+    fn allocation_bounds(&self, p: u64) -> (u64, u64) {
+        if let Some((start, size)) = self.ctx.address_range(p) {
+            return (start, start + size);
+        }
+        for m in self.modules.values() {
+            if let Some(va) = m.globals_va().filter(|&va| p >= va && p < va + m.globals().len() as u64) {
+                return (va, va + m.globals().len() as u64);
+            }
+        }
+        (p, p)
+    }
+
+    /// The CUDA error of a failed wait on the queue whose timeline is `syncobj`. A failed command is reported with
+    /// its launch record, and makes the context unusable (sticky), as in CUDA.
+    fn failed(&mut self, syncobj: u32, e: io::Error) -> CUerror {
+        let code = err(error::cuda_error(&e));
+        if let Some(point) = e.get_ref().and_then(|i| i.downcast_ref::<error::GpuError>()).and_then(|g| g.point) {
+            match self.launches.iter().find(|r| r.fence.syncobj == syncobj && r.fence.point == point) {
+                Some(r) => {
+                    eprintln!("zluda_agx: {e}: {}", r.describe());
+                    if let Some(dir) = std::env::var_os("ZLUDA_AGX_DUMP").filter(|d| !d.is_empty()) {
+                        match self.dump(r, &format!("{e}"), std::path::Path::new(&dir)) {
+                            Ok(at) => eprintln!("zluda_agx: launch saved to {} (replay.sh runs it in agx_run)", at.display()),
+                            Err(d) => eprintln!("zluda_agx: could not save the launch: {d}"),
+                        }
+                    }
+                }
+                None => eprintln!("zluda_agx: {e}: command {point}"),
+            }
+            self.sticky.get_or_insert(code);
+        }
+        code
+    }
+
+    /// Saves a failed launch under `dir/<pid>-<command>` for replaying it in the AGX Performance Simulator's
+    /// `agx_run`: the kernel's code, the launch's uniforms, and the current contents of the memory it can reach (the
+    /// allocations its pointer arguments point into, the module's global data, parameter block and error record),
+    /// with `replay.sh`. Memory is as the fault left it, not as the launch found it.
+    fn dump(&self, r: &LaunchRecord, error: &str, dir: &std::path::Path) -> io::Result<std::path::PathBuf> {
+        let m = &self.modules[&r.module];
+        let k = &m.module.kernels[&r.kernel];
+        let params: Vec<&[u8]> = r.params.iter().map(|p| &p[..]).collect();
+        let pointers = module::checked_pointers(k, &params).unwrap_or_default();
+        let bounds: Vec<(u64, u64)> = pointers.iter().map(|&p| self.allocation_bounds(p)).collect();
+        // the parameter block goes where no allocation is
+        const PARAM_BLOCK: u64 = 0x7f_0000_0000;
+        const TABLE: u64 = 0x7e_0000_0000;
+        let allocations = self.live_allocations();
+        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
+        let mut regions = replay.regions.clone();
+        // every allocation an 8-byte word of the arguments points into
+        let words = r.params.iter().flat_map(|p| p.chunks_exact(8)).chain(replay.regions.first().filter(|(va, _)| *va == PARAM_BLOCK).into_iter().flat_map(|(_, b)| b.chunks_exact(8)));
+        for w in words {
+            if let Some((start, bytes)) = self.ctx.allocation(u64::from_le_bytes(w.try_into().unwrap())) {
+                if !regions.iter().any(|(va, _)| *va == start) {
+                    regions.push((start, bytes.to_vec()));
+                }
+            }
+        }
+        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
+        write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;
+        Ok(at)
+    }
+
+    /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
+    fn finished(&mut self, syncobj: u32, point: u64) {
+        // the GPU time of the launches that finished, from their firmware timestamps (NVML utilisation)
+        let freq = self.ctx.device.params.command_timestamp_frequency_hz.max(1) as u128;
+        let queue = if self.ctx.stream.last().syncobj == syncobj {
+            Some(&self.ctx.stream)
+        } else {
+            self.streams.values().map(|s| &s.queue).find(|q| q.last().syncobj == syncobj)
+        };
+        if let Some(q) = queue {
+            let busy: u64 = self
+                .launches
+                .iter()
+                .filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point)
+                .filter_map(|r| q.timing(r.fence))
+                .map(|(start, end)| end.saturating_sub(start))
+                .sum();
+            GPU_BUSY_NS.fetch_add((busy as u128 * 1_000_000_000 / freq) as u64, std::sync::atomic::Ordering::Relaxed);
+        }
+        drop_finished(&mut self.launches, syncobj, point);
     }
 
     fn run(&mut self, op: &Op, sh: usize) -> CUresult {
@@ -138,7 +332,42 @@ impl Driver {
 // The runtime objects use Rc internally; they are only reached through DRIVER's mutex.
 unsafe impl Send for Driver {}
 
-static DRIVER: Mutex<Option<Driver>> = Mutex::new(None);
+/// The live contexts; None before cuInit.
+static DRIVER: Mutex<Option<contexts::Contexts<Driver>>> = Mutex::new(None);
+
+/// Handles of contexts, modules, functions, streams, events and graphs, unique across contexts.
+fn new_handle() -> usize {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(16);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A context's state on a newly opened device and VM.
+fn new_driver() -> Result<Driver, CUerror> {
+    let ctx = open_context().map_err(|_| CUerror::NO_DEVICE)?;
+    Ok(Driver {
+        ctx,
+        default_waits: Vec::new(),
+        modules: HashMap::new(),
+        functions: HashMap::new(),
+        streams: HashMap::new(),
+        events: HashMap::new(),
+        limits: HashMap::new(),
+        capturing: HashMap::new(),
+        graphs: HashMap::new(),
+        execs: HashMap::new(),
+        host_allocs: HashMap::new(),
+        managed: Default::default(),
+        sticky: None,
+        launches: Default::default(),
+        checked_launches: Default::default(),
+    })
+}
+
+/// Runs `f` on the registry of contexts.
+fn with_contexts<T>(f: impl FnOnce(&mut contexts::Contexts<Driver>) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
+    f(g.as_mut().ok_or(CUerror::NOT_INITIALIZED)?)
+}
 
 fn err(code: u32) -> CUerror {
     CUerror(NonZeroU32::new(code).unwrap())
@@ -149,11 +378,18 @@ pub(crate) fn from_io(e: io::Error) -> CUerror {
 }
 
 pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
-    let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
-    match g.as_mut() {
-        Some(d) => f(d),
-        None => Err(CUerror::NOT_INITIALIZED),
-    }
+    with_sticky(|d| match d.sticky {
+        Some(e) => Err(e),
+        None => f(d),
+    })
+}
+
+/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context.
+pub(crate) fn with_sticky<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    with_contexts(|c| {
+        let h = c.current();
+        f(c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?)
+    })
 }
 
 /// The Asahi render node: `$ZLUDA_AGX_NODE`, or the first render node that answers the Asahi parameter query.
@@ -173,8 +409,7 @@ fn open_context() -> io::Result<Context> {
 
 impl Driver {
     fn handle(&mut self) -> usize {
-        self.next_handle += 1;
-        self.next_handle
+        new_handle()
     }
 
     /// The queue of a stream handle; 0 and the legacy / per-thread handles (1, 2) are the default stream.
@@ -189,7 +424,7 @@ impl Driver {
     /// Prints the device printf output of every module and reports a failed device assert.
     fn after_sync(&mut self) -> Result<(), CUerror> {
         let mut failed = false;
-        for m in self.modules.values_mut() {
+        for (h, m) in self.modules.iter_mut() {
             if let Some(out) = m.drain_printf(|a| self.ctx.read_c_string(a)) {
                 use std::io::Write;
                 let mut so = std::io::stdout().lock();
@@ -200,20 +435,86 @@ impl Driver {
                 let _ = so.flush();
             }
             failed |= m.take_assert_failure();
+            if let Some(e) = m.checked_error().filter(|_| self.sticky.is_none()) {
+                eprintln!("zluda_agx: {e}");
+                if let Some((first, n)) = self.checked_launches.get(&(*h, site_kernel(&e.site_text).to_string())) {
+                    match n {
+                        1 => eprintln!("  in {first}"),
+                        _ => eprintln!("  in one of {n} launches since the last synchronisation, the first {first}"),
+                    }
+                }
+                self.sticky = Some(if e.misaligned() { CUerror::MISALIGNED_ADDRESS } else { CUerror::ILLEGAL_ADDRESS });
+            }
         }
-        if failed {
-            Err(CUerror::ASSERT)
-        } else {
-            Ok(())
-        }
+        self.checked_launches.clear();
+        sticky_after_sync(&mut self.sticky, failed)
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
-        self.ctx.stream.synchronize().map_err(from_io)?;
-        for s in self.streams.values_mut() {
-            s.queue.synchronize().map_err(from_io)?;
+        let last = self.ctx.stream.last();
+        if let Err(e) = self.ctx.stream.synchronize() {
+            return Err(self.failed(last.syncobj, e));
+        }
+        self.finished(last.syncobj, last.point);
+        let keys: Vec<usize> = self.streams.keys().copied().collect();
+        for k in keys {
+            let q = &mut self.streams.get_mut(&k).unwrap().queue;
+            let last = q.last();
+            if let Err(e) = q.synchronize() {
+                return Err(self.failed(last.syncobj, e));
+            }
+            self.finished(last.syncobj, last.point);
         }
         self.after_sync()
+    }
+}
+
+/// Writes a launch for `agx_run` to the directory `at`: `code.bin`, region `i` of `regions` as `m<i>.bin` (listed in
+/// `regions.txt`), and `replay.sh`, which runs it (`$AGX_RUN` or `agx_run` on the PATH) and leaves each region's
+/// final contents in `m<i>.out`. `header` goes into the script as comments.
+fn write_dump(at: &std::path::Path, replay: &agx_runtime::Replay, regions: &[(u64, Vec<u8>)], header: &str) -> io::Result<()> {
+    std::fs::create_dir_all(at)?;
+    std::fs::write(at.join("code.bin"), &replay.code)?;
+    if let Some(object) = &replay.debug_object {
+        std::fs::write(at.join("module.o"), object)?;
+    }
+    let mut list = String::new();
+    for (i, (va, bytes)) in regions.iter().enumerate() {
+        std::fs::write(at.join(format!("m{i}.bin")), bytes)?;
+        list += &format!("m{i}.bin {va:#x} {}\n", bytes.len());
+    }
+    std::fs::write(at.join("regions.txt"), list)?;
+    let mut sh = String::from("#!/bin/sh\n");
+    for line in header.lines() {
+        sh += &format!("# {line}\n");
+    }
+    if replay.stack_bytes > 0 {
+        sh += &format!("# the kernel uses {} bytes of stack per thread\n", replay.stack_bytes);
+    }
+    let args = replay.agx_run_args(regions, "m");
+    sh += &format!("cd \"$(dirname \"$0\")\" && exec \"${{AGX_RUN:-agx_run}}\" {} \"$@\"\n", args.join(" "));
+    std::fs::write(at.join("replay.sh"), sh)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(at.join("replay.sh"), std::fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(())
+}
+
+/// The kernel of a check site: the function of its outermost frame (`<access> <size>\t<function> ...`).
+fn site_kernel(site_text: &str) -> &str {
+    site_text.split('\t').skip(1).last().and_then(|f| f.split(' ').next()).unwrap_or_default()
+}
+
+/// The result of a synchronisation: a failed device assert makes CUDA_ERROR_ASSERT sticky.
+fn sticky_after_sync(sticky: &mut Option<CUerror>, assert_failed: bool) -> Result<(), CUerror> {
+    if assert_failed && sticky.is_none() {
+        *sticky = Some(CUerror::ASSERT);
+    }
+    match *sticky {
+        Some(e) => Err(e),
+        None => Ok(()),
     }
 }
 
@@ -230,6 +531,23 @@ fn zoc_path() -> std::path::PathBuf {
         }
     }
     "zoc".into()
+}
+
+/// `ZLUDA_AGX_STRICT=1`: compile only to the instructions Mesa's asahi compiler emits (zoc --agx-strict).
+pub(crate) fn agx_strict() -> bool {
+    std::env::var("ZLUDA_AGX_STRICT").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
+/// `ZLUDA_AGX_CHECKED=1`: check every memory access of the kernels and report the first bad one with its source
+/// location (zoc --agx-checked), as compute-sanitizer's memcheck does.
+pub(crate) fn agx_checked() -> bool {
+    std::env::var("ZLUDA_AGX_CHECKED").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
+/// `ZLUDA_AGX_LINEINFO=1`: keep the PTX source positions as a line table in the objects (zoc --lineinfo), so that
+/// fault dumps replay with source lines (checked mode always has them).
+fn agx_lineinfo() -> bool {
+    std::env::var("ZLUDA_AGX_LINEINFO").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
@@ -254,8 +572,23 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         joined = sources.iter().flat_map(|s| (s.len() as u64).to_le_bytes().into_iter().chain(s.iter().copied())).collect::<Vec<u8>>();
         &joined
     };
-    let options: &[&str] = if sources.len() > 1 { &["link"] } else { &[] };
-    let key = Key { source, chip: cpu, compiler: &compiler, options };
+    let mesa = agx_strict();
+    let mut options: Vec<&str> = Vec::new();
+    if sources.len() > 1 {
+        options.push("link");
+    }
+    if mesa {
+        options.push("agx-strict");
+    }
+    let checked = agx_checked();
+    if checked {
+        options.push("agx-checked");
+    }
+    let lineinfo = agx_lineinfo() && !checked;
+    if lineinfo {
+        options.push("lineinfo");
+    }
+    let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
         let mut paths = Vec::new();
@@ -265,7 +598,11 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
             paths.push(src);
         }
         let out = std::process::Command::new(&zoc)
-            .args(["--target", "agx", "--arch", cpu, "--output-dir"])
+            .args(["--target", "agx", "--arch", cpu])
+            .args(mesa.then_some("--agx-strict"))
+            .args(checked.then_some("--agx-checked"))
+            .args(lineinfo.then_some("--lineinfo"))
+            .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
             .output()
@@ -340,21 +677,7 @@ pub(crate) unsafe fn out<T>(p: *mut T, v: T) -> CUresult {
 pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
     let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     if g.is_none() {
-        let ctx = open_context().map_err(|_| CUerror::NO_DEVICE)?;
-        *g = Some(Driver {
-            ctx,
-            default_waits: Vec::new(),
-            modules: HashMap::new(),
-            functions: HashMap::new(),
-            streams: HashMap::new(),
-            events: HashMap::new(),
-            next_handle: 16,
-            capturing: HashMap::new(),
-            graphs: HashMap::new(),
-            execs: HashMap::new(),
-            host_allocs: HashMap::new(),
-            managed: Default::default(),
-        });
+        *g = Some(contexts::Contexts::new(new_handle(), new_driver()?));
     }
     Ok(())
 }
@@ -439,7 +762,10 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
             A::CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY | A::CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY => 1,
             A::CU_DEVICE_ATTRIBUTE_CONCURRENT_MANAGED_ACCESS | A::CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS => 0,
             A::CU_DEVICE_ATTRIBUTE_CONCURRENT_KERNELS => 1,
-            A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 1,
+            // grids up to the co-resident limit (B5); thread block clusters as compiled (B28)
+            A::CU_DEVICE_ATTRIBUTE_COOPERATIVE_LAUNCH | A::CU_DEVICE_ATTRIBUTE_CLUSTER_LAUNCH => 1,
+            // no run time limit on kernels (ptx-re-blockers B6)
+            A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 0,
             A::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY => 65536,
             A::CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT => 256,
             _ => 0,
@@ -448,39 +774,87 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
     out(pi, v)
 }
 
-const CTX: usize = 1;
-
 pub(crate) unsafe fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
     check_device(dev)?;
-    with(|_| Ok(()))?;
-    out(pctx, CUcontext(CTX as *mut _))
+    let h = with_contexts(|c| Ok(c.retain_primary()))?;
+    out(pctx, CUcontext(h as *mut _))
 }
 
+/// The primary context stays alive at no retains (the CUDA runtime retains it again before using it); its
+/// resources are freed by cuDevicePrimaryCtxReset.
 pub(crate) unsafe fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
-    check_device(dev)
+    check_device(dev)?;
+    with_contexts(|c| c.release_primary().map_err(|_| CUerror::INVALID_CONTEXT))
 }
 
-pub(crate) unsafe fn cuCtxCreate_v2(pctx: *mut CUcontext, _flags: c_uint, dev: CUdevice) -> CUresult {
-    cuDevicePrimaryCtxRetain(pctx, dev)
-}
-
-pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
-    if ctx.0 as usize != CTX {
-        return Err(CUerror::INVALID_CONTEXT);
-    }
-    with(|d| d.sync_all())
-}
-
-pub(crate) unsafe fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
-    if !ctx.0.is_null() && ctx.0 as usize != CTX {
-        return Err(CUerror::INVALID_CONTEXT);
+/// cudaDeviceReset: waits for the primary context's work, frees all its memory, modules, streams, events and
+/// graphs, and leaves a fresh context under the same handle (a sticky error ends here).
+pub(crate) unsafe fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    let fresh = new_driver()?;
+    let old = with_contexts(|c| Ok(c.reset_primary(fresh)))?;
+    if let Some(mut d) = old {
+        let _ = d.sync_all();
     }
     Ok(())
 }
 
+/// A new context with its own VM: its memory, modules and streams are its own and are freed with it.
+pub(crate) unsafe fn cuCtxCreate_v2(pctx: *mut CUcontext, _flags: c_uint, dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    let d = new_driver()?;
+    let h = new_handle();
+    with_contexts(|c| {
+        c.insert(h, d);
+        Ok(())
+    })?;
+    contexts::push(h);
+    out(pctx, CUcontext(h as *mut _))
+}
+
+pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
+    let h = ctx.0 as usize;
+    let removed = with_contexts(|c| {
+        if !c.contains(h) {
+            return Err(CUerror::INVALID_CONTEXT);
+        }
+        Ok(c.remove(h))
+    })?;
+    contexts::forget(h);
+    match removed {
+        // a created context: wait for its work, then drop everything it owns
+        Some(mut d) => {
+            let r = d.sync_all();
+            drop(d);
+            r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
+        }
+        // the primary context: as before, its sticky error ends (the next use starts clean)
+        None => with_contexts(|c| {
+            let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+            let r = d.sync_all();
+            d.sticky = None;
+            d.modules.values_mut().for_each(|m| m.reset_checked());
+            r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
+        }),
+    }
+}
+
+fn check_context(ctx: CUcontext) -> Result<Option<usize>, CUerror> {
+    if ctx.0.is_null() {
+        return Ok(None);
+    }
+    let h = ctx.0 as usize;
+    with_contexts(|c| if c.contains(h) { Ok(Some(h)) } else { Err(CUerror::INVALID_CONTEXT) })
+}
+
+pub(crate) unsafe fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
+    contexts::set(check_context(ctx)?);
+    Ok(())
+}
+
 pub(crate) unsafe fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
-    let c = with(|_| Ok(CTX)).unwrap_or(0);
-    out(pctx, CUcontext(c as *mut _))
+    with_contexts(|_| Ok(()))?;
+    out(pctx, CUcontext(contexts::top().unwrap_or(0) as *mut _))
 }
 
 pub(crate) unsafe fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
@@ -566,9 +940,13 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             unpacked = ptx_in_fatbin(bytes)?;
             &unpacked[..unpacked.len() - 1]
         } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
-            // a fat AGX object (library kernels): the object for this device's chip
+            // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
+            // "+agx-strict" build, in checked mode its "+agx-checked" one if it has one
             let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
-            module::fat_object_entry(fat, &cpu).map_err(|e| {
+            let entry = format!("{cpu}{}", if agx_strict() { "+agx-strict" } else { "" });
+            // library kernels without a checked build run unchecked
+            let checked = agx_checked().then(|| module::fat_object_entry(fat, &format!("{entry}+agx-checked")).ok()).flatten();
+            checked.map_or_else(|| module::fat_object_entry(fat, &entry), Ok).map_err(|e| {
                 if crate::log_enabled() {
                     eprintln!("[zluda_agx] {}", e.0);
                 }
@@ -838,13 +1216,25 @@ pub(crate) unsafe fn cuStreamCreate(ph: *mut CUstream, _flags: c_uint) -> CUresu
 pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
     with(|d| {
         let mut st = d.streams.remove(&(s.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
-        st.queue.synchronize().map_err(from_io)
+        let last = st.queue.last();
+        match st.queue.synchronize() {
+            Ok(()) => {
+                d.finished(last.syncobj, last.point);
+                Ok(())
+            }
+            Err(e) => Err(d.failed(last.syncobj, e)),
+        }
     })
 }
 
 pub(crate) unsafe fn cuStreamSynchronize(s: CUstream) -> CUresult {
     with(|d| {
-        d.queue(s.0 as usize)?.0.synchronize().map_err(from_io)?;
+        let q = d.queue(s.0 as usize)?.0;
+        let last = q.last();
+        if let Err(e) = q.synchronize() {
+            return Err(d.failed(last.syncobj, e));
+        }
+        d.finished(last.syncobj, last.point);
         d.after_sync()
     })
 }
@@ -901,7 +1291,10 @@ pub(crate) unsafe fn cuEventSynchronize(e: CUevent) -> CUresult {
         if let Some((s, fence)) = ev.fence {
             let q = d.queue(s)?.0;
             let timeout = q.timeout;
-            q.wait(fence, timeout).map_err(from_io)?;
+            if let Err(e) = q.wait(fence, timeout) {
+                return Err(d.failed(fence.syncobj, e));
+            }
+            d.finished(fence.syncobj, fence.point);
         }
         d.after_sync()
     })
@@ -1035,14 +1428,18 @@ pub(crate) unsafe fn cuCtxGetFlags(flags: *mut c_uint) -> CUresult {
 }
 
 pub(crate) unsafe fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
-    cuCtxSetCurrent(ctx)
+    let h = check_context(ctx)?.ok_or(CUerror::INVALID_VALUE)?;
+    contexts::push(h);
+    Ok(())
 }
 
 pub(crate) unsafe fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
+    with_contexts(|_| Ok(()))?;
+    let h = contexts::pop().ok_or(CUerror::INVALID_CONTEXT)?;
     if pctx.is_null() {
         return Ok(());
     }
-    cuCtxGetCurrent(pctx)
+    out(pctx, CUcontext(h as *mut _))
 }
 
 pub(crate) unsafe fn cuDevicePrimaryCtxGetState(dev: CUdevice, flags: *mut c_uint, active: *mut c_int) -> CUresult {
@@ -1067,19 +1464,27 @@ pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *m
 
 /// Stack size per thread (scratch is not set up yet, ptx-re-blockers B1), the printf buffer of the runtime
 /// library (64 KiB per module) and the device heap (none).
+/// The limits a context keeps: what cuCtxSetLimit set, else the default. They change nothing here: the stack is sized
+/// per kernel from its compiled stack size, and the printf buffer is the module's.
 pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
-    let v = match limit {
+    let default = match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE => 0,
         CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
         CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
         _ => return Err(CUerror::UNSUPPORTED_LIMIT),
     };
+    let v = with(|d| Ok(d.limits.get(&limit.0).copied().unwrap_or(default)))?;
     out(pvalue, v)
 }
 
-pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, _value: usize) -> CUresult {
+pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     match limit {
-        CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => Ok(()),
+        CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => {
+            with(|d| {
+                d.limits.insert(limit.0, value);
+                Ok(())
+            })
+        }
         _ => Err(CUerror::UNSUPPORTED_LIMIT),
     }
 }
@@ -1139,17 +1544,103 @@ pub(crate) unsafe fn cuCtxSynchronize_v2(_ctx: CUcontext) -> CUresult {
     cuCtxSynchronize()
 }
 
+/// Launch attributes `cuLaunchKernelEx` takes: a cluster size equal to the kernel's compiled one (`.reqnctapercluster`;
+/// a cluster runs as one threadgroup, which is safe because the threadgroup barrier does not wait for ended
+/// SIMD-groups: ptx-re-blockers B28), the cluster scheduling preference (a hint), and cooperative launches.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct LaunchAttrs {
+    cluster: Option<[u32; 3]>,
+    cooperative: bool,
+}
+
+unsafe fn launch_attrs(c: &CUlaunchConfig) -> Result<LaunchAttrs, CUerror> {
+    let mut out = LaunchAttrs::default();
+    if c.numAttrs == 0 {
+        return Ok(out);
+    }
+    let attrs = std::slice::from_raw_parts(c.attrs.as_ref().ok_or(CUerror::INVALID_VALUE)?, c.numAttrs as usize);
+    for a in attrs {
+        match a.id {
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION => {
+                let d = a.value.clusterDim;
+                out.cluster = Some([d.x, d.y, d.z]);
+            }
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE => {}
+            CUlaunchAttributeID::CU_LAUNCH_ATTRIBUTE_COOPERATIVE => out.cooperative = a.value.cooperative != 0,
+            _ => return Err(CUerror::NOT_SUPPORTED),
+        }
+    }
+    Ok(out)
+}
+
+/// Whether `attrs` can be honoured for kernel `k`, launched as `grid` of `block` with `shared` dynamic bytes on a
+/// device of `cores` cores.
+fn check_launch_attrs(k: &module::KernelInfo, attrs: LaunchAttrs, grid: [u32; 3], block: [u32; 3], shared: u32, cores: u32) -> Result<(), CUerror> {
+    if let Some(c) = attrs.cluster {
+        if c.contains(&0) {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        // The cluster size is part of the code (the CTA rank within the cluster is computed from it).
+        if c != k.cluster && c != [1, 1, 1] {
+            return Err(if k.cluster == [1, 1, 1] { CUerror::NOT_SUPPORTED } else { CUerror::INVALID_CLUSTER_SIZE });
+        }
+    }
+    if attrs.cooperative {
+        let blocks: u64 = grid.iter().map(|&g| g as u64).product();
+        let threads = block.iter().product::<u32>();
+        if blocks > cooperative_limit(k, threads, shared as usize, cores) as u64 {
+            return Err(CUerror::COOPERATIVE_LAUNCH_TOO_LARGE);
+        }
+    }
+    Ok(())
+}
+
+/// Threadgroups of `k` that are resident together on the whole device (B5), which a cooperative launch may use.
+fn cooperative_limit(k: &module::KernelInfo, threads: u32, dynamic_shared: usize, cores: u32) -> u32 {
+    let per_core = co_resident_threadgroups(k.simd_groups_per_core() / threads.div_ceil(32).max(1));
+    let shared = k.threadgroup_bytes as usize + dynamic_shared;
+    let per_core = if shared > 0 { per_core.min((65536 / shared) as u32) } else { per_core };
+    per_core * cores
+}
+
 pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfunction, params: *mut *mut c_void, extra: *mut *mut c_void) -> CUresult {
     let c = config.as_ref().ok_or(CUerror::INVALID_VALUE)?;
-    if c.numAttrs != 0 {
-        // cluster dimensions, cooperative launch and the other attributes are not supported
-        return Err(CUerror::NOT_SUPPORTED);
-    }
+    let attrs = launch_attrs(c)?;
+    let (grid, block) = ([c.gridDimX, c.gridDimY, c.gridDimZ], [c.blockDimX, c.blockDimY, c.blockDimZ]);
+    with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        check_launch_attrs(&d.modules[m].module.kernels[name], attrs, grid, block, c.sharedMemBytes, d.ctx.props.cores)
+    })?;
     cuLaunchKernel(f, c.gridDimX, c.gridDimY, c.gridDimZ, c.blockDimX, c.blockDimY, c.blockDimZ, c.sharedMemBytes, c.hStream, params, extra)
+}
+
+pub(crate) unsafe fn cuLaunchCooperativeKernel(
+    f: CUfunction,
+    gx: c_uint,
+    gy: c_uint,
+    gz: c_uint,
+    bx: c_uint,
+    by: c_uint,
+    bz: c_uint,
+    shared: c_uint,
+    stream: CUstream,
+    params: *mut *mut c_void,
+) -> CUresult {
+    let attrs = LaunchAttrs { cooperative: true, ..Default::default() };
+    with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        check_launch_attrs(&d.modules[m].module.kernels[name], attrs, [gx, gy, gz], [bx, by, bz], shared, d.ctx.props.cores)
+    })?;
+    cuLaunchKernel(f, gx, gy, gz, bx, by, bz, shared, stream, params, std::ptr::null_mut())
 }
 
 /// Occupancy from the G14 register budget: up to 96 SIMD-groups per core, fewer when each thread needs more
 /// registers (2 * floor(3328 / (2 * register halves)) SIMD-groups), and 64 KiB of threadgroup memory per core.
+///
+/// The count is the number of CTAs per core that are resident together, which persistent kernels and software grid
+/// barriers rely on. Measured on the M2 Max (AGX Performance Simulator tasks/ptx-re-blockers.md, B5): a whole grid is
+/// resident only up to min(15, floor(S / g) - 1) threadgroups per core, for S SIMD-groups per core and g per
+/// threadgroup; above that, later threadgroups start only when earlier ones exit.
 pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
     n: *mut c_int,
     f: CUfunction,
@@ -1164,7 +1655,7 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
             return Err(CUerror::INVALID_VALUE);
         }
         let groups_per_block = (block as u32).div_ceil(32);
-        let mut blocks = k.simd_groups_per_core() / groups_per_block;
+        let mut blocks = co_resident_threadgroups(k.simd_groups_per_core() / groups_per_block);
         let shared = k.threadgroup_bytes as usize + dynamic_shared;
         if shared > 0 {
             blocks = blocks.min((65536 / shared) as u32);
@@ -1172,6 +1663,16 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(
         Ok(blocks as c_int)
     })?;
     out(n, v)
+}
+
+/// Threadgroups per core that are resident together, of `fit` that fit in the register budget (B5): one less, at most
+/// 15. One threadgroup that fits always runs (B26).
+fn co_resident_threadgroups(fit: u32) -> u32 {
+    if fit <= 1 {
+        fit
+    } else {
+        (fit - 1).min(15)
+    }
 }
 
 pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, f: CUfunction, block: c_int, dynamic_shared: usize) -> CUresult {
@@ -1512,7 +2013,11 @@ pub(crate) unsafe fn cuPointerGetAttribute(data: *mut c_void, attribute: CUpoint
         P::CU_POINTER_ATTRIBUTE_IS_MANAGED if device => out(data as *mut c_uint, managed as c_uint),
         P::CU_POINTER_ATTRIBUTE_HOST_POINTER if unified => out(data as *mut *mut c_void, ptr.0),
         P::CU_POINTER_ATTRIBUTE_DEVICE_POINTER if device => out(data as *mut CUdeviceptr, ptr),
-        P::CU_POINTER_ATTRIBUTE_CONTEXT if device => out(data as *mut CUcontext, CUcontext(CTX as *mut _)),
+        P::CU_POINTER_ATTRIBUTE_CONTEXT if device => {
+            // the current context, whose allocation it is (each context has its own address space)
+            let h = with_contexts(|c| Ok(c.current()))?;
+            out(data as *mut CUcontext, CUcontext(h as *mut _))
+        }
         _ => Err(CUerror::INVALID_VALUE),
     }
 }
@@ -1802,6 +2307,178 @@ pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, add
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn record(syncobj: u32, point: u64) -> LaunchRecord {
+        LaunchRecord {
+            fence: Fence { syncobj, point },
+            stream: 0,
+            module: 1,
+            kernel: "saxpy".into(),
+            grid: [4, 1, 1],
+            block: [256, 1, 1],
+            shared: 0,
+            params: vec![0x1100_0000_0040u64.to_le_bytes().to_vec(), 7u32.to_le_bytes().to_vec(), vec![1, 2, 3]],
+        }
+    }
+
+    #[test]
+    fn launch_records_describe_the_task() {
+        assert_eq!(
+            record(5, 9).describe(),
+            "kernel saxpy grid (4, 1, 1) block (256, 1, 1) shared 0 bytes, stream 0, command 9, arguments \
+             [0x110000000040, 0x7, 010203]"
+        );
+    }
+
+    #[test]
+    fn finished_launches_are_dropped_per_queue() {
+        let mut l: std::collections::VecDeque<_> = [record(5, 1), record(5, 2), record(6, 1), record(5, 3)].into();
+        drop_finished(&mut l, 5, 2);
+        let left: Vec<_> = l.iter().map(|r| (r.fence.syncobj, r.fence.point)).collect();
+        assert_eq!(left, vec![(6, 1), (5, 3)]);
+    }
+
+    // A dump of the checked kernel of agx_runtime/tests/data/checked.ll, replayed in agx_run when $AGX_RUN names it:
+    // out[5] = n is out of bounds of a 16-byte buffer.
+    #[test]
+    fn a_dumped_launch_replays_in_agx_run() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/checked.o")).unwrap();
+        let (out, q) = (0x100_0000u64, 0x200_0000u64);
+        let mut pair = [0u8; 16];
+        pair[..4].copy_from_slice(&9u32.to_le_bytes());
+        pair[8..].copy_from_slice(&q.to_le_bytes());
+        let (o, i) = (out.to_le_bytes(), 5u32.to_le_bytes());
+        let params: [&[u8]; 3] = [&o, &i, &pair];
+        let record = [0u8; 64];
+        let r = agx_runtime::replay(
+            &m,
+            Some((0x800_0000, &m.globals)),
+            Some((0x700_0000, &record)),
+            "put",
+            &params,
+            [1, 1, 1],
+            [8, 1, 1],
+            0,
+            &[(out, out + 16), (q, q + 64)],
+            &[],
+            0x7e_0000_0000,
+            0x7f_0000_0000,
+        )
+        .unwrap();
+        let mut regions = r.regions.clone();
+        regions.extend([(out, vec![0u8; 16]), (q, vec![0u8; 64])]);
+        let dir = tempfile::tempdir().unwrap();
+        write_dump(dir.path(), &r, &regions, "a test\nsecond line").unwrap();
+        let sh = std::fs::read_to_string(dir.path().join("replay.sh")).unwrap();
+        assert!(sh.contains("# a test\n# second line\n") && sh.contains("--grid 8,1,1 --wg 8,1,1"), "{sh}");
+        // The object has a line table: a fault in the replay names its source line.
+        let lines = format!("--lines module.o --lines-offset {}", m.kernels["put"].offset);
+        assert!(sh.contains(&lines) && dir.path().join("module.o").exists(), "{sh}");
+        let list = std::fs::read_to_string(dir.path().join("regions.txt")).unwrap();
+        let rec = list.lines().position(|l| l.contains(" 0x7000000 64")).expect(&list);
+        let Some(agx_run) = std::env::var_os("AGX_RUN") else { return };
+        let o = std::process::Command::new(dir.path().join("replay.sh")).env("AGX_RUN", agx_run).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let rec = std::fs::read(dir.path().join(format!("m{rec}.out"))).unwrap();
+        let (off, size) = m.global_symbols[module::CHECKED_SITES_SYMBOL];
+        let t = &m.globals[off as usize..(off + size) as usize];
+        let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
+        assert_eq!((e.kind, e.store, e.address, e.site_text.as_str()), (1, true, out + 20, "store 4\tput put.cu:4:3"));
+    }
+
+    #[test]
+    fn a_pointer_loaded_from_memory_is_checked_against_the_allocations() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/chase.o")).unwrap();
+        let (data, ptrs, out) = (0x100_0000u64, 0x200_0000u64, 0x300_0000u64);
+        // threads 0..6 read data[t]; thread 7 reads just past the end of data
+        let table: Vec<u8> = (0..8u64).flat_map(|t| (data + 4 * t + if t == 7 { 4 } else { 0 }).to_le_bytes()).collect();
+        let record = [0u8; 64];
+        let (p, o) = (ptrs.to_le_bytes(), out.to_le_bytes());
+        let allocations = [(data, data + 32), (ptrs, ptrs + 64), (out, out + 32)];
+        let r = agx_runtime::replay(
+            &m,
+            Some((0x800_0000, &m.globals)),
+            Some((0x700_0000, &record)),
+            "chase",
+            &[&p, &o],
+            [1, 1, 1],
+            [8, 1, 1],
+            0,
+            &[(ptrs, ptrs + 64), (out, out + 32)],
+            &allocations,
+            0x7e_0000_0000,
+            0x7f_0000_0000,
+        )
+        .unwrap();
+        assert!(r.regions.iter().any(|(va, b)| *va == 0x7e_0000_0000 && b.len() == 48), "the table is a region");
+        let mut regions = r.regions.clone();
+        regions.extend([(data, (100..108u32).flat_map(u32::to_le_bytes).collect()), (ptrs, table), (out, vec![0u8; 32])]);
+        let dir = tempfile::tempdir().unwrap();
+        write_dump(dir.path(), &r, &regions, "chase").unwrap();
+        let Some(agx_run) = std::env::var_os("AGX_RUN") else { return };
+        let o = std::process::Command::new(dir.path().join("replay.sh")).env("AGX_RUN", agx_run).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+        let list = std::fs::read_to_string(dir.path().join("regions.txt")).unwrap();
+        let at = |va: &str| list.lines().position(|l| l.contains(va)).expect(&list);
+        let rec = std::fs::read(dir.path().join(format!("m{}.out", at(" 0x7000000 64")))).unwrap();
+        let (off, size) = m.global_symbols[module::CHECKED_SITES_SYMBOL];
+        let t = &m.globals[off as usize..(off + size) as usize];
+        let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
+        assert_eq!((e.kind, e.store, e.address, e.thread), (1, false, data + 32, [7, 0, 0]));
+        let out_bytes = std::fs::read(dir.path().join(format!("m{}.out", at(" 0x3000000 32")))).unwrap();
+        assert_eq!(out_bytes[..28], (100..107u32).flat_map(u32::to_le_bytes).collect::<Vec<u8>>()[..]);
+    }
+
+    #[test]
+    fn launch_attributes_are_checked_against_the_kernel() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/checked.o")).unwrap();
+        let plain = m.kernels["put"].clone();
+        let clustered = module::KernelInfo { cluster: [2, 1, 1], ..plain.clone() };
+        let none = LaunchAttrs::default();
+        let cluster = |c| LaunchAttrs { cluster: Some(c), ..none };
+        let coop = LaunchAttrs { cooperative: true, ..none };
+        let (g, b) = ([4, 1, 1], [32, 1, 1]);
+        assert_eq!(check_launch_attrs(&plain, none, g, b, 0, 38), Ok(()));
+        // a cluster is the compiled one, or 1
+        assert_eq!(check_launch_attrs(&clustered, cluster([2, 1, 1]), g, b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&plain, cluster([1, 1, 1]), g, b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&clustered, cluster([4, 1, 1]), g, b, 0, 38), Err(CUerror::INVALID_CLUSTER_SIZE));
+        assert_eq!(check_launch_attrs(&plain, cluster([2, 1, 1]), g, b, 0, 38), Err(CUerror::NOT_SUPPORTED));
+        assert_eq!(check_launch_attrs(&plain, cluster([0, 1, 1]), g, b, 0, 38), Err(CUerror::INVALID_VALUE));
+        // cooperative: up to the co-resident threadgroups of the device
+        let limit = cooperative_limit(&plain, 32, 0, 38);
+        assert_eq!(limit, 38 * co_resident_threadgroups(plain.simd_groups_per_core()));
+        assert_eq!(check_launch_attrs(&plain, coop, [limit, 1, 1], b, 0, 38), Ok(()));
+        assert_eq!(check_launch_attrs(&plain, coop, [limit + 1, 1, 1], b, 0, 38), Err(CUerror::COOPERATIVE_LAUNCH_TOO_LARGE));
+        // threadgroup memory lowers it: 32 KiB per block leaves 2 per core
+        assert_eq!(cooperative_limit(&plain, 32, 32768, 38), 2 * 38);
+    }
+
+    #[test]
+    fn a_check_site_names_its_kernel() {
+        assert_eq!(site_kernel("store 4\toob"), "oob");
+        assert_eq!(site_kernel("load 8\tget a.cu:3:5\tk a.cu:9:1"), "k");
+        assert_eq!(site_kernel(""), "");
+    }
+
+    #[test]
+    fn a_failed_assert_stays_until_the_context_is_destroyed() {
+        let mut sticky = None;
+        assert_eq!(sticky_after_sync(&mut sticky, false), Ok(()));
+        assert_eq!(sticky_after_sync(&mut sticky, true), Err(CUerror::ASSERT));
+        // the flag is cleared on the device once read, but the context keeps the error
+        assert_eq!(sticky_after_sync(&mut sticky, false), Err(CUerror::ASSERT));
+        assert_eq!(sticky, Some(CUerror::ASSERT));
+    }
+
+    #[test]
+    fn co_resident_threadgroups_follow_the_measured_rule() {
+        // B5 on the M2 Max (38 cores): 32-thread CTAs, 576 resident; 128-thread CTAs at 13 per core, 456 = 38 * 12
+        assert_eq!(co_resident_threadgroups(96), 15);
+        assert_eq!(co_resident_threadgroups(13), 12);
+        assert_eq!(co_resident_threadgroups(1), 1);
+        assert_eq!(co_resident_threadgroups(0), 0);
+    }
 
     // Needs zoc built with the agx feature: target/debug/zoc, or ZLUDA_AGX_ZOC.
     #[test]

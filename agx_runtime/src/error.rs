@@ -31,6 +31,8 @@ impl std::error::Error for StageError {
 pub struct GpuError {
     /// Negative errno.
     pub fence_status: i32,
+    /// The timeline point of the failed command, when known.
+    pub point: Option<u64>,
 }
 
 impl fmt::Display for GpuError {
@@ -112,7 +114,7 @@ mod tests {
 
     #[test]
     fn failed_jobs_are_launch_failures_unless_timed_out() {
-        let job = |s| io::Error::other(GpuError { fence_status: s });
+        let job = |s| io::Error::other(GpuError { fence_status: s, point: None });
         assert_eq!(classify(&job(-libc::EIO)), Failure::JobFailed);
         assert_eq!(cuda_error(&job(-libc::EIO)), 719);
         assert_eq!(cuda_error(&job(-libc::ETIMEDOUT)), 702);

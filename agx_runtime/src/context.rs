@@ -45,11 +45,13 @@ impl DeviceProps {
             cores,
             clock_khz: p.max_frequency_khz,
             warp_size: 32,
-            // Metal's limit; the CDM launch words take larger local sizes, unmeasured.
+            // Measured on the M2 Max (AGX Performance Simulator tasks/ptx-re-blockers.md, B22): threadgroups of 1024
+            // threads along x, y or z run; a 2048-thread threadgroup runs nothing.
             max_threads_per_block: 1024,
-            max_block_dim: [1024, 1024, 64],
-            // The CDM global size words are 32-bit thread counts.
-            max_grid_dim: [u32::MAX / 1024, 65535, 65535],
+            max_block_dim: [1024, 1024, 1024],
+            // The CDM global size words are 32-bit thread counts per dimension (2^32 - 32 threads along x run), so a
+            // launch also needs grid * block < 2^32 in each dimension. y and z take more than CUDA's 65535 CTAs.
+            max_grid_dim: [i32::MAX as u32, 65535, 65535],
             shared_memory_per_block: 65536,
             registers_per_thread: 128,
             total_memory,
@@ -135,6 +137,19 @@ impl Context {
     /// Waits for the default stream (before the CPU touches memory the GPU may use).
     pub fn synchronize(&mut self) -> io::Result<()> {
         self.stream.synchronize()
+    }
+
+    /// The current contents of the allocation `va` points into, and its base, without waiting for the GPU (a dump
+    /// after a fault).
+    pub fn allocation(&self, va: u64) -> Option<(u64, &[u8])> {
+        let start = find(&self.allocs, va, 0, |a| a.1)?;
+        let (bo, size) = &self.allocs[&start];
+        Some((start, &bo.as_slice()[..*size as usize]))
+    }
+
+    /// `[lo, hi)` of every allocation, in address order.
+    pub fn allocation_ranges(&self) -> Vec<(u64, u64)> {
+        self.allocs.iter().map(|(&va, (_, size))| (va, va + size)).collect()
     }
 
     /// The allocation's base and size for a pointer into it (cuMemGetAddressRange).

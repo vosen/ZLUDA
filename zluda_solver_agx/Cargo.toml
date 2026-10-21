@@ -1,0 +1,18 @@
+[package]
+name = "zluda_solver_agx"
+version = "0.0.0"
+edition = "2021"
+description = "cuSOLVER (dense LU, Cholesky and QR) on Apple GPUs (Asahi Linux) for zluda_agx, on agx_libs' MLIR kernels"
+
+[lib]
+name = "cusolver_agx"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+agx_libs = { path = "../agx_libs" }
+cuda_types = { path = "../cuda_types", default-features = false }
+
+[package.metadata.zluda]
+agx = true
+linux_only = true
+linux_symlinks = ["libcusolver.so", "libcusolver.so.11"]

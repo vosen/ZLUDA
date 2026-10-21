@@ -7,6 +7,7 @@
 //! Supported so far: one device and context, device memory, synchronous copies and fills, modules from PTX (or an
 //! AGX object), kernel launches with `kernelParams`, streams, events, device `printf` and `assert`.
 
+mod contexts;
 mod dark;
 mod driver;
 mod texture;
@@ -86,6 +87,7 @@ cuda_macros::cuda_function_declarations!(
             cuDeviceGetUuid_v2,
             cuDevicePrimaryCtxGetState,
             cuDevicePrimaryCtxRelease_v2,
+            cuDevicePrimaryCtxReset_v2,
             cuDevicePrimaryCtxRetain,
             cuDevicePrimaryCtxSetFlags_v2,
             cuDeviceTotalMem_v2,
@@ -113,6 +115,7 @@ cuda_macros::cuda_function_declarations!(
             cuInit,
             cuKernelGetAttribute,
             cuKernelGetFunction,
+            cuLaunchCooperativeKernel,
             cuLaunchKernel,
             cuLaunchKernelEx,
             cuLibraryGetKernel,

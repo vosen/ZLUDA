@@ -45,7 +45,40 @@ pub struct KernelInfo {
     /// CTAs per cluster along x, y and z (`.agx.kernels` extension 1; 1, 1, 1 without clusters). A cluster runs
     /// as one threadgroup: thread (x, y, z) of CTA r of the cluster is thread (x, y, z * C + r), C = x * y * z.
     pub cluster: [u32; 3],
+    /// The hidden arguments of a kernel built with the backend's `agx-checked` feature (`.agx.kernels`
+    /// extension 2), which checks its memory accesses and reports the first bad one in an error record.
+    pub checked: Option<Checked>,
 }
+
+/// Where a checked kernel takes its hidden arguments (LLVM's AGXUsage.rst, "Checked mode").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Checked {
+    /// 16-bit uniform half of the 64-bit error record address.
+    pub record_half: u32,
+    /// Half of the 32-bit threadgroup memory size (static plus dynamic).
+    pub threadgroup_bytes_half: u32,
+    pub slots: Vec<CheckedSlot>,
+    /// Halves of the allocation table's address and of its entry count (`.agx.kernels` extension 3), for a kernel
+    /// that checks pointers of unknown origin (loaded from memory) against every live allocation. The table is the
+    /// `(lo, hi)` pairs of 64-bit addresses of the allocations, sorted; a count of 0 checks those pointers for null
+    /// only.
+    pub table: Option<(u32, u32)>,
+}
+
+/// A pointer the checked kernel bounds-checks: the bounds of the allocation it points into go to `lo_half` and
+/// `hi_half` (64-bit each; `lo = hi = pointer` if it points into none).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CheckedSlot {
+    /// Source-level argument holding the pointer.
+    pub arg: u32,
+    /// Byte offset of the pointer in the argument's bytes; `None` if the argument is the pointer.
+    pub offset: Option<u32>,
+    pub lo_half: u32,
+    pub hi_half: u32,
+}
+
+/// Bytes of the error record of a checked module.
+pub const CHECKED_RECORD_BYTES: u64 = 64;
 
 /// One argument of the source kernel (a PTX `.param`, a CUDA kernel parameter).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +138,9 @@ pub struct Module {
     /// Words of the global data buffer that hold addresses in it: (offset, width in bytes, target offset). The
     /// loader adds the buffer's address (`Module::relocated_globals`).
     pub global_relocs: Vec<(u64, u8, u64)>,
+    /// The object itself when it has a DWARF line table (`.debug_line`), for mapping PCs to source lines
+    /// (`agx_run --lines`).
+    pub debug_object: Option<Vec<u8>>,
 }
 
 struct Elf<'a> {
@@ -215,12 +251,37 @@ impl<'a> Elf<'a> {
                 .map(|i| Ok(ArgSlot { by_pointer: word(f + 7 + 3 * i)? == 1, bytes: word(f + 8 + 3 * i)?, half: word(f + 9 + 3 * i)? }))
                 .collect::<Result<_, Error>>()?;
             // tagged extensions up to the end of the record
-            let (mut cluster, mut e, end) = ([1, 1, 1], f + 7 + 3 * nargs, at + size / 4);
+            let (mut cluster, mut checked, mut e, end) = ([1, 1, 1], None, f + 7 + 3 * nargs, at + size / 4);
             while e < end {
                 match word(e)? {
                     1 if e + 4 <= end => {
                         cluster = [word(e + 1)?.max(1), word(e + 2)?.max(1), word(e + 3)?.max(1)];
                         e += 4;
+                    }
+                    2 if e + 5 <= end => {
+                        let (abi, n) = (word(e + 1)?, word(e + 2)? as usize);
+                        if abi != 1 || e + 5 + 4 * n > end {
+                            return err(format!("{name}: unsupported checked mode (ABI {abi}, {n} slots)"));
+                        }
+                        let slots = (0..n)
+                            .map(|i| {
+                                let w = e + 5 + 4 * i;
+                                let (arg, off) = (word(w)?, word(w + 1)?);
+                                if arg as usize >= nargs {
+                                    return err(format!("{name}: checked pointer in argument {arg} of {nargs}"));
+                                }
+                                Ok(CheckedSlot { arg, offset: (off != u32::MAX).then_some(off), lo_half: word(w + 2)?, hi_half: word(w + 3)? })
+                            })
+                            .collect::<Result<_, Error>>()?;
+                        checked = Some(Checked { record_half: word(e + 3)?, threadgroup_bytes_half: word(e + 4)?, slots, table: None });
+                        e += 5 + 4 * n;
+                    }
+                    3 if e + 3 <= end => {
+                        let Some(c) = checked.as_mut() else {
+                            return err(format!("{name}: an allocation table without checked mode"));
+                        };
+                        c.table = Some((word(e + 1)?, word(e + 2)?));
+                        e += 3;
                     }
                     _ => break,
                 }
@@ -239,6 +300,7 @@ impl<'a> Elf<'a> {
                     stack_bytes: word(f + 5)?,
                     args,
                     cluster,
+                    checked,
                 },
             );
             at += size / 4;
@@ -352,6 +414,7 @@ impl Module {
                     stack_bytes: r[5].unwrap_or(0),
                     args: Vec::new(),
                     cluster: [1, 1, 1],
+                    checked: None,
                 },
             );
         }
@@ -360,7 +423,8 @@ impl Module {
         }
         let global_symbols = elf.symbols(".agx.globals", 1)?.into_iter().map(|(n, v, s)| (n, (v, s))).collect();
         let global_relocs = elf.global_relocs()?;
-        Ok(Module { text, globals, kernels, global_symbols, global_relocs })
+        let debug_object = elf.sections.iter().any(|s| s.0 == ".debug_line").then(|| object.to_vec());
+        Ok(Module { text, globals, kernels, global_symbols, global_relocs, debug_object })
     }
 
     /// The initial global data buffer once placed at `va`, with its relocations applied.
@@ -470,6 +534,135 @@ pub fn param_block_size(k: &KernelInfo) -> u64 {
     k.args.iter().filter(|a| a.by_pointer && a.half != u32::MAX).fold(0, |n, a| n.next_multiple_of(16) + a.bytes as u64)
 }
 
+/// The pointers a checked kernel bounds-checks, in the order of its slots, read from the launch's arguments.
+pub fn checked_pointers(k: &KernelInfo, params: &[&[u8]]) -> Result<Vec<u64>, Error> {
+    let Some(c) = &k.checked else { return Ok(Vec::new()) };
+    c.slots
+        .iter()
+        .map(|s| {
+            let at = s.offset.unwrap_or(0) as usize;
+            let b = params.get(s.arg as usize).and_then(|p| p.get(at..at + 8));
+            b.map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+                .ok_or_else(|| Error(format!("{}: checked pointer outside argument {}", k.name, s.arg)))
+        })
+        .collect()
+}
+
+/// Fills the hidden arguments of a checked kernel in `u` (from `pack_params`): the error record's address, the
+/// threadgroup memory bytes, and per slot the `[lo, hi)` bounds of the allocation its pointer points into.
+/// The bytes of an allocation table: `(lo, hi)` pairs, sorted by `lo` (as `KernelInfo::checked`'s `table` reads them).
+pub fn checked_table(allocations: &[(u64, u64)]) -> Vec<u8> {
+    let mut sorted = allocations.to_vec();
+    sorted.sort_unstable();
+    sorted.iter().flat_map(|&(lo, hi)| lo.to_le_bytes().into_iter().chain(hi.to_le_bytes())).collect()
+}
+
+/// Puts a checked kernel's hidden arguments into its uniforms: the error record, the threadgroup memory size, the
+/// bounds of each checked pointer and the allocation table (its address and entry count; ignored by kernels
+/// without one).
+pub fn pack_checked(
+    k: &KernelInfo,
+    u: &mut [u16],
+    record: u64,
+    threadgroup_bytes: u32,
+    bounds: &[(u64, u64)],
+    table: (u64, u32),
+) -> Result<(), Error> {
+    let Some(c) = &k.checked else { return Ok(()) };
+    if bounds.len() != c.slots.len() {
+        return err(format!("{}: {} bounds given, {} checked pointers", k.name, bounds.len(), c.slots.len()));
+    }
+    let mut put = |half: u32, v: u64, halves: usize| -> Result<(), Error> {
+        for i in 0..halves {
+            *u.get_mut(half as usize + i).ok_or_else(|| Error(format!("{}: hidden argument outside the uniforms", k.name)))? =
+                (v >> (16 * i)) as u16;
+        }
+        Ok(())
+    };
+    put(c.record_half, record, 4)?;
+    put(c.threadgroup_bytes_half, threadgroup_bytes as u64, 2)?;
+    for (s, &(lo, hi)) in c.slots.iter().zip(bounds) {
+        put(s.lo_half, lo, 4)?;
+        put(s.hi_half, hi, 4)?;
+    }
+    if let Some((va_half, count_half)) = c.table {
+        put(va_half, table.0, 4)?;
+        put(count_half, table.1 as u64, 2)?;
+    }
+    Ok(())
+}
+
+/// Symbol of the text describing each check site of a checked module: one line per site,
+/// `<site>\t<access> <size>\t<frame>[\t<frame>...]`, innermost frame first, a frame being `function file:line:col`.
+pub const CHECKED_SITES_SYMBOL: &str = "__agx_checked_sites";
+
+/// The first bad access a checked kernel reported.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckedError {
+    /// 1 out of bounds, 2 null, 3 misaligned, 4 threadgroup memory out of bounds, 5 stack out of bounds.
+    pub kind: u32,
+    pub store: bool,
+    pub atomic: bool,
+    pub address: u64,
+    pub size: u32,
+    pub site: u32,
+    pub thread: [u32; 3],
+    pub threadgroup: [u32; 3],
+    /// The site's line of the module's site text, without the site number (empty if it has none).
+    pub site_text: String,
+}
+
+impl CheckedError {
+    /// Decodes an error record; `None` if no access was reported.
+    pub fn decode(record: &[u8], sites: &str) -> Option<CheckedError> {
+        let w = |i: usize| u32::from_le_bytes(record[4 * i..4 * i + 4].try_into().unwrap());
+        if record.len() < 48 || w(0) == 0 {
+            return None;
+        }
+        let site = w(5);
+        let site_text = sites
+            .lines()
+            .find_map(|l| l.split_once('\t').filter(|(n, _)| n.parse() == Ok(site)).map(|(_, t)| t.to_string()))
+            .unwrap_or_default();
+        Some(CheckedError {
+            kind: w(1) & 0xff,
+            store: w(1) & 0x100 != 0,
+            atomic: w(1) & 0x200 != 0,
+            address: w(2) as u64 | (w(3) as u64) << 32,
+            size: w(4),
+            site,
+            thread: [w(6), w(7), w(8)],
+            threadgroup: [w(9), w(10), w(11)],
+            site_text,
+        })
+    }
+
+    pub fn misaligned(&self) -> bool {
+        self.kind == 3
+    }
+}
+
+impl std::fmt::Display for CheckedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let kind = match self.kind {
+            1 => "out of bounds",
+            2 => "null",
+            3 => "misaligned",
+            4 => "threadgroup memory out of bounds",
+            5 => "stack out of bounds",
+            _ => "bad",
+        };
+        let what = if self.atomic { "atomic" } else if self.store { "store" } else { "load" };
+        let [x, y, z] = self.thread;
+        let [a, b, c] = self.threadgroup;
+        write!(f, "{kind} {what} of {} bytes at {:#x} by thread ({x}, {y}, {z}) of block ({a}, {b}, {c})", self.size, self.address)?;
+        for (i, frame) in self.site_text.split('\t').skip(1).enumerate() {
+            write!(f, "\n    {} {frame}", if i == 0 { "at" } else { "inlined into" })?;
+        }
+        Ok(())
+    }
+}
+
 /// One kernel argument, as the backend splits it.
 #[derive(Clone, Copy, Debug)]
 pub enum Arg {
@@ -530,6 +723,68 @@ pub fn pack_uniforms(k: &KernelInfo, args: &[Arg], threadgroups: [u32; 3], globa
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // tests/data/checked.ll: a pointer argument, and a pointer at byte 8 of a by-reference argument.
+    #[test]
+    fn checked_kernels_take_their_hidden_arguments() {
+        let m = Module::load_object(include_bytes!("../tests/data/checked.o")).unwrap();
+        let k = &m.kernels["put"];
+        let c = k.checked.as_ref().unwrap();
+        assert_eq!(k.args.len(), 3, "the hidden arguments are not source arguments");
+        assert_eq!(
+            c.slots,
+            [
+                CheckedSlot { arg: 0, offset: None, lo_half: 16, hi_half: 20 },
+                CheckedSlot { arg: 2, offset: Some(8), lo_half: 24, hi_half: 28 },
+            ]
+        );
+        let out = 0x1_0000_1000u64.to_le_bytes();
+        let i = 5u32.to_le_bytes();
+        let mut pair = [0u8; 16];
+        pair[8..].copy_from_slice(&0x2_0000_0040u64.to_le_bytes());
+        let params: [&[u8]; 3] = [&out, &i, &pair];
+        assert_eq!(checked_pointers(k, &params).unwrap(), [0x1_0000_1000, 0x2_0000_0040]);
+        let (mut u, _) = pack_params(k, &params, [1, 1, 1], Some(0x5000), 0x3000).unwrap();
+        pack_checked(k, &mut u, 0x7000_0000, 96, &[(0x1_0000_0000, 0x1_0001_0000), (0x2_0000_0040, 0x2_0000_0040)], (0, 0))
+            .unwrap();
+        let q = |h: usize, n: usize| (0..n).fold(0u64, |v, i| v | (u[h + i] as u64) << (16 * i));
+        assert_eq!(q(c.record_half as usize, 4), 0x7000_0000);
+        assert_eq!(q(c.threadgroup_bytes_half as usize, 2), 96);
+        assert_eq!((q(16, 4), q(20, 4)), (0x1_0000_0000, 0x1_0001_0000));
+        assert_eq!((q(24, 4), q(28, 4)), (0x2_0000_0040, 0x2_0000_0040));
+        assert_eq!(q(0, 4), 0x1_0000_1000, "the source arguments are unchanged");
+        assert!(pack_checked(k, &mut u, 0, 0, &[], (0, 0)).is_err(), "every slot needs bounds");
+        // too short an argument for its pointer
+        let short: [&[u8]; 3] = [&out, &i, &pair[..12]];
+        assert!(checked_pointers(k, &short).is_err());
+    }
+
+    #[test]
+    fn checked_errors_are_decoded_with_their_site() {
+        let m = Module::load_object(include_bytes!("../tests/data/checked.o")).unwrap();
+        let (off, size) = m.global_symbols[CHECKED_SITES_SYMBOL];
+        let t = &m.globals[off as usize..(off + size) as usize];
+        let sites = std::str::from_utf8(&t[..t.iter().position(|&c| c == 0).unwrap()]).unwrap();
+        let mut r = [0u8; 64];
+        assert_eq!(CheckedError::decode(&r, sites), None);
+        for (i, w) in [1u32, 0x101, 0x1004, 2, 4, 3, 7, 0, 0, 2, 1, 0].iter().enumerate() {
+            r[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        let e = CheckedError::decode(&r, sites).unwrap();
+        assert_eq!((e.kind, e.store, e.atomic, e.address, e.size, e.site), (1, true, false, 0x2_0000_1004, 4, 3));
+        assert_eq!((e.thread, e.threadgroup), ([7, 0, 0], [2, 1, 0]));
+        assert!(!e.misaligned());
+        assert_eq!(
+            e.to_string(),
+            "out of bounds store of 4 bytes at 0x200001004 by thread (7, 0, 0) of block (2, 1, 0)\n    at put put.cu:5:3"
+        );
+        // an inlined site, and a site the text does not have
+        let text = "1\tload 8\tget a.cu:3:5\tk a.cu:9:1\n";
+        r[20..24].copy_from_slice(&1u32.to_le_bytes());
+        assert!(CheckedError::decode(&r, text).unwrap().to_string().ends_with("\n    at get a.cu:3:5\n    inlined into k a.cu:9:1"));
+        r[20..24].copy_from_slice(&9u32.to_le_bytes());
+        assert_eq!(CheckedError::decode(&r, text).unwrap().site_text, "");
+    }
 
     const TGREV_O: &[u8] = include_bytes!("../tests/data/tgrev.o");
     const TGREV_S: &str = include_str!("../tests/data/tgrev.s");
@@ -592,6 +847,22 @@ mod tests {
         assert_eq!(unsafe { fat_object_len(fat.as_ptr()) }, 130);
     }
 
+    // tests/data/chase.ll: pointers loaded from memory, checked against the allocation table.
+    #[test]
+    fn checked_kernels_take_an_allocation_table() {
+        let m = Module::load_object(include_bytes!("../tests/data/chase.o")).unwrap();
+        let k = &m.kernels["chase"];
+        let c = k.checked.as_ref().unwrap();
+        let (va_half, count_half) = c.table.expect("extension 3");
+        let (mut u, _) = pack_params(k, &[&0x200_0000u64.to_le_bytes(), &0x300_0000u64.to_le_bytes()], [1, 1, 1], None, 0)
+            .unwrap();
+        pack_checked(k, &mut u, 0x7000_0000, 0, &[(0x200_0000, 0x200_0040), (0x300_0000, 0x300_0020)], (0x6000_0000, 3))
+            .unwrap();
+        let q = |h: u32, n: usize| (0..n).fold(0u64, |v, i| v | (u[h as usize + i] as u64) << (16 * i));
+        assert_eq!((q(va_half, 4), q(count_half, 2)), (0x6000_0000, 3));
+        assert_eq!(checked_table(&[(0x300, 0x310), (0x100, 0x140)])[..16], [0, 1, 0, 0, 0, 0, 0, 0, 0x40, 1, 0, 0, 0, 0, 0, 0]);
+    }
+
     // tests/data/global-relocs.ll: a global array of addresses of other globals.
     #[test]
     fn relocates_addresses_in_global_data() {
@@ -650,6 +921,7 @@ mod tests {
                 stack_bytes: 0,
                 args: vec![],
                 cluster: [1, 1, 1],
+                checked: None,
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -671,6 +943,7 @@ mod tests {
             stack_bytes: 0,
             args: vec![],
             cluster: [1, 1, 1],
+            checked: None,
         };
         let u = pack_uniforms(
             &k,

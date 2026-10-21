@@ -15,6 +15,16 @@ pub enum Statement<P: Operand> {
     Variable(MultiVariable<P::Ident>),
     Instruction(Option<PredAt<P::Ident>>, Instruction<P>),
     Block(Vec<Statement<P>>),
+    /// `.loc`: the source position of the statements that follow.
+    Loc(DebugLoc),
+}
+
+/// A source position: a `.file` index, a line and a column (0 if unknown).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DebugLoc {
+    pub file: u32,
+    pub line: u32,
+    pub column: u32,
 }
 
 // We define the instruction enum through the macro instead of normally, because we have some of how
@@ -3499,6 +3509,8 @@ pub struct Module<'input> {
     pub directives: Vec<Directive<'input, ParsedOperand<&'input str>>>,
     pub invalid_directives: usize,
     pub address_size: u8,
+    /// `.file` directives: index and file name.
+    pub files: Vec<(u32, &'input str)>,
 }
 
 impl Module<'_> {
@@ -3509,6 +3521,7 @@ impl Module<'_> {
             directives: Vec::new(),
             invalid_directives: usize::MAX,
             address_size: 64,
+            files: Vec::new(),
         }
     }
 }

@@ -5341,6 +5341,15 @@ dependencies = [
  "agx_runtime",
  "cuda_macros",
  "cuda_types",
+ "libc",
+]
+
+[[package]]
+name = "zluda_nccl_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
 ]
 
 [[package]]
@@ -5359,6 +5368,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_rand_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [
@@ -5370,6 +5387,13 @@ dependencies = [
  "windows-sys 0.61.2",
  "winnow 0.6.20",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_rtc_agx"
+version = "0.0.0"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]
@@ -5386,6 +5410,14 @@ dependencies = [
  "strum_macros",
  "stumpalo",
  "windows",
+]
+
+[[package]]
+name = "zluda_solver_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
 ]
 
 [[package]]

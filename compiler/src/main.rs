@@ -42,6 +42,22 @@ pub struct Options {
     /// in software where the hardware differs. Slower
     strict_fp: bool,
 
+    #[bpaf(long("agx-strict"))]
+    /// AGX: emit only the instructions Mesa's asahi compiler emits for the
+    /// same GPU (M1 and M2 only); any other is an error
+    agx_strict: bool,
+
+    #[bpaf(long("agx-checked"))]
+    /// AGX: check every memory access (bounds, null, alignment) and report
+    /// the first bad one with its source location; the runtime must pass the
+    /// checked-mode arguments (ZLUDA_AGX_CHECKED=1). Slower
+    agx_checked: bool,
+
+    #[bpaf(long("lineinfo"))]
+    /// AGX: keep the PTX `.loc` source positions as a DWARF line table in the
+    /// object (as nvcc -lineinfo), for tools that map a PC to a source line
+    lineinfo: bool,
+
     #[bpaf(positional("filename"), some("a PTX file"))]
     /// PTX files. AGX links several into one object (their kernels and
     /// functions, as cuLink does); the outputs are named after the first
@@ -98,6 +114,9 @@ fn main_core() -> Result<(), CompilerError> {
             opts.arch,
             opts.ignore_errors,
             opts.strict_fp,
+            opts.agx_strict,
+            opts.agx_checked,
+            opts.lineinfo,
         );
     }
 
@@ -124,7 +143,7 @@ fn main_core() -> Result<(), CompilerError> {
         ptx,
         ptx::Options {
             target,
-            strict_fp: false,
+            ..Default::default()
         },
     )?;
 
@@ -182,7 +201,11 @@ fn compile_agx(
     arch: Option<String>,
     ignore_errors: bool,
     strict_fp: bool,
+    agx_strict: bool,
+    checked: bool,
+    lineinfo: bool,
 ) -> Result<(), CompilerError> {
+    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
@@ -192,6 +215,8 @@ fn compile_agx(
         ptx::Options {
             target: ptx::Target::Agx,
             strict_fp,
+            // checked mode names the source of a bad access
+            debug_locations: checked || lineinfo,
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
@@ -205,6 +230,7 @@ fn compile_agx(
             ptx::Options {
                 target: ptx::Target::Agx,
                 strict_fp,
+                debug_locations: checked || lineinfo,
             },
         )?;
         other_ir.push(other.llvm_ir);
@@ -218,7 +244,7 @@ fn compile_agx(
     llvm_zluda::compile_agx_linked(
         &llvm.context,
         &arch,
-        strict_fp,
+        agx_options,
         llvm.main,
         &other_ir,
         llvm.linked_bitcode,
@@ -240,6 +266,9 @@ fn compile_agx(
     _arch: Option<String>,
     _ignore_errors: bool,
     _strict_fp: bool,
+    _agx_strict: bool,
+    _checked: bool,
+    _lineinfo: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,

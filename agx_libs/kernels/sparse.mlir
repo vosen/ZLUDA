@@ -41,7 +41,8 @@ gpu.module @agx_sparse {
     %f0 = arith.constant 0.0 : f32
     %big = arith.constant 4611686018427387904 : index
     %rows = arith.index_cast %rows_ : i64 to index
-    %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %rowptr = memref.reinterpret_cast %rowptr0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
     %col = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
@@ -56,16 +57,17 @@ gpu.module @agx_sparse {
     %live = arith.cmpi ult, %i, %rows : index
     scf.if %live {
       %lo_r = memref.load %rowptr[%i] : memref<?xi32, strided<[1]>, 1>
-      %lo_b = arith.index_cast %lo_r : i32 to index
-      %lo = arith.subi %lo_b, %base : index
       %i_1 = arith.addi %i, %i1 : index
       %hi_r = memref.load %rowptr[%i_1] : memref<?xi32, strided<[1]>, 1>
-      %hi_b = arith.index_cast %hi_r : i32 to index
-      %hi = arith.subi %hi_b, %base : index
-      %acc = scf.for %k = %lo to %hi step %i1 iter_args(%a = %f0) -> f32 {
+      // Row pointers are int32: so is the loop over the row.
+      %one32 = arith.constant 1 : i32
+      %lo32 = arith.subi %lo_r, %base32 : i32
+      %hi32 = arith.subi %hi_r, %base32 : i32
+      %acc = scf.for %k32 = %lo32 to %hi32 step %one32 iter_args(%a = %f0) -> f32 : i32 {
+        %k = arith.index_cast %k32 : i32 to index
         %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-        %c_b = arith.index_cast %c_r : i32 to index
-        %c = arith.subi %c_b, %base : index
+        %c_s = arith.subi %c_r, %base32 : i32
+        %c = arith.index_cast %c_s : i32 to index
         %v = memref.load %val[%k] : memref<?xf32, strided<[1]>, 1>
         %xv = memref.load %x[%c] : memref<?xf32, strided<[1]>, 1>
         %a1 = math.fma %v, %xv, %a : f32
@@ -98,6 +100,8 @@ gpu.module @agx_sparse {
     %big = arith.constant 4611686018427387904 : index
     %nnz = arith.index_cast %nnz_ : i64 to index
     %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %trans = arith.index_cast %trans_ : i64 to index
     %row = memref.reinterpret_cast %row0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
@@ -116,8 +120,8 @@ gpu.module @agx_sparse {
       %r_b = arith.index_cast %r_r : i32 to index
       %r = arith.subi %r_b, %base : index
       %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-      %c_b = arith.index_cast %c_r : i32 to index
-      %c = arith.subi %c_b, %base : index
+      %c_s = arith.subi %c_r, %base32 : i32
+      %c = arith.index_cast %c_s : i32 to index
       %is_t = arith.cmpi ne, %trans, %i0 : index
       %src = arith.select %is_t, %r, %c : index
       %dst = arith.select %is_t, %c, %r : index
@@ -142,7 +146,8 @@ gpu.module @agx_sparse {
     %f0 = arith.constant 0.0 : f32
     %big = arith.constant 4611686018427387904 : index
     %rows = arith.index_cast %rows_ : i64 to index
-    %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %rowptr = memref.reinterpret_cast %rowptr0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
     %col = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
@@ -157,18 +162,19 @@ gpu.module @agx_sparse {
     %live = arith.cmpi ult, %i, %rows : index
     scf.if %live {
       %lo_r = memref.load %rowptr[%i] : memref<?xi32, strided<[1]>, 1>
-      %lo_b = arith.index_cast %lo_r : i32 to index
-      %lo = arith.subi %lo_b, %base : index
       %i_1 = arith.addi %i, %i1 : index
       %hi_r = memref.load %rowptr[%i_1] : memref<?xi32, strided<[1]>, 1>
-      %hi_b = arith.index_cast %hi_r : i32 to index
-      %hi = arith.subi %hi_b, %base : index
       %xi = memref.load %x[%i] : memref<?xf32, strided<[1]>, 1>
       %axi = arith.mulf %xi, %alpha : f32
-      scf.for %k = %lo to %hi step %i1 {
+      // Row pointers are int32: so is the loop over the row.
+      %one32 = arith.constant 1 : i32
+      %lo32 = arith.subi %lo_r, %base32 : i32
+      %hi32 = arith.subi %hi_r, %base32 : i32
+      scf.for %k32 = %lo32 to %hi32 step %one32 : i32 {
+        %k = arith.index_cast %k32 : i32 to index
         %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-        %c_b = arith.index_cast %c_r : i32 to index
-        %c = arith.subi %c_b, %base : index
+        %c_s = arith.subi %c_r, %base32 : i32
+        %c = arith.index_cast %c_s : i32 to index
         %v = memref.load %val[%k] : memref<?xf32, strided<[1]>, 1>
         %p = arith.mulf %v, %axi : f32
         %old = memref.atomic_rmw addf %p, %y[%c] : (f32, memref<?xf32, strided<[1]>, 1>) -> f32
@@ -467,4 +473,231 @@ gpu.module @agx_sparse {
     }
     gpu.return
   }
+
+  // ---- helpers of the kernels below (and of sparse_ix.mlir)
+
+  // m[k] of a buffer of any length.
+  func.func private @agx_sp_ld(%m0: memref<1xf32, 1>, %k: index) -> f32 {
+    %big = arith.constant 4611686018427387904 : index
+    %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %v = memref.load %m[%k] : memref<?xf32, strided<[1]>, 1>
+    return %v : f32
+  }
+  func.func private @agx_sp_st(%m0: memref<1xf32, 1>, %k: index, %v: f32) {
+    %big = arith.constant 4611686018427387904 : index
+    %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    memref.store %v, %m[%k] : memref<?xf32, strided<[1]>, 1>
+    return
+  }
+  // m[k] - base and m[k] = v + base of an i32 index buffer.
+  func.func private @agx_sp_ldi(%m0: memref<1xi32, 1>, %k: index, %base: index) -> index {
+    %big = arith.constant 4611686018427387904 : index
+    %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
+    %r = memref.load %m[%k] : memref<?xi32, strided<[1]>, 1>
+    %b = arith.index_cast %r : i32 to index
+    %v = arith.subi %b, %base : index
+    return %v : index
+  }
+  func.func private @agx_sp_sti(%m0: memref<1xi32, 1>, %k: index, %v: index, %base: index) {
+    %big = arith.constant 4611686018427387904 : index
+    %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
+    %b = arith.addi %v, %base : index
+    %r = arith.index_cast %b : index to i32
+    memref.store %r, %m[%k] : memref<?xi32, strided<[1]>, 1>
+    return
+  }
+  // The old m[k], adding 1 to it atomically.
+  func.func private @agx_sp_inc(%m0: memref<1xi32, 1>, %k: index) -> index {
+    %big = arith.constant 4611686018427387904 : index
+    %one = arith.constant 1 : i32
+    %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
+    %old = memref.atomic_rmw addi %one, %m[%k] : (i32, memref<?xi32, strided<[1]>, 1>) -> i32
+    %v = arith.index_cast %old : i32 to index
+    return %v : index
+  }
+
+  // out[0] = part[0] + ... + part[threads - 1], in order. One thread.
+  gpu.func @agx_sparse_sum(%part0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %threads_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %threads = arith.index_cast %threads_ : i64 to index
+    %i = gpu.global_id x
+    %first = arith.cmpi eq, %i, %i0 : index
+    scf.if %first {
+      %s = scf.for %t = %i0 to %threads step %i1 iter_args(%a = %f0) -> f32 {
+        %v = func.call @agx_sp_ld(%part0, %t) : (memref<1xf32, 1>, index) -> f32
+        %a1 = arith.addf %a, %v : f32
+        scf.yield %a1 : f32
+      }
+      func.call @agx_sp_st(%out0, %i0, %s) : (memref<1xf32, 1>, index, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // D[i rs + j cs] = 0 for i < rows, j < cols: launch a rows x cols grid.
+  gpu.func @agx_dense_zero(%d0: memref<1xf32, 1>, %rows_: i64, %cols_: i64, %rs_: i64, %cs_: i64) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %rows = arith.index_cast %rows_ : i64 to index
+    %cols = arith.index_cast %cols_ : i64 to index
+    %rs = arith.index_cast %rs_ : i64 to index
+    %cs = arith.index_cast %cs_ : i64 to index
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %rows : index
+    %in_j = arith.cmpi ult, %j, %cols : index
+    %live = arith.andi %in_i, %in_j : i1
+    scf.if %live {
+      %oi = arith.muli %i, %rs : index
+      %oj = arith.muli %j, %cs : index
+      %o = arith.addi %oi, %oj : index
+      func.call @agx_sp_st(%d0, %o, %f0) : (memref<1xf32, 1>, index, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // dst[p words + w] = src[perm[p] words + w] for p < n and w < words: moves
+  // values of any size in words of 4 bytes (8 in the f64 copy). One thread
+  // per p.
+  gpu.func @agx_sparse_permute(%src0: memref<1xf32, 1>, %dst0: memref<1xf32, 1>,
+                               %perm0: memref<1xi32, 1>, %n_: i64, %words_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %n = arith.index_cast %n_ : i64 to index
+    %words = arith.index_cast %words_ : i64 to index
+    %p = gpu.global_id x
+    %live = arith.cmpi ult, %p, %n : index
+    scf.if %live {
+      %k = func.call @agx_sp_ldi(%perm0, %p, %i0) : (memref<1xi32, 1>, index, index) -> index
+      %so = arith.muli %k, %words : index
+      %do = arith.muli %p, %words : index
+      scf.for %w = %i0 to %words step %i1 {
+        %s = arith.addi %so, %w : index
+        %d = arith.addi %do, %w : index
+        %v = func.call @agx_sp_ld(%src0, %s) : (memref<1xf32, 1>, index) -> f32
+        func.call @agx_sp_st(%dst0, %d, %v) : (memref<1xf32, 1>, index, f32) -> ()
+      }
+    }
+    gpu.return
+  }
+
+  // CSR to CSC with 32-bit indices (cusparseCsr2cscEx2), in four steps over
+  // a zeroed count array cnt of cols entries:
+  // 1. cnt[col[k] - base] += 1 for the entries k of row i (one thread per row)
+  gpu.func @agx_csr2csc_count(%rowptr0: memref<1xi32, 1>, %col0: memref<1xi32, 1>,
+                              %cnt0: memref<1xi32, 1>, %rows_: i64, %base_: i64) kernel {
+    %i1 = arith.constant 1 : index
+    %rows = arith.index_cast %rows_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %rows : index
+    scf.if %live {
+      %lo = func.call @agx_sp_ldi(%rowptr0, %i, %base) : (memref<1xi32, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ldi(%rowptr0, %i_1, %base) : (memref<1xi32, 1>, index, index) -> index
+      scf.for %k = %lo to %hi step %i1 {
+        %c = func.call @agx_sp_ldi(%col0, %k, %base) : (memref<1xi32, 1>, index, index) -> index
+        %old = func.call @agx_sp_inc(%cnt0, %c) : (memref<1xi32, 1>, index) -> index
+      }
+    }
+    gpu.return
+  }
+  // 2. the column offsets ptr (from base) and in cnt the first free position
+  //    of each column (one thread)
+  gpu.func @agx_csr2csc_scan(%cnt0: memref<1xi32, 1>, %ptr0: memref<1xi32, 1>,
+                             %cols_: i64, %base_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %cols = arith.index_cast %cols_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %first = arith.cmpi eq, %i, %i0 : index
+    scf.if %first {
+      %run = scf.for %j = %i0 to %cols step %i1 iter_args(%r = %i0) -> index {
+        func.call @agx_sp_sti(%ptr0, %j, %r, %base) : (memref<1xi32, 1>, index, index, index) -> ()
+        %v = func.call @agx_sp_ldi(%cnt0, %j, %i0) : (memref<1xi32, 1>, index, index) -> index
+        func.call @agx_sp_sti(%cnt0, %j, %r, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+        %r1 = arith.addi %r, %v : index
+        scf.yield %r1 : index
+      }
+      func.call @agx_sp_sti(%ptr0, %cols, %run, %base) : (memref<1xi32, 1>, index, index, index) -> ()
+    }
+    gpu.return
+  }
+  // 3. for the entries k of row i, at the next free position p of their
+  //    column: rowind[p] = i + base, perm[p] = k (one thread per row)
+  gpu.func @agx_csr2csc_fill(%rowptr0: memref<1xi32, 1>, %col0: memref<1xi32, 1>,
+                             %next0: memref<1xi32, 1>, %rowind0: memref<1xi32, 1>,
+                             %perm0: memref<1xi32, 1>, %rows_: i64, %base_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %rows = arith.index_cast %rows_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %rows : index
+    scf.if %live {
+      %lo = func.call @agx_sp_ldi(%rowptr0, %i, %base) : (memref<1xi32, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ldi(%rowptr0, %i_1, %base) : (memref<1xi32, 1>, index, index) -> index
+      scf.for %k = %lo to %hi step %i1 {
+        %c = func.call @agx_sp_ldi(%col0, %k, %base) : (memref<1xi32, 1>, index, index) -> index
+        %p = func.call @agx_sp_inc(%next0, %c) : (memref<1xi32, 1>, index) -> index
+        func.call @agx_sp_sti(%rowind0, %p, %i, %base) : (memref<1xi32, 1>, index, index, index) -> ()
+        func.call @agx_sp_sti(%perm0, %p, %k, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+      }
+    }
+    gpu.return
+  }
+  // 4. sorts the entries of each column by perm (so by row), moving rowind
+  //    along (one thread per column)
+  gpu.func @agx_csr2csc_sort(%ptr0: memref<1xi32, 1>, %rowind0: memref<1xi32, 1>,
+                             %perm0: memref<1xi32, 1>, %cols_: i64, %base_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %false = arith.constant false
+    %cols = arith.index_cast %cols_ : i64 to index
+    %base = arith.index_cast %base_ : i64 to index
+    %j = gpu.global_id x
+    %live = arith.cmpi ult, %j, %cols : index
+    scf.if %live {
+      %lo = func.call @agx_sp_ldi(%ptr0, %j, %base) : (memref<1xi32, 1>, index, index) -> index
+      %j_1 = arith.addi %j, %i1 : index
+      %hi = func.call @agx_sp_ldi(%ptr0, %j_1, %base) : (memref<1xi32, 1>, index, index) -> index
+      %lo1 = arith.addi %lo, %i1 : index
+      scf.for %p = %lo1 to %hi step %i1 {
+        %key = func.call @agx_sp_ldi(%perm0, %p, %i0) : (memref<1xi32, 1>, index, index) -> index
+        %row = func.call @agx_sp_ldi(%rowind0, %p, %i0) : (memref<1xi32, 1>, index, index) -> index
+        %q = scf.while (%q0 = %p) : (index) -> index {
+          %more = arith.cmpi ugt, %q0, %lo : index
+          %go = scf.if %more -> i1 {
+            %qm = arith.subi %q0, %i1 : index
+            %pv = func.call @agx_sp_ldi(%perm0, %qm, %i0) : (memref<1xi32, 1>, index, index) -> index
+            %gt = arith.cmpi ugt, %pv, %key : index
+            scf.yield %gt : i1
+          } else {
+            scf.yield %false : i1
+          }
+          scf.condition(%go) %q0 : index
+        } do {
+        ^bb0(%q1: index):
+          %qm = arith.subi %q1, %i1 : index
+          %pv = func.call @agx_sp_ldi(%perm0, %qm, %i0) : (memref<1xi32, 1>, index, index) -> index
+          %rv = func.call @agx_sp_ldi(%rowind0, %qm, %i0) : (memref<1xi32, 1>, index, index) -> index
+          func.call @agx_sp_sti(%perm0, %q1, %pv, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+          func.call @agx_sp_sti(%rowind0, %q1, %rv, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+          scf.yield %qm : index
+        }
+        func.call @agx_sp_sti(%perm0, %q, %key, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+        func.call @agx_sp_sti(%rowind0, %q, %row, %i0) : (memref<1xi32, 1>, index, index, index) -> ()
+      }
+    }
+    gpu.return
+  }
+
+  // sparse_ix.mlir for 32- and 64-bit indices
 }

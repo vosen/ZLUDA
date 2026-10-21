@@ -56,6 +56,7 @@ fn run_statement<'input>(
     Ok(match statement {
         Statement::Label(label) => result.push(Statement::Label(label)),
         Statement::Variable(var) => result.push(Statement::Variable(var)),
+        Statement::Loc(loc) => result.push(Statement::Loc(loc)),
         Statement::Instruction((predicate, instruction)) => {
             if let Some(pred) = predicate {
                 let if_true = resolver.register_unnamed(None);

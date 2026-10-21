@@ -9,6 +9,14 @@ use ptx_parser as ast;
 use std::path::PathBuf;
 
 fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilation, String> {
+    compile_with(ptx, cpu, false)
+}
+
+fn compile_with(
+    ptx: &str,
+    cpu: &str,
+    agx_strict: bool,
+) -> Result<llvm_zluda::compile_agx::AgxCompilation, String> {
     let ast = ast::parse_module_checked(ptx).map_err(|e| format!("parse: {e:?}"))?;
     let attributes = pass::Attributes {
         clock_rate: 1_398_000,
@@ -16,7 +24,14 @@ fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilati
     let module = pass::to_llvm_module_for_target(ast, attributes, Target::Agx, |_| {})
         .map_err(|e| format!("translate: {e}"))?;
     let impl_ir = module.linked_bitcode();
-    llvm_zluda::compile_agx(&module.context, cpu, module.strict_fp, module.llvm_ir, impl_ir, None)
+    llvm_zluda::compile_agx(
+        &module.context,
+        cpu,
+        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, agx_strict, checked: false },
+        module.llvm_ir,
+        impl_ir,
+        None,
+    )
 }
 
 fn spirv_run_dir() -> PathBuf {
@@ -120,6 +135,38 @@ fn spirv_run_kernels_compile() {
     assert!(missing.is_empty(), "required kernels failed: {missing:?}");
 }
 
+/// In strict mode (`zoc --agx-strict`) the backend reports any instruction that Mesa's asahi compiler would not
+/// emit: every run test that compiles must also compile in that mode, for M1 and M2.
+#[test]
+fn spirv_run_kernels_compile_agx_strict() {
+    let mut entries: Vec<_> = std::fs::read_dir(spirv_run_dir())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().map_or(false, |e| e == "ptx"))
+        .collect();
+    entries.sort();
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for path in &entries {
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        let ptx = std::fs::read_to_string(path).unwrap();
+        if !matches!(std::panic::catch_unwind(|| compile(&ptx, "agx-g14g")), Ok(Ok(_))) {
+            continue;
+        }
+        for cpu in ["agx-g13g", "agx-g14c"] {
+            checked += 1;
+            match std::panic::catch_unwind(|| compile_with(&ptx, cpu, true)) {
+                Ok(Ok(out)) if !out.object.is_empty() => {}
+                Ok(Ok(_)) => failures.push(format!("{name} ({cpu}): empty object")),
+                Ok(Err(e)) => failures.push(format!("{name} ({cpu}): {}", e.lines().next().unwrap_or(""))),
+                Err(_) => failures.push(format!("{name} ({cpu}): panic")),
+            }
+        }
+    }
+    eprintln!("AGX strict mode: {} of {checked} compilations", checked - failures.len());
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
 #[test]
 fn vector_add_assembly() {
     let ptx = std::fs::read_to_string(
@@ -181,4 +228,47 @@ fn dump_ir() {
             std::fs::write(dir.join(name + ".ll"), ir.to_bytes()).unwrap();
         }
     }
+}
+
+/// With `debug_locations`, `.file` and `.loc` become line-table debug locations: each instruction carries the
+/// position of the last `.loc` before it, in a lexical block file when the file is not the first one. Without it
+/// they are dropped and the module has no debug info.
+#[test]
+fn loc_becomes_debug_locations() {
+    let ptx = r#"
+.version 7.0
+.target sm_70
+.address_size 64
+.file 1 "/work/k.cu"
+.file 2 "/work/k.h"
+.visible .entry k(.param .u64 out)
+{
+  .reg .b32 %r<2>;
+  .reg .b64 %rd<3>;
+  ld.param.u64 %rd1, [out];
+  .loc 1 7 5
+  mov.u32 %r1, %tid.x;
+  cvta.to.global.u64 %rd2, %rd1;
+  .loc 2 3 9
+  st.global.u32 [%rd2], %r1;
+  ret;
+}
+"#;
+    let translate = |debug_locations| {
+        let ast = ast::parse_module_checked(ptx).unwrap();
+        let options = pass::Options { target: Target::Agx, debug_locations, ..Default::default() };
+        let m = pass::to_llvm_module_with_options(ast, pass::Attributes { clock_rate: 1_398_000 }, options, |_| {}).unwrap();
+        m.llvm_ir.print_module_to_string().to_str().into_owned()
+    };
+    let ir = translate(true);
+    assert!(ir.contains(r#"!DIFile(filename: "k.cu", directory: "/work")"#), "{ir}");
+    assert!(ir.contains("emissionKind: LineTablesOnly"), "{ir}");
+    assert!(ir.contains("!DILocation(line: 7, column: 5, scope:"), "{ir}");
+    assert!(ir.contains("!DILocation(line: 3, column: 9, scope:"), "{ir}");
+    assert!(ir.contains(r#"!DILexicalBlockFile(scope:"#), "{ir}");
+    assert!(ir.contains(r#"!"Debug Info Version""#), "{ir}");
+    let store = ir.lines().find(|l| l.contains("store i32") && l.contains("addrspace(1)")).unwrap();
+    assert!(store.contains("!dbg"), "{store}");
+    let plain = translate(false);
+    assert!(!plain.contains("!dbg") && !plain.contains("DICompileUnit"), "{plain}");
 }

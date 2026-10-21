@@ -21,8 +21,14 @@ pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 pub static DNN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn.agxfat"));
 /// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
 pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
+/// The complex BLAS kernels of zluda_blas_agx (`kernels/blasc.mlir`, with f64 copies for the Z routines).
+pub static BLASC: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blasc.agxfat"));
 /// The sparse kernels of zluda_sparse_agx (`kernels/sparse.mlir`).
 pub static SPARSE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sparse.agxfat"));
+/// The cuRAND kernels (Philox4x32-10 and its distributions, `kernels/rand.mlir`).
+pub static RAND: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/rand.agxfat"));
+/// The dense factorizations of zluda_solver_agx (`kernels/solver.mlir`, with f64 copies).
+pub static SOLVER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/solver.agxfat"));
 
 /// Element types of A and B, and of C.
 #[derive(Clone, Copy, Debug, PartialEq)]

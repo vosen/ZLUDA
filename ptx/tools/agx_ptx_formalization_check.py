@@ -390,6 +390,8 @@ def run_test(path, args):
         def zoc(*extra):
             if args.strict_fp:
                 extra = extra + ('--strict-fp',)
+            if args.agx_strict:
+                extra = extra + ('--agx-strict',)
             return subprocess.run([args.zoc, *extra, '--target', 'agx', '--arch', args.arch,
                                    '--output-dir', tmp, src],
                                   capture_output=True, text=True, timeout=args.timeout)
@@ -596,6 +598,8 @@ def run_test(path, args):
                        '--dump', '%#x=%d:%s' % (GLOBALS_BASE, len(globals_mem), f_glob)]
                 for u, v in uniforms:
                     cmd += ['--uniform', '%d=%d' % (u, v)]
+                if args.agx_strict:
+                    cmd += ['--agx-strict', args.arch]
                 try:
                     r = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout)
                 except subprocess.TimeoutExpired:
@@ -656,6 +660,9 @@ def main():
     ap.add_argument('--arch', default='agx-g14g')
     ap.add_argument('--strict-fp', action='store_true',
                     help='compile with zoc --strict-fp (software IEEE binary32, canonical NaNs)')
+    ap.add_argument('--agx-strict', action='store_true',
+                    help='compile with zoc --agx-strict (only the instructions Mesa emits) and run agx_run '
+                         '--agx-strict for --arch, so that any other instruction fails the test')
     ap.add_argument('--timeout', type=int, default=120)
     ap.add_argument('--max-failures', type=int, default=4, help='failing elements listed per test')
     ap.add_argument('-j', type=int, default=os.cpu_count())

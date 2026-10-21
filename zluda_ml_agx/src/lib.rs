@@ -1,7 +1,7 @@
 //! NVML for Apple GPUs on Asahi Linux: the device queries monitoring tools and frameworks make (count, name, UUID,
-//! memory, compute capability, driver versions), answered from the Asahi DRM parameters. Everything else returns
-//! `NVML_ERROR_NOT_SUPPORTED`; in particular utilisation, clocks, power and temperature, which the Asahi driver does
-//! not expose to userspace.
+//! memory, compute capability, driver versions), answered from the Asahi DRM parameters, the maximum clock, and the
+//! GPU utilisation of this process's kernels. Everything else returns `NVML_ERROR_NOT_SUPPORTED`; in particular the
+//! current clock, power and temperature, which the Asahi driver does not expose without root (ptx-re-blockers B25).
 
 #![allow(non_snake_case)]
 
@@ -40,10 +40,13 @@ cuda_macros::nvml_function_declarations!(
         <= [
             nvmlDeviceGetCount_v2,
             nvmlDeviceGetCudaComputeCapability,
+            nvmlDeviceGetClockInfo,
             nvmlDeviceGetHandleByIndex_v2,
+            nvmlDeviceGetMaxClockInfo,
             nvmlDeviceGetMemoryInfo,
             nvmlDeviceGetName,
             nvmlDeviceGetUUID,
+            nvmlDeviceGetUtilizationRates,
             nvmlErrorString,
             nvmlInitWithFlags,
             nvmlInit_v2,
@@ -135,6 +138,8 @@ mod imp {
         for n in nodes {
             if let Ok(dev) = agx_runtime::Device::open(&n) {
                 *d = Some(DeviceProps::from_params(&dev.params, total_memory()));
+                // the first utilisation sample covers the time since initialisation
+                *SAMPLE.lock().unwrap() = Some((std::time::Instant::now(), busy_ns()));
                 return Ok(());
             }
         }
@@ -216,6 +221,69 @@ mod imp {
         Ok(())
     }
 
+    /// The shader clock is the device's maximum frequency (the DRM's `max_frequency_khz`); Asahi gives no other.
+    pub unsafe fn nvmlDeviceGetMaxClockInfo(device: nvmlDevice_t, type_: nvmlClockType_t, clock: *mut c_uint) -> nvmlReturn_t {
+        check(device)?;
+        if clock.is_null() {
+            return Err(nvmlError_t::INVALID_ARGUMENT);
+        }
+        match type_ {
+            nvmlClockType_t::NVML_CLOCK_GRAPHICS | nvmlClockType_t::NVML_CLOCK_SM => {
+                *clock = props()?.clock_khz / 1000;
+                Ok(())
+            }
+            _ => Err(nvmlError_t::NOT_SUPPORTED),
+        }
+    }
+
+    /// The current clock is not exposed (B25: no devfreq or clock readout without root).
+    pub unsafe fn nvmlDeviceGetClockInfo(device: nvmlDevice_t, _type: nvmlClockType_t, clock: *mut c_uint) -> nvmlReturn_t {
+        check(device)?;
+        if clock.is_null() {
+            return Err(nvmlError_t::INVALID_ARGUMENT);
+        }
+        Err(nvmlError_t::NOT_SUPPORTED)
+    }
+
+    /// GPU time of this process's finished kernels (ZLUDA's `zluda_agx_gpu_busy_ns`, from the firmware's command
+    /// timestamps), or 0 when the process does not use zluda_agx.
+    fn busy_ns() -> u64 {
+        type Busy = extern "C" fn() -> u64;
+        static F: std::sync::OnceLock<Option<Busy>> = std::sync::OnceLock::new();
+        let f = F.get_or_init(|| {
+            let p = unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"zluda_agx_gpu_busy_ns".as_ptr()) };
+            (!p.is_null()).then(|| unsafe { std::mem::transmute::<*mut libc::c_void, Busy>(p) })
+        });
+        f.map_or(0, |f| f())
+    }
+
+    static SAMPLE: Mutex<Option<(std::time::Instant, u64)>> = Mutex::new(None);
+
+    /// Percent of the time since the last call (or since NVML was initialised) the GPU spent on this process's
+    /// kernels, capped at 100 (kernels of several streams overlap). Kernels of other processes are not seen.
+    pub(super) fn utilization(now: std::time::Instant, busy: u64, last: &mut Option<(std::time::Instant, u64)>) -> u32 {
+        let pct = match *last {
+            Some((t, b)) => {
+                let wall = now.duration_since(t).as_nanos().max(1);
+                ((busy.saturating_sub(b) as u128 * 100) / wall).min(100) as u32
+            }
+            None => 0,
+        };
+        *last = Some((now, busy));
+        pct
+    }
+
+    pub unsafe fn nvmlDeviceGetUtilizationRates(device: nvmlDevice_t, u: *mut nvmlUtilization_t) -> nvmlReturn_t {
+        check(device)?;
+        if u.is_null() {
+            return Err(nvmlError_t::INVALID_ARGUMENT);
+        }
+        let gpu = utilization(std::time::Instant::now(), busy_ns(), &mut SAMPLE.lock().unwrap());
+        // memory activity is not measured
+        *u = nvmlUtilization_t { gpu, memory: 0 };
+        Ok(())
+    }
+
     pub unsafe fn nvmlDeviceGetCudaComputeCapability(device: nvmlDevice_t, major: *mut c_int, minor: *mut c_int) -> nvmlReturn_t {
         check(device)?;
         if major.is_null() || minor.is_null() {
@@ -231,6 +299,19 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utilization_is_the_busy_share_of_the_interval() {
+        let t0 = std::time::Instant::now();
+        let mut last = None;
+        assert_eq!(imp::utilization(t0, 5, &mut last), 0, "no interval yet");
+        let t1 = t0 + std::time::Duration::from_millis(100);
+        assert_eq!(imp::utilization(t1, 5 + 25_000_000, &mut last), 25);
+        let t2 = t1 + std::time::Duration::from_millis(10);
+        assert_eq!(imp::utilization(t2, 5 + 25_000_000 + 30_000_000, &mut last), 100, "overlapping streams are capped");
+        let t3 = t2 + std::time::Duration::from_millis(10);
+        assert_eq!(imp::utilization(t3, 5 + 55_000_000, &mut last), 0, "idle");
+    }
 
     #[test]
     fn queries_before_init_fail_and_errors_have_names() {

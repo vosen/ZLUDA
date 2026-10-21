@@ -1,5 +1,6 @@
 // Pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx
-// (cuDNN), in f32 for every AGX generation like sgemm.mlir. Tensors are 4-D
+// (cuDNN), in f32 for every AGX generation like sgemm.mlir (f16 and bf16
+// tensors go through f32 copies, agx_dnn_to_f32 / agx_dnn_from_f32). Tensors are 4-D
 // N x C x H x W with arbitrary element strides (0 broadcasts); a thread's
 // linear index runs over N C H W in that order. Outputs follow cuDNN's
 // blending, y = alpha r + beta y, and y is not read when beta is 0.
@@ -1020,6 +1021,601 @@ gpu.module @agx_dnn {
       %kM = arith.divf %k, %Mf : f32
       %r = arith.mulf %kM, %t1 : f32
       func.call @agx_dnn_blend(%dx0, %dxo, %r, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // f16 (kind 0) or bf16 (kind 1) bits to f32 and back (round to nearest
+  // even; NaN stays a quiet NaN)
+  func.func private @agx_dnn_h2f(%b: i16, %kind: index) -> f32 {
+    %k0 = arith.constant 0 : index
+    %c16 = arith.constant 16 : i32
+    %is_h = arith.cmpi eq, %kind, %k0 : index
+    %r = scf.if %is_h -> f32 {
+      %h = arith.bitcast %b : i16 to f16
+      %f = arith.extf %h : f16 to f32
+      scf.yield %f : f32
+    } else {
+      %w = arith.extui %b : i16 to i32
+      %s = arith.shli %w, %c16 : i32
+      %f = arith.bitcast %s : i32 to f32
+      scf.yield %f : f32
+    }
+    return %r : f32
+  }
+  func.func private @agx_dnn_f2h(%f: f32, %kind: index) -> i16 {
+    %k0 = arith.constant 0 : index
+    %c16 = arith.constant 16 : i32
+    %c1 = arith.constant 1 : i32
+    %round = arith.constant 32767 : i32
+    %qnan = arith.constant 32704 : i16
+    %is_h = arith.cmpi eq, %kind, %k0 : index
+    %r = scf.if %is_h -> i16 {
+      %h = arith.truncf %f : f32 to f16
+      %b = arith.bitcast %h : f16 to i16
+      scf.yield %b : i16
+    } else {
+      %bits = arith.bitcast %f : f32 to i32
+      %hi = arith.shrui %bits, %c16 : i32
+      %odd = arith.andi %hi, %c1 : i32
+      %bias = arith.addi %round, %odd : i32
+      %sum = arith.addi %bits, %bias : i32
+      %top = arith.shrui %sum, %c16 : i32
+      %b = arith.trunci %top : i32 to i16
+      %nan = arith.cmpf uno, %f, %f : f32
+      %v = arith.select %nan, %qnan, %b : i16
+      scf.yield %v : i16
+    }
+    return %r : i16
+  }
+
+  // d = s for 4-D tensors with element strides, from f16 / bf16 (kind 0 / 1)
+  // bits to f32 (to_f32) or back (from_f32). One thread per element.
+  gpu.func @agx_dnn_to_f32(%s0: memref<1xi16, 1>, %d0: memref<1xf32, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %ss0: index, %ss1: index, %ss2: index, %ss3: index,
+      %ds0: index, %ds1: index, %ds2: index, %ds3: index, %kind: index) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %s = memref.reinterpret_cast %s0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi16, 1> to memref<?xi16, strided<[1]>, 1>
+    %d = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %so = func.call @agx_dnn_off(%i, %C, %H, %W, %ss0, %ss1, %ss2, %ss3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %do = func.call @agx_dnn_off(%i, %C, %H, %W, %ds0, %ds1, %ds2, %ds3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %b = memref.load %s[%so] : memref<?xi16, strided<[1]>, 1>
+      %f = func.call @agx_dnn_h2f(%b, %kind) : (i16, index) -> f32
+      memref.store %f, %d[%do] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+  gpu.func @agx_dnn_from_f32(%s0: memref<1xf32, 1>, %d0: memref<1xi16, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %ss0: index, %ss1: index, %ss2: index, %ss3: index,
+      %ds0: index, %ds1: index, %ds2: index, %ds3: index, %kind: index) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %s = memref.reinterpret_cast %s0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %d = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi16, 1> to memref<?xi16, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %so = func.call @agx_dnn_off(%i, %C, %H, %W, %ss0, %ss1, %ss2, %ss3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %do = func.call @agx_dnn_off(%i, %C, %H, %W, %ds0, %ds1, %ds2, %ds3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %f = memref.load %s[%so] : memref<?xf32, strided<[1]>, 1>
+      %b = func.call @agx_dnn_f2h(%f, %kind) : (f32, index) -> i16
+      memref.store %b, %d[%do] : memref<?xi16, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // ---- the graph API (zluda_dnn_agx/src/graph.rs)
+
+  // erf by Abramowitz and Stegun 7.1.26 (|error| < 1.5e-7)
+  func.func private @agx_dnn_erf(%x: f32) -> f32 {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %p = arith.constant 0.3275911 : f32
+    %a1 = arith.constant 0.254829592 : f32
+    %a2 = arith.constant -0.284496736 : f32
+    %a3 = arith.constant 1.421413741 : f32
+    %a4 = arith.constant -1.453152027 : f32
+    %a5 = arith.constant 1.061405429 : f32
+    %nlog2e = arith.constant -1.44269504 : f32
+    %ax = math.absf %x : f32
+    %d = math.fma %p, %ax, %f1 : f32
+    %t = arith.divf %f1, %d : f32
+    %q0 = math.fma %a5, %t, %a4 : f32
+    %q1 = math.fma %q0, %t, %a3 : f32
+    %q2 = math.fma %q1, %t, %a2 : f32
+    %q3 = math.fma %q2, %t, %a1 : f32
+    %q4 = arith.mulf %q3, %t : f32
+    %x2 = arith.mulf %ax, %ax : f32
+    %e0 = arith.mulf %x2, %nlog2e : f32
+    %e = math.exp2 %e0 : f32
+    %qe = arith.mulf %q4, %e : f32
+    %r = arith.subf %f1, %qe : f32
+    %neg = arith.cmpf olt, %x, %f0 : f32
+    %nr = arith.negf %r : f32
+    %v = arith.select %neg, %nr, %r : f32
+    return %v : f32
+  }
+
+  func.func private @agx_dnn_bool(%c: i1) -> f32 {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %v = arith.select %c, %f1, %f0 : f32
+    return %v : f32
+  }
+
+  // y = op(x, b, t) for cuDNN's pointwise modes (CUDNN_POINTWISE_*): p0, p1
+  // and p2 are the relu lower clip, upper clip and slope, or the elu alpha
+  // (p0), softplus and swish beta (p0). Backward modes take the forward
+  // input as x and dy as b. NaN for unknown modes.
+  func.func private @agx_dnn_pw_op(%mode: index, %x: f32, %b: f32, %t: f32, %p0: f32, %p1: f32, %p2: f32) -> f32 {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %half = arith.constant 0.5 : f32
+    %nan = arith.constant 0x7FC00000 : f32
+    %rsqrt2 = arith.constant 0.707106781 : f32
+    %k = arith.constant 0.797884561 : f32
+    %c044 = arith.constant 0.044715 : f32
+    %c134 = arith.constant 0.134145 : f32
+    %rsqrt2pi = arith.constant 0.398942280 : f32
+    %r = scf.index_switch %mode -> f32
+    case 0 {
+      %v = arith.addf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 1 {
+      %v = arith.mulf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 2 {
+      %v = arith.minnumf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 3 {
+      %v = arith.maxnumf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 4 {
+      %v = math.sqrt %x : f32
+      scf.yield %v : f32
+    }
+    case 5 {
+      %v = math.fma %b, %b, %x : f32
+      scf.yield %v : f32
+    }
+    case 6 {
+      %v = arith.divf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 7 {
+      %q = arith.divf %x, %b : f32
+      %tq = math.trunc %q : f32
+      %nb = arith.negf %b : f32
+      %v = math.fma %tq, %nb, %x : f32
+      scf.yield %v : f32
+    }
+    case 8 {
+      %v = math.powf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 9 {
+      %v = arith.subf %x, %b : f32
+      scf.yield %v : f32
+    }
+    case 10 {
+      %v = math.absf %x : f32
+      scf.yield %v : f32
+    }
+    case 11 {
+      %v = math.ceil %x : f32
+      scf.yield %v : f32
+    }
+    case 12 {
+      %v = math.cos %x : f32
+      scf.yield %v : f32
+    }
+    case 13 {
+      %v = math.exp %x : f32
+      scf.yield %v : f32
+    }
+    case 14 {
+      %v = math.floor %x : f32
+      scf.yield %v : f32
+    }
+    case 15 {
+      %v = math.log %x : f32
+      scf.yield %v : f32
+    }
+    case 16 {
+      %v = arith.negf %x : f32
+      scf.yield %v : f32
+    }
+    case 17 {
+      %s = math.sqrt %x : f32
+      %v = arith.divf %f1, %s : f32
+      scf.yield %v : f32
+    }
+    case 18 {
+      %v = math.sin %x : f32
+      scf.yield %v : f32
+    }
+    case 19 {
+      %sn = math.sin %x : f32
+      %cs = math.cos %x : f32
+      %v = arith.divf %sn, %cs : f32
+      scf.yield %v : f32
+    }
+    case 20 {
+      %v = func.call @agx_dnn_erf(%x) : (f32) -> f32
+      scf.yield %v : f32
+    }
+    case 21 {
+      scf.yield %x : f32
+    }
+    case 22 {
+      %v = arith.divf %f1, %x : f32
+      scf.yield %v : f32
+    }
+    case 100 {
+      %below = arith.cmpf ole, %x, %p0 : f32
+      %above = arith.cmpf oge, %x, %p1 : f32
+      %d = arith.subf %x, %p0 : f32
+      %lo = math.fma %p2, %d, %p0 : f32
+      %v0 = arith.select %above, %p1, %x : f32
+      %v = arith.select %below, %lo, %v0 : f32
+      scf.yield %v : f32
+    }
+    case 101 {
+      %v = func.call @agx_dnn_tanh(%x) : (f32) -> f32
+      scf.yield %v : f32
+    }
+    case 102 {
+      %v = func.call @agx_dnn_sigmoid(%x) : (f32) -> f32
+      scf.yield %v : f32
+    }
+    case 103 {
+      %pos = arith.cmpf ogt, %x, %f0 : f32
+      %e = func.call @agx_dnn_expm1(%x) : (f32) -> f32
+      %ae = arith.mulf %p0, %e : f32
+      %v = arith.select %pos, %x, %ae : f32
+      scf.yield %v : f32
+    }
+    case 104 {
+      %u = arith.mulf %x, %rsqrt2 : f32
+      %e = func.call @agx_dnn_erf(%u) : (f32) -> f32
+      %e1 = arith.addf %e, %f1 : f32
+      %hx = arith.mulf %x, %half : f32
+      %v = arith.mulf %hx, %e1 : f32
+      scf.yield %v : f32
+    }
+    case 105 {
+      // log(1 + e^(beta x)) / beta, x beyond 20 / beta linear
+      %bx = arith.mulf %x, %p0 : f32
+      %e = math.exp %bx : f32
+      %e1 = arith.addf %e, %f1 : f32
+      %l = math.log %e1 : f32
+      %sp = arith.divf %l, %p0 : f32
+      %lim = arith.constant 20.0 : f32
+      %big = arith.cmpf ogt, %bx, %lim : f32
+      %v = arith.select %big, %x, %sp : f32
+      scf.yield %v : f32
+    }
+    case 106 {
+      %bx = arith.mulf %x, %p0 : f32
+      %s = func.call @agx_dnn_sigmoid(%bx) : (f32) -> f32
+      %v = arith.mulf %x, %s : f32
+      scf.yield %v : f32
+    }
+    case 107 {
+      %x2 = arith.mulf %x, %x : f32
+      %c = math.fma %x2, %c044, %f1 : f32
+      %xc = arith.mulf %x, %c : f32
+      %u = arith.mulf %xc, %k : f32
+      %th = func.call @agx_dnn_tanh(%u) : (f32) -> f32
+      %t1 = arith.addf %th, %f1 : f32
+      %hx = arith.mulf %x, %half : f32
+      %v = arith.mulf %hx, %t1 : f32
+      scf.yield %v : f32
+    }
+    case 200 {
+      %below = arith.cmpf ole, %x, %p0 : f32
+      %above = arith.cmpf oge, %x, %p1 : f32
+      %g0 = arith.select %above, %f0, %f1 : f32
+      %g = arith.select %below, %p2, %g0 : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 201 {
+      %th = func.call @agx_dnn_tanh(%x) : (f32) -> f32
+      %t2 = arith.mulf %th, %th : f32
+      %g = arith.subf %f1, %t2 : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 202 {
+      %s = func.call @agx_dnn_sigmoid(%x) : (f32) -> f32
+      %s1 = arith.subf %f1, %s : f32
+      %g = arith.mulf %s, %s1 : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 203 {
+      %pos = arith.cmpf ogt, %x, %f0 : f32
+      %e = math.exp %x : f32
+      %ae = arith.mulf %p0, %e : f32
+      %g = arith.select %pos, %f1, %ae : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 204 {
+      // Phi(x) + x phi(x)
+      %u = arith.mulf %x, %rsqrt2 : f32
+      %e = func.call @agx_dnn_erf(%u) : (f32) -> f32
+      %e1 = arith.addf %e, %f1 : f32
+      %cdf = arith.mulf %e1, %half : f32
+      %x2 = arith.mulf %x, %x : f32
+      %nh = arith.constant -0.5 : f32
+      %ex = arith.mulf %x2, %nh : f32
+      %pe = math.exp %ex : f32
+      %pdf = arith.mulf %pe, %rsqrt2pi : f32
+      %g = math.fma %x, %pdf, %cdf : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 205 {
+      %bx = arith.mulf %x, %p0 : f32
+      %g = func.call @agx_dnn_sigmoid(%bx) : (f32) -> f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 206 {
+      %bx = arith.mulf %x, %p0 : f32
+      %s = func.call @agx_dnn_sigmoid(%bx) : (f32) -> f32
+      %s1 = arith.subf %f1, %s : f32
+      %ss = arith.mulf %s, %s1 : f32
+      %g = math.fma %bx, %ss, %s : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 207 {
+      %x2 = arith.mulf %x, %x : f32
+      %c = math.fma %x2, %c044, %f1 : f32
+      %xc = arith.mulf %x, %c : f32
+      %u = arith.mulf %xc, %k : f32
+      %th = func.call @agx_dnn_tanh(%u) : (f32) -> f32
+      %t1 = arith.addf %th, %f1 : f32
+      %t2 = arith.mulf %th, %th : f32
+      %sech = arith.subf %f1, %t2 : f32
+      // du/dx = k (1 + 3 0.044715 x^2)
+      %dc = math.fma %x2, %c134, %f1 : f32
+      %du = arith.mulf %dc, %k : f32
+      %hx = arith.mulf %x, %half : f32
+      %r1 = arith.mulf %sech, %du : f32
+      %r2 = arith.mulf %hx, %r1 : f32
+      %h1 = arith.mulf %t1, %half : f32
+      %g = arith.addf %h1, %r2 : f32
+      %v = arith.mulf %g, %b : f32
+      scf.yield %v : f32
+    }
+    case 300 {
+      %c = arith.cmpf oeq, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 301 {
+      %c = arith.cmpf une, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 302 {
+      %c = arith.cmpf ogt, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 303 {
+      %c = arith.cmpf oge, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 304 {
+      %c = arith.cmpf olt, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 305 {
+      %c = arith.cmpf ole, %x, %b : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 400 {
+      %cx = arith.cmpf une, %x, %f0 : f32
+      %cb = arith.cmpf une, %b, %f0 : f32
+      %c = arith.andi %cx, %cb : i1
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 401 {
+      %cx = arith.cmpf une, %x, %f0 : f32
+      %cb = arith.cmpf une, %b, %f0 : f32
+      %c = arith.ori %cx, %cb : i1
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 402 {
+      %c = arith.cmpf oeq, %x, %f0 : f32
+      %v = func.call @agx_dnn_bool(%c) : (i1) -> f32
+      scf.yield %v : f32
+    }
+    case 601 {
+      %c = arith.cmpf une, %t, %f0 : f32
+      %v = arith.select %c, %x, %b : f32
+      scf.yield %v : f32
+    }
+    default {
+      scf.yield %nan : f32
+    }
+    return %r : f32
+  }
+
+  // y = op(alpha1 x, alpha2 b, t) over y's 4-D shape, every input broadcast
+  // through 0 strides. One thread per element of y.
+  gpu.func @agx_dnn_pw_graph(%x0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %t0: memref<1xf32, 1>, %y0: memref<1xf32, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %xs0: index, %xs1: index, %xs2: index, %xs3: index,
+      %bs0: index, %bs1: index, %bs2: index, %bs3: index,
+      %ts0: index, %ts1: index, %ts2: index, %ts3: index,
+      %ys0: index, %ys1: index, %ys2: index, %ys3: index,
+      %mode: index, %p0: f32, %p1: f32, %p2: f32, %alpha1: f32, %alpha2: f32) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %x = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %b = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %t = memref.reinterpret_cast %t0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %y = memref.reinterpret_cast %y0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
+          : (index, index, index, index) -> (index, index, index, index)
+      %xo = func.call @agx_dnn_dot4(%n, %c, %h, %w, %xs0, %xs1, %xs2, %xs3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %bo = func.call @agx_dnn_dot4(%n, %c, %h, %w, %bs0, %bs1, %bs2, %bs3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %to = func.call @agx_dnn_dot4(%n, %c, %h, %w, %ts0, %ts1, %ts2, %ts3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %yo = func.call @agx_dnn_dot4(%n, %c, %h, %w, %ys0, %ys1, %ys2, %ys3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %xv = memref.load %x[%xo] : memref<?xf32, strided<[1]>, 1>
+      %bv = memref.load %b[%bo] : memref<?xf32, strided<[1]>, 1>
+      %tv = memref.load %t[%to] : memref<?xf32, strided<[1]>, 1>
+      %ax = arith.mulf %xv, %alpha1 : f32
+      %ab = arith.mulf %bv, %alpha2 : f32
+      %r = func.call @agx_dnn_pw_op(%mode, %ax, %ab, %tv, %p0, %p1, %p2)
+          : (index, f32, f32, f32, f32, f32, f32) -> f32
+      memref.store %r, %y[%yo] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // y = the reduction of x over the dimensions where y has extent 1 and x has
+  // e_d > 1 (cudnnReduceTensorOp_t: add 0, mul 1, min 2, max 3, amax 4,
+  // avg 5, norm1 6, norm2 7, mul without zeros 8). One thread per element
+  // of y.
+  gpu.func @agx_dnn_reduce_graph(%x0: memref<1xf32, 1>, %y0: memref<1xf32, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %xs0: index, %xs1: index, %xs2: index, %xs3: index,
+      %ys0: index, %ys1: index, %ys2: index, %ys3: index,
+      %e0: index, %e1: index, %e2: index, %e3: index, %op: index) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %x = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %y = memref.reinterpret_cast %y0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %k0 = arith.constant 0 : index
+    %k1 = arith.constant 1 : index
+    %k2 = arith.constant 2 : index
+    %k3 = arith.constant 3 : index
+    %k4 = arith.constant 4 : index
+    %k5 = arith.constant 5 : index
+    %k6 = arith.constant 6 : index
+    %k7 = arith.constant 7 : index
+    %k8 = arith.constant 8 : index
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %inf = arith.constant 0x7F800000 : f32
+    %ninf = arith.constant 0xFF800000 : f32
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
+          : (index, index, index, index) -> (index, index, index, index)
+      %base = func.call @agx_dnn_dot4(%n, %c, %h, %w, %xs0, %xs1, %xs2, %xs3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %yo = func.call @agx_dnn_dot4(%n, %c, %h, %w, %ys0, %ys1, %ys2, %ys3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %e01 = arith.muli %e0, %e1 : index
+      %e23 = arith.muli %e2, %e3 : index
+      %count = arith.muli %e01, %e23 : index
+      %is_mul = arith.cmpi eq, %op, %k1 : index
+      %is_mnz = arith.cmpi eq, %op, %k8 : index
+      %one_init = arith.ori %is_mul, %is_mnz : i1
+      %is_min = arith.cmpi eq, %op, %k2 : index
+      %is_max = arith.cmpi eq, %op, %k3 : index
+      %i0a = arith.select %one_init, %f1, %f0 : f32
+      %i0b = arith.select %is_min, %inf, %i0a : f32
+      %init = arith.select %is_max, %ninf, %i0b : f32
+      %acc = scf.for %k = %k0 to %count step %k1 iter_args(%a = %init) -> f32 {
+        %d3 = arith.remui %k, %e3 : index
+        %q3 = arith.divui %k, %e3 : index
+        %d2 = arith.remui %q3, %e2 : index
+        %q2 = arith.divui %q3, %e2 : index
+        %d1 = arith.remui %q2, %e1 : index
+        %d0 = arith.divui %q2, %e1 : index
+        %off = func.call @agx_dnn_dot4(%d0, %d1, %d2, %d3, %xs0, %xs1, %xs2, %xs3)
+            : (index, index, index, index, index, index, index, index) -> index
+        %o = arith.addi %base, %off : index
+        %v = memref.load %x[%o] : memref<?xf32, strided<[1]>, 1>
+        %av = math.absf %v : f32
+        %r = scf.index_switch %op -> f32
+        case 1 {
+          %m = arith.mulf %a, %v : f32
+          scf.yield %m : f32
+        }
+        case 2 {
+          %m = arith.minnumf %a, %v : f32
+          scf.yield %m : f32
+        }
+        case 3 {
+          %m = arith.maxnumf %a, %v : f32
+          scf.yield %m : f32
+        }
+        case 4 {
+          %m = arith.maxnumf %a, %av : f32
+          scf.yield %m : f32
+        }
+        case 6 {
+          %m = arith.addf %a, %av : f32
+          scf.yield %m : f32
+        }
+        case 7 {
+          %m = math.fma %v, %v, %a : f32
+          scf.yield %m : f32
+        }
+        case 8 {
+          %z = arith.cmpf oeq, %v, %f0 : f32
+          %v1 = arith.select %z, %f1, %v : f32
+          %m = arith.mulf %a, %v1 : f32
+          scf.yield %m : f32
+        }
+        default {
+          %m = arith.addf %a, %v : f32
+          scf.yield %m : f32
+        }
+        scf.yield %r : f32
+      }
+      %is_avg = arith.cmpi eq, %op, %k5 : index
+      %is_n2 = arith.cmpi eq, %op, %k7 : index
+      %cnt_i = arith.index_cast %count : index to i64
+      %cnt = arith.uitofp %cnt_i : i64 to f32
+      %avg = arith.divf %acc, %cnt : f32
+      %rt = math.sqrt %acc : f32
+      %r0 = arith.select %is_avg, %avg, %acc : f32
+      %res = arith.select %is_n2, %rt, %r0 : f32
+      memref.store %res, %y[%yo] : memref<?xf32, strided<[1]>, 1>
     }
     gpu.return
   }

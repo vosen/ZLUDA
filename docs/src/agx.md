@@ -97,17 +97,17 @@ an error.
   `add`, `sub`, `mul` and `fma` of `f32x2` (sm_100, two f32 in a 64-bit
   register) are `<2 x float>` operations that follow the f32 rounding and
   denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
-  `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (with
-  round to nearest; a directed `.relu` fma is not implemented).
+  `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (PTX gives
+  it only `.rn`; another rounding mode is reported as an error).
   `lop3` (any lookup table, also in a register, and the predicate output
   form `lop3.and`/`lop3.or`) is the OR of the table's minterms.
   `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
   all-ones lanes where the comparison holds.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
-* Not supported yet: the `f32x2` forms of
-  instructions other than `add`/`sub`/`mul`/`fma` and `.ftz`/`.sat` of `bf16`
-  arithmetic (which PTX does not have).
+* Every `f32x2` instruction PTX has (`add`, `sub`, `mul`, `fma`, also with
+  `f16x2`/`bf16x2` operands) is supported. `.ftz`/`.sat` of `bf16` arithmetic
+  is not, as PTX does not have it either.
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
   kernels whose instructions all use one) are computed in software, since
   the hardware only rounds to nearest even: an emulated mode register
@@ -193,8 +193,16 @@ three differences.
   thread: [x,y,z] Assertion `+"`expr`"+` failed.`) as a printf record, sets
   `__zluda_agx_trap_flag` (which `agx_runtime` reports as
   `CUDA_ERROR_ASSERT`), orders its stores with a release fence and executes
-  `trap`. What `trap` does on the hardware when executed is not measured yet
-  (AGX Performance Simulator `tasks/ptx-re-blockers.md`, B21).
+  `trap`. On the M2 Max an executed `trap` does nothing (AGX Performance
+  Simulator `tasks/ptx-re-blockers.md`, B21), so the flag word is what reports
+  the assertion, and the LLVM backend makes a thread that reaches `trap`
+  return there: the failing thread stops, the others run on (the threadgroup
+  barrier does not wait for it, B28). `CUDA_ERROR_ASSERT` is sticky, as in
+  CUDA: every call returns it until the context is destroyed.
+* Lanes of one warp run one side of a divergent branch to completion before
+  the other side (B4), so a lane that spins waiting for a lane of its own warp
+  on the other side of a branch never finishes. This is the pre-Volta (`sm_6x`)
+  behaviour; independent thread scheduling is not available.
 
 Register use limits the threadgroup size: a threadgroup runs on one core, and
 a core holds 2 * floor(3328 / (2 * H)) SIMD-groups of a kernel that uses H
@@ -205,9 +213,24 @@ the registers that many threads need. `cuFuncGetAttribute(MAX_THREADS_PER_BLOCK)
 reports the limit, and a launch with a larger block fails with
 `CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES`, as on NVIDIA GPUs. The per-core budget is
 measured on the M2 Max (AGX Performance Simulator `tasks/safe-11`) and agrees
-with Mesa's occupancy table; that a single threadgroup must fit in it, and
-that the Registers word encodes 256 halves as 0, are Mesa's and not yet
-confirmed there (`tasks/ptx-re-blockers.md`, B26).
+with Mesa's occupancy table. That a single threadgroup must fit in it, and
+that the Registers word encodes 256 halves as 0, are measured too
+(`tasks/ptx-re-blockers.md`, B26): one granule over the budget, a 1024-thread
+threadgroup with a barrier hangs.
+
+Launches take at most 1024 threads in a block, along any of x, y and z (B22;
+a 2048-thread threadgroup runs nothing). The launch words count threads, so
+`gridDim * blockDim` must also be below 2^32 in each dimension; the grid is at
+most 2^31 - 1 CTAs along x and 65535 along y and z, as on NVIDIA GPUs. A launch
+outside these limits fails with `CUDA_ERROR_INVALID_VALUE`.
+
+`cuOccupancyMaxActiveBlocksPerMultiprocessor` reports the CTAs per core that
+are resident together: min(15, floor(S / g) - 1) for a kernel of which a core
+holds S SIMD-groups and g per CTA, and less with shared memory (B5). Only a
+grid of at most that many CTAs times the core count is resident as a whole:
+beyond it, later CTAs start when earlier ones exit (B5, B30), so a software
+grid barrier or a CTA that spins until a later CTA writes needs a grid within
+the limit. Cooperative launches are not supported.
 
 `cargo test -p ptx --no-default-features --features agx agx` compiles all PTX
 run tests for AGX: 194 of 195 compile on their own. The other, `extern_func`,
@@ -304,7 +327,10 @@ of device memory: a pool of 4 slabs is a module global
 again by every later instruction), allocates columns first fit from the slab's
 map of 32-column granules, and gives the slab back with its last
 `tcgen05.dealloc`. A CTA that finds no free slab waits for one, so at most four
-CTAs that use tensor memory run at once. `alloc` and `dealloc` are done by the
+CTAs that use tensor memory run at once. The wait cannot deadlock: a CTA that
+holds a slab is running, and a resident CTA is not preempted by the ones
+spinning (B30), so it reaches its `dealloc` unless it waits on a CTA that has
+not started. `alloc` and `dealloc` are done by the
 lowest active lane of the warp; `relinquish_alloc_permit`, `fence` and `wait`
 do nothing (every operation completes before the next instruction).
 
@@ -556,9 +582,10 @@ PTX-formalization):
 * `.ftz` with `.sat` flushes a negative subnormal result to -0 before
   saturating, so it gives -0 where the model gives +0;
 * `min.ftz.f32` of a negative and a positive subnormal gives +0, not -0;
-* `atom.add.f32` returns the canonical NaN, not the operand's payload. These
-  last two wait on hardware answers (AGX-Performance-Simulator
-  `tasks/ptx-re-blockers.md`, B3 and B11).
+* `atom.add.f32` stores and returns 0x7fc00000 for every NaN result, not the
+  operand's payload: the M2 Max's native float atomic add does
+  (AGX-Performance-Simulator `tasks/ptx-re-blockers.md`, B24). `min.ftz.f32`
+  waits on B11.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated
@@ -570,7 +597,7 @@ bit-exact. `ptx/tools/agx_rounding_check.py` does the same for the directed
 rounding modes: `add`, `sub`, `mul`, `div`, `fma`, `sqrt`, `cvt.rn.f32.s32`,
 `cvt.rn.f32.u32` and `cvt.f16.f32` in `.rz`, `.rp` and `.rm`, with a static
 rounding mode and with the mode set at run time, are bit-exact, with and
-without the strict mode.
+without strict FP.
 
 ### The emulated mode register
 
@@ -584,6 +611,102 @@ with mode changes, or whose kernels use a directed rounding mode, the
 floating point operations are constrained intrinsics with dynamic rounding,
 which the backend's `agx-lower-fp-env` pass lowers with the register's value
 at each operation.
+
+## Strict instruction mode (`agx-strict`)
+
+`zoc --agx-strict` (and `ZLUDA_AGX_STRICT=1` for `zluda_agx`) compiles for M1 and M2 using only the instruction forms
+that Mesa's asahi compiler emits for the same GPU: the LLVM backend's `agx-strict` feature (`llvm/docs/AGXUsage.rst` in
+the LLVM fork, "Strict mode"). Code then relies only on encodings that a production driver uses, and the backend
+reports any other instruction as an error. Nothing changes in the PTX translation: every AGX intrinsic ZLUDA calls has a
+Mesa form. What the backend does differently:
+
+- float atomic adds are compare-and-swap loops, not the M2's native float add;
+- 64-bit unsigned atomic min/max use the lock table, not the M2's native form;
+- device and threadgroup loads, stores and atomics are always encoded in their long form, as Mesa packs them.
+
+The mode is part of the compilation cache key. The library kernels (`agx_libs`) carry a `CHIP+agx-strict` build of every
+M1 and M2 entry, compiled with `#agxir.target<..., features = "+agx-strict">` so that the MLIR `agx` operations take
+their portable forms, and `zluda_agx` loads those entries in this mode. The AGX Performance Simulator's
+`--agx-strict GPU` (or `AGX_STRICT=GPU`) runs code with the same check, so a test fails on any instruction Mesa would
+not emit; `agx_ptx_formalization_check.py --agx-strict` and `test_kernels.py` (for `+agx-strict` entries) use it.
+
+Results (2026-10-21, simulator):
+- PTX-formalization with `--agx-strict`, run under `agx_run --agx-strict`: on `agx-g14c` and `agx-g13g`, 282 programs pass
+  and all 1,728 checks match with `--strict-fp`, and 1,553 checks match without it. That is the same as without the
+  mode, and no program used an instruction outside Mesa's forms.
+- `cargo test -p ptx --no-default-features --features agx agx`: 388 of 388 `agx-strict` compilations, the 194 run tests
+  that compile, on `agx-g13g` and `agx-g14c`.
+- Cost (agx-bench in the LLVM fork): 6.0% more code from the long memory forms, and 0.4% more estimated cycles, all of
+  it the float atomic add on M2.
+
+## Checked mode (`agx-checked`)
+
+`zoc --agx-checked` (and `ZLUDA_AGX_CHECKED=1` for `zluda_agx`) builds kernels that check their own memory accesses, as
+compute-sanitizer's memcheck does on NVIDIA GPUs: the LLVM backend's `agx-checked` feature (`llvm/docs/AGXUsage.rst`
+in the LLVM fork, "Checked mode"). Before each access that could go wrong, the kernel checks
+
+- device memory: that the address is inside the allocation its pointer argument points into, and aligned; a pointer
+  loaded from memory (arrays of pointers, linked structures) must point into some live allocation;
+- `.shared` memory, static and dynamic: that the address is below the block's threadgroup memory size;
+- `.local` memory with a variable offset: that the offset is inside the variable.
+
+Accesses at constant offsets from the same base in the same block share a check. The first bad access of any thread
+fills the module's 64-byte error record (the kind, the address and size, a check site, the thread and block) and that
+thread returns; every later checked launch of the module returns at once. The kernel does not touch the bad address, so
+nothing faults: without checked mode, the same bug reads or writes whatever is mapped there, or faults the command.
+
+`zluda_agx` passes what the kernel needs as hidden arguments after the PTX ones (the `.agx.kernels` record tells
+where): the error record, the threadgroup memory size, and for each pointer the kernel bounds-checks (a pointer
+parameter, or a pointer inside a `.param` struct) the start and end of the allocation it points into, found with
+`cuMemGetAddressRange`'s table or among the modules' global data (`cuModuleGetGlobal`). A pointer into neither gets an
+empty range, so any access through it is reported. For pointers loaded from memory, each launch also gets a sorted
+table of every live allocation and global data buffer, copied into the launch's staging memory, which the kernel
+binary-searches. At the next synchronisation the record is printed, with the launch it came from:
+
+```
+zluda_agx: out of bounds store of 4 bytes at 0x10000000080 by thread (32, 0, 0) of block (0, 0, 0)
+    at k k.cu:42:7
+  in kernel k grid (1, 1, 1) block (33, 1, 1) shared 0 bytes, stream 0, command 7, arguments [0x10000000000, ...]
+```
+
+and the context is left with `CUDA_ERROR_ILLEGAL_ADDRESS` (`CUDA_ERROR_MISALIGNED_ADDRESS` for a misaligned access),
+returned by every call until `cuCtxDestroy`, which also clears the records. A site names the function, file, line and column
+of each frame, innermost (inlined) first, from the PTX `.file` and `.loc` directives (`nvcc -lineinfo` emits them),
+which checked mode turns into LLVM line-table debug locations; without them a site names only the kernel. The line
+information changes no code: the 194 PTX run tests annotated with a `.loc` before every instruction compile to the
+same machine code with and without it. The mode is part of the compilation cache key; a library fat object
+is used in its `CHIP+agx-checked` build if it has one and unchecked otherwise.
+
+Cost (agx-bench in the LLVM fork): about 1.5 times the estimated cycles and 5 times the code; most of it is a fixed part
+per kernel (the report and the entry check). Validation (simulator):
+`llvm/utils/agx-checked/zluda_tests.py` compiles PTX kernels with `zoc --agx-checked` on `agx-g14c` and on `agx-g13g`
+with `--agx-strict`, and checks that each bug is reported with the right kind, address, thread and block, that correct
+kernels report nothing and compute what their unchecked builds compute, and that unchecked builds miss the bugs (32
+cases, among them a store inside an inlined `.func` reported as `put put.h:3:7` called from `k inl.cu:12:5`, and 7
+controls pass). It is the `zchecked` stage of `llvm/utils/agx-mesa-isa/tools/check-all.sh`.
+
+### Fault dumps
+
+A command that faults (both of its timestamps still 0) is reported with its launch record (kernel, grid, block, dynamic
+shared memory, stream, command and argument bytes), and the error (`CUDA_ERROR_LAUNCH_FAILED`) is sticky until
+`cuCtxDestroy`, as in CUDA. Faults in earlier commands of the same queue are found too, not just in the one waited for.
+With `ZLUDA_AGX_DUMP=DIR`, the launch is also saved to `DIR/<pid>-<command>` for replaying in the AGX Performance
+Simulator:
+
+- `code.bin`, the kernel's code;
+- `m<i>.bin`, the memory the launch can reach, listed with its GPU address in `regions.txt`: the allocations its
+  arguments point into, the module's global data, the parameter block and the error record. It is the memory as the
+  fault left it, not as the launch found it;
+- `replay.sh`, which runs the launch in `agx_run` (`$AGX_RUN` or `agx_run` on the `PATH`) with the same uniforms,
+  grid and threadgroup memory, and leaves each region's final contents in `m<i>.out`.
+
+Kernels that use stack memory replay too: `agx_run` gives each thread its own stack, as the driver's scratch memory does (the stack size is noted in `replay.sh`).
+
+When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`, which compiles with `zoc
+--lineinfo` to keep the PTX `.loc` positions as nvcc's `-lineinfo` does), the dump also holds `module.o` and
+`replay.sh` passes `--lines module.o`: a fault in the replay then prints the source line of the faulting
+instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
+`llvm-addr2line`.
 
 ## Checking against PTX-formalization
 
@@ -645,6 +768,16 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   (`cuMemAllocAsync`, which allocates at once, and `cuMemFreeAsync`, which
   waits for all work) are supported. `cuMemHostRegister` is not: Asahi cannot
   map existing user memory into the GPU.
+* Scratch: kernels that spill or use `.local` memory get per-thread stack
+  memory as Mesa sets it up (AGX Performance Simulator
+  `tasks/ptx-re-blockers.md`, B1, measured on the M2 Max): each command that
+  needs it carries Mesa's helper program (`libagx_helper`, compiled by Mesa
+  25.3.6 and shipped as `agx_runtime/src/data/libagx_helper.bin`), which
+  hands out blocks of one scratch buffer per address space laid out like
+  Mesa's (128 SIMD-groups per core), and the kernel's Registers word carries
+  its scratch size bucket. The buffer grows to the largest kernel's stack
+  size (for example 57 MiB for 320 bytes per thread on 38 cores, 912 MiB for
+  4 KiB) and is kept until the context is destroyed.
 * Modules: `cuModuleLoadData` takes PTX text, a fat binary (its PTX for the
   newest architecture is used; SASS-only fat binaries cannot load) or an AGX
   object. PTX is compiled by `zoc` (found through `ZLUDA_AGX_ZOC`, next to the
@@ -656,11 +789,40 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   the object's `.agx.kernels` section. Most parameters travel in uniform
   registers; the others go in a parameter block.
 * Streams are in-order queues on timeline syncobjs. Events record a queue's
-  last fence and time with the firmware's command timestamps.
+  last fence and time with the firmware's command timestamps. The firmware
+  signals a faulted compute command with success but writes neither timestamp,
+  so a command whose timestamps are both still 0 is returned as
+  `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
+  is sticky until `cuCtxDestroy` (see "Fault dumps").
+* A launch's command stream invalidates the USC (shader) cache only on a
+  queue's first command after new code was loaded: code rewritten in place is
+  seen without it (simulator `tasks/ptx-re-blockers.md`, B8), and it costs
+  about 1.8 us per command. `ZLUDA_AGX_USC_BARRIER=1` emits it on every
+  command, as Mesa does.
+* `cuLaunchCooperativeKernel` and `cuLaunchKernelEx`'s cooperative attribute
+  take grids up to the threadgroups resident together on the device (the
+  co-residency limit `cuOccupancyMaxActiveBlocksPerMultiprocessor` reports,
+  times the cores; B5), and return `CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE`
+  beyond. `cuLaunchKernelEx`'s cluster dimension must be the kernel's compiled
+  `.reqnctapercluster` (or 1); the scheduling preference is ignored.
+* Kernels have no run time limit (`CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT` is
+  0): one command ran 79.9 s correctly on the M2 Max (simulator
+  `tasks/ptx-re-blockers.md`, B6), and a synchronisation waits as long as the
+  kernel runs (`ZLUDA_AGX_WAIT_MS` sets a limit). The firmware ends a
+  deadlocked command after about 0.5 s, which is reported as a launch failure.
 * At every synchronisation, device `printf` output is printed, and a failed
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
-* There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
-  the first one that answers the Asahi parameter query.
+* There is one device (the render node is `$ZLUDA_AGX_NODE` or the first one
+  that answers the Asahi parameter query). Contexts are real: each one
+  `cuCtxCreate` makes has its own GPU address space (VM) and owns its memory,
+  modules, streams, events, graphs, limits and sticky error, all freed by
+  `cuCtxDestroy`; every thread has its own stack of current contexts
+  (`cuCtxPushCurrent` / `cuCtxPopCurrent` / `cuCtxSetCurrent`). The primary
+  context (`cuDevicePrimaryCtxRetain`, the CUDA runtime's) is used by a thread
+  with no current context; `cuDevicePrimaryCtxReset` (`cudaDeviceReset`) waits
+  for its work, frees everything in it and starts it afresh. How the firmware
+  schedules several VMs is not measured yet (simulator
+  `tasks/ptx-re-blockers.md`, B38, B42-B44).
 
 ## cuBLAS (`zluda_blas_agx`)
 
@@ -746,7 +908,9 @@ tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
 `test_kernels.py`).
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
-f32 tensors of up to 4 dimensions with any strides:
+tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16
+through packed f32 copies (converted in and out by `agx_dnn_to_f32` /
+`agx_dnn_from_f32`):
 
 * activations (`cudnnActivationForward` / `Backward`: sigmoid, ReLU, tanh,
   clipped ReLU, ELU, identity and swish, with their descriptors);
@@ -762,47 +926,167 @@ f32 tensors of up to 4 dimensions with any strides:
   statistics take two passes (the mean, then the variance), and the running
   variance is the unbiased one, as in cuDNN.
 
-These kernels are tested on the simulator for agx-g13g and agx-g14c (63
-cases per chip). The backend (graph) API, f16 for these operations, RNNs,
-LRN, dropout and the fused operations are not implemented yet.
+These kernels are tested on the simulator for agx-g13g and agx-g14c.
+
+The backend (graph) API (`cudnnBackend*`, what cudnn-frontend and PyTorch
+use) runs operation graphs of 2-D convolutions (forward, backward data and
+backward filter, any group count, symmetric padding), matmuls (2-D or batched
+3-D, broadcast batches), pointwise operations (every mode but atan2 and index
+generation: arithmetic, math functions, activations and their backward forms,
+comparisons, logic and binary select, with broadcasting) and reductions, on
+tensors of up to 4 dimensions in f32, f16 or bf16 (`zluda_dnn_agx/src/imp/graph.rs`).
+Finalizing a graph takes a snapshot of it; heuristics return one engine
+configuration when every operation is supported and none otherwise, so
+cudnn-frontend falls back or reports the graph unsupported. An execution plan
+runs the operations in dependency order in f32 on packed tensors: packed f32
+tensors are used in place, everything else (f16 and bf16 tensors, other
+strides, virtual tensors, by-value scalars) through f32 copies in the
+workspace the plan reports. The pointwise and reduction kernels are tested
+for every mode and operator against Python references. Normalization,
+attention (SDPA), resampling and the statistics operations of the graph API,
+RNNs, LRN and dropout are not implemented yet.
 
 ## cuFFT (`zluda_fft_agx`)
 
 `libcufft` on `agx_libs/kernels/fft.mlir` (one source for every chip).
-Single precision: complex to complex transforms of rank 1 to 3 (rank 1 also
+Single and double precision (C2C / Z2Z, R2C / D2Z, C2R / Z2D): complex to
+complex transforms of rank 1 to 3 (rank 1 also
 strided and batched through `cufftPlanMany`, with the same input and output
 layout), and real to complex / complex to real transforms of rank 1,
 batched, in or out of place. Power-of-two lengths use radix-2 Stockham passes
 alternating two work buffers; other lengths use a direct transform. The
 twiddles are computed on the host in double precision and uploaded with the
-plan. The plan allocates its own work buffers (`cufftSetWorkArea` is
-accepted and unused). Like cuFFT, inverse transforms are not normalized.
-Double precision, multi-dimensional real transforms, callbacks and the Xt
-API return `CUFFT_NOT_SUPPORTED`. The kernels are tested on the simulator
+plan. Double precision runs copies of the same kernels built for `f64`
+(generated by `agx_libs/build.rs`, named `<kernel>_f64`), in the backend's
+software double precision, with double precision twiddles. The plan
+allocates its own work buffers (`cufftSetWorkArea` is accepted and unused).
+Like cuFFT, inverse transforms are not normalized. Multi-dimensional real
+transforms, callbacks and the Xt API return `CUFFT_NOT_SUPPORTED`. The kernels are tested on the simulator
 for agx-g13g and agx-g14c, and the plans' launch sequences (ping-pong
 buffers, in-place copies, the passes of each dimension) are checked in unit
 tests against a direct DFT.
 
 ## cuSPARSE (`zluda_sparse_agx`)
 
-`libcusparse` on `agx_libs/kernels/sparse.mlir` (one source for every chip).
-The generic API with f32 values and 32- or 64-bit indices (the row offsets and
-the columns of one type), zero- or one-based: `cusparseSpMV` on CSR and COO
-matrices, non-transposed or transposed, and `cusparseSpMM` on CSR matrices with
-`opA` non-transposed and `opB` either way, on column- or row-major dense
-matrices. Non-transposed CSR SpMV and SpMM use one thread per output element;
-the transposed and COO products scale `y` by `beta` first and then add with
-atomic f32 adds. No external buffer is needed (`*_bufferSize` returns 0).
-Handles, streams, host and device pointer modes and the legacy matrix
-descriptor are supported. Other functions (sparse formats beyond CSR and COO,
-SpGEMM, SpSV, the legacy level 2 and 3 routines, other value types) return
-`CUSPARSE_STATUS_NOT_SUPPORTED`.
+`libcusparse` on `agx_libs/kernels/sparse.mlir` and `sparse_ix.mlir` (one
+source for every chip; `agx_libs/build.rs` instantiates `sparse_ix.mlir` for
+32- and 64-bit indices and adds f64 copies of every kernel). The generic API
+with f32 or f64 values (all operands of one type) and 32- or 64-bit indices
+(the row offsets and the columns of one type), zero- or one-based. CSC
+matrices (`cusparseCreateCsc`) work wherever CSR ones do, as the CSR matrix
+of their transpose:
+
+- `cusparseSpMV` on CSR and COO matrices, non-transposed or transposed, and
+  `cusparseSpMM` on CSR matrices with `opA` non-transposed and `opB` either
+  way, on column- or row-major dense matrices. Non-transposed CSR SpMV and
+  SpMM use one thread per output element; the transposed and COO products
+  scale `y` by `beta` first and then add with atomic adds.
+- Sparse vectors (`cusparseCreateSpVec`): `cusparseSpVV` (256 partial sums in
+  its workspace, added in order, so the result is deterministic),
+  `cusparseAxpby`, `cusparseGather`, `cusparseScatter` and `cusparseRot`.
+- Conversions: `cusparseSparseToDense` (CSR and COO), `cusparseDenseToSparse`
+  to CSR (the analysis counts the nonzeros of each row, scans them into the
+  row offsets and sets the matrix's nnz; `cusparseCsrSetPointers` then gives
+  the columns and values), and `cusparseCsr2cscEx2` (32-bit indices; any value
+  type of 4, 8 or 16 bytes, or `CUSPARSE_ACTION_SYMBOLIC`): columns are counted
+  and filled with atomics, then each column is sorted, so the row indices of a
+  column are in order like cuSPARSE's.
+- `cusparseSpGEMM` (workEstimation, compute, copy) for `C = alpha A B` with
+  CSR matrices, non-transposed, `beta` 0: the work estimation counts each
+  row's products, the compute step forms them sorted by column with equal
+  columns added (one thread per row) and sets C's nnz, and the copy writes C.
+- `cusparseSDDMM` on CSR output, `opA` and `opB` either way, one thread per row.
+- `cusparseSpSV` and `cusparseSpSM` on CSR matrices with the fill mode and
+  diagonal type of `cusparseSpMatSetAttribute`, `opA` non-transposed or
+  transposed (and `opB` either way for SpSM): one thread per right-hand side
+  substitutes row after row, so a single SpSV runs on one thread.
+
+Only SpVV, Csr2cscEx2 and SpGEMM need external buffers. Handles, streams, host and
+device pointer modes and the legacy matrix descriptor are supported. Other
+functions (SpGEMM reuse, BSR and the blocked formats, the legacy level 2 and 3 routines,
+complex and f16 values) return `CUSPARSE_STATUS_NOT_SUPPORTED`.
+
+## cuRAND (`zluda_rand_agx`)
+
+`libcurand`'s host API on `agx_libs/kernels/rand.mlir`. Every pseudo-random
+generator type is Philox4x32-10 (block `b` of a sequence is
+`philox(counter (b, 0), key seed)`); each call starts at the next whole block
+after the words earlier calls used, so results are reproducible for a seed and
+a sequence of calls, but they are not NVIDIA's sequences. `curandGenerate`,
+`curandGenerateUniform(Double)`, `curandGenerateNormal(Double)`,
+`curandGenerateLogNormal(Double)` and `curandGeneratePoisson` use cuRAND's
+documented conversions: uniform values in (0, 1], Box-Muller normals (an even
+count), and Poisson values from exponential arrivals below lambda 64 and the
+normal approximation above. The f64 kernels compute their logarithm, sine,
+cosine and exponential with polynomials (the backend has no f64
+transcendentals); the f32 ones use the hardware's. Host generators
+(`curandCreateGeneratorHost`) compute the same words on the CPU. Quasi-random
+generators (Sobol) and the discrete distributions of the device API return
+`CURAND_STATUS_TYPE_ERROR`; the device API (`curand_kernel.h`) is header code
+in the application's PTX and needs no library.
+
+## cuSOLVER (`zluda_solver_agx`)
+
+`libcusolver`'s dense LU, Cholesky and QR routines on
+`agx_libs/kernels/solver.mlir`, in single and double precision:
+`cusolverDn{S,D}getrf` / `getrs` (partial pivoting; `devIpiv` is required),
+`potrf` / `potrs` (either triangle), `geqrf`, `ormqr` (either side, `N` or `T`),
+`orgqr`, `gesvd` (m >= n; `jobu` `A` only for square matrices) and `syevd`, with
+their `_bufferSize` queries. The factorizations run one
+column at a time — a single-thread pivot or reflector step, then a parallel
+update of the rest of the matrix — and the solves run one thread per
+right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
+non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
+one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
+sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get
+there); `syevd` runs it on `A + |A|_F I`, whose singular vectors are A's
+eigenvectors, and takes the eigenvalues as Rayleigh quotients. The columns of U
+for zero singular values are left zero. The other eigen routines, the 64-bit (`cusolverDnX*`) API, batched and sparse cuSOLVER are not
+exported.
+
+## NVRTC and nvJitLink (`zluda_rtc_agx`)
+
+`libnvrtc` compiles CUDA C++ to PTX with the system's clang (`clang` on `PATH`,
+or `ZLUDA_NVRTC_CLANG`; it needs the NVPTX target, which distribution builds
+have), and zluda_agx compiles that PTX like any other module. Instead of the
+CUDA toolkit's headers, clang's CUDA headers are completed by a prelude
+(`zluda_rtc_agx/src/include`): the qualifiers and built-in variables, vector
+types, atomics, warp intrinsics, and libdevice's `__nv_*` math functions
+written in portable C++. Those are tested against the host's libm
+(`cargo test -p zluda_rtc_agx`: 1–4 ulp for the elementary functions in single
+and double precision) and on the GPU through the simulator
+(`zluda_rtc_agx/tests/agx_math.py`); the `__sinf`-style intrinsics and
+`--use_fast_math` use the hardware's approximations. Bessel, gamma, `erfinv`
+and the SIMD video functions are not implemented: a program that calls one
+fails to compile and the log names it. Headers passed to
+`nvrtcCreateProgram`, name expressions and lowered names (read from the PTX),
+and the usual options (`--gpu-architecture`, `-D`, `-I`, `--std`,
+`--use_fast_math`, `-ftz`, `-fmad`, `-default-device`, `-lineinfo`, `-rdc`) are
+supported; others are ignored with a note in the log. `nvrtcGetCUBIN` returns
+the PTX, which zluda_agx loads wherever a cubin is expected.
+
+`libnvJitLink` passes its inputs (PTX, fat binaries, AGX objects) to the
+driver's `cuLink*`, which links several PTX modules into one AGX object; the
+versioned entry points of CUDA 12.0 to 12.9 (`__nvJitLinkCreate_12_5`, ...) are
+exported too. LTO IR is not supported.
+
+## NCCL (`zluda_nccl_agx`)
+
+`libnccl` for the one GPU of an Asahi machine: every communicator has one rank
+(`ncclCommInitRank` with `nranks` 1, `ncclCommInitAll` with one device,
+`ncclCommSplit`; NCCL itself refuses two ranks on one device, and other counts
+return `ncclInvalidUsage`). On one rank each collective (AllReduce, Reduce,
+ReduceScatter, Broadcast, Bcast, AllGather) copies the send buffer to the
+receive buffer on the stream, nothing when they are the same; `ncclAvg`
+divides by one, and `ncclRedOpCreatePreMulSum` operators scale the result (f32
+and f64). Sends and receives to rank 0 pair up in order. `ncclMemAlloc`,
+buffer registration, groups and the asynchronous-error query are supported.
 
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT, cuSPARSE), with their library symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT, cuSPARSE, cuRAND, cuSOLVER, NVRTC, nvJitLink, NCCL), with their library symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -817,12 +1101,14 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). Of the 1729 PTX-formalization checks on agx-g14c, 1728 run and all of them match the formal semantics with `--strict-fp` (1553 without). Not supported: `.multimem` and `.fabric`, `f32x2` forms other than `add` / `sub` / `mul` / `fma`, clusters with more than 32 KiB of shared memory |
 | Warp-level and async | `mma`, `mma.sp`, `wmma`, `ldmatrix` / `stmatrix`, `wgmma`, `tcgen05` and the tensor memory accelerator (`cp.async.bulk.tensor`) are emulated; `cp.async`, mbarriers and thread block clusters (up to 1024 threads) run on ordinary instructions and threadgroup memory |
 | Textures and surfaces | sampled in software (the texture unit is not used yet, simulator task B29): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
-| Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` / strict mode for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
+| Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` (strict FP) for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
 | Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
 | Memory model | fences of every scope lower to measured barrier sequences |
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), linking (`cuLink*`), CUDA arrays, launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
-| Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 level 1, gemv / ger, geam / dgmm / syrk / symm / trmm / trsm and batched GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion; simulator task B1), cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
-| NVML | device count, name, UUID, memory, compute capability; no telemetry |
-| Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |
+| Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
+| Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`); cuSOLVER dense LU, Cholesky, QR, SVD and symmetric eigenvalues (`zluda_solver_agx`); NVRTC on clang and nvJitLink (`zluda_rtc_agx`); single-rank NCCL (`zluda_nccl_agx`) |
+| Not yet | recursion and non-inlined calls, peer access, IPC, the cuDNN graph API and f16 beyond convolutions, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
+| NVML | device count, name, UUID, memory, compute capability; the maximum clock (`nvmlDeviceGetMaxClockInfo`, 1,398 MHz on the M2 Max) and GPU utilisation (`nvmlDeviceGetUtilizationRates`: the share of time since the last call this process's kernels ran, from the firmware's command timestamps; other processes are not seen). Asahi exposes no current clock, temperature or power without root (B25), so those return `NVML_ERROR_NOT_SUPPORTED` |
+| Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
+| Hardware validation | M2 Max (G14C, Asahi), 2026-10-20, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md`: the direct-DRM runner and `agx_cuda_smoke` pass (B2); scratch with Mesa's helper (B1), forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), code rewrites (B8), the whole uniform file (B9), barriers (B16, B28), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), masked instruction cost (B31), submit cost (B32), vector alignment (B33) and stack cost (B34) are measured and used. Open: float atomic add under contention (B3), hardware calls (B14), async copies (B17), lane-offset fmadd recording (B18), native textures (B29), a real CUDA program (B23, B41), and B35-B45 (shader clock, IPC, checked mode, VMs and queues, allocation limits, cost model, context teardown, multiple VMs) |

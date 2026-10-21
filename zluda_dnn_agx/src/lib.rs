@@ -5,8 +5,9 @@
 //! convolution descriptors (padding, strides, dilations, groups, cross-correlation or convolution), and
 //! `cudnnConvolutionForward`, `cudnnConvolutionBackwardData` and `cudnnConvolutionBackwardFilter` for f32 and f16
 //! tensors (accumulated in f32), with the algorithm queries (one algorithm per direction, no workspace); and, on
-//! `agx_libs/kernels/dnn.mlir` for f32 tensors, activations, add / set / scale tensor, softmax, 2-D pooling and batch
-//! normalization, forward and backward. Other functions return `CUDNN_STATUS_NOT_SUPPORTED`.
+//! `agx_libs/kernels/dnn.mlir`, activations, add / set / scale tensor, softmax, 2-D pooling and batch normalization,
+//! forward and backward, for f32 tensors and for f16 and bf16 ones through packed f32 copies. The backend (graph)
+//! API runs graphs of convolutions, matmuls, pointwise operations and reductions (`imp/graph.rs`). Other functions return `CUDNN_STATUS_NOT_SUPPORTED`.
 
 #![allow(non_snake_case)]
 
@@ -44,6 +45,13 @@ cuda_macros::cudnn9_function_declarations!(
     unimplemented_fn,
     implemented_fn
         <= [
+            cudnnBackendSetAttribute,
+            cudnnBackendInitialize,
+            cudnnBackendGetAttribute,
+            cudnnBackendFinalize,
+            cudnnBackendExecute,
+            cudnnBackendDestroyDescriptor,
+            cudnnBackendCreateDescriptor,
             cudnnActivationBackward,
             cudnnActivationForward,
             cudnnAddTensor,
@@ -1021,6 +1029,59 @@ mod imp {
         run(h, "bwd_filter", s, half, elements, x, dw, dy, alpha, beta)
     }
 
+    // ---- the backend (graph) API
+
+    mod graph;
+
+    unsafe fn backend<'a>(d: cudnnBackendDescriptor_t) -> Result<&'a mut graph::Desc, cudnnError_t> {
+        (d as *mut graph::Desc).as_mut().ok_or(cudnnError_t::BAD_PARAM)
+    }
+
+    pub(crate) unsafe fn cudnnBackendCreateDescriptor(ty: cudnnBackendDescriptorType_t, d: *mut cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        let desc = graph::create(ty.0)?;
+        out(d, Box::into_raw(desc) as cudnnBackendDescriptor_t)
+    }
+
+    pub(crate) unsafe fn cudnnBackendDestroyDescriptor(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        if !d.is_null() {
+            drop(Box::from_raw(d as *mut graph::Desc));
+        }
+        Ok(())
+    }
+
+    pub(crate) unsafe fn cudnnBackendInitialize(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        backend(d).map(|_| ())
+    }
+
+    pub(crate) unsafe fn cudnnBackendFinalize(d: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        graph::finalize(backend(d)?)
+    }
+
+    pub(crate) unsafe fn cudnnBackendSetAttribute(
+        d: cudnnBackendDescriptor_t,
+        name: cudnnBackendAttributeName_t,
+        ty: cudnnBackendAttributeType_t,
+        count: i64,
+        data: *const c_void,
+    ) -> cudnnStatus_t {
+        graph::set_attribute(backend(d)?, name.0, ty.0, count, data)
+    }
+
+    pub(crate) unsafe fn cudnnBackendGetAttribute(
+        d: cudnnBackendDescriptor_t,
+        name: cudnnBackendAttributeName_t,
+        ty: cudnnBackendAttributeType_t,
+        requested: i64,
+        count: *mut i64,
+        data: *mut c_void,
+    ) -> cudnnStatus_t {
+        graph::get_attribute(backend(d)?, name.0, ty.0, requested, count, data)
+    }
+
+    pub(crate) unsafe fn cudnnBackendExecute(h: cudnnHandle_t, plan: cudnnBackendDescriptor_t, pack: cudnnBackendDescriptor_t) -> cudnnStatus_t {
+        graph::execute(h, backend(plan)?, backend(pack)?)
+    }
+
     // ---- pointwise, softmax, pooling and batch normalization (agx_libs/kernels/dnn.mlir), f32 tensors
 
     fn arg<T>(v: &mut T) -> *mut c_void {
@@ -1060,6 +1121,88 @@ mod imp {
         fn push(&mut self, v: i64) {
             self.0.push(v);
         }
+    }
+
+    /// f16 and bf16 tensors of a call through packed f32 copies, so the f32 kernels run them: each tensor
+    /// (descriptor, pointer, read, written) of the list becomes an f32 descriptor and buffer; `finish` converts the
+    /// written ones back.
+    struct Staging {
+        _descs: Vec<Box<Tensor>>,
+        back: Vec<(View, View, *mut c_void, *mut c_void, i64)>,
+        temps: Vec<Temp>,
+    }
+
+    /// The f16 (0) or bf16 (1) kind of a tensor type, None for f32.
+    fn half_kind(ty: u32) -> Result<Option<i64>, cudnnError_t> {
+        match ty {
+            t if t == cudnnDataType_t::CUDNN_DATA_FLOAT.0 => Ok(None),
+            t if t == cudnnDataType_t::CUDNN_DATA_HALF.0 => Ok(Some(0)),
+            t if t == cudnnDataType_t::CUDNN_DATA_BFLOAT16.0 => Ok(Some(1)),
+            _ => Err(cudnnError_t::NOT_SUPPORTED),
+        }
+    }
+
+    unsafe fn convert(h: &Handle, name: &'static std::ffi::CStr, mut src: *mut c_void, sv: &View, mut dst: *mut c_void, dv: &View, mut kind: i64) -> cudnnStatus_t {
+        let mut total = sv.total();
+        let mut a = Args::shape(sv).strides(sv).strides(dv);
+        let mut p = vec![arg(&mut src), arg(&mut dst), arg(&mut total)];
+        p.extend(a.0.iter_mut().map(|v| arg(v)));
+        p.push(arg(&mut kind));
+        dnn_launch(h, name, &mut p, total)
+    }
+
+    /// None when every tensor is f32, else the staging and the f32 descriptors and pointers to call with.
+    unsafe fn stage(
+        h: cudnnHandle_t,
+        tensors: &[(cudnnTensorDescriptor_t, *const c_void, bool, bool)],
+    ) -> Result<Option<(Staging, Vec<(cudnnTensorDescriptor_t, *mut c_void)>)>, cudnnError_t> {
+        let mut any = false;
+        for &(d, _, _, _) in tensors {
+            any |= half_kind(obj::<Tensor>(d)?.ty)?.is_some();
+        }
+        if !any {
+            return Ok(None);
+        }
+        let handle = obj::<Handle>(h)?;
+        let mut st = Staging { _descs: Vec::new(), back: Vec::new(), temps: Vec::new() };
+        let mut calls = Vec::new();
+        for &(d, p, read, write) in tensors {
+            let t = obj::<Tensor>(d)?.clone();
+            let Some(kind) = half_kind(t.ty)? else {
+                calls.push((d, p as *mut c_void));
+                continue;
+            };
+            let orig = view(&Tensor { ty: cudnnDataType_t::CUDNN_DATA_FLOAT.0, ..t.clone() })?;
+            let mut desc = Box::new(Tensor { ty: cudnnDataType_t::CUDNN_DATA_FLOAT.0, strides: packed_strides(&t.dims, false), dims: t.dims.clone() });
+            let packed = view(&desc)?;
+            let tmp = temp(handle, 4 * packed.total())?;
+            if read && !p.is_null() {
+                convert(handle, c"agx_dnn_to_f32", p as *mut c_void, &orig, tmp.0, &packed, kind)?;
+            }
+            if write {
+                st.back.push((packed, orig, tmp.0, p as *mut c_void, kind));
+            }
+            calls.push((&mut *desc as *mut Tensor as cudnnTensorDescriptor_t, tmp.0));
+            st._descs.push(desc);
+            st.temps.push(tmp);
+        }
+        Ok(Some((st, calls)))
+    }
+
+    impl Staging {
+        unsafe fn finish(self, h: cudnnHandle_t, result: cudnnStatus_t) -> cudnnStatus_t {
+            result?;
+            let handle = obj::<Handle>(h)?;
+            for (packed, orig, tmp, p, kind) in &self.back {
+                convert(handle, c"agx_dnn_from_f32", *tmp, packed, *p, orig, *kind)?;
+            }
+            Ok(())
+        }
+    }
+
+    /// beta != 0: the output is read too.
+    unsafe fn reads_output(beta: *const c_void) -> Result<bool, cudnnError_t> {
+        Ok(f32_scalar(beta)? != 0.0)
     }
 
     pub(crate) unsafe fn cudnnCreateActivationDescriptor(d: *mut cudnnActivationDescriptor_t) -> cudnnStatus_t {
@@ -1110,6 +1253,9 @@ mod imp {
         y_desc: cudnnTensorDescriptor_t,
         mut y: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (y_desc, y, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnActivationForward(h, d, alpha, t[0].0, t[0].1, beta, t[1].0, t[1].1));
+        }
         let h = obj::<Handle>(h)?;
         let (mut mode, mut coef) = activation_args(obj::<Activation>(d)?)?;
         let (xv, yv) = (tensor_view(x_desc)?, tensor_view(y_desc)?);
@@ -1141,6 +1287,9 @@ mod imp {
         dx_desc: cudnnTensorDescriptor_t,
         mut dx: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(y_desc, y, true, false), (dy_desc, dy, true, false), (x_desc, x, true, false), (dx_desc, dx, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnActivationBackward(h, d, alpha, t[0].0, t[0].1, t[1].0, t[1].1, t[2].0, t[2].1, beta, t[3].0, t[3].1));
+        }
         let h = obj::<Handle>(h)?;
         let (mode, mut coef) = activation_args(obj::<Activation>(d)?)?;
         let views = [tensor_view(y_desc)?, tensor_view(dy_desc)?, tensor_view(x_desc)?, tensor_view(dx_desc)?];
@@ -1187,14 +1336,23 @@ mod imp {
         c_desc: cudnnTensorDescriptor_t,
         c: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(a_desc, a, true, false), (c_desc, c, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnAddTensor(h, alpha, t[0].0, t[0].1, beta, t[1].0, t[1].1));
+        }
         pointwise(h, Some(tensor_view(a_desc)?), a, c_desc, c, 0, f32_scalar(alpha)?, f32_scalar(beta)?)
     }
 
     pub(crate) unsafe fn cudnnSetTensor(h: cudnnHandle_t, y_desc: cudnnTensorDescriptor_t, y: *mut c_void, value: *const c_void) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(y_desc, y, false, true)])? {
+            return st.finish(h, cudnnSetTensor(h, t[0].0, t[0].1, value));
+        }
         pointwise(h, None, std::ptr::null(), y_desc, y, 1, f32_scalar(value)?, 0.0)
     }
 
     pub(crate) unsafe fn cudnnScaleTensor(h: cudnnHandle_t, y_desc: cudnnTensorDescriptor_t, y: *mut c_void, alpha: *const c_void) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(y_desc, y, true, true)])? {
+            return st.finish(h, cudnnScaleTensor(h, t[0].0, t[0].1, alpha));
+        }
         pointwise(h, None, std::ptr::null(), y_desc, y, 2, f32_scalar(alpha)?, 0.0)
     }
 
@@ -1227,6 +1385,9 @@ mod imp {
         y_desc: cudnnTensorDescriptor_t,
         mut y: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (y_desc, y, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnSoftmaxForward(h, algo, mode, alpha, t[0].0, t[0].1, beta, t[1].0, t[1].1));
+        }
         let h = obj::<Handle>(h)?;
         let (xv, yv) = (tensor_view(x_desc)?, tensor_view(y_desc)?);
         if xv.dims != yv.dims {
@@ -1257,6 +1418,9 @@ mod imp {
         dx_desc: cudnnTensorDescriptor_t,
         mut dx: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(y_desc, y, true, false), (dy_desc, dy, true, false), (dx_desc, dx, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnSoftmaxBackward(h, algo, mode, alpha, t[0].0, t[0].1, t[1].0, t[1].1, beta, t[2].0, t[2].1));
+        }
         let h = obj::<Handle>(h)?;
         let (yv, dyv, dxv) = (tensor_view(y_desc)?, tensor_view(dy_desc)?, tensor_view(dx_desc)?);
         if yv.dims != dyv.dims || yv.dims != dxv.dims {
@@ -1367,6 +1531,9 @@ mod imp {
         y_desc: cudnnTensorDescriptor_t,
         mut y: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (y_desc, y, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnPoolingForward(h, d, alpha, t[0].0, t[0].1, beta, t[1].0, t[1].1));
+        }
         let h = obj::<Handle>(h)?;
         let pool = obj::<Pooling>(d)?.clone();
         let (xv, yv) = (tensor_view(x_desc)?, tensor_view(y_desc)?);
@@ -1395,6 +1562,9 @@ mod imp {
         dx_desc: cudnnTensorDescriptor_t,
         mut dx: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(y_desc, _y, false, false), (dy_desc, dy, true, false), (x_desc, x, true, false), (dx_desc, dx, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnPoolingBackward(h, d, alpha, t[0].0, t[0].1, t[1].0, t[1].1, t[2].0, t[2].1, beta, t[3].0, t[3].1));
+        }
         let h = obj::<Handle>(h)?;
         let pool = obj::<Pooling>(d)?.clone();
         let (yv, dyv, xv, dxv) = (tensor_view(y_desc)?, tensor_view(dy_desc)?, tensor_view(x_desc)?, tensor_view(dx_desc)?);
@@ -1508,6 +1678,9 @@ mod imp {
         var: *const c_void,
         eps: f64,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (y_desc, y, reads_output(beta)?, true)])? {
+            return st.finish(h, cudnnBatchNormalizationForwardInference(h, mode, alpha, beta, t[0].0, t[0].1, t[1].0, t[1].1, _p_desc, scale, bias, mean, var, eps));
+        }
         let h = obj::<Handle>(h)?;
         let (xv, yv) = (tensor_view(x_desc)?, tensor_view(y_desc)?);
         if xv.dims != yv.dims || [scale, bias, mean, var].iter().any(|p| p.is_null()) {
@@ -1535,6 +1708,12 @@ mod imp {
         smean: *mut c_void,
         sinv: *mut c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (y_desc, y, reads_output(beta)?, true)])? {
+            return st.finish(
+                h,
+                cudnnBatchNormalizationForwardTraining(h, mode, alpha, beta, t[0].0, t[0].1, t[1].0, t[1].1, _p_desc, scale, bias, factor, rmean, rvar, eps, smean, sinv),
+            );
+        }
         let h = obj::<Handle>(h)?;
         let (xv, yv) = (tensor_view(x_desc)?, tensor_view(y_desc)?);
         if xv.dims != yv.dims || scale.is_null() || bias.is_null() || rmean.is_null() != rvar.is_null() || smean.is_null() != sinv.is_null() {
@@ -1573,6 +1752,14 @@ mod imp {
         smean: *const c_void,
         sinv: *const c_void,
     ) -> cudnnStatus_t {
+        if let Some((st, t)) = stage(h, &[(x_desc, x, true, false), (dy_desc, dy, true, false), (dx_desc, dx, reads_output(beta_data)?, true)])? {
+            return st.finish(
+                h,
+                cudnnBatchNormalizationBackward(
+                    h, mode, alpha_data, beta_data, alpha_param, beta_param, t[0].0, t[0].1, t[1].0, t[1].1, t[2].0, t[2].1, _p_desc, scale, dscale, dbias, eps, smean, sinv,
+                ),
+            );
+        }
         let h = obj::<Handle>(h)?;
         let (xv, dyv, dxv) = (tensor_view(x_desc)?, tensor_view(dy_desc)?, tensor_view(dx_desc)?);
         if xv.dims != dyv.dims || xv.dims != dxv.dims || scale.is_null() || dscale.is_null() || dbias.is_null() || smean.is_null() != sinv.is_null() {

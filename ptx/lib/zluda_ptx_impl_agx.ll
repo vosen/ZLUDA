@@ -505,7 +505,9 @@ cta:
 
 ; shfl.sync: opts holds the subsection mask in bits 12..8 and the end lane
 ; in bits 4..0. Out of range lanes read their own value and clear the
-; predicate.
+; predicate. Over the whole warp (opts 31 for down and bfly, 0 for up) these
+; are the native relative shuffles, whose out of range lanes also keep their
+; own value; the general form folds away when opts is that constant.
 define <2 x i32> @__zluda_ptx_impl_shfl_sync_up_b32_pred(i32 %input, i32 %delta0, i32 %opts, i32 %membermask) #2 {
   %sm0 = lshr i32 %opts, 8
   %section_mask = and i32 %sm0, 31
@@ -519,7 +521,10 @@ define <2 x i32> @__zluda_ptx_impl_shfl_sync_up_b32_pred(i32 %input, i32 %delta0
   %idx = sub i32 %self, %delta
   %oob = icmp slt i32 %idx, %subsection_end
   %lane = select i1 %oob, i32 %self, i32 %idx
-  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %general = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %whole = icmp eq i32 %opts, 0
+  %native = call i32 @llvm.agx.simd.shuffle.up.i32(i32 %input, i32 %delta)
+  %value = select i1 %whole, i32 %native, i32 %general
   %inb = xor i1 %oob, true
   %p = zext i1 %inb to i32
   %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
@@ -545,7 +550,10 @@ define <2 x i32> @__zluda_ptx_impl_shfl_sync_down_b32_pred(i32 %input, i32 %delt
   %idx = add i32 %self, %delta
   %oob = icmp sgt i32 %idx, %subsection_end
   %lane = select i1 %oob, i32 %self, i32 %idx
-  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %general = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %whole = icmp eq i32 %opts, 31
+  %native = call i32 @llvm.agx.simd.shuffle.down.i32(i32 %input, i32 %delta)
+  %value = select i1 %whole, i32 %native, i32 %general
   %inb = xor i1 %oob, true
   %p = zext i1 %inb to i32
   %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
@@ -571,7 +579,10 @@ define <2 x i32> @__zluda_ptx_impl_shfl_sync_bfly_b32_pred(i32 %input, i32 %delt
   %idx = xor i32 %self, %delta
   %oob = icmp sgt i32 %idx, %subsection_end
   %lane = select i1 %oob, i32 %self, i32 %idx
-  %value = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %general = call i32 @llvm.agx.simd.shuffle.i32(i32 %input, i32 %lane)
+  %whole = icmp eq i32 %opts, 31
+  %native = call i32 @llvm.agx.simd.shuffle.xor.i32(i32 %input, i32 %delta)
+  %value = select i1 %whole, i32 %native, i32 %general
   %inb = xor i1 %oob, true
   %p = zext i1 %inb to i32
   %r0 = insertelement <2 x i32> poison, i32 %value, i32 0
@@ -3145,6 +3156,9 @@ declare i32 @llvm.agx.thread.index.in.simdgroup()
 declare i32 @llvm.agx.thread.index.in.threadgroup()
 declare i32 @llvm.agx.simd.ballot(i1)
 declare i32 @llvm.agx.simd.shuffle.i32(i32, i32)
+declare i32 @llvm.agx.simd.shuffle.up.i32(i32, i32)
+declare i32 @llvm.agx.simd.shuffle.down.i32(i32, i32)
+declare i32 @llvm.agx.simd.shuffle.xor.i32(i32, i32)
 declare i32 @llvm.agx.simd.reduce.i32(i32, i32 immarg)
 declare void @llvm.agx.threadgroup.barrier()
 declare float @llvm.agx.rsqrt.f32(float)
