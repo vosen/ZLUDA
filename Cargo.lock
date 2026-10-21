@@ -5360,6 +5360,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_rand_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [

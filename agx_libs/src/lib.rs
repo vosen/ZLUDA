@@ -25,6 +25,8 @@ pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat")
 pub static BLASC: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blasc.agxfat"));
 /// The sparse kernels of zluda_sparse_agx (`kernels/sparse.mlir`).
 pub static SPARSE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sparse.agxfat"));
+/// The cuRAND kernels (Philox4x32-10 and its distributions, `kernels/rand.mlir`).
+pub static RAND: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/rand.agxfat"));
 
 /// Element types of A and B, and of C.
 #[derive(Clone, Copy, Debug, PartialEq)]

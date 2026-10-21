@@ -665,6 +665,96 @@ def case_spgemm(a, obj, tmp, I, base, rnd):
     return close(unpack(cval, BT), [v for _, v in flat], range(nnz), TOL(1e-5))
 
 
+def philox(c, k):
+    """Philox4x32-10 of the counter words c with the key words k (Random123)."""
+    M = 0xFFFFFFFF
+    c, k = list(c), list(k)
+    for _ in range(10):
+        p0, p1 = 0xD2511F53 * c[0], 0xCD9E8D57 * c[2]
+        c = [((p1 >> 32) ^ c[1] ^ k[0]) & M, p1 & M, ((p0 >> 32) ^ c[3] ^ k[1]) & M, p0 & M]
+        k = [(k[0] + 0x9E3779B9) & M, (k[1] + 0xBB67AE85) & M]
+    return c
+
+
+def f32(x):
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def case_rand(a, obj, tmp, what, rnd):
+    seed, start, n = rnd.getrandbits(64), rnd.getrandbits(40), 23
+    blocks = lambda count: [philox([(b & 0xFFFFFFFF), b >> 32, 0, 0], [seed & 0xFFFFFFFF, seed >> 32]) for b in range(start, start + count)]
+    if what == "poisson":
+        bad = []
+        for lam in (0.5, 7.25, 150.0):
+            (got,) = run(a, obj, "agx_rand_poisson", [("buf", pack([0] * n, "I"), True), ("i64", n), ("i64", start), ("i64", seed),
+                                                     ("f32", lam)], grid1(n), (32, 1), tmp)
+            got = unpack(got, "I")
+            want = []
+            for j in range(n):
+                g = start + j
+                if lam < 64:
+                    it, total, k = 0, 0.0, 0
+                    while True:
+                        w = philox([g & 0xFFFFFFFF, g >> 32, it, 1], [seed & 0xFFFFFFFF, seed >> 32])
+                        it += 1
+                        for x in w:
+                            total -= math.log(f32(x * 2.0 ** -32 + 2.0 ** -33))
+                            if total > lam:
+                                break
+                            k += 1
+                        else:
+                            continue
+                        break
+                    want.append(k)
+                else:
+                    w = philox([g & 0xFFFFFFFF, g >> 32, 0, 1], [seed & 0xFFFFFFFF, seed >> 32])
+                    u, v = f32(w[0] * 2.0 ** -32 + 2.0 ** -33), w[1] * 2.0 ** -32 * 2 * math.pi
+                    z = math.sqrt(-2 * math.log(u)) * math.sin(v)
+                    want.append(max(0, math.floor(lam + math.sqrt(lam) * z + 0.5)))
+            # f32 logs: allow an arrival on the boundary to differ by one
+            bad += ["lambda %g at %d: %d, want %d" % (lam, j, g_, w_) for j, (g_, w_) in enumerate(zip(got, want)) if abs(g_ - w_) > 1]
+        return bad
+    if what.startswith("r64"):
+        mode = int(what[3:])
+        mean, sd = 0.25, 2.0
+        (got,) = run(a, obj, "agx_rand64", [("buf", pack([0.0] * n, "d"), True), ("i64", n), ("i64", start), ("i64", seed),
+                                            ("i64", mode), ("f64", mean), ("f64", sd)], grid1(-(-n // 2)), (32, 1), tmp)
+        got = unpack(got, "d")
+        want = []
+        for w in blocks(-(-n // 2)):
+            u0 = (w[0] ^ ((w[1] << 21) & 0xFFFFFFFFFFFFFFFF)) * 2.0 ** -53 + 2.0 ** -54
+            u1 = (w[2] ^ ((w[3] << 21) & 0xFFFFFFFFFFFFFFFF)) * 2.0 ** -53 + 2.0 ** -54
+            if mode == 1:
+                want += [u0, u1]
+            else:
+                s_ = math.sqrt(-2 * math.log(u0))
+                z = [mean + sd * s_ * math.sin(2 * math.pi * u1), mean + sd * s_ * math.cos(2 * math.pi * u1)]
+                want += [math.exp(x) for x in z] if mode == 3 else z
+        bad = close(got, want, range(n), 1e-14)
+        if bad and os.environ.get("RAND_DEBUG"):
+            print([(got[i], want[i]) for i in bad[:4]])
+        return bad
+    mode = int(what[3:])
+    mean, sd = -1.0, 0.5
+    (got,) = run(a, obj, "agx_rand32", [("buf", pack([0] * n, "I"), True), ("i64", n), ("i64", start), ("i64", seed),
+                                        ("i64", mode), ("f32", mean), ("f32", sd)], grid1(-(-n // 4)), (32, 1), tmp)
+    words = [x for w in blocks(-(-n // 4)) for x in w]
+    if mode == 0:
+        return [i for i in range(n) if unpack(got, "I")[i] != words[i]]
+    got = unpack(got, "f")
+    uni = [f32(f32(float(x)) * f32(2.0 ** -32) + f32(2.0 ** -33)) for x in words]
+    if mode == 1:
+        return close(got, uni, range(n), 1e-7)
+    want = []
+    for i in range(0, n, 2):
+        u = uni[i]
+        v = words[i + 1] * 2.0 ** -32 * 2 * math.pi + 2.0 ** -33 * 2 * math.pi
+        s_ = math.sqrt(-2 * math.log(u))
+        z = [mean + sd * s_ * math.sin(v), mean + sd * s_ * math.cos(v)]
+        want += [math.exp(x) for x in z] if mode == 3 else z
+    return close(got, want[:n], range(n), 2e-5)
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1625,6 +1715,9 @@ def main():
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
             elif "agx_cgemm" in records:
                 cases = cblas_cases(a, obj, tmp, rnd)
+            elif "agx_rand32" in records:
+                cases = [("rand %s" % w, lambda w=w: case_rand(a, obj, tmp, w, rnd))
+                         for w in ("r320", "r321", "r322", "r323", "r641", "r642", "r643", "poisson")]
             elif "agx_csr_spmv_i32" in records:
                 cases = []
                 for I in ("i32", "i64"):
