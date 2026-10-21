@@ -58,6 +58,11 @@ pub struct Checked {
     /// Half of the 32-bit threadgroup memory size (static plus dynamic).
     pub threadgroup_bytes_half: u32,
     pub slots: Vec<CheckedSlot>,
+    /// Halves of the allocation table's address and of its entry count (`.agx.kernels` extension 3), for a kernel
+    /// that checks pointers of unknown origin (loaded from memory) against every live allocation. The table is the
+    /// `(lo, hi)` pairs of 64-bit addresses of the allocations, sorted; a count of 0 checks those pointers for null
+    /// only.
+    pub table: Option<(u32, u32)>,
 }
 
 /// A pointer the checked kernel bounds-checks: the bounds of the allocation it points into go to `lo_half` and
@@ -268,8 +273,15 @@ impl<'a> Elf<'a> {
                                 Ok(CheckedSlot { arg, offset: (off != u32::MAX).then_some(off), lo_half: word(w + 2)?, hi_half: word(w + 3)? })
                             })
                             .collect::<Result<_, Error>>()?;
-                        checked = Some(Checked { record_half: word(e + 3)?, threadgroup_bytes_half: word(e + 4)?, slots });
+                        checked = Some(Checked { record_half: word(e + 3)?, threadgroup_bytes_half: word(e + 4)?, slots, table: None });
                         e += 5 + 4 * n;
+                    }
+                    3 if e + 3 <= end => {
+                        let Some(c) = checked.as_mut() else {
+                            return err(format!("{name}: an allocation table without checked mode"));
+                        };
+                        c.table = Some((word(e + 1)?, word(e + 2)?));
+                        e += 3;
                     }
                     _ => break,
                 }
@@ -538,7 +550,24 @@ pub fn checked_pointers(k: &KernelInfo, params: &[&[u8]]) -> Result<Vec<u64>, Er
 
 /// Fills the hidden arguments of a checked kernel in `u` (from `pack_params`): the error record's address, the
 /// threadgroup memory bytes, and per slot the `[lo, hi)` bounds of the allocation its pointer points into.
-pub fn pack_checked(k: &KernelInfo, u: &mut [u16], record: u64, threadgroup_bytes: u32, bounds: &[(u64, u64)]) -> Result<(), Error> {
+/// The bytes of an allocation table: `(lo, hi)` pairs, sorted by `lo` (as `KernelInfo::checked`'s `table` reads them).
+pub fn checked_table(allocations: &[(u64, u64)]) -> Vec<u8> {
+    let mut sorted = allocations.to_vec();
+    sorted.sort_unstable();
+    sorted.iter().flat_map(|&(lo, hi)| lo.to_le_bytes().into_iter().chain(hi.to_le_bytes())).collect()
+}
+
+/// Puts a checked kernel's hidden arguments into its uniforms: the error record, the threadgroup memory size, the
+/// bounds of each checked pointer and the allocation table (its address and entry count; ignored by kernels
+/// without one).
+pub fn pack_checked(
+    k: &KernelInfo,
+    u: &mut [u16],
+    record: u64,
+    threadgroup_bytes: u32,
+    bounds: &[(u64, u64)],
+    table: (u64, u32),
+) -> Result<(), Error> {
     let Some(c) = &k.checked else { return Ok(()) };
     if bounds.len() != c.slots.len() {
         return err(format!("{}: {} bounds given, {} checked pointers", k.name, bounds.len(), c.slots.len()));
@@ -555,6 +584,10 @@ pub fn pack_checked(k: &KernelInfo, u: &mut [u16], record: u64, threadgroup_byte
     for (s, &(lo, hi)) in c.slots.iter().zip(bounds) {
         put(s.lo_half, lo, 4)?;
         put(s.hi_half, hi, 4)?;
+    }
+    if let Some((va_half, count_half)) = c.table {
+        put(va_half, table.0, 4)?;
+        put(count_half, table.1 as u64, 2)?;
     }
     Ok(())
 }
@@ -712,14 +745,15 @@ mod tests {
         let params: [&[u8]; 3] = [&out, &i, &pair];
         assert_eq!(checked_pointers(k, &params).unwrap(), [0x1_0000_1000, 0x2_0000_0040]);
         let (mut u, _) = pack_params(k, &params, [1, 1, 1], Some(0x5000), 0x3000).unwrap();
-        pack_checked(k, &mut u, 0x7000_0000, 96, &[(0x1_0000_0000, 0x1_0001_0000), (0x2_0000_0040, 0x2_0000_0040)]).unwrap();
+        pack_checked(k, &mut u, 0x7000_0000, 96, &[(0x1_0000_0000, 0x1_0001_0000), (0x2_0000_0040, 0x2_0000_0040)], (0, 0))
+            .unwrap();
         let q = |h: usize, n: usize| (0..n).fold(0u64, |v, i| v | (u[h + i] as u64) << (16 * i));
         assert_eq!(q(c.record_half as usize, 4), 0x7000_0000);
         assert_eq!(q(c.threadgroup_bytes_half as usize, 2), 96);
         assert_eq!((q(16, 4), q(20, 4)), (0x1_0000_0000, 0x1_0001_0000));
         assert_eq!((q(24, 4), q(28, 4)), (0x2_0000_0040, 0x2_0000_0040));
         assert_eq!(q(0, 4), 0x1_0000_1000, "the source arguments are unchanged");
-        assert!(pack_checked(k, &mut u, 0, 0, &[]).is_err(), "every slot needs bounds");
+        assert!(pack_checked(k, &mut u, 0, 0, &[], (0, 0)).is_err(), "every slot needs bounds");
         // too short an argument for its pointer
         let short: [&[u8]; 3] = [&out, &i, &pair[..12]];
         assert!(checked_pointers(k, &short).is_err());
@@ -811,6 +845,22 @@ mod tests {
         assert_eq!(fat_object_entry(&fat, "agx-g13g").unwrap(), b"abc");
         assert!(fat_object_entry(&fat, "agx-g14g").unwrap_err().0.contains("agx-g13g, agx-g14c"));
         assert_eq!(unsafe { fat_object_len(fat.as_ptr()) }, 130);
+    }
+
+    // tests/data/chase.ll: pointers loaded from memory, checked against the allocation table.
+    #[test]
+    fn checked_kernels_take_an_allocation_table() {
+        let m = Module::load_object(include_bytes!("../tests/data/chase.o")).unwrap();
+        let k = &m.kernels["chase"];
+        let c = k.checked.as_ref().unwrap();
+        let (va_half, count_half) = c.table.expect("extension 3");
+        let (mut u, _) = pack_params(k, &[&0x200_0000u64.to_le_bytes(), &0x300_0000u64.to_le_bytes()], [1, 1, 1], None, 0)
+            .unwrap();
+        pack_checked(k, &mut u, 0x7000_0000, 0, &[(0x200_0000, 0x200_0040), (0x300_0000, 0x300_0020)], (0x6000_0000, 3))
+            .unwrap();
+        let q = |h: u32, n: usize| (0..n).fold(0u64, |v, i| v | (u[h as usize + i] as u64) << (16 * i));
+        assert_eq!((q(va_half, 4), q(count_half, 2)), (0x6000_0000, 3));
+        assert_eq!(checked_table(&[(0x300, 0x310), (0x100, 0x140)])[..16], [0, 1, 0, 0, 0, 0, 0, 0, 0x40, 1, 0, 0, 0, 0, 0, 0]);
     }
 
     // tests/data/global-relocs.ll: a global array of addresses of other globals.

@@ -645,7 +645,8 @@ Results (2026-10-21, simulator):
 compute-sanitizer's memcheck does on NVIDIA GPUs: the LLVM backend's `agx-checked` feature (`llvm/docs/AGXUsage.rst`
 in the LLVM fork, "Checked mode"). Before each access that could go wrong, the kernel checks
 
-- device memory: that the address is inside the allocation its pointer argument points into, and aligned;
+- device memory: that the address is inside the allocation its pointer argument points into, and aligned; a pointer
+  loaded from memory (arrays of pointers, linked structures) must point into some live allocation;
 - `.shared` memory, static and dynamic: that the address is below the block's threadgroup memory size;
 - `.local` memory with a variable offset: that the offset is inside the variable.
 
@@ -658,8 +659,9 @@ nothing faults: without checked mode, the same bug reads or writes whatever is m
 where): the error record, the threadgroup memory size, and for each pointer the kernel bounds-checks (a pointer
 parameter, or a pointer inside a `.param` struct) the start and end of the allocation it points into, found with
 `cuMemGetAddressRange`'s table or among the modules' global data (`cuModuleGetGlobal`). A pointer into neither gets an
-empty range, so any access through it is reported. At the next synchronisation the record is printed, with the launch
-it came from:
+empty range, so any access through it is reported. For pointers loaded from memory, each launch also gets a sorted
+table of every live allocation and global data buffer, copied into the launch's staging memory, which the kernel
+binary-searches. At the next synchronisation the record is printed, with the launch it came from:
 
 ```
 zluda_agx: out of bounds store of 4 bytes at 0x10000000080 by thread (32, 0, 0) of block (0, 0, 0)

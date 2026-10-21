@@ -147,6 +147,11 @@ impl Context {
         Some((start, &bo.as_slice()[..*size as usize]))
     }
 
+    /// `[lo, hi)` of every allocation, in address order.
+    pub fn allocation_ranges(&self) -> Vec<(u64, u64)> {
+        self.allocs.iter().map(|(&va, (_, size))| (va, va + size)).collect()
+    }
+
     /// The allocation's base and size for a pointer into it (cuMemGetAddressRange).
     pub fn address_range(&self, va: u64) -> Option<(u64, u64)> {
         let start = find(&self.allocs, va, 0, |a| a.1)?;

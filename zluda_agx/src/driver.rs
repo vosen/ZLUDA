@@ -172,6 +172,7 @@ impl Driver {
             }
             None => Vec::new(),
         };
+        let allocations = if k.checked.as_ref().is_some_and(|c| c.table.is_some()) { self.live_allocations() } else { Vec::new() };
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
         let (queue, waits) = if sh <= 2 {
@@ -182,7 +183,7 @@ impl Driver {
         };
         let w = std::mem::take(waits);
         let fence = modules[&m]
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &w)
+            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
             .map_err(from_io)?;
         if self.launches.len() == MAX_LAUNCH_RECORDS {
             self.launches.pop_front();
@@ -202,6 +203,14 @@ impl Driver {
         }
         self.launches.push_back(record);
         Ok(())
+    }
+
+    /// Every allocation a pointer can point into, for a checked kernel's allocation table: device memory and the
+    /// modules' global data buffers.
+    fn live_allocations(&self) -> Vec<(u64, u64)> {
+        let mut all = self.ctx.allocation_ranges();
+        all.extend(self.modules.values().filter_map(|m| m.globals_va().map(|va| (va, va + m.globals().len() as u64))));
+        all
     }
 
     /// `[lo, hi)` of the allocation `p` points into, for a checked kernel's bounds: device memory, or a module's
@@ -252,7 +261,9 @@ impl Driver {
         let bounds: Vec<(u64, u64)> = pointers.iter().map(|&p| self.allocation_bounds(p)).collect();
         // the parameter block goes where no allocation is
         const PARAM_BLOCK: u64 = 0x7f_0000_0000;
-        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, PARAM_BLOCK)?;
+        const TABLE: u64 = 0x7e_0000_0000;
+        let allocations = self.live_allocations();
+        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
         let mut regions = replay.regions.clone();
         // every allocation an 8-byte word of the arguments points into
         let words = r.params.iter().flat_map(|p| p.chunks_exact(8)).chain(replay.regions.first().filter(|(va, _)| *va == PARAM_BLOCK).into_iter().flat_map(|(_, b)| b.chunks_exact(8)));
@@ -2349,6 +2360,8 @@ mod tests {
             [8, 1, 1],
             0,
             &[(out, out + 16), (q, q + 64)],
+            &[],
+            0x7e_0000_0000,
             0x7f_0000_0000,
         )
         .unwrap();
@@ -2371,6 +2384,49 @@ mod tests {
         let t = &m.globals[off as usize..(off + size) as usize];
         let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
         assert_eq!((e.kind, e.store, e.address, e.site_text.as_str()), (1, true, out + 20, "store 4\tput put.cu:4:3"));
+    }
+
+    #[test]
+    fn a_pointer_loaded_from_memory_is_checked_against_the_allocations() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/chase.o")).unwrap();
+        let (data, ptrs, out) = (0x100_0000u64, 0x200_0000u64, 0x300_0000u64);
+        // threads 0..6 read data[t]; thread 7 reads just past the end of data
+        let table: Vec<u8> = (0..8u64).flat_map(|t| (data + 4 * t + if t == 7 { 4 } else { 0 }).to_le_bytes()).collect();
+        let record = [0u8; 64];
+        let (p, o) = (ptrs.to_le_bytes(), out.to_le_bytes());
+        let allocations = [(data, data + 32), (ptrs, ptrs + 64), (out, out + 32)];
+        let r = agx_runtime::replay(
+            &m,
+            Some((0x800_0000, &m.globals)),
+            Some((0x700_0000, &record)),
+            "chase",
+            &[&p, &o],
+            [1, 1, 1],
+            [8, 1, 1],
+            0,
+            &[(ptrs, ptrs + 64), (out, out + 32)],
+            &allocations,
+            0x7e_0000_0000,
+            0x7f_0000_0000,
+        )
+        .unwrap();
+        assert!(r.regions.iter().any(|(va, b)| *va == 0x7e_0000_0000 && b.len() == 48), "the table is a region");
+        let mut regions = r.regions.clone();
+        regions.extend([(data, (100..108u32).flat_map(u32::to_le_bytes).collect()), (ptrs, table), (out, vec![0u8; 32])]);
+        let dir = tempfile::tempdir().unwrap();
+        write_dump(dir.path(), &r, &regions, "chase").unwrap();
+        let Some(agx_run) = std::env::var_os("AGX_RUN") else { return };
+        let o = std::process::Command::new(dir.path().join("replay.sh")).env("AGX_RUN", agx_run).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+        let list = std::fs::read_to_string(dir.path().join("regions.txt")).unwrap();
+        let at = |va: &str| list.lines().position(|l| l.contains(va)).expect(&list);
+        let rec = std::fs::read(dir.path().join(format!("m{}.out", at(" 0x7000000 64")))).unwrap();
+        let (off, size) = m.global_symbols[module::CHECKED_SITES_SYMBOL];
+        let t = &m.globals[off as usize..(off + size) as usize];
+        let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
+        assert_eq!((e.kind, e.store, e.address, e.thread), (1, false, data + 32, [7, 0, 0]));
+        let out_bytes = std::fs::read(dir.path().join(format!("m{}.out", at(" 0x3000000 32")))).unwrap();
+        assert_eq!(out_bytes[..28], (100..107u32).flat_map(u32::to_le_bytes).collect::<Vec<u8>>()[..]);
     }
 
     #[test]

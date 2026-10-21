@@ -1104,13 +1104,14 @@ fn uniforms(
     threadgroups: [u32; 3],
     dynamic_shared: u32,
     bounds: &[(u64, u64)],
+    table: (u64, u32),
     globals: Option<u64>,
     record: Option<u64>,
     param_block: u64,
 ) -> io::Result<(Vec<u16>, Vec<u8>)> {
     let (mut halves, block) = module::pack_params(k, params, threadgroups, globals, param_block).map_err(|e| invalid(e.to_string()))?;
     if k.checked.is_some() {
-        module::pack_checked(k, &mut halves, record.unwrap_or(0), k.threadgroup_bytes + dynamic_shared, bounds)
+        module::pack_checked(k, &mut halves, record.unwrap_or(0), k.threadgroup_bytes + dynamic_shared, bounds, table)
             .map_err(|e| invalid(e.to_string()))?;
     }
     Ok((halves, block))
@@ -1118,7 +1119,8 @@ fn uniforms(
 
 /// A launch of `module` as the hardware sees it: the kernel's code, the hardware grid and threadgroup sizes, and
 /// the uniforms with the parameter block (if any) at `param_block`, the module's global data and error record at
-/// the given addresses. Other memory is the caller's to save.
+/// the given addresses, and a checked kernel's allocation table (`allocations`) at `table_va`. Other memory is the
+/// caller's to save.
 pub fn replay(
     module: &module::Module,
     globals: Option<(u64, &[u8])>,
@@ -1129,18 +1131,32 @@ pub fn replay(
     local: [u32; 3],
     dynamic_shared: u32,
     bounds: &[(u64, u64)],
+    allocations: &[(u64, u64)],
+    table_va: u64,
     param_block: u64,
 ) -> io::Result<Replay> {
     let k = module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
     let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
-    let (uniforms, param_bytes) =
-        uniforms(k, params, threadgroups, dynamic_shared, bounds, globals.map(|g| g.0), record.map(|r| r.0), param_block)?;
+    let table = k.checked.as_ref().and_then(|c| c.table).map(|_| module::checked_table(allocations)).filter(|t| !t.is_empty());
+    let table_arg = table.as_ref().map_or((0, 0), |t| (table_va, (t.len() / 16) as u32));
+    let (uniforms, param_bytes) = uniforms(
+        k,
+        params,
+        threadgroups,
+        dynamic_shared,
+        bounds,
+        table_arg,
+        globals.map(|g| g.0),
+        record.map(|r| r.0),
+        param_block,
+    )?;
     let code = module.text[k.offset as usize..(k.offset + k.size) as usize].to_vec();
     let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
     if !param_bytes.is_empty() {
         regions.push((param_block, param_bytes));
     }
     regions.extend(globals.into_iter().chain(record).map(|(va, b)| (va, b.to_vec())));
+    regions.extend(table.map(|t| (table_va, t)));
     Ok(Replay {
         code,
         grid: std::array::from_fn(|i| threadgroups[i] * local[i]),
@@ -1359,7 +1375,8 @@ impl LoadedModule {
     /// them. Needs a module whose object has `.agx.kernels`. Arguments the kernel reads through a pointer are
     /// copied to a parameter block that lives until the launch has finished. For a checked kernel, `bounds` holds
     /// the `[lo, hi)` range of the allocation each of its checked pointers (`module::checked_pointers`) points
-    /// into; it is empty otherwise.
+    /// into, and `allocations` every live allocation (staged as the allocation table of a kernel that has one);
+    /// both are empty otherwise.
     pub fn launch_params_async(
         &self,
         vm: &mut Vm,
@@ -1371,16 +1388,26 @@ impl LoadedModule {
         local: [u32; 3],
         dynamic_shared: u32,
         bounds: &[(u64, u64)],
+        allocations: &[(u64, u64)],
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         queue.collect()?;
         let k = self.kernel(kernel, dynamic_shared)?;
         let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
-        let (mut halves, block) = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, 0)?;
+        // the allocation table lives in the data ring until the launch has finished; a table too large for the
+        // ring is left out (count 0: the kernel checks those pointers for null only)
+        let mut table = (0, 0);
+        if k.checked.as_ref().is_some_and(|c| c.table.is_some()) && !allocations.is_empty() {
+            let bytes = module::checked_table(allocations);
+            if (bytes.len() as u64) <= DATA_RING_BYTES / 4 {
+                table = (queue.stage(RingKind::Data, &bytes, 16)?, allocations.len() as u32);
+            }
+        }
+        let (mut halves, block) = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, table, 0)?;
         if !block.is_empty() {
             // the pointers in the uniforms depend on where the block lands
             let va = queue.stage(RingKind::Data, &block, 16)?;
-            halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, va)?.0;
+            halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, table, va)?.0;
         }
         self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
     }
@@ -1392,10 +1419,11 @@ impl LoadedModule {
         threadgroups: [u32; 3],
         dynamic_shared: u32,
         bounds: &[(u64, u64)],
+        table: (u64, u32),
         param_block: u64,
     ) -> io::Result<(Vec<u16>, Vec<u8>)> {
         let record = self.record.as_ref().map(|r| r.va);
-        uniforms(k, params, threadgroups, dynamic_shared, bounds, self.globals_va(), record, param_block)
+        uniforms(k, params, threadgroups, dynamic_shared, bounds, table, self.globals_va(), record, param_block)
     }
 
     /// What a launch hands the hardware, for replaying it elsewhere (the AGX Performance Simulator's `agx_run`):
@@ -1408,11 +1436,26 @@ impl LoadedModule {
         local: [u32; 3],
         dynamic_shared: u32,
         bounds: &[(u64, u64)],
+        allocations: &[(u64, u64)],
+        table_va: u64,
         param_block: u64,
     ) -> io::Result<Replay> {
         let globals = self.globals_va().map(|va| (va, self.globals()));
         let record = self.record.as_ref().map(|r| (r.va, &r.as_slice()[..module::CHECKED_RECORD_BYTES as usize]));
-        replay(&self.module, globals, record, kernel, params, threadgroups, local, dynamic_shared, bounds, param_block)
+        replay(
+            &self.module,
+            globals,
+            record,
+            kernel,
+            params,
+            threadgroups,
+            local,
+            dynamic_shared,
+            bounds,
+            allocations,
+            table_va,
+            param_block,
+        )
     }
 
     fn kernel(&self, kernel: &str, dynamic_shared: u32) -> io::Result<&module::KernelInfo> {
