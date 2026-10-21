@@ -3,6 +3,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::contexts;
 use agx_runtime::cache::{Cache, Key};
 use agx_runtime::context::Context;
 use agx_runtime::{error, module, Fence, LoadedModule, Queue};
@@ -45,7 +46,8 @@ pub(crate) struct Driver {
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
     events: HashMap<usize, Event>,
-    next_handle: usize,
+    /// cuCtxSetLimit values of this context.
+    limits: HashMap<u32, usize>,
     /// Streams being captured (0 is the default stream) and their operations so far.
     capturing: HashMap<usize, Vec<Op>>,
     /// Graphs and their instantiations: both are operation lists.
@@ -319,7 +321,42 @@ impl Driver {
 // The runtime objects use Rc internally; they are only reached through DRIVER's mutex.
 unsafe impl Send for Driver {}
 
-static DRIVER: Mutex<Option<Driver>> = Mutex::new(None);
+/// The live contexts; None before cuInit.
+static DRIVER: Mutex<Option<contexts::Contexts<Driver>>> = Mutex::new(None);
+
+/// Handles of contexts, modules, functions, streams, events and graphs, unique across contexts.
+fn new_handle() -> usize {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(16);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A context's state on a newly opened device and VM.
+fn new_driver() -> Result<Driver, CUerror> {
+    let ctx = open_context().map_err(|_| CUerror::NO_DEVICE)?;
+    Ok(Driver {
+        ctx,
+        default_waits: Vec::new(),
+        modules: HashMap::new(),
+        functions: HashMap::new(),
+        streams: HashMap::new(),
+        events: HashMap::new(),
+        limits: HashMap::new(),
+        capturing: HashMap::new(),
+        graphs: HashMap::new(),
+        execs: HashMap::new(),
+        host_allocs: HashMap::new(),
+        managed: Default::default(),
+        sticky: None,
+        launches: Default::default(),
+        checked_launches: Default::default(),
+    })
+}
+
+/// Runs `f` on the registry of contexts.
+fn with_contexts<T>(f: impl FnOnce(&mut contexts::Contexts<Driver>) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
+    f(g.as_mut().ok_or(CUerror::NOT_INITIALIZED)?)
+}
 
 fn err(code: u32) -> CUerror {
     CUerror(NonZeroU32::new(code).unwrap())
@@ -336,13 +373,12 @@ pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Resu
     })
 }
 
-/// `with`, also after a sticky error (cuCtxDestroy).
+/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context.
 pub(crate) fn with_sticky<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
-    let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
-    match g.as_mut() {
-        Some(d) => f(d),
-        None => Err(CUerror::NOT_INITIALIZED),
-    }
+    with_contexts(|c| {
+        let h = c.current();
+        f(c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?)
+    })
 }
 
 /// The Asahi render node: `$ZLUDA_AGX_NODE`, or the first render node that answers the Asahi parameter query.
@@ -362,8 +398,7 @@ fn open_context() -> io::Result<Context> {
 
 impl Driver {
     fn handle(&mut self) -> usize {
-        self.next_handle += 1;
-        self.next_handle
+        new_handle()
     }
 
     /// The queue of a stream handle; 0 and the legacy / per-thread handles (1, 2) are the default stream.
@@ -617,24 +652,7 @@ pub(crate) unsafe fn out<T>(p: *mut T, v: T) -> CUresult {
 pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
     let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     if g.is_none() {
-        let ctx = open_context().map_err(|_| CUerror::NO_DEVICE)?;
-        *g = Some(Driver {
-            ctx,
-            default_waits: Vec::new(),
-            modules: HashMap::new(),
-            functions: HashMap::new(),
-            streams: HashMap::new(),
-            events: HashMap::new(),
-            next_handle: 16,
-            capturing: HashMap::new(),
-            graphs: HashMap::new(),
-            execs: HashMap::new(),
-            host_allocs: HashMap::new(),
-            managed: Default::default(),
-            sticky: None,
-            launches: Default::default(),
-            checked_launches: Default::default(),
-        });
+        *g = Some(contexts::Contexts::new(new_handle(), new_driver()?));
     }
     Ok(())
 }
@@ -731,45 +749,87 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
     out(pi, v)
 }
 
-const CTX: usize = 1;
-
 pub(crate) unsafe fn cuDevicePrimaryCtxRetain(pctx: *mut CUcontext, dev: CUdevice) -> CUresult {
     check_device(dev)?;
-    with(|_| Ok(()))?;
-    out(pctx, CUcontext(CTX as *mut _))
+    let h = with_contexts(|c| Ok(c.retain_primary()))?;
+    out(pctx, CUcontext(h as *mut _))
 }
 
+/// The primary context stays alive at no retains (the CUDA runtime retains it again before using it); its
+/// resources are freed by cuDevicePrimaryCtxReset.
 pub(crate) unsafe fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
-    check_device(dev)
+    check_device(dev)?;
+    with_contexts(|c| c.release_primary().map_err(|_| CUerror::INVALID_CONTEXT))
 }
 
-pub(crate) unsafe fn cuCtxCreate_v2(pctx: *mut CUcontext, _flags: c_uint, dev: CUdevice) -> CUresult {
-    cuDevicePrimaryCtxRetain(pctx, dev)
-}
-
-pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
-    if ctx.0 as usize != CTX {
-        return Err(CUerror::INVALID_CONTEXT);
-    }
-    // Destroying the context ends a sticky error (the next context starts clean).
-    with_sticky(|d| {
-        let r = d.sync_all();
-        d.sticky = None;
-        d.modules.values_mut().for_each(|m| m.reset_checked());
-        r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
-    })
-}
-
-pub(crate) unsafe fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
-    if !ctx.0.is_null() && ctx.0 as usize != CTX {
-        return Err(CUerror::INVALID_CONTEXT);
+/// cudaDeviceReset: waits for the primary context's work, frees all its memory, modules, streams, events and
+/// graphs, and leaves a fresh context under the same handle (a sticky error ends here).
+pub(crate) unsafe fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    let fresh = new_driver()?;
+    let old = with_contexts(|c| Ok(c.reset_primary(fresh)))?;
+    if let Some(mut d) = old {
+        let _ = d.sync_all();
     }
     Ok(())
 }
 
+/// A new context with its own VM: its memory, modules and streams are its own and are freed with it.
+pub(crate) unsafe fn cuCtxCreate_v2(pctx: *mut CUcontext, _flags: c_uint, dev: CUdevice) -> CUresult {
+    check_device(dev)?;
+    let d = new_driver()?;
+    let h = new_handle();
+    with_contexts(|c| {
+        c.insert(h, d);
+        Ok(())
+    })?;
+    contexts::push(h);
+    out(pctx, CUcontext(h as *mut _))
+}
+
+pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
+    let h = ctx.0 as usize;
+    let removed = with_contexts(|c| {
+        if !c.contains(h) {
+            return Err(CUerror::INVALID_CONTEXT);
+        }
+        Ok(c.remove(h))
+    })?;
+    contexts::forget(h);
+    match removed {
+        // a created context: wait for its work, then drop everything it owns
+        Some(mut d) => {
+            let r = d.sync_all();
+            drop(d);
+            r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
+        }
+        // the primary context: as before, its sticky error ends (the next use starts clean)
+        None => with_contexts(|c| {
+            let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+            let r = d.sync_all();
+            d.sticky = None;
+            d.modules.values_mut().for_each(|m| m.reset_checked());
+            r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
+        }),
+    }
+}
+
+fn check_context(ctx: CUcontext) -> Result<Option<usize>, CUerror> {
+    if ctx.0.is_null() {
+        return Ok(None);
+    }
+    let h = ctx.0 as usize;
+    with_contexts(|c| if c.contains(h) { Ok(Some(h)) } else { Err(CUerror::INVALID_CONTEXT) })
+}
+
+pub(crate) unsafe fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
+    contexts::set(check_context(ctx)?);
+    Ok(())
+}
+
 pub(crate) unsafe fn cuCtxGetCurrent(pctx: *mut CUcontext) -> CUresult {
-    let c = with(|_| Ok(CTX)).unwrap_or(0);
-    out(pctx, CUcontext(c as *mut _))
+    with_contexts(|_| Ok(()))?;
+    out(pctx, CUcontext(contexts::top().unwrap_or(0) as *mut _))
 }
 
 pub(crate) unsafe fn cuCtxGetDevice(device: *mut CUdevice) -> CUresult {
@@ -1343,14 +1403,18 @@ pub(crate) unsafe fn cuCtxGetFlags(flags: *mut c_uint) -> CUresult {
 }
 
 pub(crate) unsafe fn cuCtxPushCurrent_v2(ctx: CUcontext) -> CUresult {
-    cuCtxSetCurrent(ctx)
+    let h = check_context(ctx)?.ok_or(CUerror::INVALID_VALUE)?;
+    contexts::push(h);
+    Ok(())
 }
 
 pub(crate) unsafe fn cuCtxPopCurrent_v2(pctx: *mut CUcontext) -> CUresult {
+    with_contexts(|_| Ok(()))?;
+    let h = contexts::pop().ok_or(CUerror::INVALID_CONTEXT)?;
     if pctx.is_null() {
         return Ok(());
     }
-    cuCtxGetCurrent(pctx)
+    out(pctx, CUcontext(h as *mut _))
 }
 
 pub(crate) unsafe fn cuDevicePrimaryCtxGetState(dev: CUdevice, flags: *mut c_uint, active: *mut c_int) -> CUresult {
@@ -1375,19 +1439,27 @@ pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *m
 
 /// Stack size per thread (scratch is not set up yet, ptx-re-blockers B1), the printf buffer of the runtime
 /// library (64 KiB per module) and the device heap (none).
+/// The limits a context keeps: what cuCtxSetLimit set, else the default. They change nothing here: the stack is sized
+/// per kernel from its compiled stack size, and the printf buffer is the module's.
 pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
-    let v = match limit {
+    let default = match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE => 0,
         CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
         CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
         _ => return Err(CUerror::UNSUPPORTED_LIMIT),
     };
+    let v = with(|d| Ok(d.limits.get(&limit.0).copied().unwrap_or(default)))?;
     out(pvalue, v)
 }
 
-pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, _value: usize) -> CUresult {
+pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     match limit {
-        CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => Ok(()),
+        CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => {
+            with(|d| {
+                d.limits.insert(limit.0, value);
+                Ok(())
+            })
+        }
         _ => Err(CUerror::UNSUPPORTED_LIMIT),
     }
 }
@@ -1916,7 +1988,11 @@ pub(crate) unsafe fn cuPointerGetAttribute(data: *mut c_void, attribute: CUpoint
         P::CU_POINTER_ATTRIBUTE_IS_MANAGED if device => out(data as *mut c_uint, managed as c_uint),
         P::CU_POINTER_ATTRIBUTE_HOST_POINTER if unified => out(data as *mut *mut c_void, ptr.0),
         P::CU_POINTER_ATTRIBUTE_DEVICE_POINTER if device => out(data as *mut CUdeviceptr, ptr),
-        P::CU_POINTER_ATTRIBUTE_CONTEXT if device => out(data as *mut CUcontext, CUcontext(CTX as *mut _)),
+        P::CU_POINTER_ATTRIBUTE_CONTEXT if device => {
+            // the current context, whose allocation it is (each context has its own address space)
+            let h = with_contexts(|c| Ok(c.current()))?;
+            out(data as *mut CUcontext, CUcontext(h as *mut _))
+        }
         _ => Err(CUerror::INVALID_VALUE),
     }
 }

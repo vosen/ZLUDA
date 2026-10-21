@@ -804,8 +804,17 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   deadlocked command after about 0.5 s, which is reported as a launch failure.
 * At every synchronisation, device `printf` output is printed, and a failed
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
-* There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or
-  the first one that answers the Asahi parameter query.
+* There is one device (the render node is `$ZLUDA_AGX_NODE` or the first one
+  that answers the Asahi parameter query). Contexts are real: each one
+  `cuCtxCreate` makes has its own GPU address space (VM) and owns its memory,
+  modules, streams, events, graphs, limits and sticky error, all freed by
+  `cuCtxDestroy`; every thread has its own stack of current contexts
+  (`cuCtxPushCurrent` / `cuCtxPopCurrent` / `cuCtxSetCurrent`). The primary
+  context (`cuDevicePrimaryCtxRetain`, the CUDA runtime's) is used by a thread
+  with no current context; `cuDevicePrimaryCtxReset` (`cudaDeviceReset`) waits
+  for its work, frees everything in it and starts it afresh. How the firmware
+  schedules several VMs is not measured yet (simulator
+  `tasks/ptx-re-blockers.md`, B38, B42-B44).
 
 ## cuBLAS (`zluda_blas_agx`)
 
