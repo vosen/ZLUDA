@@ -585,6 +585,33 @@ floating point operations are constrained intrinsics with dynamic rounding,
 which the backend's `agx-lower-fp-env` pass lowers with the register's value
 at each operation.
 
+## Mesa ISA mode
+
+`zoc --mesa-isa` (and `ZLUDA_AGX_MESA_ISA=1` for `zluda_agx`) compiles for M1 and M2 using only the instruction forms
+that Mesa's asahi compiler emits for the same GPU: the LLVM backend's `mesa-isa` feature (`llvm/docs/AGXUsage.rst` in
+the LLVM fork, "Mesa ISA mode"). Code then relies only on encodings that a production driver uses, and the backend
+reports any other instruction as an error. Nothing changes in the PTX translation: every AGX intrinsic ZLUDA calls has a
+Mesa form. What the backend does differently:
+
+- float atomic adds are compare-and-swap loops, not the M2's native float add;
+- 64-bit unsigned atomic min/max use the lock table, not the M2's native form;
+- device and threadgroup loads, stores and atomics are always encoded in their long form, as Mesa packs them.
+
+The mode is part of the compilation cache key. The library kernels (`agx_libs`) carry a `CHIP+mesa-isa` build of every
+M1 and M2 entry, compiled with `#agxir.target<..., features = "+mesa-isa">` so that the MLIR `agx` operations take
+their portable forms, and `zluda_agx` loads those entries in this mode. The AGX Performance Simulator's
+`--mesa-isa GPU` (or `AGX_MESA_ISA=GPU`) runs code with the same check, so a test fails on any instruction Mesa would
+not emit; `agx_ptx_formalization_check.py --mesa-isa` and `test_kernels.py` (for `+mesa-isa` entries) use it.
+
+Results (2026-10-21, simulator):
+- PTX-formalization with `--mesa-isa`, run under `agx_run --mesa-isa`: on `agx-g14c` and `agx-g13g`, 282 programs pass
+  and all 1,728 checks match with `--strict-fp`, and 1,553 checks match without it. That is the same as without the
+  mode, and no program used an instruction outside Mesa's forms.
+- `cargo test -p ptx --no-default-features --features agx agx`: 388 of 388 Mesa ISA compilations, the 194 run tests
+  that compile, on `agx-g13g` and `agx-g14c`.
+- Cost (agx-bench in the LLVM fork): 6.0% more code from the long memory forms, and 0.4% more estimated cycles, all of
+  it the float atomic add on M2.
+
 ## Checking against PTX-formalization
 
 `ptx/tools/agx_ptx_formalization_check.py` runs the test programs of
@@ -825,4 +852,5 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 level 1, gemv / ger, geam / dgmm / syrk / symm / trmm / trsm and batched GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
 | Not yet | per-thread scratch on hardware (`.local`, spills, recursion; simulator task B1), cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
+| Mesa ISA mode | `zoc --mesa-isa` / `ZLUDA_AGX_MESA_ISA=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Mesa ISA mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

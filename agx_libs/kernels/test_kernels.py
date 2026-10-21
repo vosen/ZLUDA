@@ -4,6 +4,9 @@ and compare them with a Python reference, for each chip in the object (or --chip
 
   test_kernels.py --agx-run AGX_RUN --objcopy LLVM_OBJCOPY --readelf LLVM_READELF sgemm.agxfat [--chips agx-g14c]
 
+Entries named CHIP+mesa-isa (agx-build-fatbin.py's Mesa ISA builds) run under agx_run's Mesa ISA check
+(AGX_MESA_ISA=CHIP).
+
 Exits with 1 if any case is wrong.
 """
 
@@ -956,6 +959,12 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         for chip in chips:
             obj = entries[chip]
+            # A CHIP+mesa-isa entry runs with agx_run's Mesa ISA check: any instruction Mesa's compiler would not
+            # emit for that GPU fails the case.
+            if chip.endswith("+mesa-isa"):
+                os.environ["AGX_MESA_ISA"] = chip[:-len("+mesa-isa")]
+            else:
+                os.environ.pop("AGX_MESA_ISA", None)
             records = kernel_records(obj, a, tmp)
             if "agx_dnn_act_fwd" in records:
                 cases = []

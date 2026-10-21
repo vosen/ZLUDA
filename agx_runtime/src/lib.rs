@@ -391,9 +391,12 @@ pub struct Pipeline {
     pub shared_bytes: u32,
 }
 
-/// The largest uniform range one USC Uniform word is used for. The field holds at least 8 halves (measured);
-/// its full width is unmeasured (blocker B9), so longer ranges are split into words of this size.
-pub const UNIFORM_WORD_HALVES: u32 = 32;
+/// The largest uniform range one USC Uniform word is used for: 64 halves, as Mesa packs them (the 6-bit size field
+/// holds 64 as 0). Measured on the M2 Max up to the whole 512-half file (ptx-re-blockers B9).
+pub const UNIFORM_WORD_HALVES: u32 = 64;
+
+/// The uniform file: 512 halves. Halves from 256 on are preloaded with the Uniform High word, as Mesa does.
+pub const UNIFORM_FILE_HALVES: u32 = 512;
 
 impl Pipeline {
     /// The uniform halves the dispatch must declare: one past the highest preloaded half.
@@ -409,14 +412,17 @@ impl Pipeline {
         let mut w = Vec::new();
         for &(start, count, va) in &self.uniforms {
             assert!(va % 4 == 0, "uniform values must be 4-byte aligned");
+            assert!(start + count <= UNIFORM_FILE_HALVES);
             let mut done = 0;
             while done < count {
-                let n = (count - done).min(UNIFORM_WORD_HALVES);
                 let s = start + done;
-                assert!(s < 256);
+                // A word stays on one side of half 256.
+                let n = (count - done).min(UNIFORM_WORD_HALVES).min(if s < 256 { 256 - s } else { u32::MAX });
                 let v = va + 2 * done as u64;
-                // Uniform: tag 0x1d, start half at bit 8, halves at bit 20, value address >> 2 at bit 26
-                w.extend_from_slice(&(0x1du64 | (s as u64) << 8 | (n as u64) << 20 | (v >> 2) << 26).to_le_bytes());
+                // Uniform (tag 0x1d) or, from half 256, Uniform High (0x3d): start half at bit 8 (relative to 256 for
+                // Uniform High), halves at bit 20 (64 as 0), value address >> 2 at bit 26
+                let (tag, rel) = if s < 256 { (0x1du64, s) } else { (0x3du64, s - 256) };
+                w.extend_from_slice(&(tag | (rel as u64) << 8 | ((n & 63) as u64) << 20 | (v >> 2) << 26).to_le_bytes());
                 done += n;
             }
         }
@@ -450,8 +456,10 @@ pub fn cdm_dispatch(pipeline_words: u32, uniform_halves: u32, g14x: bool, global
     }
     let mut c = Vec::new();
     let put = |c: &mut Vec<u8>, v: u32| c.extend_from_slice(&v.to_le_bytes());
-    // Launch word 0: uniform registers in groups of 64 halves at bit 1; direct mode; block type 0
-    put(&mut c, uniform_halves.div_ceil(64).max(1) << 1);
+    // Launch word 0: uniform registers in groups of 64 halves at bit 1 (3 bits, 8 groups as 0); direct mode; block
+    // type 0
+    assert!(uniform_halves <= UNIFORM_FILE_HALVES);
+    put(&mut c, (uniform_halves.div_ceil(64).max(1) & 7) << 1);
     // Launch word 1: USC offset of the pipeline words
     put(&mut c, pipeline_words);
     if g14x {
@@ -841,13 +849,28 @@ mod tests {
 
     #[test]
     fn long_uniform_ranges_are_split() {
-        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(0, 40, 0x1000)], shared_bytes: 0 };
+        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(0, 80, 0x1000)], shared_bytes: 0 };
         let w = p.usc_words();
         let a = u64::from_le_bytes(w[0..8].try_into().unwrap());
         let b = u64::from_le_bytes(w[8..16].try_into().unwrap());
-        assert_eq!((a >> 8 & 0xff, a >> 20 & 0x3f, a >> 26), (0, 32, 0x1000 >> 2));
-        assert_eq!((b >> 8 & 0xff, b >> 20 & 0x3f, b >> 26), (32, 8, (0x1000 + 64) >> 2));
-        assert_eq!(p.uniform_halves(), 40);
+        // 64 halves is size field 0
+        assert_eq!((a & 0xff, a >> 8 & 0xff, a >> 20 & 0x3f, a >> 26), (0x1d, 0, 0, 0x1000 >> 2));
+        assert_eq!((b & 0xff, b >> 8 & 0xff, b >> 20 & 0x3f, b >> 26), (0x1d, 64, 16, (0x1000 + 128) >> 2));
+        assert_eq!(p.uniform_halves(), 80);
+    }
+
+    // Halves 256-511 use Uniform High, as Mesa's agx_usc_uniform; a range does not cross half 256 in one word.
+    #[test]
+    fn high_uniforms_use_uniform_high() {
+        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(240, 40, 0x1000)], shared_bytes: 0 };
+        let w = p.usc_words();
+        let a = u64::from_le_bytes(w[0..8].try_into().unwrap());
+        let b = u64::from_le_bytes(w[8..16].try_into().unwrap());
+        assert_eq!((a & 0xff, a >> 8 & 0xff, a >> 20 & 0x3f, a >> 26), (0x1d, 240, 16, 0x1000 >> 2));
+        assert_eq!((b & 0xff, b >> 8 & 0xff, b >> 20 & 0x3f, b >> 26), (0x3d, 0, 24, (0x1000 + 32) >> 2));
+        // The whole file is 8 groups of 64 halves, field value 0.
+        let c = cdm_dispatch(0x1000, 512, false, [32, 1, 1], [32, 1, 1]);
+        assert_eq!(u32::from_le_bytes(c[0..4].try_into().unwrap()), 0);
     }
 
     #[test]

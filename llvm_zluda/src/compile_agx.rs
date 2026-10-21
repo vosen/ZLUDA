@@ -42,6 +42,34 @@ pub const AGX_DEFAULT_CPU: &str = "agx-g14g";
 /// differs.
 pub const AGX_STRICT_FP_FEATURES: &CStr = c"+ieee-fp32,+canonical-nan";
 
+/// Target feature of the Mesa ISA mode: the backend emits only the
+/// instruction forms Mesa's asahi compiler emits for the same GPU (G13 and
+/// G14), and reports any other.
+pub const AGX_MESA_ISA_FEATURE: &str = "+mesa-isa";
+
+/// Code generation choices beyond the processor.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AgxOptions {
+    /// Exact PTX floating point semantics (`AGX_STRICT_FP_FEATURES`).
+    pub strict_fp: bool,
+    /// Only instructions Mesa emits (`AGX_MESA_ISA_FEATURE`).
+    pub mesa_isa: bool,
+}
+
+impl AgxOptions {
+    /// The LLVM target features these options select.
+    pub fn features(&self) -> String {
+        let mut f = Vec::new();
+        if self.strict_fp {
+            f.push(AGX_STRICT_FP_FEATURES.to_str().unwrap());
+        }
+        if self.mesa_isa {
+            f.push(AGX_MESA_ISA_FEATURE);
+        }
+        f.join(",")
+    }
+}
+
 /// The outputs of an AGX compilation.
 pub struct AgxCompilation {
     /// Relocatable ELF object with the kernels' machine code.
@@ -143,17 +171,16 @@ fn internalize_functions(module: &Module) {
 /// Link `main` with the AGX implementation of ZLUDA's PTX helper functions
 /// (`ptx_impl`, textual IR or bitcode),
 /// optimize, and generate code for the AGX processor `cpu` (for example
-/// `agx-g13g` or `agx-g14c`). With `strict_fp`, the strict floating point
-/// features are enabled (see `AGX_STRICT_FP_FEATURES`).
+/// `agx-g13g` or `agx-g14c`), with the features `options` select.
 pub fn compile_agx(
     ctx: &Context,
     cpu: &str,
-    strict_fp: bool,
+    options: AgxOptions,
     main: Module,
     ptx_impl: &[u8],
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
 ) -> Result<AgxCompilation, String> {
-    compile_agx_linked(ctx, cpu, strict_fp, main, &[], ptx_impl, compiler_hook)
+    compile_agx_linked(ctx, cpu, options, main, &[], ptx_impl, compiler_hook)
 }
 
 /// `compile_agx` for several PTX modules linked into one object (`cuLink*`): `others` are the LLVM IR (text or
@@ -161,7 +188,7 @@ pub fn compile_agx(
 pub fn compile_agx_linked(
     ctx: &Context,
     cpu: &str,
-    strict_fp: bool,
+    options: AgxOptions,
     main: Module,
     others: &[&[u8]],
     ptx_impl: &[u8],
@@ -191,7 +218,9 @@ pub fn compile_agx_linked(
         hook(&message.to_bytes().to_vec(), String::from("linked.ll"));
     }
 
+    let strict_fp = options.strict_fp;
     let cpu = CString::new(cpu).map_err(|_| ("invalid AGX processor").to_string())?;
+    let features = CString::new(options.features()).unwrap();
     let mut target = unsafe { std::mem::zeroed() };
     let mut err = std::ptr::null_mut();
     let status = unsafe { LLVMGetTargetFromTriple(AGX_TRIPLE.as_ptr(), &mut target, &mut err) };
@@ -203,7 +232,7 @@ pub fn compile_agx_linked(
         target,
         AGX_TRIPLE,
         &cpu,
-        if strict_fp { AGX_STRICT_FP_FEATURES } else { c"" },
+        &features,
         LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
         LLVMRelocMode::LLVMRelocDefault,
         LLVMCodeModel::LLVMCodeModelDefault,

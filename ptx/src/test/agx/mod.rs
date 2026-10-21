@@ -9,6 +9,14 @@ use ptx_parser as ast;
 use std::path::PathBuf;
 
 fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilation, String> {
+    compile_with(ptx, cpu, false)
+}
+
+fn compile_with(
+    ptx: &str,
+    cpu: &str,
+    mesa_isa: bool,
+) -> Result<llvm_zluda::compile_agx::AgxCompilation, String> {
     let ast = ast::parse_module_checked(ptx).map_err(|e| format!("parse: {e:?}"))?;
     let attributes = pass::Attributes {
         clock_rate: 1_398_000,
@@ -16,7 +24,14 @@ fn compile(ptx: &str, cpu: &str) -> Result<llvm_zluda::compile_agx::AgxCompilati
     let module = pass::to_llvm_module_for_target(ast, attributes, Target::Agx, |_| {})
         .map_err(|e| format!("translate: {e}"))?;
     let impl_ir = module.linked_bitcode();
-    llvm_zluda::compile_agx(&module.context, cpu, module.strict_fp, module.llvm_ir, impl_ir, None)
+    llvm_zluda::compile_agx(
+        &module.context,
+        cpu,
+        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, mesa_isa },
+        module.llvm_ir,
+        impl_ir,
+        None,
+    )
 }
 
 fn spirv_run_dir() -> PathBuf {
@@ -118,6 +133,38 @@ fn spirv_run_kernels_compile() {
         .filter(|r| !compiled.iter().any(|c| c == *r))
         .collect();
     assert!(missing.is_empty(), "required kernels failed: {missing:?}");
+}
+
+/// In Mesa ISA mode (`zoc --mesa-isa`) the backend reports any instruction that Mesa's asahi compiler would not
+/// emit: every run test that compiles must also compile in that mode, for M1 and M2.
+#[test]
+fn spirv_run_kernels_compile_mesa_isa() {
+    let mut entries: Vec<_> = std::fs::read_dir(spirv_run_dir())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().map_or(false, |e| e == "ptx"))
+        .collect();
+    entries.sort();
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for path in &entries {
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        let ptx = std::fs::read_to_string(path).unwrap();
+        if !matches!(std::panic::catch_unwind(|| compile(&ptx, "agx-g14g")), Ok(Ok(_))) {
+            continue;
+        }
+        for cpu in ["agx-g13g", "agx-g14c"] {
+            checked += 1;
+            match std::panic::catch_unwind(|| compile_with(&ptx, cpu, true)) {
+                Ok(Ok(out)) if !out.object.is_empty() => {}
+                Ok(Ok(_)) => failures.push(format!("{name} ({cpu}): empty object")),
+                Ok(Err(e)) => failures.push(format!("{name} ({cpu}): {}", e.lines().next().unwrap_or(""))),
+                Err(_) => failures.push(format!("{name} ({cpu}): panic")),
+            }
+        }
+    }
+    eprintln!("AGX Mesa ISA mode: {} of {checked} compilations", checked - failures.len());
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 #[test]

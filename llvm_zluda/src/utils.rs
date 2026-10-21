@@ -75,6 +75,10 @@ impl Module {
         };
         let mut module: LLVMModuleRef = unsafe { mem::zeroed() };
         let mut message = ptr::null_mut();
+        // Textual IR with named values cannot be read by a context that discards names (release builds), so names
+        // are kept while parsing.
+        let discards = unsafe { LLVMContextShouldDiscardValueNames(ctx.get()) };
+        unsafe { LLVMContextSetDiscardValueNames(ctx.get(), 0) };
         // Takes ownership of the memory buffer.
         let status = unsafe {
             llvm_sys::ir_reader::LLVMParseIRInContext(
@@ -84,6 +88,7 @@ impl Module {
                 &mut message,
             )
         };
+        unsafe { LLVMContextSetDiscardValueNames(ctx.get(), discards) };
         if status != 0 {
             let message = Message::new(unsafe { CStr::from_ptr(message) });
             Err(message.to_str().to_string())

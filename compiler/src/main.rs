@@ -42,6 +42,11 @@ pub struct Options {
     /// in software where the hardware differs. Slower
     strict_fp: bool,
 
+    #[bpaf(long("mesa-isa"))]
+    /// AGX: emit only the instructions Mesa's asahi compiler emits for the
+    /// same GPU (M1 and M2 only); any other is an error
+    mesa_isa: bool,
+
     #[bpaf(positional("filename"), some("a PTX file"))]
     /// PTX files. AGX links several into one object (their kernels and
     /// functions, as cuLink does); the outputs are named after the first
@@ -98,6 +103,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.arch,
             opts.ignore_errors,
             opts.strict_fp,
+            opts.mesa_isa,
         );
     }
 
@@ -182,7 +188,9 @@ fn compile_agx(
     arch: Option<String>,
     ignore_errors: bool,
     strict_fp: bool,
+    mesa_isa: bool,
 ) -> Result<(), CompilerError> {
+    let agx_options = llvm_zluda::AgxOptions { strict_fp, mesa_isa };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
@@ -218,7 +226,7 @@ fn compile_agx(
     llvm_zluda::compile_agx_linked(
         &llvm.context,
         &arch,
-        strict_fp,
+        agx_options,
         llvm.main,
         &other_ir,
         llvm.linked_bitcode,
@@ -240,6 +248,7 @@ fn compile_agx(
     _arch: Option<String>,
     _ignore_errors: bool,
     _strict_fp: bool,
+    _mesa_isa: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,
