@@ -55,6 +55,9 @@ pub(crate) struct Driver {
     host_allocs: HashMap<u64, c_uint>,
     /// cuMemAllocManaged allocations.
     managed: std::collections::HashSet<u64>,
+    /// An error that makes the context unusable until it is destroyed, as in CUDA: a failed device assert
+    /// (CUDA_ERROR_ASSERT). Every call returns it meanwhile.
+    sticky: Option<CUerror>,
 }
 
 fn stream_key(s: CUstream) -> usize {
@@ -154,6 +157,14 @@ pub(crate) fn from_io(e: io::Error) -> CUerror {
 }
 
 pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    with_sticky(|d| match d.sticky {
+        Some(e) => Err(e),
+        None => f(d),
+    })
+}
+
+/// `with`, also after a sticky error (cuCtxDestroy).
+pub(crate) fn with_sticky<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
     let mut g = DRIVER.lock().unwrap_or_else(|p| p.into_inner());
     match g.as_mut() {
         Some(d) => f(d),
@@ -206,11 +217,7 @@ impl Driver {
             }
             failed |= m.take_assert_failure();
         }
-        if failed {
-            Err(CUerror::ASSERT)
-        } else {
-            Ok(())
-        }
+        sticky_after_sync(&mut self.sticky, failed)
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
@@ -219,6 +226,17 @@ impl Driver {
             s.queue.synchronize().map_err(from_io)?;
         }
         self.after_sync()
+    }
+}
+
+/// The result of a synchronisation: a failed device assert makes CUDA_ERROR_ASSERT sticky.
+fn sticky_after_sync(sticky: &mut Option<CUerror>, assert_failed: bool) -> Result<(), CUerror> {
+    if assert_failed && sticky.is_none() {
+        *sticky = Some(CUerror::ASSERT);
+    }
+    match *sticky {
+        Some(e) => Err(e),
+        None => Ok(()),
     }
 }
 
@@ -373,6 +391,7 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
             execs: HashMap::new(),
             host_allocs: HashMap::new(),
             managed: Default::default(),
+            sticky: None,
         });
     }
     Ok(())
@@ -487,7 +506,12 @@ pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
     if ctx.0 as usize != CTX {
         return Err(CUerror::INVALID_CONTEXT);
     }
-    with(|d| d.sync_all())
+    // Destroying the context ends a sticky error (the next context starts clean).
+    with_sticky(|d| {
+        let r = d.sync_all();
+        d.sticky = None;
+        r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
+    })
 }
 
 pub(crate) unsafe fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult {
@@ -1838,6 +1862,16 @@ pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, add
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_assert_stays_until_the_context_is_destroyed() {
+        let mut sticky = None;
+        assert_eq!(sticky_after_sync(&mut sticky, false), Ok(()));
+        assert_eq!(sticky_after_sync(&mut sticky, true), Err(CUerror::ASSERT));
+        // the flag is cleared on the device once read, but the context keeps the error
+        assert_eq!(sticky_after_sync(&mut sticky, false), Err(CUerror::ASSERT));
+        assert_eq!(sticky, Some(CUerror::ASSERT));
+    }
 
     #[test]
     fn co_resident_threadgroups_follow_the_measured_rule() {

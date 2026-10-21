@@ -194,9 +194,11 @@ three differences.
   `__zluda_agx_trap_flag` (which `agx_runtime` reports as
   `CUDA_ERROR_ASSERT`), orders its stores with a release fence and executes
   `trap`. On the M2 Max an executed `trap` does nothing (AGX Performance
-  Simulator `tasks/ptx-re-blockers.md`, B21): the stores after it land and the
-  command ends normally, so the flag word is what reports the assertion, and
-  the kernel keeps running after a failed `assert`.
+  Simulator `tasks/ptx-re-blockers.md`, B21), so the flag word is what reports
+  the assertion, and the LLVM backend makes a thread that reaches `trap`
+  return there: the failing thread stops, the others run on (the threadgroup
+  barrier does not wait for it, B28). `CUDA_ERROR_ASSERT` is sticky, as in
+  CUDA: every call returns it until the context is destroyed.
 * Lanes of one warp run one side of a divergent branch to completion before
   the other side (B4), so a lane that spins waiting for a lane of its own warp
   on the other side of a branch never finishes. This is the pre-Volta (`sm_6x`)
