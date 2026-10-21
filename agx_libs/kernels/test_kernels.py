@@ -925,6 +925,22 @@ def case_level3(a, obj, tmp, what, opts, rnd):
                     s = sum(at(A, i, l, lda, trans) * at(A, j, l, lda, trans) for l in range(k))
                     want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
         return close(unpack(got, BT), want, range(len(C)), TOL(1e-5))
+    if what == "syr2k":
+        upper, trans = opts["upper"], opts["trans"]
+        lda, ldb, ldc = (k if trans else n) + 1, (k if trans else n) + 3, n + 2
+        A, B = mat(0, n if trans else k, lda, rnd), mat(0, n if trans else k, ldb, rnd)
+        C = mat(0, n, ldc, rnd)
+        (got,) = run(a, obj, K("agx_ssyr2k"), [("buf", pack(A, BT)), ("buf", pack(B, BT)), ("buf", pack(C, BT), True), ("i64", n),
+                                              ("i64", k), ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", upper),
+                                              ("i64", trans), (S(), alpha), (S(), beta)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(n):
+                if (i <= j) if upper else (i >= j):
+                    s = sum(at(A, i, l, lda, trans) * at(B, j, l, ldb, trans) + at(B, i, l, ldb, trans) * at(A, j, l, lda, trans)
+                            for l in range(k))
+                    want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
+        return close(unpack(got, BT), want, range(len(C)), TOL(1e-5))
     right, upper = opts["right"], opts["upper"]
     na = n if right else m
     lda, ldb = na + 1, m + 2
@@ -1044,6 +1060,8 @@ def main():
                     for trans in (0, 1):
                         cases.append(("ssyrk upper %d trans %d" % (upper, trans),
                                       lambda u=upper, t=trans: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t}, rnd)))
+                        cases.append(("ssyr2k upper %d trans %d" % (upper, trans),
+                                      lambda u=upper, t=trans: case_level3(a, obj, tmp, "syr2k", {"upper": u, "trans": t}, rnd)))
                     for right in (0, 1):
                         cases.append(("ssymm right %d upper %d" % (right, upper),
                                       lambda u=upper, r=right: case_level3(a, obj, tmp, "symm", {"upper": u, "right": r}, rnd)))

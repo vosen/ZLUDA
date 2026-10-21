@@ -517,6 +517,44 @@ gpu.module @agx_blas {
     }
     gpu.return
   }
+  // syr2k: C = alpha (op(A) op(B)^T + op(B) op(A)^T) + beta C on the upper or
+  // lower triangle of the n x n C, with op(A), op(B) n x k (k x n stored when
+  // trans). One thread per element of C (2-D grid).
+  gpu.func @agx_ssyr2k(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                       %n: index, %k: index, %lda: index, %ldb: index, %ldc: index,
+                       %upper_: i64, %trans_: i64, %alpha: f32, %beta: f32) kernel {
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %trans = arith.cmpi ne, %trans_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %n : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %le = arith.cmpi ule, %i, %j : index
+    %ge = arith.cmpi uge, %i, %j : index
+    %tri = arith.select %upper, %le, %ge : i1
+    %in0 = arith.andi %in_i, %in_j : i1
+    %in = arith.andi %in0, %tri : i1
+    scf.if %in {
+      %s = scf.for %l = %i0 to %k step %i1 iter_args(%acc = %f0) -> f32 {
+        %ai = func.call @agx_blas_at(%a0, %i, %l, %lda, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %bj = func.call @agx_blas_at(%b0, %j, %l, %ldb, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %bi = func.call @agx_blas_at(%b0, %i, %l, %ldb, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %aj = func.call @agx_blas_at(%a0, %j, %l, %lda, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32
+        %acc1 = math.fma %ai, %bj, %acc : f32
+        %acc2 = math.fma %bi, %aj, %acc1 : f32
+        scf.yield %acc2 : f32
+      }
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      func.call @agx_blas_blend(%c0, %p, %s, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
 
   // C = alpha A B + beta C (left) or alpha B A + beta C (right) for a
   // symmetric A held in one triangle (sym 1), or C = alpha op(A) B / alpha B

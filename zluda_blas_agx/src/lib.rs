@@ -8,7 +8,7 @@
 //! `cublasHgemm`, their strided batched forms, and `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C,
 //! or f16 A and B and f16 or f32 C), always accumulated in f32, and `cublasDgemm`; and the single and double precision
 //! level 1 routines (axpy, scal, copy, swap, dot, asum, nrm2, amax, amin), level 2 gemv and ger, and level 3 geam,
-//! dgmm, syrk, symm, trmm, trsm and batched GEMM (`cublasS*` and `cublasD*`, with their `_64` forms). The double
+//! dgmm, syrk, syr2k, symm, trmm, trsm and batched GEMM (`cublasS*` and `cublasD*`, with their `_64` forms). The double
 //! precision routines run the f64 copies of the f32 kernels (agx_libs/build.rs), in the backend's software double
 //! precision.
 //! Reductions are deterministic: fixed per-thread partial sums combined in order. Other functions return
@@ -110,6 +110,10 @@ cuda_macros::cublas_function_declarations!(
             cublasStrsm_v2,
             cublasStrsm_v2_64,
             cublasXerbla,
+            cublasSsyr2k_v2,
+            cublasSsyr2k_v2_64,
+            cublasDsyr2k_v2,
+            cublasDsyr2k_v2_64,
             cublasDaxpy_v2,
             cublasDaxpy_v2_64,
             cublasDscal_v2,
@@ -1061,6 +1065,31 @@ mod imp {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn syr2k<T: Real>(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, mut n: i64, mut k: i64, alpha: *const T, mut a: *const T, mut lda: i64, mut b: *const T, mut ldb: i64, beta: *const T, mut c: *mut T, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (upper, t) = (fill(uplo)?, op(trans)?);
+        if n < 0 || k < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if t { k } else { n })?;
+        ld_ok(ldb, if t { k } else { n })?;
+        ld_ok(ldc, n)?;
+        let mut alpha = T::scalar(h, alpha as *const c_void)?;
+        let mut beta = T::scalar(h, beta as *const c_void)?;
+        if n == 0 || ((alpha.to_f64() == 0.0 || k == 0) && beta.to_f64() == 1.0) {
+            return Ok(());
+        }
+        let (mut upper, mut t) = (upper as i64, t as i64);
+        blas_launch(
+            h,
+            T::kernel(c"agx_ssyr2k", c"agx_ssyr2k_f64"),
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            [n, n],
+            [16, 4],
+        )
+    }
+
     /// symm (`sym`, with beta) and the out-of-place trmm (beta 0).
     #[allow(clippy::too_many_arguments)]
     unsafe fn symm_trmm<T: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, sym: bool, mut m: i64, mut n: i64, alpha: *const T, mut a: *const T, mut lda: i64, mut b: *const T, mut ldb: i64, beta: *const T, mut c: *mut T, mut ldc: i64) -> cublasStatus_t {
@@ -1190,11 +1219,12 @@ mod imp {
     }
 
     macro_rules! level3_for {
-        ($r:ty, $geam:ident, $geam64:ident, $dgmm:ident, $dgmm64:ident, $syrk:ident, $syrk64:ident, $trsm:ident, $trsm64:ident, $batched:ident, $batched64:ident, $symm:ident, $symm64:ident, $trmm:ident, $trmm64:ident) => {
+        ($r:ty, $geam:ident, $geam64:ident, $dgmm:ident, $dgmm64:ident, $syrk:ident, $syrk64:ident, $syr2k:ident, $syr2k64:ident, $trsm:ident, $trsm64:ident, $batched:ident, $batched64:ident, $symm:ident, $symm64:ident, $trmm:ident, $trmm64:ident) => {
             both_widths! {
                 $geam, $geam64 => geam::<$r>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int as i64, n: c_int as i64, alpha: *const $r, a: *const $r, lda: c_int as i64, beta: *const $r, b: *const $r, ldb: c_int as i64, c: *mut $r, ldc: c_int as i64);
                 $dgmm, $dgmm64 => dgmm::<$r>(h: cublasHandle_t, mode: cublasSideMode_t, m: c_int as i64, n: c_int as i64, a: *const $r, lda: c_int as i64, x: *const $r, incx: c_int as i64, c: *mut $r, ldc: c_int as i64);
                 $syrk, $syrk64 => syrk::<$r>(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, n: c_int as i64, k: c_int as i64, alpha: *const $r, a: *const $r, lda: c_int as i64, beta: *const $r, c: *mut $r, ldc: c_int as i64);
+                $syr2k, $syr2k64 => syr2k::<$r>(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, n: c_int as i64, k: c_int as i64, alpha: *const $r, a: *const $r, lda: c_int as i64, b: *const $r, ldb: c_int as i64, beta: *const $r, c: *mut $r, ldc: c_int as i64);
                 $trsm, $trsm64 => trsm::<$r>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int as i64, n: c_int as i64, alpha: *const $r, a: *const $r, lda: c_int as i64, b: *mut $r, ldb: c_int as i64);
                 $batched, $batched64 => gemm_batched::<$r>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int as i64, n: c_int as i64, k: c_int as i64, alpha: *const $r, a: *const *const $r, lda: c_int as i64, b: *const *const $r, ldb: c_int as i64, beta: *const $r, c: *const *mut $r, ldc: c_int as i64, batch: c_int as i64);
             }
@@ -1221,6 +1251,6 @@ mod imp {
         };
     }
 
-    level3_for!(f32, cublasSgeam, cublasSgeam_64, cublasSdgmm, cublasSdgmm_64, cublasSsyrk_v2, cublasSsyrk_v2_64, cublasStrsm_v2, cublasStrsm_v2_64, cublasSgemmBatched, cublasSgemmBatched_64, cublasSsymm_v2, cublasSsymm_v2_64, cublasStrmm_v2, cublasStrmm_v2_64);
-    level3_for!(f64, cublasDgeam, cublasDgeam_64, cublasDdgmm, cublasDdgmm_64, cublasDsyrk_v2, cublasDsyrk_v2_64, cublasDtrsm_v2, cublasDtrsm_v2_64, cublasDgemmBatched, cublasDgemmBatched_64, cublasDsymm_v2, cublasDsymm_v2_64, cublasDtrmm_v2, cublasDtrmm_v2_64);
+    level3_for!(f32, cublasSgeam, cublasSgeam_64, cublasSdgmm, cublasSdgmm_64, cublasSsyrk_v2, cublasSsyrk_v2_64, cublasSsyr2k_v2, cublasSsyr2k_v2_64, cublasStrsm_v2, cublasStrsm_v2_64, cublasSgemmBatched, cublasSgemmBatched_64, cublasSsymm_v2, cublasSsymm_v2_64, cublasStrmm_v2, cublasStrmm_v2_64);
+    level3_for!(f64, cublasDgeam, cublasDgeam_64, cublasDdgmm, cublasDdgmm_64, cublasDsyrk_v2, cublasDsyrk_v2_64, cublasDsyr2k_v2, cublasDsyr2k_v2_64, cublasDtrsm_v2, cublasDtrsm_v2_64, cublasDgemmBatched, cublasDgemmBatched_64, cublasDsymm_v2, cublasDsymm_v2_64, cublasDtrmm_v2, cublasDtrmm_v2_64);
 }
