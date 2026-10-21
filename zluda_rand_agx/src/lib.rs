@@ -259,7 +259,8 @@ unsafe fn generate32(g: curandGenerator_t, out: *mut u32, n: usize, kind: Kind) 
         return Ok(());
     }
     let (mean, sd) = kind.params();
-    let (mut p, mut n_, mut start, mut seed, mut mode, mut mean, mut sd) = (out as *mut c_void, n as i64, start as i64, g.seed as i64, kind.mode(), mean as f32, sd as f32);
+    let (mut p, mut n_, mut start, mut seed, mut mode, mut mean, mut sd) =
+        (out as *mut c_void, n as i64, start as i64, g.seed as i64, kind.mode(), mean as f32, sd as f32);
     launch(
         g,
         c"agx_rand32",
@@ -493,10 +494,7 @@ mod tests {
         // Random123's kat_vectors for philox4x32_10
         assert_eq!(philox([0; 4], [0; 2]), [0x6627e8d5, 0xe169c58d, 0xbc57ac4c, 0x9b00dbd8]);
         assert_eq!(philox([u32::MAX; 4], [u32::MAX; 2]), [0x408f276d, 0x41c83b0e, 0xa20bc7c6, 0x6d5451fd]);
-        assert_eq!(
-            philox([0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344], [0xa4093822, 0x299f31d0]),
-            [0xd16cfe09, 0x94fdcceb, 0x5001e420, 0x24126ea1]
-        );
+        assert_eq!(philox([0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344], [0xa4093822, 0x299f31d0]), [0xd16cfe09, 0x94fdcceb, 0x5001e420, 0x24126ea1]);
     }
 
     #[test]
