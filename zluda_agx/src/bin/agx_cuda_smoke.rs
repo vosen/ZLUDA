@@ -41,7 +41,7 @@ fn main() {
         check("cuInit", cuInit(0));
         let mut dev = 0;
         check("cuDeviceGet", cuDeviceGet(&mut dev, 0));
-        let mut name = [0i8; 128];
+        let mut name = [0 as std::ffi::c_char; 128];
         check("cuDeviceGetName", cuDeviceGetName(name.as_mut_ptr(), 128, dev));
         let mut ctx = CUcontext(null_mut());
         check("cuCtxCreate", cuCtxCreate_v2(&mut ctx, 0, dev));

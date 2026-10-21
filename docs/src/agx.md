@@ -696,6 +696,16 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   (`cuMemAllocAsync`, which allocates at once, and `cuMemFreeAsync`, which
   waits for all work) are supported. `cuMemHostRegister` is not: Asahi cannot
   map existing user memory into the GPU.
+* Scratch: kernels that spill or use `.local` memory get per-thread stack
+  memory as Mesa sets it up (AGX Performance Simulator
+  `tasks/ptx-re-blockers.md`, B1, measured on the M2 Max): each command that
+  needs it carries Mesa's helper program (`libagx_helper`, compiled by Mesa
+  25.3.6 and shipped as `agx_runtime/src/data/libagx_helper.bin`), which
+  hands out blocks of one scratch buffer per address space laid out like
+  Mesa's (128 SIMD-groups per core), and the kernel's Registers word carries
+  its scratch size bucket. The buffer grows to the largest kernel's stack
+  size (for example 57 MiB for 320 bytes per thread on 38 cores, 912 MiB for
+  4 KiB) and is kept until the context is destroyed.
 * Modules: `cuModuleLoadData` takes PTX text, a fat binary (its PTX for the
   newest architecture is used; SASS-only fat binaries cannot load) or an AGX
   object. PTX is compiled by `zoc` (found through `ZLUDA_AGX_ZOC`, next to the
@@ -877,7 +887,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), linking (`cuLink*`), CUDA arrays, launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 level 1, gemv / ger, geam / dgmm / syrk / symm / trmm / trsm and batched GEMM (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single precision (`zluda_fft_agx`); cuSPARSE SpMV and SpMM in f32 (`zluda_sparse_agx`) |
-| Not yet | per-thread scratch on hardware (`.local`, spills, recursion; simulator task B1), cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
+| Not yet | recursion and non-inlined calls, cooperative launches, peer access, IPC, cuBLAS double precision beyond GEMM, complex types and syr2k / her*, the cuDNN graph API and f16 beyond convolutions, double precision cuFFT, cuSPARSE beyond SpMV and SpMM |
 | NVML | device count, name, UUID, memory, compute capability; no telemetry |
 | Mesa ISA mode | `zoc --mesa-isa` / `ZLUDA_AGX_MESA_ISA=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Mesa ISA mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | pending: the open questions are in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` |

@@ -7,7 +7,6 @@
 //! verified on an M2 Max (G14C) under Asahi Linux. See Apple-M2-Playground `experiments/baseline/direct-drm-compute.md`
 //! for the measured layout. The tests below pin those exact bytes. Fields that are not yet measured are listed in
 //! the AGX Performance Simulator's `tasks/ptx-re-blockers.md`:
-//! - scratch / stack memory (B1);
 //! - the largest uniform preload (B9);
 //! - partial workgroups.
 //!
@@ -19,6 +18,7 @@ pub mod error;
 pub mod module;
 pub mod printf;
 pub mod ring;
+pub mod scratch;
 
 use asahi_sys::*;
 use std::ffi::CString;
@@ -261,6 +261,19 @@ pub struct Vm {
     pub usc_base: u64,
     usc: Rc<RefCell<RangeAllocator>>,
     data: Rc<RefCell<RangeAllocator>>,
+    /// Header entries of the present cores (`scratch::core_entries`).
+    core_entries: Vec<u32>,
+    scratch: Option<Scratch>,
+}
+
+/// The helper program and the scratch buffer of an address space.
+struct Scratch {
+    helper: Bo,
+    buffer: Bo,
+    layout: scratch::Layout,
+    /// Smaller buffers that commands in flight may still use; freed with the address space.
+    #[allow(dead_code)]
+    retired: Vec<Bo>,
 }
 
 pub const USC_HEAP_SIZE: u64 = 1 << 32;
@@ -288,7 +301,46 @@ impl Vm {
             // offset 0 of the heap is never used, so a USC offset of 0 can mean "none"
             usc: Rc::new(RefCell::new(RangeAllocator::new(usc_base + PAGE, USC_HEAP_SIZE - PAGE))),
             data: Rc::new(RefCell::new(RangeAllocator::new(data_base, vc.kernel_start - data_base))),
+            core_entries: scratch::core_entries(&p.core_masks, p.num_clusters_total, p.num_cores_per_cluster),
+            scratch: None,
         })
+    }
+
+    /// The helper program of a command whose shader uses `dwords` 32-bit words of stack per thread: its tagged USC
+    /// address and the address of the scratch buffer's header (`drm_asahi_helper_program`). The buffer grows to the
+    /// largest size asked for and is shared by every command of the address space.
+    pub fn scratch(&mut self, dwords: u32) -> io::Result<(u32, u64)> {
+        if dwords > (8 << 12) * 4 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("{dwords} words of stack per thread")));
+        }
+        let have = self.scratch.as_ref().map_or(0, |s| s.layout.dwords());
+        if (dwords as u64) > have {
+            let layout = scratch::Layout::new(dwords);
+            let buf = scratch::Buffer::new(layout, self.core_entries.len(), PAGE);
+            let mut bo = self.alloc_data_aligned(buf.size, buf.align)?;
+            let header = buf.header(bo.va, &self.core_entries);
+            bo.as_mut_slice()[..header.len()].copy_from_slice(&header);
+            match &mut self.scratch {
+                Some(s) => {
+                    let old = std::mem::replace(&mut s.buffer, bo);
+                    s.retired.push(old);
+                    s.layout = layout;
+                }
+                None => {
+                    let mut helper = self.alloc_usc(scratch::HELPER.len() as u64)?;
+                    helper.as_mut_slice()[..scratch::HELPER.len()].copy_from_slice(scratch::HELPER);
+                    self.scratch = Some(Scratch { helper, buffer: bo, layout, retired: Vec::new() });
+                }
+            }
+        }
+        let s = self.scratch.as_ref().unwrap();
+        // a tagged USC pointer, as Mesa's agx_helper_program
+        Ok(((s.helper.va - self.usc_base) as u32 | 1, s.buffer.va))
+    }
+
+    /// The scratch buffer's header and block lists, to check the helper's counters (`scratch::core_counters`).
+    pub fn scratch_header(&self) -> Option<&[u8]> {
+        self.scratch.as_ref().map(|s| &s.buffer.as_slice()[..scratch::Buffer::new(s.layout, self.core_entries.len(), PAGE).blocks_offset as usize])
     }
 
     fn create(&self, size: u64, va: u64, bind_flags: u32, heap: Option<&Rc<RefCell<RangeAllocator>>>) -> io::Result<Bo> {
@@ -351,9 +403,18 @@ impl Vm {
         self.alloc_in(&self.data.clone(), size, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, "data heap full")
     }
 
+    /// `alloc_data` at an address that is a multiple of `align` (a power of two, at least a page).
+    pub fn alloc_data_aligned(&mut self, size: u64, align: u64) -> io::Result<Bo> {
+        self.alloc_in_aligned(&self.data.clone(), size, align, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, "data heap full")
+    }
+
     fn alloc_in(&self, heap: &Rc<RefCell<RangeAllocator>>, size: u64, flags: u32, full: &str) -> io::Result<Bo> {
+        self.alloc_in_aligned(heap, size, PAGE, flags, full)
+    }
+
+    fn alloc_in_aligned(&self, heap: &Rc<RefCell<RangeAllocator>>, size: u64, align: u64, flags: u32, full: &str) -> io::Result<Bo> {
         let size = round_up(size.max(1), PAGE);
-        let va = heap.borrow_mut().alloc(size, PAGE).ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, full))?;
+        let va = heap.borrow_mut().alloc(size, align.max(PAGE)).ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, full))?;
         self.create(size, va, flags, Some(heap)).inspect_err(|_| heap.borrow_mut().free(va, size))
     }
 
@@ -373,6 +434,8 @@ impl Vm {
 
 impl Drop for Vm {
     fn drop(&mut self) {
+        // unbind the scratch objects while the address space exists
+        self.scratch = None;
         let mut vd = drm_asahi_vm_destroy { vm_id: self.id, pad: 0 };
         let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_VM_DESTROY as u64, &mut vd, "vm-destroy");
     }
@@ -389,6 +452,8 @@ pub struct Pipeline {
     pub uniforms: Vec<(u32, u32, u64)>,
     /// Threadgroup memory per workgroup in bytes (0..=65536).
     pub shared_bytes: u32,
+    /// The scratch size bucket of a shader that uses the stack (`scratch::Layout::bucket`), or 0.
+    pub spill_bucket: u32,
 }
 
 /// The largest uniform range one USC Uniform word is used for: 64 halves, as Mesa packs them (the 6-bit size field
@@ -436,9 +501,11 @@ impl Pipeline {
         w.extend_from_slice(&(shared as u32).to_le_bytes());
         // Shader: tag 0x0d, unk_2 = 3 (compute) at bit 10, code offset at bit 16 (6 bytes)
         w.extend_from_slice(&(0x0du64 | 3 << 10 | (self.code as u64) << 16).to_le_bytes()[..6]);
-        // Registers: tag 0x8d, registers in groups of 8 halves at bit 8 (5 bits, 0 = 256), unk_4 = 1 at bit 24
+        // Registers: tag 0x8d, registers in groups of 8 halves at bit 8 (5 bits, 0 = 256), the scratch bucket at bit 18
+        // (4 bits, B1), unk_4 = 1 at bit 24
+        assert!(self.spill_bucket <= 15);
         let groups = self.gpr_halves.div_ceil(8) & 31;
-        w.extend_from_slice(&(0x8du32 | groups << 8 | 1 << 24).to_le_bytes());
+        w.extend_from_slice(&(0x8du32 | groups << 8 | self.spill_bucket << 18 | 1 << 24).to_le_bytes());
         // No preshader
         w.extend_from_slice(&[0x88, 0x00]);
         w
@@ -588,6 +655,17 @@ impl Queue {
     /// queues) and the earlier commands of this queue. Does not wait. Its timestamps stay readable with `timing`
     /// until `TIMESTAMP_SLOTS` more commands are submitted.
     pub fn submit_compute(&mut self, cdm_base: u64, cdm_end: u64, wait_for: &[Fence]) -> io::Result<Fence> {
+        self.submit_compute_with_helper(cdm_base, cdm_end, None, wait_for)
+    }
+
+    /// `submit_compute` with a helper program: `(binary, data)` of `Vm::scratch` for a shader that uses the stack.
+    pub fn submit_compute_with_helper(
+        &mut self,
+        cdm_base: u64,
+        cdm_end: u64,
+        helper: Option<(u32, u64)>,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
         let point = self.submitted + 1;
         let slot = (point % TIMESTAMP_SLOTS) as u32 * 16;
         self.ts.as_mut_slice()[slot as usize..slot as usize + 16].fill(0);
@@ -603,6 +681,9 @@ impl Queue {
         cmd.h.cdm_barrier = 0;
         cmd.c.cdm_ctrl_stream_base = cdm_base;
         cmd.c.cdm_ctrl_stream_end = cdm_end;
+        if let Some((binary, data)) = helper {
+            cmd.c.helper = drm_asahi_helper_program { binary, cfg: 0, data };
+        }
         cmd.c.ts.start = drm_asahi_timestamp { handle: self.ts_handle, offset: slot };
         cmd.c.ts.end = drm_asahi_timestamp { handle: self.ts_handle, offset: slot + 8 };
         let sync = |f: &Fence| drm_asahi_sync {
@@ -838,7 +919,7 @@ mod tests {
     // Bytes recorded from the direct-DRM control dispatch on the M2 Max (direct-drm-compute.md).
     #[test]
     fn usc_words_match_the_measured_control() {
-        let p = Pipeline { code: 0x2000, gpr_halves: 8, uniforms: vec![(8, 8, 0x11_0000_0000)], shared_bytes: 0 };
+        let p = Pipeline { code: 0x2000, gpr_halves: 8, uniforms: vec![(8, 8, 0x11_0000_0000)], shared_bytes: 0, spill_bucket: 0 };
         assert_eq!(hex(&p.usc_words()), "1d08800000000011".to_owned() + "4d900000" + "0d0c00200000" + "8d010001" + "8800");
     }
 
@@ -855,10 +936,17 @@ mod tests {
         assert_eq!(hex(&c), want);
     }
 
+    // Mesa's Registers word for its spilling dispatch: 24 halves, scratch bucket 5 (B1 trace).
+    #[test]
+    fn registers_word_carries_the_scratch_bucket() {
+        let p = Pipeline { code: 0, gpr_halves: 24, uniforms: vec![], shared_bytes: 0, spill_bucket: 5 };
+        assert_eq!(hex(&p.usc_words()[10..14]), "8d031401");
+    }
+
     // Shared word as built by the simulator's run_drm_tg_layout.py.
     #[test]
     fn shared_word_with_threadgroup_memory() {
-        let p = Pipeline { code: 0, gpr_halves: 256, uniforms: vec![], shared_bytes: 4096 };
+        let p = Pipeline { code: 0, gpr_halves: 256, uniforms: vec![], shared_bytes: 4096, spill_bucket: 0 };
         let w = p.usc_words();
         assert_eq!(u32::from_le_bytes(w[0..4].try_into().unwrap()), 0x4d | 1 << 8 | 0x24 << 10 | 16 << 24);
         // 256 halves is register group field 0
@@ -867,7 +955,7 @@ mod tests {
 
     #[test]
     fn long_uniform_ranges_are_split() {
-        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(0, 80, 0x1000)], shared_bytes: 0 };
+        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(0, 80, 0x1000)], shared_bytes: 0, spill_bucket: 0 };
         let w = p.usc_words();
         let a = u64::from_le_bytes(w[0..8].try_into().unwrap());
         let b = u64::from_le_bytes(w[8..16].try_into().unwrap());
@@ -880,7 +968,7 @@ mod tests {
     // Halves 256-511 use Uniform High, as Mesa's agx_usc_uniform; a range does not cross half 256 in one word.
     #[test]
     fn high_uniforms_use_uniform_high() {
-        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(240, 40, 0x1000)], shared_bytes: 0 };
+        let p = Pipeline { code: 0, gpr_halves: 8, uniforms: vec![(240, 40, 0x1000)], shared_bytes: 0, spill_bucket: 0 };
         let w = p.usc_words();
         let a = u64::from_le_bytes(w[0..8].try_into().unwrap());
         let b = u64::from_le_bytes(w[8..16].try_into().unwrap());
@@ -1059,10 +1147,6 @@ impl LoadedModule {
 
     fn kernel(&self, kernel: &str, dynamic_shared: u32) -> io::Result<&module::KernelInfo> {
         let k = self.module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
-        if k.stack_bytes > 0 {
-            // per-thread scratch for direct-DRM dispatches is not measured yet (ptx-re-blockers B1)
-            return Err(io::Error::new(io::ErrorKind::Unsupported, format!("{kernel} needs {} bytes of stack", k.stack_bytes)));
-        }
         if k.threadgroup_bytes + dynamic_shared > 65536 {
             return Err(invalid(format!("{kernel} needs {} bytes of threadgroup memory", k.threadgroup_bytes + dynamic_shared)));
         }
@@ -1083,6 +1167,9 @@ impl LoadedModule {
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         let r = (|| {
+            // a shader that uses the stack gets its scratch from the helper program
+            let stack_dwords = k.stack_bytes.div_ceil(4);
+            let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords)?) } else { None };
             let bytes: Vec<u8> = halves.iter().flat_map(|h| h.to_le_bytes()).collect();
             let unif = if bytes.is_empty() { 0 } else { queue.stage(RingKind::Data, &bytes, 64)? };
             let pipeline = Pipeline {
@@ -1090,13 +1177,14 @@ impl LoadedModule {
                 gpr_halves: k.gpr_halves(),
                 uniforms: if halves.is_empty() { vec![] } else { vec![(0, halves.len() as u32, unif)] },
                 shared_bytes: k.threadgroup_bytes + dynamic_shared,
+                spill_bucket: if stack_dwords > 0 { scratch::Layout::new(stack_dwords).bucket } else { 0 },
             };
             // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
             let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
             let stream = cdm_dispatch((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
-            queue.submit_compute(cdm, cdm + stream.len() as u64, wait_for)
+            queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, wait_for)
         })();
         let fence = r.inspect_err(|_| queue.unstage())?;
         if !keep.is_empty() {

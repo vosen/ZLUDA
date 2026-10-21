@@ -185,7 +185,7 @@ impl CudaDisplay
     }
 }
 
-impl CudaDisplay for Option<unsafe extern "C" fn(*const i8)> {
+impl CudaDisplay for Option<unsafe extern "C" fn(*const std::ffi::c_char)> {
     fn write(
         &self,
         _fn_name: &'static str,
@@ -200,7 +200,7 @@ impl CudaDisplay for Option<unsafe extern "C" fn(*const i8)> {
     }
 }
 
-impl CudaDisplay for Option<unsafe extern "C" fn(i32, *const i8, *const i8)> {
+impl CudaDisplay for Option<unsafe extern "C" fn(i32, *const std::ffi::c_char, *const std::ffi::c_char)> {
     fn write(
         &self,
         _fn_name: &'static str,

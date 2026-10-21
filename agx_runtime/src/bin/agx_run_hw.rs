@@ -130,6 +130,7 @@ fn main() {
         gpr_halves: regs,
         uniforms: if n32 > 0 { vec![(0, 2 * n32 as u32, unif.va)] } else { vec![] },
         shared_bytes: shared,
+        spill_bucket: 0,
     };
     let words = pipeline.usc_words();
     if words.len() > code_off as usize {
