@@ -1,5 +1,6 @@
 // Pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx
-// (cuDNN), in f32 for every AGX generation like sgemm.mlir. Tensors are 4-D
+// (cuDNN), in f32 for every AGX generation like sgemm.mlir (f16 and bf16
+// tensors go through f32 copies, agx_dnn_to_f32 / agx_dnn_from_f32). Tensors are 4-D
 // N x C x H x W with arbitrary element strides (0 broadcasts); a thread's
 // linear index runs over N C H W in that order. Outputs follow cuDNN's
 // blending, y = alpha r + beta y, and y is not read when beta is 0.
@@ -1020,6 +1021,97 @@ gpu.module @agx_dnn {
       %kM = arith.divf %k, %Mf : f32
       %r = arith.mulf %kM, %t1 : f32
       func.call @agx_dnn_blend(%dx0, %dxo, %r, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // f16 (kind 0) or bf16 (kind 1) bits to f32 and back (round to nearest
+  // even; NaN stays a quiet NaN)
+  func.func private @agx_dnn_h2f(%b: i16, %kind: index) -> f32 {
+    %k0 = arith.constant 0 : index
+    %c16 = arith.constant 16 : i32
+    %is_h = arith.cmpi eq, %kind, %k0 : index
+    %r = scf.if %is_h -> f32 {
+      %h = arith.bitcast %b : i16 to f16
+      %f = arith.extf %h : f16 to f32
+      scf.yield %f : f32
+    } else {
+      %w = arith.extui %b : i16 to i32
+      %s = arith.shli %w, %c16 : i32
+      %f = arith.bitcast %s : i32 to f32
+      scf.yield %f : f32
+    }
+    return %r : f32
+  }
+  func.func private @agx_dnn_f2h(%f: f32, %kind: index) -> i16 {
+    %k0 = arith.constant 0 : index
+    %c16 = arith.constant 16 : i32
+    %c1 = arith.constant 1 : i32
+    %round = arith.constant 32767 : i32
+    %qnan = arith.constant 32704 : i16
+    %is_h = arith.cmpi eq, %kind, %k0 : index
+    %r = scf.if %is_h -> i16 {
+      %h = arith.truncf %f : f32 to f16
+      %b = arith.bitcast %h : f16 to i16
+      scf.yield %b : i16
+    } else {
+      %bits = arith.bitcast %f : f32 to i32
+      %hi = arith.shrui %bits, %c16 : i32
+      %odd = arith.andi %hi, %c1 : i32
+      %bias = arith.addi %round, %odd : i32
+      %sum = arith.addi %bits, %bias : i32
+      %top = arith.shrui %sum, %c16 : i32
+      %b = arith.trunci %top : i32 to i16
+      %nan = arith.cmpf uno, %f, %f : f32
+      %v = arith.select %nan, %qnan, %b : i16
+      scf.yield %v : i16
+    }
+    return %r : i16
+  }
+
+  // d = s for 4-D tensors with element strides, from f16 / bf16 (kind 0 / 1)
+  // bits to f32 (to_f32) or back (from_f32). One thread per element.
+  gpu.func @agx_dnn_to_f32(%s0: memref<1xi16, 1>, %d0: memref<1xf32, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %ss0: index, %ss1: index, %ss2: index, %ss3: index,
+      %ds0: index, %ds1: index, %ds2: index, %ds3: index, %kind: index) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %s = memref.reinterpret_cast %s0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi16, 1> to memref<?xi16, strided<[1]>, 1>
+    %d = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %so = func.call @agx_dnn_off(%i, %C, %H, %W, %ss0, %ss1, %ss2, %ss3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %do = func.call @agx_dnn_off(%i, %C, %H, %W, %ds0, %ds1, %ds2, %ds3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %b = memref.load %s[%so] : memref<?xi16, strided<[1]>, 1>
+      %f = func.call @agx_dnn_h2f(%b, %kind) : (i16, index) -> f32
+      memref.store %f, %d[%do] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+  gpu.func @agx_dnn_from_f32(%s0: memref<1xf32, 1>, %d0: memref<1xi16, 1>,
+      %total: index, %C: index, %H: index, %W: index,
+      %ss0: index, %ss1: index, %ss2: index, %ss3: index,
+      %ds0: index, %ds1: index, %ds2: index, %ds3: index, %kind: index) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %s = memref.reinterpret_cast %s0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %d = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xi16, 1> to memref<?xi16, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %live = arith.cmpi ult, %i, %total : index
+    scf.if %live {
+      %so = func.call @agx_dnn_off(%i, %C, %H, %W, %ss0, %ss1, %ss2, %ss3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %do = func.call @agx_dnn_off(%i, %C, %H, %W, %ds0, %ds1, %ds2, %ds3)
+          : (index, index, index, index, index, index, index, index) -> index
+      %f = memref.load %s[%so] : memref<?xf32, strided<[1]>, 1>
+      %b = func.call @agx_dnn_f2h(%f, %kind) : (f32, index) -> i16
+      memref.store %b, %d[%do] : memref<?xi16, strided<[1]>, 1>
     }
     gpu.return
   }

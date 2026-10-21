@@ -973,6 +973,56 @@ def case_eigsvd(a, obj, tmp, what, rnd):
     return bad[:4]
 
 
+def bf16_bits(v):
+    b = struct.unpack("<I", struct.pack("<f", v))[0]
+    if v != v:
+        return 0x7FC0
+    return ((b + 0x7FFF + ((b >> 16) & 1)) >> 16) & 0xFFFF
+
+
+def case_dnn_convert(a, obj, tmp, kind, rnd):
+    """agx_dnn_to_f32 / agx_dnn_from_f32 for f16 (kind 0) and bf16 (kind 1), strided both ways."""
+    N, C, H, W = 2, 3, 2, 5
+    total = N * C * H * W
+    ss = (C * H * W * 2, H * W * 2, W * 2, 2)  # a padded source
+    ds = (1, N, N * C, N * C * H)  # a transposed destination
+    vals = [rnd.uniform(-70000, 70000) if i % 7 == 0 else rnd.uniform(-3, 3) for i in range(total)] + [float("inf"), -0.0]
+    vals = vals[:total]
+    to_bits = (lambda v: struct.unpack("<H", struct.pack("<e", v))[0] if abs(v) < 65504 or v != v else (0x7C00 | (0x8000 if v < 0 else 0))) if kind == 0 else bf16_bits
+    def from_bits(b):
+        return struct.unpack("<e", struct.pack("<H", b))[0] if kind == 0 else struct.unpack("<f", struct.pack("<I", b << 16))[0]
+    src = [0] * (ss[0] * N)
+    for i in range(total):
+        n, c, h, w = i // (C * H * W), i // (H * W) % C, i // W % H, i % W
+        src[n * ss[0] + c * ss[1] + h * ss[2] + w * ss[3]] = to_bits(vals[i])
+    common = [("i64", total), ("i64", C), ("i64", H), ("i64", W)]
+    (f,) = run(a, obj, "agx_dnn_to_f32", [("buf", pack(src, "H")), ("buf", pack([0.0] * total, "f"), True)] + common +
+               [("i64", x) for x in ss] + [("i64", x) for x in ds] + [("i64", kind)], grid1(total), (32, 1), tmp)
+    got = unpack(f, "f")
+    bad = []
+    for i in range(total):
+        n, c, h, w = i // (C * H * W), i // (H * W) % C, i // W % H, i % W
+        o = n * ds[0] + c * ds[1] + h * ds[2] + w * ds[3]
+        want = from_bits(src[n * ss[0] + c * ss[1] + h * ss[2] + w * ss[3]])
+        if got[o] != want and not (got[o] != got[o] and want != want):
+            bad.append("to_f32 %d: %r want %r" % (i, got[o], want))
+    # back from the original f32 values (rounding)
+    f32s = rounded(vals, "f")
+    fsrc = [0.0] * total
+    for i in range(total):
+        n, c, h, w = i // (C * H * W), i // (H * W) % C, i // W % H, i % W
+        fsrc[n * ds[0] + c * ds[1] + h * ds[2] + w * ds[3]] = f32s[i]
+    (hb,) = run(a, obj, "agx_dnn_from_f32", [("buf", pack(fsrc, "f")), ("buf", pack([0] * (ss[0] * N), "H"), True)] + common +
+                [("i64", x) for x in ds] + [("i64", x) for x in ss] + [("i64", kind)], grid1(total), (32, 1), tmp)
+    hb = unpack(hb, "H")
+    for i in range(total):
+        n, c, h, w = i // (C * H * W), i // (H * W) % C, i // W % H, i % W
+        o = n * ss[0] + c * ss[1] + h * ss[2] + w * ss[3]
+        if hb[o] != to_bits(f32s[i]):
+            bad.append("from_f32 %d: %#x want %#x (%r)" % (i, hb[o], to_bits(f32s[i]), f32s[i]))
+    return bad[:4]
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1873,6 +1923,8 @@ def main():
                         for beta in (0.0, 0.5):
                             cases.append(("dnn act mode %d %s beta %g" % (mode, "bwd" if bwd else "fwd", beta),
                                           lambda m=mode, b=bwd, be=beta: case_act(a, obj, tmp, m, b, be, rnd)))
+                for kind in (0, 1):
+                    cases.append(("dnn convert %s" % ("f16", "bf16")[kind], lambda k=kind: case_dnn_convert(a, obj, tmp, k, rnd)))
                 for op, label in ((0, "add bias"), (1, "set"), (2, "scale")):
                     cases.append(("dnn %s" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd)))
                 for inst in (0, 1):
