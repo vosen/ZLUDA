@@ -97,17 +97,17 @@ an error.
   `add`, `sub`, `mul` and `fma` of `f32x2` (sm_100, two f32 in a 64-bit
   register) are `<2 x float>` operations that follow the f32 rounding and
   denormal modes, directed rounding included. `fma.relu` of `f16`, `f16x2`,
-  `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (with
-  round to nearest; a directed `.relu` fma is not implemented).
+  `bf16` and `bf16x2` clamps negative results to +0 and keeps NaN (PTX gives
+  it only `.rn`; another rounding mode is reported as an error).
   `lop3` (any lookup table, also in a register, and the predicate output
   form `lop3.and`/`lop3.or`) is the OR of the table's minterms.
   `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
   all-ones lanes where the comparison holds.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
-* Not supported yet: the `f32x2` forms of
-  instructions other than `add`/`sub`/`mul`/`fma` and `.ftz`/`.sat` of `bf16`
-  arithmetic (which PTX does not have).
+* Every `f32x2` instruction PTX has (`add`, `sub`, `mul`, `fma`, also with
+  `f16x2`/`bf16x2` operands) is supported. `.ftz`/`.sat` of `bf16` arithmetic
+  is not, as PTX does not have it either.
 * The directed rounding modes of `.rz`/`.rm`/`.rp` instructions (and of
   kernels whose instructions all use one) are computed in software, since
   the hardware only rounds to nearest even: an emulated mode register

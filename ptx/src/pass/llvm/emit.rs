@@ -5365,7 +5365,8 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         if self.is_half_directed_rounding(&data) {
             if data.relu {
-                return Err(TranslateError::Todo("fma.relu with a directed rounding mode".to_string()));
+                // PTX's half precision fma (.relu included) has only .rn
+                return Err(TranslateError::Unsupported("fma.relu takes only the .rn rounding mode".to_string()));
             }
             let srcs = vec![
                 self.resolver.value(arguments.src1)?,
