@@ -49,11 +49,13 @@ cuda_macros::cusparse_function_declarations!(
             cusparseAxpby,
             cusparseCreate,
             cusparseCreateConstCoo,
+            cusparseCreateConstCsc,
             cusparseCreateConstCsr,
             cusparseCreateConstDnMat,
             cusparseCreateConstDnVec,
             cusparseCreateConstSpVec,
             cusparseCreateCoo,
+            cusparseCreateCsc,
             cusparseCreateCsr,
             cusparseCreateDnMat,
             cusparseCreateDnVec,
@@ -61,6 +63,7 @@ cuda_macros::cusparse_function_declarations!(
             cusparseCreateSpVec,
             cusparseCsr2cscEx2,
             cusparseCsr2cscEx2_bufferSize,
+            cusparseCscSetPointers,
             cusparseCsrSetPointers,
             cusparseDenseToSparse_analysis,
             cusparseDenseToSparse_bufferSize,
@@ -127,6 +130,9 @@ pub enum Format {
     Csr,
     /// `a` holds nnz row indices.
     Coo,
+    /// `a` holds cols + 1 column offsets and `col` the row indices: the CSR matrix of the transpose
+    /// ([`SpMat::csr`]).
+    Csc,
 }
 
 /// A sparse matrix of the generic API.
@@ -147,6 +153,29 @@ pub struct SpMat {
     /// The triangle (CUSPARSE_SPMAT_FILL_MODE) and diagonal (CUSPARSE_SPMAT_DIAG_TYPE) SpSV and SpSM use.
     pub upper: bool,
     pub unit: bool,
+}
+
+impl SpMat {
+    /// A CSC matrix as the CSR matrix of its transpose, with `op` changed to match (the triangle of SpSV and SpSM
+    /// flips with it); other matrices as they are.
+    pub fn csr(&self, op: cusparseOperation_t) -> (SpMat, cusparseOperation_t) {
+        if self.format != Format::Csc {
+            return (self.clone(), op);
+        }
+        let t = SpMat { format: Format::Csr, rows: self.cols, cols: self.rows, upper: !self.upper, ..self.clone() };
+        (t, flip(op))
+    }
+}
+
+/// The transposed operation (other values stay invalid).
+pub fn flip(op: cusparseOperation_t) -> cusparseOperation_t {
+    match op {
+        cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE => cusparseOperation_t::CUSPARSE_OPERATION_TRANSPOSE,
+        cusparseOperation_t::CUSPARSE_OPERATION_TRANSPOSE | cusparseOperation_t::CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE => {
+            cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE
+        }
+        op => op,
+    }
 }
 
 /// A sparse vector of the generic API.
@@ -181,6 +210,11 @@ pub struct DnMat {
 }
 
 impl DnMat {
+    /// The transpose, on the same memory.
+    pub fn transposed(&self) -> DnMat {
+        DnMat { rows: self.cols, cols: self.rows, row_major: !self.row_major, ..self.clone() }
+    }
+
     /// The element strides of a row and of a column.
     pub fn strides(&self) -> (i64, i64) {
         if self.row_major {
@@ -269,6 +303,8 @@ pub fn spmv_plan(op: cusparseOperation_t, a: &SpMat, x: &DnVec, y: &DnVec, compu
         (Format::Csr, true) => vec![Launch::Scale { n: yn, stride: 1 }, Launch::CsrSpmvT],
         (Format::Coo, _) if a.nnz == 0 => vec![Launch::Scale { n: yn, stride: 1 }],
         (Format::Coo, trans) => vec![Launch::Scale { n: yn, stride: 1 }, Launch::CooSpmv { trans }],
+        // callers pass CSC matrices through SpMat::csr
+        (Format::Csc, _) => return Err(cusparseError_t::NOT_SUPPORTED),
     })
 }
 
@@ -584,7 +620,7 @@ mod imp {
         idx_base: cusparseIndexBase_t,
         ty: cudaDataType,
     ) -> Result<SpMat, cusparseError_t> {
-        if rows < 0 || cols < 0 || nnz < 0 || (format == Format::Csr && rows > 0 && a.is_null()) {
+        if rows < 0 || cols < 0 || nnz < 0 || (format == Format::Csr && rows > 0 && a.is_null()) || (format == Format::Csc && cols > 0 && a.is_null()) {
             return Err(cusparseError_t::INVALID_VALUE);
         }
         if nnz > 0 && (a.is_null() || col.is_null() || val.is_null()) {
@@ -628,6 +664,38 @@ mod imp {
         ty: cudaDataType,
     ) -> cusparseStatus_t {
         new_const(d, sp_mat(Format::Csr, rows, cols, nnz, offsets, col, val, offsets_ty, col_ty, idx_base, ty)?)
+    }
+
+    pub(crate) unsafe fn cusparseCreateCsc(
+        d: *mut cusparseSpMatDescr_t,
+        rows: i64,
+        cols: i64,
+        nnz: i64,
+        offsets: *mut c_void,
+        row: *mut c_void,
+        val: *mut c_void,
+        offsets_ty: cusparseIndexType_t,
+        row_ty: cusparseIndexType_t,
+        idx_base: cusparseIndexBase_t,
+        ty: cudaDataType,
+    ) -> cusparseStatus_t {
+        new(d, sp_mat(Format::Csc, rows, cols, nnz, offsets, row, val, offsets_ty, row_ty, idx_base, ty)?)
+    }
+
+    pub(crate) unsafe fn cusparseCreateConstCsc(
+        d: *mut cusparseConstSpMatDescr_t,
+        rows: i64,
+        cols: i64,
+        nnz: i64,
+        offsets: *const c_void,
+        row: *const c_void,
+        val: *const c_void,
+        offsets_ty: cusparseIndexType_t,
+        row_ty: cusparseIndexType_t,
+        idx_base: cusparseIndexBase_t,
+        ty: cudaDataType,
+    ) -> cusparseStatus_t {
+        new_const(d, sp_mat(Format::Csc, rows, cols, nnz, offsets, row, val, offsets_ty, row_ty, idx_base, ty)?)
     }
 
     pub(crate) unsafe fn cusparseCreateCoo(
@@ -849,7 +917,8 @@ mod imp {
         size: *mut usize,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        spmv_plan(op, obj(a)?, obj(x)?, obj(y)?, compute)?;
+        let (a, op) = obj::<SpMat>(a)?.csr(op);
+        spmv_plan(op, &a, obj(x)?, obj(y)?, compute)?;
         out(size, 0)
     }
 
@@ -867,9 +936,10 @@ mod imp {
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
         let (a, x, y) = (obj::<SpMat>(a)?, obj::<DnVec>(x)?, obj::<DnVec>(y)?);
-        let launches = spmv_plan(op, a, x, y, compute)?;
+        let (a, op) = a.csr(op);
+        let launches = spmv_plan(op, &a, x, y, compute)?;
         let (alpha, beta) = (scalar(h, alpha, a.double)?, scalar(h, beta, a.double)?);
-        execute(h, &launches, a, x.values, y.values, alpha, beta)
+        execute(h, &launches, &a, x.values, y.values, alpha, beta)
     }
 
     pub(crate) unsafe fn cusparseSpMM_bufferSize(
@@ -886,7 +956,8 @@ mod imp {
         size: *mut usize,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        spmm_plan(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute)?;
+        let (a, op_a) = obj::<SpMat>(a)?.csr(op_a);
+        spmm_plan(op_a, op_b, &a, obj(b)?, obj(c)?, compute)?;
         out(size, 0)
     }
 
@@ -904,7 +975,8 @@ mod imp {
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        spmm_plan(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute).map(|_| ())
+        let (a, op_a) = obj::<SpMat>(a)?.csr(op_a);
+        spmm_plan(op_a, op_b, &a, obj(b)?, obj(c)?, compute).map(|_| ())
     }
 
     pub(crate) unsafe fn cusparseSpMM(
@@ -922,11 +994,12 @@ mod imp {
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
         let (a, b, c) = (obj::<SpMat>(a)?, obj::<DnMat>(b)?, obj::<DnMat>(c)?);
-        let Some(launch) = spmm_plan(op_a, op_b, a, b, c, compute)? else {
+        let (a, op_a) = a.csr(op_a);
+        let Some(launch) = spmm_plan(op_a, op_b, &a, b, c, compute)? else {
             return Ok(());
         };
         let (alpha, beta) = (scalar(h, alpha, a.double)?, scalar(h, beta, a.double)?);
-        execute(h, &[launch], a, b.values, c.values, alpha, beta)
+        execute(h, &[launch], &a, b.values, c.values, alpha, beta)
     }
 
     // ---- the other generic API functions
@@ -1139,6 +1212,15 @@ mod imp {
 
     // ---- conversions
 
+    /// A CSC matrix and a dense one as the CSR matrix of the transpose and the dense transpose.
+    fn csr_dense(a: &SpMat, d: &DnMat) -> (SpMat, DnMat) {
+        if a.format == Format::Csc {
+            (a.csr(cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE).0, d.transposed())
+        } else {
+            (a.clone(), d.clone())
+        }
+    }
+
     fn same_shape(a: &SpMat, d: &DnMat) -> cusparseStatus_t {
         if value_type(d.ty)? != a.double {
             return Err(cusparseError_t::NOT_SUPPORTED);
@@ -1157,7 +1239,8 @@ mod imp {
         size: *mut usize,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        same_shape(obj(a)?, obj(b)?)?;
+        let (a, b) = csr_dense(obj(a)?, obj(b)?);
+        same_shape(&a, &b)?;
         out(size, 0)
     }
 
@@ -1169,8 +1252,8 @@ mod imp {
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
-        let (a, b) = (obj::<SpMat>(a)?, obj::<DnMat>(b)?);
-        same_shape(a, b)?;
+        let (a, b) = csr_dense(obj::<SpMat>(a)?, obj::<DnMat>(b)?);
+        same_shape(&a, &b)?;
         let (rs, cs) = b.strides();
         let (mut pd, mut rows, mut cols, mut rs, mut cs) = (ptr(b.values), b.rows, b.cols, rs, cs);
         run(
@@ -1232,7 +1315,8 @@ mod imp {
         size: *mut usize,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        dense_to_csr_check(obj(a)?, obj(b)?)?;
+        let (b, a) = csr_dense(obj(b)?, obj(a)?);
+        dense_to_csr_check(&a, &b)?;
         out(size, 0)
     }
 
@@ -1245,7 +1329,9 @@ mod imp {
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
-        let (a, b) = (obj::<DnMat>(a)?, obj::<SpMat>(b)?);
+        let desc = obj::<SpMat>(b)?;
+        let (b, a) = csr_dense(desc, obj::<DnMat>(a)?);
+        let (a, b) = (&a, &b);
         dense_to_csr_check(a, b)?;
         if b.a.is_null() {
             return Err(cusparseError_t::INVALID_VALUE);
@@ -1258,7 +1344,7 @@ mod imp {
         let mut last = [0u8; 8];
         engine::read(last.as_mut_ptr() as *mut c_void, b.a.cast::<u8>().add(b.rows as usize * width).cast(), width).map_err(status)?;
         let end = if b.wide { i64::from_le_bytes(last) } else { i32::from_le_bytes(last[..4].try_into().unwrap()) as i64 };
-        b.nnz = end - b.base;
+        desc.nnz = end - b.base;
         Ok(())
     }
 
@@ -1270,21 +1356,29 @@ mod imp {
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
-        let (a, b) = (obj::<DnMat>(a)?, obj::<SpMat>(b)?);
-        dense_to_csr_check(a, b)?;
+        let (b, a) = csr_dense(obj::<SpMat>(b)?, obj::<DnMat>(a)?);
+        dense_to_csr_check(&a, &b)?;
         if b.a.is_null() || (b.nnz > 0 && (b.col.is_null() || b.val.is_null())) {
             return Err(cusparseError_t::INVALID_VALUE);
         }
-        dense_to_csr(h, a, b, true)
+        dense_to_csr(h, &a, &b, true)
+    }
+
+    unsafe fn set_pointers(d: cusparseSpMatDescr_t, format: Format, a: *mut c_void, col: *mut c_void, val: *mut c_void) -> cusparseStatus_t {
+        let m = obj::<SpMat>(d)?;
+        if m.format != format {
+            return Err(cusparseError_t::INVALID_VALUE);
+        }
+        (m.a, m.col, m.val) = (a, col, val);
+        Ok(())
     }
 
     pub(crate) unsafe fn cusparseCsrSetPointers(d: cusparseSpMatDescr_t, offsets: *mut c_void, col: *mut c_void, val: *mut c_void) -> cusparseStatus_t {
-        let m = obj::<SpMat>(d)?;
-        if m.format != Format::Csr {
-            return Err(cusparseError_t::INVALID_VALUE);
-        }
-        (m.a, m.col, m.val) = (offsets, col, val);
-        Ok(())
+        set_pointers(d, Format::Csr, offsets, col, val)
+    }
+
+    pub(crate) unsafe fn cusparseCscSetPointers(d: cusparseSpMatDescr_t, offsets: *mut c_void, row: *mut c_void, val: *mut c_void) -> cusparseStatus_t {
+        set_pointers(d, Format::Csc, offsets, row, val)
     }
 
     pub(crate) unsafe fn cusparseSpMatSetAttribute(
@@ -1437,6 +1531,25 @@ mod imp {
 
     // ---- SDDMM
 
+    /// C in CSR with the dense operands in the order the kernel takes them: a CSC C is the CSR matrix of
+    /// C^T = op(B)^T op(A)^T.
+    fn sddmm_args<'a>(
+        op_a: cusparseOperation_t,
+        op_b: cusparseOperation_t,
+        a: &'a DnMat,
+        b: &'a DnMat,
+        c: &SpMat,
+        compute: cudaDataType_t,
+    ) -> Result<(SpMat, &'a DnMat, &'a DnMat, [i64; 5]), cusparseError_t> {
+        if c.format == Format::Csc {
+            let (ct, _) = c.csr(op_a);
+            let plan = sddmm_plan(flip(op_b), flip(op_a), b, a, &ct, compute)?;
+            Ok((ct, b, a, plan))
+        } else {
+            Ok((c.clone(), a, b, sddmm_plan(op_a, op_b, a, b, c, compute)?))
+        }
+    }
+
     pub(crate) unsafe fn cusparseSDDMM_bufferSize(
         h: cusparseHandle_t,
         op_a: cusparseOperation_t,
@@ -1451,7 +1564,7 @@ mod imp {
         size: *mut usize,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        sddmm_plan(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute)?;
+        sddmm_args(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute)?;
         out(size, 0)
     }
 
@@ -1469,7 +1582,7 @@ mod imp {
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
         obj::<Handle>(h)?;
-        sddmm_plan(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute).map(|_| ())
+        sddmm_args(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute).map(|_| ())
     }
 
     pub(crate) unsafe fn cusparseSDDMM(
@@ -1487,7 +1600,7 @@ mod imp {
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
         let (a, b, c) = (obj::<DnMat>(a)?, obj::<DnMat>(b)?, obj::<SpMat>(c)?);
-        let [mut k, mut ars, mut acs, mut brs, mut bcs] = sddmm_plan(op_a, op_b, a, b, c, compute)?;
+        let (c, a, b, [mut k, mut ars, mut acs, mut brs, mut bcs]) = sddmm_args(op_a, op_b, a, b, c, compute)?;
         let (mut alpha, mut beta) = (Val::new(scalar(h, alpha, c.double)?), Val::new(scalar(h, beta, c.double)?));
         let (mut pr, mut pc, mut pv, mut pa, mut pb, mut rows, mut base) = (ptr(c.a), ptr(c.col), ptr(c.val), ptr(a.values), ptr(b.values), c.rows, c.base);
         run(
@@ -1539,9 +1652,14 @@ mod imp {
         (v.size, 1, 1, 1)
     }
 
-    fn spsv_check(op: cusparseOperation_t, a: &SpMat, x: &DnVec, y: &DnVec, compute: cudaDataType_t) -> Result<(bool, [i64; 4]), cusparseError_t> {
+    /// The matrix in CSR, whether it is transposed and the strides of op(B) and C.
+    type Solve4 = (SpMat, bool, [i64; 4]);
+
+    fn spsv_check(op: cusparseOperation_t, a: &SpMat, x: &DnVec, y: &DnVec, compute: cudaDataType_t) -> Result<Solve4, cusparseError_t> {
         same_type(a, &[x.ty, y.ty, compute])?;
-        spsm_plan(op, a, vec_dims(x), vec_dims(y))
+        let (a, op) = a.csr(op);
+        let (trans, strides) = spsm_plan(op, &a, vec_dims(x), vec_dims(y))?;
+        Ok((a, trans, strides))
     }
 
     fn spsm_check(
@@ -1551,9 +1669,11 @@ mod imp {
         b: &DnMat,
         c: &DnMat,
         compute: cudaDataType_t,
-    ) -> Result<(bool, [i64; 4]), cusparseError_t> {
+    ) -> Result<Solve4, cusparseError_t> {
         same_type(a, &[b.ty, c.ty, compute])?;
-        spsm_plan(op_a, a, op_dims(op_b, b)?, op_dims(cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE, c)?)
+        let (a, op_a) = a.csr(op_a);
+        let (trans, strides) = spsm_plan(op_a, &a, op_dims(op_b, b)?, op_dims(cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE, c)?)?;
+        Ok((a, trans, strides))
     }
 
     unsafe fn spsm(h: &Handle, a: &SpMat, b: *const c_void, c: *const c_void, n: i64, trans: bool, strides: [i64; 4], alpha: f64) -> cusparseStatus_t {
@@ -1635,9 +1755,9 @@ mod imp {
         let h = obj::<Handle>(h)?;
         obj::<Solve>(d)?;
         let (a, x, y) = (obj::<SpMat>(a)?, obj::<DnVec>(x)?, obj::<DnVec>(y)?);
-        let (trans, strides) = spsv_check(op, a, x, y, compute)?;
+        let (a, trans, strides) = spsv_check(op, a, x, y, compute)?;
         let alpha = scalar(h, alpha, a.double)?;
-        spsm(h, a, x.values, y.values, 1, trans, strides, alpha)
+        spsm(h, &a, x.values, y.values, 1, trans, strides, alpha)
     }
 
     pub(crate) unsafe fn cusparseSpSM_bufferSize(
@@ -1691,9 +1811,9 @@ mod imp {
         let h = obj::<Handle>(h)?;
         obj::<Solve>(d)?;
         let (a, b, c) = (obj::<SpMat>(a)?, obj::<DnMat>(b)?, obj::<DnMat>(c)?);
-        let (trans, strides) = spsm_check(op_a, op_b, a, b, c, compute)?;
+        let (a, trans, strides) = spsm_check(op_a, op_b, a, b, c, compute)?;
         let alpha = scalar(h, alpha, a.double)?;
-        spsm(h, a, b.values, c.values, c.cols, trans, strides, alpha)
+        spsm(h, &a, b.values, c.values, c.cols, trans, strides, alpha)
     }
 }
 
@@ -1961,6 +2081,28 @@ mod tests {
             imp::cusparseSpSV_createDescr(&mut sv).unwrap();
             imp::cusparseSpSV_destroyDescr(sv).unwrap();
         }
+    }
+
+    #[test]
+    fn csc_is_the_csr_transpose() {
+        // the CSC arrays of A are the CSR arrays of A^T
+        let at = matrix(5, 7, 11);
+        let d = dense(&at);
+        let csc = SpMat { format: Format::Csc, rows: 7, cols: 5, ..sp(&at, Format::Csr) };
+        for (op, trans) in [(N, false), (T, true)] {
+            let (view, vop) = csc.csr(op);
+            assert_eq!((view.format, view.rows, view.cols, view.upper), (Format::Csr, 5, 7, true));
+            // op(A) x with A = D^T
+            let (xn, yn) = if trans { (7, 5) } else { (5, 7) };
+            let x: Vec<f32> = (0..xn).map(|i| i as f32 - 1.0).collect();
+            let mut y = vec![0.0; yn];
+            let want: Vec<f32> = (0..yn).map(|i| (0..xn).map(|j| if trans { d[i][j] } else { d[j][i] } * x[j]).sum()).collect();
+            let plan = spmv_plan(vop, &view, &vec_of(xn), &vec_of(yn), F32).unwrap();
+            emulate(&plan, &at, &x, &mut y, 1.0, 0.0);
+            assert_eq!(y, want, "trans {trans}");
+        }
+        let m = DnMat { rows: 7, cols: 5, ld: 9, values: std::ptr::null(), ty: F32, row_major: false };
+        assert_eq!(m.transposed().strides(), (9, 1));
     }
 
     #[test]

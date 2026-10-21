@@ -954,7 +954,9 @@ tests against a direct DFT.
 source for every chip; `agx_libs/build.rs` instantiates `sparse_ix.mlir` for
 32- and 64-bit indices and adds f64 copies of every kernel). The generic API
 with f32 or f64 values (all operands of one type) and 32- or 64-bit indices
-(the row offsets and the columns of one type), zero- or one-based:
+(the row offsets and the columns of one type), zero- or one-based. CSC
+matrices (`cusparseCreateCsc`) work wherever CSR ones do, as the CSR matrix
+of their transpose:
 
 - `cusparseSpMV` on CSR and COO matrices, non-transposed or transposed, and
   `cusparseSpMM` on CSR matrices with `opA` non-transposed and `opB` either
@@ -979,7 +981,7 @@ with f32 or f64 values (all operands of one type) and 32- or 64-bit indices
 
 Only SpVV and Csr2cscEx2 need an external buffer. Handles, streams, host and
 device pointer modes and the legacy matrix descriptor are supported. Other
-functions (SpGEMM, BSR and other formats, the legacy level 2 and 3 routines,
+functions (SpGEMM, BSR and the blocked formats, the legacy level 2 and 3 routines,
 complex and f16 values) return `CUSPARSE_STATUS_NOT_SUPPORTED`.
 
 ## Building a release for Asahi
