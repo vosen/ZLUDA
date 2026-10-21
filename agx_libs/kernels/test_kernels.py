@@ -444,6 +444,178 @@ def case_sparse(a, obj, tmp, what, I, base, rnd):
     return close(unpack(got, BT), want, idx, TOL(1e-5))
 
 
+def grid1(n, w=32):
+    return (max(1, -(-n // w)) * w, 1)
+
+
+def case_sparse_ops(a, obj, tmp, what, I, base, rnd):
+    """The kernels of sparse_ix.mlir and the index-free ones of sparse.mlir."""
+    it = "i" if I == "i32" else "q"
+    rows, cols = 13, 9
+    if what in ("spvv", "axpby", "gather", "scatter", "rot"):
+        size, nnz = 23, 9
+        idx = sorted(rnd.sample(range(size), nnz))
+        ip = pack([i + base for i in idx], it)
+        xv = rounded([rnd.uniform(-1, 1) for _ in range(nnz)], BT)
+        y = rounded([rnd.uniform(-1, 1) for _ in range(size)], BT)
+        if what == "spvv":
+            threads = 4
+            (part,) = run(a, obj, K("agx_spvv_" + I), [("buf", ip), ("buf", pack(xv, BT)), ("buf", pack(y, BT)),
+                                                    ("buf", pack([7.0] * threads, BT), True), ("i64", nnz), ("i64", base),
+                                                    ("i64", threads)], grid1(threads), (32, 1), tmp)
+            (out,) = run(a, obj, K("agx_sparse_sum"), [("buf", part), ("buf", pack([7.0], BT), True), ("i64", threads)],
+                         (32, 1), (32, 1), tmp)
+            return close(unpack(out, BT), [sum(xv[k] * y[idx[k]] for k in range(nnz))], [0], TOL(1e-5))
+        op = ("axpby", "gather", "scatter", "rot").index(what)
+        al, be = (1.5, 0.0) if op == 0 else (0.6, 0.8)
+        gx, gy = run(a, obj, K("agx_spvec_" + I), [("buf", ip), ("buf", pack(xv, BT), True), ("buf", pack(y, BT), True),
+                                                  ("i64", nnz), ("i64", base), ("i64", op), (S(), al), (S(), be)],
+                     grid1(nnz), (32, 1), tmp)
+        wx, wy = list(xv), list(y)
+        for k, i in enumerate(idx):
+            if op == 0:
+                wy[i] = al * xv[k] + y[i]
+            elif op == 1:
+                wx[k] = y[i]
+            elif op == 2:
+                wy[i] = xv[k]
+            else:
+                wx[k], wy[i] = al * xv[k] + be * y[i], al * y[i] - be * xv[k]
+        return close(unpack(gx, BT) + unpack(gy, BT), wx + wy, range(nnz + size), TOL(1e-5))
+    rowptr, col, val = random_csr(rows, cols, rnd)
+    nnz = len(col)
+    rp = pack([r + base for r in rowptr], it)
+    ci = pack([c + base for c in col], it)
+    dense = {(i, col[k]): val[k] for i in range(rows) for k in range(rowptr[i], rowptr[i + 1])}
+    if what in ("csr2dense", "coo2dense"):
+        ld = rows + 3
+        D = pack([5.0] * (ld * cols), BT)
+        (z,) = run(a, obj, K("agx_dense_zero"), [("buf", D, True), ("i64", rows), ("i64", cols), ("i64", 1), ("i64", ld)],
+                   (16, 16), (16, 4), tmp)
+        coo = what == "coo2dense"
+        ai = pack([i + base for i in range(rows) for _ in range(rowptr[i], rowptr[i + 1])], it) if coo else rp
+        (got,) = run(a, obj, K("agx_sp_to_dense_" + I), [("buf", ai), ("buf", ci), ("buf", pack(val, BT)), ("buf", z, True),
+                                                        ("i64", nnz if coo else rows), ("i64", base), ("i64", int(coo)),
+                                                        ("i64", 1), ("i64", ld)], grid1(nnz if coo else rows), (32, 1), tmp)
+        want = [5.0] * (ld * cols)
+        idxs = []
+        for i in range(rows):
+            for j in range(cols):
+                want[i + j * ld] = dense.get((i, j), 0.0)
+                idxs.append(i + j * ld)
+        return close(unpack(got, BT), want, range(ld * cols), 0)
+    if what == "dense2csr":
+        ld = cols + 2
+        D = [0.0] * (ld * rows)
+        for (i, j), v in dense.items():
+            D[i * ld + j] = v
+        D = pack(D, BT)
+        common = [("i64", rows), ("i64", cols), ("i64", ld), ("i64", 1), ("i64", base)]
+        (cnt,) = run(a, obj, K("agx_dense_to_csr_" + I), [("buf", D), ("buf", pack([99] * (rows + 1), it), True),
+                                                         ("buf", pack([0], it)), ("buf", pack([0.0], BT))] + common + [("i64", 0)],
+                     grid1(rows), (32, 1), tmp)
+        (ptr,) = run(a, obj, K("agx_sparse_scan_" + I), [("buf", cnt, True), ("i64", rows), ("i64", base)], (32, 1), (32, 1), tmp)
+        got_ptr = list(unpack(ptr, it))
+        if got_ptr != [r + base for r in rowptr]:
+            return ["rowptr %s, want %s" % (got_ptr, [r + base for r in rowptr])]
+        gc, gv = run(a, obj, K("agx_dense_to_csr_" + I), [("buf", D), ("buf", ptr), ("buf", pack([-1] * nnz, it), True),
+                                                         ("buf", pack([9.0] * nnz, BT), True)] + common + [("i64", 1)],
+                     grid1(rows), (32, 1), tmp)
+        if list(unpack(gc, it)) != [c + base for c in col]:
+            return ["columns %s, want %s" % (list(unpack(gc, it)), col)]
+        return close(unpack(gv, BT), val, range(nnz), 0)
+    if what == "sddmm":
+        K_, alpha, beta = 4, 1.5, 0.5
+        lda, ldb = K_ + 1, cols + 2  # A row-major rows x K, B row-major K x cols
+        A = rounded([rnd.uniform(-1, 1) for _ in range(rows * lda)], BT)
+        B = rounded([rnd.uniform(-1, 1) for _ in range(K_ * ldb)], BT)
+        (got,) = run(a, obj, K("agx_sddmm_" + I), [("buf", rp), ("buf", ci), ("buf", pack(val, BT), True), ("buf", pack(A, BT)),
+                                                  ("buf", pack(B, BT)), ("i64", rows), ("i64", K_), ("i64", base),
+                                                  ("i64", lda), ("i64", 1), ("i64", ldb), ("i64", 1), (S(), alpha), (S(), beta)],
+                     grid1(rows), (32, 1), tmp)
+        want = [alpha * sum(A[i * lda + t] * B[t * ldb + col[k]] for t in range(K_)) + beta * val[k]
+                for i in range(rows) for k in range(rowptr[i], rowptr[i + 1])]
+        return close(unpack(got, BT), want, range(nnz), TOL(1e-5))
+    if what.startswith("spsm"):
+        # what = spsm-<upper><unit><trans>
+        upper, unit, trans = (int(c) for c in what[5:])
+        n = 3
+        m = 11
+        # a well-conditioned square matrix with entries on both sides of the diagonal
+        rowptr, col, val = [0], [], []
+        for i in range(m):
+            for j in range(m):
+                if i == j or rnd.random() < 0.3:
+                    col.append(j)
+                    val.append(rnd.uniform(2, 3) * rnd.choice((-1, 1)) if i == j else rnd.uniform(-0.5, 0.5))
+            rowptr.append(len(col))
+        val = rounded(val, BT)
+        nnz = len(col)
+        dense = {(i, col[k]): val[k] for i in range(m) for k in range(rowptr[i], rowptr[i + 1])}
+        ldb, ldc = m + 1, m + 2
+        Bm = rounded([rnd.uniform(-1, 1) for _ in range(ldb * n)], BT)
+        alpha = 1.5
+        (got,) = run(a, obj, K("agx_spsm_" + I), [("buf", pack([r + base for r in rowptr], it)), ("buf", pack([c + base for c in col], it)),
+                                                 ("buf", pack(val, BT)), ("buf", pack(Bm, BT)), ("buf", pack([0.0] * (ldc * n), BT), True),
+                                                 ("i64", m), ("i64", n), ("i64", base), ("i64", 1), ("i64", ldb),
+                                                 ("i64", 1), ("i64", ldc), ("i64", upper), ("i64", unit), ("i64", trans),
+                                                 (S(), alpha)], (32, 1), (32, 1), tmp)
+
+        def tri(i, j):
+            if i == j:
+                return 1.0 if unit else dense.get((i, i), 0.0)
+            if (j > i) if upper else (j < i):
+                return dense.get((i, j), 0.0)
+            return 0.0
+        X = unpack(got, BT)
+        # check op(T) X = alpha B
+        errs = []
+        for j in range(n):
+            for i in range(m):
+                lhs = sum((tri(k, i) if trans else tri(i, k)) * X[k + j * ldc] for k in range(m))
+                if abs(lhs - alpha * Bm[i + j * ldb]) > TOL(1e-4) * 10:
+                    errs.append("residual at %d,%d: %g vs %g" % (i, j, lhs, alpha * Bm[i + j * ldb]))
+        return errs[:5]
+    raise ValueError(what)
+
+
+def case_csr2csc(a, obj, tmp, base, words, rnd):
+    """cusparseCsr2cscEx2 in its four steps and the value permutation (words of the value type per value)."""
+    rows, cols = 13, 9
+    rowptr, col, val = random_csr(rows, cols, rnd, 0.35)
+    nnz = len(col)
+    rp, ci = pack([r + base for r in rowptr], "i"), pack([c + base for c in col], "i")
+    (cnt,) = run(a, obj, "agx_csr2csc_count", [("buf", rp), ("buf", ci), ("buf", pack([0] * cols, "i"), True),
+                                               ("i64", rows), ("i64", base)], grid1(rows), (32, 1), tmp)
+    nxt, ptr = run(a, obj, "agx_csr2csc_scan", [("buf", cnt, True), ("buf", pack([0] * (cols + 1), "i"), True),
+                                                ("i64", cols), ("i64", base)], (32, 1), (32, 1), tmp)
+    ri, perm = run(a, obj, "agx_csr2csc_fill", [("buf", rp), ("buf", ci), ("buf", nxt), ("buf", pack([0] * nnz, "i"), True),
+                                                ("buf", pack([0] * nnz, "i"), True), ("i64", rows), ("i64", base)],
+                   grid1(rows), (32, 1), tmp)
+    ri, perm = run(a, obj, "agx_csr2csc_sort", [("buf", ptr), ("buf", ri, True), ("buf", perm, True), ("i64", cols), ("i64", base)],
+                   grid1(cols), (32, 1), tmp)
+    want_ptr, want_ri, want_perm = [base], [], []
+    for j in range(cols):
+        for i in range(rows):
+            for k in range(rowptr[i], rowptr[i + 1]):
+                if col[k] == j:
+                    want_ri.append(i + base)
+                    want_perm.append(k)
+        want_ptr.append(len(want_ri) + base)
+    errs = []
+    for label, got, want in (("ptr", unpack(ptr, "i"), want_ptr), ("rowind", unpack(ri, "i"), want_ri), ("perm", unpack(perm, "i"), want_perm)):
+        if list(got) != want:
+            errs.append("%s %s, want %s" % (label, list(got), want))
+    if errs:
+        return errs
+    src = [rnd.uniform(-1, 1) for _ in range(nnz * words)]
+    src = rounded(src, BT)
+    (dst,) = run(a, obj, K("agx_sparse_permute"), [("buf", pack(src, BT)), ("buf", pack([0.0] * (nnz * words), BT), True),
+                                                 ("buf", perm), ("i64", nnz), ("i64", words)], grid1(nnz), (32, 1), tmp)
+    want = [src[want_perm[p] * words + w] for p in range(nnz) for w in range(words)]
+    return close(unpack(dst, BT), want, range(nnz * words), 0)
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1411,6 +1583,15 @@ def main():
                         for what in ("csr", "csr_t", "coo", "coo_t", "spmm_col", "spmm_row"):
                             cases.append(("sparse %s %s base %d" % (what, I, base),
                                           lambda w=what, I=I, b=base: case_sparse(a, obj, tmp, w, I, b, rnd)))
+                        ops = ["spvv", "axpby", "gather", "scatter", "rot", "csr2dense", "coo2dense", "dense2csr", "sddmm"]
+                        ops += ["spsm-%d%d%d" % (u, d, t) for u in (0, 1) for d in (0, 1) for t in (0, 1)]
+                        for what in ops:
+                            cases.append(("sparse %s %s base %d" % (what, I, base),
+                                          lambda w=what, I=I, b=base: case_sparse_ops(a, obj, tmp, w, I, b, rnd)))
+                for base in (0, 1):
+                    for words in (1, 2):
+                        cases.append(("sparse csr2csc base %d %d words" % (base, words),
+                                      lambda b=base, w=words: case_csr2csc(a, obj, tmp, b, w, rnd)))
                 if "agx_csr_spmv_i32_f64" in records:
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
 

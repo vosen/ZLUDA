@@ -22,8 +22,7 @@ fn llvm_source(build: &Path) -> PathBuf {
 /// renamed) in the same module: the kernels are written for any float type, so the copy changes f32 to f64, and with
 /// `wide_ints` also i32 to i64 (the BLAS reductions keep an index in the bits of a float, and return it or the float
 /// in one word).
-fn with_f64_copy(src: &Path, out: &Path, wide_ints: bool) {
-    let text = fs::read_to_string(src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
+fn with_f64_copy(text: &str, out: &Path, wide_ints: bool) {
     let open = text.find("gpu.module @").expect("no gpu.module");
     let body_start = text[open..].find('{').unwrap() + open + 1;
     let body_end = text.rfind('}').expect("unterminated module");
@@ -45,6 +44,18 @@ fn with_f64_copy(src: &Path, out: &Path, wide_ints: bool) {
     fs::write(out, all).unwrap();
 }
 
+fn read(path: &str) -> String {
+    fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"))
+}
+
+/// sparse.mlir with the functions of sparse_ix.mlir for i32 and for i64 indices (`IXT` the index type, `_IX` the
+/// name suffix) at the end of its module.
+fn with_index_copies(text: &str, template: &str) -> String {
+    let end = text.rfind('}').expect("unterminated module");
+    let copies: String = ["i32", "i64"].iter().map(|ty| template.replace("IXT", ty).replace("_IX", &format!("_{ty}"))).collect();
+    format!("{}{}{}", &text[..end], copies, &text[end..])
+}
+
 fn main() {
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_BUILD_DIR");
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_SOURCE_DIR");
@@ -54,6 +65,7 @@ fn main() {
     println!("cargo:rerun-if-changed=kernels/conv.mlir");
     println!("cargo:rerun-if-changed=kernels/fft.mlir");
     println!("cargo:rerun-if-changed=kernels/sparse.mlir");
+    println!("cargo:rerun-if-changed=kernels/sparse_ix.mlir");
     println!("cargo:rerun-if-changed=kernels/blas.mlir");
     println!("cargo:rerun-if-changed=kernels/blasc.mlir");
     println!("cargo:rerun-if-changed=kernels/dnn.mlir");
@@ -66,7 +78,11 @@ fn main() {
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false)] {
-        with_f64_copy(Path::new(&format!("kernels/{name}.mlir")), &out_dir.join(format!("{name}.mlir")), wide);
+        let mut text = read(&format!("kernels/{name}.mlir"));
+        if name == "sparse" {
+            text = with_index_copies(&text, &read("kernels/sparse_ix.mlir"));
+        }
+        with_f64_copy(&text, &out_dir.join(format!("{name}.mlir")), wide);
     }
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn"] {
         let out = out_dir.join(format!("{name}.agxfat"));
