@@ -5398,6 +5398,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_solver_agx"
+version = "0.0.0"
+dependencies = [
+ "agx_libs",
+ "cuda_types",
+]
+
+[[package]]
 name = "zluda_sparse"
 version = "0.0.0"
 dependencies = [

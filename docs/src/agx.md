@@ -1007,11 +1007,25 @@ generators (Sobol) and the discrete distributions of the device API return
 `CURAND_STATUS_TYPE_ERROR`; the device API (`curand_kernel.h`) is header code
 in the application's PTX and needs no library.
 
+## cuSOLVER (`zluda_solver_agx`)
+
+`libcusolver`'s dense LU, Cholesky and QR routines on
+`agx_libs/kernels/solver.mlir`, in single and double precision:
+`cusolverDn{S,D}getrf` / `getrs` (partial pivoting; `devIpiv` is required),
+`potrf` / `potrs` (either triangle), `geqrf`, `ormqr` (either side, `N` or `T`)
+and `orgqr`, with their `_bufferSize` queries. The factorizations run one
+column at a time — a single-thread pivot or reflector step, then a parallel
+update of the rest of the matrix — and the solves run one thread per
+right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
+non-positive leading minor (potrf) as LAPACK does. Eigenvalue and SVD
+routines, the 64-bit (`cusolverDnX*`) API, batched and sparse cuSOLVER are not
+exported.
+
 ## Building a release for Asahi
 
 ```
 ZLUDA_LLVM_BUILD_DIR=/path/to/llvm-agx-build cargo build --release -p compiler --no-default-features --features agx
-ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT, cuSPARSE, cuRAND), with their library symlinks
+ZLUDA_XTASK_AGX=1 cargo xtask --release      # zluda_agx and the *_agx libraries (NVML, cuBLAS, cuBLASLt, cuDNN, cuFFT, cuSPARSE, cuRAND, cuSOLVER), with their library symlinks
 ```
 
 `ZLUDA_XTASK_AGX` selects the packages marked `agx = true` in their `[package.metadata.zluda]` instead of the
@@ -1032,8 +1046,8 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Driver API | devices, contexts, memory, copies, modules (PTX, fat binaries, AGX objects), linking (`cuLink*`), CUDA arrays, launches, streams, events, graphs (stream capture), occupancy, `cuGetProcAddress`, export tables. Other functions return `CUDA_ERROR_NOT_SUPPORTED` (see `ZLUDA_AGX_LOG`). |
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
-| Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`) |
-| Not yet | recursion and non-inlined calls, peer access, IPC, the cuDNN graph API and f16 beyond convolutions, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
+| Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`); cuSOLVER dense LU, Cholesky and QR (`zluda_solver_agx`) |
+| Not yet | recursion and non-inlined calls, peer access, IPC, the cuDNN graph API and f16 beyond convolutions, cuSPARSE's blocked formats, cuRAND's quasi-random generators, cuSOLVER eigen / SVD |
 | NVML | device count, name, UUID, memory, compute capability; the maximum clock (`nvmlDeviceGetMaxClockInfo`, 1,398 MHz on the M2 Max) and GPU utilisation (`nvmlDeviceGetUtilizationRates`: the share of time since the last call this process's kernels ran, from the firmware's command timestamps; other processes are not seen). Asahi exposes no current clock, temperature or power without root (B25), so those return `NVML_ERROR_NOT_SUPPORTED` |
 | Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | M2 Max (G14C, Asahi), 2026-10-20, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md`: the direct-DRM runner and `agx_cuda_smoke` pass (B2); scratch with Mesa's helper (B1), forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), code rewrites (B8), the whole uniform file (B9), barriers (B16, B28), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), masked instruction cost (B31), submit cost (B32), vector alignment (B33) and stack cost (B34) are measured and used. Open: float atomic add under contention (B3), hardware calls (B14), async copies (B17), lane-offset fmadd recording (B18), native textures (B29), a real CUDA program (B23, B41), and B35-B45 (shader clock, IPC, checked mode, VMs and queues, allocation limits, cost model, context teardown, multiple VMs) |

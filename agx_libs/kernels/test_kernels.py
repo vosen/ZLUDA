@@ -755,6 +755,142 @@ def case_rand(a, obj, tmp, what, rnd):
     return close(got, want[:n], range(n), 2e-5)
 
 
+def case_solver(a, obj, tmp, what, rnd):
+    """The column steps of getrf / potrf / geqrf, then getrs / potrs / ormqr / orgqr, against Python references."""
+    t = BT
+    n, lda, nrhs, ldb = 6, 8, 3, 7
+    tol = TOL(1e-4)
+
+    def matmul(A, B):
+        return [[sum(A[i][k] * B[k][j] for k in range(len(B))) for j in range(len(B[0]))] for i in range(len(A))]
+
+    def col_major(M, ld):
+        flat = [0.0] * (ld * len(M[0]))
+        for i in range(len(M)):
+            for j in range(len(M[0])):
+                flat[i + j * ld] = M[i][j]
+        return flat
+
+    def from_col(flat, rows, cols, ld):
+        return [[flat[i + j * ld] for j in range(cols)] for i in range(rows)]
+
+    B = [[rnd.uniform(-1, 1) for _ in range(nrhs)] for _ in range(n)]
+    bbuf = pack(rounded(col_major(B, ldb), t), t)
+    if what.startswith("lu"):
+        m = n
+        A = [[rnd.uniform(-1, 1) for _ in range(n)] for _ in range(m)]
+        A = [[rounded([x], t)[0] for x in r] for r in A]
+        buf, ipiv, info = pack(col_major(A, lda), t), pack([0] * n, "i"), pack([77], "i")
+        for k in range(n):
+            ipiv, info = run(a, obj, K("agx_lu_pivot"), [("buf", buf), ("i64", m), ("i64", k), ("i64", lda), ("buf", ipiv, True),
+                                                       ("buf", info, True)], (1, 1), (1, 1), tmp)
+            (buf,) = run(a, obj, K("agx_lu_swap"), [("buf", buf, True), ("i64", n), ("i64", lda), ("i64", k), ("buf", ipiv)],
+                         grid1(n), (32, 1), tmp)
+            (buf,) = run(a, obj, K("agx_lu_scale"), [("buf", buf, True), ("i64", m), ("i64", lda), ("i64", k)], grid1(m), (32, 1), tmp)
+            (buf,) = run(a, obj, K("agx_lu_update"), [("buf", buf, True), ("i64", m), ("i64", n), ("i64", lda), ("i64", k)],
+                         (16, 16), (16, 4), tmp)
+        if unpack(info, "i")[0] != 0:
+            return ["info %d" % unpack(info, "i")[0]]
+        # P A = L U
+        F = from_col(unpack(buf, t), m, n, lda)
+        L = [[1.0 if i == j else (F[i][j] if i > j else 0.0) for j in range(n)] for i in range(m)]
+        U = [[F[i][j] if i <= j else 0.0 for j in range(n)] for i in range(n)]
+        PA = [r[:] for r in A]
+        for k, p in enumerate(unpack(ipiv, "i")):
+            PA[k], PA[p - 1] = PA[p - 1], PA[k]
+        LU = matmul(L, U)
+        bad = ["PA != LU at %d,%d" % (i, j) for i in range(n) for j in range(n) if abs(LU[i][j] - PA[i][j]) > tol * 10]
+        if bad:
+            return bad[:4]
+        trans = what == "lu_t"
+        (x,) = run(a, obj, K("agx_getrs"), [("buf", buf), ("i64", n), ("i64", lda), ("buf", ipiv), ("buf", bbuf, True),
+                                           ("i64", nrhs), ("i64", ldb), ("i64", int(trans))], (32, 1), (32, 1), tmp)
+        X = from_col(unpack(x, t), n, nrhs, ldb)
+        opA = [list(r) for r in zip(*A)] if trans else A
+        AX = matmul(opA, X)
+        return ["residual at %d,%d" % (i, j) for i in range(n) for j in range(nrhs) if abs(AX[i][j] - B[i][j]) > tol * 100][:4]
+    if what.startswith("chol"):
+        upper = what == "chol_u"
+        M = [[rnd.uniform(-1, 1) for _ in range(n)] for _ in range(n)]
+        A = matmul(M, [list(r) for r in zip(*M)])
+        for i in range(n):
+            A[i][i] += n
+        A = [[rounded([x], t)[0] for x in r] for r in A]
+        # only the used triangle is meaningful: poison the other one
+        stored = [[A[i][j] if ((j >= i) if upper else (j <= i)) else 1e3 for j in range(n)] for i in range(n)]
+        rs, cs = (lda, 1) if upper else (1, lda)
+        buf, info = pack(col_major(stored, lda), t), pack([77], "i")
+        for k in range(n):
+            (buf, info) = run(a, obj, K("agx_chol_diag"), [("buf", buf, True), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info, True)],
+                              (1, 1), (1, 1), tmp)
+            (buf,) = run(a, obj, K("agx_chol_scale"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
+                         grid1(n), (32, 1), tmp)
+            (buf,) = run(a, obj, K("agx_chol_update"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
+                         (16, 16), (16, 4), tmp)
+        if unpack(info, "i")[0] != 0:
+            return ["info %d" % unpack(info, "i")[0]]
+        (x,) = run(a, obj, K("agx_potrs"), [("buf", buf), ("i64", n), ("i64", lda), ("buf", bbuf, True), ("i64", nrhs), ("i64", ldb),
+                                           ("i64", int(upper))], (32, 1), (32, 1), tmp)
+        F = from_col(unpack(buf, t), n, n, lda)
+        bad = ["other triangle written at %d,%d" % (i, j) for i in range(n) for j in range(n)
+               if ((j < i) if upper else (j > i)) and F[i][j] != 1e3]
+        X = from_col(unpack(x, t), n, nrhs, ldb)
+        AX = matmul(A, X)
+        return (bad + ["residual at %d,%d" % (i, j) for i in range(n) for j in range(nrhs) if abs(AX[i][j] - B[i][j]) > tol * 100])[:4]
+    if what == "chol_fail":
+        A = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+        A[3][3] = -1.0
+        buf, info = pack(col_major(A, lda), t), pack([77], "i")
+        for k in range(n):
+            (buf, info) = run(a, obj, K("agx_chol_diag"), [("buf", buf, True), ("i64", k), ("i64", 1), ("i64", lda), ("buf", info, True)],
+                              (1, 1), (1, 1), tmp)
+        return [] if unpack(info, "i")[0] == 4 else ["info %d, want 4" % unpack(info, "i")[0]]
+    # QR of an m x n matrix (m >= n), then Q and op(Q) C
+    m = 8
+    A = [[rounded([rnd.uniform(-1, 1)], t)[0] for _ in range(n)] for _ in range(m)]
+    buf, tau = pack(col_major(A, m + 1), t), pack([0.0] * n, t)
+    for k in range(n):
+        (buf, tau) = run(a, obj, K("agx_qr_house"), [("buf", buf, True), ("i64", m), ("i64", k), ("i64", m + 1), ("buf", tau, True)],
+                         (1, 1), (1, 1), tmp)
+        (buf,) = run(a, obj, K("agx_qr_apply"), [("buf", buf, True), ("i64", m), ("i64", n), ("i64", k), ("i64", m + 1), ("buf", tau)],
+                     grid1(n), (32, 1), tmp)
+    F = from_col(unpack(buf, t), m, n, m + 1)
+    R = [[F[i][j] if i <= j else 0.0 for j in range(n)] for i in range(m)]
+    # orgqr: Q's first n columns from the identity
+    (eye,) = run(a, obj, K("agx_sv_copy"), [("buf", pack([0.0], t)), ("i64", 1), ("buf", pack([9.0] * (m * n), t), True), ("i64", m),
+                                          ("i64", m), ("i64", n), ("i64", 1)], (16, 16), (16, 4), tmp)
+    (q,) = run(a, obj, K("agx_ormqr"), [("buf", buf), ("i64", m + 1), ("buf", tau), ("buf", eye, True), ("i64", m), ("i64", n),
+                                       ("i64", n), ("i64", m), ("i64", 1), ("i64", 0)], (32, 1), (32, 1), tmp)
+    Q = from_col(unpack(q, t), m, n, m)
+    QR = matmul(Q, R[:n])
+    bad = ["QR != A at %d,%d" % (i, j) for i in range(m) for j in range(n) if abs(QR[i][j] - A[i][j]) > tol * 10]
+    QtQ = matmul([list(r) for r in zip(*Q)], Q)
+    bad += ["Q^T Q at %d,%d" % (i, j) for i in range(n) for j in range(n) if abs(QtQ[i][j] - (i == j)) > tol * 10]
+    if bad:
+        return bad[:4]
+    # the full Q (m x m) for the ormqr checks
+    (eye,) = run(a, obj, K("agx_sv_copy"), [("buf", pack([0.0], t)), ("i64", 1), ("buf", pack([9.0] * (m * m), t), True), ("i64", m),
+                                          ("i64", m), ("i64", m), ("i64", 1)], (16, 16), (16, 4), tmp)
+    (qf,) = run(a, obj, K("agx_ormqr"), [("buf", buf), ("i64", m + 1), ("buf", tau), ("buf", eye, True), ("i64", m), ("i64", m),
+                                        ("i64", n), ("i64", m), ("i64", 1), ("i64", 0)], (32, 1), (32, 1), tmp)
+    Qf = from_col(unpack(qf, t), m, m, m)
+    Qt = [list(r) for r in zip(*Qf)]
+    for left in (1, 0):
+        for trans in (0, 1):
+            rows, cols = (m, 5) if left else (5, m)
+            ldc = rows + 2
+            C = [[rounded([rnd.uniform(-1, 1)], t)[0] for _ in range(cols)] for _ in range(rows)]
+            (got,) = run(a, obj, K("agx_ormqr"), [("buf", buf), ("i64", m + 1), ("buf", tau), ("buf", pack(col_major(C, ldc), t), True),
+                                                 ("i64", rows), ("i64", cols), ("i64", n), ("i64", ldc), ("i64", left), ("i64", trans)],
+                         (32, 1), (32, 1), tmp)
+            G = from_col(unpack(got, t), rows, cols, ldc)
+            op = Qt if trans else Qf
+            W = matmul(op, C) if left else matmul(C, op)
+            bad += ["ormqr left %d trans %d at %d,%d" % (left, trans, i, j) for i in range(rows) for j in range(cols)
+                    if abs(G[i][j] - W[i][j]) > tol * 10]
+    return bad[:4]
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1715,6 +1851,11 @@ def main():
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
             elif "agx_cgemm" in records:
                 cases = cblas_cases(a, obj, tmp, rnd)
+            elif "agx_lu_pivot" in records:
+                cases = [("solver %s" % w, lambda w=w: case_solver(a, obj, tmp, w, rnd))
+                         for w in ("lu", "lu_t", "chol_l", "chol_u", "chol_fail", "qr")]
+                if "agx_lu_pivot_f64" in records:
+                    cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
             elif "agx_rand32" in records:
                 cases = [("rand %s" % w, lambda w=w: case_rand(a, obj, tmp, w, rnd))
                          for w in ("r320", "r321", "r322", "r323", "r641", "r642", "r643", "poisson")]

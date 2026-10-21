@@ -70,6 +70,7 @@ fn main() {
     println!("cargo:rerun-if-changed=kernels/blasc.mlir");
     println!("cargo:rerun-if-changed=kernels/dnn.mlir");
     println!("cargo:rerun-if-changed=kernels/rand.mlir");
+    println!("cargo:rerun-if-changed=kernels/solver.mlir");
     let build = PathBuf::from(env::var_os("ZLUDA_LLVM_BUILD_DIR").expect(
         "agx_libs compiles its MLIR kernels with the LLVM AGX fork: set ZLUDA_LLVM_BUILD_DIR to its build directory",
     ));
@@ -78,16 +79,16 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false)] {
+    for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false), ("solver", false)] {
         let mut text = read(&format!("kernels/{name}.mlir"));
         if name == "sparse" {
             text = with_index_copies(&text, &read("kernels/sparse_ix.mlir"));
         }
         with_f64_copy(&text, &out_dir.join(format!("{name}.mlir")), wide);
     }
-    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn", "rand"] {
+    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
+        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
         let status = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
