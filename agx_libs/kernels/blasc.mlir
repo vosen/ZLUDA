@@ -607,4 +607,219 @@ gpu.module @agx_blas {
     }
     gpu.return
   }
+
+  // ---- triangular and elementwise level 3
+
+  // Element (r, c) of op(A) for the triangular A held in its upper (or lower)
+  // triangle: 0 outside it, 1 on a unit diagonal.
+  func.func private @agx_c_tri(%a0: memref<1xf32, 1>, %r: index, %c: index, %ld: index,
+                               %upper: i1, %unit: i1, %op: i64) -> (f32, f32) {
+    %z = arith.constant 0 : i64
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %t = arith.cmpi ne, %op, %z : i64
+    %sr = arith.select %t, %c, %r : index
+    %sc = arith.select %t, %r, %c : index
+    %le = arith.cmpi ule, %sr, %sc : index
+    %ge = arith.cmpi uge, %sr, %sc : index
+    %inside = arith.select %upper, %le, %ge : i1
+    %diag = arith.cmpi eq, %sr, %sc : index
+    %one = arith.andi %diag, %unit : i1
+    %v:2 = scf.if %inside -> (f32, f32) {
+      %g:2 = func.call @agx_c_get(%a0, %r, %c, %ld, %op) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+      scf.yield %g#0, %g#1 : f32, f32
+    } else {
+      scf.yield %f0, %f0 : f32, f32
+    }
+    %re = arith.select %one, %f1, %v#0 : f32
+    %im = arith.select %one, %f0, %v#1 : f32
+    return %re, %im : f32, f32
+  }
+
+  // a / b
+  func.func private @agx_c_div(%ar: f32, %ai: f32, %br: f32, %bi: f32) -> (f32, f32) {
+    // Smith's algorithm
+    %abr = math.absf %br : f32
+    %abi = math.absf %bi : f32
+    %big = arith.cmpf oge, %abr, %abi : f32
+    %r:2 = scf.if %big -> (f32, f32) {
+      %q = arith.divf %bi, %br : f32
+      %d = math.fma %bi, %q, %br : f32
+      %nr0 = math.fma %ai, %q, %ar : f32
+      %naq = arith.mulf %ar, %q : f32
+      %ni0 = arith.subf %ai, %naq : f32
+      %nr = arith.divf %nr0, %d : f32
+      %ni = arith.divf %ni0, %d : f32
+      scf.yield %nr, %ni : f32, f32
+    } else {
+      %q = arith.divf %br, %bi : f32
+      %d = math.fma %br, %q, %bi : f32
+      %nr0 = math.fma %ar, %q, %ai : f32
+      %aiq = arith.mulf %ai, %q : f32
+      %ni0 = arith.subf %aiq, %ar : f32
+      %nr = arith.divf %nr0, %d : f32
+      %ni = arith.divf %ni0, %d : f32
+      scf.yield %nr, %ni : f32, f32
+    }
+    return %r#0, %r#1 : f32, f32
+  }
+
+  // trmm: C = alpha op(A) B (left, A m x m) or alpha B op(A) (right, A n x n)
+  // for the triangular A. One thread per element of C; C must not be B.
+  gpu.func @agx_ctrmm(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %ldb: index, %ldc: index,
+                      %right_: i64, %upper_: i64, %op: i64, %unit_: i64,
+                      %ar: f32, %ai: f32) kernel {
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %false = arith.constant false
+    %right = arith.cmpi ne, %right_, %z : i64
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %m : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_i, %in_j : i1
+    scf.if %in {
+      %len = arith.select %right, %n, %m : index
+      %s:2 = scf.for %l = %i0 to %len step %i1 iter_args(%sr = %f0, %si = %f0) -> (f32, f32) {
+        %ar_ = arith.select %right, %l, %i : index
+        %ac_ = arith.select %right, %j, %l : index
+        %br_ = arith.select %right, %i, %l : index
+        %bc_ = arith.select %right, %l, %j : index
+        %u:2 = func.call @agx_c_tri(%a0, %ar_, %ac_, %lda, %upper, %unit, %op) : (memref<1xf32, 1>, index, index, index, i1, i1, i64) -> (f32, f32)
+        %bcl = arith.muli %bc_, %ldb : index
+        %bp = arith.addi %bcl, %br_ : index
+        %v:2 = func.call @agx_c_ld(%b0, %bp) : (memref<1xf32, 1>, index) -> (f32, f32)
+        %r:2 = func.call @agx_c_fma(%u#0, %u#1, %v#0, %v#1, %sr, %si) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+        scf.yield %r#0, %r#1 : f32, f32
+      }
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      func.call @agx_c_blend(%c0, %p, %s#0, %s#1, %ar, %ai, %f0, %f0, %false)
+          : (memref<1xf32, 1>, index, f32, f32, f32, f32, f32, f32, i1) -> ()
+    }
+    gpu.return
+  }
+
+  // trsm: solves op(A) X = alpha B (left) or X op(A) = alpha B (right) in
+  // place in B for the triangular A. One thread per column (left) or row
+  // (right) of B, each a triangular system M v = alpha b with M = op(A)
+  // (left) or op(A)^T (right), lower when `lower`.
+  gpu.func @agx_ctrsm(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %ldb: index,
+                      %right_: i64, %upper_: i64, %op: i64, %unit_: i64, %lower_: i64,
+                      %ar: f32, %ai: f32) kernel {
+    %z = arith.constant 0 : i64
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %right = arith.cmpi ne, %right_, %z : i64
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %lower = arith.cmpi ne, %lower_, %z : i64
+    %t = gpu.global_id x
+    %count = arith.select %right, %m, %n : index
+    %len = arith.select %right, %n, %m : index
+    %live = arith.cmpi ult, %t, %count : index
+    scf.if %live {
+      %vs = arith.select %right, %ldb, %i1 : index
+      %bs0 = arith.muli %t, %ldb : index
+      %base = arith.select %right, %t, %bs0 : index
+      scf.for %e = %i0 to %len step %i1 {
+        %eo = arith.muli %e, %vs : index
+        %p = arith.addi %base, %eo : index
+        %v:2 = func.call @agx_c_ld(%b0, %p) : (memref<1xf32, 1>, index) -> (f32, f32)
+        %s:2 = func.call @agx_c_fma(%ar, %ai, %v#0, %v#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+        func.call @agx_c_st(%b0, %p, %s#0, %s#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+      }
+      scf.for %step = %i0 to %len step %i1 {
+        %lm1 = arith.subi %len, %i1 : index
+        %back = arith.subi %lm1, %step : index
+        %r = arith.select %lower, %step, %back : index
+        %ro = arith.muli %r, %vs : index
+        %pr = arith.addi %base, %ro : index
+        %br:2 = func.call @agx_c_ld(%b0, %pr) : (memref<1xf32, 1>, index) -> (f32, f32)
+        %d:2 = func.call @agx_ctrsm_m(%a0, %r, %r, %lda, %right, %upper, %op, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i64, i1) -> (f32, f32)
+        %x:2 = func.call @agx_c_div(%br#0, %br#1, %d#0, %d#1) : (f32, f32, f32, f32) -> (f32, f32)
+        func.call @agx_c_st(%b0, %pr, %x#0, %x#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+        %nxr = arith.negf %x#0 : f32
+        %nxi = arith.negf %x#1 : f32
+        %r1 = arith.addi %r, %i1 : index
+        %lo = arith.select %lower, %r1, %i0 : index
+        %hi = arith.select %lower, %len, %r : index
+        scf.for %s2 = %lo to %hi step %i1 {
+          %mv:2 = func.call @agx_ctrsm_m(%a0, %s2, %r, %lda, %right, %upper, %op, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i64, i1) -> (f32, f32)
+          %so = arith.muli %s2, %vs : index
+          %ps = arith.addi %base, %so : index
+          %old:2 = func.call @agx_c_ld(%b0, %ps) : (memref<1xf32, 1>, index) -> (f32, f32)
+          %nv:2 = func.call @agx_c_fma(%mv#0, %mv#1, %nxr, %nxi, %old#0, %old#1) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+          func.call @agx_c_st(%b0, %ps, %nv#0, %nv#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+        }
+      }
+    }
+    gpu.return
+  }
+
+  // M(r, c): op(A)(r, c) left, op(A)(c, r) right.
+  func.func private @agx_ctrsm_m(%a0: memref<1xf32, 1>, %r: index, %c: index, %lda: index,
+                                 %right: i1, %upper: i1, %op: i64, %unit: i1) -> (f32, f32) {
+    %rr = arith.select %right, %c, %r : index
+    %cc = arith.select %right, %r, %c : index
+    %v:2 = func.call @agx_c_tri(%a0, %rr, %cc, %lda, %upper, %unit, %op) : (memref<1xf32, 1>, index, index, index, i1, i1, i64) -> (f32, f32)
+    return %v#0, %v#1 : f32, f32
+  }
+
+  // geam: C = alpha op(A) + beta op(B) (m x n). One thread per element.
+  gpu.func @agx_cgeam(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %ldb: index, %ldc: index,
+                      %opa: i64, %opb: i64, %ar: f32, %ai: f32, %br: f32, %bi: f32) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %m : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_i, %in_j : i1
+    scf.if %in {
+      %u:2 = func.call @agx_c_get(%a0, %i, %j, %lda, %opa) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+      %v:2 = func.call @agx_c_get(%b0, %i, %j, %ldb, %opb) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+      %s:2 = func.call @agx_c_fma(%ar, %ai, %u#0, %u#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+      %w:2 = func.call @agx_c_fma(%br, %bi, %v#0, %v#1, %s#0, %s#1) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      func.call @agx_c_st(%c0, %p, %w#0, %w#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // dgmm: C = A diag(x) (right) or diag(x) A. One thread per element.
+  gpu.func @agx_cdgmm(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
+                      %m: index, %n: index, %lda: index, %incx: i64, %ldc: index,
+                      %right_: i64) kernel {
+    %z = arith.constant 0 : i64
+    %f0 = arith.constant 0.0 : f32
+    %right = arith.cmpi ne, %right_, %z : i64
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %m : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_i, %in_j : i1
+    scf.if %in {
+      %jl = arith.muli %j, %lda : index
+      %pa = arith.addi %jl, %i : index
+      %u:2 = func.call @agx_c_ld(%a0, %pa) : (memref<1xf32, 1>, index) -> (f32, f32)
+      %e = arith.select %right, %j, %i : index
+      %len = arith.select %right, %n, %m : index
+      %ix = func.call @agx_cblas_pos(%e, %len, %incx) : (index, index, i64) -> index
+      %v:2 = func.call @agx_c_ld(%x0, %ix) : (memref<1xf32, 1>, index) -> (f32, f32)
+      %w:2 = func.call @agx_c_fma(%u#0, %u#1, %v#0, %v#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+      %jc = arith.muli %j, %ldc : index
+      %pc = arith.addi %jc, %i : index
+      func.call @agx_c_st(%c0, %pc, %w#0, %w#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
 }

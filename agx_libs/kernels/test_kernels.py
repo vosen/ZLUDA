@@ -1158,6 +1158,76 @@ def case_cblas(a, obj, tmp, what, o, rnd):
             else:
                 wx[px], wy[py] = y[py], x[px]
         return cclose(cunpack(gx), wx, range(len(x)), tol) + cclose(cunpack(gy), wy, range(len(y)), tol)
+    if what in ("trmm", "trsm"):
+        m, n = 5, 4
+        right, upper, op, unit = o["right"], o["upper"], o["op"], o["unit"]
+        na = n if right else m
+        lda, ldb, ldc = na + 1, m + 2, m + 1
+        A, B = crand(lda * na, rnd), crand(ldb * n, rnd)
+
+        def tri(r, c):
+            sr, sc = (c, r) if op else (r, c)
+            inside = sr <= sc if upper else sr >= sc
+            if unit and sr == sc:
+                return 1 + 0j
+            return cop(A, r, c, lda, op) if inside else 0j
+        if what == "trmm":
+            C = crand(ldc * n, rnd)
+            (got,) = run(a, obj, K("agx_ctrmm"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", m), ("i64", n),
+                                                  ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", right), ("i64", upper), ("i64", op),
+                                                  ("i64", unit)] + cs(alpha), (16, 8), (16, 4), tmp)
+            want = list(C)
+            for j in range(n):
+                for i in range(m):
+                    if right:
+                        v = sum(B[i + l * ldb] * tri(l, j) for l in range(n))
+                    else:
+                        v = sum(tri(i, l) * B[l + j * ldb] for l in range(m))
+                    want[i + j * ldc] = alpha * v
+            return cclose(cunpack(got), want, range(len(C)), tol)
+        for d in range(na):
+            A[d + d * lda] = complex(2.0 + 0.25 * d, 0.5)
+        lower = int((not upper) ^ bool(op) ^ bool(right))
+        (got,) = run(a, obj, K("agx_ctrsm"), [("buf", cpack(A)), ("buf", cpack(B), True), ("i64", m), ("i64", n), ("i64", lda),
+                                              ("i64", ldb), ("i64", right), ("i64", upper), ("i64", op), ("i64", unit), ("i64", lower)]
+                     + cs(alpha), (32, 1), (32, 1), tmp)
+        X = cunpack(got)
+        bad = []
+        for j in range(n):
+            for i in range(m):
+                if right:
+                    v = sum(X[i + l * ldb] * tri(l, j) for l in range(n))
+                else:
+                    v = sum(tri(i, l) * X[l + j * ldb] for l in range(m))
+                w = alpha * B[i + j * ldb]
+                if abs(v - w) > TOL(1e-4) * (1 + abs(w)):
+                    bad.append((i, j, v, w))
+        return bad
+    if what == "geam":
+        m, n, opa, opb = 5, 4, o["opa"], o["opb"]
+        lda, ldb, ldc = (n if opa else m) + 1, (n if opb else m) + 2, m + 1
+        A, B, C = crand(lda * (m if opa else n), rnd), crand(ldb * (m if opb else n), rnd), crand(ldc * n, rnd)
+        (got,) = run(a, obj, K("agx_cgeam"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", m), ("i64", n),
+                                              ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", opa), ("i64", opb)]
+                     + cs(alpha) + cs(beta), (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = alpha * cop(A, i, j, lda, opa) + beta * cop(B, i, j, ldb, opb)
+        return cclose(cunpack(got), want, range(len(C)), tol)
+    if what == "dgmm":
+        m, n, right, incx = 5, 4, o["right"], -2
+        lda, ldc = m + 1, m + 2
+        A, C = crand(lda * n, rnd), crand(ldc * n, rnd)
+        L = n if right else m
+        x = crand(1 + (L - 1) * 2, rnd)
+        (got,) = run(a, obj, K("agx_cdgmm"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(C), True), ("i64", m), ("i64", n),
+                                              ("i64", lda), ("i64", incx), ("i64", ldc), ("i64", right)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = A[i + j * lda] * x[blas_pos(j if right else i, L, incx)]
+        return cclose(cunpack(got), want, range(len(C)), tol)
     # reductions
     op, n, incx, incy, threads = o["op"], o["n"], o["incx"], o["incy"], o["threads"]
     x = crand(1 + max(n - 1, 0) * abs(incx), rnd)
@@ -1218,6 +1288,18 @@ def cblas_cases(a, obj, tmp, rnd):
         for n, incx, incy, threads in ((40, 1, 1, 7), (9, -2, 3, 4), (0, 1, 1, 2)):
             cases.append(("c%s n=%d inc %d,%d threads %d" % (name, n, incx, incy, threads),
                           lambda o={"op": op, "n": n, "incx": incx, "incy": incy, "threads": threads}: case_cblas(a, obj, tmp, "reduce", o, rnd)))
+    for right in (0, 1):
+        for upper in (0, 1):
+            for op in (0, 1, 2):
+                for unit in (0, 1):
+                    o = {"right": right, "upper": upper, "op": op, "unit": unit}
+                    cases.append(("ctrmm %s" % o, lambda o=o: case_cblas(a, obj, tmp, "trmm", o, rnd)))
+                    cases.append(("ctrsm %s" % o, lambda o=o: case_cblas(a, obj, tmp, "trsm", o, rnd)))
+    for opa in (0, 2):
+        for opb in (0, 1):
+            cases.append(("cgeam op %d,%d" % (opa, opb), lambda o={"opa": opa, "opb": opb}: case_cblas(a, obj, tmp, "geam", o, rnd)))
+    for right in (0, 1):
+        cases.append(("cdgmm right %d" % right, lambda o={"right": right}: case_cblas(a, obj, tmp, "dgmm", o, rnd)))
     if "agx_cgemm_f64" in kernel_records(obj, a, tmp):
         cases += [("z" + label[1:], lambda f=f: with_t("d", f)) for label, f in list(cases)]
     return cases

@@ -11,7 +11,7 @@
 //! dgmm, syrk, syr2k, symm, trmm, trsm and batched GEMM (`cublasS*` and `cublasD*`, with their `_64` forms). The double
 //! precision routines run the f64 copies of the f32 kernels (agx_libs/build.rs), in the backend's software double
 //! precision. Complex (`cublasC*`, `cublasZ*`): axpy, scal, sscal / dscal, copy, swap, dotu, dotc, asum, nrm2, amax,
-//! amin, gemv, hemv, geru, gerc, her, her2, gemm, hemm, symm, herk, her2k, syrk and syr2k with their `_64` forms
+//! amin, gemv, hemv, geru, gerc, her, her2, gemm (also batched), hemm, symm, herk, her2k, syrk, syr2k, trmm, trsm, geam and dgmm with their `_64` forms
 //! (agx_libs/kernels/blasc.mlir).
 //! Reductions are deterministic: fixed per-thread partial sums combined in order. Other functions return
 //! `CUBLAS_STATUS_NOT_SUPPORTED`.
@@ -112,6 +112,30 @@ cuda_macros::cublas_function_declarations!(
             cublasStrsm_v2,
             cublasStrsm_v2_64,
             cublasXerbla,
+            cublasCtrmm_v2,
+            cublasCtrmm_v2_64,
+            cublasCtrsm_v2,
+            cublasCtrsm_v2_64,
+            cublasCgeam,
+            cublasCgeam_64,
+            cublasCdgmm,
+            cublasCdgmm_64,
+            cublasCgemmBatched,
+            cublasCgemmBatched_64,
+            cublasCgemmStridedBatched,
+            cublasCgemmStridedBatched_64,
+            cublasZtrmm_v2,
+            cublasZtrmm_v2_64,
+            cublasZtrsm_v2,
+            cublasZtrsm_v2_64,
+            cublasZgeam,
+            cublasZgeam_64,
+            cublasZdgmm,
+            cublasZdgmm_64,
+            cublasZgemmBatched,
+            cublasZgemmBatched_64,
+            cublasZgemmStridedBatched,
+            cublasZgemmStridedBatched_64,
             cublasCaxpy_v2,
             cublasCaxpy_v2_64,
             cublasCscal_v2,
@@ -2046,5 +2070,245 @@ mod imp {
     #[allow(clippy::too_many_arguments)]
     pub(crate) unsafe fn cublasZsyr2k_v2_64(h: cublasHandle_t, uplo: cublasFillMode_t, trans: cublasOperation_t, n: i64, k: i64, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: i64, b: *const cuDoubleComplex, ldb: i64, beta: *const cuDoubleComplex, c: *mut cuDoubleComplex, ldc: i64) -> cublasStatus_t {
         crankk::<f64>(h, uplo, trans, false, n, k, alpha as *const c_void, a as *const c_void, lda, b as *const c_void, ldb, beta as *const c_void, c as *mut c_void, ldc)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn ctrmm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const c_void, mut a: *const c_void, mut lda: i64, mut b: *const c_void, mut ldb: i64, mut c: *mut c_void, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (right, upper, mut op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if right { n } else { m })?;
+        ld_ok(ldb, m)?;
+        ld_ok(ldc, m)?;
+        let (mut ar, mut ai) = cscalar::<R>(h, alpha)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        let mut copy = std::ptr::null_mut();
+        if c as *const c_void == b {
+            let bytes = 2 * R::BYTES * ((n - 1) * ldb + m) as usize;
+            copy = engine::alloc(bytes).map_err(status)?;
+            engine::copy(copy, b, bytes, h.stream).map_err(status)?;
+            b = copy;
+        }
+        let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
+        let r = cblas_launch(
+            h,
+            R::kernel(c"agx_ctrmm", c"agx_ctrmm_f64"),
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut ar), arg(&mut ai)],
+            [m, n],
+            [16, 4],
+        );
+        if !copy.is_null() {
+            engine::synchronize(h.stream).map_err(status)?;
+            engine::free(copy).map_err(status)?;
+        }
+        r
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn ctrsm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const c_void, mut a: *const c_void, mut lda: i64, mut b: *mut c_void, mut ldb: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (right, upper, mut op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if right { n } else { m })?;
+        ld_ok(ldb, m)?;
+        let (mut ar, mut ai) = cscalar::<R>(h, alpha)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        let mut lower = (!upper ^ (op != 0) ^ right) as i64;
+        let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
+        let threads = if right == 1 { m } else { n };
+        cblas_launch(
+            h,
+            R::kernel(c"agx_ctrsm", c"agx_ctrsm_f64"),
+            &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut lower), arg(&mut ar), arg(&mut ai)],
+            [threads, 1],
+            [64, 1],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgeam<R: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, mut m: i64, mut n: i64, alpha: *const c_void, mut a: *const c_void, mut lda: i64, beta: *const c_void, mut b: *const c_void, mut ldb: i64, mut c: *mut c_void, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let (mut opa, mut opb) = (cop(transa)?, cop(transb)?);
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, if opa != 0 { n } else { m })?;
+        ld_ok(ldb, if opb != 0 { n } else { m })?;
+        ld_ok(ldc, m)?;
+        let (mut ar, mut ai) = cscalar::<R>(h, alpha)?;
+        let (mut br, mut bi) = cscalar::<R>(h, beta)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        if (c as *const c_void == a && (opa != 0 || lda != ldc)) || (c as *const c_void == b && (opb != 0 || ldb != ldc)) {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        cblas_launch(
+            h,
+            R::kernel(c"agx_cgeam", c"agx_cgeam_f64"),
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut opa), arg(&mut opb), arg(&mut ar), arg(&mut ai), arg(&mut br), arg(&mut bi)],
+            [m, n],
+            [16, 4],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cdgmm<R: Real>(h: cublasHandle_t, mode: cublasSideMode_t, mut m: i64, mut n: i64, mut a: *const c_void, mut lda: i64, mut x: *const c_void, mut incx: i64, mut c: *mut c_void, mut ldc: i64) -> cublasStatus_t {
+        let h = handle(h)?;
+        let mut right = side(mode)? as i64;
+        if m < 0 || n < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        ld_ok(lda, m)?;
+        ld_ok(ldc, m)?;
+        if m == 0 || n == 0 {
+            return Ok(());
+        }
+        cblas_launch(
+            h,
+            R::kernel(c"agx_cdgmm", c"agx_cdgmm_f64"),
+            &mut [arg(&mut a), arg(&mut x), arg(&mut c), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut incx), arg(&mut ldc), arg(&mut right)],
+            [m, n],
+            [16, 4],
+        )
+    }
+
+    /// Batched GEMM: arrays of device pointers (read back after the stream is idle), or a base and a stride.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgemm_batched<R: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const c_void, a: *const c_void, lda: i64, sa: Option<i64>, b: *const c_void, ldb: i64, sb: i64, beta: *const c_void, c: *mut c_void, ldc: i64, sc: i64, batch: i64) -> cublasStatus_t {
+        let hh = handle(h)?;
+        if batch < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if batch == 0 || m == 0 || n == 0 {
+            return Ok(());
+        }
+        let (pa, pb, pc): (Vec<usize>, Vec<usize>, Vec<usize>) = match sa {
+            Some(sa) => {
+                let e = 2 * R::BYTES as i64;
+                let at = |p: *const c_void, s: i64| (0..batch).map(|i| (p as i64 + i * s * e) as usize).collect();
+                (at(a, sa), at(b, sb), at(c, sc))
+            }
+            None => {
+                let fetch = |p: *const c_void| -> Result<Vec<usize>, cublasError_t> {
+                    if p.is_null() {
+                        return Err(cublasError_t::INVALID_VALUE);
+                    }
+                    let mut v = vec![0usize; batch as usize];
+                    engine::read(v.as_mut_ptr() as *mut c_void, p, 8 * batch as usize).map_err(status)?;
+                    Ok(v)
+                };
+                engine::synchronize(hh.stream).map_err(status)?;
+                (fetch(a)?, fetch(b)?, fetch(c)?)
+            }
+        };
+        for i in 0..batch as usize {
+            cgemm::<R>(h, transa, transb, m, n, k, alpha, pa[i] as *const c_void, lda, pb[i] as *const c_void, ldb, beta, pc[i] as *mut c_void, ldc)?;
+        }
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCtrmm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const cuComplex, a: *const cuComplex, lda: c_int, b: *const cuComplex, ldb: c_int, c: *mut cuComplex, ldc: c_int) -> cublasStatus_t {
+        ctrmm::<f32>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, b as *const c_void, ldb as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCtrmm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const cuComplex, a: *const cuComplex, lda: i64, b: *const cuComplex, ldb: i64, c: *mut cuComplex, ldc: i64) -> cublasStatus_t {
+        ctrmm::<f32>(h, sd, uplo, trans, diag, m, n, alpha as *const c_void, a as *const c_void, lda, b as *const c_void, ldb, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCtrsm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const cuComplex, a: *const cuComplex, lda: c_int, b: *mut cuComplex, ldb: c_int) -> cublasStatus_t {
+        ctrsm::<f32>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, b as *mut c_void, ldb as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCtrsm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const cuComplex, a: *const cuComplex, lda: i64, b: *mut cuComplex, ldb: i64) -> cublasStatus_t {
+        ctrsm::<f32>(h, sd, uplo, trans, diag, m, n, alpha as *const c_void, a as *const c_void, lda, b as *mut c_void, ldb)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgeam(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, alpha: *const cuComplex, a: *const cuComplex, lda: c_int, beta: *const cuComplex, b: *const cuComplex, ldb: c_int, c: *mut cuComplex, ldc: c_int) -> cublasStatus_t {
+        cgeam::<f32>(h, transa, transb, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, beta as *const c_void, b as *const c_void, ldb as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgeam_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, alpha: *const cuComplex, a: *const cuComplex, lda: i64, beta: *const cuComplex, b: *const cuComplex, ldb: i64, c: *mut cuComplex, ldc: i64) -> cublasStatus_t {
+        cgeam::<f32>(h, transa, transb, m, n, alpha as *const c_void, a as *const c_void, lda, beta as *const c_void, b as *const c_void, ldb, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCdgmm(h: cublasHandle_t, mode: cublasSideMode_t, m: c_int, n: c_int, a: *const cuComplex, lda: c_int, x: *const cuComplex, incx: c_int, c: *mut cuComplex, ldc: c_int) -> cublasStatus_t {
+        cdgmm::<f32>(h, mode, m as i64, n as i64, a as *const c_void, lda as i64, x as *const c_void, incx as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCdgmm_64(h: cublasHandle_t, mode: cublasSideMode_t, m: i64, n: i64, a: *const cuComplex, lda: i64, x: *const cuComplex, incx: i64, c: *mut cuComplex, ldc: i64) -> cublasStatus_t {
+        cdgmm::<f32>(h, mode, m, n, a as *const c_void, lda, x as *const c_void, incx, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgemmBatched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const cuComplex, a: *const *const cuComplex, lda: c_int, b: *const *const cuComplex, ldb: c_int, beta: *const cuComplex, c: *const *mut cuComplex, ldc: c_int, batch: c_int) -> cublasStatus_t {
+        cgemm_batched::<f32>(h, transa, transb, m as i64, n as i64, k as i64, alpha as *const c_void, a as *const c_void, lda as i64, None, b as *const c_void, ldb as i64, 0, beta as *const c_void, c as *mut c_void, ldc as i64, 0, batch as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgemmBatched_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const cuComplex, a: *const *const cuComplex, lda: i64, b: *const *const cuComplex, ldb: i64, beta: *const cuComplex, c: *const *mut cuComplex, ldc: i64, batch: i64) -> cublasStatus_t {
+        cgemm_batched::<f32>(h, transa, transb, m, n, k, alpha as *const c_void, a as *const c_void, lda, None, b as *const c_void, ldb, 0, beta as *const c_void, c as *mut c_void, ldc, 0, batch)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgemmStridedBatched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const cuComplex, a: *const cuComplex, lda: c_int, sa: c_longlong, b: *const cuComplex, ldb: c_int, sb: c_longlong, beta: *const cuComplex, c: *mut cuComplex, ldc: c_int, sc: c_longlong, batch: c_int) -> cublasStatus_t {
+        cgemm_batched::<f32>(h, transa, transb, m as i64, n as i64, k as i64, alpha as *const c_void, a as *const c_void, lda as i64, Some(sa), b as *const c_void, ldb as i64, sb, beta as *const c_void, c as *mut c_void, ldc as i64, sc, batch as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasCgemmStridedBatched_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const cuComplex, a: *const cuComplex, lda: i64, sa: c_longlong, b: *const cuComplex, ldb: i64, sb: c_longlong, beta: *const cuComplex, c: *mut cuComplex, ldc: i64, sc: c_longlong, batch: i64) -> cublasStatus_t {
+        cgemm_batched::<f32>(h, transa, transb, m, n, k, alpha as *const c_void, a as *const c_void, lda, Some(sa), b as *const c_void, ldb, sb, beta as *const c_void, c as *mut c_void, ldc, sc, batch)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZtrmm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: c_int, b: *const cuDoubleComplex, ldb: c_int, c: *mut cuDoubleComplex, ldc: c_int) -> cublasStatus_t {
+        ctrmm::<f64>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, b as *const c_void, ldb as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZtrmm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: i64, b: *const cuDoubleComplex, ldb: i64, c: *mut cuDoubleComplex, ldc: i64) -> cublasStatus_t {
+        ctrmm::<f64>(h, sd, uplo, trans, diag, m, n, alpha as *const c_void, a as *const c_void, lda, b as *const c_void, ldb, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZtrsm_v2(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: c_int, b: *mut cuDoubleComplex, ldb: c_int) -> cublasStatus_t {
+        ctrsm::<f64>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, b as *mut c_void, ldb as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZtrsm_v2_64(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: i64, b: *mut cuDoubleComplex, ldb: i64) -> cublasStatus_t {
+        ctrsm::<f64>(h, sd, uplo, trans, diag, m, n, alpha as *const c_void, a as *const c_void, lda, b as *mut c_void, ldb)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgeam(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: c_int, beta: *const cuDoubleComplex, b: *const cuDoubleComplex, ldb: c_int, c: *mut cuDoubleComplex, ldc: c_int) -> cublasStatus_t {
+        cgeam::<f64>(h, transa, transb, m as i64, n as i64, alpha as *const c_void, a as *const c_void, lda as i64, beta as *const c_void, b as *const c_void, ldb as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgeam_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: i64, beta: *const cuDoubleComplex, b: *const cuDoubleComplex, ldb: i64, c: *mut cuDoubleComplex, ldc: i64) -> cublasStatus_t {
+        cgeam::<f64>(h, transa, transb, m, n, alpha as *const c_void, a as *const c_void, lda, beta as *const c_void, b as *const c_void, ldb, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZdgmm(h: cublasHandle_t, mode: cublasSideMode_t, m: c_int, n: c_int, a: *const cuDoubleComplex, lda: c_int, x: *const cuDoubleComplex, incx: c_int, c: *mut cuDoubleComplex, ldc: c_int) -> cublasStatus_t {
+        cdgmm::<f64>(h, mode, m as i64, n as i64, a as *const c_void, lda as i64, x as *const c_void, incx as i64, c as *mut c_void, ldc as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZdgmm_64(h: cublasHandle_t, mode: cublasSideMode_t, m: i64, n: i64, a: *const cuDoubleComplex, lda: i64, x: *const cuDoubleComplex, incx: i64, c: *mut cuDoubleComplex, ldc: i64) -> cublasStatus_t {
+        cdgmm::<f64>(h, mode, m, n, a as *const c_void, lda, x as *const c_void, incx, c as *mut c_void, ldc)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgemmBatched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const cuDoubleComplex, a: *const *const cuDoubleComplex, lda: c_int, b: *const *const cuDoubleComplex, ldb: c_int, beta: *const cuDoubleComplex, c: *const *mut cuDoubleComplex, ldc: c_int, batch: c_int) -> cublasStatus_t {
+        cgemm_batched::<f64>(h, transa, transb, m as i64, n as i64, k as i64, alpha as *const c_void, a as *const c_void, lda as i64, None, b as *const c_void, ldb as i64, 0, beta as *const c_void, c as *mut c_void, ldc as i64, 0, batch as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgemmBatched_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const cuDoubleComplex, a: *const *const cuDoubleComplex, lda: i64, b: *const *const cuDoubleComplex, ldb: i64, beta: *const cuDoubleComplex, c: *const *mut cuDoubleComplex, ldc: i64, batch: i64) -> cublasStatus_t {
+        cgemm_batched::<f64>(h, transa, transb, m, n, k, alpha as *const c_void, a as *const c_void, lda, None, b as *const c_void, ldb, 0, beta as *const c_void, c as *mut c_void, ldc, 0, batch)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgemmStridedBatched(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: c_int, n: c_int, k: c_int, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: c_int, sa: c_longlong, b: *const cuDoubleComplex, ldb: c_int, sb: c_longlong, beta: *const cuDoubleComplex, c: *mut cuDoubleComplex, ldc: c_int, sc: c_longlong, batch: c_int) -> cublasStatus_t {
+        cgemm_batched::<f64>(h, transa, transb, m as i64, n as i64, k as i64, alpha as *const c_void, a as *const c_void, lda as i64, Some(sa), b as *const c_void, ldb as i64, sb, beta as *const c_void, c as *mut c_void, ldc as i64, sc, batch as i64)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasZgemmStridedBatched_64(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const cuDoubleComplex, a: *const cuDoubleComplex, lda: i64, sa: c_longlong, b: *const cuDoubleComplex, ldb: i64, sb: c_longlong, beta: *const cuDoubleComplex, c: *mut cuDoubleComplex, ldc: i64, sc: c_longlong, batch: i64) -> cublasStatus_t {
+        cgemm_batched::<f64>(h, transa, transb, m, n, k, alpha as *const c_void, a as *const c_void, lda, Some(sa), b as *const c_void, ldb, sb, beta as *const c_void, c as *mut c_void, ldc, sc, batch)
     }
 }
