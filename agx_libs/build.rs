@@ -65,12 +65,12 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    for (name, wide) in [("fft", false), ("blas", true), ("blasc", true)] {
+    for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false)] {
         with_f64_copy(Path::new(&format!("kernels/{name}.mlir")), &out_dir.join(format!("{name}.mlir")), wide);
     }
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if matches!(name, "fft" | "blas" | "blasc") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
+        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
         let status = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")

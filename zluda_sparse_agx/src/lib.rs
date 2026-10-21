@@ -2,7 +2,7 @@
 //! (`agx_libs/kernels/sparse.mlir`, written once for every AGX generation).
 //!
 //! Supported so far: handles, streams and pointer modes, the legacy matrix descriptor, and the generic API for f32
-//! values with 32- or 64-bit indices (row offsets and columns of the same type), zero- or one-based:
+//! and f64 values (f64 on the f64 copies of the kernels, all operands of one type) with 32- or 64-bit indices (row offsets and columns of the same type), zero- or one-based:
 //! `cusparseSpMV` on CSR and COO matrices (non-transposed and transposed) and `cusparseSpMM` on CSR matrices
 //! (`opA` non-transposed, `opB` non-transposed or transposed, column- or row-major dense matrices). No workspace is
 //! needed. Other functions return `CUSPARSE_STATUS_NOT_SUPPORTED`.
@@ -108,6 +108,8 @@ pub struct SpMat {
     /// 64-bit (true) or 32-bit indices.
     pub wide: bool,
     pub base: i64,
+    /// f64 (true) or f32 values.
+    pub double: bool,
 }
 
 /// A dense vector of the generic API.
@@ -175,12 +177,23 @@ pub enum Launch {
     CsrSpmm { n: i64, brs: i64, bcs: i64, crs: i64, ccs: i64 },
 }
 
-fn f32_only(ty: cudaDataType_t) -> Result<(), cusparseError_t> {
-    if ty == cudaDataType_t::CUDA_R_32F {
-        Ok(())
-    } else {
-        Err(cusparseError_t::NOT_SUPPORTED)
+/// Whether a value type is f64 (else f32); others are not supported.
+fn value_type(ty: cudaDataType_t) -> Result<bool, cusparseError_t> {
+    match ty {
+        cudaDataType_t::CUDA_R_32F => Ok(false),
+        cudaDataType_t::CUDA_R_64F => Ok(true),
+        _ => Err(cusparseError_t::NOT_SUPPORTED),
     }
+}
+
+/// The dense operands and the compute type must have the matrix's value type.
+fn same_type(a: &SpMat, tys: &[cudaDataType_t]) -> Result<(), cusparseError_t> {
+    for &ty in tys {
+        if value_type(ty)? != a.double {
+            return Err(cusparseError_t::NOT_SUPPORTED);
+        }
+    }
+    Ok(())
 }
 
 /// The launches of `y = alpha op(A) x + beta y`.
@@ -191,9 +204,7 @@ pub fn spmv_plan(op: cusparseOperation_t, a: &SpMat, x: &DnVec, y: &DnVec, compu
         cusparseOperation_t::CUSPARSE_OPERATION_TRANSPOSE | cusparseOperation_t::CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE => true,
         _ => return Err(cusparseError_t::INVALID_VALUE),
     };
-    for ty in [x.ty, y.ty, compute] {
-        f32_only(ty)?;
-    }
+    same_type(a, &[x.ty, y.ty, compute])?;
     let (xn, yn) = if trans { (a.rows, a.cols) } else { (a.cols, a.rows) };
     if x.size != xn || y.size != yn {
         return Err(cusparseError_t::INVALID_VALUE);
@@ -219,9 +230,7 @@ pub fn spmm_plan(
     c: &DnMat,
     compute: cudaDataType_t,
 ) -> Result<Option<Launch>, cusparseError_t> {
-    for ty in [b.ty, c.ty, compute] {
-        f32_only(ty)?;
-    }
+    same_type(a, &[b.ty, c.ty, compute])?;
     if op_a != cusparseOperation_t::CUSPARSE_OPERATION_NON_TRANSPOSE || a.format != Format::Csr {
         return Err(cusparseError_t::NOT_SUPPORTED);
     }
@@ -471,8 +480,8 @@ mod imp {
         if index(col_ty)? != wide {
             return Err(cusparseError_t::NOT_SUPPORTED);
         }
-        f32_only(ty)?;
-        Ok(SpMat { format, rows, cols, nnz, a, col, val, wide, base: base(idx_base)? })
+        let double = value_type(ty)?;
+        Ok(SpMat { format, rows, cols, nnz, a, col, val, wide, base: base(idx_base)?, double })
     }
 
     pub(crate) unsafe fn cusparseCreateCsr(
@@ -614,16 +623,19 @@ mod imp {
 
     // ---- SpMV and SpMM
 
-    unsafe fn scalar(h: &Handle, p: *const c_void) -> Result<f32, cusparseError_t> {
+    /// alpha or beta of the value type (f64 when `double`), from host or device memory.
+    unsafe fn scalar(h: &Handle, p: *const c_void, double: bool) -> Result<f64, cusparseError_t> {
         if p.is_null() {
             return Err(cusparseError_t::INVALID_VALUE);
         }
-        if !h.device_scalars {
-            return Ok(*(p as *const f32));
+        let mut v = [0u8; 8];
+        let n = if double { 8 } else { 4 };
+        if h.device_scalars {
+            engine::read(v.as_mut_ptr() as *mut c_void, p, n).map_err(status)?;
+        } else {
+            std::ptr::copy_nonoverlapping(p as *const u8, v.as_mut_ptr(), n);
         }
-        let mut v = 0f32;
-        engine::read(&mut v as *mut f32 as *mut c_void, p, 4).map_err(status)?;
-        Ok(v)
+        Ok(if double { f64::from_le_bytes(v) } else { f32::from_le_bytes(v[..4].try_into().unwrap()) as f64 })
     }
 
     fn arg<T>(v: &mut T) -> *mut c_void {
@@ -638,26 +650,38 @@ mod imp {
     }
 
     /// Runs `launches` on the matrix `a`, the input `x` (a vector or B) and the output `y` (a vector or C).
-    unsafe fn execute(h: &Handle, launches: &[Launch], a: &SpMat, x: *const c_void, y: *const c_void, mut alpha: f32, mut beta: f32) -> cusparseStatus_t {
+    unsafe fn execute(h: &Handle, launches: &[Launch], a: &SpMat, x: *const c_void, y: *const c_void, alpha: f64, beta: f64) -> cusparseStatus_t {
         let (mut pa, mut pc, mut pv, mut px, mut py) = (a.a, a.col, a.val, x, y);
         let (mut rows, mut nnz, mut base) = (a.rows, a.nnz, a.base);
-        let pick = |n32: &'static std::ffi::CStr, n64: &'static std::ffi::CStr| if a.wide { n64 } else { n32 };
+        // the kernels take the scalars in the value type
+        let (mut alpha32, mut beta32, mut alpha64, mut beta64) = (alpha as f32, beta as f32, alpha, beta);
+        let (alpha, beta): (*mut c_void, *mut c_void) =
+            if a.double { (arg(&mut alpha64), arg(&mut beta64)) } else { (arg(&mut alpha32), arg(&mut beta32)) };
+        // index width, then the f32 kernel or its f64 copy
+        let pick = |n32: &'static std::ffi::CStr, n64: &'static std::ffi::CStr, d32: &'static std::ffi::CStr, d64: &'static std::ffi::CStr| {
+            match (a.wide, a.double) {
+                (false, false) => n32,
+                (true, false) => n64,
+                (false, true) => d32,
+                (true, true) => d64,
+            }
+        };
         for l in launches {
             match *l {
                 Launch::Scale { mut n, mut stride } => {
-                    run(h, c"agx_sparse_scale", &mut [arg(&mut py), arg(&mut n), arg(&mut stride), arg(&mut beta)], [n, 1], [64, 1])?
+                    run(h, if a.double { c"agx_sparse_scale_f64" } else { c"agx_sparse_scale" }, &mut [arg(&mut py), arg(&mut n), arg(&mut stride), beta], [n, 1], [64, 1])?
                 }
                 Launch::CsrSpmv => run(
                     h,
-                    pick(c"agx_csr_spmv_i32", c"agx_csr_spmv_i64"),
-                    &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut rows), arg(&mut base), arg(&mut alpha), arg(&mut beta)],
+                    pick(c"agx_csr_spmv_i32", c"agx_csr_spmv_i64", c"agx_csr_spmv_i32_f64", c"agx_csr_spmv_i64_f64"),
+                    &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut rows), arg(&mut base), alpha, beta],
                     [rows, 1],
                     [64, 1],
                 )?,
                 Launch::CsrSpmvT => run(
                     h,
-                    pick(c"agx_csr_spmv_t_i32", c"agx_csr_spmv_t_i64"),
-                    &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut rows), arg(&mut base), arg(&mut alpha)],
+                    pick(c"agx_csr_spmv_t_i32", c"agx_csr_spmv_t_i64", c"agx_csr_spmv_t_i32_f64", c"agx_csr_spmv_t_i64_f64"),
+                    &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut rows), arg(&mut base), alpha],
                     [rows, 1],
                     [64, 1],
                 )?,
@@ -665,15 +689,15 @@ mod imp {
                     let mut trans = trans as i64;
                     run(
                         h,
-                        pick(c"agx_coo_spmv_i32", c"agx_coo_spmv_i64"),
-                        &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut nnz), arg(&mut base), arg(&mut trans), arg(&mut alpha)],
+                        pick(c"agx_coo_spmv_i32", c"agx_coo_spmv_i64", c"agx_coo_spmv_i32_f64", c"agx_coo_spmv_i64_f64"),
+                        &mut [arg(&mut pa), arg(&mut pc), arg(&mut pv), arg(&mut px), arg(&mut py), arg(&mut nnz), arg(&mut base), arg(&mut trans), alpha],
                         [nnz, 1],
                         [64, 1],
                     )?
                 }
                 Launch::CsrSpmm { mut n, mut brs, mut bcs, mut crs, mut ccs } => run(
                     h,
-                    pick(c"agx_csr_spmm_i32", c"agx_csr_spmm_i64"),
+                    pick(c"agx_csr_spmm_i32", c"agx_csr_spmm_i64", c"agx_csr_spmm_i32_f64", c"agx_csr_spmm_i64_f64"),
                     &mut [
                         arg(&mut pa),
                         arg(&mut pc),
@@ -687,8 +711,8 @@ mod imp {
                         arg(&mut bcs),
                         arg(&mut crs),
                         arg(&mut ccs),
-                        arg(&mut alpha),
-                        arg(&mut beta),
+                        alpha,
+                        beta,
                     ],
                     [rows, n],
                     [16, 4],
@@ -730,7 +754,7 @@ mod imp {
         let h = obj::<Handle>(h)?;
         let (a, x, y) = (obj::<SpMat>(a)?, obj::<DnVec>(x)?, obj::<DnVec>(y)?);
         let launches = spmv_plan(op, a, x, y, compute)?;
-        let (alpha, beta) = (scalar(h, alpha)?, scalar(h, beta)?);
+        let (alpha, beta) = (scalar(h, alpha, a.double)?, scalar(h, beta, a.double)?);
         execute(h, &launches, a, x.values, y.values, alpha, beta)
     }
 
@@ -787,7 +811,7 @@ mod imp {
         let Some(launch) = spmm_plan(op_a, op_b, a, b, c, compute)? else {
             return Ok(());
         };
-        let (alpha, beta) = (scalar(h, alpha)?, scalar(h, beta)?);
+        let (alpha, beta) = (scalar(h, alpha, a.double)?, scalar(h, beta, a.double)?);
         execute(h, &[launch], a, b.values, c.values, alpha, beta)
     }
 }
@@ -841,6 +865,7 @@ mod tests {
             val: std::ptr::null(),
             wide: false,
             base: 0,
+            double: false,
         }
     }
 
@@ -931,6 +956,12 @@ mod tests {
         assert_eq!(spmv_plan(N, &a, &x, &vec_of(4), F32), Err(cusparseError_t::NOT_SUPPORTED));
         let empty = sp(&matrix(0, 3, 1), Format::Csr);
         assert_eq!(spmv_plan(N, &empty, &vec_of(3), &vec_of(0), F32), Ok(vec![]));
+        // f64 values with f64 vectors and compute type
+        let d = SpMat { double: true, ..a.clone() };
+        let f64v = |n| DnVec { ty: cudaDataType_t::CUDA_R_64F, ..vec_of(n) };
+        assert_eq!(spmv_plan(N, &d, &f64v(3), &f64v(4), cudaDataType_t::CUDA_R_64F), Ok(vec![Launch::CsrSpmv]));
+        assert_eq!(spmv_plan(N, &d, &f64v(3), &f64v(4), F32), Err(cusparseError_t::NOT_SUPPORTED));
+        assert_eq!(spmv_plan(N, &d, &vec_of(3), &f64v(4), cudaDataType_t::CUDA_R_64F), Err(cusparseError_t::NOT_SUPPORTED));
     }
 
     #[test]
