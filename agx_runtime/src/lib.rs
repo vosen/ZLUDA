@@ -1029,6 +1029,101 @@ fn invalid(m: String) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, m)
 }
 
+/// The uniforms of a `launch_params_async` of `k` over hardware `threadgroups` with the parameter block at
+/// `param_block`, and the block's contents.
+fn uniforms(
+    k: &module::KernelInfo,
+    params: &[&[u8]],
+    threadgroups: [u32; 3],
+    dynamic_shared: u32,
+    bounds: &[(u64, u64)],
+    globals: Option<u64>,
+    record: Option<u64>,
+    param_block: u64,
+) -> io::Result<(Vec<u16>, Vec<u8>)> {
+    let (mut halves, block) = module::pack_params(k, params, threadgroups, globals, param_block).map_err(|e| invalid(e.to_string()))?;
+    if k.checked.is_some() {
+        module::pack_checked(k, &mut halves, record.unwrap_or(0), k.threadgroup_bytes + dynamic_shared, bounds)
+            .map_err(|e| invalid(e.to_string()))?;
+    }
+    Ok((halves, block))
+}
+
+/// A launch of `module` as the hardware sees it: the kernel's code, the hardware grid and threadgroup sizes, and
+/// the uniforms with the parameter block (if any) at `param_block`, the module's global data and error record at
+/// the given addresses. Other memory is the caller's to save.
+pub fn replay(
+    module: &module::Module,
+    globals: Option<(u64, &[u8])>,
+    record: Option<(u64, &[u8])>,
+    kernel: &str,
+    params: &[&[u8]],
+    threadgroups: [u32; 3],
+    local: [u32; 3],
+    dynamic_shared: u32,
+    bounds: &[(u64, u64)],
+    param_block: u64,
+) -> io::Result<Replay> {
+    let k = module.kernels.get(kernel).ok_or_else(|| invalid(format!("no kernel {kernel}")))?;
+    let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
+    let (uniforms, param_bytes) =
+        uniforms(k, params, threadgroups, dynamic_shared, bounds, globals.map(|g| g.0), record.map(|r| r.0), param_block)?;
+    let code = module.text[k.offset as usize..(k.offset + k.size) as usize].to_vec();
+    let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
+    if !param_bytes.is_empty() {
+        regions.push((param_block, param_bytes));
+    }
+    regions.extend(globals.into_iter().chain(record).map(|(va, b)| (va, b.to_vec())));
+    Ok(Replay {
+        code,
+        grid: std::array::from_fn(|i| threadgroups[i] * local[i]),
+        local,
+        shared_bytes: k.threadgroup_bytes + dynamic_shared,
+        stack_bytes: k.stack_bytes,
+        uniforms,
+        regions,
+    })
+}
+
+/// A launch as the hardware sees it, from [`replay`].
+#[derive(Clone, Debug)]
+pub struct Replay {
+    pub code: Vec<u8>,
+    /// Threads per dimension.
+    pub grid: [u32; 3],
+    pub local: [u32; 3],
+    pub shared_bytes: u32,
+    pub stack_bytes: u32,
+    /// Uniform registers, in 16-bit halves.
+    pub uniforms: Vec<u16>,
+    /// GPU address and contents of the memory the module owns: the parameter block, the global data buffer and
+    /// the error record.
+    pub regions: Vec<(u64, Vec<u8>)>,
+}
+
+impl Replay {
+    /// The `agx_run` arguments of the launch, with each region `i` of `regions` (the module's and the caller's)
+    /// read from `<prefix><i>.bin` and dumped to `<prefix><i>.out`, the code from `code.bin`.
+    pub fn agx_run_args(&self, regions: &[(u64, Vec<u8>)], prefix: &str) -> Vec<String> {
+        let d = |v: [u32; 3]| format!("{},{},{}", v[0], v[1], v[2]);
+        let mut a = vec!["code.bin".to_string(), "--grid".into(), d(self.grid), "--wg".into(), d(self.local)];
+        if self.shared_bytes > 0 {
+            a.extend(["--shared".into(), self.shared_bytes.to_string()]);
+        }
+        for (i, pair) in self.uniforms.chunks(2).enumerate() {
+            let v = pair[0] as u32 | (*pair.get(1).unwrap_or(&0) as u32) << 16;
+            if v != 0 {
+                a.extend(["--uniform".into(), format!("{i}={v}")]);
+            }
+        }
+        for (i, (va, bytes)) in regions.iter().enumerate() {
+            a.extend(["--map".into(), format!("{va:#x}={prefix}{i}.bin")]);
+            a.extend(["--dump".into(), format!("{va:#x}={}:{prefix}{i}.out", bytes.len())]);
+        }
+        a
+    }
+}
+
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
 pub struct LoadedModule {
     pub module: module::Module,
@@ -1206,19 +1301,43 @@ impl LoadedModule {
         queue.collect()?;
         let k = self.kernel(kernel, dynamic_shared)?;
         let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
-        let (mut halves, block) =
-            module::pack_params(k, params, threadgroups, self.globals_va(), 0).map_err(|e| invalid(e.to_string()))?;
+        let (mut halves, block) = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, 0)?;
         if !block.is_empty() {
             // the pointers in the uniforms depend on where the block lands
             let va = queue.stage(RingKind::Data, &block, 16)?;
-            halves = module::pack_params(k, params, threadgroups, self.globals_va(), va).map_err(|e| invalid(e.to_string()))?.0;
-        }
-        if k.checked.is_some() {
-            let record = self.record.as_ref().map_or(0, |r| r.va);
-            module::pack_checked(k, &mut halves, record, k.threadgroup_bytes + dynamic_shared, bounds)
-                .map_err(|e| invalid(e.to_string()))?;
+            halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, va)?.0;
         }
         self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+    }
+
+    fn uniforms(
+        &self,
+        k: &module::KernelInfo,
+        params: &[&[u8]],
+        threadgroups: [u32; 3],
+        dynamic_shared: u32,
+        bounds: &[(u64, u64)],
+        param_block: u64,
+    ) -> io::Result<(Vec<u16>, Vec<u8>)> {
+        let record = self.record.as_ref().map(|r| r.va);
+        uniforms(k, params, threadgroups, dynamic_shared, bounds, self.globals_va(), record, param_block)
+    }
+
+    /// What a launch hands the hardware, for replaying it elsewhere (the AGX Performance Simulator's `agx_run`):
+    /// see [`replay`].
+    pub fn replay(
+        &self,
+        kernel: &str,
+        params: &[&[u8]],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        bounds: &[(u64, u64)],
+        param_block: u64,
+    ) -> io::Result<Replay> {
+        let globals = self.globals_va().map(|va| (va, self.globals()));
+        let record = self.record.as_ref().map(|r| (r.va, &r.as_slice()[..module::CHECKED_RECORD_BYTES as usize]));
+        replay(&self.module, globals, record, kernel, params, threadgroups, local, dynamic_shared, bounds, param_block)
     }
 
     fn kernel(&self, kernel: &str, dynamic_shared: u32) -> io::Result<&module::KernelInfo> {

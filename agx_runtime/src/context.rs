@@ -139,6 +139,14 @@ impl Context {
         self.stream.synchronize()
     }
 
+    /// The current contents of the allocation `va` points into, and its base, without waiting for the GPU (a dump
+    /// after a fault).
+    pub fn allocation(&self, va: u64) -> Option<(u64, &[u8])> {
+        let start = find(&self.allocs, va, 0, |a| a.1)?;
+        let (bo, size) = &self.allocs[&start];
+        Some((start, &bo.as_slice()[..*size as usize]))
+    }
+
     /// The allocation's base and size for a pointer into it (cuMemGetAddressRange).
     pub fn address_range(&self, va: u64) -> Option<(u64, u64)> {
         let start = find(&self.allocs, va, 0, |a| a.1)?;

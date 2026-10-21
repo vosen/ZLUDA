@@ -212,12 +212,48 @@ impl Driver {
         let code = err(error::cuda_error(&e));
         if let Some(point) = e.get_ref().and_then(|i| i.downcast_ref::<error::GpuError>()).and_then(|g| g.point) {
             match self.launches.iter().find(|r| r.fence.syncobj == syncobj && r.fence.point == point) {
-                Some(r) => eprintln!("zluda_agx: {e}: {}", r.describe()),
+                Some(r) => {
+                    eprintln!("zluda_agx: {e}: {}", r.describe());
+                    if let Some(dir) = std::env::var_os("ZLUDA_AGX_DUMP").filter(|d| !d.is_empty()) {
+                        match self.dump(r, &format!("{e}"), std::path::Path::new(&dir)) {
+                            Ok(at) => eprintln!("zluda_agx: launch saved to {} (replay.sh runs it in agx_run)", at.display()),
+                            Err(d) => eprintln!("zluda_agx: could not save the launch: {d}"),
+                        }
+                    }
+                }
                 None => eprintln!("zluda_agx: {e}: command {point}"),
             }
             self.sticky.get_or_insert(code);
         }
         code
+    }
+
+    /// Saves a failed launch under `dir/<pid>-<command>` for replaying it in the AGX Performance Simulator's
+    /// `agx_run`: the kernel's code, the launch's uniforms, and the current contents of the memory it can reach (the
+    /// allocations its pointer arguments point into, the module's global data, parameter block and error record),
+    /// with `replay.sh`. Memory is as the fault left it, not as the launch found it.
+    fn dump(&self, r: &LaunchRecord, error: &str, dir: &std::path::Path) -> io::Result<std::path::PathBuf> {
+        let m = &self.modules[&r.module];
+        let k = &m.module.kernels[&r.kernel];
+        let params: Vec<&[u8]> = r.params.iter().map(|p| &p[..]).collect();
+        let pointers = module::checked_pointers(k, &params).unwrap_or_default();
+        let bounds: Vec<(u64, u64)> = pointers.iter().map(|&p| self.allocation_bounds(p)).collect();
+        // the parameter block goes where no allocation is
+        const PARAM_BLOCK: u64 = 0x7f_0000_0000;
+        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, PARAM_BLOCK)?;
+        let mut regions = replay.regions.clone();
+        // every allocation an 8-byte word of the arguments points into
+        let words = r.params.iter().flat_map(|p| p.chunks_exact(8)).chain(replay.regions.first().filter(|(va, _)| *va == PARAM_BLOCK).into_iter().flat_map(|(_, b)| b.chunks_exact(8)));
+        for w in words {
+            if let Some((start, bytes)) = self.ctx.allocation(u64::from_le_bytes(w.try_into().unwrap())) {
+                if !regions.iter().any(|(va, _)| *va == start) {
+                    regions.push((start, bytes.to_vec()));
+                }
+            }
+        }
+        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
+        write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;
+        Ok(at)
     }
 
     /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
@@ -358,6 +394,36 @@ impl Driver {
         }
         self.after_sync()
     }
+}
+
+/// Writes a launch for `agx_run` to the directory `at`: `code.bin`, region `i` of `regions` as `m<i>.bin` (listed in
+/// `regions.txt`), and `replay.sh`, which runs it (`$AGX_RUN` or `agx_run` on the PATH) and leaves each region's
+/// final contents in `m<i>.out`. `header` goes into the script as comments.
+fn write_dump(at: &std::path::Path, replay: &agx_runtime::Replay, regions: &[(u64, Vec<u8>)], header: &str) -> io::Result<()> {
+    std::fs::create_dir_all(at)?;
+    std::fs::write(at.join("code.bin"), &replay.code)?;
+    let mut list = String::new();
+    for (i, (va, bytes)) in regions.iter().enumerate() {
+        std::fs::write(at.join(format!("m{i}.bin")), bytes)?;
+        list += &format!("m{i}.bin {va:#x} {}\n", bytes.len());
+    }
+    std::fs::write(at.join("regions.txt"), list)?;
+    let mut sh = String::from("#!/bin/sh\n");
+    for line in header.lines() {
+        sh += &format!("# {line}\n");
+    }
+    if replay.stack_bytes > 0 {
+        sh += &format!("# the kernel uses {} bytes of stack per thread\n", replay.stack_bytes);
+    }
+    let args = replay.agx_run_args(regions, "m");
+    sh += &format!("cd \"$(dirname \"$0\")\" && exec \"${{AGX_RUN:-agx_run}}\" {} \"$@\"\n", args.join(" "));
+    std::fs::write(at.join("replay.sh"), sh)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(at.join("replay.sh"), std::fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(())
 }
 
 /// The kernel of a check site: the function of its outermost frame (`<access> <size>\t<function> ...`).
@@ -2060,6 +2126,49 @@ mod tests {
         drop_finished(&mut l, 5, 2);
         let left: Vec<_> = l.iter().map(|r| (r.fence.syncobj, r.fence.point)).collect();
         assert_eq!(left, vec![(6, 1), (5, 3)]);
+    }
+
+    // A dump of the checked kernel of agx_runtime/tests/data/checked.ll, replayed in agx_run when $AGX_RUN names it:
+    // out[5] = n is out of bounds of a 16-byte buffer.
+    #[test]
+    fn a_dumped_launch_replays_in_agx_run() {
+        let m = module::Module::load_object(include_bytes!("../../agx_runtime/tests/data/checked.o")).unwrap();
+        let (out, q) = (0x100_0000u64, 0x200_0000u64);
+        let mut pair = [0u8; 16];
+        pair[..4].copy_from_slice(&9u32.to_le_bytes());
+        pair[8..].copy_from_slice(&q.to_le_bytes());
+        let (o, i) = (out.to_le_bytes(), 5u32.to_le_bytes());
+        let params: [&[u8]; 3] = [&o, &i, &pair];
+        let record = [0u8; 64];
+        let r = agx_runtime::replay(
+            &m,
+            Some((0x800_0000, &m.globals)),
+            Some((0x700_0000, &record)),
+            "put",
+            &params,
+            [1, 1, 1],
+            [8, 1, 1],
+            0,
+            &[(out, out + 16), (q, q + 64)],
+            0x7f_0000_0000,
+        )
+        .unwrap();
+        let mut regions = r.regions.clone();
+        regions.extend([(out, vec![0u8; 16]), (q, vec![0u8; 64])]);
+        let dir = tempfile::tempdir().unwrap();
+        write_dump(dir.path(), &r, &regions, "a test\nsecond line").unwrap();
+        let sh = std::fs::read_to_string(dir.path().join("replay.sh")).unwrap();
+        assert!(sh.contains("# a test\n# second line\n") && sh.contains("--grid 8,1,1 --wg 8,1,1"), "{sh}");
+        let list = std::fs::read_to_string(dir.path().join("regions.txt")).unwrap();
+        let rec = list.lines().position(|l| l.contains(" 0x7000000 64")).expect(&list);
+        let Some(agx_run) = std::env::var_os("AGX_RUN") else { return };
+        let o = std::process::Command::new(dir.path().join("replay.sh")).env("AGX_RUN", agx_run).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let rec = std::fs::read(dir.path().join(format!("m{rec}.out"))).unwrap();
+        let (off, size) = m.global_symbols[module::CHECKED_SITES_SYMBOL];
+        let t = &m.globals[off as usize..(off + size) as usize];
+        let e = module::CheckedError::decode(&rec, std::str::from_utf8(&t[..t.len() - 1]).unwrap()).unwrap();
+        assert_eq!((e.kind, e.store, e.address, e.site_text.as_str()), (1, true, out + 20, "store 4\tput put.cu:4:3"));
     }
 
     #[test]
