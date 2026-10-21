@@ -785,6 +785,11 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   so a command whose timestamps are both still 0 is returned as
   `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
   is sticky until `cuCtxDestroy` (see "Fault dumps").
+* Kernels have no run time limit (`CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT` is
+  0): one command ran 79.9 s correctly on the M2 Max (simulator
+  `tasks/ptx-re-blockers.md`, B6), and a synchronisation waits as long as the
+  kernel runs (`ZLUDA_AGX_WAIT_MS` sets a limit). The firmware ends a
+  deadlocked command after about 0.5 s, which is reported as a launch failure.
 * At every synchronisation, device `printf` output is printed, and a failed
   device `assert` is returned as `CUDA_ERROR_ASSERT`.
 * There is one device and one context. The render node is `$ZLUDA_AGX_NODE` or

@@ -610,6 +610,21 @@ pub enum RingKind {
     Usc,
 }
 
+/// How long a queue waits for a command: `$ZLUDA_AGX_WAIT_MS` milliseconds, or without limit. The hardware has no
+/// limit on how long a command runs (AGX Performance Simulator tasks/ptx-re-blockers.md, B6: one command ran 79.9 s
+/// correctly on the M2 Max), and the firmware ends a deadlocked command after about 0.5 s with both timestamps 0,
+/// which `wait` reports as a fault.
+pub fn default_wait_timeout() -> Duration {
+    wait_timeout_from(std::env::var("ZLUDA_AGX_WAIT_MS").ok().as_deref())
+}
+
+fn wait_timeout_from(ms: Option<&str>) -> Duration {
+    match ms.and_then(|v| v.trim().parse::<u64>().ok()) {
+        Some(ms) if ms > 0 => Duration::from_millis(ms),
+        _ => Duration::MAX,
+    }
+}
+
 fn monotonic_deadline(timeout: Duration) -> i64 {
     let mut now: libc::timespec = unsafe { std::mem::zeroed() };
     unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
@@ -648,7 +663,7 @@ impl Queue {
             submitted: 0,
             ts,
             ts_handle: bind.object_handle,
-            timeout: Duration::from_secs(3),
+            timeout: default_wait_timeout(),
             in_flight: Default::default(),
             verified: Default::default(),
             data_ring: (vm.alloc_data(DATA_RING_BYTES)?, ring::RingAlloc::new(DATA_RING_BYTES)),
@@ -895,6 +910,16 @@ impl Drop for Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn queues_wait_without_limit_unless_asked() {
+        assert_eq!(wait_timeout_from(None), Duration::MAX);
+        assert_eq!(wait_timeout_from(Some("")), Duration::MAX);
+        assert_eq!(wait_timeout_from(Some("0")), Duration::MAX);
+        assert_eq!(wait_timeout_from(Some("x")), Duration::MAX);
+        assert_eq!(wait_timeout_from(Some("2500")), Duration::from_millis(2500));
+        assert!(monotonic_deadline(Duration::MAX) == i64::MAX, "no deadline saturates instead of wrapping");
+    }
 
     #[test]
     fn a_fault_before_the_last_command_is_found() {
