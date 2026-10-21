@@ -289,7 +289,7 @@ pub(crate) unsafe fn copy_2d_unaligned_v2(memcpy: hip_Memcpy2D) -> CUresult {
     Ok(())
 }
 
-pub(crate) unsafe fn set_d_2d32_v2(
+pub(crate) unsafe fn set_d2d32_v2(
     dst_device: hipDeviceptr_t,
     dst_pitch: usize,
     value: ::core::ffi::c_uint,
@@ -299,7 +299,7 @@ pub(crate) unsafe fn set_d_2d32_v2(
     hipMemset2D(dst_device.0, dst_pitch, value as _, width, height)
 }
 
-pub(crate) unsafe fn set_d_2d32_async(
+pub(crate) unsafe fn set_d2d32_async(
     dst_device: hipDeviceptr_t,
     dst_pitch: usize,
     value: ::core::ffi::c_uint,

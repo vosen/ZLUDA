@@ -3,6 +3,7 @@ use zluda_common::from_cuda_object;
 
 pub(super) mod array;
 pub(super) mod context;
+pub(super) mod d3d11;
 pub(super) mod device;
 pub(super) mod driver;
 pub(super) mod event;

@@ -5171,6 +5171,7 @@ dependencies = [
  "miopen-sys",
  "rocblas-sys",
  "rocsparse-sys",
+ "windows",
  "zluda_windows",
 ]
 
