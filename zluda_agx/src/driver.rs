@@ -464,6 +464,9 @@ impl Driver {
 fn write_dump(at: &std::path::Path, replay: &agx_runtime::Replay, regions: &[(u64, Vec<u8>)], header: &str) -> io::Result<()> {
     std::fs::create_dir_all(at)?;
     std::fs::write(at.join("code.bin"), &replay.code)?;
+    if let Some(object) = &replay.debug_object {
+        std::fs::write(at.join("module.o"), object)?;
+    }
     let mut list = String::new();
     for (i, (va, bytes)) in regions.iter().enumerate() {
         std::fs::write(at.join(format!("m{i}.bin")), bytes)?;
@@ -530,6 +533,12 @@ pub(crate) fn agx_checked() -> bool {
     std::env::var("ZLUDA_AGX_CHECKED").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// `ZLUDA_AGX_LINEINFO=1`: keep the PTX source positions as a line table in the objects (zoc --lineinfo), so that
+/// fault dumps replay with source lines (checked mode always has them).
+fn agx_lineinfo() -> bool {
+    std::env::var("ZLUDA_AGX_LINEINFO").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
     compile_ptx_linked(&[ptx], cpu)
@@ -564,6 +573,10 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if checked {
         options.push("agx-checked");
     }
+    let lineinfo = agx_lineinfo() && !checked;
+    if lineinfo {
+        options.push("lineinfo");
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -577,6 +590,7 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
             .args(["--target", "agx", "--arch", cpu])
             .args(mesa.then_some("--agx-strict"))
             .args(checked.then_some("--agx-checked"))
+            .args(lineinfo.then_some("--lineinfo"))
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -2344,6 +2358,9 @@ mod tests {
         write_dump(dir.path(), &r, &regions, "a test\nsecond line").unwrap();
         let sh = std::fs::read_to_string(dir.path().join("replay.sh")).unwrap();
         assert!(sh.contains("# a test\n# second line\n") && sh.contains("--grid 8,1,1 --wg 8,1,1"), "{sh}");
+        // The object has a line table: a fault in the replay names its source line.
+        let lines = format!("--lines module.o --lines-offset {}", m.kernels["put"].offset);
+        assert!(sh.contains(&lines) && dir.path().join("module.o").exists(), "{sh}");
         let list = std::fs::read_to_string(dir.path().join("regions.txt")).unwrap();
         let rec = list.lines().position(|l| l.contains(" 0x7000000 64")).expect(&list);
         let Some(agx_run) = std::env::var_os("AGX_RUN") else { return };

@@ -700,6 +700,12 @@ Simulator:
 
 Kernels that use stack memory replay too: `agx_run` gives each thread its own stack, as the driver's scratch memory does (the stack size is noted in `replay.sh`).
 
+When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`, which compiles with `zoc
+--lineinfo` to keep the PTX `.loc` positions as nvcc's `-lineinfo` does), the dump also holds `module.o` and
+`replay.sh` passes `--lines module.o`: a fault in the replay then prints the source line of the faulting
+instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
+`llvm-addr2line`.
+
 ## Checking against PTX-formalization
 
 `ptx/tools/agx_ptx_formalization_check.py` runs the test programs of

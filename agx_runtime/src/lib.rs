@@ -1149,6 +1149,8 @@ pub fn replay(
         stack_bytes: k.stack_bytes,
         uniforms,
         regions,
+        text_offset: k.offset as u64,
+        debug_object: module.debug_object.clone(),
     })
 }
 
@@ -1166,6 +1168,9 @@ pub struct Replay {
     /// GPU address and contents of the memory the module owns: the parameter block, the global data buffer and
     /// the error record.
     pub regions: Vec<(u64, Vec<u8>)>,
+    /// Where the kernel's code starts in the module's `.text`, and the module's object if it has a line table.
+    pub text_offset: u64,
+    pub debug_object: Option<Vec<u8>>,
 }
 
 impl Replay {
@@ -1186,6 +1191,9 @@ impl Replay {
         for (i, (va, bytes)) in regions.iter().enumerate() {
             a.extend(["--map".into(), format!("{va:#x}={prefix}{i}.bin")]);
             a.extend(["--dump".into(), format!("{va:#x}={}:{prefix}{i}.out", bytes.len())]);
+        }
+        if self.debug_object.is_some() {
+            a.extend(["--lines".into(), "module.o".into(), "--lines-offset".into(), self.text_offset.to_string()]);
         }
         a
     }

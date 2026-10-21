@@ -53,6 +53,11 @@ pub struct Options {
     /// checked-mode arguments (ZLUDA_AGX_CHECKED=1). Slower
     agx_checked: bool,
 
+    #[bpaf(long("lineinfo"))]
+    /// AGX: keep the PTX `.loc` source positions as a DWARF line table in the
+    /// object (as nvcc -lineinfo), for tools that map a PC to a source line
+    lineinfo: bool,
+
     #[bpaf(positional("filename"), some("a PTX file"))]
     /// PTX files. AGX links several into one object (their kernels and
     /// functions, as cuLink does); the outputs are named after the first
@@ -111,6 +116,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.strict_fp,
             opts.agx_strict,
             opts.agx_checked,
+            opts.lineinfo,
         );
     }
 
@@ -197,6 +203,7 @@ fn compile_agx(
     strict_fp: bool,
     agx_strict: bool,
     checked: bool,
+    lineinfo: bool,
 ) -> Result<(), CompilerError> {
     let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
@@ -209,7 +216,7 @@ fn compile_agx(
             target: ptx::Target::Agx,
             strict_fp,
             // checked mode names the source of a bad access
-            debug_locations: checked,
+            debug_locations: checked || lineinfo,
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
@@ -223,7 +230,7 @@ fn compile_agx(
             ptx::Options {
                 target: ptx::Target::Agx,
                 strict_fp,
-                debug_locations: checked,
+                debug_locations: checked || lineinfo,
             },
         )?;
         other_ir.push(other.llvm_ir);
@@ -261,6 +268,7 @@ fn compile_agx(
     _strict_fp: bool,
     _agx_strict: bool,
     _checked: bool,
+    _lineinfo: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,

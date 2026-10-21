@@ -133,6 +133,9 @@ pub struct Module {
     /// Words of the global data buffer that hold addresses in it: (offset, width in bytes, target offset). The
     /// loader adds the buffer's address (`Module::relocated_globals`).
     pub global_relocs: Vec<(u64, u8, u64)>,
+    /// The object itself when it has a DWARF line table (`.debug_line`), for mapping PCs to source lines
+    /// (`agx_run --lines`).
+    pub debug_object: Option<Vec<u8>>,
 }
 
 struct Elf<'a> {
@@ -408,7 +411,8 @@ impl Module {
         }
         let global_symbols = elf.symbols(".agx.globals", 1)?.into_iter().map(|(n, v, s)| (n, (v, s))).collect();
         let global_relocs = elf.global_relocs()?;
-        Ok(Module { text, globals, kernels, global_symbols, global_relocs })
+        let debug_object = elf.sections.iter().any(|s| s.0 == ".debug_line").then(|| object.to_vec());
+        Ok(Module { text, globals, kernels, global_symbols, global_relocs, debug_object })
     }
 
     /// The initial global data buffer once placed at `va`, with its relocations applied.
