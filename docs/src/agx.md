@@ -785,6 +785,11 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   so a command whose timestamps are both still 0 is returned as
   `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
   is sticky until `cuCtxDestroy` (see "Fault dumps").
+* A launch's command stream invalidates the USC (shader) cache only on a
+  queue's first command after new code was loaded: code rewritten in place is
+  seen without it (simulator `tasks/ptx-re-blockers.md`, B8), and it costs
+  about 1.8 us per command. `ZLUDA_AGX_USC_BARRIER=1` emits it on every
+  command, as Mesa does.
 * Kernels have no run time limit (`CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT` is
   0): one command ran 79.9 s correctly on the M2 Max (simulator
   `tasks/ptx-re-blockers.md`, B6), and a synchronisation waits as long as the

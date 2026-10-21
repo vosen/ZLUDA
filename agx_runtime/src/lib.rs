@@ -264,6 +264,9 @@ pub struct Vm {
     /// Header entries of the present cores (`scratch::core_entries`).
     core_entries: Vec<u32>,
     scratch: Option<Scratch>,
+    /// Counts USC allocations (module code, rings): a queue's next command invalidates the USC cache when this has
+    /// changed since its last one.
+    pub usc_generation: u64,
 }
 
 /// The helper program and the scratch buffer of an address space.
@@ -303,6 +306,7 @@ impl Vm {
             data: Rc::new(RefCell::new(RangeAllocator::new(data_base, vc.kernel_start - data_base))),
             core_entries: scratch::core_entries(&p.core_masks, p.num_clusters_total, p.num_cores_per_cluster),
             scratch: None,
+            usc_generation: 0,
         })
     }
 
@@ -395,6 +399,7 @@ impl Vm {
     /// A read-only object in the USC heap, for shader code and pipeline words. Its USC offset is
     /// `bo.va - vm.usc_base`.
     pub fn alloc_usc(&mut self, size: u64) -> io::Result<Bo> {
+        self.usc_generation += 1;
         self.alloc_in(&self.usc.clone(), size, DRM_ASAHI_BIND_READ as u32, "USC heap full")
     }
 
@@ -515,6 +520,20 @@ impl Pipeline {
 /// The CDM control stream of one direct dispatch, followed by a USC-cache-invalidating barrier and the stream
 /// terminator. `global` is in threads and must be a multiple of `local` in every dimension.
 pub fn cdm_dispatch(pipeline_words: u32, uniform_halves: u32, g14x: bool, global: [u32; 3], local: [u32; 3]) -> Vec<u8> {
+    cdm_dispatch_with(pipeline_words, uniform_halves, g14x, global, local, true)
+}
+
+/// `cdm_dispatch`, with the USC-cache-invalidating barrier only if `barrier`. Code and pipeline words rewritten in
+/// place at one USC address are seen by the next command without it (1,000 rewrites, none stale, on the M2 Max:
+/// ptx-re-blockers B8), and it costs about 1.8 us per command.
+pub fn cdm_dispatch_with(
+    pipeline_words: u32,
+    uniform_halves: u32,
+    g14x: bool,
+    global: [u32; 3],
+    local: [u32; 3],
+    barrier: bool,
+) -> Vec<u8> {
     assert!(pipeline_words % 64 == 0);
     let threads: u64 = local.iter().map(|&x| x as u64).product();
     assert!(threads >= 1 && threads <= 1024);
@@ -540,7 +559,9 @@ pub fn cdm_dispatch(pipeline_words: u32, uniform_halves: u32, g14x: bool, global
         put(&mut c, l);
     }
     // Barrier: Mesa's unk0..19, including the USC cache invalidate
-    put(&mut c, 3 << 29 | 0xfffff);
+    if barrier {
+        put(&mut c, 3 << 29 | 0xfffff);
+    }
     // Stream terminate
     put(&mut c, 2 << 29);
     put(&mut c, 0);
@@ -593,6 +614,8 @@ pub struct Queue {
     in_flight: std::collections::VecDeque<(u64, Vec<Bo>)>,
     /// The last point whose timestamps were checked for a fault (`wait`).
     verified: std::cell::Cell<u64>,
+    /// The VM's `usc_generation` at this queue's last command.
+    usc_seen: std::cell::Cell<u64>,
     /// Rings for the per-launch objects: data (uniforms, control streams, parameter blocks) and USC (pipeline
     /// words). A launch costs no buffer object creation, mapping or binding.
     data_ring: (Bo, ring::RingAlloc),
@@ -608,6 +631,12 @@ pub const USC_RING_BYTES: u64 = 256 << 10;
 pub enum RingKind {
     Data,
     Usc,
+}
+
+/// `ZLUDA_AGX_USC_BARRIER=1`: invalidate the USC cache after every command, as Mesa's command stream does.
+fn always_usc_barrier() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_USC_BARRIER").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
 /// How long a queue waits for a command: `$ZLUDA_AGX_WAIT_MS` milliseconds, or without limit. The hardware has no
@@ -666,6 +695,7 @@ impl Queue {
             timeout: default_wait_timeout(),
             in_flight: Default::default(),
             verified: Default::default(),
+            usc_seen: std::cell::Cell::new(u64::MAX),
             data_ring: (vm.alloc_data(DATA_RING_BYTES)?, ring::RingAlloc::new(DATA_RING_BYTES)),
             usc_ring: (vm.alloc_usc(USC_RING_BYTES)?, ring::RingAlloc::new(USC_RING_BYTES)),
         })
@@ -910,6 +940,18 @@ impl Drop for Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_usc_barrier_is_optional() {
+        let with = cdm_dispatch_with(0x1000, 16, false, [32, 1, 1], [32, 1, 1], true);
+        let without = cdm_dispatch_with(0x1000, 16, false, [32, 1, 1], [32, 1, 1], false);
+        assert_eq!(with, cdm_dispatch(0x1000, 16, false, [32, 1, 1], [32, 1, 1]));
+        assert_eq!(with.len(), without.len() + 4);
+        let words = |c: &[u8]| c.chunks(4).map(|w| u32::from_le_bytes(w.try_into().unwrap())).collect::<Vec<_>>();
+        assert!(words(&with).contains(&(3 << 29 | 0xfffff)));
+        assert!(!words(&without).contains(&(3 << 29 | 0xfffff)));
+        assert_eq!(words(&without)[words(&without).len() - 2..], [2 << 29, 0], "still terminated");
+    }
 
     #[test]
     fn queues_wait_without_limit_unless_asked() {
@@ -1402,7 +1444,12 @@ impl LoadedModule {
             // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
             let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-            let stream = cdm_dispatch((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local);
+            // The USC cache is invalidated after new code was allocated (a module load), and always with
+            // ZLUDA_AGX_USC_BARRIER=1 (Mesa's stream).
+            let barrier = queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
+            queue.usc_seen.set(vm.usc_generation);
+            let stream =
+                cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
             queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, wait_for)
         })();
