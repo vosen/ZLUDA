@@ -41,7 +41,8 @@ gpu.module @agx_sparse {
     %f0 = arith.constant 0.0 : f32
     %big = arith.constant 4611686018427387904 : index
     %rows = arith.index_cast %rows_ : i64 to index
-    %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %rowptr = memref.reinterpret_cast %rowptr0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
     %col = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
@@ -56,16 +57,17 @@ gpu.module @agx_sparse {
     %live = arith.cmpi ult, %i, %rows : index
     scf.if %live {
       %lo_r = memref.load %rowptr[%i] : memref<?xi32, strided<[1]>, 1>
-      %lo_b = arith.index_cast %lo_r : i32 to index
-      %lo = arith.subi %lo_b, %base : index
       %i_1 = arith.addi %i, %i1 : index
       %hi_r = memref.load %rowptr[%i_1] : memref<?xi32, strided<[1]>, 1>
-      %hi_b = arith.index_cast %hi_r : i32 to index
-      %hi = arith.subi %hi_b, %base : index
-      %acc = scf.for %k = %lo to %hi step %i1 iter_args(%a = %f0) -> f32 {
+      // Row pointers are int32: so is the loop over the row.
+      %one32 = arith.constant 1 : i32
+      %lo32 = arith.subi %lo_r, %base32 : i32
+      %hi32 = arith.subi %hi_r, %base32 : i32
+      %acc = scf.for %k32 = %lo32 to %hi32 step %one32 iter_args(%a = %f0) -> f32 : i32 {
+        %k = arith.index_cast %k32 : i32 to index
         %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-        %c_b = arith.index_cast %c_r : i32 to index
-        %c = arith.subi %c_b, %base : index
+        %c_s = arith.subi %c_r, %base32 : i32
+        %c = arith.index_cast %c_s : i32 to index
         %v = memref.load %val[%k] : memref<?xf32, strided<[1]>, 1>
         %xv = memref.load %x[%c] : memref<?xf32, strided<[1]>, 1>
         %a1 = math.fma %v, %xv, %a : f32
@@ -98,6 +100,8 @@ gpu.module @agx_sparse {
     %big = arith.constant 4611686018427387904 : index
     %nnz = arith.index_cast %nnz_ : i64 to index
     %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %trans = arith.index_cast %trans_ : i64 to index
     %row = memref.reinterpret_cast %row0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
@@ -116,8 +120,8 @@ gpu.module @agx_sparse {
       %r_b = arith.index_cast %r_r : i32 to index
       %r = arith.subi %r_b, %base : index
       %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-      %c_b = arith.index_cast %c_r : i32 to index
-      %c = arith.subi %c_b, %base : index
+      %c_s = arith.subi %c_r, %base32 : i32
+      %c = arith.index_cast %c_s : i32 to index
       %is_t = arith.cmpi ne, %trans, %i0 : index
       %src = arith.select %is_t, %r, %c : index
       %dst = arith.select %is_t, %c, %r : index
@@ -142,7 +146,8 @@ gpu.module @agx_sparse {
     %f0 = arith.constant 0.0 : f32
     %big = arith.constant 4611686018427387904 : index
     %rows = arith.index_cast %rows_ : i64 to index
-    %base = arith.index_cast %base_ : i64 to index
+    // Column indices are int32 and at least the base: the difference fits.
+    %base32 = arith.trunci %base_ : i64 to i32
     %rowptr = memref.reinterpret_cast %rowptr0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xi32, 1> to memref<?xi32, strided<[1]>, 1>
     %col = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
@@ -157,18 +162,19 @@ gpu.module @agx_sparse {
     %live = arith.cmpi ult, %i, %rows : index
     scf.if %live {
       %lo_r = memref.load %rowptr[%i] : memref<?xi32, strided<[1]>, 1>
-      %lo_b = arith.index_cast %lo_r : i32 to index
-      %lo = arith.subi %lo_b, %base : index
       %i_1 = arith.addi %i, %i1 : index
       %hi_r = memref.load %rowptr[%i_1] : memref<?xi32, strided<[1]>, 1>
-      %hi_b = arith.index_cast %hi_r : i32 to index
-      %hi = arith.subi %hi_b, %base : index
       %xi = memref.load %x[%i] : memref<?xf32, strided<[1]>, 1>
       %axi = arith.mulf %xi, %alpha : f32
-      scf.for %k = %lo to %hi step %i1 {
+      // Row pointers are int32: so is the loop over the row.
+      %one32 = arith.constant 1 : i32
+      %lo32 = arith.subi %lo_r, %base32 : i32
+      %hi32 = arith.subi %hi_r, %base32 : i32
+      scf.for %k32 = %lo32 to %hi32 step %one32 : i32 {
+        %k = arith.index_cast %k32 : i32 to index
         %c_r = memref.load %col[%k] : memref<?xi32, strided<[1]>, 1>
-        %c_b = arith.index_cast %c_r : i32 to index
-        %c = arith.subi %c_b, %base : index
+        %c_s = arith.subi %c_r, %base32 : i32
+        %c = arith.index_cast %c_s : i32 to index
         %v = memref.load %val[%k] : memref<?xf32, strided<[1]>, 1>
         %p = arith.mulf %v, %axi : f32
         %old = memref.atomic_rmw addf %p, %y[%c] : (f32, memref<?xf32, strided<[1]>, 1>) -> f32
