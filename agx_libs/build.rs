@@ -18,26 +18,30 @@ fn llvm_source(build: &Path) -> PathBuf {
     Path::new(llvm).parent().unwrap().to_path_buf()
 }
 
-/// fft.mlir with a double precision copy of each kernel (`<name>_f64`) in the same module: the kernels are written
-/// for any float type, so the copy only changes f32 to f64.
-fn fft_with_f64(src: &Path, out: &Path) {
+/// A kernel file with a double precision copy of each of its functions (`<name>_f64`, every `@agx_*` symbol
+/// renamed) in the same module: the kernels are written for any float type, so the copy changes f32 to f64, and with
+/// `wide_ints` also i32 to i64 (the BLAS reductions keep an index in the bits of a float, and return it or the float
+/// in one word).
+fn with_f64_copy(src: &Path, out: &Path, wide_ints: bool) {
     let text = fs::read_to_string(src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
-    let open = text.find("gpu.module @agx_fft {").expect("fft.mlir has no gpu.module @agx_fft");
+    let open = text.find("gpu.module @").expect("no gpu.module");
     let body_start = text[open..].find('{').unwrap() + open + 1;
-    let body_end = text.rfind('}').expect("fft.mlir: unterminated module");
-    let body = &text[body_start..body_end];
-    let mut f64_body = String::new();
-    for line in body.lines() {
-        let mut l = line.replace("f32", "f64");
-        if let Some(at) = l.find("gpu.func @") {
-            let name_start = at + "gpu.func @".len();
-            let name_end = l[name_start..].find('(').map(|i| name_start + i).expect("gpu.func without arguments");
-            l.insert_str(name_end, "_f64");
-        }
-        f64_body.push_str(&l);
-        f64_body.push('\n');
+    let body_end = text.rfind('}').expect("unterminated module");
+    let mut copy = text[body_start..body_end].replace("f32", "f64");
+    if wide_ints {
+        copy = copy.replace("i32", "i64");
     }
-    let all = format!("{}\n  // double precision copies\n{}{}", &text[..body_end], f64_body, &text[body_end..]);
+    // @agx_name -> @agx_name_f64
+    let mut renamed = String::with_capacity(copy.len());
+    let mut rest = copy.as_str();
+    while let Some(at) = rest.find("@agx_") {
+        let end = rest[at + 1..].find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).map_or(rest.len(), |i| at + 1 + i);
+        renamed.push_str(&rest[..end]);
+        renamed.push_str("_f64");
+        rest = &rest[end..];
+    }
+    renamed.push_str(rest);
+    let all = format!("{}\n  // double precision copies\n{}{}", &text[..body_end], renamed, &text[body_end..]);
     fs::write(out, all).unwrap();
 }
 
@@ -60,11 +64,12 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let fft = out_dir.join("fft.mlir");
-    fft_with_f64(Path::new("kernels/fft.mlir"), &fft);
+    for (name, wide) in [("fft", false), ("blas", true)] {
+        with_f64_copy(Path::new(&format!("kernels/{name}.mlir")), &out_dir.join(format!("{name}.mlir")), wide);
+    }
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "dnn"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if name == "fft" { fft.clone() } else { PathBuf::from(format!("kernels/{name}.mlir")) };
+        let src = if matches!(name, "fft" | "blas") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
         let status = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
