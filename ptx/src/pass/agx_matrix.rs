@@ -19,7 +19,13 @@
 //!   added as integers in a fixed point accumulator anchored at the largest
 //!   term (120 bits, 248 for `f64`), and the sum is rounded once to nearest
 //!   even into the type of D, like the model of PTX-formalization. Terms more
-//!   than that below the largest one only contribute a sticky bit.
+//!   than that below the largest one only contribute a sticky bit. The
+//!   elements of D are computed one at a time in a loop (with the shuffles
+//!   in it) to keep the registers of a sum, and narrow terms are added in
+//!   64-bit bands of 32 bits. NaN, infinite and zero results come from the
+//!   same dot product of +-1, +-0, infinities and NaNs in `f32`, computed
+//!   only when an input of the SIMD-group is a NaN or an infinity or an
+//!   element of C is -0.
 //! * `wmma` fragments are tiles of `mma.sync` fragments (16x8, or 8x8 for
 //!   8-row matrices): A is made of the A fragments of its row tiles, B of the
 //!   B fragments of its column tiles, C and D of the C fragments of the tiles
@@ -550,6 +556,9 @@ struct Ir {
     block: String,
     // declarations of the intrinsics used
     declarations: BTreeSet<String>,
+    // when set, `special_dot` computes the special values only when this i1
+    // is true, and is +0 otherwise
+    special_guard: Option<String>,
 }
 
 struct Lane {
@@ -573,6 +582,7 @@ impl Default for Ir {
             next: 0,
             block: "entry".to_string(),
             declarations: BTreeSet::new(),
+            special_guard: None,
         }
     }
 }
@@ -1142,8 +1152,104 @@ fn mma_tile(
         }
         Ok(shuffled[&key].clone())
     };
-    // The elements (raw bits) or, for .b1, 32-bit words along k.
     let word = d.atype == ast::MmaType::B1;
+    let looped = !word && scales.is_none() && (d.atype.is_float() || exponent_range(d.atype).is_some());
+    if looped {
+        // One element of D at a time, the shuffles in the loop: the exact
+        // sums take many registers. Row g + 8h of A element kk is element
+        // i % per of register i / per of thread `source` of the quad (the same
+        // thread and position for both rows); column 2t + e of B, of thread
+        // 8t + 4e + source.
+        let c_elements = (0..nc)
+            .map(|j| fragment_element(ir, c, register_bits(d.ctype), d.ctype.bits(), j))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut a_src = Vec::new();
+        let mut b_src = Vec::new();
+        for kk in 0..k as usize {
+            let rows = a_rows.iter().map(|r| r[kk].ok_or_else(|| todo("layout"))).collect::<Result<Vec<_>, _>>()?;
+            let (source, i) = rows[0];
+            if rows.iter().any(|(s, x)| *s != source || x % per != i % per) {
+                return Err(todo("fragment layout"));
+            }
+            a_src.push((source, rows.iter().map(|(_, x)| x / per).collect::<Vec<_>>(), i % per));
+            let (source, i) = b_cols[0][kk].ok_or_else(|| todo("layout"))?;
+            if b_cols[1][kk] != Some((source, i)) {
+                return Err(todo("fragment layout"));
+            }
+            b_src.push((source, i / per, i % per));
+        }
+        // the special values are only computed when an input of the
+        // SIMD-group is a NaN or an infinity, or an element of C is -0
+        let mut guard = "false".to_string();
+        let ab_bits = d.atype.bits();
+        for (regs, type_) in [(a, d.atype), (b, d.btype)] {
+            for r in regs {
+                for i in 0..per {
+                    let x = fragment_element(ir, &[r.clone()], ab_reg_bits, ab_bits, i)?;
+                    let special = is_special(ir, type_, &x, ab_ty)?;
+                    guard = ir.op("or", "i1", &guard, &special);
+                }
+            }
+        }
+        let c_ty = bits_type(register_bits(d.ctype));
+        for x in &c_elements {
+            let special = is_special(ir, d.ctype, x, c_ty)?;
+            let sign = match d.ctype.bits() {
+                32 => "-2147483648".to_string(),
+                bits => (1u64 << (bits - 1)).to_string(),
+            };
+            let minus_zero = ir.icmp("eq", c_ty, x, &sign);
+            guard = ir.op("or", "i1", &guard, &special);
+            guard = ir.op("or", "i1", &guard, &minus_zero);
+        }
+        if d.atype != ast::MmaType::F64 {
+            let votes = ir.def(&format!("call i32 @llvm.agx.simd.ballot(i1 {guard})"));
+            ir.declarations.insert("declare i32 @llvm.agx.simd.ballot(i1)".to_string());
+            ir.special_guard = Some(ir.icmp("ne", "i32", &votes, "0"));
+        }
+        let depths = (0..k).collect::<Vec<_>>();
+        let elements = elements_loop(ir, d, &lc, &c_elements, &mut |ir, h, e| {
+            let mut shuffled: HashMap<(Vec<u32>, u32, bool), String> = HashMap::new();
+            let mut av = Vec::new();
+            let mut bv = Vec::new();
+            for kk in 0..k as usize {
+                let (source, regs, position) = &a_src[kk];
+                let key = (regs.clone(), *source, true);
+                if !shuffled.contains_key(&key) {
+                    let mut r = a.get(regs[0] as usize).ok_or_else(|| todo("fragment size"))?.clone();
+                    for (row, reg) in regs.iter().enumerate().skip(1) {
+                        let x = a.get(*reg as usize).ok_or_else(|| todo("fragment size"))?;
+                        let is = ir.icmp("eq", "i32", h, &row.to_string());
+                        r = ir.select(&is, ab_ty, x, &r);
+                    }
+                    let v = ir.shuffle(&r, ab_reg_bits, &source.to_string(), true);
+                    shuffled.insert(key.clone(), v);
+                }
+                av.push(fragment_element(ir, &[shuffled[&key].clone()], ab_reg_bits, ab_bits, *position)?);
+                let (source, reg, position) = b_src[kk];
+                let key = (vec![reg], source, false);
+                if !shuffled.contains_key(&key) {
+                    let r = b.get(reg as usize).ok_or_else(|| todo("fragment size"))?;
+                    let l = ir.linear(0, &lane.g, 8, &lane.t, source);
+                    let e4 = ir.op("shl", "i32", e, "2");
+                    let l = ir.op("add", "i32", &l, &e4);
+                    let v = ir.shuffle(r, ab_reg_bits, &l, false);
+                    shuffled.insert(key.clone(), v);
+                }
+                bv.push(fragment_element(ir, &[shuffled[&key].clone()], ab_reg_bits, ab_bits, position)?);
+            }
+            Ok((av, bv))
+        }, &mut |ir, av, bv, ce| {
+            if d.atype == ast::MmaType::F64 {
+                float_dot(ir, d, av, bv, ce)
+            } else {
+                dot(ir, lane, d, av, bv, &depths, ce, &None, 0, 0)
+            }
+        })?;
+        ir.special_guard = None;
+        return Ok(pack_d(ir, d, &elements));
+    }
+    // The elements (raw bits) or, for .b1, 32-bit words along k.
     let mut gather = |ir: &mut Ir, which: u32, index: u32| -> Result<Vec<String>, TranslateError> {
         let entries = if which == 0 { &a_rows[index as usize] } else { &b_cols[index as usize] };
         let mut values = Vec::new();
@@ -1172,9 +1278,7 @@ fn mma_tile(
     let b_vals = (0..2).map(|e| gather(ir, 1, e)).collect::<Result<Vec<_>, _>>()?;
     let _ = ab_ty;
     let mut d_elements = Vec::new();
-    if d.atype == ast::MmaType::F64 {
-        d_elements = f64_elements_loop(ir, d, &lc, &a_vals, &b_vals, c)?;
-    } else {
+    {
         let depths = (0..k).collect::<Vec<_>>();
         for j in 0..nc {
             let (h, e) = (lc.row[j as usize] / 8, lc.col[j as usize]);
@@ -1212,9 +1316,11 @@ fn dot(
         let range = (ra.0 + rb.0, ra.1 + rb.1);
         let block = d.block_scale.map_or(d.k, |scale| d.k / scale.chunks);
         let mut groups: Vec<(u32, Vec<Term>)> = Vec::new();
+        // without block scales, the special values come from `special_dot`
+        let flags = d.block_scale.is_some() && scales.is_some();
         for ((x, y), kk) in a.iter().zip(b).zip(depths) {
-            let x = decode(ir, d.atype, x, ab_ty)?;
-            let y = decode(ir, d.btype, y, ab_ty)?;
+            let x = decode_flags(ir, d.atype, x, ab_ty, flags)?;
+            let y = decode_flags(ir, d.btype, y, ab_ty, flags)?;
             let p = product(ir, &x, &y);
             let chunk = kk / block;
             match groups.iter_mut().find(|(c, _)| *c == chunk) {
@@ -1226,7 +1332,7 @@ fn dot(
             (Some(scale), Some((sa, sb))) => Some(block_scales(ir, lane, &scale, sa, sb, h, e)),
             _ => None,
         };
-        let mut terms = vec![decode(ir, d.ctype, c, "i32")?];
+        let mut terms = vec![decode_flags(ir, d.ctype, c, "i32", flags)?];
         for (chunk, products) in &groups {
             let sum = fixed_sum(ir, products, range);
             terms.push(match &factors {
@@ -1237,7 +1343,11 @@ fn dot(
                 None => sum,
             });
         }
-        exact_sum(ir, &terms, d.dtype)
+        let special = match factors {
+            None => Some((d, a, b, c)),
+            Some(_) => None,
+        };
+        exact_sum(ir, &terms, d.dtype, special)
     } else if let (Some(scale), Some((sa, sb))) = (d.block_scale, scales) {
         let (sa, sb) = block_scales(ir, lane, &scale, sa, sb, h, e);
         let block = d.k / scale.chunks;
@@ -1250,7 +1360,7 @@ fn dot(
             let s = product(ir, &sa[chunk], &sb[chunk]);
             terms.push(product(ir, &p, &s));
         }
-        exact_sum(ir, &terms, d.dtype)
+        exact_sum(ir, &terms, d.dtype, None)
     } else if d.atype.is_float() {
         float_dot(ir, d, a, b, c)
     } else {
@@ -1415,70 +1525,74 @@ fn sparse_tile(
 // The elements of D of an f64 mma, computed in a loop over the elements:
 // unrolled, the exact sums of the elements take more registers than the
 // hardware has.
-fn f64_elements_loop(
+fn elements_loop(
     ir: &mut Ir,
     d: &ast::MmaDetails,
     lc: &Layout,
-    a: &[Vec<String>],
-    b: &[Vec<String>],
     c: &[String],
+    elements: &mut dyn FnMut(&mut Ir, &str, &str) -> Result<(Vec<String>, Vec<String>), TranslateError>,
+    value: &mut dyn FnMut(&mut Ir, &[String], &[String], &str) -> Result<String, TranslateError>,
 ) -> Result<Vec<String>, TranslateError> {
-    let k = d.k as usize;
     let nc = lc.row.len();
     for j in 0..nc {
         let (h, e) = if d.m == 16 { (j / 2, j % 2) } else { (0, j) };
         if (lc.row[j] / 8, lc.col[j]) != (h as u32, e as u32) {
-            return Err(todo("f64 accumulator layout"));
+            return Err(todo("accumulator layout"));
         }
     }
+    let cd_ty = bits_type(register_bits(d.dtype));
+    let c_ty = bits_type(register_bits(d.ctype));
     // value number j of the list
-    let pick = |ir: &mut Ir, values: &[String], j: &str| {
+    let pick = |ir: &mut Ir, values: &[String], j: &str, ty: &str| {
         let mut result = values[0].clone();
         for (i, v) in values.iter().enumerate().skip(1) {
             let is = ir.icmp("eq", "i32", j, &i.to_string());
-            result = ir.select(&is, "i64", v, &result);
+            result = ir.select(&is, ty, v, &result);
         }
         result
     };
     let id = ir.next;
-    let (head, exit) = (format!("f64_loop{id}"), format!("f64_done{id}"));
+    let (head, latch, exit) = (format!("mma_loop{id}"), format!("mma_latch{id}"), format!("mma_done{id}"));
     let before = ir.block.clone();
     ir.stmt(&format!("br label %{head}"));
     ir.label(&head);
-    let next = format!("%f64_next{id}");
-    let j = ir.def(&format!("phi i32 [ 0, %{before} ], [ {next}, %{head} ]"));
+    let next = format!("%mma_next{id}");
+    let j = ir.def(&format!("phi i32 [ 0, %{before} ], [ {next}, %{latch} ]"));
     // the elements of D computed so far, carried by the loop
-    let results = (0..nc).map(|i| format!("%f64_d{id}_{i}")).collect::<Vec<_>>();
+    let results = (0..nc).map(|i| format!("%mma_d{id}_{i}")).collect::<Vec<_>>();
     let previous = (0..nc)
-        .map(|i| ir.def(&format!("phi i64 [ 0, %{before} ], [ {}, %{head} ]", results[i])))
+        .map(|i| ir.def(&format!("phi {cd_ty} [ 0, %{before} ], [ {}, %{latch} ]", results[i])))
         .collect::<Vec<_>>();
     let (h, e) = if d.m == 16 {
         (ir.op("lshr", "i32", &j, "1"), ir.op("and", "i32", &j, "1"))
     } else {
         ("0".to_string(), j.clone())
     };
-    let mut av = Vec::new();
-    let mut bv = Vec::new();
-    for kk in 0..k {
-        let column = a.iter().map(|row| row[kk].clone()).collect::<Vec<_>>();
-        av.push(pick(ir, &column, &h));
-        let row = b.iter().map(|column| column[kk].clone()).collect::<Vec<_>>();
-        bv.push(pick(ir, &row, &e));
-    }
-    let ce = pick(ir, c.get(..nc).ok_or_else(|| todo("fragment size"))?, &j);
-    let value = float_dot(ir, d, &av, &bv, &ce)?;
+    let (av, bv) = elements(ir, &h, &e)?;
+    let ce = pick(ir, c.get(..nc).ok_or_else(|| todo("fragment size"))?, &j, c_ty);
+    let value = value(ir, &av, &bv, &ce)?;
     for i in 0..nc {
         let is = ir.icmp("eq", "i32", &j, &i.to_string());
         ir.stmt(&format!(
-            "{} = select i1 {is}, i64 {value}, i64 {}",
+            "{} = select i1 {is}, {cd_ty} {value}, {cd_ty} {}",
             results[i], previous[i]
         ));
     }
     ir.stmt(&format!("{next} = add i32 {j}, 1"));
     let more = ir.icmp("ult", "i32", &next, &nc.to_string());
-    ir.stmt(&format!("br i1 {more}, label %{head}, label %{exit}"));
+    ir.stmt(&format!("br i1 {more}, label %{latch}, label %{exit}"));
+    ir.label(&latch);
+    ir.stmt(&format!("br label %{head}"));
     ir.label(&exit);
     Ok(results)
+}
+
+fn bits_type(bits: u32) -> &'static str {
+    if bits == 64 {
+        "i64"
+    } else {
+        "i32"
+    }
 }
 
 // The scale factors of block scaled mma for row g + 8h of A and column
@@ -1627,6 +1741,7 @@ fn format(type_: ast::MmaType) -> Result<Format, TranslateError> {
 /// A decoded floating point value or product: (-1)^sign * mantissa *
 /// 2^exponent, of at most `width` significant bits; mantissa is 0 for zeros,
 /// infinities and NaNs.
+#[derive(Clone)]
 struct Term {
     sign: String,     // i1
     mantissa: String, // i64 or i128
@@ -1638,59 +1753,92 @@ struct Term {
     zero: String, // i1
 }
 
-fn decode(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result<Term, TranslateError> {
-    let f = format(type_)?;
-    let x = ir.cast("zext", raw_type, raw, "i64");
-    // the bits of the format in the container
+// The bits of a value of the format in its container, in i32 for the formats
+// of at most 16 bits (i64 otherwise: f32 and tf32 in i32 make the backend
+// miscompile the tcgen05.mma sums of PTX-formalization's tc-7).
+fn container_bits(ir: &mut Ir, type_: ast::MmaType, f: &Format, raw: &str, raw_type: &str) -> (String, &'static str) {
+    let w = if raw_type == "i32" && f.mantissa + f.exponent < 16 { "i32" } else { "i64" };
+    let x = ir.cast("zext", raw_type, raw, w);
     let x = match type_ {
-        ast::MmaType::Tf32 => ir.op("and", "i64", &x, &(!0x1fffu64 & 0xffff_ffff).to_string()),
-        ast::MmaType::E3m2 | ast::MmaType::E2m3 => ir.op("and", "i64", &x, "63"),
+        ast::MmaType::Tf32 => ir.op("and", w, &x, if w == "i32" { "-8192" } else { "4294959104" }),
+        ast::MmaType::E3m2 | ast::MmaType::E2m3 => ir.op("and", w, &x, "63"),
         // the central 4 bits of the 8-bit container
         ast::MmaType::E2m1 => {
-            let x = ir.op("lshr", "i64", &x, "2");
-            ir.op("and", "i64", &x, "15")
+            let x = ir.op("lshr", w, &x, "2");
+            ir.op("and", w, &x, "15")
         }
-        ast::MmaType::E2m1x2 => ir.op("and", "i64", &x, "15"),
+        ast::MmaType::E2m1x2 => ir.op("and", w, &x, "15"),
         _ => x,
     };
-    let frac = ir.op("and", "i64", &x, &((1u64 << f.mantissa) - 1).to_string());
-    let e = ir.op("lshr", "i64", &x, &f.mantissa.to_string());
+    (x, w)
+}
+
+// Whether a value is a NaN or an infinity.
+fn is_special(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result<String, TranslateError> {
+    let f = format(type_)?;
+    let (x, w) = container_bits(ir, type_, &f, raw, raw_type);
+    Ok(match f.specials {
+        Specials::Ieee => {
+            let e = (((1u64 << f.exponent) - 1) << f.mantissa).to_string();
+            let bits = ir.op("and", w, &x, &e);
+            ir.icmp("eq", w, &bits, &e)
+        }
+        Specials::E4m3 => {
+            let low = ir.op("and", w, &x, "127");
+            ir.icmp("eq", w, &low, "127")
+        }
+        Specials::None => "false".to_string(),
+    })
+}
+
+fn decode(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result<Term, TranslateError> {
+    decode_flags(ir, type_, raw, raw_type, true)
+}
+
+// Without `flags`, NaNs and infinities are decoded as finite values and the
+// flags are false (for sums whose special values come from `special_dot`).
+fn decode_flags(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str, flags: bool) -> Result<Term, TranslateError> {
+    let f = format(type_)?;
+    let (x, w) = container_bits(ir, type_, &f, raw, raw_type);
+    let frac = ir.op("and", w, &x, &((1u64 << f.mantissa) - 1).to_string());
+    let e = ir.op("lshr", w, &x, &f.mantissa.to_string());
     let e_mask = (1u64 << f.exponent) - 1;
-    let e = ir.op("and", "i64", &e, &e_mask.to_string());
-    let s = ir.op("lshr", "i64", &x, &(f.mantissa + f.exponent).to_string());
-    let sign = ir.cast("trunc", "i64", &s, "i1");
-    let e_zero = ir.icmp("eq", "i64", &e, "0");
-    let hidden = ir.op("or", "i64", &frac, &(1u64 << f.mantissa).to_string());
-    let mantissa = ir.select(&e_zero, "i64", &frac, &hidden);
-    let e_adj = ir.select(&e_zero, "i64", "1", &e);
-    let e_adj = ir.cast("trunc", "i64", &e_adj, "i32");
+    let e = ir.op("and", w, &e, &e_mask.to_string());
+    let s = ir.op("lshr", w, &x, &(f.mantissa + f.exponent).to_string());
+    let sign = ir.cast("trunc", w, &s, "i1");
+    let e_zero = ir.icmp("eq", w, &e, "0");
+    let hidden = ir.op("or", w, &frac, &(1u64 << f.mantissa).to_string());
+    let mantissa = ir.select(&e_zero, w, &frac, &hidden);
+    let e_adj = ir.select(&e_zero, w, "1", &e);
+    let e_adj = ir.cast("trunc", w, &e_adj, "i32");
     let bias = (1u32 << (f.exponent - 1)) - 1;
     let exponent = ir.op("sub", "i32", &e_adj, &(bias + f.mantissa).to_string());
     let (nan, inf) = match f.specials {
         Specials::Ieee => {
-            let special = ir.icmp("eq", "i64", &e, &e_mask.to_string());
-            let frac_zero = ir.icmp("eq", "i64", &frac, "0");
-            let frac_nonzero = ir.icmp("ne", "i64", &frac, "0");
+            let special = ir.icmp("eq", w, &e, &e_mask.to_string());
+            let frac_zero = ir.icmp("eq", w, &frac, "0");
+            let frac_nonzero = ir.icmp("ne", w, &frac, "0");
             (
                 ir.op("and", "i1", &special, &frac_nonzero),
                 ir.op("and", "i1", &special, &frac_zero),
             )
         }
         Specials::E4m3 => {
-            let low = ir.op("and", "i64", &x, "127");
-            (ir.icmp("eq", "i64", &low, "127"), "false".to_string())
+            let low = ir.op("and", w, &x, "127");
+            (ir.icmp("eq", w, &low, "127"), "false".to_string())
         }
         Specials::None => ("false".to_string(), "false".to_string()),
     };
+    let (nan, inf) = if flags { (nan, inf) } else { ("false".to_string(), "false".to_string()) };
     let special = ir.op("or", "i1", &nan, &inf);
-    let mantissa = ir.select(&special, "i64", "0", &mantissa);
-    let zero0 = ir.icmp("eq", "i64", &mantissa, "0");
+    let mantissa = ir.select(&special, w, "0", &mantissa);
+    let zero0 = ir.icmp("eq", w, &mantissa, "0");
     let not_special = ir.op("xor", "i1", &special, "true");
     let zero = ir.op("and", "i1", &zero0, &not_special);
     Ok(Term {
         sign,
         mantissa,
-        mantissa_type: "i64",
+        mantissa_type: w,
         exponent,
         width: f.mantissa + 1,
         nan,
@@ -1701,9 +1849,14 @@ fn decode(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result
 
 fn product(ir: &mut Ir, a: &Term, b: &Term) -> Term {
     let width = a.width + b.width;
-    let ty = if width <= 64 { "i64" } else { "i128" };
-    let x = ir.cast("zext", a.mantissa_type, &a.mantissa, ty);
-    let y = ir.cast("zext", b.mantissa_type, &b.mantissa, ty);
+    let ty = if width <= 32 { "i32" } else if width <= 64 { "i64" } else { "i128" };
+    // (a mantissa held in a wider type than its width needs is truncated)
+    let resize = |ir: &mut Ir, t: &Term| {
+        let op = if type_bits(t.mantissa_type) > type_bits(ty) { "trunc" } else { "zext" };
+        ir.cast(op, t.mantissa_type, &t.mantissa, ty)
+    };
+    let x = resize(ir, a);
+    let y = resize(ir, b);
     let mantissa = ir.op("mul", ty, &x, &y);
     let sign = ir.op("xor", "i1", &a.sign, &b.sign);
     let exponent = ir.op("add", "i32", &a.exponent, &b.exponent);
@@ -1737,13 +1890,71 @@ fn type_bits(ty: &str) -> u32 {
 fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> Result<String, TranslateError> {
     let ab_ty = if register_bits(d.atype) == 64 { "i64" } else { "i32" };
     let c_ty = if register_bits(d.ctype) == 64 { "i64" } else { "i32" };
-    let mut terms = vec![decode(ir, d.ctype, c, c_ty)?];
+    let narrow = [d.atype, d.btype, d.ctype, d.dtype].iter().all(|t| register_bits(*t) <= 32);
+    let mut terms = vec![decode_flags(ir, d.ctype, c, c_ty, !narrow)?];
     for (x, y) in a.iter().zip(b) {
-        let x = decode(ir, d.atype, x, ab_ty)?;
-        let y = decode(ir, d.btype, y, ab_ty)?;
+        let x = decode_flags(ir, d.atype, x, ab_ty, !narrow)?;
+        let y = decode_flags(ir, d.btype, y, ab_ty, !narrow)?;
         terms.push(product(ir, &x, &y));
     }
-    exact_sum(ir, &terms, d.dtype)
+    let special = if narrow { Some((d, a, b, c)) } else { None };
+    exact_sum(ir, &terms, d.dtype, special)
+}
+
+// A float whose infinities, NaN and zero sign are those of the value: +-1 for
+// the other finite values, so that sums of products of a few of them stay
+// exact and finite.
+// (From the magnitude bits rather than the fields of `decode`, which then need
+// not be kept for it.)
+fn special_value(ir: &mut Ir, type_: ast::MmaType, raw: &str, raw_type: &str) -> Result<String, TranslateError> {
+    let f = format(type_)?;
+    let (x, w) = container_bits(ir, type_, &f, raw, raw_type);
+    let bits = f.mantissa + f.exponent;
+    let magnitude = ir.op("and", w, &x, &((1u64 << bits) - 1).to_string());
+    let (nan, inf) = match f.specials {
+        Specials::Ieee => {
+            let inf = (((1u64 << f.exponent) - 1) << f.mantissa).to_string();
+            (ir.icmp("ugt", w, &magnitude, &inf), ir.icmp("eq", w, &magnitude, &inf))
+        }
+        Specials::E4m3 => (ir.icmp("eq", w, &magnitude, "127"), "false".to_string()),
+        Specials::None => ("false".to_string(), "false".to_string()),
+    };
+    let zero = ir.icmp("eq", w, &magnitude, "0");
+    let v = ir.select(&zero, "i32", "0", "1065353216");
+    let v = ir.select(&inf, "i32", "2139095040", &v);
+    let v = ir.select(&nan, "i32", "2143289344", &v);
+    let s = ir.op("lshr", w, &x, &bits.to_string());
+    let s = ir.cast("trunc", w, &s, "i1");
+    let s = ir.select(&s, "i32", "-2147483648", "0");
+    let v = ir.op("or", "i32", &v, &s);
+    Ok(ir.cast("bitcast", "i32", &v, "float"))
+}
+
+// The special values of the exact dot product of `float_dot` (a NaN, an
+// infinity or the sign of a zero), from the products of `special_value`s in
+// floating point: inf * 0 and inf - inf are NaN, NaN propagates.
+fn special_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> Result<String, TranslateError> {
+    ir.declarations.insert("declare float @llvm.fma.f32(float, float, float)".to_string());
+    let guard = ir.special_guard.clone();
+    let id = ir.next;
+    let (before, slow, join) = (ir.block.clone(), format!("special{id}"), format!("special_done{id}"));
+    if let Some(g) = &guard {
+        ir.stmt(&format!("br i1 {g}, label %{slow}, label %{join}"));
+        ir.label(&slow);
+    }
+    let mut s = special_value(ir, d.ctype, c, "i32")?;
+    for (x, y) in a.iter().zip(b) {
+        let x = special_value(ir, d.atype, x, "i32")?;
+        let y = special_value(ir, d.btype, y, "i32")?;
+        s = ir.def(&format!("call float @llvm.fma.f32(float {x}, float {y}, float {s})"));
+    }
+    if guard.is_some() {
+        let end = ir.block.clone();
+        ir.stmt(&format!("br label %{join}"));
+        ir.label(&join);
+        s = ir.def(&format!("phi float [ 0.0, %{before} ], [ {s}, %{end} ]"));
+    }
+    Ok(s)
 }
 
 // The exponents of the least significant bit of the non-zero finite values
@@ -1766,18 +1977,42 @@ fn fixed_sum(ir: &mut Ir, products: &[Term], range: (i32, i32)) -> Term {
     let carries = 32 - (products.len() as u32).leading_zeros();
     let bits = (range.1 - range.0) as u32 + width + carries + 1;
     let ty = if bits <= 64 { "i64" } else { "i128" };
+    // With narrow products, the sum is made of i64 bands of 32 bits: each
+    // signed product is shifted by less than 32 into the band of its shift.
+    let bands = ((range.1 - range.0) as u32 + 32) / 32;
+    let banded = width + carries <= 31 && products.iter().all(|p| p.mantissa_type == "i32") && bands <= 3;
+    let mut band_sums = vec!["0".to_string(); bands as usize];
     let mut sum = "0".to_string();
     let mut nan = "false".to_string();
     let (mut plus_inf, mut minus_inf) = ("false".to_string(), "false".to_string());
     let (mut all_zero, mut all_negative) = ("true".to_string(), "true".to_string());
     for p in products {
         let shift = ir.op("sub", "i32", &p.exponent, &range.0.to_string());
-        let shift = ir.cast("zext", "i32", &shift, ty);
-        let m = ir.cast("zext", p.mantissa_type, &p.mantissa, ty);
-        let v = ir.op("shl", ty, &m, &shift);
-        let plus = ir.op("add", ty, &sum, &v);
-        let minus = ir.op("sub", ty, &sum, &v);
-        sum = ir.select(&p.sign, ty, &minus, &plus);
+        if banded {
+            let negated = ir.op("sub", "i32", "0", &p.mantissa);
+            let signed = ir.select(&p.sign, "i32", &negated, &p.mantissa);
+            let signed = ir.cast("sext", "i32", &signed, "i64");
+            let r = ir.op("and", "i32", &shift, "31");
+            let r = ir.cast("zext", "i32", &r, "i64");
+            let v = ir.op("shl", "i64", &signed, &r);
+            let q = ir.op("lshr", "i32", &shift, "5");
+            for (i, band) in band_sums.iter_mut().enumerate() {
+                let v = if bands == 1 {
+                    v.clone()
+                } else {
+                    let here = ir.icmp("eq", "i32", &q, &i.to_string());
+                    ir.select(&here, "i64", &v, "0")
+                };
+                *band = ir.op("add", "i64", band, &v);
+            }
+        } else {
+            let shift = ir.cast("zext", "i32", &shift, ty);
+            let m = ir.cast("zext", p.mantissa_type, &p.mantissa, ty);
+            let v = ir.op("shl", ty, &m, &shift);
+            let plus = ir.op("add", ty, &sum, &v);
+            let minus = ir.op("sub", ty, &sum, &v);
+            sum = ir.select(&p.sign, ty, &minus, &plus);
+        }
         nan = ir.op("or", "i1", &nan, &p.nan);
         let positive = ir.op("xor", "i1", &p.sign, "true");
         let pi = ir.op("and", "i1", &p.inf, &positive);
@@ -1786,6 +2021,13 @@ fn fixed_sum(ir: &mut Ir, products: &[Term], range: (i32, i32)) -> Term {
         minus_inf = ir.op("or", "i1", &minus_inf, &mi);
         all_zero = ir.op("and", "i1", &all_zero, &p.zero);
         all_negative = ir.op("and", "i1", &all_negative, &p.sign);
+    }
+    if banded {
+        for (i, band) in band_sums.iter().enumerate() {
+            let b = ir.cast("sext", "i64", band, ty);
+            let b = if i == 0 { b } else { ir.op("shl", ty, &b, &(32 * i).to_string()) };
+            sum = ir.op("add", ty, &sum, &b);
+        }
     }
     let negative = ir.icmp("slt", ty, &sum, "0");
     let negated = ir.op("sub", ty, "0", &sum);
@@ -1811,9 +2053,14 @@ fn fixed_sum(ir: &mut Ir, products: &[Term], range: (i32, i32)) -> Term {
     }
 }
 
+/// The operands of a dot product: its types, the elements of A and B and C.
+type SpecialInputs<'a> = (&'a ast::MmaDetails, &'a [String], &'a [String], &'a str);
+
 /// The sum of the terms, rounded once to nearest even into `type_`, as raw
-/// bits in an i32 (i64 for `f64`).
-fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType) -> Result<String, TranslateError> {
+/// bits in an i32 (i64 for `f64`). With `special`, the operands of the dot
+/// product, `special_dot` gives the NaN, infinite and zero results instead of
+/// the flags of the terms (computed last: it needs few registers).
+fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType, special: Option<SpecialInputs>) -> Result<String, TranslateError> {
     let f = format(type_)?;
     let wide = terms.iter().any(|t| t.width > 100);
     // The accumulator is made of 128-bit limbs (least significant first).
@@ -1830,7 +2077,52 @@ fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType) -> Result<String,
     }
     let base = ir.op("sub", "i32", &tmax, &(n - 8).to_string());
     let mut acc = vec!["0".to_string(); limbs];
-    for term in terms {
+    // Narrow terms are summed in four i64 bands of 32 bits of the window: a
+    // signed term shifted by less than 32 into the band of its shift.
+    let carries = 32 - (terms.len() as u32).leading_zeros();
+    let width = terms.iter().map(|t| t.width).max().unwrap_or(1);
+    let banded = limbs == 1 && width + carries <= 31 && terms.iter().all(|t| t.mantissa_type != "i128");
+    if banded {
+        let mut bands = vec!["0".to_string(); 4];
+        for term in terms {
+            let mantissa = ir.cast("trunc", term.mantissa_type, &term.mantissa, "i32");
+            let term = &Term { mantissa, mantissa_type: "i32", ..term.clone() };
+            let sh = ir.op("sub", "i32", &term.exponent, &base);
+            let positive = ir.icmp("sge", "i32", &sh, "0");
+            // below the window, the bits shifted out become a sticky bit
+            let right_amount = ir.op("sub", "i32", "0", &sh);
+            let all_out = ir.icmp("uge", "i32", &right_amount, "32");
+            let right_amount = ir.intrinsic("umin", "i32", &[&right_amount, "31"]);
+            let right = ir.op("lshr", "i32", &term.mantissa, &right_amount);
+            let right = ir.select(&all_out, "i32", "0", &right);
+            let shifted_back = ir.op("shl", "i32", &right, &right_amount);
+            let lost = ir.icmp("ne", "i32", &shifted_back, &term.mantissa);
+            let lost = ir.cast("zext", "i1", &lost, "i32");
+            let right = ir.op("or", "i32", &right, &lost);
+            let value = ir.select(&positive, "i32", &term.mantissa, &right);
+            let negated = ir.op("sub", "i32", "0", &value);
+            let value = ir.select(&term.sign, "i32", &negated, &value);
+            let value = ir.cast("sext", "i32", &value, "i64");
+            let left = ir.select(&positive, "i32", &sh, "0");
+            let r = ir.op("and", "i32", &left, "31");
+            let r = ir.cast("zext", "i32", &r, "i64");
+            let v = ir.op("shl", "i64", &value, &r);
+            let q = ir.op("lshr", "i32", &left, "5");
+            for (i, band) in bands.iter_mut().enumerate() {
+                let here = ir.icmp("eq", "i32", &q, &i.to_string());
+                let v = ir.select(&here, "i64", &v, "0");
+                *band = ir.op("add", "i64", band, &v);
+            }
+        }
+        let mut sum = "0".to_string();
+        for (i, band) in bands.iter().enumerate() {
+            let b = ir.cast("sext", "i64", band, "i128");
+            let b = if i == 0 { b } else { ir.op("shl", "i128", &b, &(32 * i).to_string()) };
+            sum = ir.op("add", "i128", &sum, &b);
+        }
+        acc[0] = sum;
+    }
+    for term in terms.iter().filter(|_| !banded) {
         let p = type_bits(term.mantissa_type);
         let sh = ir.op("sub", "i32", &term.exponent, &base);
         let positive = ir.icmp("sge", "i32", &sh, "0");
@@ -1915,6 +2207,26 @@ fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType) -> Result<String,
         minus_inf = ir.op("or", "i1", &minus_inf, &mi);
     }
     let is_zero = all_zero;
+    let inf = ((1u64 << f.exponent) - 1) << f.mantissa;
+    let sign_bit = 1u64 << (f.mantissa + f.exponent);
+    if let Some((d, a, b, c)) = special {
+        let s = special_dot(ir, d, a, b, c)?;
+        let raw = ir.cast("bitcast", "float", &s, "i32");
+        let negative_zero = ir.icmp("eq", "i32", &raw, "-2147483648");
+        let sign = ir.select(&is_zero, "i1", &negative_zero, &negative);
+        let bits = ir.def(&format!(
+            "call i64 @__zluda_ptx_impl_agx_round_pack(i1 {sign}, i64 {top}, i1 {sticky}, i32 {e}, i32 {}, i32 {})",
+            f.mantissa, f.exponent
+        ));
+        let magnitude = ir.op("and", "i32", &raw, "2147483647");
+        let is_inf = ir.icmp("eq", "i32", &magnitude, "2139095040");
+        let is_nan = ir.icmp("ugt", "i32", &magnitude, "2139095040");
+        let minus = ir.icmp("slt", "i32", &raw, "0");
+        let signed_inf = ir.select(&minus, "i64", &(inf | sign_bit).to_string(), &inf.to_string());
+        let result = ir.select(&is_inf, "i64", &signed_inf, &bits);
+        let result = ir.select(&is_nan, "i64", &(sign_bit - 1).to_string(), &result);
+        return Ok(ir.cast("trunc", "i64", &result, "i32"));
+    }
     let sign = ir.select(&is_zero, "i1", &negative_zero, &negative);
     let bits = ir.def(&format!(
         "call i64 @__zluda_ptx_impl_agx_round_pack(i1 {sign}, i64 {top}, i1 {sticky}, i32 {e}, i32 {}, i32 {})",
@@ -1922,8 +2234,6 @@ fn exact_sum(ir: &mut Ir, terms: &[Term], type_: ast::MmaType) -> Result<String,
     ));
     let both_inf = ir.op("and", "i1", &plus_inf, &minus_inf);
     let nan = ir.op("or", "i1", &nan, &both_inf);
-    let inf = ((1u64 << f.exponent) - 1) << f.mantissa;
-    let sign_bit = 1u64 << (f.mantissa + f.exponent);
     let result = ir.select(&minus_inf, "i64", &(inf | sign_bit).to_string(), &bits);
     let result = ir.select(&plus_inf, "i64", &inf.to_string(), &result);
     let result = ir.select(&nan, "i64", &(sign_bit - 1).to_string(), &result);
@@ -2767,7 +3077,7 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
                 let p = product(ir, &x, &y);
                 terms.push(scaled(ir, p, kk));
             }
-            results.push(exact_sum(ir, &terms, dtype)?);
+            results.push(exact_sum(ir, &terms, dtype, None)?);
         }
         if block_scaled {
             results[1].clone()
