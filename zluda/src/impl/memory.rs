@@ -339,3 +339,10 @@ pub(crate) unsafe fn copy_dto_d_v2(
 pub(crate) unsafe fn copy_3d_v2(memcpy: HIP_MEMCPY3D) -> hipError_t {
     hipDrvMemcpy3D(&memcpy)
 }
+
+pub(crate) unsafe fn alloc_host_v2(
+    pp: *mut *mut ::core::ffi::c_void,
+    bytesize: usize,
+) -> hipError_t {
+    hipHostMalloc(pp, bytesize, 0)
+}
