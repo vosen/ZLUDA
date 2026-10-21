@@ -8,8 +8,11 @@
     %m = memref.reinterpret_cast %m0 to offset: [0], sizes: [%big], strides: [1]
         : memref<1xIXT, 1> to memref<?xIXT, strided<[1]>, 1>
     %r = memref.load %m[%k] : memref<?xIXT, strided<[1]>, 1>
-    %b = arith.index_cast %r : IXT to index
-    %v = arith.subi %b, %base : index
+    // In the index type (indices are at least the base): with int32 indices
+    // the extended difference folds into the accesses it addresses.
+    %bt = arith.index_cast %base : index to IXT
+    %d = arith.subi %r, %bt : IXT
+    %v = arith.index_cast %d : IXT to index
     return %v : index
   }
   func.func private @agx_sp_six_IX(%m0: memref<1xIXT, 1>, %k: index, %v: index, %base: index) {
