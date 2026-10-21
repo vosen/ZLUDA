@@ -1754,10 +1754,9 @@ struct Term {
 }
 
 // The bits of a value of the format in its container, in i32 for the formats
-// of at most 16 bits (i64 otherwise: f32 and tf32 in i32 make the backend
-// miscompile the tcgen05.mma sums of PTX-formalization's tc-7).
+// that fit (i64 otherwise).
 fn container_bits(ir: &mut Ir, type_: ast::MmaType, f: &Format, raw: &str, raw_type: &str) -> (String, &'static str) {
-    let w = if raw_type == "i32" && f.mantissa + f.exponent < 16 { "i32" } else { "i64" };
+    let w = if raw_type == "i32" && f.mantissa + f.exponent < 32 { "i32" } else { "i64" };
     let x = ir.cast("zext", raw_type, raw, w);
     let x = match type_ {
         ast::MmaType::Tf32 => ir.op("and", w, &x, if w == "i32" { "-8192" } else { "4294959104" }),
