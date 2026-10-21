@@ -1023,6 +1023,103 @@ def case_dnn_convert(a, obj, tmp, kind, rnd):
     return bad[:4]
 
 
+def pw_ref(mode, x, b, t, p0, p1, p2):
+    """cuDNN's pointwise modes (zluda_dnn_agx's graph API)."""
+    sig = lambda v: 1 / (1 + math.exp(-v))
+    erf = math.erf
+    k = math.sqrt(2 / math.pi)
+    def gelu_tanh_d(v):
+        u = k * (v + 0.044715 * v ** 3)
+        th = math.tanh(u)
+        return 0.5 * (1 + th) + 0.5 * v * (1 - th * th) * k * (1 + 3 * 0.044715 * v * v)
+    f = {
+        0: lambda: x + b, 1: lambda: x * b, 2: lambda: min(x, b), 3: lambda: max(x, b), 4: lambda: math.sqrt(x),
+        5: lambda: x + b * b, 6: lambda: x / b, 7: lambda: math.fmod(x, b), 8: lambda: x ** b, 9: lambda: x - b,
+        10: lambda: abs(x), 11: lambda: math.ceil(x), 12: lambda: math.cos(x), 13: lambda: math.exp(x),
+        14: lambda: math.floor(x), 15: lambda: math.log(x), 16: lambda: -x, 17: lambda: 1 / math.sqrt(x),
+        18: lambda: math.sin(x), 19: lambda: math.tan(x), 20: lambda: erf(x), 21: lambda: x, 22: lambda: 1 / x,
+        100: lambda: p0 + p2 * (x - p0) if x <= p0 else (p1 if x >= p1 else x), 101: lambda: math.tanh(x),
+        102: lambda: sig(x), 103: lambda: x if x > 0 else p0 * math.expm1(x), 104: lambda: 0.5 * x * (1 + erf(x / math.sqrt(2))),
+        105: lambda: math.log1p(math.exp(p0 * x)) / p0, 106: lambda: x * sig(p0 * x),
+        107: lambda: 0.5 * x * (1 + math.tanh(k * (x + 0.044715 * x ** 3))),
+        200: lambda: b * (p2 if x <= p0 else (0.0 if x >= p1 else 1.0)), 201: lambda: b * (1 - math.tanh(x) ** 2),
+        202: lambda: b * sig(x) * (1 - sig(x)), 203: lambda: b * (1.0 if x > 0 else p0 * math.exp(x)),
+        204: lambda: b * (0.5 * (1 + erf(x / math.sqrt(2))) + x * math.exp(-x * x / 2) / math.sqrt(2 * math.pi)),
+        205: lambda: b * sig(p0 * x), 206: lambda: b * (sig(p0 * x) + p0 * x * sig(p0 * x) * (1 - sig(p0 * x))),
+        207: lambda: b * gelu_tanh_d(x),
+        300: lambda: float(x == b), 301: lambda: float(x != b), 302: lambda: float(x > b), 303: lambda: float(x >= b),
+        304: lambda: float(x < b), 305: lambda: float(x <= b), 400: lambda: float(x != 0 and b != 0),
+        401: lambda: float(x != 0 or b != 0), 402: lambda: float(x == 0), 601: lambda: x if t != 0 else b,
+    }
+    return f[mode]()
+
+
+PW_MODES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 100, 101, 102, 103, 104, 105, 106,
+            107, 200, 201, 202, 203, 204, 205, 206, 207, 300, 301, 302, 303, 304, 305, 400, 401, 402, 601]
+
+
+def case_pw_graph(a, obj, tmp, modes, rnd):
+    N, C, H, W = 2, 3, 2, 3
+    total = N * C * H * W
+    positive = {4, 8, 15, 17}
+    bad = []
+    for mode in modes:
+        lo = 0.1 if mode in positive else -2.5
+        xs = rounded([rnd.uniform(lo, 2.5) for _ in range(total)], "f")
+        if mode >= 100 and mode not in (105, 205):
+            xs[3] = 0.0
+        bc = rounded([rnd.uniform(0.5, 2.0) * rnd.choice((-1, 1)) for _ in range(C)], "f")  # b broadcast over channels
+        if mode in (300, 301, 302, 303, 304, 305):
+            bc[0] = xs[0]
+        ts = [float(i % 2) for i in range(total)]
+        p0, p1, p2 = (-0.5, 1.5, 0.1) if mode in (100, 200) else (1.3, 0.0, 0.0)
+        alpha1, alpha2 = 1.0, 1.0
+        ys = (C * H * W, H * W, W, 1)
+        (got,) = run(a, obj, "agx_dnn_pw_graph", [("buf", pack(xs, "f")), ("buf", pack(bc, "f")), ("buf", pack(ts, "f")),
+                                                  ("buf", pack([7.0] * total, "f"), True), ("i64", total), ("i64", C), ("i64", H), ("i64", W)] +
+                     [("i64", v) for v in ys] + [("i64", 0), ("i64", 1), ("i64", 0), ("i64", 0)] + [("i64", v) for v in ys] +
+                     [("i64", v) for v in ys] + [("i64", mode), ("f32", p0), ("f32", p1), ("f32", p2), ("f32", alpha1), ("f32", alpha2)],
+                     grid1(total), (32, 1), tmp)
+        got = unpack(got, "f")
+        for i in range(total):
+            c = i // (H * W) % C
+            want = pw_ref(mode, xs[i], bc[c], ts[i], f32_(p0), f32_(p1), f32_(p2))
+            if not (abs(got[i] - want) <= 2e-5 * (1 + abs(want))) and not (math.isinf(want) and got[i] == want):
+                bad.append("mode %d at %d (x %r b %r): %r want %r" % (mode, i, xs[i], bc[c], got[i], want))
+                break
+    return bad[:6]
+
+
+def f32_(v):
+    return struct.unpack("<f", struct.pack("<f", v))[0]
+
+
+def case_reduce_graph(a, obj, tmp, op, rnd):
+    N, C, H, W = 2, 3, 4, 5
+    xs = rounded([rnd.uniform(-2, 2) for _ in range(N * C * H * W)], "f")
+    xs[5] = 0.0
+    xst = (C * H * W, H * W, W, 1)
+    bad = []
+    # reduce over C and W, then over everything
+    for yd in ((N, 1, H, 1), (1, 1, 1, 1)):
+        e = [N if yd[0] == 1 else 1, C if yd[1] == 1 else 1, H if yd[2] == 1 else 1, W if yd[3] == 1 else 1]
+        ytot = yd[0] * yd[1] * yd[2] * yd[3]
+        yst = (yd[1] * yd[2] * yd[3], yd[2] * yd[3], yd[3], 1)
+        (got,) = run(a, obj, "agx_dnn_reduce_graph", [("buf", pack(xs, "f")), ("buf", pack([9.0] * ytot, "f"), True), ("i64", ytot),
+                                                      ("i64", yd[1]), ("i64", yd[2]), ("i64", yd[3])] + [("i64", v) for v in xst] +
+                     [("i64", v) for v in yst] + [("i64", v) for v in e] + [("i64", op)], grid1(ytot), (32, 1), tmp)
+        got = unpack(got, "f")
+        for j in range(ytot):
+            n, c, h, w = j // (yd[1] * yd[2] * yd[3]), j // (yd[2] * yd[3]) % yd[1], j // yd[3] % yd[2], j % yd[3]
+            vals = [xs[(n + dn) * xst[0] + (c + dc) * xst[1] + (h + dh) * xst[2] + (w + dw) * xst[3]]
+                    for dn in range(e[0]) for dc in range(e[1]) for dh in range(e[2]) for dw in range(e[3])]
+            want = [sum(vals), math.prod(vals), min(vals), max(vals), max(abs(v) for v in vals), sum(vals) / len(vals),
+                    sum(abs(v) for v in vals), math.sqrt(sum(v * v for v in vals)), math.prod(v for v in vals if v != 0)][op]
+            if not abs(got[j] - want) <= 1e-4 * (1 + abs(want)):
+                bad.append("op %d y %s at %d: %r want %r" % (op, yd, j, got[j], want))
+    return bad[:4]
+
+
 def blas_pos(i, n, inc):
     return i * inc if inc >= 0 else (n - 1 - i) * -inc
 
@@ -1925,6 +2022,11 @@ def main():
                                           lambda m=mode, b=bwd, be=beta: case_act(a, obj, tmp, m, b, be, rnd)))
                 for kind in (0, 1):
                     cases.append(("dnn convert %s" % ("f16", "bf16")[kind], lambda k=kind: case_dnn_convert(a, obj, tmp, k, rnd)))
+                for start in range(0, len(PW_MODES), 8):
+                    modes = PW_MODES[start:start + 8]
+                    cases.append(("dnn graph pointwise %d-%d" % (modes[0], modes[-1]), lambda m=modes: case_pw_graph(a, obj, tmp, m, rnd)))
+                for op in range(9):
+                    cases.append(("dnn graph reduction op %d" % op, lambda o=op: case_reduce_graph(a, obj, tmp, o, rnd)))
                 for op, label in ((0, "add bias"), (1, "set"), (2, "scale")):
                     cases.append(("dnn %s" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd)))
                 for inst in (0, 1):
