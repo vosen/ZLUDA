@@ -582,9 +582,10 @@ PTX-formalization):
 * `.ftz` with `.sat` flushes a negative subnormal result to -0 before
   saturating, so it gives -0 where the model gives +0;
 * `min.ftz.f32` of a negative and a positive subnormal gives +0, not -0;
-* `atom.add.f32` returns the canonical NaN, not the operand's payload. These
-  last two wait on hardware answers (AGX-Performance-Simulator
-  `tasks/ptx-re-blockers.md`, B3 and B11).
+* `atom.add.f32` stores and returns 0x7fc00000 for every NaN result, not the
+  operand's payload: the M2 Max's native float atomic add does
+  (AGX-Performance-Simulator `tasks/ptx-re-blockers.md`, B24). `min.ftz.f32`
+  waits on B11.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated
