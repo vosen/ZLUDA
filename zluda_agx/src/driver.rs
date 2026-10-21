@@ -58,7 +58,57 @@ pub(crate) struct Driver {
     /// An error that makes the context unusable until it is destroyed, as in CUDA: a failed device assert
     /// (CUDA_ERROR_ASSERT). Every call returns it meanwhile.
     sticky: Option<CUerror>,
+    /// The launches whose commands have not been seen to finish, oldest first: what a failed command was.
+    launches: std::collections::VecDeque<LaunchRecord>,
 }
+
+/// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
+#[derive(Clone, Debug)]
+pub(crate) struct LaunchRecord {
+    pub fence: Fence,
+    pub stream: usize,
+    pub module: usize,
+    pub kernel: String,
+    pub grid: [u32; 3],
+    pub block: [u32; 3],
+    pub shared: u32,
+    pub params: Vec<Vec<u8>>,
+}
+
+impl LaunchRecord {
+    pub fn describe(&self) -> String {
+        let args: Vec<String> = self
+            .params
+            .iter()
+            .map(|p| match p.len() {
+                8 => format!("{:#x}", u64::from_le_bytes(p[..].try_into().unwrap())),
+                4 => format!("{:#x}", u32::from_le_bytes(p[..].try_into().unwrap())),
+                _ => p.iter().map(|b| format!("{b:02x}")).collect(),
+            })
+            .collect();
+        format!(
+            "kernel {} grid ({}, {}, {}) block ({}, {}, {}) shared {} bytes, stream {}, command {}, arguments [{}]",
+            self.kernel,
+            self.grid[0],
+            self.grid[1],
+            self.grid[2],
+            self.block[0],
+            self.block[1],
+            self.block[2],
+            self.shared,
+            self.stream,
+            self.fence.point,
+            args.join(", ")
+        )
+    }
+}
+
+fn drop_finished(launches: &mut std::collections::VecDeque<LaunchRecord>, syncobj: u32, point: u64) {
+    launches.retain(|r| !(r.fence.syncobj == syncobj && r.fence.point <= point));
+}
+
+/// At most this many launch records are kept; older ones are dropped.
+const MAX_LAUNCH_RECORDS: usize = 1024;
 
 fn stream_key(s: CUstream) -> usize {
     if (s.0 as usize) <= 2 {
@@ -109,10 +159,42 @@ impl Driver {
             (&mut s.queue, &mut s.waits)
         };
         let w = std::mem::take(waits);
-        modules[&m]
+        let fence = modules[&m]
             .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &w)
-            .map(|_| ())
-            .map_err(from_io)
+            .map_err(from_io)?;
+        if self.launches.len() == MAX_LAUNCH_RECORDS {
+            self.launches.pop_front();
+        }
+        self.launches.push_back(LaunchRecord {
+            fence,
+            stream: sh,
+            module: m,
+            kernel: name,
+            grid,
+            block,
+            shared,
+            params: args.iter().map(|a| a.to_vec()).collect(),
+        });
+        Ok(())
+    }
+
+    /// The CUDA error of a failed wait on the queue whose timeline is `syncobj`. A failed command is reported with
+    /// its launch record, and makes the context unusable (sticky), as in CUDA.
+    fn failed(&mut self, syncobj: u32, e: io::Error) -> CUerror {
+        let code = err(error::cuda_error(&e));
+        if let Some(point) = e.get_ref().and_then(|i| i.downcast_ref::<error::GpuError>()).and_then(|g| g.point) {
+            match self.launches.iter().find(|r| r.fence.syncobj == syncobj && r.fence.point == point) {
+                Some(r) => eprintln!("zluda_agx: {e}: {}", r.describe()),
+                None => eprintln!("zluda_agx: {e}: command {point}"),
+            }
+            self.sticky.get_or_insert(code);
+        }
+        code
+    }
+
+    /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
+    fn finished(&mut self, syncobj: u32, point: u64) {
+        drop_finished(&mut self.launches, syncobj, point);
     }
 
     fn run(&mut self, op: &Op, sh: usize) -> CUresult {
@@ -221,9 +303,19 @@ impl Driver {
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
-        self.ctx.stream.synchronize().map_err(from_io)?;
-        for s in self.streams.values_mut() {
-            s.queue.synchronize().map_err(from_io)?;
+        let last = self.ctx.stream.last();
+        if let Err(e) = self.ctx.stream.synchronize() {
+            return Err(self.failed(last.syncobj, e));
+        }
+        self.finished(last.syncobj, last.point);
+        let keys: Vec<usize> = self.streams.keys().copied().collect();
+        for k in keys {
+            let q = &mut self.streams.get_mut(&k).unwrap().queue;
+            let last = q.last();
+            if let Err(e) = q.synchronize() {
+                return Err(self.failed(last.syncobj, e));
+            }
+            self.finished(last.syncobj, last.point);
         }
         self.after_sync()
     }
@@ -392,6 +484,7 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
             host_allocs: HashMap::new(),
             managed: Default::default(),
             sticky: None,
+            launches: Default::default(),
         });
     }
     Ok(())
@@ -883,13 +976,25 @@ pub(crate) unsafe fn cuStreamCreate(ph: *mut CUstream, _flags: c_uint) -> CUresu
 pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
     with(|d| {
         let mut st = d.streams.remove(&(s.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
-        st.queue.synchronize().map_err(from_io)
+        let last = st.queue.last();
+        match st.queue.synchronize() {
+            Ok(()) => {
+                d.finished(last.syncobj, last.point);
+                Ok(())
+            }
+            Err(e) => Err(d.failed(last.syncobj, e)),
+        }
     })
 }
 
 pub(crate) unsafe fn cuStreamSynchronize(s: CUstream) -> CUresult {
     with(|d| {
-        d.queue(s.0 as usize)?.0.synchronize().map_err(from_io)?;
+        let q = d.queue(s.0 as usize)?.0;
+        let last = q.last();
+        if let Err(e) = q.synchronize() {
+            return Err(d.failed(last.syncobj, e));
+        }
+        d.finished(last.syncobj, last.point);
         d.after_sync()
     })
 }
@@ -946,7 +1051,10 @@ pub(crate) unsafe fn cuEventSynchronize(e: CUevent) -> CUresult {
         if let Some((s, fence)) = ev.fence {
             let q = d.queue(s)?.0;
             let timeout = q.timeout;
-            q.wait(fence, timeout).map_err(from_io)?;
+            if let Err(e) = q.wait(fence, timeout) {
+                return Err(d.failed(fence.syncobj, e));
+            }
+            d.finished(fence.syncobj, fence.point);
         }
         d.after_sync()
     })
@@ -1862,6 +1970,36 @@ pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, add
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn record(syncobj: u32, point: u64) -> LaunchRecord {
+        LaunchRecord {
+            fence: Fence { syncobj, point },
+            stream: 0,
+            module: 1,
+            kernel: "saxpy".into(),
+            grid: [4, 1, 1],
+            block: [256, 1, 1],
+            shared: 0,
+            params: vec![0x1100_0000_0040u64.to_le_bytes().to_vec(), 7u32.to_le_bytes().to_vec(), vec![1, 2, 3]],
+        }
+    }
+
+    #[test]
+    fn launch_records_describe_the_task() {
+        assert_eq!(
+            record(5, 9).describe(),
+            "kernel saxpy grid (4, 1, 1) block (256, 1, 1) shared 0 bytes, stream 0, command 9, arguments \
+             [0x110000000040, 0x7, 010203]"
+        );
+    }
+
+    #[test]
+    fn finished_launches_are_dropped_per_queue() {
+        let mut l: std::collections::VecDeque<_> = [record(5, 1), record(5, 2), record(6, 1), record(5, 3)].into();
+        drop_finished(&mut l, 5, 2);
+        let left: Vec<_> = l.iter().map(|r| (r.fence.syncobj, r.fence.point)).collect();
+        assert_eq!(left, vec![(6, 1), (5, 3)]);
+    }
 
     #[test]
     fn a_failed_assert_stays_until_the_context_is_destroyed() {

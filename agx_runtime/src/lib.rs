@@ -558,6 +558,13 @@ pub struct Timing {
 /// Number of commands whose timestamps a queue keeps.
 pub const TIMESTAMP_SLOTS: u64 = PAGE / 16;
 
+/// The oldest command in (verified, upto] whose timestamps say it faulted, of those whose timestamp slot is still
+/// theirs (the last `TIMESTAMP_SLOTS` of `submitted`).
+fn first_faulted(verified: u64, upto: u64, submitted: u64, timing: impl Fn(u64) -> Option<(u64, u64)>) -> Option<u64> {
+    let first = (verified + 1).max(submitted.saturating_sub(TIMESTAMP_SLOTS - 1)).max(1);
+    (first..=upto).find(|&p| timing(p).is_some_and(job_faulted))
+}
+
 /// Whether the timestamps of a signalled command say it faulted: the firmware writes none for a faulted command.
 fn job_faulted((start, end): (u64, u64)) -> bool {
     start == 0 && end == 0
@@ -584,6 +591,8 @@ pub struct Queue {
     pub timeout: Duration,
     /// Objects the GPU may still read, freed once their fence has signalled.
     in_flight: std::collections::VecDeque<(u64, Vec<Bo>)>,
+    /// The last point whose timestamps were checked for a fault (`wait`).
+    verified: std::cell::Cell<u64>,
     /// Rings for the per-launch objects: data (uniforms, control streams, parameter blocks) and USC (pipeline
     /// words). A launch costs no buffer object creation, mapping or binding.
     data_ring: (Bo, ring::RingAlloc),
@@ -641,6 +650,7 @@ impl Queue {
             ts_handle: bind.object_handle,
             timeout: Duration::from_secs(3),
             in_flight: Default::default(),
+            verified: Default::default(),
             data_ring: (vm.alloc_data(DATA_RING_BYTES)?, ring::RingAlloc::new(DATA_RING_BYTES)),
             usc_ring: (vm.alloc_usc(USC_RING_BYTES)?, ring::RingAlloc::new(USC_RING_BYTES)),
         })
@@ -725,12 +735,19 @@ impl Queue {
         self.dev.ioctl(DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT, &mut wait, "syncobj-wait")?;
         let status = self.fence_status(fence)?;
         if status < 0 {
-            return Err(io::Error::other(error::GpuError { fence_status: status }));
+            return Err(io::Error::other(error::GpuError { fence_status: status, point: Some(fence.point) }));
         }
         // The firmware signals a faulted compute command with success but writes neither of its timestamps (the slot
-        // was zeroed at submit), so a command that ended at time 0 failed.
-        if self.timing(fence).is_some_and(job_faulted) {
-            return Err(io::Error::other(error::GpuError { fence_status: -libc::EFAULT }));
+        // was zeroed at submit), so a command that ended at time 0 failed. Every command of the queue up to `fence` has
+        // finished, so all of them are checked, oldest first; commands whose slot was reused are not.
+        if fence.syncobj == self.timeline {
+            let faulted = first_faulted(self.verified.get(), fence.point, self.submitted, |p| {
+                self.timing(Fence { syncobj: self.timeline, point: p })
+            });
+            self.verified.set(self.verified.get().max(fence.point));
+            if let Some(point) = faulted {
+                return Err(io::Error::other(error::GpuError { fence_status: -libc::EFAULT, point: Some(point) }));
+            }
         }
         Ok(())
     }
@@ -880,10 +897,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_fault_before_the_last_command_is_found() {
+        // commands 1..=5 finished; 3 faulted
+        let t = |p: u64| Some(if p == 3 { (0, 0) } else { (10 * p, 10 * p + 5) });
+        assert_eq!(first_faulted(0, 5, 5, t), Some(3));
+        // already verified past it: not reported twice
+        assert_eq!(first_faulted(3, 5, 5, t), None);
+        // the oldest fault is the one reported
+        let t2 = |p: u64| Some(if p == 2 || p == 4 { (0, 0) } else { (1, 2) });
+        assert_eq!(first_faulted(0, 5, 5, t2), Some(2));
+        // only the commands whose slots are still theirs are checked
+        let n = TIMESTAMP_SLOTS + 10;
+        assert_eq!(first_faulted(0, n, n, |p| Some(if p == 5 { (0, 0) } else { (1, 2) })), None);
+        assert_eq!(first_faulted(0, n, n, |p| Some(if p == n - 3 { (0, 0) } else { (1, 2) })), Some(n - 3));
+        // waiting for an earlier fence checks only up to it
+        assert_eq!(first_faulted(0, 2, 5, t), None);
+    }
+
+    #[test]
     fn unstamped_commands_faulted() {
         assert!(job_faulted((0, 0)));
         assert!(!job_faulted((5, 9)));
-        let e = io::Error::other(error::GpuError { fence_status: -libc::EFAULT });
+        let e = io::Error::other(error::GpuError { fence_status: -libc::EFAULT, point: None });
         assert_eq!(error::cuda_error(&e), 719);
     }
 
