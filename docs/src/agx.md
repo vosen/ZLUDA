@@ -698,7 +698,7 @@ Simulator:
 - `replay.sh`, which runs the launch in `agx_run` (`$AGX_RUN` or `agx_run` on the `PATH`) with the same uniforms,
   grid and threadgroup memory, and leaves each region's final contents in `m<i>.out`.
 
-Kernels that use stack memory are noted in `replay.sh`; `agx_run` does not set up scratch memory as the driver does.
+Kernels that use stack memory replay too: `agx_run` gives each thread its own stack, as the driver's scratch memory does (the stack size is noted in `replay.sh`).
 
 ## Checking against PTX-formalization
 
