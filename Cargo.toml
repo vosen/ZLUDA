@@ -49,6 +49,7 @@ members = [
     "zluda_sparse_agx",
     "zluda_rand_agx",
     "zluda_solver_agx",
+    "zluda_rtc_agx",
     "zluda_precompile",
     "zluda_redirect",
     "zluda_server_common",

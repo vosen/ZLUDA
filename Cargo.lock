@@ -5382,6 +5382,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "zluda_rtc_agx"
+version = "0.0.0"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "zluda_server_common"
 version = "0.0.0"
 dependencies = [
