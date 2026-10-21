@@ -47,6 +47,12 @@ pub struct Options {
     /// same GPU (M1 and M2 only); any other is an error
     agx_strict: bool,
 
+    #[bpaf(long("agx-checked"))]
+    /// AGX: check every memory access (bounds, null, alignment) and report
+    /// the first bad one with its source location; the runtime must pass the
+    /// checked-mode arguments (ZLUDA_AGX_CHECKED=1). Slower
+    agx_checked: bool,
+
     #[bpaf(positional("filename"), some("a PTX file"))]
     /// PTX files. AGX links several into one object (their kernels and
     /// functions, as cuLink does); the outputs are named after the first
@@ -104,6 +110,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.ignore_errors,
             opts.strict_fp,
             opts.agx_strict,
+            opts.agx_checked,
         );
     }
 
@@ -189,8 +196,9 @@ fn compile_agx(
     ignore_errors: bool,
     strict_fp: bool,
     agx_strict: bool,
+    checked: bool,
 ) -> Result<(), CompilerError> {
-    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict };
+    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
@@ -249,6 +257,7 @@ fn compile_agx(
     _ignore_errors: bool,
     _strict_fp: bool,
     _agx_strict: bool,
+    _checked: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,

@@ -1038,6 +1038,8 @@ pub struct LoadedModule {
     /// USC offset of each kernel's copy in `code`.
     entries: std::collections::HashMap<String, u32>,
     globals: Option<Bo>,
+    /// The error record of the module's checked kernels (zeroed; the first bad access fills it).
+    record: Option<Bo>,
 }
 
 impl LoadedModule {
@@ -1066,7 +1068,38 @@ impl LoadedModule {
             g.as_mut_slice()[..init.len()].copy_from_slice(&init);
             Some(g)
         };
-        Ok(LoadedModule { module, code, entries, globals })
+        let record = if module.kernels.values().any(|k| k.checked.is_some()) {
+            let mut r = vm.alloc_data(module::CHECKED_RECORD_BYTES)?;
+            r.as_mut_slice()[..module::CHECKED_RECORD_BYTES as usize].fill(0);
+            Some(r)
+        } else {
+            None
+        };
+        Ok(LoadedModule { module, code, entries, globals, record })
+    }
+
+    /// Whether the module has kernels built in checked mode.
+    pub fn checked(&self) -> bool {
+        self.record.is_some()
+    }
+
+    /// The bad access a checked kernel of the module reported, if any. Call it after the launches have finished.
+    /// The record stays set, and every later checked launch of the module returns at once, until
+    /// `reset_checked`.
+    pub fn checked_error(&self) -> Option<module::CheckedError> {
+        let r = self.record.as_ref()?;
+        let sites = self.module.global_symbols.get(module::CHECKED_SITES_SYMBOL).map_or(String::new(), |&(off, size)| {
+            let t = self.globals().get(off as usize..(off + size) as usize).unwrap_or_default();
+            String::from_utf8_lossy(&t[..t.iter().position(|&c| c == 0).unwrap_or(t.len())]).into_owned()
+        });
+        module::CheckedError::decode(&r.as_slice()[..module::CHECKED_RECORD_BYTES as usize], &sites)
+    }
+
+    /// Clears the error record (a new context).
+    pub fn reset_checked(&mut self) {
+        if let Some(r) = self.record.as_mut() {
+            r.as_mut_slice()[..module::CHECKED_RECORD_BYTES as usize].fill(0);
+        }
     }
 
     /// The current contents of the global data buffer (device variables).
@@ -1154,7 +1187,9 @@ impl LoadedModule {
 
     /// `launch_async` with the bytes of each source-level argument, as cuLaunchKernel's `kernelParams` point to
     /// them. Needs a module whose object has `.agx.kernels`. Arguments the kernel reads through a pointer are
-    /// copied to a parameter block that lives until the launch has finished.
+    /// copied to a parameter block that lives until the launch has finished. For a checked kernel, `bounds` holds
+    /// the `[lo, hi)` range of the allocation each of its checked pointers (`module::checked_pointers`) points
+    /// into; it is empty otherwise.
     pub fn launch_params_async(
         &self,
         vm: &mut Vm,
@@ -1165,6 +1200,7 @@ impl LoadedModule {
         threadgroups: [u32; 3],
         local: [u32; 3],
         dynamic_shared: u32,
+        bounds: &[(u64, u64)],
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         queue.collect()?;
@@ -1176,6 +1212,11 @@ impl LoadedModule {
             // the pointers in the uniforms depend on where the block lands
             let va = queue.stage(RingKind::Data, &block, 16)?;
             halves = module::pack_params(k, params, threadgroups, self.globals_va(), va).map_err(|e| invalid(e.to_string()))?.0;
+        }
+        if k.checked.is_some() {
+            let record = self.record.as_ref().map_or(0, |r| r.va);
+            module::pack_checked(k, &mut halves, record, k.threadgroup_bytes + dynamic_shared, bounds)
+                .map_err(|e| invalid(e.to_string()))?;
         }
         self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
     }

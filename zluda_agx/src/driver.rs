@@ -60,6 +60,9 @@ pub(crate) struct Driver {
     sticky: Option<CUerror>,
     /// The launches whose commands have not been seen to finish, oldest first: what a failed command was.
     launches: std::collections::VecDeque<LaunchRecord>,
+    /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
+    /// followed: the launches a reported bad access may come from.
+    checked_launches: HashMap<(usize, String), (String, u32)>,
 }
 
 /// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
@@ -150,6 +153,13 @@ impl Driver {
         if (0..3).any(|i| grid[i] % k.cluster[i] != 0) {
             return Err(CUerror::INVALID_CLUSTER_SIZE);
         }
+        let bounds = match k.checked {
+            Some(_) => {
+                let pointers = module::checked_pointers(k, args).map_err(|_| CUerror::INVALID_VALUE)?;
+                pointers.iter().map(|&p| self.allocation_bounds(p)).collect()
+            }
+            None => Vec::new(),
+        };
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
         let (queue, waits) = if sh <= 2 {
@@ -160,12 +170,12 @@ impl Driver {
         };
         let w = std::mem::take(waits);
         let fence = modules[&m]
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &w)
+            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &w)
             .map_err(from_io)?;
         if self.launches.len() == MAX_LAUNCH_RECORDS {
             self.launches.pop_front();
         }
-        self.launches.push_back(LaunchRecord {
+        let record = LaunchRecord {
             fence,
             stream: sh,
             module: m,
@@ -174,8 +184,26 @@ impl Driver {
             block,
             shared,
             params: args.iter().map(|a| a.to_vec()).collect(),
-        });
+        };
+        if self.modules[&m].module.kernels[&record.kernel].checked.is_some() {
+            self.checked_launches.entry((m, record.kernel.clone())).or_insert_with(|| (record.describe(), 0)).1 += 1;
+        }
+        self.launches.push_back(record);
         Ok(())
+    }
+
+    /// `[lo, hi)` of the allocation `p` points into, for a checked kernel's bounds: device memory, or a module's
+    /// global data buffer (`cuModuleGetGlobal`); `lo = hi = p` (every access fails) if it points into neither.
+    fn allocation_bounds(&self, p: u64) -> (u64, u64) {
+        if let Some((start, size)) = self.ctx.address_range(p) {
+            return (start, start + size);
+        }
+        for m in self.modules.values() {
+            if let Some(va) = m.globals_va().filter(|&va| p >= va && p < va + m.globals().len() as u64) {
+                return (va, va + m.globals().len() as u64);
+            }
+        }
+        (p, p)
     }
 
     /// The CUDA error of a failed wait on the queue whose timeline is `syncobj`. A failed command is reported with
@@ -287,7 +315,7 @@ impl Driver {
     /// Prints the device printf output of every module and reports a failed device assert.
     fn after_sync(&mut self) -> Result<(), CUerror> {
         let mut failed = false;
-        for m in self.modules.values_mut() {
+        for (h, m) in self.modules.iter_mut() {
             if let Some(out) = m.drain_printf(|a| self.ctx.read_c_string(a)) {
                 use std::io::Write;
                 let mut so = std::io::stdout().lock();
@@ -298,7 +326,18 @@ impl Driver {
                 let _ = so.flush();
             }
             failed |= m.take_assert_failure();
+            if let Some(e) = m.checked_error().filter(|_| self.sticky.is_none()) {
+                eprintln!("zluda_agx: {e}");
+                if let Some((first, n)) = self.checked_launches.get(&(*h, site_kernel(&e.site_text).to_string())) {
+                    match n {
+                        1 => eprintln!("  in {first}"),
+                        _ => eprintln!("  in one of {n} launches since the last synchronisation, the first {first}"),
+                    }
+                }
+                self.sticky = Some(if e.misaligned() { CUerror::MISALIGNED_ADDRESS } else { CUerror::ILLEGAL_ADDRESS });
+            }
         }
+        self.checked_launches.clear();
         sticky_after_sync(&mut self.sticky, failed)
     }
 
@@ -319,6 +358,11 @@ impl Driver {
         }
         self.after_sync()
     }
+}
+
+/// The kernel of a check site: the function of its outermost frame (`<access> <size>\t<function> ...`).
+fn site_kernel(site_text: &str) -> &str {
+    site_text.split('\t').skip(1).last().and_then(|f| f.split(' ').next()).unwrap_or_default()
 }
 
 /// The result of a synchronisation: a failed device assert makes CUDA_ERROR_ASSERT sticky.
@@ -352,6 +396,12 @@ pub(crate) fn agx_strict() -> bool {
     std::env::var("ZLUDA_AGX_STRICT").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// `ZLUDA_AGX_CHECKED=1`: check every memory access of the kernels and report the first bad one with its source
+/// location (zoc --agx-checked), as compute-sanitizer's memcheck does.
+pub(crate) fn agx_checked() -> bool {
+    std::env::var("ZLUDA_AGX_CHECKED").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
     compile_ptx_linked(&[ptx], cpu)
@@ -382,6 +432,10 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if mesa {
         options.push("agx-strict");
     }
+    let checked = agx_checked();
+    if checked {
+        options.push("agx-checked");
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -394,6 +448,7 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         let out = std::process::Command::new(&zoc)
             .args(["--target", "agx", "--arch", cpu])
             .args(mesa.then_some("--agx-strict"))
+            .args(checked.then_some("--agx-checked"))
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -485,6 +540,7 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
             managed: Default::default(),
             sticky: None,
             launches: Default::default(),
+            checked_launches: Default::default(),
         });
     }
     Ok(())
@@ -603,6 +659,7 @@ pub(crate) unsafe fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult {
     with_sticky(|d| {
         let r = d.sync_all();
         d.sticky = None;
+        d.modules.values_mut().for_each(|m| m.reset_checked());
         r.or_else(|e| if e == CUerror::ASSERT { Ok(()) } else { Err(e) })
     })
 }
@@ -703,9 +760,13 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             &unpacked[..unpacked.len() - 1]
         } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
             // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
-            // "+agx-strict" build
+            // "+agx-strict" build, in checked mode its "+agx-checked" one
             let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
-            let entry = if agx_strict() { format!("{cpu}+agx-strict") } else { cpu.clone() };
+            let entry = format!(
+                "{cpu}{}{}",
+                if agx_strict() { "+agx-strict" } else { "" },
+                if agx_checked() { "+agx-checked" } else { "" }
+            );
             module::fat_object_entry(fat, &entry).map_err(|e| {
                 if crate::log_enabled() {
                     eprintln!("[zluda_agx] {}", e.0);
@@ -1999,6 +2060,13 @@ mod tests {
         drop_finished(&mut l, 5, 2);
         let left: Vec<_> = l.iter().map(|r| (r.fence.syncobj, r.fence.point)).collect();
         assert_eq!(left, vec![(6, 1), (5, 3)]);
+    }
+
+    #[test]
+    fn a_check_site_names_its_kernel() {
+        assert_eq!(site_kernel("store 4\toob"), "oob");
+        assert_eq!(site_kernel("load 8\tget a.cu:3:5\tk a.cu:9:1"), "k");
+        assert_eq!(site_kernel(""), "");
     }
 
     #[test]

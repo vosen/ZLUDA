@@ -47,6 +47,10 @@ pub const AGX_STRICT_FP_FEATURES: &CStr = c"+ieee-fp32,+canonical-nan";
 /// G14), and reports any other.
 pub const AGX_STRICT_FEATURE: &str = "+agx-strict";
 
+/// Target feature of checked mode: the backend checks the kernels' memory accesses and reports the first bad one
+/// in an error record the runtime passes (LLVM's AGXUsage.rst, "Checked mode").
+pub const AGX_CHECKED_FEATURE: &str = "+agx-checked";
+
 /// Code generation choices beyond the processor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AgxOptions {
@@ -54,6 +58,8 @@ pub struct AgxOptions {
     pub strict_fp: bool,
     /// Only instructions Mesa emits (`AGX_STRICT_FEATURE`).
     pub agx_strict: bool,
+    /// Check every memory access (`AGX_CHECKED_FEATURE`).
+    pub checked: bool,
 }
 
 impl AgxOptions {
@@ -65,6 +71,9 @@ impl AgxOptions {
         }
         if self.agx_strict {
             f.push(AGX_STRICT_FEATURE);
+        }
+        if self.checked {
+            f.push(AGX_CHECKED_FEATURE);
         }
         f.join(",")
     }
