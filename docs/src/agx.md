@@ -662,22 +662,25 @@ it came from:
 
 ```
 zluda_agx: out of bounds store of 4 bytes at 0x10000000080 by thread (32, 0, 0) of block (0, 0, 0)
-    at k
+    at k k.cu:42:7
   in kernel k grid (1, 1, 1) block (33, 1, 1) shared 0 bytes, stream 0, command 7, arguments [0x10000000000, ...]
 ```
 
 and the context is left with `CUDA_ERROR_ILLEGAL_ADDRESS` (`CUDA_ERROR_MISALIGNED_ADDRESS` for a misaligned access),
-returned by every call until `cuCtxDestroy`, which also clears the records. A site names the kernel and, for code with
-LLVM debug locations, the file, line and column of each inlined frame; ZLUDA does not turn PTX `.loc` into debug
-locations yet, so PTX sites name only the kernel. The mode is part of the compilation cache key; a library fat object
+returned by every call until `cuCtxDestroy`, which also clears the records. A site names the function, file, line and column
+of each frame, innermost (inlined) first, from the PTX `.file` and `.loc` directives (`nvcc -lineinfo` emits them),
+which checked mode turns into LLVM line-table debug locations; without them a site names only the kernel. The line
+information changes no code: the 194 PTX run tests annotated with a `.loc` before every instruction compile to the
+same machine code with and without it. The mode is part of the compilation cache key; a library fat object
 is used in its `CHIP+agx-checked` build if it has one and unchecked otherwise.
 
 Cost (agx-bench in the LLVM fork): about 1.5 times the estimated cycles and 5 times the code; most of it is a fixed part
 per kernel (the report and the entry check). Validation (simulator):
 `llvm/utils/agx-checked/zluda_tests.py` compiles PTX kernels with `zoc --agx-checked` on `agx-g14c` and on `agx-g13g`
 with `--agx-strict`, and checks that each bug is reported with the right kind, address, thread and block, that correct
-kernels report nothing and compute what their unchecked builds compute, and that unchecked builds miss the bugs (30
-cases and 7 controls pass). It is the `zchecked` stage of `llvm/utils/agx-mesa-isa/tools/check-all.sh`.
+kernels report nothing and compute what their unchecked builds compute, and that unchecked builds miss the bugs (32
+cases, among them a store inside an inlined `.func` reported as `put put.h:3:7` called from `k inl.cu:12:5`, and 7
+controls pass). It is the `zchecked` stage of `llvm/utils/agx-mesa-isa/tools/check-all.sh`.
 
 ### Fault dumps
 

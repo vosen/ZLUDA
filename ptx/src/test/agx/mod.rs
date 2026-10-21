@@ -229,3 +229,46 @@ fn dump_ir() {
         }
     }
 }
+
+/// With `debug_locations`, `.file` and `.loc` become line-table debug locations: each instruction carries the
+/// position of the last `.loc` before it, in a lexical block file when the file is not the first one. Without it
+/// they are dropped and the module has no debug info.
+#[test]
+fn loc_becomes_debug_locations() {
+    let ptx = r#"
+.version 7.0
+.target sm_70
+.address_size 64
+.file 1 "/work/k.cu"
+.file 2 "/work/k.h"
+.visible .entry k(.param .u64 out)
+{
+  .reg .b32 %r<2>;
+  .reg .b64 %rd<3>;
+  ld.param.u64 %rd1, [out];
+  .loc 1 7 5
+  mov.u32 %r1, %tid.x;
+  cvta.to.global.u64 %rd2, %rd1;
+  .loc 2 3 9
+  st.global.u32 [%rd2], %r1;
+  ret;
+}
+"#;
+    let translate = |debug_locations| {
+        let ast = ast::parse_module_checked(ptx).unwrap();
+        let options = pass::Options { target: Target::Agx, debug_locations, ..Default::default() };
+        let m = pass::to_llvm_module_with_options(ast, pass::Attributes { clock_rate: 1_398_000 }, options, |_| {}).unwrap();
+        m.llvm_ir.print_module_to_string().to_str().into_owned()
+    };
+    let ir = translate(true);
+    assert!(ir.contains(r#"!DIFile(filename: "k.cu", directory: "/work")"#), "{ir}");
+    assert!(ir.contains("emissionKind: LineTablesOnly"), "{ir}");
+    assert!(ir.contains("!DILocation(line: 7, column: 5, scope:"), "{ir}");
+    assert!(ir.contains("!DILocation(line: 3, column: 9, scope:"), "{ir}");
+    assert!(ir.contains(r#"!DILexicalBlockFile(scope:"#), "{ir}");
+    assert!(ir.contains(r#"!"Debug Info Version""#), "{ir}");
+    let store = ir.lines().find(|l| l.contains("store i32") && l.contains("addrspace(1)")).unwrap();
+    assert!(store.contains("!dbg"), "{store}");
+    let plain = translate(false);
+    assert!(!plain.contains("!dbg") && !plain.contains("DICompileUnit"), "{plain}");
+}

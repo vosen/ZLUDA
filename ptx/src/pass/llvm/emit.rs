@@ -69,15 +69,20 @@ pub(crate) fn run<'input>(
     fp_mode: FloatingPointMode,
     target: Target,
     strict_fp: bool,
+    files: &[(u32, String)],
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
     let mut emit_ctx =
         ModuleEmitContext::new(context, &module, &id_defs, fp_mode, target, strict_fp);
+    emit_ctx.debug = DebugInfo::new(context.get(), module.get(), files);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
+    }
+    if let Some(d) = emit_ctx.debug.take() {
+        d.finish();
     }
     if target == Target::Agx {
         super::super::agx_matrix::define_helpers(context, &module)?;
@@ -90,7 +95,108 @@ pub(crate) fn run<'input>(
     Ok(module)
 }
 
+/// Line tables from `.file` and `.loc`: a compile unit, a subprogram per function with a body, and the location of
+/// the last `.loc` on every instruction after it.
+struct DebugInfo {
+    context: LLVMContextRef,
+    module: LLVMModuleRef,
+    builder: LLVMDIBuilderRef,
+    unit_file: LLVMMetadataRef,
+    files: std::collections::HashMap<u32, LLVMMetadataRef>,
+    subroutine: LLVMMetadataRef,
+}
+
+impl DebugInfo {
+    fn new(context: LLVMContextRef, module: LLVMModuleRef, files: &[(u32, String)]) -> Option<DebugInfo> {
+        use llvm_zluda::debuginfo::*;
+        let (_, first) = files.first()?;
+        let builder = unsafe { LLVMCreateDIBuilder(module) };
+        let file = |name: &str| {
+            let (dir, base) = match name.rsplit_once('/') {
+                Some((d, b)) => (d, b),
+                None => ("", name),
+            };
+            unsafe { LLVMDIBuilderCreateFile(builder, base.as_ptr().cast(), base.len(), dir.as_ptr().cast(), dir.len()) }
+        };
+        let files: std::collections::HashMap<u32, LLVMMetadataRef> = files.iter().map(|(i, f)| (*i, file(f))).collect();
+        let unit_file = file(first);
+        let producer = "ZLUDA";
+        unsafe {
+            LLVMDIBuilderCreateCompileUnit(
+                builder,
+                LLVMDWARFSourceLanguage::LLVMDWARFSourceLanguageC_plus_plus,
+                unit_file,
+                producer.as_ptr().cast(),
+                producer.len(),
+                1,
+                ptr::null(),
+                0,
+                0,
+                ptr::null(),
+                0,
+                LLVMDWARFEmissionKind::LLVMDWARFEmissionKindLineTablesOnly,
+                0,
+                0,
+                0,
+                ptr::null(),
+                0,
+                ptr::null(),
+                0,
+            )
+        };
+        let subroutine = unsafe { LLVMDIBuilderCreateSubroutineType(builder, unit_file, ptr::null_mut(), 0, 0) };
+        Some(DebugInfo { context, module, builder, unit_file, files, subroutine })
+    }
+
+    /// Gives `function` a subprogram and returns it.
+    fn subprogram(&self, function: LLVMValueRef, name: &str) -> LLVMMetadataRef {
+        use llvm_zluda::debuginfo::*;
+        unsafe {
+            let sp = LLVMDIBuilderCreateFunction(
+                self.builder,
+                self.unit_file,
+                name.as_ptr().cast(),
+                name.len(),
+                name.as_ptr().cast(),
+                name.len(),
+                self.unit_file,
+                0,
+                self.subroutine,
+                0,
+                1,
+                0,
+                0,
+                1,
+            );
+            LLVMSetSubprogram(function, sp);
+            sp
+        }
+    }
+
+    /// The location of `.loc` in `subprogram`.
+    fn location(&self, subprogram: LLVMMetadataRef, loc: ast::DebugLoc) -> LLVMMetadataRef {
+        use llvm_zluda::debuginfo::*;
+        let scope = match self.files.get(&loc.file) {
+            Some(&f) if f != self.unit_file => unsafe { LLVMDIBuilderCreateLexicalBlockFile(self.builder, subprogram, f, 0) },
+            _ => subprogram,
+        };
+        unsafe { LLVMDIBuilderCreateDebugLocation(self.context, loc.line, loc.column, scope, ptr::null_mut()) }
+    }
+
+    fn finish(self) {
+        use llvm_zluda::debuginfo::*;
+        unsafe {
+            LLVMDIBuilderFinalize(self.builder);
+            LLVMDisposeDIBuilder(self.builder);
+            let version = LLVMValueAsMetadata(LLVMConstInt(LLVMInt32TypeInContext(self.context), LLVMDebugMetadataVersion() as u64, 0));
+            let key = "Debug Info Version";
+            LLVMAddModuleFlag(self.module, LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorWarning, key.as_ptr().cast(), key.len(), version);
+        }
+    }
+}
+
 struct ModuleEmitContext<'a, 'input> {
+    debug: Option<DebugInfo>,
     context: LLVMContextRef,
     module: LLVMModuleRef,
     builder: Builder,
@@ -111,6 +217,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         strict_fp: bool,
     ) -> Self {
         ModuleEmitContext {
+            debug: None,
             context: context.get(),
             module: module.get(),
             builder: Builder::new(context),
@@ -237,8 +344,15 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
+            // instructions before the first .loc are at line 0
+            let subprogram = self.debug.as_ref().map(|d| {
+                let sp = d.subprogram(fn_, name.to_str().unwrap_or(""));
+                let at = d.location(sp, ast::DebugLoc { file: u32::MAX, line: 0, column: 0 });
+                unsafe { LLVMSetCurrentDebugLocation2(self.builder.get(), at) };
+                sp
+            });
             let mut method_emitter =
-                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory, is_kernel);
+                MethodEmitContext::new(self, fn_, variables_builder, base_32bit_memory, is_kernel, subprogram);
             for var in method.return_arguments {
                 method_emitter.emit_variable(var)?;
             }
@@ -259,6 +373,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             }
             method_emitter.finish();
             unsafe { LLVMBuildBr(method_emitter.variables_builder.get(), real_bb) };
+            if subprogram.is_some() {
+                unsafe { LLVMSetCurrentDebugLocation2(self.builder.get(), ptr::null_mut()) };
+            }
         }
         Ok(())
     }
@@ -600,6 +717,8 @@ struct MethodEmitContext<'a> {
     target: Target,
     strict_fp: bool,
     stack: Option<PtxStack>,
+    /// The function's subprogram and the module's debug info, if `.loc` is kept.
+    debug: Option<(LLVMMetadataRef, &'a DebugInfo)>,
 }
 
 // The stack of alloca, stacksave and stackrestore: a private array (sized
@@ -620,6 +739,7 @@ impl<'a> MethodEmitContext<'a> {
         variables_builder: Builder,
         base_32bit_memory: Option<SpirvWord>,
         is_kernel: bool,
+        subprogram: Option<LLVMMetadataRef>,
     ) -> MethodEmitContext<'a> {
         let fp = FloatingPoint {
             context: parent.context,
@@ -641,6 +761,7 @@ impl<'a> MethodEmitContext<'a> {
             target: parent.target,
             strict_fp: parent.strict_fp,
             stack: None,
+            debug: subprogram.zip(parent.debug.as_ref()),
         }
     }
 
@@ -711,6 +832,11 @@ impl<'a> MethodEmitContext<'a> {
             Statement::FpSaturate { dst, src, type_ } => self.emit_fp_saturate(type_, dst, src)?,
             Statement::FpFlush { dst, src, type_ } => self.emit_fp_flush(type_, dst, src)?,
             Statement::FpModeRequired { .. } => {}
+            Statement::Loc(loc) => {
+                if let Some((sp, d)) = self.debug {
+                    unsafe { LLVMSetCurrentDebugLocation2(self.builder, d.location(sp, loc)) };
+                }
+            }
         })
     }
 

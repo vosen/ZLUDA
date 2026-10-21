@@ -98,6 +98,19 @@ pub struct Options {
     /// canonical NaNs in software, and `.sat` keeps `-0.0`. Slower; ignored
     /// for AMDGPU.
     pub strict_fp: bool,
+    /// Keep `.loc` as LLVM debug locations (line tables only), for the AGX
+    /// backend's checked mode to name the source of a bad access.
+    pub debug_locations: bool,
+}
+
+/// Drops the `.loc` statements of every function.
+fn drop_locs<P: ast::Operand>(statements: &mut Vec<ast::Statement<P>>) {
+    statements.retain(|s| !matches!(s, ast::Statement::Loc(_)));
+    for s in statements {
+        if let ast::Statement::Block(b) = s {
+            drop_locs(b);
+        }
+    }
 }
 
 pub fn to_llvm_module_for_target<'input>(
@@ -111,7 +124,7 @@ pub fn to_llvm_module_for_target<'input>(
         attributes,
         Options {
             target,
-            strict_fp: false,
+            ..Options::default()
         },
         on_pass_end,
     )
@@ -123,8 +136,17 @@ pub fn to_llvm_module_with_options<'input>(
     options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
-    let Options { target, strict_fp } = options;
+    let Options { target, strict_fp, debug_locations } = options;
     let strict_fp = strict_fp && target == Target::Agx;
+    let mut ast = ast;
+    if !debug_locations {
+        for d in ast.directives.iter_mut() {
+            if let ast::Directive::Method(_, ast::Function { body: Some(body), .. }) = d {
+                drop_locs(body);
+            }
+        }
+    }
+    let files = if debug_locations { ast.files.iter().map(|&(i, f)| (i, f.to_string())).collect() } else { Vec::new() };
     let sm_version = ast.sm_version;
     let mut flat_resolver = GlobalStringIdentResolver2::<'input>::new(SpirvWord(1));
     let mut scoped_resolver = ScopedResolver::new(&mut flat_resolver);
@@ -181,7 +203,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
     let llvm_ir =
-        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp)?;
+        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp, &files)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -621,6 +643,8 @@ enum Statement<I, P: ast::Operand> {
         src: SpirvWord,
         type_: ast::ScalarType,
     },
+    /// `.loc`: the source position of the statements that follow (kept only with `Options::debug_locations`)
+    Loc(ast::DebugLoc),
 }
 
 #[derive(Eq, PartialEq, Clone, Copy)]
@@ -949,6 +973,7 @@ impl<T: ast::Operand<Ident = SpirvWord>> Statement<ast::Instruction<T>, T> {
                 )?;
                 Statement::FpFlush { dst, src, type_ }
             }
+            Statement::Loc(loc) => Statement::Loc(loc),
             Statement::FpModeRequired {
                 ftz_f32,
                 rnd_f32,

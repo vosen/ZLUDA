@@ -137,7 +137,7 @@ fn main_core() -> Result<(), CompilerError> {
         ptx,
         ptx::Options {
             target,
-            strict_fp: false,
+            ..Default::default()
         },
     )?;
 
@@ -208,6 +208,8 @@ fn compile_agx(
         ptx::Options {
             target: ptx::Target::Agx,
             strict_fp,
+            // checked mode names the source of a bad access
+            debug_locations: checked,
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
@@ -221,6 +223,7 @@ fn compile_agx(
             ptx::Options {
                 target: ptx::Target::Agx,
                 strict_fp,
+                debug_locations: checked,
             },
         )?;
         other_ir.push(other.llvm_ir);

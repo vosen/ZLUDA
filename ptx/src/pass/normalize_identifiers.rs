@@ -156,6 +156,7 @@ fn run_statements<'input, 'b>(
                 run_statements(resolver, result, block)?;
                 resolver.end_scope();
             }
+            ast::Statement::Loc(loc) => result.push(Statement::Loc(loc)),
         }
     }
     Ok(())

@@ -115,6 +115,8 @@ struct PtxParserState<'a, 'input> {
         FxHashMap<&'input str, (Vec<(ast::Type, StateSpace)>, Vec<(ast::Type, StateSpace)>)>,
     // .branchtargets labels
     branch_targets: FxHashMap<&'input str, Vec<&'input str>>,
+    // .file directives: index and name
+    files: Vec<(u32, &'input str)>,
 }
 
 impl<'a, 'input> PtxParserState<'a, 'input> {
@@ -125,6 +127,7 @@ impl<'a, 'input> PtxParserState<'a, 'input> {
             function_declarations: FxHashMap::default(),
             call_prototypes: FxHashMap::default(),
             branch_targets: FxHashMap::default(),
+            files: Vec::new(),
         }
     }
 
@@ -556,6 +559,12 @@ pub fn parse_module_unchecked<'input>(text: &'input str) -> ast::Module<'input> 
 }
 
 fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
+    let mut m = module_body.parse_next(stream)?;
+    m.files = std::mem::take(&mut stream.state.files);
+    Ok(m)
+}
+
+fn module_body<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module<'input>> {
     trace(
         "module",
         (
@@ -573,6 +582,7 @@ fn module<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Module
                         address_size: address_size.unwrap_or(32),
                         directives: directives.into_iter().flatten().collect(),
                         invalid_directives,
+                        files: Vec::new(),
                     }
                 },
             ),
@@ -701,18 +711,22 @@ fn module_variable<'a, 'input>(
     Ok((linking, var))
 }
 
+// .file index "name" {, timestamp, size}
 fn file<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
-    trace(
+    let (index, name) = trace(
         "file",
         (
             Token::DotFile,
             u32,
-            Token::String,
+            token::any.verify_map(|(t, span): (Token<'input>, logos::Span)| matches!(t, Token::String).then_some(span)),
             opt((Token::Comma, u32, Token::Comma, u32)),
         )
-            .void(),
+            .map(|(_, index, name, _)| (index, name)),
     )
-    .parse_next(stream)
+    .parse_next(stream)?;
+    let name = stream.state.text.get(name).unwrap_or("").trim_matches('"');
+    stream.state.files.push((index, name));
+    Ok(())
 }
 
 fn section<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
@@ -937,7 +951,7 @@ fn statement<'a, 'input>(
         alt((
             call_target_directive.map(|_| None),
             label.map(Some),
-            debug_directive.map(|_| None),
+            debug_directive.map(|l| Some(Statement::Loc(l))),
             terminated(
                 method_space
                     .flat_map(|space| multi_variable(false, space))
@@ -1742,7 +1756,7 @@ fn label<'a, 'input>(
 }
 
 // .loc file line column {prologue_end} {, function_name label{+offset}} {, inlined_at file line column}
-fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
+fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::DebugLoc> {
     (
         Token::DotLoc,
         u32,
@@ -1760,7 +1774,7 @@ fn debug_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()
             ),
         ),
     )
-        .void()
+        .map(|(_, file, line, column, _, _)| ast::DebugLoc { file, line, column })
         .parse_next(stream)
 }
 
@@ -8468,6 +8482,28 @@ mod tests {
         let module = module.parse(stream).unwrap();
         assert_eq!(module.directives.len(), 1);
         assert_eq!(module.invalid_directives, 2);
+    }
+
+    #[test]
+    fn file_and_loc_are_kept() {
+        let text = "
+            .version 6.5
+            .target sm_30
+            .address_size 64
+            .file 1 \"/src/example.cu\", 1700000000, 1234
+            .file 2 \"example.h\"
+            .visible .entry func1()
+            {
+                .loc 2 14 3, function_name $L__info_string0, inlined_at 1 9 5
+                ret;
+            }";
+        let module = parse_module_checked(text).unwrap();
+        assert_eq!(module.files, [(1, "/src/example.cu"), (2, "example.h")]);
+        let crate::ast::Directive::Method(_, f) = &module.directives[0] else { panic!() };
+        assert!(matches!(
+            f.body.as_ref().unwrap()[0],
+            crate::ast::Statement::Loc(crate::ast::DebugLoc { file: 2, line: 14, column: 3 })
+        ));
     }
 
     #[test]
