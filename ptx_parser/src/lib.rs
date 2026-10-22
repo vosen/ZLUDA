@@ -2838,6 +2838,20 @@ fn take_mma_types(modifiers: &mut Vec<&str>) -> Option<[ast::MmaType; 4]> {
     }
 }
 
+fn take_rounding(modifiers: &mut Vec<&str>) -> Option<ast::RoundingMode> {
+    for (name, mode) in [
+        ("rn", ast::RoundingMode::NearestEven),
+        ("rz", ast::RoundingMode::Zero),
+        ("rm", ast::RoundingMode::NegativeInf),
+        ("rp", ast::RoundingMode::PositiveInf),
+    ] {
+        if take_modifier(modifiers, name) {
+            return Some(mode);
+        }
+    }
+    None
+}
+
 fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
     if !take_modifier(modifiers, "popc") {
         return None;
@@ -4259,6 +4273,7 @@ fn wgmma<'a, 'input>(
         b1_op,
         block_scale: None,
         sparse: selector,
+        rounding: None,
     };
     Ok(ast::Instruction::Wgmma {
         data: ast::WgmmaDetails {
@@ -4302,6 +4317,15 @@ fn mma<'a, 'input>(
     let Some([dtype, mut atype, mut btype, ctype]) = take_mma_types(&mut modifiers) else {
         return backtrack();
     };
+    // f64: the rounding of the fused multiply-adds
+    let rounding = if atype == ast::MmaType::F64 {
+        match take_rounding(&mut modifiers) {
+            Some(ast::RoundingMode::NearestEven) | None => None,
+            rounding => rounding,
+        }
+    } else {
+        None
+    };
     // fp4 elements are packed two per byte with kind::mxf4 and kind::mxf4nvf4
     if let Some((_, true)) = block_scale {
         for t in [&mut atype, &mut btype] {
@@ -4324,15 +4348,17 @@ fn mma<'a, 'input>(
         b1_op,
         block_scale: None,
         sparse: None,
+        rounding,
     };
     let supported = match (sparse, block_scale) {
         (true, block_scale) => data.is_supported_sparse(kind_f8f6f4, block_scale.as_ref().map(|(s, fp4)| (s, *fp4))),
         (false, None) => data.is_supported_mma(kind_f8f6f4),
         (false, Some((scale, fp4))) => data.is_supported_block_scale(&scale, fp4),
     };
+    // m8n8k4 with .f16 A and B takes every layout
+    let any_layout = (m, n, k) == (8, 8, 4) && atype == ast::MmaType::F16;
     if !modifiers.is_empty()
-        || alayout != ast::MatrixLayout::Row
-        || blayout != ast::MatrixLayout::Col
+        || (!any_layout && (alayout != ast::MatrixLayout::Row || blayout != ast::MatrixLayout::Col))
         || !supported
     {
         return backtrack();
@@ -4531,6 +4557,7 @@ fn wmma<'a, 'input>(
             b1_op,
             block_scale: None,
             sparse: None,
+            rounding: None,
         };
         if !modifiers.is_empty() || !data.is_supported_wmma() {
             return backtrack();

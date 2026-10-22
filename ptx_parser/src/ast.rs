@@ -4634,6 +4634,9 @@ pub struct MmaDetails {
     /// metadata operand their positions; the value is the sparsity selector
     /// (an immediate).
     pub sparse: Option<u32>,
+    /// The rounding of the fused multiply-adds of an `f64` mma (`None` for
+    /// `.rn`, the default).
+    pub rounding: Option<RoundingMode>,
 }
 
 impl MmaDetails {
@@ -4655,7 +4658,7 @@ impl MmaDetails {
             return shape == (16, 8, 32) && f8f6f4(a) && f8f6f4(b) && float_accumulator;
         }
         match (a, b) {
-            (F16, F16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && float_accumulator,
+            (F16, F16) => matches!(shape, (8, 8, 4) | (16, 8, 8) | (16, 8, 16)) && float_accumulator,
             (Bf16, Bf16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && c == F32 && d == F32,
             (Tf32, Tf32) => matches!(shape, (16, 8, 4) | (16, 8, 8)) && c == F32 && d == F32,
             (F64, F64) => {
@@ -4783,7 +4786,9 @@ impl MmaDetails {
         let register_bits = if type_ == MmaType::F64 { 64 } else { 32 };
         // half of the elements of a sparse A
         let sparsity = if self.sparse.is_some() && matrix == MmaMatrix::A { 2 } else { 1 };
-        (rows * cols / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
+        // m8n8k4 with f16 A and B: four products, one per quad pair
+        let products = if (self.m, self.n, self.k, self.atype) == (8, 8, 4, MmaType::F16) { 4 } else { 1 };
+        (rows * cols * products / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
     }
 
     /// Number of registers of a fragment of `wmma`, as given by the PTX ISA:
@@ -4913,6 +4918,7 @@ impl WmmaLoadStoreDetails {
             b1_op: None,
             block_scale: None,
             sparse: None,
+            rounding: None,
         }
     }
 

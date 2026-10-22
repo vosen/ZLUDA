@@ -341,16 +341,25 @@ inlined.
   the type of D, like the model of PTX-formalization (tensor cores round in
   implementation-defined ways, which PTX does not specify): the products and
   C are decoded into integer significands and exponents, added in a fixed
-  point accumulator of 120 bits below the top of the largest term (248 bits,
-  in two 128-bit limbs, for `f64`), normalized and rounded with denormals,
-  overflow to infinity and canonical NaNs. Terms that fall below the window
-  only contribute a sticky bit, so a sum is exact unless its terms span more
-  than about 100 bits (200 for `f64`) and cancel. The products of `f16`,
+  point accumulator of 120 bits below the top of the largest term,
+  normalized and rounded with denormals, overflow to infinity and canonical
+  NaNs. Terms that fall below the window only contribute a sticky bit, so a
+  sum is exact unless its terms span more than about 100 bits and cancel.
+* `f64` elements are what the PTX ISA specifies instead: the chain of `f64`
+  fused multiply-adds along k starting from C, rounded in the direction of
+  the instruction's `.rn`, `.rz`, `.rm` or `.rp`.
+* `mma.m8n8k4` with `f16` A and B is four independent 8x8x4 products, one
+  per quad pair (threads 4q to 4q + 3 and 4q + 16 to 4q + 19), with every
+  `.row`/`.col` layout of A and B and `f16` or `f32` C and D: each element of
+  D gathers its row of A, its column of B (and, when C and D have different
+  types and so different layouts, its element of C) from the quad pair with
+  SIMD-group shuffles. The products of `f16`,
   fp8, fp6 and fp4 elements have bounded exponents and are first summed in
   fixed point. An exact zero sum is -0 only if all terms are -0 (for `mma.sp`
   the omitted zeros of A are not counted).
 * Block scaled `mma` (`kind::mxf8f6f4`, `mxf4`, `mxf4nvf4`) multiplies each
-  block's sum exactly by its `ue8m0` or `ue4m3` scale factors; the
+  block's sum exactly by its `ue8m0` or `ue4m3` scale factors (NaN factors,
+  `ue8m0` 0xff and `ue4m3` 0x7f, make the products NaN); the
   `{byte-id, thread-id}` selectors must be immediates, and so must the
   sparsity selector of `mma.sp`.
 * `wmma` fragments, whose layout PTX leaves unspecified, are tiles of
@@ -365,15 +374,14 @@ inlined.
 
 The emulation is large: in instructions per thread (whole test kernels),
 130 for `ldmatrix.x2` with `stmatrix.x2`, 170 to 570 for 8-bit and 4-bit integer
-`mma`, 80 for `m8n8k128.b1`, 3,000 for `m8n8k4.f64`, 4,300 for
-`m16n8k4.tf32`, 6,600 for `m16n8k8.f32.f16`, 12,000 for `m16n8k16.f32.f16`,
-11,000 for `m16n8k16.f64` (whose elements are computed in a loop, unrolled
-they need more registers than the hardware has), 7,000 to 15,000 for fp8,
+`mma`, 80 for `m8n8k128.b1`, 4,300 for
+`m16n8k4.tf32`, 6,600 for `m16n8k8.f32.f16`, 12,000 for `m16n8k16.f32.f16`
+(the elements of `f64` mma are computed in a loop of software fused
+multiply-adds), 7,000 to 15,000 for fp8,
 10,000 to 20,000 for block scaled fp8 and fp4, and 23,000 for a
 `wmma.load`/`mma`/`store` of `m16n16k16.f32.f16`.
 
-Not supported: `mma.m8n8k4` with `f16` A and B (its four quad-pair
-products), `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
+Not supported: `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
 rounding mode other than `.rn`, and register selectors of block scaled and
 sparse `mma`.
 

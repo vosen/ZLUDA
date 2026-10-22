@@ -17,8 +17,10 @@
 //!   shuffles and the columns of B with SIMD-group shuffles, then computes its
 //!   elements of D. Floating point sums are exact: the products and C are
 //!   added as integers in a fixed point accumulator anchored at the largest
-//!   term (120 bits, 248 for `f64`), and the sum is rounded once to nearest
-//!   even into the type of D, like the model of PTX-formalization. Terms more
+//!   term (120 bits), and the sum is rounded once to nearest even into the
+//!   type of D, like the model of PTX-formalization. `f64` elements are
+//!   instead the chain of fused multiply-adds along k from C that the PTX
+//!   ISA specifies, rounded in the instruction's direction. Terms more
 //!   than that below the largest one only contribute a sticky bit. The
 //!   elements of D are computed one at a time in a loop (with the shuffles
 //!   in it) to keep the registers of a sum, and narrow terms are added in
@@ -26,6 +28,9 @@
 //!   same dot product of +-1, +-0, infinities and NaNs in `f32`, computed
 //!   only when an input of the SIMD-group is a NaN or an infinity or an
 //!   element of C is -0.
+//! * `mma.m8n8k4` with `f16` A and B is four independent 8x8x4 products, one
+//!   per quad pair, with every layout of A and B; each element of D gathers
+//!   its row of A and column of B from the pair with SIMD-group shuffles.
 //! * `wmma` fragments are tiles of `mma.sync` fragments (16x8, or 8x8 for
 //!   8-row matrices): A is made of the A fragments of its row tiles, B of the
 //!   B fragments of its column tiles, C and D of the C fragments of the tiles
@@ -147,6 +152,18 @@ fn mma_name(d: &ast::MmaDetails) -> String {
     if let Some(selector) = d.sparse {
         write!(name, "_sp{selector}").unwrap();
     }
+    match d.rounding {
+        Some(ast::RoundingMode::Zero) => name.push_str("_rz"),
+        Some(ast::RoundingMode::NegativeInf) => name.push_str("_rm"),
+        Some(ast::RoundingMode::PositiveInf) => name.push_str("_rp"),
+        Some(ast::RoundingMode::NearestEven) | None => {}
+    }
+    if d.alayout == ast::MatrixLayout::Col {
+        name.push_str("_acol");
+    }
+    if d.blayout == ast::MatrixLayout::Row {
+        name.push_str("_brow");
+    }
     if let Some(s) = d.block_scale {
         let stype = if s.ue4m3 { "ue4m3" } else { "ue8m0" };
         write!(
@@ -177,8 +194,8 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
         m,
         n,
         k,
-        alayout: ast::MatrixLayout::Row,
-        blayout: ast::MatrixLayout::Col,
+        alayout: if flags.contains(&"acol") { ast::MatrixLayout::Col } else { ast::MatrixLayout::Row },
+        blayout: if flags.contains(&"brow") { ast::MatrixLayout::Row } else { ast::MatrixLayout::Col },
         dtype: types[0],
         atype: types[1],
         btype: types[2],
@@ -208,6 +225,15 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
         sparse: flags
             .iter()
             .find_map(|f| f.strip_prefix("sp").and_then(|s| s.parse().ok())),
+        rounding: if flags.contains(&"rz") {
+            Some(ast::RoundingMode::Zero)
+        } else if flags.contains(&"rm") {
+            Some(ast::RoundingMode::NegativeInf)
+        } else if flags.contains(&"rp") {
+            Some(ast::RoundingMode::PositiveInf)
+        } else {
+            None
+        },
     })
 }
 
@@ -481,7 +507,9 @@ fn define(
             } else {
                 None
             };
-            if d.sparse.is_some() {
+            if (d.m, d.k, d.atype) == (8, 4, ast::MmaType::F16) {
+                Some(mma_m8n8k4_f16(&mut ir, &lane, &d, &a, &b, &c)?)
+            } else if d.sparse.is_some() {
                 let metadata = param(3)?.0;
                 Some(sparse_tile(&mut ir, &lane, &d, &a, &b, &c, &metadata, scales)?)
             } else {
@@ -1089,6 +1117,154 @@ fn register_bits(type_: ast::MmaType) -> u32 {
 
 // ---------------------------------------------------------------- mma
 
+// mma.m8n8k4 with .f16 A and B: four independent 8x8x4 products, product q
+// by the quad pair of lanes 4q..4q+3 and 4q+16..4q+19. Rows 4-7 of A, C and
+// D and columns 4-7 of B are held by the upper half of the pair (lanes 16 and
+// above); a thread computes the elements of D of its own half.
+fn mma_m8n8k4_f16(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    c: &[String],
+) -> Result<Vec<String>, TranslateError> {
+    let l = ir.linear(4, &lane.g, 1, &lane.t, 0);
+    let base = ir.op("and", "i32", &l, "12");
+    let half = ir.op("and", "i32", &l, "16");
+    let low = ir.op("and", "i32", &l, "3");
+    let pair = ir.op("or", "i32", &base, &half);
+    // element `index` (an i32) of registers holding `bits`-bit elements
+    let element = |ir: &mut Ir, regs: &[String], index: &str, bits: u32| {
+        let per = 32 / bits;
+        if per == 1 {
+            let mut r = regs[0].clone();
+            for (i, x) in regs.iter().enumerate().skip(1) {
+                let is = ir.icmp("eq", "i32", index, &i.to_string());
+                r = ir.select(&is, "i32", x, &r);
+            }
+            return r;
+        }
+        let reg = ir.op("udiv", "i32", index, &per.to_string());
+        let mut r = regs[0].clone();
+        for (i, x) in regs.iter().enumerate().skip(1) {
+            let is = ir.icmp("eq", "i32", &reg, &i.to_string());
+            r = ir.select(&is, "i32", x, &r);
+        }
+        let shift = ir.op("urem", "i32", index, &per.to_string());
+        let shift = ir.op("mul", "i32", &shift, &bits.to_string());
+        let x = ir.op("lshr", "i32", &r, &shift);
+        ir.op("and", "i32", &x, &((1u64 << bits) - 1).to_string())
+    };
+    let mut lanes: HashMap<(bool, String, u32), String> = HashMap::new();
+    let mut shuffled: HashMap<(usize, usize, String), String> = HashMap::new();
+    // registers `regs` (matrix `which`) of lane offset + add of the quad pair
+    // (of the thread's half of it for A and C)
+    let mut fetch = |ir: &mut Ir, which: usize, regs: &[String], offset: &str, add: u32| {
+        let key = (which == 1, offset.to_string(), add);
+        if !lanes.contains_key(&key) {
+            let start = if which == 1 { &base } else { &pair };
+            let x = ir.op("add", "i32", start, offset);
+            let x = ir.op("add", "i32", &x, &add.to_string());
+            lanes.insert(key.clone(), x);
+        }
+        let source = lanes[&key].clone();
+        regs.iter()
+            .enumerate()
+            .map(|(i, r)| {
+                shuffled
+                    .entry((which, i, source.clone()))
+                    .or_insert_with(|| ir.shuffle(r, 32, &source, false))
+                    .clone()
+            })
+            .collect::<Vec<_>>()
+    };
+    // row % 4 and column of element i of a C or D fragment of type `type_`
+    let position = |ir: &mut Ir, type_: ast::MmaType, i: u32| -> (String, String) {
+        if type_ == ast::MmaType::F16 {
+            (low.clone(), i.to_string())
+        } else {
+            let r = ir.op("and", "i32", &low, "1");
+            let r = ir.op("add", "i32", &r, &(i & 2).to_string());
+            let col = ir.op("and", "i32", &low, "2");
+            let col = ir.op("add", "i32", &col, &(i & 5).to_string());
+            (r, col)
+        }
+    };
+    // the special values are only computed when an input of the SIMD-group
+    // is a NaN or an infinity, or an element of C is -0
+    let mut guard = "false".to_string();
+    for r in a.iter().chain(b) {
+        for i in 0..2 {
+            let x = fragment_element(ir, &[r.clone()], 32, 16, i)?;
+            let special = is_special(ir, ast::MmaType::F16, &x, "i32")?;
+            guard = ir.op("or", "i1", &guard, &special);
+        }
+    }
+    let c_bits = d.ctype.bits();
+    for j in 0..8 {
+        let x = fragment_element(ir, c, 32, c_bits, j)?;
+        let special = is_special(ir, d.ctype, &x, "i32")?;
+        let sign = if c_bits == 32 { "-2147483648".to_string() } else { (1u64 << 15).to_string() };
+        let minus_zero = ir.icmp("eq", "i32", &x, &sign);
+        guard = ir.op("or", "i1", &guard, &special);
+        guard = ir.op("or", "i1", &guard, &minus_zero);
+    }
+    let votes = ir.def(&format!("call i32 @llvm.agx.simd.ballot(i1 {guard})"));
+    ir.declarations.insert("declare i32 @llvm.agx.simd.ballot(i1)".to_string());
+    ir.special_guard = Some(ir.icmp("ne", "i32", &votes, "0"));
+    let a_col = d.alayout == ast::MatrixLayout::Col;
+    let b_col = d.blayout == ast::MatrixLayout::Col;
+    let mut elements = Vec::new();
+    for i in 0..8 {
+        let (row, col) = position(ir, d.dtype, i);
+        let upper = i & 4 != 0;
+        let col4 = ir.op("and", "i32", &col, "3");
+        let cu = if upper { 16 } else { 0 };
+        let mut av = Vec::new();
+        let mut bv = Vec::new();
+        for kk in 0..4 {
+            // A[row][kk]: .row in lane row, element kk; .col in lane kk, element row
+            av.push(if a_col {
+                let regs = fetch(ir, 0, a, "0", kk);
+                element(ir, &regs, &row, 16)
+            } else {
+                let regs = fetch(ir, 0, a, &row, 0);
+                element(ir, &regs, &kk.to_string(), 16)
+            });
+            // B[kk][col]: .row in lane kk (upper half for columns 4-7),
+            // element col % 4; .col in lane col % 4, element kk
+            bv.push(if b_col {
+                let regs = fetch(ir, 1, b, &col4, cu);
+                element(ir, &regs, &kk.to_string(), 16)
+            } else {
+                let regs = fetch(ir, 1, b, "0", kk + cu);
+                element(ir, &regs, &col4, 16)
+            });
+        }
+        let ce = if d.ctype == d.dtype {
+            fragment_element(ir, c, 32, c_bits, i)?
+        } else if d.ctype == ast::MmaType::F16 {
+            // f16 C: lane row, element col
+            let regs = fetch(ir, 2, c, &row, 0);
+            element(ir, &regs, &col, 16)
+        } else {
+            // f32 C: lane (row & 1) + (col & 2), element (col & 5) + (row & 2)
+            let r1 = ir.op("and", "i32", &row, "1");
+            let c2 = ir.op("and", "i32", &col, "2");
+            let offset = ir.op("add", "i32", &r1, &c2);
+            let regs = fetch(ir, 2, c, &offset, 0);
+            let c5 = ir.op("and", "i32", &col, "5");
+            let r2 = ir.op("and", "i32", &row, "2");
+            let index = ir.op("add", "i32", &c5, &r2);
+            element(ir, &regs, &index, 32)
+        };
+        elements.push(float_dot(ir, d, &av, &bv, &ce)?);
+    }
+    ir.special_guard = None;
+    Ok(pack_d(ir, d, &elements))
+}
+
 /// One `mma.sync` tile (m x 8 x k, m = 8 or 16): the registers of D from
 /// those of A, B and C.
 fn mma_tile(
@@ -1625,6 +1801,16 @@ fn block_scales(
 // A scale factor: ue8m0 is 2^(x - 127); ue4m3 an unsigned e4m3 (as in
 // PTX-formalization, the NaN encodings are not special).
 fn scale_factor(ir: &mut Ir, x: &str, ue4m3: bool) -> Term {
+    // NaN: ue4m3 0x7f (the most significant bit of the byte is ignored),
+    // ue8m0 0xff
+    let (x, nan) = if ue4m3 {
+        let x = ir.op("and", "i32", x, "127");
+        let nan = ir.icmp("eq", "i32", &x, "127");
+        (x, nan)
+    } else {
+        (x.to_string(), ir.icmp("eq", "i32", x, "255"))
+    };
+    let x = x.as_str();
     let (mantissa, exponent, width) = if ue4m3 {
         let m = ir.op("and", "i32", x, "7");
         let e = ir.op("lshr", "i32", x, "3");
@@ -1636,14 +1822,17 @@ fn scale_factor(ir: &mut Ir, x: &str, ue4m3: bool) -> Term {
     } else {
         ("1".to_string(), ir.op("sub", "i32", x, "127"), 1)
     };
+    let mantissa = ir.select(&nan, "i64", "0", &mantissa);
     let zero = ir.icmp("eq", "i64", &mantissa, "0");
+    let not_nan = ir.op("xor", "i1", &nan, "true");
+    let zero = ir.op("and", "i1", &zero, &not_nan);
     Term {
         sign: "false".to_string(),
         mantissa,
         mantissa_type: "i64",
         exponent,
         width,
-        nan: "false".to_string(),
+        nan,
         inf: "false".to_string(),
         zero,
     }
@@ -1887,6 +2076,9 @@ fn type_bits(ty: &str) -> u32 {
 }
 
 fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> Result<String, TranslateError> {
+    if d.atype == ast::MmaType::F64 {
+        return Ok(f64_fma_chain(ir, d, a, b, c));
+    }
     let ab_ty = if register_bits(d.atype) == 64 { "i64" } else { "i32" };
     let c_ty = if register_bits(d.ctype) == 64 { "i64" } else { "i32" };
     let narrow = [d.atype, d.btype, d.ctype, d.dtype].iter().all(|t| register_bits(*t) <= 32);
@@ -1898,6 +2090,35 @@ fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &s
     }
     let special = if narrow { Some((d, a, b, c)) } else { None };
     exact_sum(ir, &terms, d.dtype, special)
+}
+
+// An element of an f64 mma: the fused multiply-adds of the products along k
+// in order, from C, rounded in the instruction's direction.
+fn f64_fma_chain(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> String {
+    let rounding = match d.rounding {
+        Some(ast::RoundingMode::Zero) => Some("towardzero"),
+        Some(ast::RoundingMode::NegativeInf) => Some("downward"),
+        Some(ast::RoundingMode::PositiveInf) => Some("upward"),
+        Some(ast::RoundingMode::NearestEven) | None => None,
+    };
+    match rounding {
+        Some(_) => ir.declarations.insert(
+            "declare double @llvm.experimental.constrained.fma.f64(double, double, double, metadata, metadata)".to_string(),
+        ),
+        None => ir.declarations.insert("declare double @llvm.fma.f64(double, double, double)".to_string()),
+    };
+    let mut acc = ir.cast("bitcast", "i64", c, "double");
+    for (x, y) in a.iter().zip(b) {
+        let x = ir.cast("bitcast", "i64", x, "double");
+        let y = ir.cast("bitcast", "i64", y, "double");
+        acc = match rounding {
+            Some(r) => ir.def(&format!(
+                "call double @llvm.experimental.constrained.fma.f64(double {x}, double {y}, double {acc}, metadata !\"round.{r}\", metadata !\"fpexcept.ignore\")"
+            )),
+            None => ir.def(&format!("call double @llvm.fma.f64(double {x}, double {y}, double {acc})")),
+        };
+    }
+    ir.cast("bitcast", "double", &acc, "i64")
 }
 
 // A float whose infinities, NaN and zero sign are those of the value: +-1 for
