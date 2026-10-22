@@ -20,7 +20,10 @@ pub(crate) struct ContextState {
     pub(crate) flags: u32,
     pub(crate) modules: FxHashSet<CUmodule>,
     pub(crate) storage: FxHashMap<usize, StorageData>,
+    pub(crate) opencl_context: Option<super::graphics::OpenCLContext>,
 }
+
+unsafe impl Send for ContextState {}
 
 pub(crate) struct StorageData {
     pub(crate) value: usize,
@@ -35,6 +38,7 @@ impl ContextState {
             flags: 0,
             modules: FxHashSet::default(),
             storage: FxHashMap::default(),
+            opencl_context: None,
         }
     }
 

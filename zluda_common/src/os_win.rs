@@ -16,3 +16,16 @@ impl<'a, E: crate::CudaErrorType> FromCuda<'a, *mut cuda_types::cuda::IDXGIAdapt
         .ok_or(E::INVALID_VALUE)
     }
 }
+
+impl<'a, E: crate::CudaErrorType> FromCuda<'a, *mut cuda_types::cuda::ID3D11Resource, E>
+    for &'a windows::Win32::Graphics::Direct3D11::ID3D11Resource
+{
+    fn from_cuda(resource: &'a *mut cuda_types::cuda::ID3D11Resource) -> Result<Self, E> {
+        unsafe {
+            windows::Win32::Graphics::Direct3D11::ID3D11Resource::from_raw_borrowed(mem::transmute(
+                resource,
+            ))
+        }
+        .ok_or(E::INVALID_VALUE)
+    }
+}
