@@ -633,10 +633,17 @@ pub enum RingKind {
     Usc,
 }
 
-/// `ZLUDA_AGX_USC_BARRIER=1`: invalidate the USC cache after every command, as Mesa's command stream does.
+/// Every command invalidates the USC cache, as Mesa's command stream does: each launch stages its pipeline words in
+/// the USC ring, and with 45 or more launches queued the GPU can run stale words it cached while earlier commands ran
+/// (AGX Performance Simulator tasks/zluda-issues.md, Z2). `ZLUDA_AGX_USC_BARRIER=0` invalidates only after new code
+/// was allocated, which saves about 1.8 us per launch but is only safe with short queues.
 fn always_usc_barrier() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_USC_BARRIER").is_ok_and(|v| !v.is_empty() && v != "0"))
+    *ON.get_or_init(|| usc_barrier_from(std::env::var("ZLUDA_AGX_USC_BARRIER").ok().as_deref()))
+}
+
+fn usc_barrier_from(v: Option<&str>) -> bool {
+    v != Some("0")
 }
 
 /// How long a queue waits for a command: `$ZLUDA_AGX_WAIT_MS` milliseconds, or without limit. The hardware has no
@@ -951,6 +958,14 @@ mod tests {
         assert!(words(&with).contains(&(3 << 29 | 0xfffff)));
         assert!(!words(&without).contains(&(3 << 29 | 0xfffff)));
         assert_eq!(words(&without)[words(&without).len() - 2..], [2 << 29, 0], "still terminated");
+    }
+
+    #[test]
+    fn the_usc_barrier_is_on_unless_turned_off() {
+        assert!(usc_barrier_from(None));
+        assert!(usc_barrier_from(Some("1")));
+        assert!(usc_barrier_from(Some("")));
+        assert!(!usc_barrier_from(Some("0")));
     }
 
     #[test]
@@ -1495,8 +1510,8 @@ impl LoadedModule {
             // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
             let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-            // The USC cache is invalidated after new code was allocated (a module load), and always with
-            // ZLUDA_AGX_USC_BARRIER=1 (Mesa's stream).
+            // The USC cache is invalidated on every command, or with ZLUDA_AGX_USC_BARRIER=0 only after new code
+            // was allocated (a module load).
             let barrier = queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
             queue.usc_seen.set(vm.usc_generation);
             let stream =
