@@ -73,12 +73,14 @@ fn find<T>(allocs: &BTreeMap<u64, T>, va: u64, len: u64, size: impl Fn(&T) -> u6
     (va.checked_add(len)? <= start + size(a)).then_some(start)
 }
 
+/// Fields drop in declaration order: the allocations and the queue are unbound before the VM is destroyed (a VM
+/// destroyed with objects still bound strands their memory in the kernel, also past process exit; B42).
 pub struct Context {
-    pub device: Device,
-    pub props: DeviceProps,
-    pub vm: Vm,
-    pub stream: Queue,
     allocs: BTreeMap<u64, (Bo, u64)>,
+    pub stream: Queue,
+    pub vm: Vm,
+    pub props: DeviceProps,
+    pub device: Device,
 }
 
 fn invalid(m: impl Into<String>) -> io::Error {

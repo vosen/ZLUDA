@@ -937,6 +937,18 @@ impl Queue {
 
 impl Drop for Queue {
     fn drop(&mut self) {
+        // The timestamp object was bound with GEM_BIND_OBJECT; a bound object strands its memory (B42).
+        let mut unbind = drm_asahi_gem_bind_object {
+            op: DRM_ASAHI_BIND_OBJECT_OP_UNBIND as u32,
+            flags: 0,
+            handle: 0,
+            vm_id: 0,
+            offset: 0,
+            range: 0,
+            object_handle: self.ts_handle,
+            pad: 0,
+        };
+        let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_BIND_OBJECT as u64, &mut unbind, "unbind-timestamps");
         let mut qd = drm_asahi_queue_destroy { queue_id: self.id, pad: 0 };
         let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_QUEUE_DESTROY as u64, &mut qd, "queue-destroy");
         let mut sd = drm_syncobj_destroy { handle: self.timeline, pad: 0 };

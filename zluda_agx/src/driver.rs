@@ -40,7 +40,6 @@ enum Op {
 }
 
 pub(crate) struct Driver {
-    pub(crate) ctx: Context,
     default_waits: Vec<Fence>,
     modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
@@ -65,6 +64,9 @@ pub(crate) struct Driver {
     /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
     /// followed: the launches a reported bad access may come from.
     checked_launches: HashMap<(usize, String), (String, u32)>,
+    /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
+    /// context's VM is destroyed (B42).
+    pub(crate) ctx: Context,
 }
 
 /// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
