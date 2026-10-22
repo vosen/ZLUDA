@@ -51,6 +51,10 @@ pub struct KernelInfo {
     /// Half of the hidden 32-bit argument that the launch sets to the threadgroup memory of the dispatch, static
     /// and dynamic bytes (`.agx.kernels` extension 4, for kernels that read the shared memory size).
     pub threadgroup_bytes_half: Option<u32>,
+    /// Half of the 64-bit texture heap address (`.agx.kernels` extension 5, a module that samples textures with
+    /// llvm.agx.texture.sample): the address of the 24-byte hardware texture descriptors whose offsets the samples
+    /// name.
+    pub texture_heap_half: Option<u32>,
 }
 
 /// Where a checked kernel takes its hidden arguments (LLVM's AGXUsage.rst, "Checked mode").
@@ -261,6 +265,7 @@ impl<'a> Elf<'a> {
             // tagged extensions up to the end of the record
             let (mut cluster, mut checked, mut e, end) = ([1, 1, 1], None, f + 7 + 3 * nargs, at + size / 4);
             let mut threadgroup_bytes_half = None;
+            let mut texture_heap_half = None;
             while e < end {
                 match word(e)? {
                     1 if e + 4 <= end => {
@@ -296,6 +301,10 @@ impl<'a> Elf<'a> {
                         threadgroup_bytes_half = Some(word(e + 1)?);
                         e += 2;
                     }
+                    5 if e + 2 <= end => {
+                        texture_heap_half = Some(word(e + 1)?);
+                        e += 2;
+                    }
                     _ => break,
                 }
             }
@@ -315,6 +324,7 @@ impl<'a> Elf<'a> {
                     cluster,
                     checked,
                     threadgroup_bytes_half,
+                    texture_heap_half,
                 },
             );
             at += size / 4;
@@ -430,6 +440,7 @@ impl Module {
                     cluster: [1, 1, 1],
                     checked: None,
                     threadgroup_bytes_half: None,
+                    texture_heap_half: None,
                 },
             );
         }
@@ -970,6 +981,7 @@ mod tests {
                 cluster: [1, 1, 1],
                 checked: None,
                 threadgroup_bytes_half: None,
+                texture_heap_half: None,
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -993,6 +1005,7 @@ mod tests {
             cluster: [1, 1, 1],
             checked: None,
             threadgroup_bytes_half: None,
+            texture_heap_half: None,
         };
         let u = pack_uniforms(
             &k,

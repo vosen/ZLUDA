@@ -306,7 +306,29 @@ pub struct Vm {
     /// Counts USC allocations (module code, rings): a queue's next command invalidates the USC cache when this has
     /// changed since its last one.
     pub usc_generation: u64,
+    textures: Option<Textures>,
 }
+
+/// The texture and sampler heaps of an address space, for bindless sampling (llvm.agx.texture.sample): 24-byte
+/// hardware texture descriptors at byte offsets from the texture heap, whose address the kernels of a module that
+/// samples receive (`.agx.kernels` extension 5), and 8-byte samplers by index, the heap every compute command names
+/// (`drm_asahi_cmd_compute.sampler_heap`). Descriptors are laid out as in Mesa's `cmdbuf.xml` (Texture, Sampler).
+struct Textures {
+    textures: Bo,
+    /// Free texture slots, and the number of slots ever used.
+    free: Vec<u32>,
+    used: u32,
+    samplers: Bo,
+    /// Each sampler slot's descriptor and reference count (0: free).
+    sampler_slots: Vec<([u8; 8], u32)>,
+}
+
+pub const TEXTURE_DESCRIPTOR_BYTES: u32 = 24;
+pub const SAMPLER_DESCRIPTOR_BYTES: u32 = 8;
+/// Texture slots of an address space; a texture past them is sampled in software.
+pub const TEXTURE_SLOTS: u32 = 1 << 16;
+/// The firmware's limit on a command's sampler heap.
+pub const SAMPLER_SLOTS: u32 = 1024;
 
 /// The helper program and the scratch buffer of an address space.
 struct Scratch {
@@ -346,7 +368,78 @@ impl Vm {
             core_entries: scratch::core_entries(&p.core_masks, p.num_clusters_total, p.num_cores_per_cluster),
             scratch: None,
             usc_generation: 0,
+            textures: None,
         })
+    }
+
+    fn textures(&mut self) -> io::Result<&mut Textures> {
+        if self.textures.is_none() {
+            let textures = self.alloc_data((TEXTURE_SLOTS * TEXTURE_DESCRIPTOR_BYTES) as u64)?;
+            let samplers = self.alloc_data((SAMPLER_SLOTS * SAMPLER_DESCRIPTOR_BYTES) as u64)?;
+            self.textures = Some(Textures { textures, free: Vec::new(), used: 0, samplers, sampler_slots: Vec::new() });
+        }
+        Ok(self.textures.as_mut().unwrap())
+    }
+
+    /// Puts a hardware texture descriptor in the texture heap: its byte offset there, or None when the heap is
+    /// full. The caller removes it only when no command in flight can sample it.
+    pub fn add_texture(&mut self, descriptor: &[u8; TEXTURE_DESCRIPTOR_BYTES as usize]) -> io::Result<Option<u32>> {
+        let t = self.textures()?;
+        let slot = match t.free.pop() {
+            Some(slot) => slot,
+            None if t.used < TEXTURE_SLOTS => {
+                t.used += 1;
+                t.used - 1
+            }
+            None => return Ok(None),
+        };
+        let offset = slot * TEXTURE_DESCRIPTOR_BYTES;
+        t.textures.as_mut_slice()[offset as usize..(offset + TEXTURE_DESCRIPTOR_BYTES) as usize].copy_from_slice(descriptor);
+        Ok(Some(offset))
+    }
+
+    pub fn remove_texture(&mut self, offset: u32) {
+        if let Some(t) = self.textures.as_mut() {
+            t.free.push(offset / TEXTURE_DESCRIPTOR_BYTES);
+        }
+    }
+
+    /// The index of a hardware sampler descriptor in the sampler heap (shared by equal samplers), or None when
+    /// the heap is full. Each `add_sampler` is undone by a `remove_sampler`.
+    pub fn add_sampler(&mut self, descriptor: &[u8; SAMPLER_DESCRIPTOR_BYTES as usize]) -> io::Result<Option<u16>> {
+        let t = self.textures()?;
+        if let Some(i) = t.sampler_slots.iter().position(|s| s.1 > 0 && s.0 == *descriptor) {
+            t.sampler_slots[i].1 += 1;
+            return Ok(Some(i as u16));
+        }
+        let i = match t.sampler_slots.iter().position(|s| s.1 == 0) {
+            Some(i) => i,
+            None if t.sampler_slots.len() < SAMPLER_SLOTS as usize => {
+                t.sampler_slots.push(([0; 8], 0));
+                t.sampler_slots.len() - 1
+            }
+            None => return Ok(None),
+        };
+        t.sampler_slots[i] = (*descriptor, 1);
+        let at = i * SAMPLER_DESCRIPTOR_BYTES as usize;
+        t.samplers.as_mut_slice()[at..at + SAMPLER_DESCRIPTOR_BYTES as usize].copy_from_slice(descriptor);
+        Ok(Some(i as u16))
+    }
+
+    pub fn remove_sampler(&mut self, index: u16) {
+        if let Some(s) = self.textures.as_mut().and_then(|t| t.sampler_slots.get_mut(index as usize)) {
+            s.1 = s.1.saturating_sub(1);
+        }
+    }
+
+    /// The texture heap's address (0 before the first texture).
+    pub fn texture_heap(&self) -> u64 {
+        self.textures.as_ref().map_or(0, |t| t.textures.va)
+    }
+
+    /// The sampler heap's address and the number of its slots that commands may name, if any.
+    pub fn sampler_heap(&self) -> Option<(u64, u32)> {
+        self.textures.as_ref().filter(|t| !t.sampler_slots.is_empty()).map(|t| (t.samplers.va, t.sampler_slots.len() as u32))
     }
 
     /// The helper program of a command whose shader uses `dwords` 32-bit words of stack per thread: its tagged USC
@@ -855,15 +948,17 @@ impl Queue {
     /// queues) and the earlier commands of this queue. Does not wait. Its timestamps stay readable with `timing`
     /// until `TIMESTAMP_SLOTS` more commands are submitted.
     pub fn submit_compute(&mut self, cdm_base: u64, cdm_end: u64, wait_for: &[Fence]) -> io::Result<Fence> {
-        self.submit_compute_with_helper(cdm_base, cdm_end, None, wait_for)
+        self.submit_compute_with_helper(cdm_base, cdm_end, None, None, wait_for)
     }
 
-    /// `submit_compute` with a helper program: `(binary, data)` of `Vm::scratch` for a shader that uses the stack.
+    /// `submit_compute` with a helper program: `(binary, data)` of `Vm::scratch` for a shader that uses the stack,
+    /// and a sampler heap: `(address, count)` of `Vm::sampler_heap` for a shader that samples.
     pub fn submit_compute_with_helper(
         &mut self,
         cdm_base: u64,
         cdm_end: u64,
         helper: Option<(u32, u64)>,
+        samplers: Option<(u64, u32)>,
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         let point = self.submitted + 1;
@@ -883,6 +978,10 @@ impl Queue {
         cmd.c.cdm_ctrl_stream_end = cdm_end;
         if let Some((binary, data)) = helper {
             cmd.c.helper = drm_asahi_helper_program { binary, cfg: 0, data };
+        }
+        if let Some((heap, count)) = samplers {
+            cmd.c.sampler_heap = heap;
+            cmd.c.sampler_count = count;
         }
         cmd.c.ts.start = drm_asahi_timestamp { handle: self.ts_handle, offset: slot };
         cmd.c.ts.end = drm_asahi_timestamp { handle: self.ts_handle, offset: slot + 8 };
@@ -1052,7 +1151,7 @@ impl Queue {
     /// `run_compute` with the helper program of `Vm::scratch` (a shader that uses the stack).
     pub fn run_compute_with_helper(&mut self, cdm_base: u64, cdm_end: u64, helper: Option<(u32, u64)>) -> io::Result<Timing> {
         let h0 = Instant::now();
-        let fence = self.submit_compute_with_helper(cdm_base, cdm_end, helper, &[])?;
+        let fence = self.submit_compute_with_helper(cdm_base, cdm_end, helper, None, &[])?;
         self.wait(fence, self.timeout)?;
         let host = h0.elapsed();
         let (start, end) = self.timing(fence).unwrap();
@@ -1803,6 +1902,19 @@ impl LoadedModule {
             // a shader that uses the stack gets its scratch from the helper program
             let stack_dwords = k.stack_bytes.div_ceil(4);
             let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords)?) } else { None };
+            let mut halves = halves.to_vec();
+            if let Some(h) = k.texture_heap_half {
+                let heap = vm.texture_heap();
+                for (i, x) in halves
+                    .get_mut(h as usize..h as usize + 4)
+                    .ok_or_else(|| invalid(format!("{}: texture heap outside the uniforms", k.name)))?
+                    .iter_mut()
+                    .enumerate()
+                {
+                    *x = (heap >> (16 * i)) as u16;
+                }
+            }
+            let samplers = if k.texture_heap_half.is_some() { vm.sampler_heap() } else { None };
             let bytes: Vec<u8> = halves.iter().flat_map(|h| h.to_le_bytes()).collect();
             let unif = if bytes.is_empty() { 0 } else { queue.stage(RingKind::Data, &bytes, 64)? };
             let pipeline = Pipeline {
@@ -1822,7 +1934,7 @@ impl LoadedModule {
             let stream =
                 cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
-            queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, wait_for)
+            queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
         })();
         let fence = r.inspect_err(|_| queue.unstage())?;
         if !keep.is_empty() {

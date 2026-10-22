@@ -9,6 +9,11 @@
 //! textures), and a CUDA array is a dense device allocation in the layout those
 //! descriptors read: levels one after the other, each holding all layers, each
 //! layer depth x height x width texels.
+//!
+//! A texture object that the hardware can sample as CUDA does (a linear 1D or 2D image of one level, see
+//! `native_descriptors`) also gets a hardware texture descriptor in the address space's texture heap and a sampler
+//! in its sampler heap; word 16 of its descriptor names them, and `tex.1d` / `tex.2d` with float coordinates use
+//! the texture unit instead of the software sampler (outside `--strict-fp`).
 
 use crate::driver::{from_io, out, with, Driver};
 use cuda_types::cuda::*;
@@ -16,7 +21,13 @@ use std::ffi::c_void;
 
 const TEXTURE_MAGIC: u64 = 0x5458_5854;
 const SURFACE_MAGIC: u64 = 0x5354_5446;
-const DESCRIPTOR_BYTES: u64 = 128;
+const DESCRIPTOR_BYTES: u64 = 256;
+/// Word 16 of a texture descriptor: bit 63 set for a texture with hardware descriptors, bit 62 when it samples to
+/// integers, bit 61 when it is 2D (`tex.2d`; else `tex.1d`), the sampler index at bit 32 and the texture heap
+/// offset in the low 32 bits.
+const NATIVE: u64 = 1 << 63;
+const NATIVE_INTEGER: u64 = 1 << 62;
+const NATIVE_2D: u64 = 1 << 61;
 
 /// A CUDA array (a level of a mipmapped array is one too, borrowing its memory).
 pub(crate) struct Array {
@@ -249,11 +260,136 @@ pub(crate) unsafe fn cuMipmappedArrayDestroy(handle: CUmipmappedArray) -> CUresu
 
 // ---------------------------------------------------------------- texture and surface objects
 
-unsafe fn write_descriptor(d: &mut Driver, words: &[u64; 16]) -> Result<u64, CUerror> {
+unsafe fn write_descriptor(d: &mut Driver, words: &[u64]) -> Result<u64, CUerror> {
     let va = d.ctx.mem_alloc(DESCRIPTOR_BYTES).map_err(from_io)?;
     let p = d.ctx.cpu_ptr(va, DESCRIPTOR_BYTES).map_err(from_io)? as *mut u64;
-    std::ptr::copy_nonoverlapping(words.as_ptr(), p, 16);
+    std::ptr::copy_nonoverlapping(words.as_ptr(), p, words.len());
     Ok(va)
+}
+
+/// A texture object's descriptor, with word 16 naming its hardware descriptors when it has them (see
+/// `native_descriptors`; a full heap leaves it to the software sampler).
+unsafe fn write_texture(d: &mut Driver, img: &Image, t: &CUDA_TEXTURE_DESC) -> Result<u64, CUerror> {
+    let mut words = texture_words(img, t)?.to_vec();
+    let mut native = 0;
+    if std::env::var_os("ZLUDA_AGX_SOFTWARE_TEXTURES").is_none() {
+        if let Some((texture, sampler, integer, rank)) = native_descriptors(img, t) {
+            if let Some(offset) = d.ctx.vm.add_texture(&texture).map_err(from_io)? {
+                match d.ctx.vm.add_sampler(&sampler).map_err(from_io)? {
+                    Some(index) => {
+                        native = NATIVE
+                            | if integer { NATIVE_INTEGER } else { 0 }
+                            | if rank == 2 { NATIVE_2D } else { 0 }
+                            | (index as u64) << 32
+                            | offset as u64
+                    }
+                    None => d.ctx.vm.remove_texture(offset),
+                }
+            }
+        }
+    }
+    words.push(native);
+    write_descriptor(d, &words)
+}
+
+/// Frees a texture object's descriptor, its hardware descriptors included, once the GPU is idle.
+unsafe fn free_texture(d: &mut Driver, va: u64) -> Result<(), CUerror> {
+    let p = d.ctx.cpu_ptr(va, DESCRIPTOR_BYTES).map_err(|_| CUerror::INVALID_HANDLE)? as *const u64;
+    let native = *p.add(16);
+    d.sync_all()?;
+    if native & NATIVE != 0 {
+        d.ctx.vm.remove_texture(native as u32);
+        d.ctx.vm.remove_sampler((native >> 32) as u16);
+    }
+    d.ctx.mem_free(va).map_err(from_io)
+}
+
+fn put(bytes: &mut [u8], start: usize, size: usize, value: u64) {
+    for i in 0..size {
+        if (value >> i) & 1 != 0 {
+            bytes[(start + i) / 8] |= 1 << ((start + i) % 8);
+        }
+    }
+}
+
+/// The hardware descriptors of a texture the texture unit samples as the software sampler does, up to the
+/// precision of linear filtering (Mesa's `cmdbuf.xml`, Texture and Sampler): a linear 1D or 2D image of one level
+/// and layer, at most 16384 texels wide and high, its address and row pitch multiples of 16 bytes, read either as
+/// floats (float and half formats, normalized 8- and 16-bit integers) or as integers without filtering, with
+/// normalized coordinates or with clamp (and, for four channels, border) addressing. Returns (texture, sampler, integer results, rank).
+fn native_descriptors(img: &Image, t: &CUDA_TEXTURE_DESC) -> Option<([u8; 24], [u8; 8], bool, u32)> {
+    use CUarray_format_enum as F;
+    let bytes = element_bytes(img.format)?;
+    let texel = bytes * img.channels as usize;
+    let rank: usize = if img.dims[1] > 1 || img.pitch != 0 { 2 } else { 1 };
+    let pitch = if img.pitch != 0 { img.pitch } else { img.dims[0] * texel };
+    let normalized = t.flags & CU_TRSF_NORMALIZED_COORDINATES != 0;
+    let linear = t.filterMode == CUfilter_mode::CU_TR_FILTER_MODE_LINEAR;
+    let small_integer = matches!(bytes, 1 | 2) && img.format != F::CU_AD_FORMAT_HALF;
+    let read_normalized = small_integer && t.flags & CU_TRSF_READ_AS_INTEGER == 0;
+    let float = matches!(img.format, F::CU_AD_FORMAT_HALF | F::CU_AD_FORMAT_FLOAT) || read_normalized;
+    let signed = matches!(img.format, F::CU_AD_FORMAT_SIGNED_INT8 | F::CU_AD_FORMAT_SIGNED_INT16 | F::CU_AD_FORMAT_SIGNED_INT32);
+    if img.dims[2] > 1 || img.layers > 1 || img.levels > 1 || img.cube || img.base % 16 != 0 || pitch % 16 != 0
+        || img.dims[0] > 16384 || img.dims[1] > 16384 || (linear && !float)
+        || t.flags & CU_TRSF_SRGB != 0
+    {
+        return None;
+    }
+    // wrap and mirror take normalized coordinates (CUDA clamps unnormalized ones)
+    let wraps = t.addressMode.map(|m| match m {
+        CUaddress_mode::CU_TR_ADDRESS_MODE_WRAP => 1,
+        CUaddress_mode::CU_TR_ADDRESS_MODE_MIRROR => 2,
+        CUaddress_mode::CU_TR_ADDRESS_MODE_BORDER => 3,
+        _ => 0,
+    });
+    if !normalized && wraps[..rank].iter().any(|&w| w == 1 || w == 2) {
+        return None;
+    }
+    // the border is (0, 0, 0, 0), and the swizzle's constant 1 might apply to it
+    if img.channels != 4 && wraps[..rank].contains(&3) {
+        return None;
+    }
+    let channels = match (bytes, img.channels) {
+        (1, 1) => 0x00,
+        (1, 2) => 0x0a,
+        (1, 4) => 0x28,
+        (2, 1) => 0x09,
+        (2, 2) => 0x23,
+        (2, 4) => 0x32,
+        (4, 1) => 0x21,
+        (4, 2) => 0x31,
+        _ => 0x38,
+    };
+    let kind = match img.format {
+        F::CU_AD_FORMAT_HALF | F::CU_AD_FORMAT_FLOAT => 4,
+        _ if read_normalized => signed as u64,
+        _ => 2 + signed as u64,
+    };
+    // missing channels read as (r, 0, 0, 1), as in the software sampler
+    let swizzle: [u64; 4] = match img.channels {
+        1 => [0, 5, 5, 4],
+        2 => [0, 1, 5, 4],
+        _ => [0, 1, 2, 3],
+    };
+    let mut tex = [0u8; 24];
+    put(&mut tex, 0, 4, if rank == 1 { 0 } else { 2 });
+    put(&mut tex, 6, 7, channels);
+    put(&mut tex, 13, 3, kind);
+    for (i, s) in swizzle.iter().enumerate() {
+        put(&mut tex, 16 + 3 * i, 3, *s);
+    }
+    put(&mut tex, 28, 14, img.dims[0] as u64 - 1);
+    put(&mut tex, 42, 14, if rank == 1 { 0 } else { img.dims[1] as u64 - 1 });
+    put(&mut tex, 66, 36, img.base >> 4);
+    put(&mut tex, 110, 18, (pitch.max(16) as u64 - 16) >> 4);
+    let mut sampler = [0u8; 8];
+    put(&mut sampler, 23, 2, linear as u64);
+    put(&mut sampler, 25, 2, linear as u64);
+    for (i, w) in wraps.iter().enumerate() {
+        put(&mut sampler, 29 + 3 * i, 3, *w);
+    }
+    put(&mut sampler, 38, 1, !normalized as u64);
+    Some((tex, sampler, !float, rank as u32))
 }
 
 /// The memory a texture or surface reads: base address, element format, channels, dims, layers,
@@ -368,13 +504,19 @@ pub(crate) unsafe fn cuTexObjectCreate(
 ) -> CUresult {
     let r = resource.as_ref().ok_or(CUerror::INVALID_VALUE)?;
     let t = texture.as_ref().ok_or(CUerror::INVALID_VALUE)?;
-    let words = texture_words(&image(r)?, t)?;
-    let va = with(|d| write_descriptor(d, &words))?;
+    let img = image(r)?;
+    let va = with(|d| write_texture(d, &img, t))?;
     out(handle, va)
 }
 
 pub(crate) unsafe fn cuTexObjectDestroy(handle: CUtexObject) -> CUresult {
-    destroy_descriptor(handle, TEXTURE_MAGIC)
+    with(|d| {
+        let p = d.ctx.cpu_ptr(handle, DESCRIPTOR_BYTES).map_err(|_| CUerror::INVALID_HANDLE)? as *const u64;
+        if *p != TEXTURE_MAGIC {
+            return Err(CUerror::INVALID_HANDLE);
+        }
+        free_texture(d, handle)
+    })
 }
 
 unsafe fn destroy_descriptor(handle: u64, magic: u64) -> CUresult {
@@ -570,6 +712,45 @@ mod tests {
     }
 
     #[test]
+    fn native_descriptors_of_a_pitch_linear_texture() {
+        let mut r: CUDA_RESOURCE_DESC = unsafe { std::mem::zeroed() };
+        r.resType = CUresourcetype::CU_RESOURCE_TYPE_PITCH2D;
+        r.res.pitch2D = CUDA_RESOURCE_DESC_st__bindgen_ty_1__bindgen_ty_4 {
+            devPtr: CUdeviceptr_v2(0x123456000 as *mut c_void),
+            format: CUarray_format::CU_AD_FORMAT_UNSIGNED_INT8,
+            numChannels: 4,
+            width: 30,
+            height: 20,
+            pitchInBytes: 128,
+        };
+        let mut t: CUDA_TEXTURE_DESC = unsafe { std::mem::zeroed() };
+        t.addressMode = [CUaddress_mode::CU_TR_ADDRESS_MODE_MIRROR; 3];
+        t.filterMode = CUfilter_mode::CU_TR_FILTER_MODE_LINEAR;
+        t.flags = CU_TRSF_NORMALIZED_COORDINATES;
+        let img = unsafe { image(&r) }.unwrap();
+        let (tex, sampler, integer, rank) = native_descriptors(&img, &t).unwrap();
+        let bits = |b: &[u8], start: usize, size: usize| (0..size).map(|i| ((b[(start + i) / 8] >> ((start + i) % 8)) as u64 & 1) << i).sum::<u64>();
+        // 2D, linear layout, RGBA8 unorm, identity swizzle, 30 x 20, address >> 4, (pitch - 16) >> 4
+        assert_eq!((bits(&tex, 0, 4), bits(&tex, 4, 2), bits(&tex, 6, 7), bits(&tex, 13, 3)), (2, 0, 0x28, 0));
+        assert_eq!((bits(&tex, 16, 12), bits(&tex, 28, 14), bits(&tex, 42, 14)), (0b011_010_001_000, 29, 19));
+        assert_eq!((bits(&tex, 66, 36), bits(&tex, 110, 18)), (0x12345600, 7));
+        // linear magnify and minify, mirrored repeat, normalized coordinates
+        assert_eq!((bits(&sampler, 23, 2), bits(&sampler, 25, 2), bits(&sampler, 29, 9), bits(&sampler, 38, 1)), (1, 1, 0o222, 0));
+        assert_eq!((integer, rank), (false, 2));
+        // integers are not filtered; mirror needs normalized coordinates; a 3D image is not linear
+        t.flags |= CU_TRSF_READ_AS_INTEGER;
+        assert!(native_descriptors(&img, &t).is_none());
+        t.flags = 0;
+        t.filterMode = CUfilter_mode::CU_TR_FILTER_MODE_POINT;
+        assert!(native_descriptors(&img, &t).is_none());
+        t.addressMode = [CUaddress_mode::CU_TR_ADDRESS_MODE_CLAMP; 3];
+        let (_, sampler, ..) = native_descriptors(&img, &t).unwrap();
+        assert_eq!((bits(&sampler, 23, 4), bits(&sampler, 29, 9), bits(&sampler, 38, 1)), (0, 0, 1));
+        let img3 = Image { dims: [4, 4, 4], ..img };
+        assert!(native_descriptors(&img3, &t).is_none());
+    }
+
+    #[test]
     fn array_layout() {
         // a layered 4 x 3 array of 2 layers and 3 levels, float2 texels
         let a = Array {
@@ -646,17 +827,16 @@ pub(crate) unsafe fn cuModuleGetTexRef(p: *mut CUtexref, hmod: CUmodule, name: *
 /// Makes the reference's texture object again and points the module's variable at it.
 unsafe fn rebind(r: &mut TexRef) -> CUresult {
     let Some(resource) = r.resource else { return Ok(()) };
-    let words = texture_words(&image(&resource)?, &r.desc)?;
+    let img = image(&resource)?;
     with(|d| {
-        let va = write_descriptor(d, &words)?;
+        let va = write_texture(d, &img, &r.desc)?;
         let old = std::mem::replace(&mut r.object, va);
         let m = d.modules.get_mut(&r.module).ok_or(CUerror::INVALID_HANDLE)?;
         if !m.write_global(&r.name, &va.to_le_bytes()) {
             return Err(CUerror::NOT_FOUND);
         }
         if old != 0 {
-            d.sync_all()?;
-            d.ctx.mem_free(old).map_err(from_io)?;
+            free_texture(d, old)?;
         }
         Ok(())
     })

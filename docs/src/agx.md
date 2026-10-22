@@ -533,8 +533,8 @@ not supported yet.
 ### Textures and surfaces
 
 Textures and surfaces are sampled in software (`ptx/lib/zluda_ptx_impl_agx_tex.c`, compiled to the generated
-part of `zluda_ptx_impl_agx.ll` by `ptx/lib/gen_agx_tex.py`). AGX's texture unit is not used yet: its descriptors
-and sampling rules have not been measured (simulator task B29). The rules are those of PTX-formalization's model:
+part of `zluda_ptx_impl_agx.ll` by `ptx/lib/gen_agx_tex.py`), except where the texture unit can sample as the
+software does (below). The software follows PTX-formalization's model:
 - coordinates scale by the extent when normalized;
 - point and linear filtering, with weights quantised to 1/256 and the sum computed exactly (in software fp64)
   and rounded once;
@@ -558,6 +558,30 @@ The runtime supports:
 - copies to and from arrays (`cuMemcpy2D`, `cuMemcpy3D`, `cuMemcpyHtoA` / `AtoH`);
 - `cuTexObjectCreate` over arrays, mipmapped arrays, linear and pitch-linear memory;
 - `cuSurfObjectCreate` over arrays.
+
+**The texture unit.** `tex.1d` and `tex.2d` of a texture object with float coordinates, automatic LOD and no
+separate sampler, offsets or depth compare sample with the hardware's `texture_sample`
+(`llvm.agx.texture.sample`, bindless: LLVM's AGXUsage.rst, "Textures"), outside `--strict-fp`, on a texture that
+`cuTexObjectCreate` (or a texture reference) gave hardware descriptors. Those are the 24-byte texture and 8-byte
+sampler descriptors of Mesa's `cmdbuf.xml` layout (read for their bit layout only), which `agx_runtime` keeps per
+address space: the texture heap, whose address a module that samples receives in `u0_u1` (`.agx.kernels`
+extension 5), and the sampler heap of every compute command (`drm_asahi_cmd_compute.sampler_heap`, equal samplers
+shared, at most 1024). A texture gets them when it is:
+- a linear 1D or 2D image (an array or pitch-linear memory) of one level and one layer, not a cubemap, at most
+  16384 texels wide and high, its address and row pitch multiples of 16 bytes;
+- read as floats (float or half texels, or normalized 8- and 16-bit integers; linear filtering allowed) or as
+  integers with point filtering, the PTX destination type matching;
+- addressed with clamp or border (border only for four channels), or with wrap or mirror on normalized
+  coordinates;
+- not sRGB.
+
+Word 16 of the software descriptor names the hardware ones (bit 63; bit 62 integer results, bit 61 2D, the
+sampler index at bit 32, the texture heap offset in the low 32 bits); any other texture, form or the
+`ZLUDA_AGX_SOFTWARE_TEXTURES` environment variable keeps the software path. Point sampling gives the same
+results; linear filtering uses the hardware's weights rather than the model's 1/256 steps, and the f16 forms' results
+are rounded once more, which is why `--strict-fp` does not use the unit. The
+formalization harness builds the same descriptors (`agx_run --sampler-heap`), and the texture tests pass both
+ways. Not yet validated on the GPU (simulator only).
 
 Module `.texref`, `.samplerref` and `.surfref` variables compile: on AGX each holds the 64-bit handle of
 a texture, sampler or surface object, which the instructions load. The legacy texture reference API
@@ -1316,7 +1340,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
 | PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. |
 | Warp-level and async | `mma`, `mma.sp`, `wmma`, `ldmatrix` / `stmatrix`, `wgmma`, `tcgen05` and the tensor memory accelerator (`cp.async.bulk.tensor`) are emulated; `cp.async`, mbarriers and thread block clusters (up to 1024 threads) run on ordinary instructions and threadgroup memory |
-| Textures and surfaces | sampled in software (the texture unit is not used yet, simulator task B29): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
+| Textures and surfaces | sampled in software, `tex.1d` / `tex.2d` of linear one-level texture objects on the texture unit outside `--strict-fp` (simulator only): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` (strict FP) for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
 | Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
 | Memory model | fences of every scope lower to measured barrier sequences |

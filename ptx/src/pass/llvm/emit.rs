@@ -7024,6 +7024,16 @@ impl<'a> MethodEmitContext<'a> {
                 }
                 args.extend(offsets);
                 args.extend([has_ref, reference]);
+                // the texture unit may sample it (on a texture with hardware descriptors): not bit exact for
+                // linear filtering, so not with --strict-fp
+                let unit = !self.strict_fp
+                    && matches!(data.geometry, ast::TexGeometry::D1 | ast::TexGeometry::D2)
+                    && data.lod_mode == 0
+                    && data.ctype == ast::ScalarType::F32
+                    && arguments.src_sampler.is_none()
+                    && arguments.src_ref.is_none()
+                    && [arguments.src_o0, arguments.src_o1, arguments.src_o2].iter().all(|o| o.is_none());
+                args.push(self.const_u32(unit as u64));
                 self.emit_vector_helper(c"__zluda_ptx_impl_agx_tex", ast::ScalarType::B32, &args)?
             }
             ast::TexOp::Tld4(comp) => {

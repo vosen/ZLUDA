@@ -48,6 +48,8 @@ MM_BASE = 0x700000000000
 MM_WINDOW = 1 << 36
 # the fabric logical endpoint table: entry le (64 bytes: the count, the size, the device buffers) at FAB_TABLE + 64 le
 FAB_TABLE = 0x6ff000000000
+TEX_HEAP = 0x6fe000000000      # hardware texture descriptors (zluda_agx's texture heap)
+SAMPLER_HEAP = 0x6fe100000000  # hardware samplers
 
 
 class Unsupported(Exception):
@@ -79,6 +81,36 @@ def object_words(kind, t, addr, attrs, dims):
     return [0x53545446, addr, SIZES[t], nth(attrs, 0), nth(dims, 0), nth(dims, 1), nth(dims, 2), nth(attrs, 1, 11),
             nth(attrs, 2, 1), nth(attrs, 3), nth(attrs, 4), nth(attrs, 5, 1), nth(attrs, 6, int(nth(attrs, 0) > 1)),
             0, 0, 0]
+
+
+def native_texture(words):
+    """The hardware descriptors (Mesa's cmdbuf.xml Texture and Sampler) that zluda_agx's native_descriptors makes for a
+    texture of these descriptor words, as (24-byte texture, 8-byte sampler, word 16 without the heap offset and
+    sampler index), or None for a texture the software sampler reads."""
+    code, ch, filt, addr, norm, rnorm, layers = words[2:9]
+    dims, levels, flags = words[9:12], words[12], words[13]
+    fmt = {0: (1, 'u'), 1: (2, 'u'), 2: (4, 'u'), 3: (4, 's'), 6: (2, 'f'), 7: (4, 'f'), 20: (1, 's'), 21: (2, 's')}
+    if code not in fmt or ch not in (1, 2, 4):
+        return None
+    nbytes, kind = fmt[code]
+    rnorm = rnorm and kind != 'f' and nbytes < 4
+    is_float = kind == 'f' or rnorm
+    rank = 2 if dims[1] > 1 else 1
+    pitch = max(dims[0], 1) * nbytes * ch
+    w = {0: 1, 1: 0, 2: 3, 3: 2}.get(addr, 0)
+    if dims[2] > 1 or layers > 1 or levels > 1 or flags or words[1] % 16 or pitch % 16 or dims[0] > 16384 \
+            or dims[1] > 16384 or (filt and not is_float) or (not norm and w in (1, 2)) or (ch != 4 and w == 3):
+        return None
+    chan = {(1, 1): 0x00, (1, 2): 0x0a, (1, 4): 0x28, (2, 1): 0x09, (2, 2): 0x23, (2, 4): 0x32, (4, 1): 0x21,
+            (4, 2): 0x31, (4, 4): 0x38}[(nbytes, ch)]
+    ty = 4 if kind == 'f' else (int(kind == 's') if rnorm else 2 + int(kind == 's'))
+    swz = {1: [0, 5, 5, 4], 2: [0, 1, 5, 4], 4: [0, 1, 2, 3]}[ch]
+    t = (0 if rank == 1 else 2) | chan << 6 | ty << 13 | sum(v << (16 + 3 * i) for i, v in enumerate(swz))
+    t |= (dims[0] - 1) << 28 | (0 if rank == 1 else dims[1] - 1) << 42 | (words[1] >> 4) << 66
+    t |= ((max(pitch, 16) - 16) >> 4) << 110
+    smp = filt << 23 | filt << 25 | w << 29 | w << 32 | w << 35 | int(not norm) << 38
+    tag = 1 << 63 | int(not is_float) << 62 | int(rank == 2) << 61
+    return t.to_bytes(24, 'little'), smp.to_bytes(8, 'little'), tag
 
 
 def tensormap_words(t, addr, dims, strides, box, swizzle, im2col=None):
@@ -344,7 +376,7 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             args = [struct.unpack_from('<3I', d, q + 28 + 12 * i) for i in range(nargs)]
             # tagged extensions up to the record's end: 1 = cluster dimensions, 4 = the hidden threadgroup memory
             # size argument (2 and 3 are checked mode's, which the harness does not run)
-            cluster, tgb_half, e = (1, 1, 1), None, q + 28 + 12 * nargs
+            cluster, tgb_half, tex_half, e = (1, 1, 1), None, None, q + 28 + 12 * nargs
             while e + 4 <= pos + size:
                 tag, = struct.unpack_from('<I', d, e)
                 if tag == 1 and e + 16 <= pos + size:
@@ -353,12 +385,15 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
                 elif tag == 4 and e + 8 <= pos + size:
                     tgb_half, = struct.unpack_from('<I', d, e + 4)
                     e += 8
+                elif tag == 5 and e + 8 <= pos + size:
+                    tex_half, = struct.unpack_from('<I', d, e + 4)
+                    e += 8
                 else:
                     break
-            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half)
+            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half)
             pos += size
     kernels = {}
-    for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half) in records.items():
+    for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
@@ -374,6 +409,8 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             'cluster': cluster,
             # the hidden argument set to the threadgroup memory of the launch, static and dynamic bytes
             'tgb_half': None if tgb_half in (None, 0xffffffff) else tgb_half,
+            # the texture heap address (extension 5, a module that samples with the texture unit)
+            'tex_half': tex_half,
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
     gsizes = {n: v[1] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
@@ -469,6 +506,7 @@ def run_test(path, args):
         syms, bufs, last = {}, {}, None
         mm_entries = []
         fab_entries = {}
+        textures, samplers = [], []
         globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
         for off, n, target in relocs:
             globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
@@ -560,6 +598,15 @@ def run_test(path, args):
                     words = object_words('sampler', None, 0, ints(m.group(3)), [])
                 else:
                     words = object_words(m.group(1), m.group(3), syms[m.group(4)], ints(m.group(6)), ints(m.group(5)))
+                    native = native_texture(words) if m.group(1) == 'texture' else None
+                    if native:
+                        # word 16 (zluda_agx texture.rs): the heap offset and the sampler index of its hardware
+                        # descriptors, samplers shared when equal
+                        tex, smp, tag = native
+                        if smp not in samplers:
+                            samplers.append(smp)
+                        words = words + [tag | samplers.index(smp) << 32 | 24 * len(textures)]
+                        textures.append(tex)
                 addr = BASE + ((mem.top + 255) & ~255)
                 mem.top = (addr - BASE) + 8 * len(words)
                 syms[m.group(2)] = addr
@@ -642,6 +689,8 @@ def run_test(path, args):
                     put(k['globals_half'], GLOBALS_BASE, 8)
                 if k['tgb_half'] is not None:
                     put(k['tgb_half'], k['shared'] + dyn, 4)
+                if k['tex_half'] is not None:
+                    put(k['tex_half'], TEX_HEAP, 8)
                 # agx_run takes 32-bit uniforms
                 uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
                                    for h in halves})
@@ -683,6 +732,14 @@ def run_test(path, args):
                     with open(f_fab, 'wb') as f:
                         f.write(table)
                     cmd += ['--map', '%#x=%s' % (FAB_TABLE, f_fab)]
+                if k['tex_half'] is not None and textures:
+                    f_tex, f_smp = os.path.join(tmp, 'tex.bin'), os.path.join(tmp, 'smp.bin')
+                    with open(f_tex, 'wb') as f:
+                        f.write(b''.join(textures))
+                    with open(f_smp, 'wb') as f:
+                        f.write(b''.join(samplers))
+                    cmd += ['--map', '%#x=%s' % (TEX_HEAP, f_tex), '--map', '%#x=%s' % (SAMPLER_HEAP, f_smp),
+                            '--sampler-heap', '%#x=%d' % (SAMPLER_HEAP, len(samplers))]
                 for u, v in uniforms:
                     cmd += ['--uniform', '%d=%d' % (u, v)]
                 if args.agx_strict:

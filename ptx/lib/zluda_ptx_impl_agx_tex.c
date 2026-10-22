@@ -1,5 +1,6 @@
-// Texture and surface instructions for AGX, in software (AGX's own texture
-// unit is not used yet: its descriptors are not known).
+// Texture and surface instructions for AGX, in software, except tex.1d / tex.2d
+// on textures that zluda_agx gave hardware descriptors (word 16), which the
+// texture unit samples outside --strict-fp.
 //
 // The texture, sampler and surface objects that CUDA handles point to are
 // descriptors in device memory in the encoding of PTX-formalization's model
@@ -31,7 +32,9 @@ enum { TEX_MAGIC = 0x54585854, SAMPLER_MAGIC = 0x5343504d, SURF_MAGIC = 0x535454
 
 // texture: 1 base, 2 type code, 3 channels, 4 filter, 5 address mode,
 // 6 normalized, 7 read-normalized, 8 layers, 9..11 dims, 12 levels,
-// 13 flags (bit 0 depth, bit 1 cube, bits 8-15 samples of a multi-sample texture), 14 row pitch (0: dense; not in the model), 15 mip filter
+// 13 flags (bit 0 depth, bit 1 cube, bits 8-15 samples of a multi-sample texture), 14 row pitch (0: dense; not in the model), 15 mip filter,
+// 16 hardware descriptors (zluda_agx texture.rs: bit 63 present, 62 integer results, 61 2D, 32..47 sampler
+// index, 0..31 texture heap offset; not in the model)
 // sampler: 1 filter, 2 address mode, 3 normalized, 4 mip filter, 5 min lod,
 // 6 max lod (1/256 units, signed)
 // surface: 1 base, 2 texel bytes, 3 layers, 4..6 dims, 7 sample format,
@@ -406,12 +409,24 @@ static inline int geom_rank(int g) { return g == G_1D || g == G_A1D ? 1 : g == G
 static inline int geom_array(int g) { return g == G_A1D || g == G_A2D || g == G_ACUBE; }
 static inline int geom_cube(int g) { return g == G_CUBE || g == G_ACUBE; }
 
+// The texture unit's sample of (x, y) (zluda_ptx_impl_agx.ll): word 16 of a texture descriptor that zluda_agx gave
+// hardware descriptors.
+v4u32 __zluda_ptx_impl_agx_tex_unit(uint64_t native, float x, float y);
+
 // tex[.base|.level|.grad].geom.v4.dtype.ctype d, [t {, s}, {c0..c3}] {, lod | , dPdx, dPdy} {, offsets} {, ref}
-// lod_mode: 0 none (.base too), 1 .level, 2 .grad
+// lod_mode: 0 none (.base too), 1 .level, 2 .grad. `unit`: the form may use the texture unit (tex.1d / tex.2d with
+// float coordinates, automatic lod, no sampler, offsets or depth compare, outside --strict-fp), which it does on a
+// texture with hardware descriptors of its rank whose results are integers exactly when dtype is.
 API v4u32 __zluda_ptx_impl_agx_tex(desc_t t, desc_t s, int geom, int lod_mode, int ctype_float, int dtype,
                                    uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3, float lod, float dx0,
                                    float dx1, float dx2, float dy0, float dy1, float dy2, int32_t o0, int32_t o1,
-                                   int32_t o2, int has_ref, uint32_t ref) {
+                                   int32_t o2, int has_ref, uint32_t ref, int unit) {
+    if (unit) {
+        uint64_t native = tw(t, 16);
+        if ((native >> 63) && (int)((native >> 62) & 1) == (dtype != 0) &&
+            (int)((native >> 61) & 1) == (geom == G_2D))
+            return __zluda_ptx_impl_agx_tex_unit(native, bits_to_float(c0), bits_to_float(c1));
+    }
     struct sampling sm = sampling_of(t, s);
     struct q q = {0, {o0, o1, o2}, has_ref, ref};
     double dx[3] = {dx0, dx1, dx2}, dy[3] = {dy0, dy1, dy2};
@@ -849,14 +864,16 @@ typedef int32_t v1s32 __attribute__((ext_vector_type(1)));
 typedef int32_t v2s32 __attribute__((ext_vector_type(2)));
 typedef int32_t v4s32 __attribute__((ext_vector_type(4)));
 
-#define TEXOBJ(GEOM, CODE, DTYPE, DCODE, CTYPE, CFLOAT, N, C1, C2)                                                   \
-    API v4##DTYPE __zluda_ptx_impl_texobj_##GEOM##_v4_##DTYPE##_##CTYPE(uint64_t texobj, v##N##CTYPE coord) {        \
+#define TEXOBJ(GEOM, CODE, DTYPE, DCODE, CTYPE, CFLOAT, N, C1, C2) TEXOBJ_(GEOM, CODE, DTYPE, DCODE, CTYPE, CFLOAT, N, C1, C2, , 0)
+// the _unit forms (tex.1d / tex.2d with float coordinates outside --strict-fp) may use the texture unit
+#define TEXOBJ_(GEOM, CODE, DTYPE, DCODE, CTYPE, CFLOAT, N, C1, C2, SUFFIX, UNIT)                                    \
+    API v4##DTYPE __zluda_ptx_impl_texobj_##GEOM##_v4_##DTYPE##_##CTYPE##SUFFIX(uint64_t texobj, v##N##CTYPE coord) { \
         union {                                                                                                     \
             CTYPE##_t v;                                                                                            \
             uint32_t u;                                                                                             \
         } x = {coord[0]}, y = {C1}, z = {C2};                                                                       \
         v4u32 out = __zluda_ptx_impl_agx_tex((desc_t)texobj, 0, CODE, 0, CFLOAT, DCODE, x.u, y.u, z.u, 0, 0, 0, 0, \
-                                             0, 0, 0, 0, 0, 0, 0, 0, 0);                                            \
+                                             0, 0, 0, 0, 0, 0, 0, 0, 0, UNIT);                                      \
         union {                                                                                                     \
             uint32_t u[4];                                                                                          \
             v4##DTYPE v;                                                                                            \
@@ -870,6 +887,8 @@ typedef int32_t s32_t;
     TEXOBJ(1d, G_1D, DTYPE, DCODE, f32, 1, 1, 0, 0)                                                                 \
     TEXOBJ(1d, G_1D, DTYPE, DCODE, s32, 0, 1, 0, 0)                                                                 \
     TEXOBJ(2d, G_2D, DTYPE, DCODE, f32, 1, 2, coord[1], 0)                                                          \
+    TEXOBJ_(1d, G_1D, DTYPE, DCODE, f32, 1, 1, 0, 0, _unit, 1)                                                      \
+    TEXOBJ_(2d, G_2D, DTYPE, DCODE, f32, 1, 2, coord[1], 0, _unit, 1)                                               \
     TEXOBJ(2d, G_2D, DTYPE, DCODE, s32, 0, 2, coord[1], 0)                                                          \
     TEXOBJ(3d, G_3D, DTYPE, DCODE, f32, 1, 4, coord[1], coord[2])                                                   \
     TEXOBJ(3d, G_3D, DTYPE, DCODE, s32, 0, 4, coord[1], coord[2])
