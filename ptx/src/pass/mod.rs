@@ -105,6 +105,11 @@ pub struct Options {
     /// `CU_LIMIT_STACK_SIZE`; 0 for its default, 1024); the frames of recursive
     /// functions get four times as much.
     pub stack_size: u32,
+    /// AGX: compute `mma` and `wmma` with f16, bf16 or tf32 A and B as 8x8x8
+    /// SIMD-group matrix products in f32 (the matrix unit on G14): much
+    /// faster, but the sums are a chain of rounded fused multiply-adds with
+    /// f32 denormals flushed instead of exact sums rounded once.
+    pub fast_mma: bool,
 }
 
 /// Drops the `.loc` statements of every function.
@@ -140,7 +145,7 @@ pub fn to_llvm_module_with_options<'input>(
     options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
-    let Options { target, strict_fp, debug_locations, stack_size } = options;
+    let Options { target, strict_fp, debug_locations, stack_size, fast_mma } = options;
     let strict_fp = strict_fp && target == Target::Agx;
     let mut ast = ast;
     if !debug_locations {
@@ -184,6 +189,7 @@ pub fn to_llvm_module_with_options<'input>(
     let directives = remove_unreachable_basic_blocks::run(directives, target == Target::Agx)?;
     on_pass_end("remove_unreachable_basic_blocks");
     instruction_mode_to_global_mode::set_f32_always_ftz(sm_version < 20);
+    agx_matrix::set_fast_mma(fast_mma && target == Target::Agx);
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
     let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;

@@ -385,6 +385,27 @@ Not supported: `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
 rounding mode other than `.rn`, and register selectors of block scaled and
 sparse `mma`.
 
+The metadata of `mma.sp` with two chunks of rows per thread follows the
+ISA's figures: for `f16` / `bf16` `m16n8k32` and `tf32` `m16n8k16`, thread
+`2 sel + c / 4` of the quad holds chunks `c` of rows `g` (bits 0-15) and
+`g + 8` (bits 16-31); for 8-bit `m16n8k32`, thread `2 sel + h` holds the 8
+chunks of row `g + 8h`.
+
+`zoc --fast-mma` (`ZLUDA_AGX_FAST_MMA=1` for `zluda_agx`) computes `mma` and
+`wmma` with `f16`, `bf16` or `tf32` A and B and `f16` or `f32` C and D as
+8x8x8 `llvm.agx.simdgroup.matrix.fma` products in `f32`: the matrix unit
+(`simd_matrix_fmadd32`) on G14, the same chain of fused multiply-adds with
+shuffles on other chips. The operands are gathered from the PTX fragments
+with SIMD-group shuffles (whose lanes are fitted at compile time as linear
+functions of the lane bits; layouts that do not fit keep the exact form), A
+and B are converted to `f32` exactly, `k` is padded with zeros to a multiple
+of 8, and an `f16` D is rounded once from `f32`. It is not the exact sum of
+the default emulation: the products are summed by rounded fused
+multiply-adds in `k` order and `f32` denormals are flushed (the `mma-*`
+programs of PTX-formalization then differ from the model by a few units in
+the last place). A kernel with an `m16n8k16.f32.f16` mma has 298 instead of
+1,237 instructions on G14 (4 `simd_matrix_fmadd32`), 728 on G13.
+
 ### Fifth-generation tensor core (`tcgen05`)
 
 The tensor memory of a CTA (128 lanes of 512 32-bit columns) is a 256 KiB slab
@@ -434,15 +455,17 @@ as `mma.sync` tiles. Warp `w % 4` of the warpgroup computes rows
 `16w..16w+15` of D as `n / 8` tiles of `m16n8kK`, through one tile helper
 that is inlined at each use (AGX has no calls). A comes from the registers or,
 like B, from shared memory through its matrix descriptor (start address, LBO,
-SBO and swizzle modes 0 to 6, following `ptx-exec-wg.k`), K-major or
+SBO, swizzle modes 0 to 6 and the base offset of bits 49-51, which starts the
+swizzle pattern that many 128-byte lines before the address, following
+`ptx-exec-wg.k`), K-major or
 transposed with `.trans`. Sparse A in shared memory is the packed
 `M x K/2` tile, read in the element order of the `mma.sp` fragment.
 `imm-scale-a/b` = -1 negate the elements, and `scale-d` is either an
 immediate or a predicate. Every `wgmma` is synchronous on AGX, so
 `wgmma.fence`, `commit_group` and `wait_group` compile to nothing. D can have
 up to 128 registers (`n256` with `f32`). A vector operand can now hold up to
-256 elements. All 34 `wg-*` and `wgsp-*` programs of PTX-formalization
-match the formal semantics on agx-g13g and agx-g14c.
+256 elements. All `wg-*`, `wg-baseoff-*` and `wgsp-*` programs of
+PTX-formalization match the formal semantics.
 
 ### Tensor memory accelerator (`cp.async.bulk.tensor`)
 
@@ -452,9 +475,11 @@ issued). Supported:
 
 * tile loads, stores and reductions (`add`, `min`, `max`, `inc`, `dec`,
   `and`, `or`, `xor`; signedness and float from the tensor map's element
-  type), 1D to 5D, with element strides, out-of-bounds zero or NaN fill and
-  the shared-memory swizzles (32B, 64B, 128B, and 128B with 32B, 32B + 8-byte
-  flip and 64B atomicity), by the CTA-relative shared address;
+  type), 1D to 5D, with element strides (a box dimension of `n` elements with
+  stride `s` holds `ceil(n / s)` of them), out-of-bounds zero or NaN fill and
+  the shared-memory swizzles (32B, 64B, 128B, 96B, which has the pattern of
+  32B, and 128B with 32B, 32B + 8-byte flip and 64B atomicity), by the
+  CTA-relative shared address;
 * `.multicast::cluster` (16- and 32-bit masks) and `.cta_group::2`;
 * the im2col modes `.im2col`, `.im2col::w`, `.im2col::w::128` and stores with
   `.im2col_no_offs::w`;
@@ -468,9 +493,10 @@ The 128-byte tensor map is opaque to PTX. `cuTensorMapEncodeTiled`,
 `cuTensorMapEncodeIm2col` and `cuTensorMapReplaceAddress` write the encoding
 of PTX-formalization's model (16 64-bit words: element type, rank, address,
 dims, strides, box, swizzle, fill, interleave, element strides, im2col
-corners), and the emulation reads the same one. All 28 `tma*` and `tma-*`
-programs of PTX-formalization match the formal semantics on agx-g13g and
-agx-g14c. The interleaved layouts are plain copies of the dims, as in the
+corners), and the emulation reads the same one. Tensor maps are read with
+ordinary loads, so `fence.proxy.tensormap::generic` is a fence of its scope.
+The `tma*` and `tma-*` programs of PTX-formalization match the formal
+semantics, except `.report_mechanism` (`tma-report`). The interleaved layouts are plain copies of the dims, as in the
 model. `cp.async.bulk.prefetch.tensor` and `.tile::gather4` / `scatter4` are
 not supported yet.
 

@@ -631,6 +631,12 @@ fn agx_lineinfo() -> bool {
     std::env::var("ZLUDA_AGX_LINEINFO").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// `ZLUDA_AGX_FAST_MMA=1`: compute `mma` and `wmma` of f16, bf16 and tf32 with the SIMD-group matrix
+/// multiply-accumulate (zoc --fast-mma) instead of exact sums.
+fn agx_fast_mma() -> bool {
+    std::env::var("ZLUDA_AGX_FAST_MMA").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
     compile_ptx_linked(&[ptx], cpu)
@@ -669,6 +675,10 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if lineinfo {
         options.push("lineinfo");
     }
+    let fast_mma = agx_fast_mma();
+    if fast_mma {
+        options.push("fast-mma");
+    }
     let stack_size = STACK_SIZE.load(std::sync::atomic::Ordering::Relaxed);
     let stack_option = format!("stack-size={stack_size}");
     if stack_size != DEFAULT_STACK_SIZE {
@@ -688,6 +698,7 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
             .args(mesa.then_some("--agx-strict"))
             .args(checked.then_some("--agx-checked"))
             .args(lineinfo.then_some("--lineinfo"))
+            .args(fast_mma.then_some("--fast-mma"))
             .args((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")))
             .arg("--output-dir")
             .arg(dir.path())

@@ -2432,6 +2432,12 @@ elements:
   %w15h = lshr i64 %w15, 32
   %w15ht = trunc i64 %w15h to i32
   %e4 = and i32 %w15ht, 255
+  ; dimension i holds ceil(box_i / element stride_i) elements (PTX ISA 5.5.3.2)
+  %cnt0 = call i32 @__zluda_ptx_impl_agx_tma_count(i32 %bx0, i32 %e0)
+  %cnt1 = call i32 @__zluda_ptx_impl_agx_tma_count(i32 %b1r, i32 %e1)
+  %cnt2 = call i32 @__zluda_ptx_impl_agx_tma_count(i32 %b2r, i32 %e2)
+  %cnt3 = call i32 @__zluda_ptx_impl_agx_tma_count(i32 %b3r, i32 %e3)
+  %cnt4 = call i32 @__zluda_ptx_impl_agx_tma_count(i32 %b4r, i32 %e4)
   ; swizzle mode from swizzle_mode / swizzle_atomicity
   %swz = lshr i32 %w14t, 16
   %swzm = and i32 %swz, 255
@@ -2441,7 +2447,10 @@ elements:
   %is128 = icmp eq i32 %swzm, 3
   %m128 = select i1 %is128, i32 1, i32 0
   %is64 = icmp eq i32 %swzm, 2
-  %is32 = icmp eq i32 %swzm, 1
+  ; 32B, and 96B (4) with the pattern of 32B (PTX ISA 5.5.7, Figure 31)
+  %is32b = icmp eq i32 %swzm, 1
+  %is96 = icmp eq i32 %swzm, 4
+  %is32 = or i1 %is32b, %is96
   %m64 = select i1 %is64, i32 2, i32 %m128
   %m32 = select i1 %is32, i32 3, i32 %m64
   %atomic = add i32 %atom, 3
@@ -2464,10 +2473,10 @@ elements:
   ; the shared image is swizzled by its CTA-relative address
   %smem_rel = call i32 @__zluda_agx_cluster_mapa(i32 %smem, i32 0)
   %window = sub i32 %smem, %smem_rel
-  %v01 = mul i32 %bx0, %b1r
-  %v012 = mul i32 %v01, %b2r
-  %v0123 = mul i32 %v012, %b3r
-  %count = mul i32 %v0123, %b4r
+  %v01 = mul i32 %cnt0, %cnt1
+  %v012 = mul i32 %v01, %cnt2
+  %v0123 = mul i32 %v012, %cnt3
+  %count = mul i32 %v0123, %cnt4
   %bytes = mul i32 %count, %eb
   %empty = icmp eq i32 %count, 0
   br i1 %empty, label %exit, label %loop
@@ -2547,19 +2556,19 @@ reduce:
 next:
   ; advance (q0, ..., q4) through the box, dim 0 fastest
   %q0.i = add i32 %q0, 1
-  %w0 = icmp eq i32 %q0.i, %bx0
+  %w0 = icmp eq i32 %q0.i, %cnt0
   %q0.n = select i1 %w0, i32 0, i32 %q0.i
   %k0 = zext i1 %w0 to i32
   %q1.i = add i32 %q1, %k0
-  %w1c = icmp eq i32 %q1.i, %b1r
+  %w1c = icmp eq i32 %q1.i, %cnt1
   %q1.n = select i1 %w1c, i32 0, i32 %q1.i
   %k1 = zext i1 %w1c to i32
   %q2.i = add i32 %q2, %k1
-  %w2c = icmp eq i32 %q2.i, %b2r
+  %w2c = icmp eq i32 %q2.i, %cnt2
   %q2.n = select i1 %w2c, i32 0, i32 %q2.i
   %k2 = zext i1 %w2c to i32
   %q3.i = add i32 %q3, %k2
-  %w3c = icmp eq i32 %q3.i, %b3r
+  %w3c = icmp eq i32 %q3.i, %cnt3
   %q3.n = select i1 %w3c, i32 0, i32 %q3.i
   %k3 = zext i1 %w3c to i32
   %q4.n = add i32 %q4, %k3
@@ -2575,6 +2584,16 @@ exit:
 ; (6-bit) bytes in global memory and 8 (b4x16) or 16 bytes (data, then zero
 ; padding) in shared memory; groups are laid out like the elements of a tile,
 ; and a group outside the tensor reads as zeros. Returns the bytes of the box.
+; the elements of a box dimension of `box` elements with element stride `stride`
+define i32 @__zluda_ptx_impl_agx_tma_count(i32 %box, i32 %stride) #0 {
+  %zero = icmp eq i32 %stride, 0
+  %s = select i1 %zero, i32 1, i32 %stride
+  %t = add i32 %box, %s
+  %t1 = sub i32 %t, 1
+  %n = udiv i32 %t1, %s
+  ret i32 %n
+}
+
 define i32 @__zluda_ptx_impl_agx_tma_tile_sub(ptr %tm, i32 %et, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4, i32 %smem, i32 %dir) #3 {
 entry:
   %six = icmp eq i32 %et, 15
@@ -3046,7 +3065,10 @@ define i32 @__zluda_ptx_impl_agx_tma_swizzle_mode(i64 %w14) #0 {
   %is128 = icmp eq i32 %swzm, 3
   %m128 = select i1 %is128, i32 1, i32 0
   %is64 = icmp eq i32 %swzm, 2
-  %is32 = icmp eq i32 %swzm, 1
+  ; 32B, and 96B (4) with the pattern of 32B (PTX ISA 5.5.7, Figure 31)
+  %is32b = icmp eq i32 %swzm, 1
+  %is96 = icmp eq i32 %swzm, 4
+  %is32 = or i1 %is32b, %is96
   %m64 = select i1 %is64, i32 2, i32 %m128
   %m32 = select i1 %is32, i32 3, i32 %m64
   %atomic = add i32 %atom, 3

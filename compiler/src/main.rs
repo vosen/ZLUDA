@@ -53,6 +53,12 @@ pub struct Options {
     /// checked-mode arguments (ZLUDA_AGX_CHECKED=1). Slower
     agx_checked: bool,
 
+    #[bpaf(long("fast-mma"))]
+    /// AGX: compute mma and wmma with f16, bf16 or tf32 A and B with the
+    /// SIMD-group matrix multiply-accumulate in f32 (the matrix unit on G14):
+    /// much faster than the exact sums, rounded at every step
+    fast_mma: bool,
+
     #[bpaf(long("lineinfo"))]
     /// AGX: keep the PTX `.loc` source positions as a DWARF line table in the
     /// object (as nvcc -lineinfo), for tools that map a PC to a source line
@@ -124,6 +130,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.agx_checked,
             opts.lineinfo,
             opts.stack_size,
+            opts.fast_mma,
         );
     }
 
@@ -212,6 +219,7 @@ fn compile_agx(
     checked: bool,
     lineinfo: bool,
     stack_size: u32,
+    fast_mma: bool,
 ) -> Result<(), CompilerError> {
     let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
@@ -226,6 +234,7 @@ fn compile_agx(
             // checked mode names the source of a bad access
             debug_locations: checked || lineinfo,
             stack_size,
+            fast_mma,
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
@@ -241,6 +250,7 @@ fn compile_agx(
                 strict_fp,
                 debug_locations: checked || lineinfo,
                 stack_size,
+                fast_mma,
             },
         )?;
         other_ir.push(other.llvm_ir);

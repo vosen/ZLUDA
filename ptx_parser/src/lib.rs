@@ -2873,6 +2873,61 @@ fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
 // cp.async.bulk.tensor.dim.global.shared::cta{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
 // cp.reduce.async.bulk.tensor.dim.global.shared::cta.redOp{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
 // tensormap.replace.tile.field{.space}.b1024.type [tensorMap], {ord,} value
+// fence.proxy.tensormap::generic.release.scope;
+// fence.proxy.tensormap::generic.acquire.scope [addr], size;
+// Tensor maps are read with ordinary loads (the generic proxy): a fence of the scope (a cluster is one CTA).
+fn fence_tensormap<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let (acquire, scope) = match modifiers[..] {
+        ["proxy", "tensormap::generic", sem @ ("release" | "acquire"), scope] => (sem == "acquire", scope),
+        _ => return backtrack(),
+    };
+    let scope = match scope {
+        "cta" => MemScope::Cta,
+        "cluster" | "gpu" => MemScope::Gpu,
+        "sys" => MemScope::Sys,
+        _ => return backtrack(),
+    };
+    if acquire {
+        let _ = (ParsedOperandStr::parse, Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    }
+    Ok(ast::Instruction::Membar { data: scope })
+}
+
+// createpolicy.fractional.L2::primary.L2::secondary.b64 policy{, fraction}: the form with a secondary priority
+// (a cache hint, like the primary one), which the instruction grammar cannot tell from the primary.
+fn createpolicy_secondary<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let priority = |m: &str| match m {
+        "L2::evict_last" => Some(EvictionPriority::L2EvictLast),
+        "L2::evict_normal" => Some(EvictionPriority::L2EvictNormal),
+        "L2::evict_first" => Some(EvictionPriority::L2EvictFirst),
+        "L2::evict_unchanged" => Some(EvictionPriority::L2EvictUnchanged),
+        _ => None,
+    };
+    let primary = match modifiers[..] {
+        ["fractional", primary, "L2::evict_first" | "L2::evict_unchanged", "b64"] => priority(primary),
+        _ => None,
+    };
+    let Some(primary_priority) = primary else {
+        return backtrack();
+    };
+    let dst_policy = ParsedOperandStr::parse.parse_next(stream)?;
+    let fraction = opt((Token::Comma, ParsedOperandStr::parse).map(|(_, f)| f)).parse_next(stream)?;
+    let fraction = fraction
+        .and_then(|op| op.as_immediate())
+        .and_then(|imm| imm.as_f64())
+        .unwrap_or(1.0) as f32;
+    Ok(ast::Instruction::CreatePolicyFractional {
+        data: ast::CreatePolicyFractionalDetails { primary_priority, fraction },
+        arguments: ast::CreatePolicyFractionalArgs { dst_policy },
+    })
+}
+
 // vote.{all,any,uni}.pred d, {!}a: the deprecated forms without .sync (below sm_70), over the active threads.
 // vote.ballot.b32 and the .sync forms stay with the instruction grammar.
 fn vote_without_sync<'a, 'input>(
@@ -2907,7 +2962,7 @@ fn tensor_instruction<'a, 'input>(
     let sparse = opcode == "spcompress" || opcode == "spdecompress";
     let tcgen05 = opcode == "tcgen05";
     if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05
-        && opcode != "vote"
+        && opcode != "vote" && opcode != "fence" && opcode != "createpolicy"
     {
         return backtrack();
     }
@@ -2915,6 +2970,12 @@ fn tensor_instruction<'a, 'input>(
     let mut modifiers = matrix_modifiers(stream);
     if opcode == "vote" {
         return vote_without_sync(stream, modifiers);
+    }
+    if opcode == "fence" {
+        return fence_tensormap(stream, modifiers);
+    }
+    if opcode == "createpolicy" {
+        return createpolicy_secondary(stream, modifiers);
     }
     if opcode == "cvt" {
         return cvt_narrow_instruction(stream, modifiers);
@@ -8419,8 +8480,7 @@ derive_parser!(
     // createpolicy.range{.global}.level::primary_priority{.level::secondary_priority}.b64
     //                                 cache-policy, [a], primary-size, total-size;
 
-    // I'm ignoring the secondary priority for now, since it might require changes to the parser
-    // and it's not used for the current workload I'm enabling.
+    // (the form with a secondary priority is parsed by `createpolicy_secondary`)
     createpolicy.fractional.level::primary_priority.b64
                                     cache-policy{, fraction} => {
         let fraction = fraction

@@ -46,6 +46,31 @@ use std::fmt::Write;
 
 const AGX_PREFIX: &str = "agx_";
 
+thread_local! {
+    static FAST_MMA: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `Options::fast_mma` for the module being translated on this thread.
+pub(super) fn set_fast_mma(fast: bool) {
+    FAST_MMA.with(|f| f.set(fast));
+}
+
+/// The `mma` tiles that `fast_mma` computes with the SIMD-group matrix
+/// multiply-accumulate.
+fn is_fast(d: &ast::MmaDetails) -> bool {
+    use ast::MmaType::*;
+    d.sparse.is_none()
+        && d.block_scale.is_none()
+        && !d.satfinite
+        && matches!(d.atype, F16 | Bf16 | Tf32)
+        && d.btype == d.atype
+        && matches!(d.ctype, F16 | F32)
+        && matches!(d.dtype, F16 | F32)
+        && d.n == 8
+        && matches!(d.m, 8 | 16)
+        && (d.m, d.k) != (8, 4)
+}
+
 #[derive(Copy, Clone)]
 enum Helper {
     LdMatrix(ast::LdMatrixDetails),
@@ -76,7 +101,13 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::Tcgen05Mma { data, .. } => Helper::Tcgen05Mma(*data),
         _ => return None,
     };
-    Some(helper.name())
+    let mut name = helper.name();
+    if let Helper::Mma(d) | Helper::WmmaMma(d) = helper {
+        if is_fast(&d) && FAST_MMA.with(|f| f.get()) {
+            name.push_str("_fast");
+        }
+    }
+    Some(name)
 }
 
 // ---------------------------------------------------------------- names
@@ -463,6 +494,7 @@ fn define(
     declarations: &mut BTreeSet<String>,
 ) -> Result<String, TranslateError> {
     let mut ir = Ir::default();
+    ir.fast_mma = name.ends_with("_fast");
     let args = params
         .iter()
         .enumerate()
@@ -587,6 +619,8 @@ struct Ir {
     // when set, `special_dot` computes the special values only when this i1
     // is true, and is +0 otherwise
     special_guard: Option<String>,
+    // the tiles of `is_fast` mma are computed by `fast_tile`
+    fast_mma: bool,
 }
 
 struct Lane {
@@ -611,6 +645,7 @@ impl Default for Ir {
             block: "entry".to_string(),
             declarations: BTreeSet::new(),
             special_guard: None,
+            fast_mma: false,
         }
     }
 }
@@ -1117,6 +1152,241 @@ fn register_bits(type_: ast::MmaType) -> u32 {
 
 // ---------------------------------------------------------------- mma
 
+// `f(lane)` as an i32 expression of the bits of `lane`, c0 + sum of c_j *
+// bit j, when f has that form for the lanes where it is defined (Some). The
+// coefficients name the expression, so equal functions share it (and their
+// shuffles).
+fn lane_function(
+    ir: &mut Ir,
+    cache: &mut HashMap<Vec<i64>, String>,
+    lane: &str,
+    f: &dyn Fn(u32) -> Option<u32>,
+) -> Result<String, TranslateError> {
+    let fail = || todo("fast mma: fragment layout");
+    let x0 = (0..32).find(|&x| f(x).is_some()).ok_or_else(fail)?;
+    // c_j from two defined lanes that differ only in bit j
+    let c = (0..5)
+        .map(|j| {
+            (0..32u32)
+                .filter(|x| x & (1 << j) == 0)
+                .find_map(|x| Some(f(x | (1 << j))? as i64 - f(x)? as i64))
+                .unwrap_or(0)
+        })
+        .collect::<Vec<_>>();
+    let at = |x: u32| (0..5).filter(|j| (x >> j) & 1 == 1).map(|j| c[j]).sum::<i64>();
+    let c0 = f(x0).ok_or_else(fail)? as i64 - at(x0);
+    for x in 0..32u32 {
+        if f(x).is_some_and(|v| v as i64 != c0 + at(x)) {
+            return Err(fail());
+        }
+    }
+    let key = std::iter::once(c0).chain(c.iter().copied()).collect::<Vec<_>>();
+    if let Some(v) = cache.get(&key) {
+        return Ok(v.clone());
+    }
+    let mut acc = c0.to_string();
+    for (j, cj) in c.iter().enumerate() {
+        if *cj != 0 {
+            let bit = ir.op("lshr", "i32", lane, &j.to_string());
+            let bit = ir.op("and", "i32", &bit, "1");
+            let term = ir.op("mul", "i32", &bit, &cj.to_string());
+            acc = ir.op("add", "i32", &acc, &term);
+        }
+    }
+    cache.insert(key, acc.clone());
+    Ok(acc)
+}
+
+// Row and column of slot s of lane t in an operand of
+// llvm.agx.simdgroup.matrix.fma, and the lane and slot of (row, column).
+fn unit_position(t: u32, s: u32) -> (u32, u32) {
+    (4 * (t / 16) + (t / 2) % 4, 4 * ((t / 8) % 2) + 2 * (t % 2) + s)
+}
+
+fn unit_holder(row: u32, col: u32) -> (u32, u32) {
+    (16 * (row / 4) + 2 * (row % 4) + 8 * (col / 4) + (col / 2) % 2, col % 2)
+}
+
+// `Options::fast_mma`: an mma tile of f16, bf16 or tf32 A and B as 8x8x8
+// llvm.agx.simdgroup.matrix.fma products in f32 (the G14 matrix unit, or the
+// same chain of fused multiply-adds in k order with shuffles elsewhere):
+// each operand is gathered from the PTX fragments with SIMD-group shuffles,
+// A and B converted to f32 exactly, k padded with zeros to a multiple of 8,
+// and D rounded once from f32 when it is f16. Not the exact sum of the
+// default emulation: the products are rounded at every step and f32
+// denormals are flushed.
+fn fast_tile(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    c: &[String],
+) -> Result<Vec<String>, TranslateError> {
+    use ast::MmaMatrix;
+    let (m, k) = (d.m, d.k);
+    let l = ir.linear(4, &lane.g, 1, &lane.t, 0);
+    let mut functions = HashMap::new();
+    let mut shuffled: HashMap<(usize, usize, String), String> = HashMap::new();
+    // the element of each position of a fragment: (lane, index)
+    let owners = |matrix, bits: u32, count: u32| -> Result<HashMap<(u32, u32), (u32, u32)>, TranslateError> {
+        let mut map = HashMap::new();
+        for lane in 0..32 {
+            for i in 0..count {
+                let p = position(matrix, m, k, bits, lane, i).ok_or_else(|| todo("mma shape"))?;
+                map.insert(p, (lane, i));
+            }
+        }
+        Ok(map)
+    };
+    // f32 bits of element `index` (an i32) of `bits`-bit elements of `type_`
+    let to_f32 = |ir: &mut Ir, regs: &[String], index: &str, type_: ast::MmaType| -> String {
+        let bits = type_.bits();
+        let per = 32 / bits;
+        let reg = ir.op("udiv", "i32", index, &per.to_string());
+        let mut r = regs[0].clone();
+        for (i, x) in regs.iter().enumerate().skip(1) {
+            let is = ir.icmp("eq", "i32", &reg, &i.to_string());
+            r = ir.select(&is, "i32", x, &r);
+        }
+        let x = if per == 1 {
+            r
+        } else {
+            let shift = ir.op("urem", "i32", index, &per.to_string());
+            let shift = ir.op("mul", "i32", &shift, &bits.to_string());
+            ir.op("lshr", "i32", &r, &shift)
+        };
+        match type_ {
+            ast::MmaType::F16 => {
+                let h = ir.cast("trunc", "i32", &x, "i16");
+                let h = ir.cast("bitcast", "i16", &h, "half");
+                let f = ir.cast("fpext", "half", &h, "float");
+                ir.cast("bitcast", "float", &f, "i32")
+            }
+            ast::MmaType::Bf16 => ir.op("shl", "i32", &x, "16"),
+            ast::MmaType::Tf32 => ir.op("and", "i32", &x, "-8192"),
+            _ => x,
+        }
+    };
+    // f32 bits of the operand slot s of this thread for the 8x8 tile of
+    // `matrix` at (row0, col0), zero past `cols`
+    let mut gather = |ir: &mut Ir,
+                      which: usize,
+                      regs: &[String],
+                      type_: ast::MmaType,
+                      owners: &HashMap<(u32, u32), (u32, u32)>,
+                      (row0, col0, cols): (u32, u32, u32),
+                      s: u32|
+     -> Result<String, TranslateError> {
+        let at = |t: u32| {
+            let (r, col) = unit_position(t, s);
+            owners.get(&(row0 + r, col0 + col)).copied().filter(|_| col0 + col < cols)
+        };
+        let valid = |t: u32| Some(at(t).is_some() as u32);
+        if (0..32).all(|t| at(t).is_none()) {
+            return Ok("0".to_string());
+        }
+        let source = |t: u32| at(t).map(|(lane, _)| lane);
+        let index = |t: u32| at(t).map(|(_, i)| i);
+        let source = lane_function(ir, &mut functions, &l, &source)?;
+        let index = lane_function(ir, &mut functions, &l, &index)?;
+        let values = regs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                shuffled
+                    .entry((which, i, source.clone()))
+                    .or_insert_with(|| ir.shuffle(r, 32, &source, false))
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        let x = to_f32(ir, &values, &index, type_);
+        if (0..32).all(|t| at(t).is_some()) {
+            return Ok(x);
+        }
+        let valid = lane_function(ir, &mut functions, &l, &valid)?;
+        let valid = ir.icmp("ne", "i32", &valid, "0");
+        Ok(ir.select(&valid, "i32", &x, "0"))
+    };
+    let vector = |ir: &mut Ir, x: &str, y: &str| {
+        let x = ir.cast("bitcast", "i32", x, "float");
+        let y = ir.cast("bitcast", "i32", y, "float");
+        let v = ir.def(&format!("insertelement <2 x float> poison, float {x}, i32 0"));
+        ir.def(&format!("insertelement <2 x float> {v}, float {y}, i32 1"))
+    };
+    let a_owners = owners(MmaMatrix::A, d.atype.bits(), m * k / 32)?;
+    let b_owners = owners(MmaMatrix::B, d.btype.bits(), k * 8 / 32)?;
+    let c_owners = owners(MmaMatrix::C, d.ctype.bits(), m * 8 / 32)?;
+    ir.declarations.insert(
+        "declare <2 x float> @llvm.agx.simdgroup.matrix.fma.v2f32(<2 x float>, <2 x float>, <2 x float>)".to_string(),
+    );
+    let steps = k.div_ceil(8);
+    let mut b_tiles = Vec::new();
+    for kt in 0..steps {
+        let x = gather(ir, 1, b, d.btype, &b_owners, (8 * kt, 0, 8), 0)?;
+        // (the rows of B past k have no element, and are zero)
+        let y = gather(ir, 1, b, d.btype, &b_owners, (8 * kt, 0, 8), 1)?;
+        b_tiles.push(vector(ir, &x, &y));
+    }
+    let mut tiles = Vec::new();
+    for h in 0..m / 8 {
+        let x = gather(ir, 2, c, d.ctype, &c_owners, (8 * h, 0, 8), 0)?;
+        let y = gather(ir, 2, c, d.ctype, &c_owners, (8 * h, 0, 8), 1)?;
+        let mut acc = vector(ir, &x, &y);
+        for (kt, bt) in b_tiles.iter().enumerate() {
+            let kt = kt as u32;
+            let x = gather(ir, 0, a, d.atype, &a_owners, (8 * h, 8 * kt, k), 0)?;
+            let y = gather(ir, 0, a, d.atype, &a_owners, (8 * h, 8 * kt, k), 1)?;
+            let at = vector(ir, &x, &y);
+            acc = ir.def(&format!(
+                "call <2 x float> @llvm.agx.simdgroup.matrix.fma.v2f32(<2 x float> {at}, <2 x float> {bt}, <2 x float> {acc})"
+            ));
+        }
+        let slots = (0..2)
+            .map(|s| {
+                let x = ir.def(&format!("extractelement <2 x float> {acc}, i32 {s}"));
+                ir.cast("bitcast", "float", &x, "i32")
+            })
+            .collect::<Vec<_>>();
+        tiles.push(slots);
+    }
+    // the elements of D in the PTX layout (that of C)
+    let mut elements = Vec::new();
+    for j in 0..m * 8 / 32 {
+        let at = |t: u32| -> (u32, u32, u32) {
+            let (r, col) = position(MmaMatrix::C, m, k, d.ctype.bits(), t, j).unwrap_or((0, 0));
+            let (holder, slot) = unit_holder(r % 8, col);
+            (r / 8, holder, slot)
+        };
+        let tile = lane_function(ir, &mut functions, &l, &|t| Some(at(t).0))?;
+        let source = lane_function(ir, &mut functions, &l, &|t| Some(at(t).1))?;
+        let slot = lane_function(ir, &mut functions, &l, &|t| Some(at(t).2))?;
+        let mut value = "0".to_string();
+        for (h, slots) in tiles.iter().enumerate() {
+            for (s, x) in slots.iter().enumerate() {
+                let key = (3 + h, s, source.clone());
+                let v = shuffled
+                    .entry(key)
+                    .or_insert_with(|| ir.shuffle(x, 32, &source, false))
+                    .clone();
+                let is_tile = ir.icmp("eq", "i32", &tile, &h.to_string());
+                let is_slot = ir.icmp("eq", "i32", &slot, &s.to_string());
+                let is = ir.op("and", "i1", &is_tile, &is_slot);
+                value = ir.select(&is, "i32", &v, &value);
+            }
+        }
+        elements.push(if d.dtype == ast::MmaType::F16 {
+            let f = ir.cast("bitcast", "i32", &value, "float");
+            let h = ir.cast("fptrunc", "float", &f, "half");
+            let h = ir.cast("bitcast", "half", &h, "i16");
+            ir.cast("zext", "i16", &h, "i32")
+        } else {
+            value
+        });
+    }
+    Ok(pack_d(ir, d, &elements))
+}
+
 // mma.m8n8k4 with .f16 A and B: four independent 8x8x4 products, product q
 // by the quad pair of lanes 4q..4q+3 and 4q+16..4q+19. Rows 4-7 of A, C and
 // D and columns 4-7 of B are held by the upper half of the pair (lanes 16 and
@@ -1280,6 +1550,14 @@ fn mma_tile(
     let (m, k) = (d.m, d.k);
     if d.n != 8 || (m != 8 && m != 16) {
         return Err(todo("mma shape"));
+    }
+    if ir.fast_mma && is_fast(d) && scales.is_none() {
+        // (the exact form where the layouts are not linear in the lane bits)
+        let saved = (ir.out.len(), ir.next, ir.block.clone(), ir.declarations.clone());
+        match fast_tile(ir, lane, d, a, b, c) {
+            Ok(regs) => return Ok(regs),
+            Err(_) => (ir.out, ir.next, ir.block, ir.declarations) = (ir.out[..saved.0].to_string(), saved.1, saved.2, saved.3),
+        }
     }
     let ab_bits = d.atype.bits();
     let ab_reg_bits = register_bits(d.atype);
@@ -1648,6 +1926,12 @@ fn sparse_tile(
             if !nibbles.contains_key(&(rh, chunk)) {
                 let (thread, shift) = match chunks {
                     4 => (selector, 16 * rh + 4 * chunk),
+                    // f16 / bf16 m16n8k32 and tf32 m16n8k16 (ISA Figures 122
+                    // and 125): thread 2 * sel + chunk / 4 holds chunks 4 to
+                    // 4h + 3 of row g and, in its upper half, of row g + 8
+                    8 if bits >= 16 => (2 * selector + chunk / 4, 16 * rh + 4 * (chunk % 4)),
+                    // 8-bit m16n8k32 (Figure 129): thread 2 * sel + h holds
+                    // the 8 chunks of row g + 8h
                     8 => (2 * selector + rh, 4 * chunk),
                     16 => (2 * (chunk / 8) + rh, 4 * (chunk % 8)),
                     _ => return Err(todo("mma.sp shape")),
@@ -2522,8 +2806,10 @@ fn add_limbs(ir: &mut Ir, a: &[String], b: &[String], subtract: bool) -> Vec<Str
 
 // The fields of a matrix descriptor (an i64 value), as i32 values: start
 // address, leading and stride offsets (in elements of `bits` bits), swizzle
-// mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56) and the rows of a
-// swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling).
+// mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56), the rows of a
+// swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling) and
+// the base offset (bits 49-51: the swizzle pattern starts that many 128-byte
+// lines before a multiple of its size).
 #[derive(Clone)]
 struct Descriptor {
     start: String,
@@ -2531,6 +2817,7 @@ struct Descriptor {
     stride: String,
     mode: String,
     atom: String,
+    base: String,
 }
 
 fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
@@ -2544,6 +2831,7 @@ fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
     let sbo = field(32, 0x3fff);
     let mode = field(62, 3);
     let sub = field(56, 1);
+    let base = field(49, 7);
     let start = ir.op("shl", "i32", &start, "4");
     // bytes (16 * field) to elements: 128 / bits elements per 16 bytes
     let elements = |ir: &mut Ir, f: &str| {
@@ -2561,17 +2849,21 @@ fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
         let c = ir.icmp("eq", "i32", &mode, &m.to_string());
         atom = ir.select(&c, "i32", &rows.to_string(), &atom);
     }
-    Descriptor { start, leading, stride, mode, atom }
+    Descriptor { start, leading, stride, mode, atom, base }
 }
 
-// The swizzled byte address of byte `a` of a tile (PTX ISA canonical layouts)
-fn swizzle(ir: &mut Ir, mode: &str, a: &str) -> String {
-    let line = ir.op("lshr", "i32", a, "7");
+// The swizzled byte address of byte `a` of a tile (PTX ISA canonical
+// layouts), the phase of the pattern counted from `base` 128-byte lines
+// before `a`'s line (the descriptor's base offset)
+fn swizzle(ir: &mut Ir, mode: &str, a: &str, base: &str) -> String {
+    let shift = ir.op("shl", "i32", base, "7");
+    let p = ir.op("sub", "i32", a, &shift);
+    let line = ir.op("lshr", "i32", &p, "7");
     // modes 1 to 3: Swizzle<B, 4, 3> with B = 3, 2, 1
     let mut result = a.to_string();
     for (m, b) in [(1u32, 3u32), (2, 2), (3, 1)] {
         let mask = ((1u32 << b) - 1) << 7;
-        let x = ir.op("and", "i32", a, &mask.to_string());
+        let x = ir.op("and", "i32", &p, &mask.to_string());
         let x = ir.op("lshr", "i32", &x, "3");
         let v = ir.op("xor", "i32", a, &x);
         let c = ir.icmp("eq", "i32", mode, &m.to_string());
@@ -2642,7 +2934,7 @@ fn tile_element(ir: &mut Ir, d: &Descriptor, k_major: bool, bits: u32, mn: &str,
     let bit_offset = ir.op("mul", "i32", &offset, &bits.to_string());
     let byte = ir.op("lshr", "i32", &bit_offset, "3");
     let byte = ir.op("add", "i32", &d.start, &byte);
-    let address = swizzle(ir, &d.mode, &byte);
+    let address = swizzle(ir, &d.mode, &byte, &d.base);
     let p = ir.def(&format!("inttoptr i32 {address} to ptr addrspace(3)"));
     let (ty, align) = match bits {
         32 => ("i32", 4),
