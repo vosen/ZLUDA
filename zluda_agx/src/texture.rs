@@ -19,7 +19,7 @@ use crate::driver::{from_io, out, with, Driver};
 use cuda_types::cuda::*;
 use std::ffi::c_void;
 
-const TEXTURE_MAGIC: u64 = 0x5458_5854;
+pub(crate) const TEXTURE_MAGIC: u64 = 0x5458_5854;
 const SURFACE_MAGIC: u64 = 0x5354_5446;
 const DESCRIPTOR_BYTES: u64 = 256;
 /// Word 16 of a texture descriptor: bit 63 set for a texture with hardware descriptors, bit 62 when it samples to

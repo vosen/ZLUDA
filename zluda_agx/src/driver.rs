@@ -298,7 +298,8 @@ impl Driver {
         const PARAM_BLOCK: u64 = 0x7f_0000_0000;
         const TABLE: u64 = 0x7e_0000_0000;
         let allocations = self.live_allocations();
-        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
+        let mut replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
+        replay.add_textures(&self.ctx.vm);
         let mut regions = replay.regions.clone();
         // every allocation an 8-byte word of the arguments points into
         let words = r.params.iter().flat_map(|p| p.chunks_exact(8)).chain(replay.regions.first().filter(|(va, _)| *va == PARAM_BLOCK).into_iter().flat_map(|(_, b)| b.chunks_exact(8)));
@@ -308,6 +309,19 @@ impl Driver {
                     regions.push((start, bytes.to_vec()));
                 }
             }
+        }
+        // the texels of the texture objects among them (word 1 of a texture descriptor)
+        let mut i = 0;
+        while i < regions.len() {
+            let b = &regions[i].1;
+            if b.len() >= 16 && u64::from_le_bytes(b[..8].try_into().unwrap()) == TEXTURE_MAGIC {
+                if let Some((start, bytes)) = self.ctx.allocation(u64::from_le_bytes(b[8..16].try_into().unwrap())) {
+                    if !regions.iter().any(|(va, _)| *va == start) {
+                        regions.push((start, bytes.to_vec()));
+                    }
+                }
+            }
+            i += 1;
         }
         let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
         write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;

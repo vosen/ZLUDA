@@ -1455,6 +1455,8 @@ pub fn replay(
         regions,
         text_offset: k.offset as u64,
         debug_object: module.debug_object.clone(),
+        texture_heap_half: k.texture_heap_half,
+        sampler_heap: None,
     })
 }
 
@@ -1475,9 +1477,27 @@ pub struct Replay {
     /// Where the kernel's code starts in the module's `.text`, and the module's object if it has a line table.
     pub text_offset: u64,
     pub debug_object: Option<Vec<u8>>,
+    /// The kernel's texture heap uniform (`KernelInfo::texture_heap_half`), and the sampler heap's address and
+    /// count once `add_textures` has added the heaps.
+    pub texture_heap_half: Option<u32>,
+    pub sampler_heap: Option<(u64, u32)>,
 }
 
 impl Replay {
+    /// For a kernel that samples with the texture unit: the address space's texture and sampler heaps as regions,
+    /// the texture heap's address in its uniform and the sampler heap for `agx_run --sampler-heap`.
+    pub fn add_textures(&mut self, vm: &Vm) {
+        let (Some(h), Some(t)) = (self.texture_heap_half, vm.textures.as_ref()) else { return };
+        for (i, x) in self.uniforms.iter_mut().skip(h as usize).take(4).enumerate() {
+            *x = (t.textures.va >> (16 * i)) as u16;
+        }
+        let used = (t.used * TEXTURE_DESCRIPTOR_BYTES) as usize;
+        self.regions.push((t.textures.va, t.textures.as_slice()[..used.max(16)].to_vec()));
+        let samplers = t.sampler_slots.len() * SAMPLER_DESCRIPTOR_BYTES as usize;
+        self.regions.push((t.samplers.va, t.samplers.as_slice()[..samplers.max(16)].to_vec()));
+        self.sampler_heap = vm.sampler_heap();
+    }
+
     /// The `agx_run` arguments of the launch, with each region `i` of `regions` (the module's and the caller's)
     /// read from `<prefix><i>.bin` and dumped to `<prefix><i>.out`, the code from `code.bin`.
     pub fn agx_run_args(&self, regions: &[(u64, Vec<u8>)], prefix: &str) -> Vec<String> {
@@ -1495,6 +1515,9 @@ impl Replay {
         for (i, (va, bytes)) in regions.iter().enumerate() {
             a.extend(["--map".into(), format!("{va:#x}={prefix}{i}.bin")]);
             a.extend(["--dump".into(), format!("{va:#x}={}:{prefix}{i}.out", bytes.len())]);
+        }
+        if let Some((va, count)) = self.sampler_heap {
+            a.extend(["--sampler-heap".into(), format!("{va:#x}={count}")]);
         }
         if self.debug_object.is_some() {
             a.extend(["--lines".into(), "module.o".into(), "--lines-offset".into(), self.text_offset.to_string()]);
