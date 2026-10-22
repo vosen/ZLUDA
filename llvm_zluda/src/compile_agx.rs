@@ -10,7 +10,7 @@ use crate::{
     LLVMInitializeAGXAsmPrinter, LLVMInitializeAGXTarget, LLVMInitializeAGXTargetInfo,
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
     LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces,
-    LLVMZludaAgxLowerClusters,
+    LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
@@ -280,6 +280,28 @@ pub fn compile_agx_linked(
         if !lowered && !(i == 0 && clusters > 0) {
             break;
         }
+        let error = unsafe {
+            LLVMRunPasses(
+                linked.get(),
+                c"default<O3>".as_ptr(),
+                target_machine.get(),
+                pb_options.get(),
+            )
+        };
+        if !error.is_null() {
+            let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
+            let message = Message::new(unsafe { CStr::from_ptr(err_msg) });
+            return Err(message.to_str().to_string());
+        }
+    }
+
+    // cluster shared memory over 32 KiB, in device memory
+    let spilled = unsafe { LLVMZludaAgxSpillClusterShared(linked.get(), &mut err) };
+    if spilled < 0 {
+        let message = Message::new(unsafe { CStr::from_ptr(err) });
+        return Err(message.to_str().to_string());
+    }
+    if spilled > 0 {
         let error = unsafe {
             LLVMRunPasses(
                 linked.get(),

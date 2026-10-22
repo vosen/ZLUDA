@@ -3410,10 +3410,73 @@ fn cvt_narrow_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
     mut modifiers: Vec<&'input str>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    if take_modifier(&mut modifiers, "rs") {
+        return cvt_rs(stream, modifiers);
+    }
+    if modifiers.contains(&"pzo") {
+        let kind = modifiers.iter().find_map(|m| match *m {
+            "f16" => Some(0u8),
+            "bf16" => Some(1),
+            "tf32" => Some(2),
+            "f16x2" => Some(3),
+            "bf16x2" => Some(4),
+            _ => None,
+        });
+        if let Some(kind) = kind {
+            let mut flags = 0u8;
+            for (name, bit) in [("relu", 4u8), ("satfinite", 64), ("pzo", 0), ("rn", 0)] {
+                if take_modifier(&mut modifiers, name) {
+                    flags |= bit;
+                }
+            }
+            if modifiers.len() != 2 || modifiers[1] != "f32" {
+                return backtrack();
+            }
+            let dst = ParsedOperandStr::parse.parse_next(stream)?;
+            Token::Comma.parse_next(stream)?;
+            let src_a = ParsedOperandStr::parse.parse_next(stream)?;
+            let src_b = if kind >= 3 {
+                Token::Comma.parse_next(stream)?;
+                Some(ParsedOperandStr::parse.parse_next(stream)?)
+            } else {
+                None
+            };
+            return Ok(ast::Instruction::CvtPzo {
+                data: ast::CvtRsDetails { kind, flags },
+                arguments: CvtPzoArgs { dst, src_a, src_b },
+            });
+        }
+    }
+    let kind_of = |m: &str| {
+        Some(match m {
+            "e4m3x2" => 0u8,
+            "e5m2x2" => 1,
+            "e2m3x2" => 2,
+            "e3m2x2" => 3,
+            "e2m1x2" => 4,
+            "ue5m3x2" => 5,
+            "s2f6x2" => 6,
+            "ue8m0x2" => 7,
+            _ => return None,
+        })
+    };
+    let half_of = |m: &str| match m {
+        "f16x2" => Some(0u8),
+        "bf16x2" => Some(1u8),
+        _ => None,
+    };
+    let has = |m: &str| modifiers.contains(&m);
+    let types: Vec<&str> = modifiers.iter().copied().filter(|m| kind_of(m).is_some() || half_of(m).is_some() || *m == "f32").collect();
+    let narrowing = matches!(types.as_slice(), [d, _] if kind_of(d).is_some());
+    let widening = matches!(types.as_slice(), [d, s] if half_of(d).is_some() && kind_of(s).is_some());
+    // the forms of PTX ISA 9.1 / 9.4 (the older ones are cvt.rn / .rz conversions of the mini formats)
     let new_form = modifiers
         .iter()
-        .any(|m| matches!(*m, "pzo" | "scaled::n1::ue8m0" | "scaled::n2::ue8m0" | "ue5m3x2" | "s2f6x2"));
-    if !new_form {
+        .any(|m| matches!(*m, "pzo" | "scaled::n1::ue8m0" | "scaled::n2::ue8m0" | "ue5m3x2" | "s2f6x2" | "ue8m0x2"))
+        || (narrowing && (has("rp") || has("rm")))
+        || (widening && (has("relu") || has("satfinite")));
+    // the bf16x2 -> ue8m0x2 widening keeps the older form
+    if !new_form || (widening && has("ue8m0x2")) {
         return backtrack();
     }
     let rounding = if take_modifier(&mut modifiers, "rn") {
@@ -3422,6 +3485,8 @@ fn cvt_narrow_instruction<'a, 'input>(
         1
     } else if take_modifier(&mut modifiers, "rp") {
         2
+    } else if take_modifier(&mut modifiers, "rm") {
+        3
     } else {
         return backtrack();
     };
@@ -3432,32 +3497,18 @@ fn cvt_narrow_instruction<'a, 'input>(
         }
     }
     let satfinite = take_modifier(&mut modifiers, "satfinite");
-    let kind_of = |m: &str| {
-        Some(match m {
-            "e4m3x2" => 0u8,
-            "e5m2x2" => 1,
-            "e2m3x2" => 2,
-            "e3m2x2" => 3,
-            "e2m1x2" => 4,
-            "ue5m3x2" => 5,
-            "s2f6x2" => 6,
-            _ => return None,
-        })
-    };
-    let half_of = |m: &str| match m {
-        "f16x2" => Some(0u8),
-        "bf16x2" => Some(1u8),
-        _ => None,
-    };
     let (kind, other, widen) = match modifiers.as_slice() {
         [d, "f32"] if kind_of(d).is_some() => (kind_of(d).unwrap(), 0u8, false),
         [d, s] if kind_of(d).is_some() && half_of(s).is_some() => (kind_of(d).unwrap(), half_of(s).unwrap() + 1, false),
         [d, s] if half_of(d).is_some() && kind_of(s).is_some() => (kind_of(s).unwrap(), half_of(d).unwrap(), true),
         _ => return backtrack(),
     };
-    // narrowing needs .satfinite; widening rounds to nearest without the other modifiers
-    if widen == satfinite || (widen && (rounding != 0 || flags & !32 != 0)) {
+    // narrowing needs .satfinite; widening rounds to nearest, with .relu, .satfinite and .scaled::n2::ue8m0
+    if (!widen && !satfinite) || (widen && (rounding != 0 || flags & !(32 | 4) != 0)) {
         return backtrack();
+    }
+    if widen && satfinite {
+        flags |= 64;
     }
     let dst = ParsedOperandStr::parse.parse_next(stream)?;
     Token::Comma.parse_next(stream)?;
@@ -3472,6 +3523,62 @@ fn cvt_narrow_instruction<'a, 'input>(
     Ok(ast::Instruction::CvtNarrow {
         data: ast::CvtNarrowDetails { kind, flags, other, widen },
         arguments: CvtNarrowArgs { dst, src1, src2, src_scale: scale },
+    })
+}
+
+// cvt.rs{.relu}{.satfinite}{.pzo}.{f16x2,bf16x2}.f32 d, a, b, rbits;
+// cvt.rs{.relu}.satfinite{.pzo}.{e4m3x4,e5m2x4,e2m3x4,e3m2x4,e2m1x4}.f32 d, {a, b, e, f}, rbits
+fn cvt_rs<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut flags = 0u8;
+    for (name, bit) in [("relu", 4u8), ("pzo", 8), ("satfinite", 64)] {
+        if take_modifier(&mut modifiers, name) {
+            flags |= bit;
+        }
+    }
+    let kind = match modifiers.as_slice() {
+        ["e4m3x4", "f32"] => 0u8,
+        ["e5m2x4", "f32"] => 1,
+        ["e2m3x4", "f32"] => 2,
+        ["e3m2x4", "f32"] => 3,
+        ["e2m1x4", "f32"] => 4,
+        ["f16x2", "f32"] => 8,
+        ["bf16x2", "f32"] => 9,
+        _ => return backtrack(),
+    };
+    if kind < 8 && flags & 64 == 0 {
+        return backtrack();
+    }
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    comma(stream)?;
+    let (src_a, src_b, src_e, src_f) = if kind < 8 {
+        let ast::ParsedOperand::VecPack(values) = ParsedOperandStr::parse.parse_next(stream)? else {
+            return backtrack();
+        };
+        let mut regs = Vec::new();
+        for v in values {
+            match v {
+                Some(ast::RegOrImmediate::Reg(r)) => regs.push(ast::ParsedOperand::Reg(r)),
+                Some(ast::RegOrImmediate::Imm(i)) => regs.push(ast::ParsedOperand::Imm(i)),
+                _ => return backtrack(),
+            }
+        }
+        let [a, b, e, f]: [ParsedOperandStr<'input>; 4] = regs.try_into().map_err(|_| ErrMode::from_error_kind(stream, ErrorKind::Verify))?;
+        (a, b, Some(e), Some(f))
+    } else {
+        let a = ParsedOperandStr::parse.parse_next(stream)?;
+        comma(stream)?;
+        let b = ParsedOperandStr::parse.parse_next(stream)?;
+        (a, b, None, None)
+    };
+    comma(stream)?;
+    let src_rbits = ParsedOperandStr::parse.parse_next(stream)?;
+    Ok(ast::Instruction::CvtRs {
+        data: ast::CvtRsDetails { kind, flags },
+        arguments: CvtRsArgs { dst, src_a, src_b, src_e, src_f, src_rbits },
     })
 }
 
@@ -3934,6 +4041,9 @@ fn mixed_float_instruction<'a, 'input>(
     opcode: &str,
     mut modifiers: Vec<&'input str>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    if let Some(x4) = alt_fp_x4(stream, opcode, &mut modifiers)? {
+        return Ok(x4);
+    }
     let type_of = |m: &str| match m {
         "f32" => Some(ScalarType::F32),
         "f16" => Some(ScalarType::F16),
@@ -3955,7 +4065,40 @@ fn mixed_float_instruction<'a, 'input>(
     .find(|(name, _)| take_modifier(&mut modifiers, name))
     .map(|&(_, r)| r);
     let flush_to_zero = take_modifier(&mut modifiers, "ftz");
-    let saturate = take_modifier(&mut modifiers, "sat");
+    // .sat may come after the types, or twice
+    let mut saturate = false;
+    while take_modifier(&mut modifiers, "sat") {
+        saturate = true;
+    }
+    if opcode == "fma" && take_modifier(&mut modifiers, "oob") {
+        let relu = take_modifier(&mut modifiers, "relu");
+        let type_ = match types.as_slice() {
+            &[t @ (ScalarType::F16 | ScalarType::BF16 | ScalarType::F16x2 | ScalarType::BF16x2)] => t,
+            _ => return backtrack(),
+        };
+        if !modifiers.is_empty() || flush_to_zero || saturate || rounding != Some(ast::RoundingMode::NearestEven) {
+            return backtrack();
+        }
+        let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+        let dst = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src1 = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src2 = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src3 = operand(stream)?;
+        return Ok(ast::Instruction::FmaOob {
+            data: ast::ArithFloat {
+                type_,
+                rounding: ast::RoundingMode::NearestEven,
+                flush_to_zero: if matches!(type_, ScalarType::F16 | ScalarType::F16x2) { Some(false) } else { None },
+                saturate: false,
+                is_fusable: false,
+                relu,
+            },
+            arguments: FmaOobArgs { dst, src1, src2, src3 },
+        });
+    }
     if !modifiers.is_empty() {
         return backtrack();
     }
@@ -3963,6 +4106,8 @@ fn mixed_float_instruction<'a, 'input>(
     use ScalarType::*;
     let (op, dtype, atype, btype) = match (opcode, types.as_slice()) {
         ("mul", &[F32, a @ (F16 | BF16)]) => (ast::MixedFloatOp::Mul, F32, a, F32),
+        ("add" | "sub", &[F32, a @ (F16 | BF16)]) => (op_of(opcode), F32, a, F32),
+        ("fma", &[F32, a @ (F16 | BF16)]) => (ast::MixedFloatOp::Fma, F32, a, a),
         ("add" | "sub" | "mul", &[F32x2, a, F32x2]) if narrow(a) => (op_of(opcode), F32x2, a, F32x2),
         ("fma", &[F32x2, a, F32x2, F32x2]) if narrow(a) => (ast::MixedFloatOp::Fma, F32x2, a, a),
         ("add" | "sub" | "mul", &[d, F32x2, F32x2]) if narrow(d) => (op_of(opcode), d, F32x2, F32x2),
@@ -3996,6 +4141,66 @@ fn mixed_float_instruction<'a, 'input>(
         },
         arguments: MixedFloatArgs { dst, src1, src2, src3 },
     })
+}
+
+// add / sub{.rn}{.satfinite}.dtype.atype d, a, c; mul{.rn}{.satfinite}.dtype.atype.ctype d, a, c;
+// fma{.rn}{.satfinite}.dtype.atype.btype d, a, b, c (PTX ISA 9.4 9.7.6)
+fn alt_fp_x4<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    modifiers: &mut Vec<&'input str>,
+) -> PResult<Option<ast::Instruction<ParsedOperandStr<'input>>>> {
+    use ast::AltFpKind::*;
+    let kind_of = |m: &str| match m {
+        "e4m3x4" => Some(E4m3),
+        "e5m2x4" => Some(E5m2),
+        "e2m3x4" => Some(E2m3),
+        "e3m2x4" => Some(E3m2),
+        "e2m1x4" => Some(E2m1),
+        "ue8m0x4" => Some(Ue8m0),
+        "e2m1p4x4" => Some(E2m1p4),
+        _ => None,
+    };
+    let kinds: Vec<ast::AltFpKind> = modifiers.iter().filter_map(|m| kind_of(m)).collect();
+    if kinds.is_empty() {
+        return Ok(None);
+    }
+    modifiers.retain(|m| kind_of(m).is_none());
+    take_modifier(modifiers, "rn");
+    let satfinite = take_modifier(modifiers, "satfinite");
+    let three = opcode == "mul" || opcode == "fma";
+    if !modifiers.is_empty() || kinds.len() != if three { 3 } else { 2 } || !matches!(kinds[0], E4m3 | E5m2) {
+        return backtrack();
+    }
+    let op = match opcode {
+        "add" => 0,
+        "sub" => 1,
+        "mul" => 2,
+        _ => 3,
+    };
+    let (d, a) = (kinds[0], kinds[1]);
+    let (b, c) = match op {
+        2 => (d, kinds[2]),
+        3 => (kinds[2], d),
+        _ => (d, d),
+    };
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    comma(stream)?;
+    let src_a = ParsedOperandStr::parse.parse_next(stream)?;
+    comma(stream)?;
+    let src_b = if op == 3 {
+        let b = ParsedOperandStr::parse.parse_next(stream)?;
+        comma(stream)?;
+        Some(b)
+    } else {
+        None
+    };
+    let src_c = ParsedOperandStr::parse.parse_next(stream)?;
+    Ok(Some(ast::Instruction::AltFpX4 {
+        data: ast::AltFpX4Details { op, d, a, b, c, satfinite },
+        arguments: AltFpX4Args { dst, src_a, src_b, src_c },
+    }))
 }
 
 fn op_of(opcode: &str) -> ast::MixedFloatOp {
@@ -8597,8 +8802,9 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol
     // No cluster is ever canceled (a valid outcome of try_cancel): the response says so
     clusterlaunchcontrol.try_cancel.async{.space}.completion_mechanism{.multicast}.b128 [addr], [mbar] => {
-        let _ = (space, multicast);
+        let _ = space;
         Instruction::ClusterLaunchTryCancel {
+            data: multicast,
             arguments: ClusterLaunchTryCancelArgs { src_addr: addr, src_mbarrier: mbar }
         }
     }

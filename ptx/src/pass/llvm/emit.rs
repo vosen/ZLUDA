@@ -1138,6 +1138,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Abs { data, arguments } => self.emit_abs(data, arguments),
             ast::Instruction::Mad { data, arguments } => self.emit_mad(data, arguments),
             ast::Instruction::Fma { data, arguments } => self.emit_fma(data, arguments),
+            ast::Instruction::FmaOob { data, arguments } => self.emit_fma_oob(data, arguments),
             ast::Instruction::Sub { data, arguments } => self.emit_sub(data, arguments),
             ast::Instruction::Min { data, arguments } => self.emit_min(data, arguments),
             ast::Instruction::Max { data, arguments } => self.emit_max(data, arguments),
@@ -1164,6 +1165,22 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::Slct { data, arguments } => self.emit_slct(data, arguments),
             // expanded by insert_post_saturation
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
+            ast::Instruction::AltFpX4 { data, arguments } => self.emit_alt_fp_x4(data, arguments),
+            ast::Instruction::CvtRs { data, arguments } => self.emit_cvt_rs(data, arguments),
+            ast::Instruction::CvtPzo { data, arguments } => {
+                let kind = self.const_u32(data.kind as u64);
+                let flags = self.const_u32(data.flags as u64);
+                let a = self.i32_value(Some(arguments.src_a))?;
+                let b = self.i32_value(arguments.src_b)?;
+                let x = self.emit_agx_helper(c"__zluda_ptx_impl_agx_cvt_pzo", None, Some(ast::ScalarType::B32), &[kind, flags, a, b])?;
+                let x = if data.kind <= 1 {
+                    unsafe { LLVMBuildTrunc(self.builder, x, LLVMInt16TypeInContext(self.context), LLVM_UNNAMED.as_ptr()) }
+                } else {
+                    x
+                };
+                self.resolver.register(arguments.dst, x);
+                Ok(())
+            }
             ast::Instruction::StAsync { data, arguments } => self.emit_st_async(data, arguments),
             ast::Instruction::StBulk { arguments, .. } => {
                 let to = self.resolver.value(arguments.src_addr)?;
@@ -1179,7 +1196,9 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::SetMaxNReg { .. } => Ok(()),
             // the emulated wgmma completes when it is executed: fences and waits have nothing to order
             ast::Instruction::WgmmaFence { .. } => Ok(()),
-            ast::Instruction::ClusterLaunchTryCancel { arguments } => self.emit_cluster_launch_try_cancel(arguments),
+            ast::Instruction::ClusterLaunchTryCancel { data, arguments } => {
+                self.emit_cluster_launch_try_cancel(data, arguments)
+            }
             ast::Instruction::ClusterLaunchQuery { data, arguments } => {
                 // no cluster is ever canceled
                 let dst_type = get_type(self.context, &data.dst_type())?;
@@ -5695,6 +5714,49 @@ impl<'a> MethodEmitContext<'a> {
         }
     }
 
+    fn emit_fma_oob(&mut self, data: ptx_parser::ArithFloat, arguments: ast::FmaOobArgs<SpirvWord>) -> Result<(), TranslateError> {
+        self.emit_fma(
+            data,
+            ast::FmaArgs { dst: arguments.dst, src1: arguments.src1, src2: arguments.src2, src3: arguments.src3 },
+        )?;
+        let (lanes, nan) = match data.type_ {
+            ast::ScalarType::F16 => (1, 0x7e00),
+            ast::ScalarType::BF16 => (1, 0x7fc0),
+            ast::ScalarType::F16x2 => (2, 0x7e00),
+            _ => (2, 0x7fc0),
+        };
+        let b = self.builder;
+        unsafe {
+            let int = LLVMIntTypeInContext(self.context, 16 * lanes);
+            let vector = LLVMVectorType(LLVMInt16TypeInContext(self.context), lanes);
+            let as_lanes = |v: LLVMValueRef| {
+                let x = LLVMBuildBitCast(b, v, int, LLVM_UNNAMED.as_ptr());
+                LLVMBuildBitCast(b, x, vector, LLVM_UNNAMED.as_ptr())
+            };
+            let pattern = LLVMConstVector(
+                vec![LLVMConstInt(LLVMInt16TypeInContext(self.context), nan, 0); lanes as usize].as_mut_ptr(),
+                lanes,
+            );
+            let mut oob = None;
+            for src in [arguments.src1, arguments.src2, arguments.src3] {
+                let x = as_lanes(self.resolver.value(src)?);
+                let is = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, x, pattern, LLVM_UNNAMED.as_ptr());
+                oob = Some(match oob {
+                    Some(o) => LLVMBuildOr(b, o, is, LLVM_UNNAMED.as_ptr()),
+                    None => is,
+                });
+            }
+            let result = self.resolver.value(arguments.dst)?;
+            let r = as_lanes(result);
+            let zero = LLVMConstNull(vector);
+            let r = LLVMBuildSelect(b, oob.unwrap(), zero, r, LLVM_UNNAMED.as_ptr());
+            let r = LLVMBuildBitCast(b, r, int, LLVM_UNNAMED.as_ptr());
+            let r = LLVMBuildBitCast(b, r, LLVMTypeOf(result), LLVM_UNNAMED.as_ptr());
+            self.resolver.register(arguments.dst, r);
+        }
+        Ok(())
+    }
+
     fn emit_fma(
         &mut self,
         data: ptx_parser::ArithFloat,
@@ -6509,12 +6571,19 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
-    // clusterlaunchcontrol.try_cancel never cancels a cluster: the response (16 bytes) is 0, and completes
+    // clusterlaunchcontrol.try_cancel never cancels a cluster: the response (16 bytes) is 0, and completes;
+    // .multicast::cluster::all writes it and completes the transaction in each CTA of the cluster
     fn emit_cluster_launch_try_cancel(
         &mut self,
+        multicast: bool,
         arguments: ast::ClusterLaunchTryCancelArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let to = self.resolver.value(arguments.src_addr)?;
+        if multicast {
+            let mbarrier = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbarrier)?;
+            self.emit_agx_helper(c"__zluda_ptx_impl_agx_clc_try_cancel_multicast", None, None, &[to, mbarrier])?;
+            return Ok(());
+        }
         unsafe {
             let zero = LLVMConstInt(LLVMInt8TypeInContext(self.context), 0, 0);
             let size = LLVMConstInt(LLVMInt32TypeInContext(self.context), 16, 0);
@@ -7534,13 +7603,62 @@ impl<'a> MethodEmitContext<'a> {
             )?;
         } else {
             let b = self.i32_value(arguments.src2)?;
-            self.emit_agx_helper(
-                c"__zluda_ptx_impl_agx_cvt_narrow",
-                Some(arguments.dst),
-                Some(ast::ScalarType::B16),
-                &[kind, flags, other, a, b, scale],
-            )?;
+            if data.kind == 4 {
+                let x = self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_cvt_narrow",
+                    None,
+                    Some(ast::ScalarType::B16),
+                    &[kind, flags, other, a, b, scale],
+                )?;
+                let i8_type = unsafe { LLVMInt8TypeInContext(self.context) };
+                let x = unsafe { LLVMBuildTrunc(self.builder, x, i8_type, LLVM_UNNAMED.as_ptr()) };
+                self.resolver.register(arguments.dst, x);
+            } else {
+                self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_cvt_narrow",
+                    Some(arguments.dst),
+                    Some(ast::ScalarType::B16),
+                    &[kind, flags, other, a, b, scale],
+                )?;
+            }
         }
+        Ok(())
+    }
+
+    fn emit_cvt_rs(&mut self, data: ast::CvtRsDetails, arguments: ast::CvtRsArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let kind = self.const_u32(data.kind as u64);
+        let flags = self.const_u32(data.flags as u64);
+        let a = self.i32_value(Some(arguments.src_a))?;
+        let b = self.i32_value(Some(arguments.src_b))?;
+        let e = self.i32_value(arguments.src_e)?;
+        let f = self.i32_value(arguments.src_f)?;
+        let rbits = self.i32_value(Some(arguments.src_rbits))?;
+        let x = self.emit_agx_helper(c"__zluda_ptx_impl_agx_cvt_rs", None, Some(ast::ScalarType::B32), &[kind, flags, a, b, e, f, rbits])?;
+        let x = if data.kind == 4 {
+            let i16_type = unsafe { LLVMInt16TypeInContext(self.context) };
+            unsafe { LLVMBuildTrunc(self.builder, x, i16_type, LLVM_UNNAMED.as_ptr()) }
+        } else {
+            x
+        };
+        self.resolver.register(arguments.dst, x);
+        Ok(())
+    }
+
+    // the four elements, exactly and rounded once (zluda_ptx_impl_agx_cvt.c)
+    fn emit_alt_fp_x4(&mut self, data: ast::AltFpX4Details, arguments: ast::AltFpX4Args<SpirvWord>) -> Result<(), TranslateError> {
+        let op = self.const_u32(data.op as u64);
+        let kinds = data.d as u64 | (data.a as u64) << 4 | (data.b as u64) << 8 | (data.c as u64) << 12;
+        let kinds = self.const_u32(kinds);
+        let satfinite = self.const_u32(data.satfinite as u64);
+        let a = self.i32_value(Some(arguments.src_a))?;
+        let b = self.i32_value(arguments.src_b)?;
+        let c = self.i32_value(Some(arguments.src_c))?;
+        self.emit_agx_helper(
+            c"__zluda_ptx_impl_agx_altfp_x4",
+            Some(arguments.dst),
+            Some(ast::ScalarType::B32),
+            &[op, kinds, satfinite, a, b, c],
+        )?;
         Ok(())
     }
 

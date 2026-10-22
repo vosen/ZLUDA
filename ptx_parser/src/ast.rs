@@ -263,6 +263,26 @@ ptx_parser_macros::generate_instruction_type!(
                 src3: Option<T>,
             }
         },
+        // add / sub / mul / fma of the alternate floating point x4 types (PTX ISA 9.4 9.7.6), in software
+        AltFpX4 {
+            type: Type::Scalar(ScalarType::B32),
+            data: AltFpX4Details,
+            arguments<T>: {
+                dst: T,
+                src_a: {
+                    repr: T,
+                    type: { data.register_type(data.a) },
+                },
+                src_b: {
+                    repr: Option<T>,
+                    type: { data.register_type(data.b) },
+                },
+                src_c: {
+                    repr: T,
+                    type: { data.register_type(data.c) },
+                },
+            }
+        },
         Slct {
             type: { Type::Scalar(data.type_) },
             data: SlctDetails,
@@ -663,7 +683,58 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src_scale: {
                     repr: Option<T>,
-                    type: { Type::Scalar(ScalarType::B16) },
+                    type: { data.scale_type() },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // cvt.rn.pzo to .f16 / .bf16 / .tf32 / .f16x2 / .bf16x2 from .f32, in software
+        CvtPzo {
+            data: CvtRsDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.pzo_dst_type() },
+                    relaxed_type_check: true,
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_b: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+            }
+        },
+        // cvt.rs (stochastic rounding) to .f16x2 / .bf16x2 from two .f32 or to the x4 mini formats from four, in software
+        CvtRs {
+            data: CvtRsDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_b: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_e: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_f: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_rbits: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
                     relaxed_type_check: true,
                 },
             }
@@ -749,6 +820,18 @@ ptx_parser_macros::generate_instruction_type!(
             }
         },
         Fma {
+            type: { Type::from(data.type_) },
+            data: ArithFloat,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
+        // fma.rn.oob{.relu}.{f16,bf16,f16x2,bf16x2}: 0 (per element) when an operand is the OOB NaN of the tensor
+        // memory accelerator (0x7e00, 0x7fc0)
+        FmaOob {
             type: { Type::from(data.type_) },
             data: ArithFloat,
             arguments<T>: {
@@ -1549,8 +1632,10 @@ ptx_parser_macros::generate_instruction_type!(
         SetMaxNReg {
             data: u32,
         },
+        // data: .multicast::cluster::all
         ClusterLaunchTryCancel {
             type: Type::Scalar(ScalarType::B128),
+            data: bool,
             arguments<T>: {
                 src_addr: {
                     repr: T,
@@ -3043,6 +3128,39 @@ pub struct MbarrierWaitDetails {
     pub try_wait: bool,
     // .phase_type::conditional: the conditional phase of a .layout::v1 object
     pub conditional: bool,
+}
+
+/// The element kinds of the alternate floating point x4 types, as __zluda_ptx_impl_agx_altfp_x4 numbers them
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum AltFpKind {
+    E4m3 = 0,
+    E5m2 = 1,
+    E2m3 = 2,
+    E3m2 = 3,
+    // four 4-bit elements in a .b16
+    E2m1 = 4,
+    Ue8m0 = 5,
+    // a 4-bit element in the low bits of each byte
+    E2m1p4 = 6,
+}
+
+#[derive(Copy, Clone)]
+pub struct AltFpX4Details {
+    // 0 add, 1 sub, 2 mul, 3 fma
+    pub op: u8,
+    pub d: AltFpKind,
+    pub a: AltFpKind,
+    // fma only
+    pub b: AltFpKind,
+    // d's kind for add / sub / fma
+    pub c: AltFpKind,
+    pub satfinite: bool,
+}
+
+impl AltFpX4Details {
+    pub fn register_type(&self, kind: AltFpKind) -> Type {
+        Type::Scalar(if kind == AltFpKind::E2m1 { ScalarType::B16 } else { ScalarType::B32 })
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -5190,9 +5308,9 @@ pub fn registers(n: u8) -> Type {
 /// and cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CvtNarrowDetails {
-    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6
+    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6, 7 ue8m0
     pub kind: u8,
-    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2
+    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp, 3 rm), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2, 6 satfinite (widening)
     pub flags: u8,
     /// narrowing: 0 f32 pair, 1 f16x2, 2 bf16x2; widening: 0 f16x2, 1 bf16x2
     pub other: u8,
@@ -5201,7 +5319,19 @@ pub struct CvtNarrowDetails {
 
 impl CvtNarrowDetails {
     pub fn dst_type(&self) -> Type {
-        Type::Scalar(if self.widen { ScalarType::B32 } else { ScalarType::B16 })
+        // .e2m1x2 is a .b8
+        Type::Scalar(if self.widen {
+            ScalarType::B32
+        } else if self.kind == 4 {
+            ScalarType::B8
+        } else {
+            ScalarType::B16
+        })
+    }
+
+    // a .ue8m0x2 pair of scale factors with .scaled::n2::ue8m0, one .ue8m0 with .scaled::n1::ue8m0
+    pub fn scale_type(&self) -> Type {
+        Type::Scalar(if self.flags & 16 != 0 { ScalarType::B8 } else { ScalarType::B16 })
     }
 
     pub fn src_type(&self) -> Type {
@@ -5210,6 +5340,25 @@ impl CvtNarrowDetails {
             (false, 0) => ScalarType::F32,
             _ => ScalarType::B32,
         })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CvtRsDetails {
+    /// 0 e4m3x4, 1 e5m2x4, 2 e2m3x4, 3 e3m2x4, 4 e2m1x4 (a .b16), 8 f16x2, 9 bf16x2
+    pub kind: u8,
+    /// 2 relu, 3 pzo, 6 satfinite
+    pub flags: u8,
+}
+
+impl CvtRsDetails {
+    pub fn dst_type(&self) -> Type {
+        Type::Scalar(if self.kind == 4 { ScalarType::B16 } else { ScalarType::B32 })
+    }
+
+    // CvtPzo: 0 f16, 1 bf16, 2 tf32, 3 f16x2, 4 bf16x2
+    pub fn pzo_dst_type(&self) -> Type {
+        Type::Scalar(if self.kind <= 1 { ScalarType::B16 } else { ScalarType::B32 })
     }
 }
 

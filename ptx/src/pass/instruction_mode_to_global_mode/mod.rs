@@ -2211,6 +2211,9 @@ fn get_instruction_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> Instruc
         | ast::Instruction::StBulk { .. }
         | ast::Instruction::SetMaxNReg { .. }
         | ast::Instruction::ClusterLaunchTryCancel { .. }
+        | ast::Instruction::AltFpX4 { .. }
+        | ast::Instruction::CvtRs { .. }
+        | ast::Instruction::CvtPzo { .. }
         | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
@@ -2350,6 +2353,7 @@ fn get_instruction_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> Instruc
         }
         | ast::Instruction::Vshr { .. } => InstructionModes::none(),
         ast::Instruction::Fma { data, .. }
+        | ast::Instruction::FmaOob { data, .. }
         | ast::Instruction::Sub {
             data: ast::ArithDetails::Float(data),
             ..

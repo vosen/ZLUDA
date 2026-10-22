@@ -264,6 +264,10 @@ fn run_instruction<'input>(
         | ast::Instruction::StBulk { .. }
         | ast::Instruction::SetMaxNReg { .. }
         | ast::Instruction::ClusterLaunchTryCancel { .. }
+        | ast::Instruction::AltFpX4 { .. }
+        | ast::Instruction::CvtRs { .. }
+        | ast::Instruction::CvtPzo { .. }
+        | ast::Instruction::FmaOob { .. }
         | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Slct { .. }
         | ast::Instruction::Testp { .. }

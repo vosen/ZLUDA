@@ -195,10 +195,20 @@ three differences.
   `.f32x2.{f16x2,bf16x2}.f32x2`, `.{f16x2,bf16x2}.f32x2.f32x2` and
   `mul.bf16x2.bf16x2.f16x2`) convert their operands exactly and compute in
   `f32` (in `.rz`, then rounded with `.rz`, for 16-bit pair results).
-* The PTX ISA 9.x conversions (`.pzo`, `.scaled::n1::ue8m0` and
-  `.scaled::n2::ue8m0`, `ue5m3x2` and `s2f6x2`) and `spcompress` /
-  `spdecompress` run in software (`ptx/lib/zluda_ptx_impl_agx_cvt.c`), with
-  every value held as an integer significand and a power of two.
+* The PTX ISA 9.x conversions (`.pzo`, also on `f16`, `bf16`, `tf32`,
+  `f16x2` and `bf16x2` results, `.scaled::n1::ue8m0` and
+  `.scaled::n2::ue8m0`, `ue5m3x2` and `s2f6x2`, `.rp` / `.rm` to the mini
+  formats (toward positive / negative infinity on the signed value), `.rn`
+  to `ue8m0x2` (the nearest power of two, ties to the even code), the
+  `.relu` / `.satfinite` up-conversions, stochastic rounding `cvt.rs` to
+  `f16x2` / `bf16x2` and to the x4 formats), the alternate floating point x4
+  arithmetic (`add` / `sub` / `mul` / `fma` of `e4m3x4`, `e5m2x4`, `e2m3x4`,
+  `e3m2x4`, `e2m1x4`, `e2m1p4x4` and `ue8m0x4`, each element exact and
+  rounded once) and `spcompress` / `spdecompress` run in software
+  (`ptx/lib/zluda_ptx_impl_agx_cvt.c`), with every value held as an integer
+  significand and a power of two. `fma.oob` gives 0 for an element whose
+  operand is the OOB NaN of the tensor memory accelerator (`0x7e00` for f16,
+  `0x7fc0` for bf16).
 * The conversions to and from `e4m3x2`, `e5m2x2`, `e2m3x2`, `e3m2x2`,
   `e2m1x2` and `ue8m0x2`, `cvt` to `tf32`, `.relu`/`.satfinite`, `bfind`,
   `bmsk`, `clmad`, the packed byte arithmetic (`.u8x4`, `.s8x4`) and
@@ -454,9 +464,9 @@ instruction).
   the pair (its rows of A and D, the odd CTA's half of B), through the
   cluster's shared memory windows and the peer's slab.
 
-All 56 PTX-formalization `tcgen05` programs but `tcg2-1` match the formal
-semantics. `tcg2-1` needs 2 x 19 KiB of shared memory per cluster, more than
-the 32 KiB of a threadgroup the cluster runs in. A shared memory address
+All 56 PTX-formalization `tcgen05` programs match the formal semantics
+(`tcg2-1`, with 2 x 19 KiB of shared memory per cluster, keeps it in device
+memory: see thread block clusters). A shared memory address
 written as a constant in a cluster kernel is the address of the first CTA's
 window (addresses taken from shared variables are right in every CTA).
 
@@ -650,8 +660,17 @@ has a multiple of 32 threads. After inlining, `LLVMZludaAgxLowerClusters`
   barrier does not wait for SIMD-groups that have ended is what the
   functional simulator does; the hardware question is ptx-re-blockers B28.
 
-Limitations: at most 1024 threads per cluster and 32 KiB of shared memory per
-cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
+A cluster whose shared memory is more than the 32 KiB of a threadgroup keeps
+it in device memory (`LLVMZludaAgxSpillClusterShared`, after the address
+spaces are lowered): each such kernel has a pool of 8 slabs of its windows'
+size, the first thread of a threadgroup claims a free one (the others wait at
+a barrier) and the last thread to return frees it. Every threadgroup memory
+access of the kernel, generic ones included, is then a device memory access
+at the slab plus its window offset, with device scope fences and atomics; a
+threadgroup that finds no free slab waits for one, as with the tensor memory
+slabs.
+
+Limitations: at most 1024 threads per cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
 grid must be a multiple of the cluster (else `CUDA_ERROR_INVALID_CLUSTER_SIZE`);
 a function that reads thread ids and is not inlined cannot be shared by kernels
 of different cluster shapes; cluster dimensions set at launch
@@ -659,7 +678,8 @@ of different cluster shapes; cluster dimensions set at launch
 `red.async` store (or update atomically) and complete their bytes on the
 destination's mbarrier; `clusterlaunchcontrol.try_cancel` never cancels a
 cluster (a valid outcome: the response is 0 and `query_cancel.is_canceled`
-false); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formalization
+false; `.multicast::cluster::all` writes it and completes its 16 bytes in each
+CTA of the cluster); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formalization
 `cluster.ptx`, `cluster-exit.ptx`, `cluster-generic.ptx`,
 `mbarrier-cluster.ptx`, `mbar-mc.ptx`, `misc-async.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
 single CTA.
@@ -866,8 +886,8 @@ Without it 1553 match. The other 175 are the floating point differences listed a
 - `-0.0` under `.sat`;
 - `div` and `sqrt` precision.
 
-The one skipped check follows the non-PTX `coll_test` of `collective.ptx`; `tcg2-1.ptx` does not compile (its
-cluster needs more than 32 KiB of shared memory) and the harness has no `.multimem` and `.fabric` directives.
+The one skipped check follows the non-PTX `coll_test` of `collective.ptx`, and the harness has no `.multimem` and
+`.fabric` directives.
 
 A full run takes about 50 minutes with `-j 4` (most of it compiling the texture and `tcgen05` tests).
 
@@ -1250,7 +1270,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Area | Status |
 | --- | --- |
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
-| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. Not supported: `.multimem` and `.fabric`, clusters with more than 32 KiB of shared memory |
+| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. Not supported: `.multimem` and `.fabric` |
 | Warp-level and async | `mma`, `mma.sp`, `wmma`, `ldmatrix` / `stmatrix`, `wgmma`, `tcgen05` and the tensor memory accelerator (`cp.async.bulk.tensor`) are emulated; `cp.async`, mbarriers and thread block clusters (up to 1024 threads) run on ordinary instructions and threadgroup memory |
 | Textures and surfaces | sampled in software (the texture unit is not used yet, simulator task B29): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` (strict FP) for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |

@@ -115,6 +115,7 @@ extern "C" {
     pub fn LLVMZludaAgxKeepGlobals(module: LLVMModuleRef);
 
     pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
+    pub fn LLVMZludaAgxSpillClusterShared(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

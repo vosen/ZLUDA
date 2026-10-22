@@ -10,9 +10,10 @@ typedef int int32;
 typedef unsigned long long uint64;
 typedef long long int64;
 
-enum { K_E4M3, K_E5M2, K_E2M3, K_E3M2, K_E2M1, K_UE5M3, K_S2F6 };
-enum { R_RN, R_RZ, R_RP };
-enum { F_RELU = 4, F_PZO = 8, F_N1 = 16, F_N2 = 32 };
+enum { K_E4M3, K_E5M2, K_E2M3, K_E3M2, K_E2M1, K_UE5M3, K_S2F6, K_UE8M0 };
+// R_RP rounds a magnitude up (away from zero); the instructions' .rp / .rm (R_RM) are signed
+enum { R_RN, R_RZ, R_RP, R_RM };
+enum { F_RELU = 4, F_PZO = 8, F_N1 = 16, F_N2 = 32, F_SATFINITE = 64 };
 enum { S_F32, S_F16X2, S_BF16X2 };
 
 typedef struct {
@@ -122,8 +123,44 @@ static value prepare(value v, uint32 flags, uint32 scale, int flush_exponent) {
     return v;
 }
 
+// the rounding of the magnitude for the instruction's rounding of a value of the sign: .rp and .rm toward positive
+// and negative infinity
+static int magnitude_rounding(int rounding, int neg) {
+    if (rounding == R_RP)
+        return neg ? R_RZ : R_RP;
+    if (rounding == R_RM)
+        return neg ? R_RP : R_RZ;
+    return rounding;
+}
+
+// .ue8m0 (.satfinite): an |x| beyond 2^127 (infinities too) gives 0xfe, also for a negative x; other negative
+// values and zero give 0; .rz rounds the exponent down, .rp up, .rn to the nearest power of two (ties, 1.5 * 2^e, to
+// the even code)
+static uint32 ue8m0_element(int rounding, value v) {
+    if (v.nan)
+        return 255;
+    if (v.inf || (v.m && v.e + bit_length(v.m) - 1 >= 127 && !(v.e + bit_length(v.m) - 1 == 127 && !(v.m & (v.m - 1)))))
+        return 254;
+    if (v.neg || !v.m)
+        return 0;
+    int length = bit_length(v.m);
+    int p = v.e + length - 1;
+    int power = !(v.m & (v.m - 1));
+    if (rounding == R_RP && !power)
+        p++;
+    else if (rounding == R_RN && !power) {
+        uint64 half = 3ull << (length - 2);
+        if (v.m > half || (v.m == half && ((p + 127) & 1)))
+            p++;
+    }
+    int code = p + 127;
+    return code < 0 ? 0 : code > 254 ? 254 : (uint32)code;
+}
+
 static uint32 narrow_element(uint32 kind, uint32 flags, value v) {
-    int rounding = flags & 3;
+    if (kind == K_UE8M0)
+        return ue8m0_element(flags & 3, v);
+    int rounding = magnitude_rounding(flags & 3, v.neg);
     int relu = (flags & F_RELU) != 0;
     if (kind == K_S2F6) {
         if (v.nan)
@@ -139,6 +176,10 @@ static uint32 narrow_element(uint32 kind, uint32 flags, value v) {
     }
     if (v.nan)
         return kind == K_E4M3 || kind == K_E5M2 ? 127 : kind == K_UE5M3 ? 255 : (uint32)top(kind);
+    // .satfinite gives .ue5m3 the positive MAX_NORM for an |x| beyond it, also for a negative x (without .relu)
+    if (kind == K_UE5M3 && !relu && v.neg &&
+        (v.inf || (v.m && encode(v.m, v.e, exponent_bits(kind), mantissa_bits(kind), R_RP) > top(kind))))
+        return (uint32)top(kind);
     if ((relu || kind == K_UE5M3) && v.neg)
         return 0;
     uint32 sign = v.neg && kind != K_UE5M3 ? 1u << (element_bits(kind) - 1) : 0;
@@ -214,19 +255,23 @@ static value decode_element(uint32 kind, uint32 c) {
     return v;
 }
 
-// round to nearest even into f16 (bf16 = 0) or bf16, overflowing to infinity
-static uint32 to_half(value v, int bf16) {
+// round to nearest even into f16 (bf16 = 0) or bf16, overflowing to infinity; .relu makes a negative result 0 and a
+// NaN the canonical 0x7fff, .satfinite an |x| beyond the largest finite value that value with its sign
+static uint32 to_half(value v, int bf16, uint32 flags) {
     int eb = bf16 ? 8 : 5, mb = bf16 ? 7 : 10;
     uint32 infinity = ((1u << eb) - 1) << mb;
     if (v.nan)
-        return bf16 ? 0x7fc0 : 0x7e00;
+        return (flags & F_RELU) ? 0x7fff : bf16 ? 0x7fc0 : 0x7e00;
+    if ((flags & F_RELU) && v.neg)
+        return 0;
     uint32 sign = v.neg ? 0x8000 : 0;
+    uint32 over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
     if (v.inf)
-        return sign | infinity;
+        return sign | over;
     if (!v.m)
         return sign;
     int64 code = encode(v.m, v.e, eb, mb, R_RN);
-    return sign | (code >= infinity ? infinity : (uint32)code);
+    return sign | (code >= infinity ? over : (uint32)code);
 }
 
 // cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
@@ -239,7 +284,219 @@ uint32 __zluda_ptx_impl_agx_cvt_widen(uint32 kind, uint32 to_bf16, uint32 flags,
         if (s == 255)
             v.nan = 1;
         v.e += (int)s - 127;
-        result |= to_half(v, (int)to_bf16) << (16 * i);
+        result |= to_half(v, (int)to_bf16, flags) << (16 * i);
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------- .pzo (PTX ISA 9.4 9.7.10.24)
+// cvt.rn{.relu}{.satfinite}.pzo.{f16,bf16}.f32 (kinds 0, 1), .tf32.f32 (2) and {f16x2,bf16x2}.f32 a, b (3, 4: a in the
+// high half): a -0.0 result is +0.0
+static uint32 pzo_half(value v, int bf16, uint32 flags) {
+    uint32 h = v.nan ? 0x7fff : to_half(v, bf16, flags);
+    return h == 0x8000 ? 0 : h;
+}
+
+uint32 __zluda_ptx_impl_agx_cvt_pzo(uint32 kind, uint32 flags, uint32 a, uint32 b) {
+    value v = from_f32(a);
+    if (kind == 2) {
+        if (v.nan)
+            return 0x7fffffff;
+        if ((flags & F_RELU) && v.neg)
+            return 0;
+        uint32 sign = v.neg ? 0x80000000u : 0;
+        uint32 infinity = 255u << 10, over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
+        int64 code = v.inf ? infinity : v.m ? encode(v.m, v.e, 8, 10, R_RN) : 0;
+        uint32 bits = sign | (code >= infinity ? over : (uint32)code) << 13;
+        return bits == 0x80000000u ? 0 : bits;
+    }
+    if (kind <= 1)
+        return pzo_half(v, (int)kind, flags);
+    return pzo_half(v, kind == 4, flags) << 16 | pzo_half(from_f32(b), kind == 4, flags);
+}
+
+// ---------------------------------------------------------------- stochastic rounding (cvt.rs, PTX ISA 9.7.9.22)
+// The magnitude code of v (unbounded above) rounded toward zero, or away from zero when the k random bits r added to
+// the k most significant discarded bits carry out
+static int64 encode_rs(value v, int exponent_bits_, int mantissa_bits_, uint32 r, int k) {
+    int bias = (1 << (exponent_bits_ - 1)) - 1;
+    int p = v.e + bit_length(v.m) - 1;
+    if (p < 1 - bias)
+        p = 1 - bias;
+    int discarded = (p - mantissa_bits_) - v.e;
+    uint64 t = 0;
+    if (discarded > 0) {
+        if (discarded >= k)
+            t = discarded - k >= 64 ? 0 : (v.m >> (discarded - k)) & ((1ull << k) - 1);
+        else
+            t = (v.m & ((1ull << discarded) - 1)) << (k - discarded);
+    }
+    int away = discarded > 0 && t + r >= (1ull << k);
+    return encode(v.m, v.e, exponent_bits_, mantissa_bits_, away ? R_RP : R_RZ);
+}
+
+static uint32 rs_half(value v, int bf16, uint32 flags, uint32 r) {
+    int eb = bf16 ? 8 : 5, mb = bf16 ? 7 : 10;
+    uint32 infinity = ((1u << eb) - 1) << mb;
+    uint32 result;
+    if (v.nan)
+        result = 0x7fff;
+    else if ((flags & F_RELU) && v.neg)
+        result = 0;
+    else {
+        uint32 sign = v.neg ? 0x8000 : 0;
+        uint32 over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
+        int64 code = v.inf ? infinity : v.m ? encode_rs(v, eb, mb, r, bf16 ? 16 : 13) : 0;
+        result = sign | (code >= infinity ? over : (uint32)code);
+    }
+    return (flags & F_PZO) && result == 0x8000 ? 0 : result;
+}
+
+static uint32 rs_mini(uint32 kind, value v, uint32 flags, uint32 r) {
+    int k = kind == K_E2M1 ? 8 : 16;
+    uint32 sign = v.neg ? 1u << (element_bits(kind) - 1) : 0;
+    uint32 code;
+    if (v.nan)
+        return kind == K_E4M3 || kind == K_E5M2 ? 127 : (uint32)top(kind);
+    if ((flags & F_RELU) && v.neg)
+        return 0;
+    if (v.inf)
+        code = sign | (uint32)top(kind);
+    else {
+        int64 c = v.m ? encode_rs(v, exponent_bits(kind), mantissa_bits(kind), r, k) : 0;
+        code = sign | (uint32)(c > top(kind) ? top(kind) : c);
+    }
+    return (flags & F_PZO) && code == (1u << (element_bits(kind) - 1)) ? 0 : code;
+}
+
+// cvt.rs{.relu}{.satfinite}{.pzo}.{f16x2,bf16x2}.f32 d, a, b, rbits (kind 8, 9: a in the high half, rbits[28:16] /
+// rbits[12:0] for f16, rbits[31:16] / rbits[15:0] for bf16) and
+// cvt.rs{.relu}.satfinite{.pzo}.{e4m3x4,e5m2x4,e2m3x4,e3m2x4,e2m1x4}.f32 d, {a, b, e, f}, rbits (a in the most
+// significant element; rbits[31:24], [15:8], [23:16], [7:0] for the elements of .e2m1x4, rbits[31:16] for a and b
+// and rbits[15:0] for e and f otherwise)
+uint32 __zluda_ptx_impl_agx_cvt_rs(uint32 kind, uint32 flags, uint32 a, uint32 b, uint32 e, uint32 f, uint32 rbits) {
+    if (kind >= 8) {
+        int bf16 = kind == 9;
+        uint32 mask = bf16 ? 0xffff : 0x1fff;
+        return rs_half(from_f32(a), bf16, flags, (rbits >> 16) & mask) << 16 | rs_half(from_f32(b), bf16, flags, rbits & mask);
+    }
+    if (kind == K_E2M1)
+        return rs_mini(kind, from_f32(a), flags, rbits >> 24) << 12 | rs_mini(kind, from_f32(b), flags, (rbits >> 8) & 255) << 8 |
+               rs_mini(kind, from_f32(e), flags, (rbits >> 16) & 255) << 4 | rs_mini(kind, from_f32(f), flags, rbits & 255);
+    return rs_mini(kind, from_f32(a), flags, rbits >> 16) << 24 | rs_mini(kind, from_f32(b), flags, rbits >> 16) << 16 |
+           rs_mini(kind, from_f32(e), flags, rbits & 0xffff) << 8 | rs_mini(kind, from_f32(f), flags, rbits & 0xffff);
+}
+
+// ---------------------------------------------------------------- alternate floating point x4 (PTX ISA 9.4 9.7.6)
+// add / sub{.rn}{.satfinite}.dtype.atype d, a, c; mul.dtype.atype.ctype d, a, c; fma.dtype.atype.btype d, a, b, c:
+// four elements, each operation exact and rounded to nearest even into the .e4m3 / .e5m2 elements of d (and c of
+// add / sub / fma). Without .satfinite an .e4m3 overflow is NaN (0x7f), an .e5m2 one infinity; a NaN is 0x7f.
+enum { X_E4M3, X_E5M2, X_E2M3, X_E3M2, X_E2M1, X_UE8M0, X_E2M1P4 };
+enum { A_ADD, A_SUB, A_MUL, A_FMA };
+
+static value x4_element(uint32 kind, uint32 v, uint32 i) {
+    if (kind == X_UE8M0) {
+        uint32 c = (v >> (8 * i)) & 255;
+        value r = {0, c == 255, 0, 1, (int)c - 127};
+        return r;
+    }
+    if (kind == X_E2M1)
+        return decode_element(K_E2M1, (v >> (4 * i)) & 15);
+    if (kind == X_E2M1P4)
+        return decode_element(K_E2M1, (v >> (8 * i)) & 15);
+    uint32 k = kind == X_E4M3 ? K_E4M3 : kind == X_E5M2 ? K_E5M2 : kind == X_E2M3 ? K_E2M3 : K_E3M2;
+    return decode_element(k, (v >> (8 * i)) & ((1u << element_bits(k)) - 1));
+}
+
+static value x4_mul(value x, value y) {
+    value r = {x.neg ^ y.neg, 0, 0, 0, 0};
+    if (x.nan || y.nan || ((x.inf || y.inf) && ((!x.m && !x.inf) || (!y.m && !y.inf)))) {
+        r.nan = 1;
+        return r;
+    }
+    if (x.inf || y.inf) {
+        r.inf = 1;
+        return r;
+    }
+    r.m = x.m * y.m;
+    r.e = x.e + y.e;
+    return r;
+}
+
+// x + y exactly; a much smaller operand only decides the rounding, as a sticky bit below the larger one's
+static value x4_add(value x, value y) {
+    value r = {0, 0, 0, 0, 0};
+    if (x.nan || y.nan || (x.inf && y.inf && x.neg != y.neg)) {
+        r.nan = 1;
+        return r;
+    }
+    if (x.inf || y.inf) {
+        r.inf = 1;
+        r.neg = x.inf ? x.neg : y.neg;
+        return r;
+    }
+    if (!x.m || !y.m) {
+        if (!x.m && !y.m) {
+            r.neg = x.neg && y.neg;
+            return r;
+        }
+        return x.m ? x : y;
+    }
+    int px = x.e + bit_length(x.m), py = y.e + bit_length(y.m);
+    if (px < py || (px == py && x.e > y.e)) {
+        value t = x;
+        x = y;
+        y = t;
+        int u = px;
+        px = py;
+        py = u;
+    }
+    // x is the larger in magnitude
+    if (px - py > 40) {
+        r.neg = x.neg;
+        r.m = (x.m << 3) + (x.neg == y.neg ? 1 : (uint64)-1);
+        r.e = x.e - 3;
+        return r;
+    }
+    int e = x.e < y.e ? x.e : y.e;
+    int64 a = (int64)(x.m << (x.e - e)), b = (int64)(y.m << (y.e - e));
+    int64 sum = (x.neg ? -a : a) + (y.neg ? -b : b);
+    r.neg = sum < 0;
+    r.m = (uint64)(sum < 0 ? -sum : sum);
+    r.e = e;
+    return r;
+}
+
+static uint32 x4_encode(uint32 kind, value z, uint32 satfinite) {
+    uint32 k = kind == X_E5M2 ? K_E5M2 : K_E4M3;
+    uint32 sign = z.neg ? 128 : 0;
+    uint32 over = satfinite ? sign + (uint32)top(k) : k == K_E5M2 ? sign + 124 : 127;
+    if (z.nan)
+        return 127;
+    if (z.inf)
+        return over;
+    if (!z.m)
+        return sign;
+    int64 code = encode(z.m, z.e, exponent_bits(k), mantissa_bits(k), R_RN);
+    return code <= top(k) ? sign + (uint32)code : over;
+}
+
+// kinds: d | a << 4 | b << 8 | c << 12
+uint32 __zluda_ptx_impl_agx_altfp_x4(uint32 op, uint32 kinds, uint32 satfinite, uint32 a, uint32 b, uint32 c) {
+    uint32 dk = kinds & 15, ak = (kinds >> 4) & 15, bk = (kinds >> 8) & 15, ck = (kinds >> 12) & 15;
+    uint32 result = 0;
+    for (uint32 i = 0; i < 4; i++) {
+        value x = x4_element(ak, a, i), y = x4_element(ck, c, i), z;
+        if (op == A_MUL)
+            z = x4_mul(x, y);
+        else if (op == A_FMA)
+            z = x4_add(x4_mul(x, x4_element(bk, b, i)), y);
+        else {
+            if (op == A_SUB)
+                y.neg ^= 1;
+            z = x4_add(x, y);
+        }
+        result |= x4_encode(dk, z, satfinite) << (8 * i);
     }
     return result;
 }
