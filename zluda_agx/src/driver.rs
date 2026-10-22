@@ -76,6 +76,13 @@ pub(crate) struct Driver {
     next_vmm: u64,
     /// The address ranges of cuMemAddressReserve: start, size
     reserved: std::collections::BTreeMap<u64, u64>,
+    /// The dma-bufs of exported allocations (cuIpcGetMemHandle), by the address of the handle, kept open for
+    /// other processes to take
+    ipc_exports: HashMap<u64, std::os::fd::OwnedFd>,
+    /// Imported allocations (cuIpcOpenMemHandle): the address returned, and the allocation's base
+    ipc_imports: HashMap<u64, u64>,
+    /// Registered host memory (cuMemHostRegister), by page-aligned start: its length, its GPU address and flags
+    registered: std::collections::BTreeMap<u64, (u64, u64, c_uint)>,
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
@@ -391,6 +398,9 @@ fn new_driver() -> Result<Driver, CUerror> {
         vmm: HashMap::new(),
         next_vmm: 1,
         reserved: Default::default(),
+        ipc_exports: HashMap::new(),
+        ipc_imports: HashMap::new(),
+        registered: Default::default(),
     })
 }
 
@@ -1916,16 +1926,163 @@ pub(crate) unsafe fn cuMemHostGetDevicePointer_v2(pdptr: *mut CUdeviceptr, p: *m
     if flags != 0 {
         return Err(CUerror::INVALID_VALUE);
     }
-    let ok = with(|d| Ok(d.ctx.is_unified(p as u64)))?;
-    if !ok {
-        return Err(CUerror::INVALID_VALUE);
-    }
-    out(pdptr, CUdeviceptr_v2(p))
+    let va = with(|d| {
+        if d.ctx.is_unified(p as u64) {
+            return Ok(p as u64);
+        }
+        registered_at(d, p as u64).map(|(start, _, va, _)| va + (p as u64 - start)).ok_or(CUerror::INVALID_VALUE)
+    })?;
+    out(pdptr, CUdeviceptr_v2(va as *mut c_void))
 }
 
 pub(crate) unsafe fn cuMemHostGetFlags(pflags: *mut c_uint, p: *mut c_void) -> CUresult {
-    let f = with(|d| d.host_allocs.get(&(p as u64)).copied().ok_or(CUerror::INVALID_VALUE))?;
+    let f = with(|d| {
+        d.host_allocs
+            .get(&(p as u64))
+            .copied()
+            .or_else(|| registered_at(d, p as u64).map(|r| r.3))
+            .ok_or(CUerror::INVALID_VALUE)
+    })?;
     out(pflags, f)
+}
+
+/// The registration of host memory containing `p`: page-aligned start, length, GPU address, flags.
+fn registered_at(d: &Driver, p: u64) -> Option<(u64, u64, u64, c_uint)> {
+    let (&start, &(len, va, flags)) = d.registered.range(..=p).next_back()?;
+    (p < start + len).then_some((start, len, va, flags))
+}
+
+/// cuMemHostRegister: the pages of the range become those of a GPU object, mapped over them at the same CPU
+/// address with their contents (there is no user-pointer import in the Asahi UAPI, ptx-re-blockers B36), so the
+/// CPU keeps its pointer and the GPU reaches the memory at the address cuMemHostGetDevicePointer gives. The
+/// whole pages are registered.
+pub(crate) unsafe fn cuMemHostRegister_v2(p: *mut c_void, bytes: usize, flags: c_uint) -> CUresult {
+    if p.is_null() || bytes == 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let page = agx_runtime::PAGE;
+    let start = p as u64 & !(page - 1);
+    let len = (p as u64 + bytes as u64).next_multiple_of(page) - start;
+    with(|d| {
+        if d.registered.range(..start + len).next_back().is_some_and(|(&s, &(l, _, _))| s + l > start) {
+            return Err(CUerror::HOST_MEMORY_ALREADY_REGISTERED);
+        }
+        let mut bo = d.ctx.vm.alloc_data(len).map_err(from_io)?;
+        bo.as_mut_slice()[..len as usize].copy_from_slice(std::slice::from_raw_parts(start as *const u8, len as usize));
+        bo.alias_at(start as *mut u8).map_err(from_io)?;
+        let va = d.ctx.insert_bo(bo, len);
+        d.registered.insert(start, (len, va, flags));
+        Ok(())
+    })
+}
+
+/// Puts ordinary memory with the same contents back under the registered pages.
+pub(crate) unsafe fn cuMemHostUnregister(p: *mut c_void) -> CUresult {
+    with(|d| {
+        let (start, len, va, _) = registered_at(d, p as u64).ok_or(CUerror::HOST_MEMORY_NOT_REGISTERED)?;
+        d.sync_all()?;
+        agx_runtime::restore_anonymous(start as *mut u8, len as usize).map_err(from_io)?;
+        d.registered.remove(&start);
+        d.ctx.mem_free(va).map_err(from_io)
+    })
+}
+
+/// A physical allocation as a dma-buf file descriptor (CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR), which the caller
+/// owns and may pass to another process.
+pub(crate) unsafe fn cuMemExportToShareableHandle(
+    shareable: *mut c_void,
+    handle: CUmemGenericAllocationHandle,
+    kind: CUmemAllocationHandleType,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if kind != CUmemAllocationHandleType::CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    let fd = with(|d| d.vmm.get(&handle).ok_or(CUerror::INVALID_VALUE)?.0.export_dmabuf().map_err(from_io))?;
+    out(shareable as *mut c_int, std::os::fd::IntoRawFd::into_raw_fd(fd))
+}
+
+pub(crate) unsafe fn cuMemImportFromShareableHandle(
+    handle: *mut CUmemGenericAllocationHandle,
+    os_handle: *mut c_void,
+    kind: CUmemAllocationHandleType,
+) -> CUresult {
+    if kind != CUmemAllocationHandleType::CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    // the descriptor is passed as the pointer's value
+    let fd = os_handle as usize as c_int;
+    let h = with(|d| {
+        let bo = d.ctx.vm.import_dmabuf_unbound(fd).map_err(from_io)?;
+        let mut prop: CUmemAllocationProp = std::mem::zeroed();
+        prop.type_ = CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type_ = CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+        prop.requestedHandleTypes = kind;
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (std::rc::Rc::new(bo), prop));
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+// ---------------------------------------------------------------- IPC (dma-buf)
+
+/// The bytes of a CUipcMemHandle: "ZAGXIPC1", the exporting process, its dma-buf descriptor, the object's size and
+/// the offset of the address in it.
+const IPC_MAGIC: &[u8; 8] = b"ZAGXIPC1";
+
+pub(crate) unsafe fn cuIpcGetMemHandle(handle: *mut CUipcMemHandle, dptr: CUdeviceptr) -> CUresult {
+    let va = dptr.0 as u64;
+    let bytes = with(|d| {
+        let (fd, offset, size) = d.ctx.export_dmabuf(va).map_err(from_io)?;
+        let raw = std::os::fd::AsRawFd::as_raw_fd(&fd);
+        d.ipc_exports.insert(va, fd);
+        let mut b = [0u8; 64];
+        b[..8].copy_from_slice(IPC_MAGIC);
+        b[8..12].copy_from_slice(&std::process::id().to_le_bytes());
+        b[12..16].copy_from_slice(&raw.to_le_bytes());
+        b[16..24].copy_from_slice(&size.to_le_bytes());
+        b[24..32].copy_from_slice(&offset.to_le_bytes());
+        Ok(b)
+    })?;
+    let h = handle.as_mut().ok_or(CUerror::INVALID_VALUE)?;
+    for (o, b) in h.reserved.iter_mut().zip(bytes) {
+        *o = b as c_char;
+    }
+    Ok(())
+}
+
+/// Opens another process's allocation: takes its dma-buf descriptor with pidfd_getfd (which needs the right to
+/// ptrace that process: the same user, and kernel.yama.ptrace_scope 0 or a parent) and binds the object here.
+pub(crate) unsafe fn cuIpcOpenMemHandle_v2(pdptr: *mut CUdeviceptr, handle: CUipcMemHandle, _flags: c_uint) -> CUresult {
+    let b: Vec<u8> = handle.reserved.iter().map(|&c| c as u8).collect();
+    if &b[..8] != IPC_MAGIC {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let word = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap());
+    let quad = |i: usize| u64::from_le_bytes(b[i..i + 8].try_into().unwrap());
+    let (pid, remote_fd, size, offset) = (word(8), word(12) as i32, quad(16), quad(24));
+    if pid == std::process::id() {
+        // CUDA refuses a handle of the same process
+        return Err(CUerror::INVALID_CONTEXT);
+    }
+    let fd = agx_runtime::take_fd(pid, remote_fd).map_err(|_| CUerror::NOT_PERMITTED)?;
+    let va = with(|d| {
+        let bo = d.ctx.vm.import_dmabuf(std::os::fd::AsRawFd::as_raw_fd(&fd), size).map_err(from_io)?;
+        let base = d.ctx.insert_bo(bo, size);
+        d.ipc_imports.insert(base + offset, base);
+        Ok(base + offset)
+    })?;
+    out(pdptr, CUdeviceptr_v2(va as *mut c_void))
+}
+
+pub(crate) unsafe fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult {
+    with(|d| {
+        let base = d.ipc_imports.remove(&(dptr.0 as u64)).ok_or(CUerror::INVALID_VALUE)?;
+        d.sync_all()?;
+        d.ctx.mem_free(base).map_err(from_io)
+    })
 }
 
 /// Managed memory is a GPU allocation mapped at its GPU address. The CPU must not touch it while kernels that use

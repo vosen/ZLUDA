@@ -177,6 +177,23 @@ impl Context {
         }
     }
 
+    /// Takes `bo` (bound) as an allocation of `size` bytes at its address, which mem_free releases: an imported
+    /// dma-buf (cuIpcOpenMemHandle), registered host memory (cuMemHostRegister).
+    pub fn insert_bo(&mut self, bo: Bo, size: u64) -> u64 {
+        let va = bo.va;
+        self.allocs.insert(va, (Memory::Bo(bo), size.max(1)));
+        va
+    }
+
+    /// A dma-buf of the object behind `va`, with the offset of `va` in it and its size (cuIpcGetMemHandle).
+    pub fn export_dmabuf(&self, va: u64) -> io::Result<(std::os::fd::OwnedFd, u64, u64)> {
+        let start = find(&self.allocs, va, 0, |a| a.1).ok_or_else(|| invalid(format!("{va:#x} is not allocated")))?;
+        match &self.allocs[&start].0 {
+            Memory::Bo(bo) => Ok((bo.export_dmabuf()?, va - start, bo.size)),
+            Memory::Mapped { phys, offset, .. } => Ok((phys.export_dmabuf()?, offset + (va - start), phys.size)),
+        }
+    }
+
     /// cuMemFree: waits for the default stream first, as CUDA does.
     pub fn mem_free(&mut self, va: u64) -> io::Result<()> {
         if !self.allocs.get(&va).is_some_and(|a| matches!(a.0, Memory::Bo(_))) {

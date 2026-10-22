@@ -116,6 +116,16 @@ struct drm_syncobj_handle {
 const DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE: u32 = 1;
 const DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0xc1, std::mem::size_of::<drm_syncobj_handle>());
 
+// drm.h: PRIME (dma-buf) export / import
+#[repr(C)]
+struct drm_prime_handle {
+    handle: u32,
+    flags: u32,
+    fd: i32,
+}
+const DRM_IOCTL_PRIME_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0x2d, std::mem::size_of::<drm_prime_handle>());
+const DRM_IOCTL_PRIME_FD_TO_HANDLE: u64 = drm_ioc(IOC_READWRITE, 0x2e, std::mem::size_of::<drm_prime_handle>());
+
 // linux/sync_file.h
 #[repr(C)]
 struct sync_file_info {
@@ -203,6 +213,8 @@ pub struct Bo {
     /// GPU virtual address, or 0 if the object is not bound.
     pub va: u64,
     map: *mut u8,
+    /// The offset to mmap the object at through the device (DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET).
+    mmap_offset: u64,
     /// The VM the object is bound in, and the allocator its range returns to.
     binding: Option<(u32, Option<Rc<RefCell<RangeAllocator>>>)>,
 }
@@ -211,6 +223,33 @@ impl Bo {
     /// Whether the CPU mapping is at the GPU address, so that the GPU address is also a valid CPU pointer.
     pub fn unified(&self) -> bool {
         self.va != 0 && self.map as u64 == self.va
+    }
+
+    /// Maps the object's memory also at the CPU address `addr` (page aligned), replacing what was there
+    /// (cuMemHostRegister: existing host memory becomes the object's). The caller restores that range before the
+    /// object goes.
+    pub fn alias_at(&self, addr: *mut u8) -> io::Result<()> {
+        let map = unsafe {
+            libc::mmap(
+                addr as *mut libc::c_void,
+                self.size as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_FIXED,
+                self.dev.fd.as_raw_fd(),
+                self.mmap_offset as libc::off_t,
+            )
+        };
+        if map == libc::MAP_FAILED {
+            return Err(stage_error("mmap", io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    /// Export as a dma-buf file descriptor (PRIME), for another process or device (B36).
+    pub fn export_dmabuf(&self) -> io::Result<OwnedFd> {
+        let mut ph = drm_prime_handle { handle: self.handle, flags: (libc::O_CLOEXEC | libc::O_RDWR) as u32, fd: -1 };
+        self.dev.ioctl(DRM_IOCTL_PRIME_HANDLE_TO_FD, &mut ph, "prime-handle-to-fd")?;
+        Ok(unsafe { OwnedFd::from_raw_fd(ph.fd) })
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -351,8 +390,13 @@ impl Vm {
         let size = round_up(size.max(1), PAGE);
         let mut gc = drm_asahi_gem_create { size, flags: DRM_ASAHI_GEM_WRITEBACK as u32, vm_id: 0, handle: 0, pad: 0 };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_CREATE as u64, &mut gc, "gem-create")?;
-        let mut mo = drm_asahi_gem_mmap_offset { handle: gc.handle, flags: 0, offset: 0 };
-        let mut bo = Bo { dev: self.dev.clone(), handle: gc.handle, size, va: 0, map: std::ptr::null_mut(), binding: None };
+        self.wrap(gc.handle, size, va, bind_flags, heap, true)
+    }
+
+    /// Map (and, with a nonzero `va`, bind) an existing GEM handle of `size` bytes.
+    fn wrap(&self, handle: u32, size: u64, va: u64, bind_flags: u32, heap: Option<&Rc<RefCell<RangeAllocator>>>, zero: bool) -> io::Result<Bo> {
+        let mut mo = drm_asahi_gem_mmap_offset { handle, flags: 0, offset: 0 };
+        let mut bo = Bo { dev: self.dev.clone(), handle, size, va: 0, map: std::ptr::null_mut(), mmap_offset: 0, binding: None };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET as u64, &mut mo, "gem-mmap-offset")?;
         // Bound objects are mapped at their GPU address when that CPU range is free, so that one pointer works on
         // both sides (unified memory: cuMemAllocManaged, GPU-visible host allocations).
@@ -379,7 +423,10 @@ impl Vm {
             return Err(stage_error("mmap", io::Error::last_os_error()));
         }
         bo.map = map as *mut u8;
-        bo.as_mut_slice().fill(0);
+        bo.mmap_offset = mo.offset;
+        if zero {
+            bo.as_mut_slice().fill(0);
+        }
         if va != 0 {
             let op = drm_asahi_gem_bind_op { flags: bind_flags, handle: bo.handle, offset: 0, range: size, addr: va };
             let mut vb = drm_asahi_vm_bind {
@@ -473,6 +520,30 @@ impl Vm {
         };
         self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-bind")?;
         Ok(Mapping { dev: self.dev.clone(), vm_id: self.id, va, size })
+    }
+
+    /// Import a dma-buf without binding it (a physical allocation of the virtual memory management API), of its
+    /// whole size.
+    pub fn import_dmabuf_unbound(&mut self, fd: i32) -> io::Result<Bo> {
+        let size = unsafe { libc::lseek(fd, 0, libc::SEEK_END) };
+        if size <= 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a dma-buf"));
+        }
+        let mut ph = drm_prime_handle { handle: 0, flags: 0, fd };
+        self.dev.ioctl(DRM_IOCTL_PRIME_FD_TO_HANDLE, &mut ph, "prime-fd-to-handle")?;
+        self.wrap(ph.handle, size as u64, 0, 0, None, false)
+    }
+
+    /// Import a dma-buf (another process's or device's buffer, B36) and bind it at the next free data address.
+    /// `size` must not exceed the dma-buf's size.
+    pub fn import_dmabuf(&mut self, fd: i32, size: u64) -> io::Result<Bo> {
+        let mut ph = drm_prime_handle { handle: 0, flags: 0, fd };
+        self.dev.ioctl(DRM_IOCTL_PRIME_FD_TO_HANDLE, &mut ph, "prime-fd-to-handle")?;
+        let size = round_up(size.max(1), PAGE);
+        let heap = self.data.clone();
+        let va = heap.borrow_mut().alloc(size, PAGE).ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "data heap full"))?;
+        self.wrap(ph.handle, size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, Some(&heap), false)
+            .inspect_err(|_| heap.borrow_mut().free(va, size))
     }
 }
 
@@ -1026,6 +1097,19 @@ impl Drop for Queue {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn restore_anonymous_keeps_the_contents() {
+        let len = super::PAGE as usize * 2;
+        let p = unsafe {
+            libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED | libc::MAP_ANONYMOUS, -1, 0)
+        } as *mut u8;
+        assert_ne!(p as *mut libc::c_void, libc::MAP_FAILED);
+        unsafe { std::slice::from_raw_parts_mut(p, len) }.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
+        super::restore_anonymous(p, len).unwrap();
+        assert!(unsafe { std::slice::from_raw_parts(p, len) }.iter().enumerate().all(|(i, &b)| b == i as u8));
+        unsafe { libc::munmap(p as *mut libc::c_void, len) };
+    }
+
     use super::*;
 
     #[test]
@@ -1363,6 +1447,41 @@ pub fn timer_block(clock_khz: u32) -> [u8; TIMER_BLOCK_BYTES] {
     b[24..28].copy_from_slice(&((1_000_000_000u128 << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
     b[28..32].copy_from_slice(&(((clock_khz as u128 * 1000) << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
     b
+}
+
+/// Puts private anonymous memory with the same contents under `len` bytes of CPU memory at `addr` (pages), for
+/// memory that `Bo::alias_at` mapped an object over.
+pub fn restore_anonymous(addr: *mut u8, len: usize) -> io::Result<()> {
+    let contents = unsafe { std::slice::from_raw_parts(addr, len) }.to_vec();
+    let m = unsafe {
+        libc::mmap(
+            addr as *mut libc::c_void,
+            len,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
+            -1,
+            0,
+        )
+    };
+    if m == libc::MAP_FAILED {
+        return Err(io::Error::last_os_error());
+    }
+    unsafe { std::ptr::copy_nonoverlapping(contents.as_ptr(), addr, len) };
+    Ok(())
+}
+
+/// A copy of file descriptor `fd` of process `pid` (pidfd_getfd, which needs the right to ptrace it).
+pub fn take_fd(pid: u32, fd: i32) -> io::Result<OwnedFd> {
+    let pidfd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::c_long, 0 as libc::c_long) };
+    if pidfd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let pidfd = unsafe { OwnedFd::from_raw_fd(pidfd as i32) };
+    let copy = unsafe { libc::syscall(libc::SYS_pidfd_getfd, pidfd.as_raw_fd() as libc::c_long, fd as libc::c_long, 0 as libc::c_long) };
+    if copy < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe { OwnedFd::from_raw_fd(copy as i32) })
 }
 
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
