@@ -584,13 +584,28 @@ section; cluster scope fences are GPU scope ones):
   waiting SIMD-groups meet each other and those of `bar.sync`, so a
   `try_wait` can release a `bar.sync` of another SIMD-group early.
   `test_wait` only polls.
+* `mbarrier.init.layout::v1` sets bit 24 of word 1 (bits 0-23 hold the
+  expected count), and `.layout::v1` objects record more state there: bit 25
+  enables the report of the last completed phase, which `test_wait` and
+  `try_wait` with a report destination (a predicate or a value) read from
+  bit 26, and bit 27 holds the parity of the conditional phase that
+  `.phase::conditional` waits test. `mbarrier.arrive_drop` with
+  `.multicast::cluster` drops on each CTA in the mask.
+* `cp.async.bulk` and `cp.async.bulk.tensor` with a `.report` mechanism
+  (PTX 9.4) record the outcome of the copy in the destination mbarrier
+  before its transaction completes: `.report::mbarrier::inspect` writes the
+  report code to the mbarrier's report bits, which the waits then return.
+  The PTX 9.4 cache hints (`prefetch` with `.l1_size` and `.valid_addr`,
+  `ld` with `.proxy::readonly`) are accepted and ignored, as are the
+  `fence.proxy.alias` and `fence.proxy.async::generic...sync_restrict`
+  variants, which are CTA fences.
 
 Limitations: an mbarrier counts at most 4095 pending arrivals and
 transaction counts between -2^18 and 2^18 - 1 bytes; phases are only
 distinguished by their parity; the `.multicast::cluster::32b` mbarrier
 operations (`expect_tx`, `complete_tx`, `arrive` and `arrive.expect_tx`)
-apply to the mbarrier at the same offset of each CTA in the mask. Tensor
-copies (`cp.async.bulk.tensor`) are not supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
+apply to the mbarrier at the same offset of each CTA in the mask.
+`ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
 reductions and the mbarrier operations with two SIMD-groups.
 
 ## Thread block clusters
@@ -683,6 +698,15 @@ PTX-formalization):
   operand's payload: the M2 Max's native float atomic add does
   (AGX-Performance-Simulator `tasks/ptx-re-blockers.md`, B24). `min.ftz.f32`
   waits on B11.
+
+`f32` atomic additions without `.ftz` semantics (`atom.add.noftz.f32`, and
+`atom.add.f32` and `red.add.f32` on shared memory, which PTX defines without
+flushing) keep subnormals: they are compare-and-swap loops whose sum is
+computed in `f64` and rounded once to `f32`, as are the `f32` additions of
+`cp.reduce.async.bulk`. Vector atomics (`.v2`, `.v4`, `.v8`) apply the
+operation per element. `redux.sync` takes `.f32` with `.min` and `.max`, with
+`.abs` (of each operand) and `.nan` (a NaN operand gives the canonical NaN),
+and `ld.global.nc` takes `.v8`.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated

@@ -613,9 +613,11 @@ fn run_instruction<'input>(
                 _ => return Err(error_unreachable()),
             };
             let name = format!(
-                "redux_sync_{}_{}",
+                "redux_sync_{}_{}{}{}",
                 op,
-                data.type_.to_string().replace(".", "")
+                data.type_.to_string().replace(".", ""),
+                if data.abs { "_abs" } else { "" },
+                if data.nan { "_nan" } else { "" }
             );
             to_call(
                 resolver,

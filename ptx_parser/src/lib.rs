@@ -2876,12 +2876,20 @@ fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
 // fence.proxy.tensormap::generic.release.scope;
 // fence.proxy.tensormap::generic.acquire.scope [addr], size;
 // Tensor maps are read with ordinary loads (the generic proxy): a fence of the scope (a cluster is one CTA).
+// Also the PTX ISA 9.4 .alias and .async::generic forms with a semantics.
 fn fence_tensormap<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
     modifiers: Vec<&'input str>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
     let (acquire, scope) = match modifiers[..] {
         ["proxy", "tensormap::generic", sem @ ("release" | "acquire"), scope] => (sem == "acquire", scope),
+        // fence.proxy.alias{.acquire, .release}.scope and
+        // fence.proxy.async::generic{.acquire, .release}.sync_restrict::...scope (PTX ISA 9.4): the
+        // proxies are all the generic one on AGX
+        ["proxy", "alias", "release" | "acquire", scope] => (false, scope),
+        ["proxy", "async::generic", "release" | "acquire", restrict, scope] if restrict.starts_with("sync_restrict::") => {
+            (false, scope)
+        }
         _ => return backtrack(),
     };
     let scope = match scope {
@@ -2928,6 +2936,147 @@ fn createpolicy_secondary<'a, 'input>(
     })
 }
 
+// mbarrier.test_wait{.parity}.phase_type::{primary, conditional}{.sem}{.scope}{.space}.b64
+//     waitComplete{|reportPredicate}{, reportValue}, [addr], state | parity;
+// mbarrier.try_wait (the same, then {, suspendTimeHint}): the PTX ISA 9.3 / 9.4 forms with a phase type.
+fn mbarrier_phase_type<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = modifiers;
+    let try_wait = match modifiers.first() {
+        Some(&"test_wait") => false,
+        Some(&"try_wait") => true,
+        _ => return backtrack(),
+    };
+    modifiers.remove(0);
+    let conditional = take_modifier(&mut modifiers, "phase_type::conditional");
+    if !conditional && !take_modifier(&mut modifiers, "phase_type::primary") {
+        return backtrack();
+    }
+    let parity = take_modifier(&mut modifiers, "parity");
+    for sem in ["acquire", "relaxed", "cta", "cluster"] {
+        take_modifier(&mut modifiers, sem);
+    }
+    let mut shared = false;
+    for space in ["shared::cluster", "shared::cta", "shared"] {
+        shared |= take_modifier(&mut modifiers, space);
+    }
+    let space = shared.then_some(StateSpace::Shared);
+    if !take_modifier(&mut modifiers, "b64") || !modifiers.is_empty() || (conditional && !parity) {
+        return backtrack();
+    }
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    let dst_report_pred = opt((Token::Pipe, ParsedOperandStr::parse).map(|(_, p)| p)).parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    // reportValue, then [addr]
+    let dst_report_value = opt((ParsedOperandStr::parse, Token::Comma).map(|(v, _)| v)).parse_next(stream)?;
+    let src_mbarrier = memory_operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src_state = ParsedOperandStr::parse.parse_next(stream)?;
+    let src_time_hint = if try_wait {
+        opt((Token::Comma, ParsedOperandStr::parse).map(|(_, t)| t)).parse_next(stream)?
+    } else {
+        None
+    };
+    Ok(ast::Instruction::MbarrierWait {
+        data: ast::MbarrierWaitDetails { space: shared_space(space), parity, try_wait, conditional },
+        arguments: ast::MbarrierWaitArgs {
+            dst,
+            dst_report_pred,
+            dst_report_value,
+            src_mbarrier,
+            src_state,
+            src_time_hint,
+        },
+    })
+}
+
+// atom / red float operations in the orders the instruction grammar does not take: .noftz on .f32
+// (atom.global.add.noftz.f32, PTX ISA 9.4) and the vector prefix before the operation
+// (atom.global.v4.f32.add{.noftz}).
+fn atom_float_any_order<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    opcode: &str,
+    modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mut modifiers = modifiers;
+    let op_position = modifiers.iter().position(|m| matches!(*m, "add" | "min" | "max"));
+    let vec_position = modifiers.iter().position(|m| matches!(*m, "v2" | "v4" | "v8"));
+    let noftz = take_modifier(&mut modifiers, "noftz");
+    let vector_first = matches!((op_position, vec_position), (Some(o), Some(v)) if v < o);
+    if !noftz && !vector_first {
+        return backtrack();
+    }
+    let semantics = [
+        ("relaxed", AtomSemantics::Relaxed),
+        ("acquire", AtomSemantics::Acquire),
+        ("release", AtomSemantics::Release),
+        ("acq_rel", AtomSemantics::AcqRel),
+    ]
+    .into_iter()
+    .find(|(name, _)| take_modifier(&mut modifiers, name))
+    .map_or(AtomSemantics::Relaxed, |(_, s)| s);
+    let scope = [("cta", MemScope::Cta), ("cluster", MemScope::Gpu), ("gpu", MemScope::Gpu), ("sys", MemScope::Sys)]
+        .into_iter()
+        .find(|(name, _)| take_modifier(&mut modifiers, name))
+        .map_or(MemScope::Gpu, |(_, s)| s);
+    let space = if take_modifier(&mut modifiers, "global") { StateSpace::Global } else { StateSpace::Generic };
+    let op = if take_modifier(&mut modifiers, "add") {
+        ast::AtomicOp::FloatAdd
+    } else if take_modifier(&mut modifiers, "min") {
+        ast::AtomicOp::FloatMin
+    } else if take_modifier(&mut modifiers, "max") {
+        ast::AtomicOp::FloatMax
+    } else {
+        return backtrack();
+    };
+    let vector = [("v2", 2u8), ("v4", 4), ("v8", 8)]
+        .into_iter()
+        .find(|(name, _)| take_modifier(&mut modifiers, name))
+        .map(|(_, n)| n);
+    let scalar = [
+        ("f32", ScalarType::F32),
+        ("f16", ScalarType::F16),
+        ("bf16", ScalarType::BF16),
+        ("f16x2", ScalarType::F16x2),
+        ("bf16x2", ScalarType::BF16x2),
+    ]
+    .into_iter()
+    .find(|(name, _)| take_modifier(&mut modifiers, name))
+    .map(|(_, t)| t);
+    let Some(scalar) = scalar else {
+        return backtrack();
+    };
+    let cache_hint = take_modifier(&mut modifiers, "L2::cache_hint");
+    if !modifiers.is_empty() || (vector == Some(8) && scalar == ScalarType::F32) {
+        return backtrack();
+    }
+    let type_ = match vector {
+        Some(n) => ast::Type::Vector(n, scalar),
+        None => ast::Type::Scalar(scalar),
+    };
+    let data = AtomDetails { noftz, semantics, scope, space, op, type_ };
+    let dst = if opcode == "atom" {
+        let d = ParsedOperandStr::parse.parse_next(stream)?;
+        Token::Comma.parse_next(stream)?;
+        Some(d)
+    } else {
+        None
+    };
+    let src1 = memory_operand(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src2 = ParsedOperandStr::parse.parse_next(stream)?;
+    // the cache policy is a hint
+    if cache_hint {
+        (Token::Comma, ParsedOperandStr::parse).parse_next(stream)?;
+    }
+    Ok(match dst {
+        Some(dst) => ast::Instruction::Atom { data, arguments: AtomArgs { dst, src1, src2 } },
+        None => ast::Instruction::Red { data, arguments: RedArgs { src1, src2 } },
+    })
+}
+
 // vote.{all,any,uni}.pred d, {!}a: the deprecated forms without .sync (below sm_70), over the active threads.
 // vote.ballot.b32 and the .sync forms stay with the instruction grammar.
 fn vote_without_sync<'a, 'input>(
@@ -2962,7 +3111,8 @@ fn tensor_instruction<'a, 'input>(
     let sparse = opcode == "spcompress" || opcode == "spdecompress";
     let tcgen05 = opcode == "tcgen05";
     if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05
-        && opcode != "vote" && opcode != "fence" && opcode != "createpolicy"
+        && opcode != "vote" && opcode != "fence" && opcode != "createpolicy" && opcode != "mbarrier"
+        && opcode != "atom" && opcode != "red"
     {
         return backtrack();
     }
@@ -2976,6 +3126,12 @@ fn tensor_instruction<'a, 'input>(
     }
     if opcode == "createpolicy" {
         return createpolicy_secondary(stream, modifiers);
+    }
+    if opcode == "mbarrier" {
+        return mbarrier_phase_type(stream, modifiers);
+    }
+    if opcode == "atom" || opcode == "red" {
+        return atom_float_any_order(stream, opcode, modifiers);
     }
     if opcode == "cvt" {
         return cvt_narrow_instruction(stream, modifiers);
@@ -3036,6 +3192,25 @@ fn tensor_instruction<'a, 'input>(
     let ov_dim = ov_dim_stride || take_modifier(&mut modifiers, "override::global_dim");
     let cta_group2 = take_modifier(&mut modifiers, "cta_group::2");
     take_modifier(&mut modifiers, "cta_group::1");
+    let report = [
+        "per_element::ff",
+        "per_16bytes::80000000",
+        "per_16bytes::8000",
+        "per_16bytes::80",
+        "per_16bytes::8",
+    ]
+    .iter()
+    .position(|r| {
+        let name = format!("mbarrier::report::validity::{r}");
+        match modifiers.iter().position(|m| *m == name) {
+            Some(i) => {
+                modifiers.remove(i);
+                true
+            }
+            None => false,
+        }
+    })
+    .map_or(0, |i| i as u32 + 1);
     let op = if reduce {
         let op = match modifiers.first() {
             Some(&"add") => ast::AtomicOp::Add,
@@ -3169,6 +3344,7 @@ fn tensor_instruction<'a, 'input>(
             cta_group2,
             im2col,
             override_address: ov_addr || ov_dim,
+            report,
         },
         arguments: ast::CpAsyncBulkTensorArgs {
             src_smem: smem,
@@ -5494,6 +5670,9 @@ derive_parser!(
     pub enum EvictionPriority { }
 
     #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
+    pub enum ReportMechanism { }
+
+    #[derive(Copy, Clone, Display, PartialEq, Eq, Hash)]
     pub enum VshOp {
         Add
     }
@@ -5612,10 +5791,10 @@ derive_parser!(
     StateSpace =                { .global };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-ld
-    ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type   d, [a]{.unified}{, cache_policy} => {
+    ld{.weak}{.ss}{.cop}{.level::eviction_priority}{.level::cache_hint}{.level::prefetch_size}{.vec}.type{.proxy}   d, [a]{.unified}{, cache_policy} => {
         let (a, unified) = a;
-        // ld: the cache and prefetch hints do not change the result
-        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy, &unified);
+        // ld: the cache and prefetch hints (and .proxy::readonly) do not change the result
+        let _ = (&level_eviction_priority, &level_cache_hint, &level_prefetch_size, &cache_policy, &unified, proxy);
         Instruction::Ld {
             data: LdDetails {
                 qualifier: weak.unwrap_or(RawLdStQualifier::Weak).into(),
@@ -5688,6 +5867,7 @@ derive_parser!(
                                             { .L1::evict_normal, .L1::evict_unchanged, .L1::evict_first, .L1::evict_last, .L1::no_allocate };
     .level::cache_hint =                    { .L2::cache_hint };
     .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
+    .proxy =                                { .proxy::readonly };
     .scope: MemScope =                      { .cta, .cluster, .gpu, .sys };
     .vec: VectorPrefix =                    { .v2, .v4, .v8 };
     .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
@@ -5744,7 +5924,7 @@ derive_parser!(
                                               .L1::evict_first, .L1::evict_last, .L1::no_allocate};
     .level::cache_hint =                    { .L2::cache_hint };
     .level::prefetch_size: PrefetchSize =   { .L2::64B, .L2::128B, .L2::256B };
-    .vec: VectorPrefix  =                   { .v2, .v4 };
+    .vec: VectorPrefix  =                   { .v2, .v4, .v8 };
     .type: ScalarType =                     { .b8, .b16, .b32, .b64, .b128,
                                               .u8, .u16, .u32, .u64,
                                               .s8, .s16, .s32, .s64,
@@ -7225,6 +7405,7 @@ derive_parser!(
         }
         ast::Instruction::Atom {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: shared_space(space),
@@ -7251,6 +7432,7 @@ derive_parser!(
         }
         ast::Instruction::Atom {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: shared_space(space),
@@ -7266,6 +7448,7 @@ derive_parser!(
         }
         ast::Instruction::Atom {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -7282,6 +7465,7 @@ derive_parser!(
         }
         ast::Instruction::Atom {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -7298,6 +7482,7 @@ derive_parser!(
         }
         ast::Instruction::Atom {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -7333,6 +7518,7 @@ derive_parser!(
         }
         ast::Instruction::Red {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: shared_space(space),
@@ -7348,6 +7534,7 @@ derive_parser!(
         }
         ast::Instruction::Red {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -7364,6 +7551,7 @@ derive_parser!(
         }
         ast::Instruction::Red {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -7380,6 +7568,7 @@ derive_parser!(
         }
         ast::Instruction::Red {
             data: AtomDetails {
+                noftz: false,
                 semantics: sem.map(Into::into).unwrap_or(AtomSemantics::Relaxed),
                 scope: scope.unwrap_or(MemScope::Gpu),
                 space: global.unwrap_or(StateSpace::Generic),
@@ -8063,7 +8252,7 @@ derive_parser!(
     // cp.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}{.cp_mask}
     //                                      [dstmem], [srcmem], size{, cache-policy}{, bytemask}
     // The modifiers are unordered, so the direction follows from the completion mechanism.
-    cp.async.bulk{.shared::cluster}{.shared::cta}{.global}{.completion_mechanism}{.bulk_group}{.multicast}{.level::cache_hint}{.cp_mask}
+    cp.async.bulk{.shared::cluster}{.shared::cta}{.global}{.completion_mechanism}{.report}{.bulk_group}{.multicast}{.level::cache_hint}{.cp_mask}
                                             [dstmem], [srcmem], size{, [mbar]}{, extra1}{, extra2} => {
         let mut extra = [extra1, extra2].into_iter().flatten();
         let to_shared = completion_mechanism && !bulk_group && global as u8 + shared_cta as u8 + shared_cluster as u8 == 2;
@@ -8086,6 +8275,13 @@ derive_parser!(
                 dst_space,
                 src_space,
                 multicast,
+                report: report.map_or(0, |r| match r {
+                    ReportMechanism::MbarrierReportValidityPerElementFf => 1,
+                    ReportMechanism::MbarrierReportValidityPer16bytes80000000 => 2,
+                    ReportMechanism::MbarrierReportValidityPer16bytes8000 => 3,
+                    ReportMechanism::MbarrierReportValidityPer16bytes80 => 4,
+                    ReportMechanism::MbarrierReportValidityPer16bytes8 => 5,
+                }),
             },
             arguments: CpAsyncBulkArgs {
                 src_to: dstmem,
@@ -8099,14 +8295,17 @@ derive_parser!(
         }
     }
     .completion_mechanism = { .mbarrier::complete_tx::bytes };
+    .report: ReportMechanism = { .mbarrier::report::validity::per_element::ff,
+        .mbarrier::report::validity::per_16bytes::80000000, .mbarrier::report::validity::per_16bytes::8000,
+        .mbarrier::report::validity::per_16bytes::80, .mbarrier::report::validity::per_16bytes::8 };
     .multicast = { .multicast::cluster };
     .level::cache_hint = { .L2::cache_hint };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier
     // Clusters have a single CTA, so .shared::cluster addresses are those of .shared::cta.
-    mbarrier.init{.space}.b64 [addr], count => {
+    mbarrier.init{.layout}{.space}.b64 [addr], count => {
         Instruction::MbarrierInit {
-            data: shared_space(space),
+            data: MbarrierInitDetails { space: shared_space(space), v1: layout },
             arguments: MbarrierInitArgs { src_mbarrier: addr, src_count: count }
         }
     }
@@ -8147,15 +8346,29 @@ derive_parser!(
     mbarrier.test_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate => {
         let _ = (sem, scope);
         Instruction::MbarrierWait {
-            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: false },
-            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: None }
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: false, conditional: false },
+            arguments: MbarrierWaitArgs {
+                dst: waitcomplete,
+                dst_report_pred: None,
+                dst_report_value: None,
+                src_mbarrier: addr,
+                src_state: mbstate,
+                src_time_hint: None,
+            }
         }
     }
     mbarrier.try_wait{.parity}{.sem}{.scope}{.space}.b64 waitcomplete, [addr], mbstate{, timehint} => {
         let _ = (sem, scope);
         Instruction::MbarrierWait {
-            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: true },
-            arguments: MbarrierWaitArgs { dst: waitcomplete, src_mbarrier: addr, src_state: mbstate, src_time_hint: timehint }
+            data: MbarrierWaitDetails { space: shared_space(space), parity, try_wait: true, conditional: false },
+            arguments: MbarrierWaitArgs {
+                dst: waitcomplete,
+                dst_report_pred: None,
+                dst_report_value: None,
+                src_mbarrier: addr,
+                src_state: mbstate,
+                src_time_hint: timehint,
+            }
         }
     }
     mbarrier.pending_count.b64 count, mbstate => {
@@ -8164,6 +8377,7 @@ derive_parser!(
         }
     }
     .nocomplete = { .noComplete };
+    .layout = { .layout::v1 };
     .sem: RawMbarrierSemantics = { .release, .acquire, .relaxed };
     .scope: MemScope = { .cta, .cluster };
     .space: StateSpace = { .shared{::cta, ::cluster} };
@@ -8276,17 +8490,24 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-redux-sync
 
-    redux.sync.op.type dst, src, membermask => {
+    // also redux.sync.{min, max}{.abs}{.NaN}.f32
+    redux.sync.op{.abs}{.nan}.type dst, src, membermask => {
+        let float = type_ == ScalarType::F32;
+        if (float && op == Reduction::Add) || (!float && (abs || nan)) {
+            state.errors.push(PtxError::SyntaxError(format!("invalid redux.sync in {:?}", state.text)));
+        }
         Instruction::ReduxSync {
-            data: ReduxSyncData { type_, reduction: op },
+            data: ReduxSyncData { type_, reduction: op, abs, nan },
             arguments: ReduxSyncArgs { dst, src, src_membermask: membermask }
         }
     }
     .op: Reduction = {.add, .min, .max};
-    .type: ScalarType = {.u32, .s32};
+    .abs = { .abs };
+    .nan = { .NaN };
+    .type: ScalarType = {.u32, .s32, .f32};
     redux.sync.bop.b32 dst, src, membermask => {
         Instruction::ReduxSync {
-            data: ReduxSyncData { type_: ScalarType::B32, reduction: bop },
+            data: ReduxSyncData { type_: ScalarType::B32, reduction: bop, abs: false, nan: false },
             arguments: ReduxSyncArgs { dst, src, src_membermask: membermask }
         }
     }
@@ -8295,8 +8516,6 @@ derive_parser!(
     // redux.sync.op.b32 dst, src, membermask;
     // .op   = {.and, .or, .xor}
 
-    // redux.sync.op{.abs.}{.NaN}.f32 dst, src, membermask;
-    // .op   = { .min, .max }
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-stmatrix
@@ -8435,9 +8654,9 @@ derive_parser!(
     }
     .type: ScalarType = { .f32, .f64 };
 
-    // also prefetch.global.L2::evict_{last,normal}
-    prefetch{.space}{.level}{.level::eviction_priority} [a] => {
-        let _ = level_eviction_priority;
+    // also prefetch.global.L2::evict_{last,normal}, and the PTX ISA 9.4 hints .L1::32B and .valid_addr
+    prefetch{.space}{.level}{.level::eviction_priority}{.l1_size}{.valid_addr} [a] => {
+        let _ = (level_eviction_priority, l1_size, valid_addr);
         let space = space.unwrap_or(StateSpace::Generic);
         ast::Instruction::Prefetch {
             data: PrefetchData { space, level: level.unwrap_or(CacheLevel::L2) },
@@ -8447,6 +8666,8 @@ derive_parser!(
     .space: StateSpace =    { .global, .local };
     .level: CacheLevel =    { .L1, .L2 };
     .level::eviction_priority: EvictionPriority = { .L2::evict_last, .L2::evict_normal };
+    .l1_size = { .L1::32B };
+    .valid_addr = { .valid_addr };
 
     prefetchu.L1 [a] => {
         ast::Instruction::Prefetch {

@@ -827,11 +827,11 @@ ptx_parser_macros::generate_instruction_type!(
         },
         MbarrierInit {
             type: Type::Scalar(ScalarType::B64),
-            data: StateSpace,
+            data: MbarrierInitDetails,
             arguments<T>: {
                 src_mbarrier: {
                     repr: T,
-                    space: { data.clone() },
+                    space: { data.space },
                 },
                 src_count: {
                     repr: T,
@@ -897,6 +897,15 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: {
                     repr: T,
                     type: Type::Scalar(ScalarType::Pred),
+                },
+                // .phase_type::primary: the payload report of the completed phase
+                dst_report_pred: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                dst_report_value: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
                 },
                 src_mbarrier: {
                     repr: T,
@@ -3001,6 +3010,10 @@ pub struct CpAsyncBulkDetails {
     pub dst_space: StateSpace,
     pub src_space: StateSpace,
     pub multicast: bool,
+    /// The data inspection of .mbarrier::report::validity (PTX ISA 9.4
+    /// 9.7.10.28.1.3): 0 none, 1 .per_element::ff, 2 to 5 .per_16bytes::
+    /// 80000000, 8000, 80 and 8
+    pub report: u32,
 }
 
 pub struct CpReduceAsyncBulkDetails {
@@ -3027,6 +3040,14 @@ pub struct MbarrierWaitDetails {
     pub parity: bool,
     // try_wait (potentially blocking) instead of test_wait
     pub try_wait: bool,
+    // .phase_type::conditional: the conditional phase of a .layout::v1 object
+    pub conditional: bool,
+}
+
+pub struct MbarrierInitDetails {
+    pub space: StateSpace,
+    // .layout::v1: with a payload report and a conditional phase
+    pub v1: bool,
 }
 
 pub struct ShfDetails {
@@ -4370,6 +4391,8 @@ pub struct AtomDetails {
     pub scope: MemScope,
     pub space: StateSpace,
     pub op: AtomicOp,
+    /// .noftz (f32 add on global memory): subnormal inputs and results are kept
+    pub noftz: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -4489,6 +4512,9 @@ impl VoteMode {
 pub struct ReduxSyncData {
     pub type_: ScalarType,
     pub reduction: Reduction,
+    // .f32: the absolute values, and a NaN result if any input is a NaN
+    pub abs: bool,
+    pub nan: bool,
 }
 
 /// Element types of the warp-level matrix instructions (`mma`, `wmma`).
@@ -5366,6 +5392,8 @@ pub struct CpAsyncBulkTensorDetails {
     pub im2col: Option<u8>,
     // .override::global_address (the address operand replaces the map's)
     pub override_address: bool,
+    /// .mbarrier::report::validity of loads: the code of CpAsyncBulkDetails::report
+    pub report: u32,
 }
 
 impl CpAsyncBulkTensorDetails {

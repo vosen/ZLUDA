@@ -1906,6 +1906,19 @@ impl<'a> MethodEmitContext<'a> {
         let builder = self.builder;
         let src1 = self.resolver.value(src1)?;
         let src2 = self.resolver.value(src2)?;
+        // f32 add keeping subnormals: on shared memory, and with .noftz (PTX ISA 9.4 9.7.15.5)
+        if let (ast::AtomicOp::FloatAdd, true) =
+            (data.op, data.noftz || data.space == ast::StateSpace::Shared)
+        {
+            let element = match &data.type_ {
+                ast::Type::Scalar(t) => Some((*t, None)),
+                ast::Type::Vector(n, t) => Some((*t, Some(*n))),
+                _ => None,
+            };
+            if let (Some((ast::ScalarType::F32, count)), Target::Agx) = (element, self.target) {
+                return self.emit_atom_fadd_ieee(data.space, src1, src2, count);
+            }
+        }
         let op = match data.op {
             ast::AtomicOp::And => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpAnd,
             ast::AtomicOp::Or => LLVMZludaAtomicRMWBinOp::LLVMZludaAtomicRMWBinOpOr,
@@ -1936,6 +1949,39 @@ impl<'a> MethodEmitContext<'a> {
                 get_ordering(data.semantics),
             )
         })
+    }
+
+    // An f32 atomic add whose sum keeps subnormals (a compare-and-swap loop
+    // around an IEEE addition), element by element for a vector
+    fn emit_atom_fadd_ieee(
+        &mut self,
+        space: ast::StateSpace,
+        address: LLVMValueRef,
+        value: LLVMValueRef,
+        count: Option<u8>,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let name = match space {
+            ast::StateSpace::Shared => c"__zluda_ptx_impl_agx_atom_fadd_ieee_shared",
+            ast::StateSpace::Global => c"__zluda_ptx_impl_agx_atom_fadd_ieee_global",
+            _ => c"__zluda_ptx_impl_agx_atom_fadd_ieee_generic",
+        };
+        let Some(count) = count else {
+            return self.emit_agx_helper(name, None, Some(ast::ScalarType::F32), &[address, value]);
+        };
+        let i8_type = unsafe { LLVMInt8TypeInContext(self.context) };
+        let mut result = unsafe { LLVMGetUndef(LLVMTypeOf(value)) };
+        for i in 0..count as u64 {
+            let index = self.const_u32(i);
+            let offset = self.const_u32(4 * i);
+            let element = unsafe { LLVMBuildExtractElement(self.builder, value, index, LLVM_UNNAMED.as_ptr()) };
+            let mut indices = [offset];
+            let pointer = unsafe {
+                LLVMBuildInBoundsGEP2(self.builder, i8_type, address, indices.as_mut_ptr(), 1, LLVM_UNNAMED.as_ptr())
+            };
+            let old = self.emit_agx_helper(name, None, Some(ast::ScalarType::F32), &[pointer, element])?;
+            result = unsafe { LLVMBuildInsertElement(self.builder, result, old, index, LLVM_UNNAMED.as_ptr()) };
+        }
+        Ok(result)
     }
 
     fn emit_atom_cas(
@@ -6445,6 +6491,7 @@ impl<'a> MethodEmitContext<'a> {
             Some(op) => {
                 self.emit_atom_impl(
                     ast::AtomDetails {
+                        noftz: false,
                         semantics: ast::AtomSemantics::Relaxed,
                         scope: ast::MemScope::Gpu,
                         space: ast::StateSpace::Shared,
@@ -6527,6 +6574,16 @@ impl<'a> MethodEmitContext<'a> {
         }
         if let Some(mbarrier) = arguments.src_mbarrier {
             let mbarrier = self.mbarrier_pointer(data.dst_space, mbarrier)?;
+            // the data inspection of .report_mechanism precedes the complete-tx
+            if data.report != 0 && data.src_space == ast::StateSpace::Global {
+                let code = self.const_u32(data.report as u64);
+                self.emit_agx_helper(
+                    c"__zluda_ptx_impl_agx_mbarrier_inspect",
+                    None,
+                    None,
+                    &[mbarrier, from, size, code],
+                )?;
+            }
             self.emit_agx_helper(
                 c"__zluda_ptx_impl_agx_mbarrier_complete_tx",
                 None,
@@ -6646,7 +6703,7 @@ impl<'a> MethodEmitContext<'a> {
                     }
                     None => self.const_u32(0),
                 };
-                let flags = data.multicast as u64 | (data.cta_group2 as u64) << 1;
+                let flags = data.multicast as u64 | (data.cta_group2 as u64) << 1 | (data.report as u64) << 8;
                 args.push(smem);
                 args.push(tmap);
                 args.extend(coords);
@@ -7555,16 +7612,17 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_mbarrier_init(
         &mut self,
-        space: ast::StateSpace,
+        data: ast::MbarrierInitDetails,
         arguments: ast::MbarrierInitArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        let mbarrier = self.mbarrier_pointer(space, arguments.src_mbarrier)?;
+        let mbarrier = self.mbarrier_pointer(data.space, arguments.src_mbarrier)?;
         let count = self.resolver.value(arguments.src_count)?;
+        let v1 = self.const_u32(data.v1 as u64);
         self.emit_agx_helper(
             c"__zluda_ptx_impl_agx_mbarrier_init",
             None,
             None,
-            &[mbarrier, count],
+            &[mbarrier, count, v1],
         )?;
         Ok(())
     }
@@ -7600,11 +7658,12 @@ impl<'a> MethodEmitContext<'a> {
             None => self.const_u32(0),
         };
         if let Some(mask) = arguments.src_cta_mask {
-            if data.drop || arguments.dst_state.is_some() {
-                return Err(error_todo_msg("multicast mbarrier.arrive_drop or with a state"));
+            if arguments.dst_state.is_some() {
+                return Err(error_todo_msg("multicast mbarrier.arrive with a state"));
             }
             let mask = self.resolver.value(mask)?;
-            let op = self.const_u32(2);
+            // 2 arrive, 3 arrive_drop
+            let op = self.const_u32(2 + data.drop as u64);
             self.emit_agx_helper(
                 c"__zluda_ptx_impl_agx_mbarrier_multicast",
                 None,
@@ -7675,17 +7734,32 @@ impl<'a> MethodEmitContext<'a> {
                 )
             }
         };
-        let name = if data.try_wait {
-            c"__zluda_ptx_impl_agx_mbarrier_try_wait"
-        } else {
-            c"__zluda_ptx_impl_agx_mbarrier_test_wait"
+        let name = match (data.try_wait, data.conditional) {
+            (true, false) => c"__zluda_ptx_impl_agx_mbarrier_try_wait",
+            (false, false) => c"__zluda_ptx_impl_agx_mbarrier_test_wait",
+            (true, true) => c"__zluda_ptx_impl_agx_mbarrier_try_wait_conditional",
+            (false, true) => c"__zluda_ptx_impl_agx_mbarrier_test_wait_conditional",
         };
-        self.emit_agx_helper(
+        let done = self.emit_agx_helper(
             name,
             Some(arguments.dst),
             Some(ast::ScalarType::Pred),
             &[mbarrier, parity],
         )?;
+        // the payload report of the completed phase (always zero for .layout::v0)
+        if let Some(report) = arguments.dst_report_pred {
+            self.emit_agx_helper(
+                c"__zluda_ptx_impl_agx_mbarrier_report",
+                Some(report),
+                Some(ast::ScalarType::Pred),
+                &[mbarrier, done],
+            )?;
+        }
+        // the report value is only OR'ed with 0 (PTX ISA 9.7.10.28.1.3)
+        if let Some(value) = arguments.dst_report_value {
+            let zero = self.const_u32(0);
+            self.resolver.register(value, zero);
+        }
         Ok(())
     }
 
