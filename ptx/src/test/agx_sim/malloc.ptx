@@ -1,0 +1,99 @@
+// Device-side malloc and free, called as nvcc emits them: every thread allocates an array of 4 * (tid % 7 + 1)
+// words, fills it, frees it and allocates again 50 times (the freed blocks are reused), then keeps one block, which
+// a second kernel reads and frees. malloc of more than the heap returns NULL.
+.version 8.0
+.target sm_80
+.address_size 64
+
+.extern .func (.param .b64 func_retval0) malloc(.param .b64 malloc_param_0);
+.extern .func free(.param .b64 free_param_0);
+
+.visible .entry alloc(.param .u64 pout, .param .u64 pkeep)
+{
+    .reg .b64 %out, %keep, %p, %bytes, %a, %d, %big; .reg .b32 %t, %n, %i, %j, %v, %sum; .reg .pred %c;
+    ld.param.u64 %out, [pout];
+    ld.param.u64 %keep, [pkeep];
+    mov.u32 %t, %tid.x;
+    rem.u32 %n, %t, 7;
+    add.u32 %n, %n, 1;
+    shl.b32 %n, %n, 2;
+    mul.wide.u32 %bytes, %n, 4;
+    mov.u32 %sum, 0;
+    mov.u32 %i, 0;
+ROUND:
+    {
+    .param .b64 a; .param .b64 r;
+    st.param.b64 [a], %bytes;
+    call.uni (r), malloc, (a);
+    ld.param.b64 %p, [r];
+    }
+    mov.u32 %j, 0;
+FILL:
+    mul.wide.u32 %d, %j, 4;
+    add.u64 %a, %p, %d;
+    add.u32 %v, %j, %i;
+    add.u32 %v, %v, %t;
+    st.global.u32 [%a], %v;
+    add.u32 %j, %j, 1;
+    setp.lt.u32 %c, %j, %n;
+    @%c bra FILL;
+    mov.u32 %j, 0;
+SUM:
+    mul.wide.u32 %d, %j, 4;
+    add.u64 %a, %p, %d;
+    ld.global.u32 %v, [%a];
+    add.u32 %sum, %sum, %v;
+    add.u32 %j, %j, 1;
+    setp.lt.u32 %c, %j, %n;
+    @%c bra SUM;
+    add.u32 %i, %i, 1;
+    setp.lt.u32 %c, %i, 50;
+    @!%c bra KEEP;
+    {
+    .param .b64 a;
+    st.param.b64 [a], %p;
+    call.uni free, (a);
+    }
+    bra ROUND;
+KEEP:
+    // the last block stays allocated: its address for the second kernel
+    mul.wide.u32 %d, %t, 8;
+    add.u64 %a, %keep, %d;
+    st.global.u64 [%a], %p;
+    // more than the heap: NULL
+    mov.u64 %big, 0x100000000;
+    {
+    .param .b64 a; .param .b64 r;
+    st.param.b64 [a], %big;
+    call.uni (r), malloc, (a);
+    ld.param.b64 %big, [r];
+    }
+    setp.eq.u64 %c, %big, 0;
+    selp.u32 %v, 1, 0, %c;
+    mul.wide.u32 %d, %t, 8;
+    add.u64 %a, %out, %d;
+    st.global.v2.u32 [%a], {%sum, %v};
+    ret;
+}
+
+// out[tid] = the first word of the block thread tid kept, which it then frees
+.visible .entry use(.param .u64 pkeep, .param .u64 pout)
+{
+    .reg .b64 %keep, %out, %p, %d, %a; .reg .b32 %t, %v;
+    ld.param.u64 %keep, [pkeep];
+    ld.param.u64 %out, [pout];
+    mov.u32 %t, %tid.x;
+    mul.wide.u32 %d, %t, 8;
+    add.u64 %a, %keep, %d;
+    ld.global.u64 %p, [%a];
+    ld.global.u32 %v, [%p];
+    mul.wide.u32 %d, %t, 4;
+    add.u64 %a, %out, %d;
+    st.global.u32 [%a], %v;
+    {
+    .param .b64 a;
+    st.param.b64 [a], %p;
+    call.uni free, (a);
+    }
+    ret;
+}

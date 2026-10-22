@@ -28,6 +28,7 @@ from agx_rounding_check import round_fmt  # noqa: E402
 SIGN = 1 << 63
 MAG = SIGN - 1
 INF = 0x7ff << 52
+QUIET = 1 << 51
 CANON = MAG
 MODES = {'rz': ('round.towardzero', 0), 'rn': ('round.tonearest', 1),
          'ru': ('round.upward', 2), 'rd': ('round.downward', 3)}
@@ -284,6 +285,11 @@ OTHER = ['fpext', 'fptosi', 'fptoui', 'floor', 'ceil', 'trunc', 'round', 'minnum
                                              'ueq', 'une', 'ult', 'ule', 'ugt', 'uge')]
 
 
+# the operations from double to double, with their number of operands
+F64_ARITY = {'add': 2, 'sub': 2, 'mul': 2, 'div': 2, 'fma': 3, 'sqrt': 1, 'rint': 1, 'floor': 1, 'ceil': 1,
+             'trunc': 1, 'round': 1, 'minnum': 2, 'maxnum': 2, 'minimum': 2, 'maximum': 2}
+
+
 def body(op, mode, dynamic):
     """IR computing %r (stored as i64) from double %x, %y, %z."""
     exc = 'metadata !"fpexcept.ignore"'
@@ -395,6 +401,11 @@ def run(op, mode, dynamic, n, args, tmp):
     bad = []
     for row, g in zip(rows, got):
         w = ref(op, mode, row)
+        # double precision operations keep NaN payloads (PTX ISA 9.7.3): the first NaN operand, quieted
+        if canon and w == CANON and op in F64_ARITY:
+            nans = [x for x in row[:F64_ARITY[op]] if is_nan(x)]
+            if nans:
+                w = nans[0] | QUIET
         if not canon and w == CANON and op not in ('fptrunc32', 'fptrunc16') and is_nan(g):
             continue
         if not canon and op == 'fptrunc32' and w == 0x7fffffff and (g & 0x7fffffff) > 0x7f800000:

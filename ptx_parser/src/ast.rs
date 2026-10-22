@@ -3734,10 +3734,11 @@ impl SetpData {
         ftz: bool,
         type_: ScalarType,
     ) -> Self {
-        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them
+        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them; .ftz
+        // applies to .f32 (and here .f16) only, and is ignored on the others (PTX ISA 9.7.4.1)
         let flush_to_zero = match (ftz, type_) {
             (_, ScalarType::F32 | ScalarType::F16 | ScalarType::F16x2) => Some(ftz),
-            (false, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
+            (_, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
             (true, _) => {
                 state.errors.push(PtxError::NonF32Ftz);
                 None
@@ -4327,6 +4328,8 @@ pub struct MinMaxFloat {
     // .xorsign.abs: compare the magnitudes, the result has the sign
     // sign(a) xor sign(b)
     pub xorsign_abs: bool,
+    // .abs without .xorsign: the magnitudes of the inputs
+    pub abs: bool,
     pub type_: ScalarType,
 }
 

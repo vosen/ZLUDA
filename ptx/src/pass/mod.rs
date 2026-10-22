@@ -374,6 +374,12 @@ enum PtxSpecialRegister {
     ClusterCtarank,
     ClusterNctarank,
     IsExplicitCluster,
+    DynamicSmemSize,
+    TotalSmemSize,
+    AggrSmemSize,
+    ReservedSmemOffsetBegin,
+    ReservedSmemOffsetEnd,
+    ReservedSmemOffsetCap,
     #[strum(disabled)]
     Envreg(u8),
     #[strum(disabled)]
@@ -412,6 +418,12 @@ impl PtxSpecialRegister {
             Self::ClusterCtarank => "%cluster_ctarank",
             Self::ClusterNctarank => "%cluster_nctarank",
             Self::IsExplicitCluster => "%is_explicit_cluster",
+            Self::DynamicSmemSize => "%dynamic_smem_size",
+            Self::TotalSmemSize => "%total_smem_size",
+            Self::AggrSmemSize => "%aggr_smem_size",
+            Self::ReservedSmemOffsetBegin => "%reserved_smem_offset_begin",
+            Self::ReservedSmemOffsetEnd => "%reserved_smem_offset_end",
+            Self::ReservedSmemOffsetCap => "%reserved_smem_offset_cap",
             Self::Envreg(n) => return Cow::Owned(format!("%envreg{}", n)),
             Self::Pm(n) => return Cow::Owned(format!("%pm{}", n)),
         })
@@ -491,6 +503,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Clock64 | PtxSpecialRegister::Globaltimer => {
                 ast::ScalarType::U64
             }
+            PtxSpecialRegister::IsExplicitCluster => ast::ScalarType::Pred,
             _ => ast::ScalarType::U32,
         }
     }
@@ -526,6 +539,12 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::ClusterCtarank => "sreg_cluster_ctarank",
             PtxSpecialRegister::ClusterNctarank => "sreg_cluster_nctarank",
             PtxSpecialRegister::IsExplicitCluster => "sreg_is_explicit_cluster",
+            PtxSpecialRegister::DynamicSmemSize => "sreg_dynamic_smem_size",
+            PtxSpecialRegister::TotalSmemSize => "sreg_total_smem_size",
+            PtxSpecialRegister::AggrSmemSize => "sreg_aggr_smem_size",
+            PtxSpecialRegister::ReservedSmemOffsetBegin => "sreg_reserved_smem_offset_begin",
+            PtxSpecialRegister::ReservedSmemOffsetEnd => "sreg_reserved_smem_offset_end",
+            PtxSpecialRegister::ReservedSmemOffsetCap => "sreg_reserved_smem_offset_cap",
             _ => "",
         }
     }

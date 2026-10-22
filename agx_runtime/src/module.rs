@@ -48,6 +48,9 @@ pub struct KernelInfo {
     /// The hidden arguments of a kernel built with the backend's `agx-checked` feature (`.agx.kernels`
     /// extension 2), which checks its memory accesses and reports the first bad one in an error record.
     pub checked: Option<Checked>,
+    /// Half of the hidden 32-bit argument that the launch sets to the threadgroup memory of the dispatch, static
+    /// and dynamic bytes (`.agx.kernels` extension 4, for kernels that read the shared memory size).
+    pub threadgroup_bytes_half: Option<u32>,
 }
 
 /// Where a checked kernel takes its hidden arguments (LLVM's AGXUsage.rst, "Checked mode").
@@ -252,6 +255,7 @@ impl<'a> Elf<'a> {
                 .collect::<Result<_, Error>>()?;
             // tagged extensions up to the end of the record
             let (mut cluster, mut checked, mut e, end) = ([1, 1, 1], None, f + 7 + 3 * nargs, at + size / 4);
+            let mut threadgroup_bytes_half = None;
             while e < end {
                 match word(e)? {
                     1 if e + 4 <= end => {
@@ -283,6 +287,10 @@ impl<'a> Elf<'a> {
                         c.table = Some((word(e + 1)?, word(e + 2)?));
                         e += 3;
                     }
+                    4 if e + 2 <= end => {
+                        threadgroup_bytes_half = Some(word(e + 1)?);
+                        e += 2;
+                    }
                     _ => break,
                 }
             }
@@ -301,6 +309,7 @@ impl<'a> Elf<'a> {
                     args,
                     cluster,
                     checked,
+                    threadgroup_bytes_half,
                 },
             );
             at += size / 4;
@@ -415,6 +424,7 @@ impl Module {
                     args: Vec::new(),
                     cluster: [1, 1, 1],
                     checked: None,
+                    threadgroup_bytes_half: None,
                 },
             );
         }
@@ -922,6 +932,7 @@ mod tests {
                 args: vec![],
                 cluster: [1, 1, 1],
                 checked: None,
+                threadgroup_bytes_half: None,
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -944,6 +955,7 @@ mod tests {
             args: vec![],
             cluster: [1, 1, 1],
             checked: None,
+            threadgroup_bytes_half: None,
         };
         let u = pack_uniforms(
             &k,

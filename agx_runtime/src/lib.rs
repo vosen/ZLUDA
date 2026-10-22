@@ -1137,6 +1137,12 @@ fn uniforms(
     param_block: u64,
 ) -> io::Result<(Vec<u16>, Vec<u8>)> {
     let (mut halves, block) = module::pack_params(k, params, threadgroups, globals, param_block).map_err(|e| invalid(e.to_string()))?;
+    if let Some(half) = k.threadgroup_bytes_half.filter(|&h| h != u32::MAX) {
+        let bytes = k.threadgroup_bytes + dynamic_shared;
+        for (i, h) in halves.get_mut(half as usize..half as usize + 2).ok_or_else(|| invalid(format!("{}: hidden argument outside the uniforms", k.name)))?.iter_mut().enumerate() {
+            *h = (bytes >> (16 * i)) as u16;
+        }
+    }
     if k.checked.is_some() {
         module::pack_checked(k, &mut halves, record.unwrap_or(0), k.threadgroup_bytes + dynamic_shared, bounds, table)
             .map_err(|e| invalid(e.to_string()))?;
@@ -1242,6 +1248,17 @@ impl Replay {
     }
 }
 
+/// The global of a module that holds the address of the device heap of `malloc` / `free`.
+pub const HEAP_SYMBOL: &str = "__zluda_agx_heap";
+
+/// The header of a device heap of `size` bytes, to write at its start (`ptx/lib/zluda_ptx_impl_agx_heap.c`: the
+/// bump offset, the size, then empty free lists).
+pub fn heap_header(size: u32) -> [u8; 8] {
+    let mut h = [0u8; 8];
+    h[4..].copy_from_slice(&size.to_le_bytes());
+    h
+}
+
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
 pub struct LoadedModule {
     pub module: module::Module,
@@ -1333,6 +1350,19 @@ impl LoadedModule {
         let failed = w != [0; 4];
         w.fill(0);
         failed
+    }
+
+    /// Whether the module calls `malloc` / `free`: it has the heap pointer `__zluda_agx_heap`.
+    pub fn uses_heap(&self) -> bool {
+        self.module.global_symbols.contains_key(HEAP_SYMBOL)
+    }
+
+    /// Points the module's `malloc` / `free` at a heap: zeroed device memory of `size` bytes at `va`, shared by the
+    /// modules of a context (see `ptx/lib/zluda_ptx_impl_agx_heap.c`), its header written (`heap_header`).
+    pub fn set_heap(&mut self, va: u64) {
+        let Some(&(off, _)) = self.module.global_symbols.get(HEAP_SYMBOL) else { return };
+        let Some(g) = self.globals.as_mut() else { return };
+        g.as_mut_slice()[off as usize..off as usize + 8].copy_from_slice(&va.to_le_bytes());
     }
 
     /// Whether a thread of a recursive kernel ran out of its stack since the last call (the backend sets the word

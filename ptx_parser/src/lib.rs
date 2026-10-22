@@ -2561,17 +2561,9 @@ fn call<'a, 'input>(
             return Ok(empty_call(uniform, name));
         }
     };
-    // A call may leave out the return values (PTX ISA 9.7.13.4): they go to registers declared on first use
-    // (`get_or_declare`), whose names are kept for the life of the program.
-    let return_arguments = return_arguments.unwrap_or_else(|| {
-        static DISCARDED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        (0..recorded_fn.0.len())
-            .map(|_| {
-                let n = DISCARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                &*Box::leak(format!("%__discarded_return{n}").into_boxed_str())
-            })
-            .collect()
-    });
+    // A call may leave out the return values (PTX ISA 9.7.13.4)
+    let return_arguments = return_arguments
+        .unwrap_or_else(|| (0..recorded_fn.0.len()).map(|_| discarded_register()).collect());
     let input_arguments = input_arguments.unwrap_or(Vec::new());
     if recorded_fn.0.len() != return_arguments.len() || recorded_fn.1.len() != input_arguments.len()
     {
@@ -4647,9 +4639,26 @@ fn mbarrier_arrive<'input>(
     }
 }
 
-// .xorsign and .abs of min/max must come together
+// A register for a discarded result (a call's left-out return value, the sink `_` of a destination): declared on
+// first use (`get_or_declare` in normalize_identifiers), its name kept for the life of the program
+fn discarded_register() -> &'static str {
+    static DISCARDED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = DISCARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    Box::leak(format!("%__discarded_return{n}").into_boxed_str())
+}
+
+fn sink_to_register<'input>(operand: ast::ParsedOperand<&'input str>) -> ast::ParsedOperand<&'input str> {
+    match operand {
+        ast::ParsedOperand::VecPack(ref elements) if matches!(elements[..], [None]) => {
+            ast::ParsedOperand::Reg(discarded_register())
+        }
+        operand => operand,
+    }
+}
+
+// .xorsign of min/max needs .abs (.abs alone takes the magnitudes of the inputs, PTX ISA 9.3)
 fn xorsign_abs(state: &mut PtxParserState, xorsign: bool, abs: bool) -> bool {
-    if xorsign != abs {
+    if xorsign && !abs {
         state
             .errors
             .push(PtxError::SyntaxError(".xorsign requires .abs".to_string()));
@@ -5930,18 +5939,6 @@ derive_parser!(
         }
     }
 
-    set.CmpOp{.ftz}.dtype_f16x2.f16x2         d, a, b => {
-        let base = ast::SetpData::try_parse(state, cmpop, ftz, ScalarType::F16x2);
-        let data = ast::SetData {
-            base,
-            dtype: dtype_f16x2
-        };
-        ast::Instruction::Set {
-            data,
-            arguments: SetArgs { dst: d, src1: a, src2: b }
-        }
-    }
-
     set.CmpOp.BoolOp{.ftz}.dtype.stype  d, a, b, {!}c => {
         let (negate_src3, c) = c;
         let base = ast::SetpData::try_parse(state, cmpop, ftz, stype);
@@ -5963,9 +5960,10 @@ derive_parser!(
                                   .lo, .ls, .hi, .hs, // signed
                                   .equ, .neu, .ltu, .leu, .gtu, .geu, .num, .nan }; // float-only
     .BoolOp: SetpBoolPostOp = { .and, .or, .xor };
-    .dtype: ScalarType = { .u32, .s32, .f32 };
-    .dtype_f16x2: ScalarType = { .u32, .f16x2 };
-    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .f32, .f64 };
+    // (the packed sources, .f16x2 and .bf16x2, take .u32, .s32 or the same packed type)
+    .dtype: ScalarType = { .u16, .s16, .u32, .s32, .f16, .bf16, .f32, .f16x2, .bf16x2 };
+    .stype: ScalarType = { .b16, .b32, .b64, .u16, .u32, .u64, .s16, .s32, .s64, .f16, .bf16, .f32, .f64,
+                           .f16x2, .bf16x2 };
 
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-setp
@@ -5974,7 +5972,7 @@ derive_parser!(
         let data = ast::SetpData::try_parse(state, cmpop, ftz, type_);
         ast::Instruction::Setp {
             data,
-            arguments: SetpArgs { dst1: p, dst2: q, src1: a, src2: b }
+            arguments: SetpArgs { dst1: sink_to_register(p), dst2: q.map(sink_to_register), src1: a, src2: b }
         }
     }
     setp.CmpOp.BoolOp{.ftz}.type  p[|q], a, b, {!}c => {
@@ -5987,7 +5985,7 @@ derive_parser!(
         };
         ast::Instruction::SetpBool {
             data,
-            arguments: SetpBoolArgs { dst1: p, dst2: q, src1: a, src2: b, src3: c }
+            arguments: SetpBoolArgs { dst1: sink_to_register(p), dst2: q.map(sink_to_register), src1: a, src2: b, src3: c }
         }
     }
     .CmpOp: RawSetpCompareOp  = { .eq, .ne, .lt, .le, .gt, .ge,
@@ -6123,6 +6121,16 @@ derive_parser!(
     }
 
     .convertType: ScalarType = { .u8, .s8 };
+
+    // the 16-bit form: d = sat(a) << 16 | sat(b)
+    cvt.pack.sat.packType.s32        d, a, b => {
+        ast::Instruction::CvtPack {
+            data: packtype,
+            arguments: ast::CvtPackArgs { dst: d, src1: a, src2: b, src3: ParsedOperand::Imm(ast::ImmediateValue::U64(0)) }
+        }
+    }
+
+    .packType: ScalarType = { .u16, .s16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#logic-and-shift-instructions-shl
     shl.type d, a, b => {
@@ -6684,6 +6692,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f32
                 }
             ),
@@ -6697,6 +6706,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f64
                 }
             ),
@@ -6716,6 +6726,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f16
                 }
             ),
@@ -6729,6 +6740,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f16x2
                 }
             ),
@@ -6742,6 +6754,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: bf16
                 }
             ),
@@ -6755,6 +6768,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: bf16x2
                 }
             ),
@@ -6795,6 +6809,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f32
                 }
             ),
@@ -6808,6 +6823,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f64
                 }
             ),
@@ -6827,6 +6843,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f16
                 }
             ),
@@ -6840,6 +6857,7 @@ derive_parser!(
                     flush_to_zero: Some(ftz),
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: f16x2
                 }
             ),
@@ -6853,6 +6871,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: bf16
                 }
             ),
@@ -6866,6 +6885,7 @@ derive_parser!(
                     flush_to_zero: None,
                     nan,
                     xorsign_abs: xorsign_abs(state, xorsign, abs),
+                    abs: abs && !xorsign,
                     type_: bf16x2
                 }
             ),

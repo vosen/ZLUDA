@@ -92,6 +92,12 @@ an error.
   `CU_LIMIT_STACK_SIZE`, 4 KiB by default; see the
   backend's `AGXUsage.rst`, *Recursion*); a thread that runs out of it ends and
   the launch fails with `CUDA_ERROR_LAUNCH_FAILED`.
+* Device-side `malloc` / `free` allocate from one heap per context of
+  `CU_LIMIT_MALLOC_HEAP_SIZE` bytes (8 MiB by default, fixed once a module that
+  uses `malloc` is loaded), shared by its modules: power-of-two blocks from 32
+  bytes with lock-free free lists per size, reused but never merged
+  (`ptx/lib/zluda_ptx_impl_agx_heap.c`). `malloc` returns NULL when no block
+  fits. In checked mode the heap counts as one allocation.
 * `alloca` / `stacksave` / `stackrestore` work on a per-thread stack in private
   memory that grows down, as in PTX. Allocations of a constant size are
   reserved in full; those of a dynamic size share `CU_LIMIT_STACK_SIZE` bytes
@@ -114,7 +120,15 @@ an error.
   `lop3` (any lookup table, also in a register, and the predicate output
   form `lop3.and`/`lop3.or`) is the OR of the table's minterms.
   `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
-  all-ones lanes where the comparison holds.
+  all-ones lanes where the comparison holds. `set` and `setp` of `f16x2` and
+  `bf16x2` take every destination type (`.u32`, `.s32`, `.f16x2`, `.bf16x2`)
+  and the `BoolOp` forms, scalar `set` also `.u16`, `.s16`, `.f16` and
+  `.bf16` destinations; a `setp` destination may be the sink `_`. `min` and
+  `max` with `.abs` and no `.xorsign` take the magnitudes of their inputs.
+  Their NaN results, and those of `.relu`, are the canonical NaN.
+  `.ftz` of comparisons, `min`/`max` and `neg`/`abs` in a function whose
+  instructions take several denormal modes (a mode register switched at run
+  time) flushes with bit operations.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
 * Every `f32x2` instruction PTX has (`add`, `sub`, `mul`, `fma`, also with
@@ -139,6 +153,17 @@ an error.
 The [strict floating point mode](#strict-floating-point-mode) removes these
 three differences.
 * `%clock` reads as zero. `nanosleep` does not sleep.
+* `%dynamic_smem_size`, `%total_smem_size` (static and dynamic bytes in
+  128-byte units), `%aggr_smem_size` and `%reserved_smem_offset_begin`,
+  `_end` and `_cap` (a reserved region of 1 KiB after the CTA's shared memory,
+  which nothing uses and no memory backs) read the shared memory of the
+  launch: the kernels of a module that reads them take it in a hidden argument
+  that the driver sets (the backend's `"agx-hidden"="threadgroup-bytes"`,
+  `.agx.kernels` extension 4). In a cluster kernel they are the
+  threadgroup's.
+* Modules with `.address_size 32` take kernels only, and their `.global` and
+  `.const` variables only as byte arrays; their shared and local memory has
+  no 32-bit generic addresses.
 
 ### Instructions
 
@@ -178,6 +203,9 @@ three differences.
 * `isspacep`: the front end emits calls to `@__zluda_agx_isspacep_<space>`,
   which `llvm_zluda` replaces after optimization by a constant when the
   address's memory is known, and otherwise by a test of the tag bits. The
+  address of a kernel parameter (`cvta.param`) is in the `.param` and
+  `.global` windows, not the `.const` one; a device address of unknown
+  origin is `.const` when it is in one of the module's `.const` variables. The
   same step rewrites generic addresses of threadgroup and private memory that
   went through integer arithmetic into pointer arithmetic, and turns those
   only used as integers (compared, masked) into their 32-bit offsets, which
@@ -185,6 +213,11 @@ three differences.
 * `alloca`, `stacksave` and `stackrestore` use a per-function stack (a
   private array and the offset of its top), so that allocations made after
   a `stackrestore` reuse the freed addresses as in PTX.
+* `sub.cc` / `subc.cc` leave CC.CF as the carry of `a + ~b + 1` (1 when there
+  is no borrow), as NVIDIA GPUs do (`ptx/src/test/spirv_run/subc_cc_s32`,
+  recorded on one), and `subc` computes `a + ~b + CC.CF`; PTX-formalization's
+  `sub-borrow` follows the PTX ISA's wording instead (CC.CF as the borrow),
+  which only differs when the flag is read by `addc`.
 * Registers start as zero, and a register used without a declaration is
   declared with the type of its first use (ptxas rejects such code, the K
   semantics of PTX accept it); `.ftz` in a `cvt` without an `f32` type is
@@ -1122,7 +1155,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`); cuSOLVER dense LU, Cholesky, QR, SVD and symmetric eigenvalues (`zluda_solver_agx`); NVRTC on clang and nvJitLink (`zluda_rtc_agx`); single-rank NCCL (`zluda_nccl_agx`) |
-| Not yet | device-side `malloc`, peer access, IPC, the virtual memory management API (`cuMemCreate` / `cuMemMap`), multicast objects, `%clock` / `nanosleep`, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
+| Not yet | peer access, IPC, the virtual memory management API (`cuMemCreate` / `cuMemMap`), multicast objects, `%clock` / `nanosleep`, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
 | NVML | device count, name, UUID, memory, compute capability; the maximum clock (`nvmlDeviceGetMaxClockInfo`, 1,398 MHz on the M2 Max) and GPU utilisation (`nvmlDeviceGetUtilizationRates`: the share of time since the last call this process's kernels ran, from the firmware's command timestamps; other processes are not seen). Asahi exposes no current clock, temperature or power without root (B25), so those return `NVML_ERROR_NOT_SUPPORTED` |
 | Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | M2 Max (G14C, Asahi), 2026-10-20 and 21, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` and `tasks/ptx-re-blockers-tracker.md`: the direct-DRM runner, `agx_cuda_smoke` and CUDA vectorAdd pass (B2); ZLUDA's scratch path runs on the GPU (B1, 262,144 threads); the `agx_libs` kernels give the right results in 817 of 819 cases on the GPU (B40; the 2 others are the test runner's missing scratch, Z6); checked mode on the GPU matches the simulator (B37); context teardown leaks nothing (B42, Z1); partial workgroups, the no-shared-memory word and 7-bit shift amounts (B2a, B2c, B47); forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), the whole uniform file (B9), memory ordering per scope (B10), source modifiers and other numeric corners (B11), calls and returns (B14), `simd_matrix_fmadd` (B15), barriers (B16, B28), lane-offset fmadd (B18), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B3, B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), native texture corners (B29), masked instruction cost (B31), submit cost (B32), vector alignment (B33), stack cost (B34), the absence of a shader clock (B35), dma-buf IPC (B36, B45), VMs and queues (B38, B43), allocation limits (B39), fault isolation (B44) and `rcp` / `rsqrt` error (B46). Open: async copies (B17), a real CUDA program (B23, B41) and the M2 Ultra / G13X items (B19, B24-7) |

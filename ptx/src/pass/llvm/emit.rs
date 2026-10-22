@@ -79,6 +79,7 @@ pub(crate) fn run<'input>(
     if stack_size != 0 {
         emit_ctx.stack_size = stack_size as u64;
     }
+    emit_ctx.threadgroup_bytes_argument = target == Target::Agx && reads_threadgroup_bytes(&id_defs, &directives);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -104,6 +105,25 @@ pub(crate) fn run<'input>(
         }
     }
     Ok(module)
+}
+
+/// Whether the module reads the shared memory size of the launch (%dynamic_smem_size, %total_smem_size, ...): its
+/// kernels then take it in a hidden argument (see `emit_method`)
+fn reads_threadgroup_bytes(
+    id_defs: &GlobalStringIdentResolver2,
+    directives: &[Directive2<ast::Instruction<SpirvWord>, SpirvWord>],
+) -> bool {
+    directives.iter().any(|directive| match directive {
+        Directive2::Method(Function { body: Some(body), .. }) => body.iter().any(|statement| match statement {
+            Statement::Instruction(ast::Instruction::Call { arguments, .. }) => id_defs
+                .ident_map
+                .get(&arguments.func)
+                .and_then(|entry| entry.name.as_deref())
+                .is_some_and(|name| name.starts_with("__zluda_ptx_impl_sreg_") && name.contains("smem")),
+            _ => false,
+        }),
+        _ => false,
+    })
 }
 
 /// Line tables from `.file` and `.loc`: a compile unit, a subprogram per function with a body, and the location of
@@ -217,6 +237,8 @@ struct ModuleEmitContext<'a, 'input> {
     target: Target,
     strict_fp: bool,
     stack_size: u64,
+    // AGX: kernels take the shared memory size of the launch as a hidden last argument
+    threadgroup_bytes_argument: bool,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -239,6 +261,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             target,
             strict_fp,
             stack_size: DYNAMIC_STACK_SIZE,
+            threadgroup_bytes_argument: false,
         }
     }
 
@@ -265,13 +288,17 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             .ok_or_else(|| error_unreachable())?;
         let name = CString::new(name).map_err(|_| error_unreachable())?;
         let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
+        let threadgroup_bytes = method.is_kernel() && self.threadgroup_bytes_argument;
         if fn_ == ptr::null_mut() {
+            let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
             let fn_type = get_function_type(
                 self.context,
                 method.return_arguments.iter().map(|v| &v.info.v_type),
-                method.input_arguments.iter().map(|v| {
-                    get_input_argument_type(self.context, &v.info.v_type, v.info.state_space)
-                }),
+                method
+                    .input_arguments
+                    .iter()
+                    .map(|v| get_input_argument_type(self.context, &v.info.v_type, v.info.state_space))
+                    .chain(threadgroup_bytes.then_some(Ok(i32_type))),
             )?;
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
             self.emit_fn_attribute_string(fn_, "amdgpu-unsafe-fp-atomics", "true");
@@ -356,6 +383,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             let real_bb =
                 unsafe { LLVMAppendBasicBlockInContext(self.context, fn_, LLVM_UNNAMED.as_ptr()) };
             unsafe { LLVMPositionBuilderAtEnd(self.builder.get(), real_bb) };
+            if threadgroup_bytes && unsafe { LLVMCountParams(fn_) } as usize > method.input_arguments.len() {
+                self.emit_threadgroup_bytes_argument(fn_, method.input_arguments.len() as u32);
+            }
             let base_32bit_memory = method.kernel_meta32.as_ref().map(|m| m.implicit_memory_ptr);
             // instructions before the first .loc are at line 0
             let subprogram = self.debug.as_ref().map(|d| {
@@ -391,6 +421,32 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             }
         }
         Ok(())
+    }
+
+    // The hidden argument of the shared memory size of the launch, static and dynamic bytes (the backend's
+    // "agx-hidden"="threadgroup-bytes", filled by the runtime), stored at the kernel's start for the
+    // %..._smem_... registers of zluda_ptx_impl_agx.ll to read, in the kernel and the functions it calls
+    fn emit_threadgroup_bytes_argument(&mut self, fn_: LLVMValueRef, index: u32) {
+        unsafe {
+            let value = LLVMGetParam(fn_, index);
+            let (key, role) = ("agx-hidden", "threadgroup-bytes");
+            let attr = LLVMCreateStringAttribute(
+                self.context,
+                key.as_ptr().cast(),
+                key.len() as u32,
+                role.as_ptr().cast(),
+                role.len() as u32,
+            );
+            LLVMAddAttributeAtIndex(fn_, index + 1, attr);
+            let i32_type = LLVMInt32TypeInContext(self.context);
+            let name = c"__zluda_agx_smem_bytes";
+            let mut global = LLVMGetNamedGlobal(self.module, name.as_ptr());
+            if global.is_null() {
+                global = LLVMAddGlobalInAddressSpace(self.module, i32_type, name.as_ptr(), get_state_space(ast::StateSpace::Shared).unwrap_or(3));
+                LLVMSetAlignment(global, 4);
+            }
+            LLVMBuildStore(self.builder.get(), value, global);
+        }
     }
 
     fn emit_global(
@@ -2522,6 +2578,28 @@ impl<'a> MethodEmitContext<'a> {
         ) {
             return Err(error_unreachable());
         }
+        if self.target == Target::Agx && float_div.type_ == ast::ScalarType::F32 {
+            // d = a * (1/b), where 1/b of 2^126 < |b| is a zero of the sign of b (PTX ISA 9.7.3.8): infinite a
+            // gives NaN, any other a a zero
+            let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
+            let b = self.builder;
+            unsafe {
+                let one = LLVMConstReal(f32_type, 1.0);
+                let recip = LLVMBuildFDiv(b, one, src2, LLVM_UNNAMED.as_ptr());
+                LLVMZludaSetFastMathFlags(recip, LLVMZludaFastMathAllowReciprocal | LLVMZludaFastMathApproxFunc);
+                let magnitude = self.emit_intrinsic(c"llvm.fabs.f32", None, vec![&ast::Type::Scalar(ast::ScalarType::F32)], vec![(src2, f32_type)])?;
+                let big = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealOGT, magnitude, LLVMConstReal(f32_type, 2f64.powi(126)), LLVM_UNNAMED.as_ptr());
+                let zero = self.emit_intrinsic(
+                    c"llvm.copysign.f32",
+                    None,
+                    vec![&ast::Type::Scalar(ast::ScalarType::F32)],
+                    vec![(LLVMConstReal(f32_type, 0.0), f32_type), (src2, f32_type)],
+                )?;
+                let recip = LLVMBuildSelect(b, big, zero, recip, LLVM_UNNAMED.as_ptr());
+                self.resolver.with_result(arguments.dst, |dst| LLVMBuildFMul(b, src1, recip, dst));
+            }
+            return Ok(());
+        }
         let fdiv = self
             .fp
             .fdiv(self.resolver, float_div.type_, arguments.dst, src1, src2)?;
@@ -2711,7 +2789,11 @@ impl<'a> MethodEmitContext<'a> {
         } else {
             LLVMBuildNeg
         };
-        if is_floating_point && data.flush_to_zero == Some(true) {
+        if is_floating_point && data.flush_to_zero == Some(true) && self.target == Target::Agx {
+            let flushed = self.emit_flush_subnormal(data.type_, src);
+            let result = self.emit_sign_bit_op(data.type_, flushed, true);
+            self.resolver.register(arguments.dst, result);
+        } else if is_floating_point && data.flush_to_zero == Some(true) {
             let negated = unsafe { llvm_fn(self.builder, src, LLVM_UNNAMED.as_ptr()) };
             let intrinsic = format!("llvm.canonicalize.{}\0", LLVMTypeDisplay(data.type_));
             self.emit_intrinsic(
@@ -2821,9 +2903,23 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_setp_int(setp_compare_int, src1, src2)
             }
             ptx_parser::SetpCompareOp::Float(setp_compare_float) => {
+                // .ftz in a function of several modes, whose comparisons follow its attribute
+                let (src1, src2) = if self.explicit_ftz(data.flush_to_zero) {
+                    (self.emit_flush_subnormal(data.type_, src1), self.emit_flush_subnormal(data.type_, src2))
+                } else {
+                    (src1, src2)
+                };
                 self.emit_setp_float(setp_compare_float, src1, src2)
             }
         }
+    }
+
+    // .ftz done with bit operations: on AGX, in a function whose instructions take several denormal modes
+    // (FloatingPointMode::Constrained), for the operations that don't follow the mode set at run time
+    fn explicit_ftz(&self, flush_to_zero: Option<bool>) -> bool {
+        self.target == Target::Agx
+            && self.fp.mode == FloatingPointMode::Constrained
+            && flush_to_zero == Some(true)
     }
 
     fn emit_setp_int(
@@ -3317,12 +3413,39 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_type = get_scalar_type(self.context, type_);
         let zero = unsafe { LLVMConstNull(llvm_type) };
         let intrinsic = format!("llvm.maximum.{}\0", LLVMTypeDisplay(type_));
-        self.emit_intrinsic(
+        let result = self.emit_intrinsic(
             unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
             None,
             vec![&type_.into()],
             vec![(src, llvm_type), (zero, llvm_type)],
-        )
+        )?;
+        Ok(self.emit_canonical_nan(type_, result))
+    }
+
+    // A NaN value (or element) replaced by the canonical NaN of its type, on AGX: the results of min, max and .relu
+    // other than f64 (whose NaN payloads are kept)
+    fn emit_canonical_nan(&mut self, type_: ast::ScalarType, value: LLVMValueRef) -> LLVMValueRef {
+        let element = type_.packed_type().unwrap_or(type_);
+        let canonical: u64 = match element {
+            ast::ScalarType::F16 | ast::ScalarType::BF16 => 0x7fff,
+            ast::ScalarType::F32 => 0x7fff_ffff,
+            _ => return value,
+        };
+        if self.target != Target::Agx {
+            return value;
+        }
+        unsafe {
+            let b = self.builder;
+            let element_bits = element.size_of() as u32 * 8;
+            let int_element = LLVMIntTypeInContext(self.context, element_bits);
+            let mut nan = LLVMConstBitCast(LLVMConstInt(int_element, canonical, 0), get_scalar_type(self.context, element));
+            if element != type_ {
+                let mut ns = [nan, nan];
+                nan = LLVMConstVector(ns.as_mut_ptr(), 2);
+            }
+            let is_nan = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealUNO, value, value, LLVM_UNNAMED.as_ptr());
+            LLVMBuildSelect(b, is_nan, nan, value, LLVM_UNNAMED.as_ptr())
+        }
     }
 
     // Conversions to and from the narrow formats (fp8 e4m3 and e5m2, fp6
@@ -3526,7 +3649,8 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     // ue8m0: the exponent of a positive value, rounded down (or up), biased
-    // by 127 and clamped to 0..254; zero and negative values give 0, NaN 255
+    // by 127 and clamped to 0..254; zero and negative finite values give 0,
+    // infinities 254 and NaN 255
     fn emit_ue8m0_encode(&mut self, round_up: bool, bits: LLVMValueRef) -> LLVMValueRef {
         let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
         let b = self.builder;
@@ -3563,7 +3687,8 @@ impl<'a> MethodEmitContext<'a> {
             let code = self.emit_int_intrinsic("llvm.smin", i32_type, &[code, c(254)]);
             let not_positive = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntSLE, bits, c(0), LLVM_UNNAMED.as_ptr());
             let code = LLVMBuildSelect(b, not_positive, c(0), code, LLVM_UNNAMED.as_ptr());
-            let is_inf = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, bits, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
+            // .satfinite (which ue8m0x2 requires): both infinities give the largest finite code
+            let is_inf = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, magnitude, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
             let code = LLVMBuildSelect(b, is_inf, c(254), code, LLVM_UNNAMED.as_ptr());
             let is_nan = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntUGT, magnitude, c(0x7f80_0000), LLVM_UNNAMED.as_ptr());
             LLVMBuildSelect(b, is_nan, c(255), code, LLVM_UNNAMED.as_ptr())
@@ -4498,16 +4623,22 @@ impl<'a> MethodEmitContext<'a> {
                 }
             }
             let mut args = [src];
-            if !matches!(space, ast::StateSpace::Shared | ast::StateSpace::SharedCta) {
+            if !matches!(space, ast::StateSpace::Shared | ast::StateSpace::SharedCta | ast::StateSpace::SharedCluster) {
                 self.resolver.with_result(arguments.dst, |dst| unsafe {
                     LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, dst)
                 });
                 return Ok(());
             }
-            // .shared is .shared::cta: also in this CTA's window of a cluster
+            // .shared is .shared::cta: also in this CTA's window of a cluster; .shared::cluster in the window of
+            // one of the cluster's CTAs
             let in_shared =
                 unsafe { LLVMBuildCall2(self.builder, fn_type, fn_, args.as_mut_ptr(), 1, LLVM_UNNAMED.as_ptr()) };
-            let own = self.emit_agx_helper(c"__zluda_ptx_impl_agx_in_own_cta", None, Some(ast::ScalarType::Pred), &[src])?;
+            let helper = if space == ast::StateSpace::SharedCluster {
+                c"__zluda_ptx_impl_agx_in_cluster"
+            } else {
+                c"__zluda_ptx_impl_agx_in_own_cta"
+            };
+            let own = self.emit_agx_helper(helper, None, Some(ast::ScalarType::Pred), &[src])?;
             let false_ = unsafe { LLVMConstInt(i1_type, 0, 0) };
             self.resolver.with_result(arguments.dst, |dst| unsafe {
                 LLVMBuildSelect(self.builder, in_shared, own, false_, dst)
@@ -4587,14 +4718,15 @@ impl<'a> MethodEmitContext<'a> {
             )
         };
         let src3 = self.resolver.value(arguments.src3)?;
-        let src3_shifted = unsafe {
+        // (the 16-bit form has no c; the shift would be out of range)
+        let src3_shifted = if input_bit_size == 16 { src3 } else { unsafe {
             LLVMBuildShl(
                 self.builder,
                 src3,
                 LLVMConstInt(dest_ty, input_bit_size as u64 * 2, 0),
                 LLVM_UNNAMED.as_ptr(),
             )
-        };
+        } };
         let src1_src2 = unsafe {
             LLVMBuildOr(
                 self.builder,
@@ -4603,6 +4735,10 @@ impl<'a> MethodEmitContext<'a> {
                 LLVM_UNNAMED.as_ptr(),
             )
         };
+        if input_bit_size == 16 {
+            self.resolver.register(arguments.dst, src1_src2);
+            return Ok(());
+        }
         self.resolver.with_result(arguments.dst, |dst| unsafe {
             LLVMBuildOr(self.builder, src1_src2, src3_shifted, dst)
         });
@@ -4789,12 +4925,25 @@ impl<'a> MethodEmitContext<'a> {
             );
             let src =
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
-            self.emit_intrinsic(
+            // A NaN gives 0 (the .sat intrinsics) unless the source is .f64 or the destination 64-bit: then
+            // 1 << (BitWidth(dst) - 1) (PTX ISA 9.7.9.22, Integer Notes)
+            let nan_top_bit = self.target == Target::Agx && (from == ast::ScalarType::F64 || to.size_of() == 8);
+            let converted = self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-                Some(arguments.dst),
+                (!nan_top_bit).then_some(arguments.dst),
                 vec![&to.into()],
                 vec![(src, get_scalar_type(self.context, from))],
             )?;
+            if nan_top_bit {
+                let to_type = get_scalar_type(self.context, to);
+                let top = unsafe { LLVMConstInt(to_type, 1u64 << (to.size_of() as u32 * 8 - 1), 0) };
+                let is_nan = unsafe {
+                    LLVMBuildFCmp(self.builder, LLVMRealPredicate::LLVMRealUNO, src, src, LLVM_UNNAMED.as_ptr())
+                };
+                self.resolver.with_result(arguments.dst, |dst| unsafe {
+                    LLVMBuildSelect(self.builder, is_nan, top, converted, dst)
+                });
+            }
         }
         Ok(())
     }
@@ -5188,15 +5337,22 @@ impl<'a> MethodEmitContext<'a> {
             }
             _ => return Err(error_unreachable()),
         };
-        self.emit_intrinsic(
+        let result = self.emit_intrinsic(
             intrinsic,
-            Some(arguments.dst),
+            None,
             vec![&data.type_.into()],
             vec![(
                 self.resolver.value(arguments.src)?,
                 get_scalar_type(self.context, data.type_),
             )],
         )?;
+        // the half formats keep subnormal results
+        let result = if self.target == Target::Agx && data.flush_to_zero == Some(true) {
+            self.emit_flush_subnormal(data.type_, result)
+        } else {
+            result
+        };
+        self.resolver.register(arguments.dst, result);
         Ok(())
     }
 
@@ -5346,8 +5502,9 @@ impl<'a> MethodEmitContext<'a> {
                 ..
             })
         );
+        let abs = matches!(data, ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { abs: true, .. }));
         let (original_a, original_b) = (a, b);
-        if xorsign_abs {
+        if xorsign_abs || abs {
             let fabs = format!("llvm.fabs.{}\0", LLVMTypeDisplay(type_));
             let fabs = unsafe { CStr::from_bytes_with_nul_unchecked(fabs.as_bytes()) };
             a = self.emit_intrinsic(fabs, None, vec![&type_.into()], vec![(a, llvm_type)])?;
@@ -5359,6 +5516,41 @@ impl<'a> MethodEmitContext<'a> {
             vec![&type_.into()],
             vec![(a, llvm_type), (b, llvm_type)],
         )?;
+        // A NaN result of f64 is the first NaN operand, quieted ("NaN payloads are supported for double-precision
+        // instructions", PTX ISA 9.7.3): explicit, as the intrinsics are commutative and their operands may swap
+        let result = match data {
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan, .. })
+                if type_ == ast::ScalarType::F64 && !xorsign_abs && self.target == Target::Agx =>
+            unsafe {
+                let src_b = b;
+                let b = self.builder;
+                let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
+                let quiet = |x| {
+                    let bits = LLVMBuildBitCast(b, x, i64_type, LLVM_UNNAMED.as_ptr());
+                    let bits = LLVMBuildOr(b, bits, LLVMConstInt(i64_type, 1 << 51, 0), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildBitCast(b, bits, llvm_type, LLVM_UNNAMED.as_ptr())
+                };
+                let a_nan = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealUNO, a, a, LLVM_UNNAMED.as_ptr());
+                let b_nan = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealUNO, src_b, src_b, LLVM_UNNAMED.as_ptr());
+                let first = LLVMBuildSelect(b, a_nan, quiet(a), quiet(src_b), LLVM_UNNAMED.as_ptr());
+                let any = if nan {
+                    LLVMBuildOr(b, a_nan, b_nan, LLVM_UNNAMED.as_ptr())
+                } else {
+                    LLVMBuildAnd(b, a_nan, b_nan, LLVM_UNNAMED.as_ptr())
+                };
+                LLVMBuildSelect(b, any, first, result, LLVM_UNNAMED.as_ptr())
+            },
+            ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. }) => {
+                // min and max of the flushed inputs are the flushed min and max
+                let result = if self.explicit_ftz(flush_to_zero) {
+                    self.emit_flush_subnormal(type_, result)
+                } else {
+                    result
+                };
+                self.emit_canonical_nan(type_, result)
+            }
+            _ => result,
+        };
         let result = if xorsign_abs {
             self.emit_xor_sign(type_, result, original_a, original_b)?
         } else {
@@ -5380,13 +5572,27 @@ impl<'a> MethodEmitContext<'a> {
         // the three-input form: op(op(a, b), c)
         let result = match src3 {
             Some(c) => {
-                let c = self.resolver.value(c)?;
-                self.emit_intrinsic(
+                let mut c = self.resolver.value(c)?;
+                if abs {
+                    let fabs = format!("llvm.fabs.{}\0", LLVMTypeDisplay(type_));
+                    let fabs = unsafe { CStr::from_bytes_with_nul_unchecked(fabs.as_bytes()) };
+                    c = self.emit_intrinsic(fabs, None, vec![&type_.into()], vec![(c, llvm_type)])?;
+                }
+                let result = self.emit_intrinsic(
                     unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
                     None,
                     vec![&type_.into()],
                     vec![(result, llvm_type), (c, llvm_type)],
-                )?
+                )?;
+                let result = match data {
+                    ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. })
+                        if self.explicit_ftz(flush_to_zero) =>
+                    {
+                        self.emit_flush_subnormal(type_, result)
+                    }
+                    _ => result,
+                };
+                self.emit_canonical_nan(type_, result)
             }
             None => result,
         };
@@ -5563,9 +5769,22 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_type = get_scalar_type(self.context, data.type_);
         let src = self.resolver.value(arguments.src)?;
         let is_floating_point = data.type_.kind() == ast::ScalarKind::Float;
+        if is_floating_point && data.flush_to_zero == Some(true) && self.target == Target::Agx {
+            let flushed = self.emit_flush_subnormal(data.type_, src);
+            let result = self.emit_sign_bit_op(data.type_, flushed, false);
+            self.resolver.register(arguments.dst, result);
+            return Ok(());
+        }
         if is_floating_point && data.flush_to_zero != Some(true) && self.target == Target::Agx {
             // A bit operation, which keeps NaN payloads
-            let result = self.emit_sign_bit_op(data.type_, src, false);
+            let mut result = self.emit_sign_bit_op(data.type_, src, false);
+            if data.type_ == ast::ScalarType::F64 {
+                // "For abs.f64, NaN input is passed through unchanged" (PTX ISA 9.7.3.9), sign included
+                unsafe {
+                    let is_nan = LLVMBuildFCmp(self.builder, LLVMRealPredicate::LLVMRealUNO, src, src, LLVM_UNNAMED.as_ptr());
+                    result = LLVMBuildSelect(self.builder, is_nan, src, result, LLVM_UNNAMED.as_ptr());
+                }
+            }
             self.resolver.register(arguments.dst, result);
             return Ok(());
         }
@@ -5595,6 +5814,40 @@ impl<'a> MethodEmitContext<'a> {
             self.resolver.register(arguments.dst, abs_result);
         }
         Ok(())
+    }
+
+    // A subnormal value (or element) replaced by the zero of its sign, with bit operations: .ftz, independent of
+    // the denormal mode of the function
+    fn emit_flush_subnormal(&mut self, type_: ast::ScalarType, src: LLVMValueRef) -> LLVMValueRef {
+        let element = type_.packed_type().unwrap_or(type_);
+        let element_bits = element.size_of() as u32 * 8;
+        let exponent_mask: u64 = match element {
+            ast::ScalarType::F16 => 0x7c00,
+            ast::ScalarType::BF16 => 0x7f80,
+            ast::ScalarType::F32 => 0x7f80_0000,
+            ast::ScalarType::F64 => 0x7ff0_0000_0000_0000,
+            _ => return src,
+        };
+        unsafe {
+            let int_element = LLVMIntTypeInContext(self.context, element_bits);
+            let constant = |v: u64| {
+                let c = LLVMConstInt(int_element, v, 0);
+                if element == type_ {
+                    c
+                } else {
+                    let mut cs = [c, c];
+                    LLVMConstVector(cs.as_mut_ptr(), 2)
+                }
+            };
+            let int_type = if element == type_ { int_element } else { LLVMVectorType(int_element, 2) };
+            let b = self.builder;
+            let bits = LLVMBuildBitCast(b, src, int_type, LLVM_UNNAMED.as_ptr());
+            let exponent = LLVMBuildAnd(b, bits, constant(exponent_mask), LLVM_UNNAMED.as_ptr());
+            let small = LLVMBuildICmp(b, LLVMIntPredicate::LLVMIntEQ, exponent, constant(0), LLVM_UNNAMED.as_ptr());
+            let sign = LLVMBuildAnd(b, bits, constant(1u64 << (element_bits - 1)), LLVM_UNNAMED.as_ptr());
+            let result = LLVMBuildSelect(b, small, sign, bits, LLVM_UNNAMED.as_ptr());
+            LLVMBuildBitCast(b, result, LLVMTypeOf(src), LLVM_UNNAMED.as_ptr())
+        }
     }
 
     // Flips (negate) or clears the sign bit of a float or packed floats
@@ -7418,86 +7671,8 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        let result = if let Some(scalar_type) = data.base.type_.packed_type() {
-            let u8_llvm = get_scalar_type(self.context, ast::ScalarType::B8);
-            let zero = unsafe { LLVMConstInt(u8_llvm, 0, 0) };
-            let one = unsafe { LLVMConstInt(u8_llvm, 1, 0) };
-            let src1_0 =
-                unsafe { LLVMBuildExtractElement(self.builder, src1, zero, LLVM_UNNAMED.as_ptr()) };
-            let src1_1 =
-                unsafe { LLVMBuildExtractElement(self.builder, src1, one, LLVM_UNNAMED.as_ptr()) };
-            let src2_0 =
-                unsafe { LLVMBuildExtractElement(self.builder, src2, zero, LLVM_UNNAMED.as_ptr()) };
-            let src2_1 =
-                unsafe { LLVMBuildExtractElement(self.builder, src2, one, LLVM_UNNAMED.as_ptr()) };
-            let dtype = data.dtype;
-            let data = ptx_parser::SetpData {
-                type_: scalar_type,
-                ..data.base
-            };
-            let setp_result_0 = self.emit_setp_impl(data, src1_0, src2_0)?;
-            let setp_result_1 = self.emit_setp_impl(data, src1_1, src2_1)?;
-            match dtype {
-                ast::ScalarType::U32 => {
-                    let setp_result_0 = self.setp_to_set(ast::ScalarType::U16, setp_result_0)?;
-                    let setp_result_1 = self.setp_to_set(ast::ScalarType::U16, setp_result_1)?;
-                    let vector_result = unsafe {
-                        LLVMBuildInsertElement(
-                            self.builder,
-                            LLVMGetPoison(get_type(
-                                self.context,
-                                &ast::Type::Vector(2, ast::ScalarType::U16),
-                            )?),
-                            setp_result_0,
-                            zero,
-                            LLVM_UNNAMED.as_ptr(),
-                        )
-                    };
-                    let vector_result = unsafe {
-                        LLVMBuildInsertElement(
-                            self.builder,
-                            vector_result,
-                            setp_result_1,
-                            one,
-                            LLVM_UNNAMED.as_ptr(),
-                        )
-                    };
-                    unsafe {
-                        LLVMBuildBitCast(
-                            self.builder,
-                            vector_result,
-                            get_scalar_type(self.context, dtype),
-                            LLVM_UNNAMED.as_ptr(),
-                        )
-                    }
-                }
-                ast::ScalarType::F16x2 => {
-                    let setp_result_0 = self.setp_to_set(ast::ScalarType::F16, setp_result_0)?;
-                    let setp_result_1 = self.setp_to_set(ast::ScalarType::F16, setp_result_1)?;
-                    let vector_result = unsafe {
-                        LLVMBuildInsertElement(
-                            self.builder,
-                            LLVMGetPoison(get_type(
-                                self.context,
-                                &ast::Type::Vector(2, ast::ScalarType::F16),
-                            )?),
-                            setp_result_0,
-                            zero,
-                            LLVM_UNNAMED.as_ptr(),
-                        )
-                    };
-                    unsafe {
-                        LLVMBuildInsertElement(
-                            self.builder,
-                            vector_result,
-                            setp_result_1,
-                            one,
-                            LLVM_UNNAMED.as_ptr(),
-                        )
-                    }
-                }
-                _ => return Err(error_unreachable()),
-            }
+        let result = if data.base.type_.packed_type().is_some() {
+            self.emit_set_packed(data.base, data.dtype, src1, src2, None)?
         } else {
             let setp_result = self.emit_setp_impl(data.base, src1, src2)?;
             self.setp_to_set(data.dtype, setp_result)?
@@ -7506,15 +7681,73 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    // set on f16x2 and bf16x2: the result of each lane in the lane of dtype (the halves of .u32 and .s32), with the
+    // lane's comparison combined with the predicate of the BoolOp form
+    fn emit_set_packed(
+        &mut self,
+        base: ptx_parser::SetpData,
+        dtype: ast::ScalarType,
+        src1: LLVMValueRef,
+        src2: LLVMValueRef,
+        bool_op: Option<(ptx_parser::SetpBoolPostOp, LLVMValueRef)>,
+    ) -> Result<LLVMValueRef, TranslateError> {
+        let lane_type = match dtype {
+            ast::ScalarType::U32 | ast::ScalarType::S32 => ast::ScalarType::U16,
+            ast::ScalarType::F16x2 => ast::ScalarType::F16,
+            ast::ScalarType::BF16x2 => ast::ScalarType::BF16,
+            _ => return Err(error_unreachable()),
+        };
+        let data = ptx_parser::SetpData {
+            type_: base.type_.packed_type().ok_or_else(error_unreachable)?,
+            ..base
+        };
+        let u8_llvm = get_scalar_type(self.context, ast::ScalarType::B8);
+        let mut vector = unsafe { LLVMGetPoison(get_type(self.context, &ast::Type::Vector(2, lane_type))?) };
+        for lane in 0..2 {
+            let index = unsafe { LLVMConstInt(u8_llvm, lane, 0) };
+            let (a, b) = unsafe {
+                (
+                    LLVMBuildExtractElement(self.builder, src1, index, LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildExtractElement(self.builder, src2, index, LLVM_UNNAMED.as_ptr()),
+                )
+            };
+            let mut lane_result = self.emit_setp_impl(data, a, b)?;
+            if let Some((op, c)) = bool_op {
+                let op = match op {
+                    ptx_parser::SetpBoolPostOp::Xor => LLVMBuildXor,
+                    ptx_parser::SetpBoolPostOp::And => LLVMBuildAnd,
+                    ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
+                };
+                lane_result = unsafe { op(self.builder, lane_result, c, LLVM_UNNAMED.as_ptr()) };
+            }
+            let lane_result = self.setp_to_set(lane_type, lane_result)?;
+            vector = unsafe { LLVMBuildInsertElement(self.builder, vector, lane_result, index, LLVM_UNNAMED.as_ptr()) };
+        }
+        Ok(unsafe {
+            LLVMBuildBitCast(self.builder, vector, get_scalar_type(self.context, dtype), LLVM_UNNAMED.as_ptr())
+        })
+    }
+
     fn emit_set_bool(
         &mut self,
         data: ptx_parser::SetBoolData,
         arguments: ptx_parser::SetBoolArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src3 = self.resolver.value(arguments.src3)?;
-        let (result_bool, _) =
-            self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, src3, false)?;
-        let set_result = self.setp_to_set(data.dtype, result_bool)?;
+        let set_result = if data.base.base.type_.packed_type().is_some() {
+            let src3 = if data.base.negate_src3 {
+                unsafe { LLVMBuildNot(self.builder, src3, LLVM_UNNAMED.as_ptr()) }
+            } else {
+                src3
+            };
+            let src1 = self.resolver.value(arguments.src1)?;
+            let src2 = self.resolver.value(arguments.src2)?;
+            self.emit_set_packed(data.base.base, data.dtype, src1, src2, Some((data.base.bool_op, src3)))?
+        } else {
+            let (result_bool, _) =
+                self.emit_setp_bool_impl(data.base, arguments.src1, arguments.src2, src3, false)?;
+            self.setp_to_set(data.dtype, result_bool)?
+        };
         self.resolver.register(arguments.dst, set_result);
         Ok(())
     }
@@ -7525,6 +7758,43 @@ impl<'a> MethodEmitContext<'a> {
         args: ast::SetpBoolArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src3 = self.resolver.value(args.src3)?;
+        if let Some(scalar_type) = data.base.type_.packed_type() {
+            // as setp.f16x2 p|q, each lane combined with c
+            let src3 = if data.negate_src3 {
+                unsafe { LLVMBuildNot(self.builder, src3, LLVM_UNNAMED.as_ptr()) }
+            } else {
+                src3
+            };
+            let op = match data.bool_op {
+                ptx_parser::SetpBoolPostOp::Xor => LLVMBuildXor,
+                ptx_parser::SetpBoolPostOp::And => LLVMBuildAnd,
+                ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
+            };
+            let src1 = self.resolver.value(args.src1)?;
+            let src2 = self.resolver.value(args.src2)?;
+            let base = ptx_parser::SetpData { type_: scalar_type, ..data.base };
+            let u8_llvm = get_scalar_type(self.context, ast::ScalarType::B8);
+            let mut lanes = [ptr::null_mut(); 2];
+            for (i, lane) in lanes.iter_mut().enumerate() {
+                let index = unsafe { LLVMConstInt(u8_llvm, i as u64, 0) };
+                let (a, b) = unsafe {
+                    (
+                        LLVMBuildExtractElement(self.builder, src1, index, LLVM_UNNAMED.as_ptr()),
+                        LLVMBuildExtractElement(self.builder, src2, index, LLVM_UNNAMED.as_ptr()),
+                    )
+                };
+                let cmp = self.emit_setp_impl(base, a, b)?;
+                *lane = unsafe { op(self.builder, cmp, src3, LLVM_UNNAMED.as_ptr()) };
+            }
+            self.resolver.register(args.dst1, lanes[0]);
+            return match args.dst2 {
+                Some(dst2) => {
+                    self.resolver.register(dst2, lanes[1]);
+                    Ok(())
+                }
+                None => Err(error_unreachable()),
+            };
+        }
         let (dst, dst2_value) =
             self.emit_setp_bool_impl(data, args.src1, args.src2, src3, args.dst2.is_some())?;
         self.resolver.register(args.dst1, dst);
@@ -8050,10 +8320,16 @@ impl<'a> MethodEmitContext<'a> {
                 ast::TestpOp::Infinite => cmp(LLVMIntEQ, magnitude, k(exp_mask)),
                 ast::TestpOp::Number => cmp(LLVMIntULE, magnitude, k(exp_mask)),
                 ast::TestpOp::NotANumber => cmp(LLVMIntUGT, magnitude, k(exp_mask)),
+                // "positive and negative zero are considered normal numbers" (PTX ISA 9.7.3.1)
                 ast::TestpOp::Normal => {
                     let not_special = cmp(LLVMIntNE, exponent, k(exp_mask));
-                    let not_small = cmp(LLVMIntNE, exponent, k(0));
-                    LLVMBuildAnd(b, not_special, not_small, LLVM_UNNAMED.as_ptr())
+                    let not_subnormal = LLVMBuildOr(
+                        b,
+                        cmp(LLVMIntNE, exponent, k(0)),
+                        cmp(LLVMIntEQ, magnitude, k(0)),
+                        LLVM_UNNAMED.as_ptr(),
+                    );
+                    LLVMBuildAnd(b, not_special, not_subnormal, LLVM_UNNAMED.as_ptr())
                 }
                 ast::TestpOp::Subnormal => {
                     let small = cmp(LLVMIntEQ, exponent, k(0));

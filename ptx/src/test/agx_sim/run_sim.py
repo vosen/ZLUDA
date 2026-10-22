@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compiles the PTX here with zoc for AGX and runs it on the AGX Performance Simulator's agx_run, checking each
 result against a reference model: prmt modes, szext and fns, the 3-input min/max, f32x2 arithmetic (default and
---strict-fp), fma.relu of the 16-bit types, two modules linked with zoc (cuLink) and recursion.
+--strict-fp), fma.relu of the 16-bit types, two modules linked with zoc (cuLink), recursion and device malloc.
 
   run_sim.py --zoc ZOC --agx-run AGX_RUN --objcopy LLVM_OBJCOPY --readelf LLVM_READELF [--chip agx-g14c]
 
@@ -160,6 +160,22 @@ def recursion(a, tmp, strict):
     return bad + [k for k in range(64) if wrote[32 * k:32 * k + 32] != tuple(range(1, k % 32 + 1)) + (0,) * (32 - k % 32)]
 
 
+def malloc(a, tmp):
+    obj = compile_ptx(a, tmp, "malloc.ptx")
+    n = 64
+    out, keep, heap = t.run(a, obj, "alloc", [("buf", bytes(8 * n), True), ("buf", bytes(8 * n), True)], (n, 1),
+                            (n, 1), tmp, heap=1 << 20)
+    sums = struct.unpack("<%dI" % (2 * n), out)
+    want = [sum(j + i + k for i in range(50) for j in range(4 * (k % 7 + 1))) for k in range(n)]
+    bad = [k for k in range(n) if sums[2 * k] != want[k] or sums[2 * k + 1] != 1]
+    ptrs = struct.unpack("<%dQ" % n, keep)
+    # 64 live blocks of at most 128 bytes: the reused blocks keep the heap small
+    if len(set(ptrs)) != n or max(ptrs) - t.HEAP_VA > 64 * 1024:
+        bad.append("blocks")
+    (first, heap) = t.run(a, obj, "use", [("buf", keep), ("buf", bytes(4 * n), True)], (n, 1), (n, 1), tmp, heap=heap)
+    return bad + [k for k in range(n) if struct.unpack("<%dI" % n, first)[k] != 49 + k]
+
+
 def main():
     ap = argparse.ArgumentParser()
     for opt in ("--zoc", "--agx-run", "--objcopy", "--readelf"):
@@ -171,7 +187,7 @@ def main():
              ("f32x2", lambda a, tmp: f32x2(a, tmp, False)), ("f32x2 strict", lambda a, tmp: f32x2(a, tmp, True)),
              ("fma.relu", fma_relu), ("cuLink extern_func", link),
              ("recursion", lambda a, tmp: recursion(a, tmp, False)),
-             ("recursion strict", lambda a, tmp: recursion(a, tmp, True))]
+             ("recursion strict", lambda a, tmp: recursion(a, tmp, True)), ("malloc and free", malloc)]
     for label, f in cases:
         with tempfile.TemporaryDirectory() as tmp:
             try:

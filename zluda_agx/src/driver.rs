@@ -64,6 +64,9 @@ pub(crate) struct Driver {
     /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
     /// followed: the launches a reported bad access may come from.
     checked_launches: HashMap<(usize, String), (String, u32)>,
+    /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
+    /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
+    heap: Option<agx_runtime::Bo>,
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
@@ -209,9 +212,18 @@ impl Driver {
 
     /// Every allocation a pointer can point into, for a checked kernel's allocation table: device memory and the
     /// modules' global data buffers.
+    /// The size of the device heap: CU_LIMIT_MALLOC_HEAP_SIZE (8 MiB by default, as in CUDA), at most 4 GiB less
+    /// 16 bytes (the heap's offsets are 32-bit).
+    fn heap_size(&self) -> u32 {
+        let limit = self.limits.get(&CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE.0).copied().unwrap_or(DEFAULT_HEAP_SIZE);
+        (limit.min(u32::MAX as usize & !15) as u32).max(4096)
+    }
+
     fn live_allocations(&self) -> Vec<(u64, u64)> {
         let mut all = self.ctx.allocation_ranges();
         all.extend(self.modules.values().filter_map(|m| m.globals_va().map(|va| (va, va + m.globals().len() as u64))));
+        // the blocks of malloc are not told apart: the heap is one allocation
+        all.extend(self.heap.as_ref().map(|h| (h.va, h.va + self.heap_size() as u64)));
         all
     }
 
@@ -225,6 +237,9 @@ impl Driver {
             if let Some(va) = m.globals_va().filter(|&va| p >= va && p < va + m.globals().len() as u64) {
                 return (va, va + m.globals().len() as u64);
             }
+        }
+        if let Some(h) = self.heap.as_ref().filter(|h| p >= h.va && p < h.va + self.heap_size() as u64) {
+            return (h.va, h.va + self.heap_size() as u64);
         }
         (p, p)
     }
@@ -362,6 +377,7 @@ fn new_driver() -> Result<Driver, CUerror> {
         sticky: None,
         launches: Default::default(),
         checked_launches: Default::default(),
+        heap: None,
     })
 }
 
@@ -973,7 +989,16 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             CStr::from_ptr(bytes as *const c_char).to_bytes()
         };
         let m = load_image(image, &cpu)?;
-        let loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
+        let mut loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
+        if loaded.uses_heap() {
+            if d.heap.is_none() {
+                let size = d.heap_size();
+                let mut heap = d.ctx.vm.alloc_data(size as u64).map_err(from_io)?;
+                heap.as_mut_slice()[..8].copy_from_slice(&agx_runtime::heap_header(size));
+                d.heap = Some(heap);
+            }
+            loaded.set_heap(d.heap.as_ref().unwrap().va);
+        }
         let h = d.handle();
         d.modules.insert(h, loaded);
         Ok(h)
@@ -1478,16 +1503,18 @@ pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *m
 /// functions get four times as much): CU_LIMIT_STACK_SIZE, for the modules compiled after it is set.
 static STACK_SIZE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(DEFAULT_STACK_SIZE);
 const DEFAULT_STACK_SIZE: usize = 1024;
+const DEFAULT_HEAP_SIZE: usize = 8 << 20;
 
 /// Stack size per thread for dynamic allocations (see STACK_SIZE), the printf buffer of the runtime library
-/// (64 KiB per module) and the device heap (none).
-/// The limits a context keeps: what cuCtxSetLimit set, else the default. Only the stack size changes anything: the
-/// stack of the modules loaded later; the printf buffer is the module's.
+/// (64 KiB per module) and the device heap of `malloc` (8 MiB).
+/// The limits a context keeps: what cuCtxSetLimit set, else the default. The stack size applies to the modules
+/// loaded later, the heap size until the first module that uses `malloc` is loaded; the printf buffer is the
+/// module's.
 pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
     let default = match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE => DEFAULT_STACK_SIZE,
         CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
-        CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
+        CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => DEFAULT_HEAP_SIZE,
         _ => return Err(CUerror::UNSUPPORTED_LIMIT),
     };
     let v = with(|d| Ok(d.limits.get(&limit.0).copied().unwrap_or(default)))?;
@@ -1497,6 +1524,13 @@ pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresu
 pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => {
+            if limit == CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE {
+                // as in CUDA, the heap's size is fixed once a module that uses it is loaded
+                let fixed = with(|d| Ok(d.heap.is_some()))?;
+                if fixed {
+                    return Err(CUerror::INVALID_VALUE);
+                }
+            }
             if limit == CUlimit_enum::CU_LIMIT_STACK_SIZE {
                 // zoc takes a 32-bit size; private memory is far smaller
                 if value > u32::MAX as usize / 4 {

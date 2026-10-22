@@ -324,19 +324,23 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             q = pos + 12 + (nlen + 3) // 4 * 4
             halves, tg_half, glob, _gprs, tg_bytes, _stack, nargs = struct.unpack_from('<7I', d, q)
             args = [struct.unpack_from('<3I', d, q + 28 + 12 * i) for i in range(nargs)]
-            # tagged extensions up to the record's end: 1 = cluster dimensions
-            cluster, e = (1, 1, 1), q + 28 + 12 * nargs
+            # tagged extensions up to the record's end: 1 = cluster dimensions, 4 = the hidden threadgroup memory
+            # size argument (2 and 3 are checked mode's, which the harness does not run)
+            cluster, tgb_half, e = (1, 1, 1), None, q + 28 + 12 * nargs
             while e + 4 <= pos + size:
                 tag, = struct.unpack_from('<I', d, e)
                 if tag == 1 and e + 16 <= pos + size:
                     cluster = struct.unpack_from('<3I', d, e + 4)
                     e += 16
+                elif tag == 4 and e + 8 <= pos + size:
+                    tgb_half, = struct.unpack_from('<I', d, e + 4)
+                    e += 8
                 else:
                     break
-            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster)
+            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half)
             pos += size
     kernels = {}
-    for name, (halves, tg_half, glob, tg_bytes, args, cluster) in records.items():
+    for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
@@ -350,9 +354,24 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             'args': [(bp == 1, nb, h) for bp, nb, h in args],
             # CTAs per cluster: a cluster runs as one threadgroup, thread (x, y, z) of CTA r at (x, y, z * C + r)
             'cluster': cluster,
+            # the hidden argument set to the threadgroup memory of the launch, static and dynamic bytes
+            'tgb_half': None if tgb_half in (None, 0xffffffff) else tgb_half,
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
-    return kernels, gdata, gsyms
+    # the relocations of address-valued initializers (.rela.agx.globals, AGXUsage.rst): (offset, size, symbol
+    # offset in .agx.globals + addend), of symbols defined in .agx.globals
+    relocs = []
+    rela, symtab = os.path.join(tmp, 'rela.bin'), os.path.join(tmp, 'symtab.bin')
+    if subprocess.run([objcopy, '--dump-section', '.rela.agx.globals=' + rela, '--dump-section',
+                       '.symtab=' + symtab, obj, os.path.join(tmp, 'unused.o')], capture_output=True).returncode == 0:
+        r, st = open(rela, 'rb').read(), open(symtab, 'rb').read()
+        for i in range(0, len(r) - 23, 24):
+            offset, info, addend = struct.unpack_from('<QQq', r, i)
+            _name, _info, _other, shndx, value, _size = struct.unpack_from('<IBBHQQ', st, 24 * (info >> 32))
+            if shndx != gsec:
+                raise Unsupported('relocation against a symbol outside .agx.globals')
+            relocs.append((offset, {1: 8, 2: 4}[info & 0xffffffff], value + addend))
+    return kernels, gdata, gsyms, relocs
 
 
 # ------------------------------------------------------------------ running
@@ -423,12 +442,14 @@ def run_test(path, args):
             return 'COMPILE-ERROR', ' | '.join(msg[:3])[:300]
         with open(os.path.join(tmp, 'm.asm')) as f:
             asm = f.read()
-        kernels, gdata, gsyms = kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
+        kernels, gdata, gsyms, relocs = kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
         params = kernel_params(module)
 
         mem = Memory()
         syms, bufs, last = {}, {}, None
         globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
+        for off, n, target in relocs:
+            globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
         for n, off in gsyms.items():
             syms[n] = GLOBALS_BASE + off
         failures, launches, skipped, passed, skipped_launches = [], 0, 0, 0, []
@@ -572,6 +593,8 @@ def run_test(path, args):
                     put(k['grid_half'] + 2 * j, hw_grid[j], 4)
                 if k['globals_half'] is not None:
                     put(k['globals_half'], GLOBALS_BASE, 8)
+                if k['tgb_half'] is not None:
+                    put(k['tgb_half'], k['shared'] + dyn, 4)
                 # agx_run takes 32-bit uniforms
                 uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
                                    for h in halves})

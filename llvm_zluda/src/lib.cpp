@@ -9,6 +9,7 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/ReplaceConstant.h>
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
@@ -306,12 +307,16 @@ void LLVMZludaUpgradeFunctionAttributes(LLVMModuleRef M)
 // The address space a generic address comes from: looks through integer
 // casts, constant offsets, address space casts and pointer arithmetic.
 // Addresses of unknown origin are device (global) addresses.
-static unsigned zludaAgxSourceAddressSpace(Value *V)
+static unsigned zludaAgxSourceAddressSpace(Value *V, Value **Source = nullptr)
 {
     for (unsigned depth = 0; depth < 64; depth++)
     {
         if (V->getType()->isPointerTy() && V->getType()->getPointerAddressSpace() != 0)
+        {
+            if (Source)
+                *Source = V;
             return V->getType()->getPointerAddressSpace();
+        }
         if (auto *Op = dyn_cast<Operator>(V))
         {
             switch (Op->getOpcode())
@@ -497,6 +502,11 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
         {"__zluda_agx_isspacep_const", [](unsigned as) { return as == 4; }, 0},
         {"__zluda_agx_isspacep_param", [](unsigned) { return false; }, 0},
     };
+    // Kernel parameters are constant memory too (address space 4); their window is in the .global window, and
+    // not in the .const one (PTX ISA 6.4.1.1)
+    auto isParam = [](Value *Source) {
+        return Source && isa<Argument>(getUnderlyingObject(Source));
+    };
     Module *Mod = unwrap(M);
     bool found = false;
     for (Function &F : *Mod)
@@ -514,9 +524,34 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
             auto *Call = dyn_cast<CallInst>(U);
             if (!Call)
                 continue;
-            unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0));
+            Value *Source = nullptr;
+            unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0), &Source);
             Value *Result;
-            if (as != 0 || space.tags == 0)
+            if (as == 4 && isParam(Source))
+            {
+                StringRef name = space.name;
+                Result = ConstantInt::getBool(Call->getContext(),
+                                              name.ends_with("_param") || name.ends_with("_global"));
+            }
+            else if (as == 0 && StringRef(space.name).ends_with("_const"))
+            {
+                // a device address of unknown origin: in one of the module's .const variables, which are in the
+                // global data buffer
+                IRBuilder<> Builder(Call);
+                Value *A = Call->getArgOperand(0);
+                Result = Builder.getFalse();
+                for (GlobalVariable &GV : Mod->globals())
+                {
+                    uint64_t size = GV.getValueType()->isSized() ? Mod->getDataLayout().getTypeAllocSize(GV.getValueType()) : 0;
+                    if (GV.getAddressSpace() != 4 || GV.isDeclaration() || size == 0)
+                        continue;
+                    Value *Start = Builder.CreatePtrToInt(
+                        Builder.CreateAddrSpaceCast(&GV, PointerType::get(Call->getContext(), 0)), A->getType());
+                    Value *Offset = Builder.CreateSub(A, Start);
+                    Result = Builder.CreateOr(Result, Builder.CreateICmpULT(Offset, ConstantInt::get(A->getType(), size)));
+                }
+            }
+            else if (as != 0 || space.tags == 0)
                 Result = ConstantInt::getBool(Call->getContext(), space.test(as));
             else
             {
@@ -710,8 +745,11 @@ namespace
                 for (Instruction &I : BB)
                     for (Value *op : I.operands())
                         zludaSharedVariables(op, used, seen);
+            // except the shared memory size of the launch and the end of the static shared memory
+            // (zluda_ptx_impl_agx.ll's %..._smem_... registers), which stay the threadgroup's
             for (GlobalVariable &GV : M.globals())
-                if (used.count(&GV))
+                if (used.count(&GV) && GV.getName() != "__zluda_agx_smem_bytes" &&
+                    GV.getName() != "__zluda_agx_smem_end")
                     shared.insert(&GV);
         }
 

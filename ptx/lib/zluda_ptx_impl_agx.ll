@@ -247,12 +247,11 @@ define i64 @__zluda_ptx_impl_bfi_b64(i64 %insert, i64 %base, i32 %pos, i32 %len)
   ret i64 %r
 }
 
-; bmsk.clamp.b32: the low bytes of position and width, clamped to 32.
+; bmsk.clamp.b32: position and width clamped to 32 (the Semantics of PTX ISA
+; 9.7.1, on the whole 32-bit operands).
 define i32 @__zluda_ptx_impl_bmsk_clamp_b32(i32 %position, i32 %width) #0 {
-  %p8 = and i32 %position, 255
-  %wd8 = and i32 %width, 255
-  %p32 = call i32 @llvm.umin.i32(i32 %p8, i32 32)
-  %wd32 = call i32 @llvm.umin.i32(i32 %wd8, i32 32)
+  %p32 = call i32 @llvm.umin.i32(i32 %position, i32 32)
+  %wd32 = call i32 @llvm.umin.i32(i32 %width, i32 32)
   %p = zext i32 %p32 to i64
   %wd = zext i32 %wd32 to i64
   %bits.s = shl i64 1, %wd
@@ -310,8 +309,48 @@ define i32 @__zluda_ptx_impl_sreg_nclusterid(i8 zeroext %member) #0 {
   %v = call i32 @__zluda_agx_cluster(i32 %w)
   ret i32 %v
 }
-define i32 @__zluda_ptx_impl_sreg_is_explicit_cluster() #0 {
+define i1 @__zluda_ptx_impl_sreg_is_explicit_cluster() #0 {
   %v = call i32 @__zluda_agx_cluster(i32 14)
+  %p = icmp ne i32 %v, 0
+  ret i1 %p
+}
+
+; The shared memory registers. The kernels of a module that reads them store the threadgroup memory of the launch
+; (static and dynamic bytes, from their hidden argument "agx-hidden"="threadgroup-bytes") in __zluda_agx_smem_bytes;
+; the backend places zero-size threadgroup variables after the others, in module order, so the address of
+; __zluda_agx_smem_end, linked after the program's, is where the dynamic shared memory starts. Allocations are in
+; units of 128 bytes, as on sm_90, followed by a reserved region of 1 KiB for system software (which AGX has none
+; of; no memory is allocated for it). In a cluster kernel they are the threadgroup's, all of the cluster's CTAs.
+@__zluda_agx_smem_bytes = addrspace(3) global i32 undef, align 4
+@__zluda_agx_smem_end = internal addrspace(3) global [0 x i8] undef, align 1
+
+define i32 @__zluda_ptx_impl_sreg_dynamic_smem_size() #3 {
+  %total = load i32, ptr addrspace(3) @__zluda_agx_smem_bytes, align 4
+  %static = ptrtoint ptr addrspace(3) @__zluda_agx_smem_end to i32
+  %v = sub i32 %total, %static
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_total_smem_size() #3 {
+  %total = load i32, ptr addrspace(3) @__zluda_agx_smem_bytes, align 4
+  %up = add i32 %total, 127
+  %v = and i32 %up, -128
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_begin() #3 {
+  %v = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  ret i32 %v
+}
+define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_end() #3 {
+  %b = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  %v = add i32 %b, 1024
+  ret i32 %v
+}
+; the size of the reserved region
+define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_cap() #3 {
+  ret i32 1024
+}
+define i32 @__zluda_ptx_impl_sreg_aggr_smem_size() #3 {
+  %v = call i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_end()
   ret i32 %v
 }
 
@@ -367,6 +406,14 @@ define zeroext i1 @__zluda_ptx_impl_agx_in_own_cta(i64 %addr) #0 {
   %me = call i32 @__zluda_agx_cluster(i32 6)
   %own = icmp eq i32 %r, %me
   ret i1 %own
+}
+
+; Whether a generic address of shared memory is in the window of a CTA of this cluster
+define zeroext i1 @__zluda_ptx_impl_agx_in_cluster(i64 %addr) #0 {
+  %r = call i32 @__zluda_ptx_impl_getctarank_generic_u64(i64 %addr)
+  %n = call i32 @__zluda_agx_cluster(i32 7)
+  %in = icmp ult i32 %r, %n
+  ret i1 %in
 }
 
 ; The cluster is the threadgroup: its barrier is the threadgroup barrier,
@@ -1122,6 +1169,10 @@ exit:
 @__zluda_agx_assert_format = internal addrspace(1) constant [73 x i8] c"%s:%u: %s: block: [%u,%u,%u], thread: [%u,%u,%u] Assertion `%s` failed.\0A\00", align 8
 @__zluda_agx_trap_flag = internal addrspace(1) global i32 0, align 4
 
+; The device heap of malloc and free (zluda_ptx_impl_agx_heap.c): zluda_agx
+; writes its address here when it loads the module.
+@__zluda_agx_heap = internal addrspace(1) externally_initialized global ptr addrspace(1) null, align 8
+
 define void @__zluda_ptx_impl___assertfail(i64 %message, i64 %file, i32 %line, i64 %function, i64 %char_size) #1 {
 entry:
   store volatile i32 1, ptr addrspace(1) @__zluda_agx_trap_flag, align 4
@@ -1190,7 +1241,8 @@ define float @__zluda_ptx_impl_div_f32_part2(float %x, float %y, float %fma4, fl
 }
 
 ; tanh(x) = sign(x) * (1 - e) / (1 + e) with e = exp(-2|x|), which cannot
-; overflow.
+; overflow; below 2^-6, where 1 - e cancels, x - x^3 / 3 (relative error
+; under 2^-27).
 define float @__zluda_ptx_impl_tanh_f32(float %x) #0 {
   %ax = call float @llvm.fabs.f32(float %x)
   %s = fmul float %ax, 0xC007154760000000
@@ -1199,7 +1251,13 @@ define float @__zluda_ptx_impl_tanh_f32(float %x) #0 {
   %den = fadd float 1.0, %e
   %t = fdiv float %num, %den
   %r = call float @llvm.copysign.f32(float %t, float %x)
-  ret float %r
+  %x2 = fmul float %x, %x
+  %c = fmul float %x2, 0xBFD5555560000000
+  %small.m = call float @llvm.fma.f32(float %x, float %c, float %x)
+  %small.r = call float @llvm.copysign.f32(float %small.m, float %x)
+  %small = fcmp olt float %ax, 0x3F90000000000000
+  %res = select i1 %small, float %small.r, float %r
+  ret float %res
 }
 
 define half @__zluda_ptx_impl_tanh_f16(half %x) #0 {
@@ -1221,11 +1279,17 @@ define <2 x half> @__zluda_ptx_impl_tanh_f16x2(<2 x half> %x) #0 {
   ret <2 x half> %r
 }
 
+; Below 2^-4 tanh(x) rounds to x in bfloat, whose subnormals would flush in
+; single precision.
 define bfloat @__zluda_ptx_impl_tanh_bf16(bfloat %x) #0 {
   %f = fpext bfloat %x to float
   %t = call float @__zluda_ptx_impl_tanh_f32(float %f)
   %r = fptrunc float %t to bfloat
-  ret bfloat %r
+  %bits = bitcast bfloat %x to i16
+  %mag = and i16 %bits, 32767
+  %small = icmp ult i16 %mag, 15744
+  %res = select i1 %small, bfloat %x, bfloat %r
+  ret bfloat %res
 }
 
 define <2 x bfloat> @__zluda_ptx_impl_tanh_bf16x2(<2 x bfloat> %x) #0 {
@@ -1237,7 +1301,11 @@ define <2 x bfloat> @__zluda_ptx_impl_tanh_bf16x2(<2 x bfloat> %x) #0 {
   %v0 = insertelement <2 x float> poison, float %t0, i32 0
   %v1 = insertelement <2 x float> %v0, float %t1, i32 1
   %r = fptrunc <2 x float> %v1 to <2 x bfloat>
-  ret <2 x bfloat> %r
+  %bits = bitcast <2 x bfloat> %x to <2 x i16>
+  %mag = and <2 x i16> %bits, <i16 32767, i16 32767>
+  %small = icmp ult <2 x i16> %mag, <i16 15744, i16 15744>
+  %res = select <2 x i1> %small, <2 x bfloat> %x, <2 x bfloat> %r
+  ret <2 x bfloat> %res
 }
 
 ; dp2a: the two 16-bit halves of a times two bytes of b (bytes 0-1 for lo,
@@ -3074,6 +3142,7 @@ exit:
 }
 
 declare float @llvm.fabs.f32(float)
+declare float @llvm.fma.f32(float, float, float)
 declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)
 declare i32 @llvm.smax.i32(i32, i32)
 declare i32 @llvm.umin.i32(i32, i32)
@@ -21177,4 +21246,267 @@ declare i32 @llvm.umax.i32(i32, i32)
 !20016 = distinct !{!20016, !20004}
 !20017 = distinct !{!20017, !20004}
 !20018 = distinct !{!20018, !20004}
+
+; from zluda_ptx_impl_agx_heap.c
+
+%struct.heap = type { i32, i32, [2 x i32], [32 x i64] }
+
+
+; Function Attrs: alwaysinline nofree norecurse nounwind memory(readwrite, inaccessiblemem: none)
+define dso_local i64 @__zluda_ptx_impl_malloc(i64 noundef %0) local_unnamed_addr #3 {
+  %2 = load ptr addrspace(1), ptr addrspace(1) @__zluda_agx_heap, align 8
+  %3 = icmp eq ptr addrspace(1) %2, null
+  %4 = icmp ugt i64 %0, 2147483632
+  %5 = or i1 %4, %3
+  br i1 %5, label %57, label %6
+
+6:                                                ; preds = %1
+  %7 = add nuw nsw i64 %0, 16
+  br label %8
+
+8:                                                ; preds = %8, %6
+  %9 = phi i32 [ %13, %8 ], [ 5, %6 ]
+  %10 = zext i32 %9 to i64
+  %11 = shl nuw i64 1, %10
+  %12 = icmp ult i64 %11, %7
+  %13 = add i32 %9, 1
+  br i1 %12, label %8, label %14, !llvm.loop !30007
+
+14:                                               ; preds = %8
+  %15 = getelementptr inbounds %struct.heap, ptr addrspace(1) %2, i64 0, i32 3, i64 %10
+  %16 = load atomic i64, ptr addrspace(1) %15 acquire, align 8
+  %17 = getelementptr inbounds i32, ptr addrspace(1) %2, i64 1
+  br label %18
+
+18:                                               ; preds = %22, %14
+  %19 = phi i64 [ %16, %14 ], [ %32, %22 ]
+  %20 = trunc i64 %19 to i32
+  %21 = icmp eq i32 %20, 0
+  br i1 %21, label %33, label %22
+
+22:                                               ; preds = %18
+  %23 = and i64 %19, 4294967295
+  %24 = getelementptr inbounds i8, ptr addrspace(1) %17, i64 %23
+  %25 = load atomic i32, ptr addrspace(1) %24 monotonic, align 4
+  %26 = and i64 %19, -4294967296
+  %27 = add i64 %26, 4294967296
+  %28 = zext i32 %25 to i64
+  %29 = or disjoint i64 %27, %28
+  %30 = cmpxchg ptr addrspace(1) %15, i64 %19, i64 %29 acq_rel acquire, align 8
+  %31 = extractvalue { i64, i1 } %30, 1
+  %32 = extractvalue { i64, i1 } %30, 0
+  br i1 %31, label %51, label %18
+
+33:                                               ; preds = %18
+  %34 = shl nuw i32 1, %9
+  %35 = load atomic i32, ptr addrspace(1) %17 monotonic, align 4
+  %36 = add i32 %35, -272
+  %37 = load atomic i32, ptr addrspace(1) %2 monotonic, align 8
+  br label %38
+
+38:                                               ; preds = %42, %33
+  %39 = phi i32 [ %37, %33 ], [ %46, %42 ]
+  %40 = sub i32 %36, %39
+  %41 = icmp ugt i32 %34, %40
+  br i1 %41, label %49, label %42
+
+42:                                               ; preds = %38
+  %43 = add i32 %39, %34
+  %44 = cmpxchg ptr addrspace(1) %2, i32 %39, i32 %43 monotonic monotonic, align 8
+  %45 = extractvalue { i32, i1 } %44, 1
+  %46 = extractvalue { i32, i1 } %44, 0
+  br i1 %45, label %47, label %38, !llvm.loop !30009
+
+47:                                               ; preds = %42
+  %48 = add i32 %39, 272
+  br label %49
+
+49:                                               ; preds = %38, %47
+  %50 = phi i32 [ %48, %47 ], [ 0, %38 ]
+  br i1 %41, label %57, label %51
+
+51:                                               ; preds = %22, %49
+  %52 = phi i32 [ %50, %49 ], [ %20, %22 ]
+  %53 = zext i32 %52 to i64
+  %54 = getelementptr inbounds i8, ptr addrspace(1) %2, i64 %53
+  store i32 %9, ptr addrspace(1) %54, align 4
+  %55 = getelementptr inbounds i8, ptr addrspace(1) %54, i64 16
+  %56 = ptrtoint ptr addrspace(1) %55 to i64
+  br label %57
+
+57:                                               ; preds = %51, %49, %1
+  %58 = phi i64 [ 0, %1 ], [ %56, %51 ], [ 0, %49 ]
+  ret i64 %58
+}
+
+; Function Attrs: alwaysinline nofree norecurse nounwind memory(readwrite, inaccessiblemem: none)
+define dso_local void @__zluda_ptx_impl_free(i64 noundef %0) local_unnamed_addr #3 {
+  %2 = load ptr addrspace(1), ptr addrspace(1) @__zluda_agx_heap, align 8
+  %3 = icmp eq i64 %0, 0
+  %4 = icmp eq ptr addrspace(1) %2, null
+  %5 = select i1 %3, i1 true, i1 %4
+  br i1 %5, label %29, label %6
+
+6:                                                ; preds = %1
+  %7 = ptrtoint ptr addrspace(1) %2 to i64
+  %8 = add i64 %0, 4294967280
+  %9 = sub i64 %8, %7
+  %10 = and i64 %9, 4294967295
+  %11 = getelementptr inbounds i8, ptr addrspace(1) %2, i64 %10
+  %12 = load i32, ptr addrspace(1) %11, align 4
+  %13 = add i32 %12, -32
+  %14 = icmp ult i32 %13, -27
+  br i1 %14, label %29, label %15
+
+15:                                               ; preds = %6
+  %16 = zext nneg i32 %12 to i64
+  %17 = getelementptr inbounds %struct.heap, ptr addrspace(1) %2, i64 0, i32 3, i64 %16
+  %18 = load atomic i64, ptr addrspace(1) %17 monotonic, align 8
+  %19 = getelementptr inbounds i32, ptr addrspace(1) %11, i64 1
+  br label %20
+
+20:                                               ; preds = %20, %15
+  %21 = phi i64 [ %18, %15 ], [ %28, %20 ]
+  %22 = trunc i64 %21 to i32
+  store atomic i32 %22, ptr addrspace(1) %19 monotonic, align 4
+  %23 = and i64 %21, -4294967296
+  %24 = add i64 %23, 4294967296
+  %25 = or disjoint i64 %24, %10
+  %26 = cmpxchg ptr addrspace(1) %17, i64 %21, i64 %25 release monotonic, align 8
+  %27 = extractvalue { i64, i1 } %26, 1
+  %28 = extractvalue { i64, i1 } %26, 0
+  br i1 %27, label %29, label %20
+
+29:                                               ; preds = %20, %6, %1
+  ret void
+}
+
+
+
+!30000 = !{i32 1, !"wchar_size", i32 4}
+!30001 = !{i32 7, !"frame-pointer", i32 2}
+!30002 = !{!"Ubuntu clang version 18.1.3 (1ubuntu1)"}
+!30003 = !{!30004, !30004, i64 0}
+!30004 = !{!"any pointer", !30005, i64 0}
+!30005 = !{!"omnipotent char", !30006, i64 0}
+!30006 = !{!"Simple C/C++ TBAA"}
+!30007 = distinct !{!30007, !30008}
+!30008 = !{!"llvm.loop.mustprogress"}
+!30009 = distinct !{!30009, !30008}
+!30010 = !{!30011, !30011, i64 0}
+!30011 = !{!"int", !30005, i64 0}
+
+; from zluda_ptx_impl_agx_math.c
+
+; Function Attrs: alwaysinline mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+define dso_local double @__zluda_ptx_impl_rcp_approx_ftz_f64(double noundef %0) local_unnamed_addr #3 {
+  %2 = bitcast double %0 to i64
+  %3 = and i64 %2, 9218868437227405312
+  %4 = icmp eq i64 %3, 0
+  %5 = select i1 %4, i64 -9223372036854775808, i64 -4294967296
+  %6 = and i64 %5, %2
+  %7 = and i64 %6, 9223372032559808512
+  %8 = icmp ugt i64 %7, 9218868437227405312
+  br i1 %8, label %32, label %9
+
+9:                                                ; preds = %1
+  switch i64 %7, label %16 [
+    i64 0, label %10
+    i64 9218868437227405312, label %13
+  ]
+
+10:                                               ; preds = %9
+  %11 = or disjoint i64 %6, 9218868437227405312
+  %12 = bitcast i64 %11 to double
+  br label %32
+
+13:                                               ; preds = %9
+  %14 = and i64 %2, -9223372036854775808
+  %15 = bitcast i64 %14 to double
+  br label %32
+
+16:                                               ; preds = %9
+  %17 = bitcast i64 %6 to double
+  %18 = fdiv double 1.000000e+00, %17
+  %19 = bitcast double %18 to i64
+  %20 = and i64 %19, 9218868437227405312
+  %21 = icmp eq i64 %20, 9218868437227405312
+  %22 = lshr i64 %19, 32
+  %23 = and i64 %22, 1
+  %24 = add nuw nsw i64 %23, 2147483647
+  %25 = select i1 %21, i64 0, i64 %24
+  %26 = add i64 %25, %19
+  %27 = and i64 %26, 9218868437227405312
+  %28 = icmp eq i64 %27, 0
+  %29 = select i1 %28, i64 -9223372036854775808, i64 -4294967296
+  %30 = and i64 %29, %26
+  %31 = bitcast i64 %30 to double
+  br label %32
+
+32:                                               ; preds = %1, %16, %13, %10
+  %33 = phi double [ %12, %10 ], [ %15, %13 ], [ %31, %16 ], [ 0x7FFFFFFF00000000, %1 ]
+  ret double %33
+}
+
+; Function Attrs: alwaysinline mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+define dso_local double @__zluda_ptx_impl_rsqrt_approx_ftz_f64(double noundef %0) local_unnamed_addr #3 {
+  %2 = bitcast double %0 to i64
+  %3 = and i64 %2, 9218868437227405312
+  %4 = icmp eq i64 %3, 0
+  %5 = select i1 %4, i64 -9223372036854775808, i64 -4294967296
+  %6 = and i64 %5, %2
+  %7 = and i64 %6, 9223372032559808512
+  %8 = icmp ugt i64 %7, 9218868437227405312
+  br i1 %8, label %36, label %9
+
+9:                                                ; preds = %1
+  %10 = icmp sgt i64 %6, -1
+  %11 = icmp eq i64 %7, 0
+  %12 = or i1 %10, %11
+  br i1 %12, label %13, label %36
+
+13:                                               ; preds = %9
+  br i1 %11, label %14, label %17
+
+14:                                               ; preds = %13
+  %15 = or disjoint i64 %6, 9218868437227405312
+  %16 = bitcast i64 %15 to double
+  br label %36
+
+17:                                               ; preds = %13
+  %18 = icmp eq i64 %6, 9218868437227405312
+  br i1 %18, label %36, label %19
+
+19:                                               ; preds = %17
+  %20 = bitcast i64 %6 to double
+  %21 = tail call double @llvm.sqrt.f64(double %20)
+  %22 = fdiv double 1.000000e+00, %21
+  %23 = bitcast double %22 to i64
+  %24 = and i64 %23, 9218868437227405312
+  %25 = icmp eq i64 %24, 9218868437227405312
+  %26 = lshr i64 %23, 32
+  %27 = and i64 %26, 1
+  %28 = add nuw nsw i64 %27, 2147483647
+  %29 = select i1 %25, i64 0, i64 %28
+  %30 = add i64 %29, %23
+  %31 = and i64 %30, 9218868437227405312
+  %32 = icmp eq i64 %31, 0
+  %33 = select i1 %32, i64 -9223372036854775808, i64 -4294967296
+  %34 = and i64 %33, %30
+  %35 = bitcast i64 %34 to double
+  br label %36
+
+36:                                               ; preds = %1, %9, %17, %19, %14
+  %37 = phi double [ %16, %14 ], [ %35, %19 ], [ 0.000000e+00, %17 ], [ 0x7FFFFFFF00000000, %9 ], [ 0x7FFFFFFF00000000, %1 ]
+  ret double %37
+}
+
+; Function Attrs: mustprogress nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare double @llvm.sqrt.f64(double)
+
+
+
+!40000 = !{i32 1, !"wchar_size", i32 4}
+!40001 = !{i32 7, !"frame-pointer", i32 2}
+!40002 = !{!"Ubuntu clang version 18.1.3 (1ubuntu1)"}
 ; ---------------------------------------------------------------- END GENERATED (gen_agx_tex.py)

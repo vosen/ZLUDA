@@ -376,6 +376,24 @@ fn run_instruction<'input>(
         }
     }
     Ok(match instruction {
+        // the 1.11.20 forms of PTX ISA 9.7.3.13 / 9.7.3.16 (zluda_ptx_impl_agx_math.c)
+        i @ ptx_parser::Instruction::Rcp {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Approx,
+                    type_: ast::ScalarType::F64,
+                    ..
+                },
+            ..
+        } if target == Target::Agx => to_call(resolver, fn_declarations, "rcp_approx_ftz_f64".into(), i)?,
+        i @ ptx_parser::Instruction::Rsqrt {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F64,
+                    flush_to_zero: Some(true),
+                },
+            ..
+        } if target == Target::Agx => to_call(resolver, fn_declarations, "rsqrt_approx_ftz_f64".into(), i)?,
         i @ ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {

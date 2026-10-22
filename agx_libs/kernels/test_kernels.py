@@ -13,6 +13,7 @@ Exits with 1 if any case is wrong.
 import argparse
 import math
 import os
+import re
 import random
 import struct
 import subprocess
@@ -72,8 +73,13 @@ def kernel_code(obj, name, a, tmp):
     sys.exit("no kernel " + name)
 
 
-def run(a, obj, name, args, grid, wg, tmp):
-    """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). Returns the dumped buffers."""
+HEAP_VA = 0x50000000
+
+
+def run(a, obj, name, args, grid, wg, tmp, heap=0):
+    """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). heap: the device heap of malloc / free, its size or
+    its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
+    zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
     tg_uniform, slots, glob = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
@@ -106,8 +112,19 @@ def run(a, obj, name, args, grid, wg, tmp):
         open(p, "wb").write(obj)
         gfile = os.path.join(tmp, "globals.bin")
         subprocess.run([a.objcopy, "-O", "binary", "--only-section=.agx.globals", p, gfile], check=True)
-        g = open(gfile, "rb").read()
-        open(gfile, "wb").write(g.ljust(16, b"\0"))
+        g = bytearray(open(gfile, "rb").read())
+        if heap:
+            syms = subprocess.run([a.readelf, "-s", p], capture_output=True, text=True, check=True).stdout
+            m = re.search(r"^\s*\d+:\s+([0-9a-f]+)\s+\d+\s+OBJECT\s+\S+\s+\S+\s+\d+\s+__zluda_agx_heap$", syms, re.M)
+            if m:
+                off = int(m.group(1), 16)
+                g[off:off + 8] = struct.pack("<Q", HEAP_VA)
+                hfile = os.path.join(tmp, "heap.bin")
+                data = heap if isinstance(heap, bytes) else struct.pack("<II", 0, heap).ljust(heap, b"\0")
+                open(hfile, "wb").write(data)
+                cmd += ["--map", "%#x=%s" % (HEAP_VA, hfile), "--dump", "%#x=%d:%s" % (HEAP_VA, len(data), hfile + ".out")]
+                dumps.append(hfile + ".out")
+        open(gfile, "wb").write(bytes(g).ljust(16, b"\0"))
         cmd += ["--map", "%#x=%s" % (0x40000000, gfile)]
         uniforms[glob // 2], uniforms[glob // 2 + 1] = 0x40000000, 0
     for d in range(3):
