@@ -1201,6 +1201,30 @@ impl Drop for Queue {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn replay_of_a_sampling_kernel_names_the_sampler_heap() {
+        let r = super::Replay {
+            code: vec![],
+            grid: [32, 1, 1],
+            local: [32, 1, 1],
+            shared_bytes: 0,
+            stack_bytes: 0,
+            uniforms: vec![0x5000, 0x0013, 0, 0, 7],
+            regions: vec![],
+            text_offset: 0,
+            debug_object: None,
+            texture_heap_half: Some(0),
+            sampler_heap: Some((0x13_0000_8000, 3)),
+        };
+        let heaps = vec![(0x13_0000_5000, vec![0; 24]), (0x13_0000_8000, vec![0; 24])];
+        let a = r.agx_run_args(&heaps, "r");
+        let at = |s: &str| a.iter().position(|x| x == s).unwrap();
+        // the texture heap address in u0_u1, both heaps mapped, the sampler heap and its count
+        assert_eq!(a[at("--uniform") + 1], format!("0={}", 0x0013_5000u32));
+        assert_eq!(a[at("--sampler-heap") + 1], "0x1300008000=3");
+        assert!(a.contains(&"0x1300005000=r0.bin".to_string()) && a.contains(&"0x1300008000=r1.bin".to_string()));
+    }
+
+    #[test]
     fn restore_anonymous_keeps_the_contents() {
         let len = super::PAGE as usize * 2;
         let p = unsafe {
