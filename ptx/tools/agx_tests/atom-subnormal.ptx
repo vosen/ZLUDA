@@ -1,0 +1,39 @@
+// Float atomic adds that keep subnormals (atom.shared.add.f32, atom.add.noftz.f32): subnormal sums, a
+// cancellation into the subnormal range and a tiny addend.
+.version 8.0
+.target sm_80
+.address_size 64
+.visible .entry k(.param .u64 po)
+{
+    .shared .align 4 .b32 s[1];
+    .reg .b64 %o; .reg .f32 %a, %b, %r, %v; .reg .b32 %x;
+    ld.param.u64 %o, [po];
+    // 2^-140 + 3*2^-141 = 5*2^-141 (both subnormal, exact)
+    mov.b32 %a, 0x00000200; mov.b32 %b, 0x00000300;
+    st.shared.f32 [s], %a;
+    atom.shared.add.f32 %r, [s], %b;
+    ld.shared.f32 %v, [s];
+    st.global.f32 [%o], %v;
+    // 2^-126 - 2^-127 = 2^-127 (normal minus normal into the subnormal range)
+    mov.b32 %a, 0x00800000; mov.b32 %b, 0x80400000;
+    st.shared.f32 [s], %a;
+    atom.shared.add.f32 %r, [s], %b;
+    ld.shared.f32 %v, [s];
+    st.global.f32 [%o+4], %v;
+    // 1.0 + subnormal = 1.0; the old value returned
+    mov.b32 %a, 0x3f800000; mov.b32 %b, 0x00000001;
+    st.shared.f32 [s], %a;
+    atom.shared.add.f32 %r, [s], %b;
+    ld.shared.f32 %v, [s];
+    st.global.f32 [%o+8], %v;
+    st.global.f32 [%o+12], %r;
+    // global .noftz: 2^-149 + 2^-149
+    mov.b32 %b, 0x00000001;
+    st.global.f32 [%o+16], %b;
+    add.u64 %o, %o, 16;
+    atom.global.add.noftz.f32 %r, [%o], %b;
+    ret;
+}
+.buffer OUT .u32 [5];
+.launch k <<< 1, 1 >>> (OUT);
+.expect OUT .u32 = { 0x00000500, 0x00400000, 0x3f800000, 0x3f800000, 0x00000002 };
