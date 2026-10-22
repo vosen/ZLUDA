@@ -522,14 +522,24 @@ fn expand_mixed_float<'input>(
     };
     run_instruction(resolver, result, instruction)?;
     if narrowed {
+        // .ftz (only with an .f16x2 destination) also flushes the f16 results that are subnormal
+        let flush = data.flush_to_zero && data.dtype == ast::ScalarType::F16x2;
+        let narrow_dst = if flush {
+            resolver.register_unnamed(Some((data.dtype.into(), ast::StateSpace::Reg)))
+        } else {
+            arguments.dst
+        };
         result.push(Statement::Instruction(ast::Instruction::Cvt {
             data: ast::CvtDetails {
                 from: compute,
                 to: data.dtype,
                 mode: truncate(ast::RoundingMode::Zero),
             },
-            arguments: ast::CvtArgs { dst: arguments.dst, src: dst, src2: None },
+            arguments: ast::CvtArgs { dst: narrow_dst, src: dst, src2: None },
         }));
+        if flush {
+            result.push(Statement::FpFlush { dst: arguments.dst, src: narrow_dst, type_: data.dtype });
+        }
     }
     Ok(())
 }

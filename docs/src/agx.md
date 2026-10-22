@@ -201,7 +201,8 @@ three differences.
 * The mixed-precision forms (`add`/`sub`/`mul`/`fma` of `.f32.{f16,bf16}`,
   `.f32x2.{f16x2,bf16x2}.f32x2`, `.{f16x2,bf16x2}.f32x2.f32x2` and
   `mul.bf16x2.bf16x2.f16x2`) convert their operands exactly and compute in
-  `f32` (in `.rz`, then rounded with `.rz`, for 16-bit pair results).
+  `f32` (in `.rz`, then rounded with `.rz`, for 16-bit pair results; with
+  `.ftz` an `.f16x2` result's subnormal halves are flushed too).
 * The PTX ISA 9.x conversions (`.pzo`, also on `f16`, `bf16`, `tf32`,
   `f16x2` and `bf16x2` results, `.scaled::n1::ue8m0` and
   `.scaled::n2::ue8m0`, `ue5m3x2` and `s2f6x2`, `.rp` / `.rm` to the mini
