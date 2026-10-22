@@ -8,6 +8,9 @@ runtime.
 
 ## Building
 
+The `compiler` crate (and so `zoc`) needs the HiGHS submodule:
+`git submodule update --init ext/HiGHS`.
+
 The AGX backend is not part of upstream LLVM. It lives in a fork of
 llvm-project, branch `claude/bold-davinci-46xi9q` of
 <https://github.com/Jianwen-Ding/llvm-project>. Two ways to use it:
