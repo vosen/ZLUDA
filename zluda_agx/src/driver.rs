@@ -698,24 +698,34 @@ pub(crate) fn load_image(image: &[u8], cpu: &str) -> Result<module::Module, CUer
     module::Module::load(&object, &asm).map_err(|_| CUerror::INVALID_IMAGE)
 }
 
+/// Whether PTX targets an architecture-specific or family-specific variant (`.target sm_90a`, `sm_100f`), whose
+/// features (wgmma, tcgen05, ...) are emulated at a cost or not at all on AGX.
+fn arch_specific_ptx(text: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(&text[..text.len().min(4096)]);
+    text.lines().map(str::trim).filter(|l| l.starts_with(".target")).any(|l| {
+        l.split(|c: char| c.is_whitespace() || c == ',')
+            .any(|t| t.starts_with("sm_") && t.ends_with(|c: char| c == 'a' || c == 'f'))
+    })
+}
+
 /// The PTX of a CUDA fat binary (a `__fatBinC_Wrapper_t` or a bare fatbin header): of the PTX files it holds, the
-/// one for the newest architecture. NVIDIA machine code (SASS) cannot run here.
+/// one for the newest architecture, portable PTX before architecture-specific PTX (sm_90a, sm_100f) of any
+/// architecture. NVIDIA machine code (SASS) cannot run here.
 unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     use dark_api::fatbin::{Fatbin, FatbinSubmodule};
-    let mut best: Option<(u32, Vec<u8>)> = None;
+    let mut best: Option<((bool, u32), Vec<u8>)> = None;
     let mut take = |sub: FatbinSubmodule| {
         let mut files = sub.get_files();
         while let Some(Ok(f)) = files.next() {
             if f.header.kind != cuda_types::dark_api::FatbinFileHeader::HEADER_KIND_PTX {
                 continue;
             }
-            let sm = f.header.sm_version;
-            if best.as_ref().is_some_and(|(b, _)| *b >= sm) {
+            let Ok(text) = f.get_or_decompress_content(true) else { continue };
+            let key = (!arch_specific_ptx(&text), f.header.sm_version);
+            if best.as_ref().is_some_and(|(b, _)| *b >= key) {
                 continue;
             }
-            if let Ok(text) = f.get_or_decompress_content(true) {
-                best = Some((sm, text.into_owned()));
-            }
+            best = Some((key, text.into_owned()));
         }
     };
     let magic = std::ptr::read_unaligned(image as *const u32);
@@ -2632,6 +2642,8 @@ mod tests {
         let mut files = file(1, 52, b"old\0\0\0\0\0");
         files.extend(file(2, 86, b"SASS....")); // machine code, ignored
         files.extend(file(1, 86, b"new\0\0\0\0\0"));
+        // architecture-specific PTX comes after portable PTX of any architecture
+        files.extend(file(1, 90, b".target sm_90a\n\0\0"));
         let mut bin = vec![0u8; 16];
         bin[0..4].copy_from_slice(&0xba55ed50u32.to_le_bytes());
         bin[4..6].copy_from_slice(&1u16.to_le_bytes());
