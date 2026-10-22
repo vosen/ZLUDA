@@ -163,6 +163,10 @@ three differences.
   `ZLUDA_AGX_TIMER=0` turns it off, and without it (also in the simulator) the
   clocks count reads of a device-wide counter, later at each read of a thread
   but not measuring time, and `nanosleep` returns at once.
+* Modules for `.target sm_1x` get its rules: single-precision instructions flush subnormals with or without
+  `.ftz`, and `mad.f32` without a rounding mode truncates the product to 24 bits before the addition (as on
+  those GPUs; `mad.rn.f32` and later targets fuse). The deprecated `vote.{all,any,uni}.pred` and
+  `vote.ballot.b32` without `.sync` vote over the active threads.
 * `%dynamic_smem_size`, `%total_smem_size` (static and dynamic bytes in
   128-byte units), `%aggr_smem_size` and `%reserved_smem_offset_begin`,
   `_end` and `_cap` (a reserved region of 1 KiB after the CTA's shared memory,

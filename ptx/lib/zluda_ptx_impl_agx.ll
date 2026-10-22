@@ -779,6 +779,37 @@ define i32 @__zluda_ptx_impl_vote_sync_ballot_b32_negate(i1 zeroext %value, i32 
   ret i32 %b
 }
 
+; the deprecated votes without .sync: over the active threads, as the .sync ones here
+define zeroext i1 @__zluda_ptx_impl_vote_any_pred(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_any_pred(i1 %value, i32 -1)
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_any_pred_negate(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_any_pred_negate(i1 %value, i32 -1)
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_all_pred(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_all_pred(i1 %value, i32 -1)
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_all_pred_negate(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_all_pred_negate(i1 %value, i32 -1)
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_uni_pred(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_uni_pred(i1 %value, i32 -1)
+  ret i1 %r
+}
+
+define zeroext i1 @__zluda_ptx_impl_vote_uni_pred_negate(i1 zeroext %value) #2 {
+  %r = call i1 @__zluda_ptx_impl_vote_sync_uni_pred_negate(i1 %value, i32 -1)
+  ret i1 %r
+}
+
 define i32 @__zluda_ptx_impl_vote_ballot_b32(i1 zeroext %value) #2 {
   %b = call i32 @llvm.agx.simd.ballot(i1 %value)
   ret i32 %b

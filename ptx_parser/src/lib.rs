@@ -2859,6 +2859,28 @@ fn take_b1_op(modifiers: &mut Vec<&str>) -> Option<ast::MmaB1Op> {
 // cp.async.bulk.tensor.dim.global.shared::cta{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
 // cp.reduce.async.bulk.tensor.dim.global.shared::cta.redOp{.tile}.bulk_group{.L2::cache_hint} [tensorMap, {coords}], [srcMem]{, cache-policy}
 // tensormap.replace.tile.field{.space}.b1024.type [tensorMap], {ord,} value
+// vote.{all,any,uni}.pred d, {!}a: the deprecated forms without .sync (below sm_70), over the active threads.
+// vote.ballot.b32 and the .sync forms stay with the instruction grammar.
+fn vote_without_sync<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let mode = match modifiers[..] {
+        ["all", "pred"] => VoteMode::All,
+        ["any", "pred"] => VoteMode::Any,
+        ["uni", "pred"] => VoteMode::Uni,
+        _ => return backtrack(),
+    };
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let negate = opt(Token::Exclamation).parse_next(stream)?.is_some();
+    let src = ParsedOperandStr::parse.parse_next(stream)?;
+    Ok(ast::Instruction::Vote {
+        data: ast::VoteDetails { mode, negate },
+        arguments: ast::VoteArgs { dst, src1: src, src2: None },
+    })
+}
+
 fn tensor_instruction<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
@@ -2870,11 +2892,16 @@ fn tensor_instruction<'a, 'input>(
     let arith = ["add", "sub", "mul", "fma"].contains(&opcode);
     let sparse = opcode == "spcompress" || opcode == "spdecompress";
     let tcgen05 = opcode == "tcgen05";
-    if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05 {
+    if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05
+        && opcode != "vote"
+    {
         return backtrack();
     }
     stream.input = &stream.input[1..];
     let mut modifiers = matrix_modifiers(stream);
+    if opcode == "vote" {
+        return vote_without_sync(stream, modifiers);
+    }
     if opcode == "cvt" {
         return cvt_narrow_instruction(stream, modifiers);
     }
@@ -6382,6 +6409,8 @@ derive_parser!(
     RawMulIntControl =  { .hi };
     ScalarType =        { .s32 };
 
+    // without a rounding mode (is_fusable): mad.rn on sm_20 and later, the product truncated before the addition
+    // on sm_1x
     mad{.ftz}{.sat}.f32      d, a, b, c => {
         ast::Instruction::Mad {
             data: ast::MadDetails::Float(
@@ -6390,7 +6419,7 @@ derive_parser!(
                     rounding: ast::RoundingMode::NearestEven,
                     flush_to_zero: Some(ftz),
                     saturate: sat,
-                    is_fusable: false,
+                    is_fusable: true,
                     relu: false,
                 }
             ),

@@ -5707,12 +5707,59 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    // mad.f32 of sm_1x: the product with its mantissa truncated to 24 bits (rounded toward zero), then added with
+    // rounding to nearest. The product rounded to nearest is one unit too far from zero when the exact error
+    // (fma(a, b, -p)) has the opposite sign.
+    fn emit_mad_sm_1x(&mut self, arguments: ptx_parser::MadArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let a = self.resolver.value(arguments.src1)?;
+        let b = self.resolver.value(arguments.src2)?;
+        let c = self.resolver.value(arguments.src3)?;
+        let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let builder = self.builder;
+        let p = unsafe { LLVMBuildFMul(builder, a, b, LLVM_UNNAMED.as_ptr()) };
+        let neg_p = unsafe { LLVMBuildFNeg(builder, p, LLVM_UNNAMED.as_ptr()) };
+        let err = self.emit_intrinsic(
+            c"llvm.fma.f32",
+            None,
+            vec![&ast::ScalarType::F32.into()],
+            vec![(a, f32_type), (b, f32_type), (neg_p, f32_type)],
+        )?;
+        unsafe {
+            let zero = LLVMConstReal(f32_type, 0.0);
+            let p_bits = LLVMBuildBitCast(builder, p, i32_type, LLVM_UNNAMED.as_ptr());
+            let err_bits = LLVMBuildBitCast(builder, err, i32_type, LLVM_UNNAMED.as_ptr());
+            let signs = LLVMBuildXor(builder, p_bits, err_bits, LLVM_UNNAMED.as_ptr());
+            let opposite = LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntSLT, signs, LLVMConstInt(i32_type, 0, 0), LLVM_UNNAMED.as_ptr());
+            let inexact = LLVMBuildFCmp(builder, LLVMRealPredicate::LLVMRealONE, err, zero, LLVM_UNNAMED.as_ptr());
+            let finite = {
+                let abs = LLVMBuildAnd(builder, p_bits, LLVMConstInt(i32_type, 0x7fff_ffff, 0), LLVM_UNNAMED.as_ptr());
+                LLVMBuildICmp(builder, LLVMIntPredicate::LLVMIntULT, abs, LLVMConstInt(i32_type, 0x7f80_0000, 0), LLVM_UNNAMED.as_ptr())
+            };
+            let back = LLVMBuildAnd(builder, opposite, inexact, LLVM_UNNAMED.as_ptr());
+            let back = LLVMBuildAnd(builder, back, finite, LLVM_UNNAMED.as_ptr());
+            let one_less = LLVMBuildSub(builder, p_bits, LLVMConstInt(i32_type, 1, 0), LLVM_UNNAMED.as_ptr());
+            let t_bits = LLVMBuildSelect(builder, back, one_less, p_bits, LLVM_UNNAMED.as_ptr());
+            let t = LLVMBuildBitCast(builder, t_bits, f32_type, LLVM_UNNAMED.as_ptr());
+            self.resolver.with_result(arguments.dst, |dst| LLVMBuildFAdd(builder, t, c, dst));
+        }
+        Ok(())
+    }
+
     fn emit_mad(
         &mut self,
         data: ptx_parser::MadDetails,
         arguments: ptx_parser::MadArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let mul_control = match data {
+            ptx_parser::MadDetails::Float(mad_float)
+                if mad_float.is_fusable
+                    && mad_float.type_ == ast::ScalarType::F32
+                    && !mad_float.saturate
+                    && super::super::instruction_mode_to_global_mode::sm_1x() =>
+            {
+                return self.emit_mad_sm_1x(arguments);
+            }
             ptx_parser::MadDetails::Float(mad_float) => {
                 return self.emit_fma(
                     mad_float,
