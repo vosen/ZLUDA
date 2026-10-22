@@ -50,10 +50,10 @@ def kernel_records(obj, a, tmp):
         (nlen,) = struct.unpack_from("<I", d, pos + 8)
         name = d[pos + 12:pos + 12 + nlen].decode()
         q = pos + 12 + (nlen + 3) // 4 * 4
-        _halves, tg_half, glob, _gprs, _tg, _stack, nargs = struct.unpack_from("<7I", d, q)
+        _halves, tg_half, glob, _gprs, _tg, stack, nargs = struct.unpack_from("<7I", d, q)
         q += 28
         args = [struct.unpack_from("<3I", d, q + 12 * i) for i in range(nargs)]
-        out[name] = (tg_half // 2, args, glob)
+        out[name] = (tg_half // 2, args, glob, stack)
         pos += size
     return out
 
@@ -80,10 +80,13 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). heap: the device heap of malloc / free, its size or
     its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
     zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
-    tg_uniform, slots, glob = kernel_records(obj, a, tmp)[name]
+    tg_uniform, slots, glob, stack = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
     cmd = [a.agx_run, code, "--grid", "%d,%d,1" % grid, "--wg", "%d,%d,1" % wg]
+    # on the GPU, a kernel that uses the stack needs its scratch (the simulator gives every thread one)
+    if stack and os.path.basename(a.agx_run).startswith("agx_run_hw"):
+        cmd += ["--stack", str(stack)]
     uniforms, dumps, bases = {}, [], [0x1000000 * (k + 1) for k in range(16)][::-1]
     for (kind, value, *rest), (_k, nbytes, half) in zip(args, slots):
         u = half // 2

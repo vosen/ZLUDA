@@ -67,6 +67,16 @@ fn system_memory() -> u64 {
     s.totalram as u64 * s.mem_unit as u64
 }
 
+/// The memory limit of the process's cgroup (v2 memory.max) and its current use, if it has a limit.
+fn cgroup_memory() -> Option<(u64, u64)> {
+    let cgroup = std::fs::read_to_string("/proc/self/cgroup").ok()?;
+    let path = cgroup.lines().find_map(|l| l.strip_prefix("0::"))?;
+    let dir = std::path::Path::new("/sys/fs/cgroup").join(path.trim_start_matches('/'));
+    let max = std::fs::read_to_string(dir.join("memory.max")).ok()?.trim().parse::<u64>().ok()?;
+    let current = std::fs::read_to_string(dir.join("memory.current")).ok()?.trim().parse::<u64>().unwrap_or(0);
+    Some((max, current))
+}
+
 /// The allocation containing `[va, va + len)`, by its start address.
 fn find<T>(allocs: &BTreeMap<u64, T>, va: u64, len: u64, size: impl Fn(&T) -> u64) -> Option<u64> {
     let (&start, a) = allocs.range(..=va).next_back()?;
@@ -302,11 +312,28 @@ impl Context {
         Some(s[..s.iter().position(|&c| c == 0)?].to_vec())
     }
 
-    /// cuMemGetInfo: (free, total). The GPU shares system memory, so free is the system's available memory.
+    /// cuMemGetInfo: (free, total). The GPU shares system memory and the UAPI reports no figures of its own
+    /// (ptx-re-blockers B39): free is the system's available memory (MemAvailable, which counts reclaimable
+    /// caches), both within the process's cgroup limit if it has one.
     pub fn mem_info(&self) -> (u64, u64) {
+        let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+        let field = |name: &str| {
+            meminfo
+                .lines()
+                .find_map(|l| l.strip_prefix(name)?.trim().strip_suffix("kB")?.trim().parse::<u64>().ok())
+                .map(|kb| kb * 1024)
+        };
         let mut s: libc::sysinfo = unsafe { std::mem::zeroed() };
-        let free = if unsafe { libc::sysinfo(&mut s) } == 0 { s.freeram as u64 * s.mem_unit as u64 } else { 0 };
-        (free, self.props.total_memory)
+        let free = field("MemAvailable:").unwrap_or_else(|| {
+            if unsafe { libc::sysinfo(&mut s) } == 0 { s.freeram as u64 * s.mem_unit as u64 } else { 0 }
+        });
+        let mut total = self.props.total_memory;
+        let mut free = free.min(total);
+        if let Some((limit, used)) = cgroup_memory() {
+            total = total.min(limit);
+            free = free.min(limit.saturating_sub(used));
+        }
+        (free, total)
     }
 }
 

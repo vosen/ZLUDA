@@ -837,6 +837,10 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   its scratch size bucket. The buffer grows to the largest kernel's stack
   size (for example 57 MiB for 320 bytes per thread on 38 cores, 912 MiB for
   4 KiB) and is kept until the context is destroyed.
+* `cuMemGetInfo` reports the system's available memory (MemAvailable) as free and its memory as total, both
+  within the process's cgroup limit (`memory.max`), since the GPU shares system memory and the UAPI reports no
+  figures of its own (ptx-re-blockers B39). Streams have one priority (`cuCtxGetStreamPriorityRange` gives [0, 0]:
+  the queue priorities change nothing, B38).
 * IPC and host memory (dma-buf, ptx-re-blockers B36): `cuIpcGetMemHandle` exports the allocation's object as a
   dma-buf and puts the process id and the descriptor in the handle; `cuIpcOpenMemHandle` in another process takes
   the descriptor with `pidfd_getfd` (the same user, and `kernel.yama.ptrace_scope` 0 or a parent process) and binds

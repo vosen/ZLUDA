@@ -657,7 +657,8 @@ impl Pipeline {
 }
 
 /// The CDM control stream of one direct dispatch, followed by a USC-cache-invalidating barrier and the stream
-/// terminator. `global` is in threads and must be a multiple of `local` in every dimension.
+/// terminator. `global` is in threads; when it is not a multiple of `local`, the last workgroups of a dimension
+/// are partial, which the hardware runs exactly (ptx-re-blockers B2a).
 pub fn cdm_dispatch(pipeline_words: u32, uniform_halves: u32, g14x: bool, global: [u32; 3], local: [u32; 3]) -> Vec<u8> {
     cdm_dispatch_with(pipeline_words, uniform_halves, g14x, global, local, true)
 }
@@ -676,9 +677,7 @@ pub fn cdm_dispatch_with(
     assert!(pipeline_words % 64 == 0);
     let threads: u64 = local.iter().map(|&x| x as u64).product();
     assert!(threads >= 1 && threads <= 1024);
-    for i in 0..3 {
-        assert!(global[i] >= 1 && global[i] % local[i] == 0, "partial workgroups are not supported");
-    }
+    assert!(global.iter().all(|&g| g >= 1));
     let mut c = Vec::new();
     let put = |c: &mut Vec<u8>, v: u32| c.extend_from_slice(&v.to_le_bytes());
     // Launch word 0: uniform registers in groups of 64 halves at bit 1 (3 bits, 8 groups as 0); direct mode; block
@@ -1047,8 +1046,13 @@ impl Queue {
 
     /// Submits one compute command and waits for it.
     pub fn run_compute(&mut self, cdm_base: u64, cdm_end: u64) -> io::Result<Timing> {
+        self.run_compute_with_helper(cdm_base, cdm_end, None)
+    }
+
+    /// `run_compute` with the helper program of `Vm::scratch` (a shader that uses the stack).
+    pub fn run_compute_with_helper(&mut self, cdm_base: u64, cdm_end: u64, helper: Option<(u32, u64)>) -> io::Result<Timing> {
         let h0 = Instant::now();
-        let fence = self.submit_compute(cdm_base, cdm_end, &[])?;
+        let fence = self.submit_compute_with_helper(cdm_base, cdm_end, helper, &[])?;
         self.wait(fence, self.timeout)?;
         let host = h0.elapsed();
         let (start, end) = self.timing(fence).unwrap();
