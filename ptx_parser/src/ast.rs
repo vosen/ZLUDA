@@ -263,6 +263,119 @@ ptx_parser_macros::generate_instruction_type!(
                 src3: Option<T>,
             }
         },
+        // fabric.* (PTX ISA 9.4 9.7.10.4-5) on the logical endpoints of zluda_ptx_impl_agx_cvt.c
+        Fabric {
+            type: Type::Scalar(ScalarType::B8),
+            data: FabricDetails,
+            arguments<T>: {
+                src_le: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_off: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_counter: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_mem: {
+                    repr: Option<T>,
+                    space: { StateSpace::Shared },
+                },
+                src_mem2: {
+                    repr: Option<T>,
+                    space: { StateSpace::Shared },
+                },
+                src_size: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_mbar: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+                src_mask: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_tm: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_d0: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d4: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c4: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // multimem.ld_reduce / st / red (PTX ISA 9.7.10.15) over the multimem windows (zluda_ptx_impl_agx_cvt.c)
+        Multimem {
+            data: MultimemDetails,
+            arguments<T>: {
+                dst: {
+                    repr: Option<T>,
+                    type: { data.value_type() },
+                },
+                src_addr: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_value: {
+                    repr: Option<T>,
+                    type: { data.value_type() },
+                },
+            }
+        },
         // add / sub / mul / fma of the alternate floating point x4 types (PTX ISA 9.4 9.7.6), in software
         AltFpX4 {
             type: Type::Scalar(ScalarType::B32),
@@ -3128,6 +3241,59 @@ pub struct MbarrierWaitDetails {
     pub try_wait: bool,
     // .phase_type::conditional: the conditional phase of a .layout::v1 object
     pub conditional: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct FabricDetails {
+    /// 0 submit / wait, 1 try_get, 2 try_put, 3 try_red, 4 try_pullred, 5 try_atom, 6 try_get.tensor, 7 try_put.tensor
+    pub kind: u8,
+    /// the dimensions of a .tensor form
+    pub rank: u8,
+    /// 0 add, 1 min, 2 max, 3 and, 4 or, 5 xor, 6 inc, 7 dec, 8 exch, 9 cas
+    pub op: u8,
+    /// as MultimemDetails::type_
+    pub type_: u8,
+    /// bit 0 .multimem, bit 1 .cp_mask, bit 2 .counted::bytes
+    pub flags: u8,
+}
+
+#[derive(Copy, Clone)]
+pub struct MultimemDetails {
+    /// 0 ld_reduce, 1 st, 2 red
+    pub kind: u8,
+    /// 0 add, 1 min, 2 max, 3 and, 4 or, 5 xor
+    pub op: u8,
+    /// b32 u32 s32 b64 u64 s64 f32 f64 f16 bf16 f16x2 bf16x2 e4m3 e5m2 e4m3x2 e5m2x2 e4m3x4 e5m2x4, numbered from 0
+    pub type_: u8,
+    /// .v2 / .v4 / .v8 (1 without)
+    pub vector: u8,
+    /// 0, 1 .acc::f32, 2 .acc::f16
+    pub acc: u8,
+}
+
+impl MultimemDetails {
+    pub fn element_bytes(&self) -> u32 {
+        match self.type_ {
+            12 | 13 => 1,
+            8 | 9 | 14 | 15 => 2,
+            3 | 4 | 5 | 7 => 8,
+            _ => 4,
+        }
+    }
+
+    pub fn value_type(&self) -> Type {
+        let scalar = match self.element_bytes() {
+            1 => ScalarType::B8,
+            2 => ScalarType::B16,
+            8 => ScalarType::B64,
+            _ => ScalarType::B32,
+        };
+        if self.vector > 1 {
+            Type::Vector(self.vector, scalar)
+        } else {
+            Type::Scalar(scalar)
+        }
+    }
 }
 
 /// The element kinds of the alternate floating point x4 types, as __zluda_ptx_impl_agx_altfp_x4 numbers them

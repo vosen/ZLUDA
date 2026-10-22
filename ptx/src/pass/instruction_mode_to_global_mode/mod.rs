@@ -2214,6 +2214,8 @@ fn get_instruction_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> Instruc
         | ast::Instruction::AltFpX4 { .. }
         | ast::Instruction::CvtRs { .. }
         | ast::Instruction::CvtPzo { .. }
+        | ast::Instruction::Multimem { .. }
+        | ast::Instruction::Fabric { .. }
         | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }

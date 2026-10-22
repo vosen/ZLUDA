@@ -268,6 +268,8 @@ fn run_instruction<'input>(
         | ast::Instruction::CvtRs { .. }
         | ast::Instruction::CvtPzo { .. }
         | ast::Instruction::FmaOob { .. }
+        | ast::Instruction::Multimem { .. }
+        | ast::Instruction::Fabric { .. }
         | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Slct { .. }
         | ast::Instruction::Testp { .. }

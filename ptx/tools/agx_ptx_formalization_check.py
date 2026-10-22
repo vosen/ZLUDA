@@ -33,7 +33,7 @@ HARNESS = ('.buffer', '.launch', '.cooplaunch', '.print', '.expect', '.patch', '
            '.tensormap', '.texture', '.sampler', '.surface', '.multimem', '.fabric',
            '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
 IGNORED = ('.print', '.memmodel', '.ub', '.occupancy', '.convergence', '.isacheck')
-UNSUPPORTED = ('.multimem', '.fabric')
+UNSUPPORTED = ()
 
 SIZES = {'b8': 1, 'u8': 1, 's8': 1, 'b16': 2, 'u16': 2, 's16': 2, 'f16': 2, 'bf16': 2,
          'b32': 4, 'u32': 4, 's32': 4, 'f32': 4, 'f16x2': 4, 'bf16x2': 4,
@@ -42,6 +42,12 @@ SIZES = {'b8': 1, 'u8': 1, 's8': 1, 'b16': 2, 'u16': 2, 's16': 2, 'f16': 2, 'bf1
 BASE = 0x10000000          # first harness buffer
 PARAM_BASE = 0x08000000    # kernel parameter memory
 GLOBALS_BASE = 0x04000000  # global data buffer (.agx.globals)
+# the multimem window table of zluda_ptx_impl_agx_cvt.c: window k at MM_BASE + (k + 1) * MM_WINDOW, entry k (64
+# bytes: the count, then the device buffers) at MM_BASE + 64 k
+MM_BASE = 0x700000000000
+MM_WINDOW = 1 << 36
+# the fabric logical endpoint table: entry le (64 bytes: the count, the size, the device buffers) at FAB_TABLE + 64 le
+FAB_TABLE = 0x6ff000000000
 
 
 class Unsupported(Exception):
@@ -447,6 +453,8 @@ def run_test(path, args):
 
         mem = Memory()
         syms, bufs, last = {}, {}, None
+        mm_entries = []
+        fab_entries = {}
         globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
         for off, n, target in relocs:
             globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
@@ -488,6 +496,23 @@ def run_test(path, args):
                 last = m.group(1)
                 for k, v in enumerate(vals):
                     mem.write(addr + k * SIZES[t], SIZES[t], lit_bits(v, t, syms))
+            elif kw == '.multimem':
+                m = re.fullmatch(r'\.multimem ([\w$.]+) \.size (\d+) \{(.*?)\}\s*;?', d)
+                if not m:
+                    raise Unsupported(d)
+                members = [syms[b.strip()] for b in m.group(3).split(',') if b.strip()]
+                if len(members) > 7:
+                    raise Unsupported('more than 7 multimem devices')
+                mm_entries.append(members)
+                syms[m.group(1)] = MM_BASE + len(mm_entries) * MM_WINDOW
+            elif kw == '.fabric':
+                m = re.fullmatch(r'\.fabric (\d+) \.size (\d+) \{(.*?)\}\s*;?', d)
+                if not m or int(m.group(1)) > 255:
+                    raise Unsupported(d)
+                members = [syms[b.strip()] for b in m.group(3).split(',') if b.strip()]
+                if len(members) > 7:
+                    raise Unsupported('more than 7 fabric devices')
+                fab_entries[int(m.group(1))] = (int(m.group(2)), members)
             elif kw == '.tensormap':
                 m = re.fullmatch(r'\.tensormap ([\w$.]+) \.(\w+) ([\w$.]+) \.dims \{(.*?)\} \.strides \{(.*?)\} '
                                  r'\.box \{(.*?)\} \.swizzle (\d+)(?: \.im2col \{(.*?)\} \{(.*?)\} \.estrides \{(.*?)\})?\s*;?', d)
@@ -619,6 +644,23 @@ def run_test(path, args):
                        '--map', '%#x=%s' % (GLOBALS_BASE, f_glob),
                        '--dump', '%#x=%d:%s' % (BASE, len(mem.buf), f_mem),
                        '--dump', '%#x=%d:%s' % (GLOBALS_BASE, len(globals_mem), f_glob)]
+                if mm_entries:
+                    f_mm = os.path.join(tmp, 'mm.bin')
+                    with open(f_mm, 'wb') as f:
+                        for members in mm_entries:
+                            row = len(members).to_bytes(8, 'little') + b''.join(a.to_bytes(8, 'little') for a in members)
+                            f.write(row + b'\0' * (64 - len(row)))
+                    cmd += ['--map', '%#x=%s' % (MM_BASE, f_mm)]
+                if fab_entries:
+                    f_fab = os.path.join(tmp, 'fab.bin')
+                    table = bytearray(64 * (max(fab_entries) + 1))
+                    for le, (size, members) in fab_entries.items():
+                        row = len(members).to_bytes(4, 'little') + size.to_bytes(4, 'little') + \
+                            b''.join(a.to_bytes(8, 'little') for a in members)
+                        table[64 * le:64 * le + len(row)] = row
+                    with open(f_fab, 'wb') as f:
+                        f.write(table)
+                    cmd += ['--map', '%#x=%s' % (FAB_TABLE, f_fab)]
                 for u, v in uniforms:
                     cmd += ['--uniform', '%d=%d' % (u, v)]
                 if args.agx_strict:

@@ -3112,7 +3112,7 @@ fn tensor_instruction<'a, 'input>(
     let tcgen05 = opcode == "tcgen05";
     if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05
         && opcode != "vote" && opcode != "fence" && opcode != "createpolicy" && opcode != "mbarrier"
-        && opcode != "atom" && opcode != "red"
+        && opcode != "atom" && opcode != "red" && opcode != "multimem" && opcode != "fabric"
     {
         return backtrack();
     }
@@ -3132,6 +3132,12 @@ fn tensor_instruction<'a, 'input>(
     }
     if opcode == "atom" || opcode == "red" {
         return atom_float_any_order(stream, opcode, modifiers);
+    }
+    if opcode == "multimem" {
+        return multimem_instruction(stream, modifiers);
+    }
+    if opcode == "fabric" {
+        return fabric_instruction(stream, modifiers);
     }
     if opcode == "cvt" {
         return cvt_narrow_instruction(stream, modifiers);
@@ -4141,6 +4147,281 @@ fn mixed_float_instruction<'a, 'input>(
         },
         arguments: MixedFloatArgs { dst, src1, src2, src3 },
     })
+}
+
+// fabric.try_get / try_put / try_red / try_pullred / try_atom (the forms without .tensor), fabric.submit, fabric.wait
+fn fabric_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let none = ast::FabricArgs {
+        src_le: None,
+        src_off: None,
+        src_counter: None,
+        src_mem: None,
+        src_mem2: None,
+        src_size: None,
+        src_mbar: None,
+        src_mask: None,
+        src_tm: None,
+        src_d0: None,
+        src_d1: None,
+        src_d2: None,
+        src_d3: None,
+        src_d4: None,
+        src_c0: None,
+        src_c1: None,
+        src_c2: None,
+        src_c3: None,
+        src_c4: None,
+    };
+    let kind = match modifiers.first().copied() {
+        Some("submit" | "wait") => {
+            return Ok(ast::Instruction::Fabric { data: ast::FabricDetails { kind: 0, rank: 0, op: 0, type_: 0, flags: 0 }, arguments: none });
+        }
+        Some("try_get") => 1u8,
+        Some("try_put") => 2,
+        Some("try_red") => 3,
+        Some("try_pullred") => 4,
+        Some("try_atom") => 5,
+        _ => return backtrack(),
+    };
+    modifiers.remove(0);
+    if take_modifier(&mut modifiers, "tensor") {
+        return fabric_tensor(stream, modifiers, kind, none);
+    }
+    let mut flags = 0u8;
+    for (name, bit) in [("multimem", 1u8), ("cp_mask", 2), ("counted::bytes", 4)] {
+        if take_modifier(&mut modifiers, name) {
+            flags |= bit;
+        }
+    }
+    let op = ["add", "min", "max", "and", "or", "xor", "inc", "dec", "exch", "cas"]
+        .iter()
+        .position(|o| take_modifier(&mut modifiers, o))
+        .map(|p| p as u8);
+    const TYPES: [&str; 18] = [
+        "b32", "u32", "s32", "b64", "u64", "s64", "f32", "f64", "f16", "bf16", "f16x2", "bf16x2", "e4m3", "e5m2",
+        "e4m3x2", "e5m2x2", "e4m3x4", "e5m2x4",
+    ];
+    let type_ = TYPES.iter().position(|t| take_modifier(&mut modifiers, t)).map(|p| p as u8);
+    fabric_drop_modifiers(&mut modifiers);
+    if !modifiers.is_empty() || (matches!(kind, 3 | 4 | 5) && (op.is_none() || type_.is_none())) {
+        return backtrack();
+    }
+    let data = ast::FabricDetails { kind, rank: 0, op: op.unwrap_or(0), type_: type_.unwrap_or(0), flags };
+    let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    let memory = |stream: &mut PtxParser<'a, 'input>| memory_operand(stream);
+    // [leId, off{, counter}]
+    let endpoint = |stream: &mut PtxParser<'a, 'input>| -> PResult<(ParsedOperandStr<'input>, ParsedOperandStr<'input>, Option<ParsedOperandStr<'input>>)> {
+        Token::LBracket.parse_next(stream)?;
+        let le = ParsedOperandStr::parse.parse_next(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let off = ParsedOperandStr::parse.parse_next(stream)?;
+        let counter = opt(preceded(Token::Comma, ParsedOperandStr::parse)).parse_next(stream)?;
+        Token::RBracket.parse_next(stream)?;
+        Ok((le, off, counter))
+    };
+    let mut a = none;
+    match kind {
+        1 | 4 => {
+            a.src_mem = Some(memory(stream)?);
+            comma(stream)?;
+            let (le, off, _) = endpoint(stream)?;
+            a.src_le = Some(le);
+            a.src_off = Some(off);
+            comma(stream)?;
+            a.src_size = Some(operand(stream)?);
+            comma(stream)?;
+            a.src_mbar = Some(memory(stream)?);
+            if kind == 4 {
+                comma(stream)?;
+                a.src_mask = Some(operand(stream)?);
+            }
+        }
+        2 | 3 => {
+            let (le, off, counter) = endpoint(stream)?;
+            if counter.is_some() != (flags & 4 != 0) {
+                return backtrack();
+            }
+            a.src_le = Some(le);
+            a.src_off = Some(off);
+            a.src_counter = counter;
+            comma(stream)?;
+            a.src_mem = Some(memory(stream)?);
+            comma(stream)?;
+            a.src_size = Some(operand(stream)?);
+            comma(stream)?;
+            a.src_mbar = Some(memory(stream)?);
+            if flags & 2 != 0 {
+                comma(stream)?;
+                a.src_mask = Some(operand(stream)?);
+            }
+        }
+        _ => {
+            let (le, off, _) = endpoint(stream)?;
+            a.src_le = Some(le);
+            a.src_off = Some(off);
+            comma(stream)?;
+            a.src_mem = Some(memory(stream)?);
+            comma(stream)?;
+            a.src_mem2 = Some(memory(stream)?);
+            comma(stream)?;
+            a.src_mbar = Some(memory(stream)?);
+        }
+    }
+    Ok(ast::Instruction::Fabric { data, arguments: a })
+}
+
+// the completion mechanisms, semantics and scopes do not change the emulation
+fn fabric_drop_modifiers(modifiers: &mut Vec<&str>) {
+    modifiers.retain(|m| {
+        !matches!(
+            *m,
+            "async" | "shared::cta" | "shared::cluster" | "mbarrier::complete_tx::bytes" | "mbarrier::complete_tx::16B"
+                | "mbarrier::report::fabric" | "relaxed" | "release" | "acquire" | "sys" | "gpu" | "cluster" | "b128"
+                | "sync" | "aligned"
+        )
+    });
+}
+
+// fabric.try_get.tensor{.multimem}.Nd...tile [smem], [tm, le, off{, {dims}}, {coords}], [mbar];
+// fabric.try_put.tensor{.multimem}.Nd...tile [tm, le, off{, {dims}}, {coords}], [smem], size, [mbar]
+fn fabric_tensor<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+    kind: u8,
+    mut a: ast::FabricArgs<ParsedOperandStr<'input>>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    if kind != 1 && kind != 2 {
+        return backtrack();
+    }
+    let flags = take_modifier(&mut modifiers, "multimem") as u8;
+    let rank = match ["1d", "2d", "3d", "4d", "5d"].iter().position(|d| take_modifier(&mut modifiers, d)) {
+        Some(r) => r as u8 + 1,
+        None => return backtrack(),
+    };
+    take_modifier(&mut modifiers, "tile");
+    take_modifier(&mut modifiers, "override::global_address");
+    let dims = take_modifier(&mut modifiers, "override::global_dim");
+    fabric_drop_modifiers(&mut modifiers);
+    if !modifiers.is_empty() {
+        return backtrack();
+    }
+    let vector = |stream: &mut PtxParser<'a, 'input>| -> PResult<Vec<ParsedOperandStr<'input>>> {
+        delimited(Token::LBrace, separated(1..=5, ParsedOperandStr::parse, Token::Comma), Token::RBrace).parse_next(stream)
+    };
+    let tensor = |stream: &mut PtxParser<'a, 'input>, a: &mut ast::FabricArgs<ParsedOperandStr<'input>>| -> PResult<()> {
+        Token::LBracket.parse_next(stream)?;
+        a.src_tm = Some(ParsedOperandStr::parse.parse_next(stream)?);
+        Token::Comma.parse_next(stream)?;
+        a.src_le = Some(ParsedOperandStr::parse.parse_next(stream)?);
+        Token::Comma.parse_next(stream)?;
+        a.src_off = Some(ParsedOperandStr::parse.parse_next(stream)?);
+        Token::Comma.parse_next(stream)?;
+        let d = if dims {
+            let d = vector(stream)?;
+            Token::Comma.parse_next(stream)?;
+            d
+        } else {
+            Vec::new()
+        };
+        let c = vector(stream)?;
+        Token::RBracket.parse_next(stream)?;
+        if c.len() != rank as usize || (dims && d.len() != rank as usize) {
+            return backtrack();
+        }
+        let mut d = d.into_iter();
+        let mut c = c.into_iter();
+        (a.src_d0, a.src_d1, a.src_d2, a.src_d3, a.src_d4) = (d.next(), d.next(), d.next(), d.next(), d.next());
+        (a.src_c0, a.src_c1, a.src_c2, a.src_c3, a.src_c4) = (c.next(), c.next(), c.next(), c.next(), c.next());
+        Ok(())
+    };
+    if kind == 1 {
+        a.src_mem = Some(memory_operand(stream)?);
+        Token::Comma.parse_next(stream)?;
+        tensor(stream, &mut a)?;
+    } else {
+        tensor(stream, &mut a)?;
+        Token::Comma.parse_next(stream)?;
+        a.src_mem = Some(memory_operand(stream)?);
+        Token::Comma.parse_next(stream)?;
+        a.src_size = Some(ParsedOperandStr::parse.parse_next(stream)?);
+    }
+    Token::Comma.parse_next(stream)?;
+    a.src_mbar = Some(memory_operand(stream)?);
+    let data = ast::FabricDetails { kind: kind + 5, rank, op: 0, type_: 0, flags };
+    Ok(ast::Instruction::Fabric { data, arguments: a })
+}
+
+// multimem.ld_reduce{.sem}{.scope}{.global}.op{.acc_prec}{.vec}.type d, [a];
+// multimem.st{.sem}{.scope}{.global}{.vec}.type [a], b; multimem.red{.sem}{.scope}{.global}.op{.vec}.type [a], b
+fn multimem_instruction<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    let kind = if take_modifier(&mut modifiers, "ld_reduce") {
+        0u8
+    } else if take_modifier(&mut modifiers, "st") {
+        1
+    } else if take_modifier(&mut modifiers, "red") {
+        2
+    } else {
+        return backtrack();
+    };
+    for m in ["weak", "relaxed", "acquire", "release", "cta", "cluster", "gpu", "sys", "global"] {
+        take_modifier(&mut modifiers, m);
+    }
+    let op = ["add", "min", "max", "and", "or", "xor"]
+        .iter()
+        .position(|o| take_modifier(&mut modifiers, o))
+        .map(|p| p as u8);
+    let acc = if take_modifier(&mut modifiers, "acc::f32") {
+        1u8
+    } else if take_modifier(&mut modifiers, "acc::f16") {
+        2
+    } else {
+        0
+    };
+    let vector = if take_modifier(&mut modifiers, "v2") {
+        2u8
+    } else if take_modifier(&mut modifiers, "v4") {
+        4
+    } else if take_modifier(&mut modifiers, "v8") {
+        8
+    } else {
+        1
+    };
+    const TYPES: [&str; 18] = [
+        "b32", "u32", "s32", "b64", "u64", "s64", "f32", "f64", "f16", "bf16", "f16x2", "bf16x2", "e4m3", "e5m2",
+        "e4m3x2", "e5m2x2", "e4m3x4", "e5m2x4",
+    ];
+    let type_ = match modifiers.as_slice() {
+        [t] => match TYPES.iter().position(|x| x == t) {
+            Some(p) => p as u8,
+            None => return backtrack(),
+        },
+        _ => return backtrack(),
+    };
+    if (kind == 1) != op.is_none() {
+        return backtrack();
+    }
+    let data = ast::MultimemDetails { kind, op: op.unwrap_or(0), type_, vector, acc };
+    let comma = |stream: &mut PtxParser<'a, 'input>| Token::Comma.parse_next(stream).map(|_| ());
+    let address = |stream: &mut PtxParser<'a, 'input>| {
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)
+    };
+    let (dst, src_addr, src_value) = if kind == 0 {
+        let d = ParsedOperandStr::parse.parse_next(stream)?;
+        comma(stream)?;
+        (Some(d), address(stream)?, None)
+    } else {
+        let a = address(stream)?;
+        comma(stream)?;
+        (None, a, Some(ParsedOperandStr::parse.parse_next(stream)?))
+    };
+    Ok(ast::Instruction::Multimem { data, arguments: MultimemArgs { dst, src_addr, src_value } })
 }
 
 // add / sub{.rn}{.satfinite}.dtype.atype d, a, c; mul{.rn}{.satfinite}.dtype.atype.ctype d, a, c;
@@ -8607,8 +8888,10 @@ derive_parser!(
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-reduce-async-bulk
     // cp.reduce.async.bulk.shared::cluster.shared::cta.mbarrier::complete_tx::bytes.redOp.type [dstmem], [srcmem], size, [mbar]
     // cp.reduce.async.bulk.global.shared::cta.bulk_group{.level::cache_hint}.redOp.type [dstmem], [srcmem], size{, cache-policy}
-    cp.reduce.async.bulk{.shared::cluster}{.global}.shared::cta{.completion_mechanism}{.bulk_group}{.level::cache_hint}.redOp.type
+    cp.reduce.async.bulk{.shared::cluster}{.global}.shared::cta{.completion_mechanism}{.bulk_group}{.level::cache_hint}.redOp{.noftz}.type
                                             [dstmem], [srcmem], size{, [mbar]}{, cache_policy} => {
+        // .add.f16 / .bf16 keep subnormals with .noftz and without it
+        let _ = noftz;
         let valid = if shared_cluster {
             !global && completion_mechanism && !bulk_group && !level_cache_hint && mbar.is_some() && cache_policy.is_none()
         } else {
@@ -8636,7 +8919,7 @@ derive_parser!(
     .completion_mechanism = { .mbarrier::complete_tx::bytes };
     .level::cache_hint = { .L2::cache_hint };
     .redOp: RawAtomicOp = { .and, .or, .xor, .add, .inc, .dec, .min, .max };
-    .type: ScalarType = { .b32, .u32, .s32, .b64, .u64, .s64, .f32, .f64 };
+    .type: ScalarType = { .b32, .u32, .s32, .b64, .u64, .s64, .f32, .f64, .f16, .bf16 };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#logic-and-shift-instructions-shf
     shf.dir.mode.b32  d, a, b, c => {

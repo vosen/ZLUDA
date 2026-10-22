@@ -1166,6 +1166,8 @@ impl<'a> MethodEmitContext<'a> {
             // expanded by insert_post_saturation
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
             ast::Instruction::AltFpX4 { data, arguments } => self.emit_alt_fp_x4(data, arguments),
+            ast::Instruction::Multimem { data, arguments } => self.emit_multimem(data, arguments),
+            ast::Instruction::Fabric { data, arguments } => self.emit_fabric(data, arguments),
             ast::Instruction::CvtRs { data, arguments } => self.emit_cvt_rs(data, arguments),
             ast::Instruction::CvtPzo { data, arguments } => {
                 let kind = self.const_u32(data.kind as u64);
@@ -7644,6 +7646,111 @@ impl<'a> MethodEmitContext<'a> {
         Ok(())
     }
 
+    // the endpoint table of zluda_ptx_impl_agx_cvt.c; the helpers complete the transfers on the mbarrier
+    fn emit_fabric(&mut self, data: ast::FabricDetails, arguments: ast::FabricArgs<SpirvWord>) -> Result<(), TranslateError> {
+        if data.kind == 0 {
+            return Ok(());
+        }
+        let le = self.i32_value(arguments.src_le)?;
+        let off = self.i64_value(arguments.src_off.ok_or_else(error_unreachable)?)?;
+        if data.kind >= 6 {
+            let tm = self.i64_value(arguments.src_tm.ok_or_else(error_unreachable)?)?;
+            let tm = unsafe {
+                LLVMBuildIntToPtr(self.builder, tm, get_pointer_type(self.context, ast::StateSpace::Generic)?, LLVM_UNNAMED.as_ptr())
+            };
+            let dims = [arguments.src_d0, arguments.src_d1, arguments.src_d2, arguments.src_d3, arguments.src_d4];
+            let nd = self.const_u32(dims.iter().filter(|d| d.is_some()).count() as u64);
+            let mut args = vec![tm, le, off, nd];
+            for x in dims.into_iter().chain([arguments.src_c0, arguments.src_c1, arguments.src_c2, arguments.src_c3, arguments.src_c4]) {
+                args.push(self.i32_value(x)?);
+            }
+            args.push(self.resolver.value(arguments.src_mem.ok_or_else(error_unreachable)?)?);
+            args.push(self.i32_value(arguments.src_size)?);
+            args.push(self.const_u32((data.flags & 1) as u64 | if data.kind == 7 { 2 } else { 0 }));
+            args.push(self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbar.ok_or_else(error_unreachable)?)?);
+            self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_tensor", None, None, &args)?;
+            return Ok(());
+        }
+        let counter = match arguments.src_counter {
+            Some(c) => self.i64_value(c)?,
+            None => unsafe { LLVMConstInt(LLVMInt64TypeInContext(self.context), 0, 0) },
+        };
+        let mem = self.resolver.value(arguments.src_mem.ok_or_else(error_unreachable)?)?;
+        let mbar = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbar.ok_or_else(error_unreachable)?)?;
+        let size = self.i32_value(arguments.src_size)?;
+        let desc = self.const_u32(data.op as u64 | (data.type_ as u64) << 4);
+        let flags = self.const_u32(data.flags as u64);
+        match data.kind {
+            1 => self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_get", None, None, &[mem, le, off, size, mbar])?,
+            2 => {
+                let mask = self.i32_value(arguments.src_mask)?;
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_put", None, None, &[le, off, counter, mem, size, mask, flags, mbar])?
+            }
+            3 => self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_red", None, None, &[le, off, counter, mem, size, desc, flags, mbar])?,
+            4 => {
+                let lane = self.emit_lane_id()?;
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_pullred", None, None, &[mem, le, off, size, desc, lane, mbar])?
+            }
+            _ => {
+                let src = self.resolver.value(arguments.src_mem2.ok_or_else(error_unreachable)?)?;
+                self.emit_agx_helper(c"__zluda_ptx_impl_agx_fabric_atom", None, None, &[le, off, mem, src, desc, mbar])?
+            }
+        };
+        Ok(())
+    }
+
+    // each element of the vector at its own address, through the window table (zluda_ptx_impl_agx_cvt.c)
+    fn emit_multimem(&mut self, data: ast::MultimemDetails, arguments: ast::MultimemArgs<SpirvWord>) -> Result<(), TranslateError> {
+        let bytes = data.element_bytes();
+        let desc = self.const_u32((data.op as u64) | (data.type_ as u64) << 3 | (data.acc as u64) << 8);
+        let address = self.i64_value(arguments.src_addr)?;
+        let b = self.builder;
+        unsafe {
+            let i64_type = LLVMInt64TypeInContext(self.context);
+            let i32_type = LLVMInt32TypeInContext(self.context);
+            let element_type = LLVMIntTypeInContext(self.context, 8 * bytes);
+            let at = |i: u32| LLVMBuildAdd(b, address, LLVMConstInt(i64_type, (i * bytes) as u64, 0), LLVM_UNNAMED.as_ptr());
+            if data.kind == 0 {
+                let dst = arguments.dst.ok_or_else(error_unreachable)?;
+                let mut elements = Vec::new();
+                for i in 0..data.vector as u32 {
+                    let a = at(i);
+                    let v = self.emit_agx_helper(c"__zluda_ptx_impl_agx_mm_ld_reduce", None, Some(ast::ScalarType::B64), &[a, desc])?;
+                    elements.push(LLVMBuildTrunc(self.builder, v, element_type, LLVM_UNNAMED.as_ptr()));
+                }
+                let value = if data.vector == 1 {
+                    elements[0]
+                } else {
+                    let mut v = LLVMGetUndef(LLVMVectorType(element_type, data.vector as u32));
+                    for (i, e) in elements.into_iter().enumerate() {
+                        v = LLVMBuildInsertElement(self.builder, v, e, LLVMConstInt(i32_type, i as u64, 0), LLVM_UNNAMED.as_ptr());
+                    }
+                    v
+                };
+                self.resolver.register(dst, value);
+            } else {
+                let source = self.resolver.value(arguments.src_value.ok_or_else(error_unreachable)?)?;
+                for i in 0..data.vector as u32 {
+                    let e = if data.vector == 1 {
+                        source
+                    } else {
+                        LLVMBuildExtractElement(self.builder, source, LLVMConstInt(i32_type, i as u64, 0), LLVM_UNNAMED.as_ptr())
+                    };
+                    let e = LLVMBuildBitCast(self.builder, e, element_type, LLVM_UNNAMED.as_ptr());
+                    let e = LLVMBuildZExt(self.builder, e, i64_type, LLVM_UNNAMED.as_ptr());
+                    let a = at(i);
+                    if data.kind == 1 {
+                        let n = self.const_u32(bytes as u64);
+                        self.emit_agx_helper(c"__zluda_ptx_impl_agx_mm_st", None, None, &[a, e, n])?;
+                    } else {
+                        self.emit_agx_helper(c"__zluda_ptx_impl_agx_mm_red", None, None, &[a, e, desc])?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     // the four elements, exactly and rounded once (zluda_ptx_impl_agx_cvt.c)
     fn emit_alt_fp_x4(&mut self, data: ast::AltFpX4Details, arguments: ast::AltFpX4Args<SpirvWord>) -> Result<(), TranslateError> {
         let op = self.const_u32(data.op as u64);
@@ -7735,6 +7842,20 @@ impl<'a> MethodEmitContext<'a> {
             ast::AtomicOp::Exchange => return Err(error_unreachable()),
         };
         let name = match (data.type_, data.dst_space) {
+            (ast::ScalarType::F16 | ast::ScalarType::BF16, space) => {
+                let op = self.const_u32(op | ((data.type_ == ast::ScalarType::BF16) as u64) << 8);
+                let name = if space == ast::StateSpace::Global {
+                    c"__zluda_ptx_impl_agx_cp_reduce_bulk_h16_global"
+                } else {
+                    c"__zluda_ptx_impl_agx_cp_reduce_bulk_h16_shared"
+                };
+                self.emit_agx_helper(name, None, None, &[to, from, size, op])?;
+                if let Some(mbarrier) = arguments.src_mbarrier {
+                    let mbarrier = self.mbarrier_pointer(data.dst_space, mbarrier)?;
+                    self.emit_agx_helper(c"__zluda_ptx_impl_agx_mbarrier_complete_tx", None, None, &[mbarrier, size])?;
+                }
+                return Ok(());
+            }
             (ast::ScalarType::F32, ast::StateSpace::Global) => {
                 c"__zluda_ptx_impl_agx_cp_reduce_bulk_f32_global"
             }

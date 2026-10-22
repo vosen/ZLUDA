@@ -949,3 +949,483 @@ uint32 __zluda_ptx_impl_agx_tcgen05_spc_f32(uint32 op, uint32 e0, uint32 e1, uin
         result |= 3u << (2 * count++);
     return result;
 }
+
+// ---------------------------------------------------------------- multimem (PTX ISA 9.7.10.15), on one GPU
+// A multimem address in a window of the table at MM_BASE (filled by whoever maps the windows: the runtime, the
+// conformance harness's .multimem) stands for the same offset in each of the window's device buffers: window k
+// starts at MM_BASE + (k + 1) * MM_WINDOW and table entry k holds the count and the buffers. Any other address is a
+// multicast object of one device (its own memory). ld_reduce loads each device's element and folds them in device
+// order; st and red store or reduce on each device in device order.
+#define MM_BASE 0x700000000000ull
+#define MM_WINDOW (1ull << 36)
+typedef __attribute__((address_space(1))) uint64 global_uint64;
+typedef __attribute__((address_space(1))) unsigned short global_uint16;
+typedef __attribute__((address_space(1))) unsigned char global_uint8;
+
+static uint32 mm_count(uint64 a) {
+    if (a < MM_BASE + MM_WINDOW || a >= MM_BASE + 256 * MM_WINDOW)
+        return 1;
+    uint64 k = (a - MM_BASE) / MM_WINDOW - 1;
+    return *(global_uint32 *)(unsigned long)(MM_BASE + 64 * k);
+}
+
+static uint64 mm_device(uint64 a, uint32 i) {
+    if (a < MM_BASE + MM_WINDOW || a >= MM_BASE + 256 * MM_WINDOW)
+        return a;
+    uint64 k = (a - MM_BASE) / MM_WINDOW - 1;
+    return *(global_uint64 *)(unsigned long)(MM_BASE + 64 * k + 8 + 8 * i) + (a - MM_BASE) % MM_WINDOW;
+}
+
+enum { M_ADD, M_MIN, M_MAX, M_AND, M_OR, M_XOR };
+enum { T_B32, T_U32, T_S32, T_B64, T_U64, T_S64, T_F32, T_F64, T_F16, T_BF16, T_F16X2, T_BF16X2, T_E4M3, T_E5M2,
+       T_E4M3X2, T_E5M2X2, T_E4M3X4, T_E5M2X4 };
+// the floating point formats of a lane and of an accumulator
+enum { P_F32, P_F16, P_BF16, P_E4M3, P_E5M2, P_F64 };
+
+typedef union {
+    double d;
+    uint64 u;
+} f64_bits;
+
+static value from_f64(uint64 x) {
+    value v = {(int)(x >> 63), 0, 0, 0, 0};
+    uint32 exponent = (x >> 52) & 2047;
+    uint64 fraction = x & ((1ull << 52) - 1);
+    if (exponent == 2047) {
+        v.nan = fraction != 0;
+        v.inf = fraction == 0;
+    } else if (exponent == 0) {
+        v.m = fraction;
+        v.e = -1074;
+    } else {
+        v.m = fraction | (1ull << 52);
+        v.e = (int)exponent - 1075;
+    }
+    return v;
+}
+
+// the value as a double (exact for the formats here)
+static double to_f64(value v) {
+    f64_bits b;
+    if (v.nan)
+        b.u = 0x7ff8000000000000ull;
+    else if (v.inf)
+        b.u = 0x7ff0000000000000ull;
+    else if (!v.m)
+        b.u = 0;
+    else {
+        // a normal double: the significands here have at most 53 bits
+        int length = bit_length(v.m);
+        b.u = (uint64)(v.e + length - 1 + 1023) << 52 | ((v.m << (53 - length)) & ((1ull << 52) - 1));
+    }
+    if (v.neg)
+        b.u |= 1ull << 63;
+    return b.d;
+}
+
+static double mm_decode(uint32 p, uint32 bits) {
+    switch (p) {
+    case P_F32:
+        return to_f64(from_f32(bits));
+    case P_F16:
+        return to_f64(from_f16(bits));
+    case P_BF16:
+        return to_f64(from_f32(bits << 16));
+    case P_E4M3:
+        return to_f64(decode_element(K_E4M3, bits & 255));
+    default:
+        return to_f64(decode_element(K_E5M2, bits & 255));
+    }
+}
+
+// x rounded to nearest even into the format (an infinity on overflow, saturating for the fp8 formats), as its bits
+static uint32 mm_encode(uint32 p, double x) {
+    f64_bits b;
+    b.d = x;
+    value v = from_f64(b.u);
+    if (p == P_E4M3 || p == P_E5M2)
+        return narrow_element(p == P_E4M3 ? K_E4M3 : K_E5M2, R_RN, v);
+    if (p == P_F32) {
+        if (v.nan)
+            return 0x7fffffff;
+        uint32 sign = v.neg ? 0x80000000u : 0;
+        int64 code = v.inf ? 255ll << 23 : v.m ? encode(v.m, v.e, 8, 23, R_RN) : 0;
+        return sign | (uint32)(code > (255ll << 23) ? 255ll << 23 : code);
+    }
+    return v.nan ? 0x7fff : to_half(v, p == P_BF16, 0);
+}
+
+// PTX min / max: a NaN operand gives the other one, -0 is below +0
+static double mm_op(uint32 op, double x, double y) {
+    if (op == M_ADD)
+        return x + y;
+    if (x != x)
+        return y;
+    if (y != y)
+        return x;
+    if (x == y) {
+        f64_bits a, b;
+        a.d = x;
+        b.d = y;
+        a.u = op == M_MIN ? a.u | b.u : a.u & b.u;
+        return a.d;
+    }
+    return (op == M_MIN) == (x < y) ? x : y;
+}
+
+static double mm_round(uint32 p, double x) { return p == P_F64 ? x : mm_decode(p, mm_encode(p, x)); }
+
+// one step of the reduction in the accumulator format (the fp8 formats operate in f16)
+static double mm_comb(uint32 op, uint32 a, double x, double y) {
+    double r = mm_op(op, x, y);
+    if (a == P_E4M3 || a == P_E5M2)
+        r = mm_round(P_F16, r);
+    return mm_round(a, r);
+}
+
+static uint32 mm_lane_format(uint32 type) {
+    switch (type) {
+    case T_F16:
+    case T_F16X2:
+        return P_F16;
+    case T_BF16:
+    case T_BF16X2:
+        return P_BF16;
+    case T_E4M3:
+    case T_E4M3X2:
+    case T_E4M3X4:
+        return P_E4M3;
+    case T_E5M2:
+    case T_E5M2X2:
+    case T_E5M2X4:
+        return P_E5M2;
+    case T_F64:
+        return P_F64;
+    default:
+        return P_F32;
+    }
+}
+
+static uint32 mm_lanes(uint32 type) {
+    return type == T_F16X2 || type == T_BF16X2 || type == T_E4M3X2 || type == T_E5M2X2 ? 2
+           : type == T_E4M3X4 || type == T_E5M2X4                                     ? 4
+                                                                                       : 1;
+}
+
+static uint32 mm_bytes(uint32 type) {
+    if (type == T_E4M3 || type == T_E5M2)
+        return 1;
+    if (type == T_F16 || type == T_BF16 || type == T_E4M3X2 || type == T_E5M2X2)
+        return 2;
+    if (type == T_B64 || type == T_U64 || type == T_S64 || type == T_F64)
+        return 8;
+    return 4;
+}
+
+static uint64 mm_load(uint64 a, uint32 bytes) {
+    if (bytes == 1)
+        return *(global_uint8 *)(unsigned long)a;
+    if (bytes == 2)
+        return *(global_uint16 *)(unsigned long)a;
+    if (bytes == 4)
+        return *(global_uint32 *)(unsigned long)a;
+    return *(global_uint64 *)(unsigned long)a;
+}
+
+// acc and x combined as the type's elements (the integers as in atom)
+static uint64 mm_combine(uint32 op, uint32 type, uint32 acc_format, uint64 acc, uint64 x) {
+    if (type <= T_S64) {
+        int wide = type >= T_B64;
+        int is_signed = type == T_S32 || type == T_S64;
+        uint64 mask = wide ? ~0ull : 0xffffffffull;
+        int64 sa = wide ? (int64)acc : (int64)(int32)(uint32)acc, sx = wide ? (int64)x : (int64)(int32)(uint32)x;
+        uint64 ua = acc & mask, ux = x & mask;
+        switch (op) {
+        case M_ADD:
+            return (ua + ux) & mask;
+        case M_MIN:
+            return (is_signed ? (sx < sa ? x : acc) : (ux < ua ? x : acc)) & mask;
+        case M_MAX:
+            return (is_signed ? (sx > sa ? x : acc) : (ux > ua ? x : acc)) & mask;
+        case M_AND:
+            return ua & ux;
+        case M_OR:
+            return ua | ux;
+        default:
+            return ua ^ ux;
+        }
+    }
+    if (type == T_F64) {
+        f64_bits a, b;
+        a.u = acc;
+        b.u = x;
+        a.d = mm_op(op, a.d, b.d);
+        return a.u;
+    }
+    uint32 l = mm_lane_format(type), width = 8 * mm_bytes(type) / mm_lanes(type);
+    uint64 out = 0;
+    for (uint32 j = 0; j < mm_lanes(type); j++) {
+        uint32 lane_mask = width == 32 ? 0xffffffffu : (1u << width) - 1;
+        double y = mm_decode(l, (uint32)(acc >> (width * j)) & lane_mask);
+        double z = mm_decode(l, (uint32)(x >> (width * j)) & lane_mask);
+        out |= (uint64)(mm_encode(l, mm_comb(op, l, y, z)) & lane_mask) << (width * j);
+    }
+    (void)acc_format;
+    return out;
+}
+
+// multimem.ld_reduce of the element at a: desc = op | type << 3 | acc << 8 (0 none, 1 .acc::f32, 2 .acc::f16)
+uint64 __zluda_ptx_impl_agx_mm_ld_reduce(uint64 a, uint32 desc) {
+    uint32 op = desc & 7, type = (desc >> 3) & 31, acc = (desc >> 8) & 3;
+    uint32 n = mm_count(a), bytes = mm_bytes(type);
+    if (type <= T_S64 || type == T_F64 || acc == 0) {
+        uint64 r = mm_load(mm_device(a, 0), bytes);
+        for (uint32 i = 1; i < n; i++)
+            r = mm_combine(op, type, 0, r, mm_load(mm_device(a, i), bytes));
+        return r;
+    }
+    // in the accumulator's format, each lane rounded back at the end
+    uint32 l = mm_lane_format(type), p = acc == 1 ? P_F32 : P_F16;
+    uint32 width = 8 * bytes / mm_lanes(type), lane_mask = width == 32 ? 0xffffffffu : (1u << width) - 1;
+    uint64 out = 0;
+    for (uint32 j = 0; j < mm_lanes(type); j++) {
+        double r = 0;
+        for (uint32 i = 0; i < n; i++) {
+            double x = mm_round(p, mm_decode(l, (uint32)(mm_load(mm_device(a, i), bytes) >> (width * j)) & lane_mask));
+            r = i == 0 ? x : mm_comb(op, p, r, x);
+        }
+        out |= (uint64)(mm_encode(l, r) & lane_mask) << (width * j);
+    }
+    return out;
+}
+
+void __zluda_ptx_impl_agx_mm_st(uint64 a, uint64 v, uint32 bytes) {
+    for (uint32 i = 0; i < mm_count(a); i++) {
+        uint64 d = mm_device(a, i);
+        if (bytes == 1)
+            *(global_uint8 *)(unsigned long)d = (unsigned char)v;
+        else if (bytes == 2)
+            *(global_uint16 *)(unsigned long)d = (unsigned short)v;
+        else if (bytes == 4)
+            *(global_uint32 *)(unsigned long)d = (uint32)v;
+        else
+            *(global_uint64 *)(unsigned long)d = v;
+    }
+}
+
+// .f32 additions in device memory flush subnormal operands and results to zero (red.global.add.f32)
+static uint32 mm_ftz32(uint32 x) { return (x & 0x7f800000) == 0 ? x & 0x80000000u : x; }
+
+// multimem.red: an atomic update of each device's element (compare and swap on the aligned word holding it)
+void __zluda_ptx_impl_agx_mm_red(uint64 a, uint64 v, uint32 desc) {
+    uint32 op = desc & 7, type = (desc >> 3) & 31, bytes = mm_bytes(type);
+    for (uint32 i = 0; i < mm_count(a); i++) {
+        uint64 d = mm_device(a, i);
+        if (bytes == 8) {
+            global_uint64 *p = (global_uint64 *)(unsigned long)d;
+            uint64 old = *p;
+            while (!__atomic_compare_exchange_n(p, &old, mm_combine(op, type, 0, old, v), 0, __ATOMIC_RELAXED,
+                                                __ATOMIC_RELAXED))
+                ;
+            continue;
+        }
+        global_uint32 *p = (global_uint32 *)(unsigned long)(d & ~3ull);
+        uint32 shift = 8 * (uint32)(d & 3), mask = bytes == 4 ? 0xffffffffu : ((1u << (8 * bytes)) - 1) << shift;
+        uint32 old = *p;
+        for (;;) {
+            uint32 e = (old & mask) >> shift, x = (uint32)v;
+            uint32 r = type == T_F32 && op == M_ADD ? mm_ftz32((uint32)mm_combine(op, type, 0, mm_ftz32(e), mm_ftz32(x)))
+                                                    : (uint32)mm_combine(op, type, 0, e, x);
+            uint32 next = (old & ~mask) | ((r << shift) & mask);
+            if (__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+                break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------- cp.reduce.async.bulk on .f16 / .bf16
+// each element updated atomically (a compare and swap on its aligned word): op 10 add (keeping subnormals, as .noftz),
+// 11 min, 12 max (PTX's: a NaN operand gives the other one), with bit 8 for .bf16
+typedef __attribute__((address_space(3))) uint32 shared_word;
+static uint32 h16_update(uint32 op, uint32 e, uint32 x) {
+    uint32 p = (op >> 8) & 1 ? P_BF16 : P_F16;
+    uint32 o = (op & 255) == 10 ? M_ADD : (op & 255) == 11 ? M_MIN : M_MAX;
+    return mm_encode(p, mm_op(o, mm_decode(p, e), mm_decode(p, x))) & 0xffff;
+}
+
+void __zluda_ptx_impl_agx_cp_reduce_bulk_h16_global(global_uint16 *dst, __attribute__((address_space(3))) unsigned short *src,
+                                                     uint32 size, uint32 op) {
+    for (uint32 i = 0; i < size / 2; i++) {
+        uint64 a = (uint64)(unsigned long)(dst + i);
+        global_uint32 *w = (global_uint32 *)(unsigned long)(a & ~3ull);
+        uint32 shift = 8 * (uint32)(a & 3), x = src[i];
+        uint32 old = *w;
+        while (!__atomic_compare_exchange_n(w, &old, (old & ~(0xffffu << shift)) | h16_update(op, (old >> shift) & 0xffff, x) << shift,
+                                            0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            ;
+    }
+}
+
+void __zluda_ptx_impl_agx_cp_reduce_bulk_h16_shared(__attribute__((address_space(3))) unsigned short *dst,
+                                                     __attribute__((address_space(3))) unsigned short *src, uint32 size, uint32 op) {
+    for (uint32 i = 0; i < size / 2; i++) {
+        uint32 a = (uint32)(unsigned long)(dst + i);
+        shared_word *w = (shared_word *)(unsigned long)(a & ~3u);
+        uint32 shift = 8 * (a & 3), x = src[i];
+        uint32 old = *w;
+        while (!__atomic_compare_exchange_n(w, &old, (old & ~(0xffffu << shift)) | h16_update(op, (old >> shift) & 0xffff, x) << shift,
+                                            0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            ;
+    }
+}
+
+// ---------------------------------------------------------------- fabric.* (PTX ISA 9.4 9.7.10.4-5), on one GPU
+// The logical endpoints are those of the table at FAB_TABLE (filled by the conformance harness's .fabric): entry le
+// (64 bytes) holds the device count, the size of the endpoint's memory and up to 7 device buffers. A unicast
+// operation reaches the first device, a .multimem one each device in order. The transfers complete at once, on the
+// mbarrier: try_get and try_pullred count bytes, try_put and try_red 16-byte units, try_atom one unit.
+#define FAB_TABLE 0x6ff000000000ull
+typedef __attribute__((address_space(3))) unsigned char shared_byte;
+typedef __attribute__((address_space(3))) uint64 shared_uint64;
+void __zluda_ptx_impl_agx_mbarrier_complete_tx(shared_uint64 *mbar, uint32 count);
+
+static uint32 fab_count(uint32 le) { return *(global_uint32 *)(unsigned long)(FAB_TABLE + 64ull * (le & 255)); }
+
+// the device address of [le, off .. off + n) on device i, trapping outside the endpoint
+static uint64 fab_device(uint32 le, uint64 off, uint64 n, uint32 i) {
+    uint64 entry = FAB_TABLE + 64ull * (le & 255);
+    uint64 size = *(global_uint32 *)(unsigned long)(entry + 4);
+    if (le > 255 || i >= fab_count(le) || off + n > size)
+        __builtin_trap();
+    return *(global_uint64 *)(unsigned long)(entry + 8 + 8 * i) + off;
+}
+
+void __zluda_ptx_impl_agx_fabric_get(shared_byte *dst, uint32 le, uint64 off, uint32 n, shared_uint64 *mbar) {
+    global_uint8 *src = (global_uint8 *)(unsigned long)fab_device(le, off, n, 0);
+    for (uint32 i = 0; i < n; i++)
+        dst[i] = src[i];
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n);
+}
+
+// flags: bit 0 .multimem, bit 1 a byte mask (.cp_mask: byte i is written when bit i % 16 is set), bit 2 a counter
+// (.counted::bytes: n added to the 64-bit word at counter on each destination device)
+void __zluda_ptx_impl_agx_fabric_put(uint32 le, uint64 off, uint64 counter, shared_byte *src, uint32 n, uint32 mask,
+                                     uint32 flags, shared_uint64 *mbar) {
+    uint32 devices = (flags & 1) ? fab_count(le) : 1;
+    for (uint32 d = 0; d < devices; d++) {
+        global_uint8 *dst = (global_uint8 *)(unsigned long)fab_device(le, off, n, d);
+        for (uint32 i = 0; i < n; i++)
+            if (!(flags & 2) || ((mask >> (i % 16)) & 1))
+                dst[i] = src[i];
+        if (flags & 4)
+            __atomic_fetch_add((global_uint64 *)(unsigned long)fab_device(le, counter, 8, d), (uint64)n, __ATOMIC_RELAXED);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n / 16);
+}
+
+static uint64 fab_load(shared_byte *p, uint32 bytes) {
+    uint64 v = 0;
+    for (uint32 i = 0; i < bytes; i++)
+        v |= (uint64)p[i] << (8 * i);
+    return v;
+}
+
+// an atomic update of the element at a: op as multimem (0 add, 1 min, 2 max, 3 and, 4 or, 5 xor) or 6 inc, 7 dec,
+// 8 exch, 9 cas (with y); returns the old value
+static uint64 fab_atomic(uint64 a, uint32 op, uint32 type, uint64 x, uint64 y) {
+    uint32 bytes = mm_bytes(type);
+    if (bytes == 8) {
+        global_uint64 *p = (global_uint64 *)(unsigned long)a;
+        uint64 old = *p, next;
+        do {
+            next = op == 8 ? x : op == 9 ? (old == x ? y : old) : mm_combine(op, type, 0, old, x);
+        } while (!__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
+        return old;
+    }
+    global_uint32 *p = (global_uint32 *)(unsigned long)(a & ~3ull);
+    uint32 shift = 8 * (uint32)(a & 3), mask = bytes == 4 ? 0xffffffffu : ((1u << (8 * bytes)) - 1) << shift;
+    uint32 old = *p, e, r;
+    for (;;) {
+        e = (old & mask) >> shift;
+        uint32 xv = (uint32)x;
+        if (op == 6)
+            r = e >= xv ? 0 : e + 1;
+        else if (op == 7)
+            r = e == 0 || e > xv ? xv : e - 1;
+        else if (op == 8)
+            r = xv;
+        else if (op == 9)
+            r = e == xv ? (uint32)y : e;
+        else
+            r = (uint32)mm_combine(op, type, 0, e, xv);
+        uint32 next = (old & ~mask) | ((r << shift) & mask);
+        if (__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            break;
+    }
+    return e;
+}
+
+// desc = op | type << 4 (the multimem type numbers)
+void __zluda_ptx_impl_agx_fabric_red(uint32 le, uint64 off, uint64 counter, shared_byte *src, uint32 n, uint32 desc,
+                                     uint32 flags, shared_uint64 *mbar) {
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type);
+    uint32 devices = (flags & 1) ? fab_count(le) : 1;
+    for (uint32 d = 0; d < devices; d++) {
+        uint64 dst = fab_device(le, off, n, d);
+        for (uint32 i = 0; i + bytes <= n; i += bytes)
+            fab_atomic(dst + i, op, type, fab_load(src + i, bytes), 0);
+        if (flags & 4)
+            __atomic_fetch_add((global_uint64 *)(unsigned long)fab_device(le, counter, 8, d), (uint64)n, __ATOMIC_RELAXED);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n / 16);
+}
+
+// try_pullred (lane 0): each device's elements, folded in device order as multimem.ld_reduce does
+void __zluda_ptx_impl_agx_fabric_pullred(shared_byte *dst, uint32 le, uint64 off, uint32 n, uint32 desc, uint32 lane,
+                                         shared_uint64 *mbar) {
+    if (lane != 0)
+        return;
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type);
+    for (uint32 i = 0; i + bytes <= n; i += bytes) {
+        uint64 r = mm_load(fab_device(le, off + i, bytes, 0), bytes);
+        for (uint32 d = 1; d < fab_count(le); d++)
+            r = mm_combine(op, type, 0, r, mm_load(fab_device(le, off + i, bytes, d), bytes));
+        for (uint32 k = 0; k < bytes; k++)
+            dst[i + k] = (unsigned char)(r >> (8 * k));
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n);
+}
+
+// try_atom [le, off], [dst], [src], [mbar]: the operand at src + off % 16 (and, for cas, the new value 16 bytes on),
+// the old value to dst + off % 16
+void __zluda_ptx_impl_agx_fabric_atom(uint32 le, uint64 off, shared_byte *dst, shared_byte *src, uint32 desc,
+                                      shared_uint64 *mbar) {
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type), so = (uint32)(off % 16);
+    uint64 x = fab_load(src + so, bytes), y = op == 9 ? fab_load(src + 16 + so, bytes) : 0;
+    uint64 old = fab_atomic(fab_device(le, off, bytes, 0), op, type, x, y);
+    for (uint32 k = 0; k < bytes; k++)
+        dst[so + k] = (unsigned char)(old >> (8 * k));
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, 1);
+}
+
+// the .tensor forms (tile mode): the tensor map with its global address replaced by the endpoint's memory at off on
+// each device (and, with .override::global_dim, its nd dimensions), copied as cp.async.bulk.tensor does. flags: bit 0
+// .multimem, bit 1 try_put. try_get counts bytes on the mbarrier, try_put size in 16-byte units.
+void __zluda_ptx_impl_agx_tma_override(uint64 *dst, const uint64 *tm, _Bool has_address, uint64 address, uint32 nd,
+                                       uint32 d0, uint32 d1, uint32 d2, uint32 d3, uint32 d4, uint32 ns, uint32 s0,
+                                       uint32 s1, uint32 s2, uint32 s3, uint32 up);
+uint32 __zluda_ptx_impl_agx_tma_copy(const uint64 *tm, uint32 c0, uint32 c1, uint32 c2, uint32 c3, uint32 c4,
+                                     uint32 imode, uint32 i0, uint32 i1, uint32 i2, uint32 smem, uint32 dir);
+void __zluda_ptx_impl_agx_fabric_tensor(const uint64 *tm, uint32 le, uint64 off, uint32 nd, uint32 d0, uint32 d1,
+                                        uint32 d2, uint32 d3, uint32 d4, uint32 c0, uint32 c1, uint32 c2, uint32 c3,
+                                        uint32 c4, shared_byte *smem, uint32 size, uint32 flags, shared_uint64 *mbar) {
+    uint64 map[16];
+    uint32 store = flags & 2, devices = store && (flags & 1) ? fab_count(le) : 1, bytes = 0;
+    for (uint32 d = 0; d < devices; d++) {
+        __zluda_ptx_impl_agx_tma_override(map, tm, 1, fab_device(le, off, 0, d), nd, d0, d1, d2, d3, d4, 0, 0, 0, 0,
+                                          0, 0);
+        bytes = __zluda_ptx_impl_agx_tma_copy(map, c0, c1, c2, c3, c4, ~0u, 0, 0, 0, (uint32)(unsigned long)smem,
+                                              store ? ~1u : ~0u);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, store ? size / 16 : bytes);
+}

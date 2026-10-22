@@ -684,6 +684,42 @@ CTA of the cluster); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formali
 `mbarrier-cluster.ptx`, `mbar-mc.ptx`, `misc-async.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
 single CTA.
 
+## Multicast memory (`multimem`)
+
+There is one GPU, so a multicast object (`cuMulticastCreate`) has a team of
+one device (`numDevices` 1, else `CUDA_ERROR_NOT_SUPPORTED`): binding memory
+to it (`cuMulticastBindMem`, `cuMulticastBindAddr`) records the physical
+allocation, and `cuMemMap` of the multicast handle maps the bound memory at
+the range, so that its addresses are that memory's.
+`CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED` is 1.
+
+`multimem.ld_reduce`, `multimem.st` and `multimem.red` (every type of the
+PTX ISA tables, `.vec`, `.acc::f32` / `.acc::f16`) run in software
+(`ptx/lib/zluda_ptx_impl_agx_cvt.c`) over the devices of an address: an
+address in a window of the table at 0x700000000000 (window k from
+0x700000000000 + (k + 1) * 2^36, entry k of 64 bytes holding the count and up
+to 7 buffers) is the same offset in each of its buffers, any other address
+the memory of one device. `ld_reduce` loads each device's element and folds
+them in device order (each step rounded in the type, or in the `.acc_prec`
+type, the fp8 types through f16), `st` stores on each device and `red`
+updates each one atomically, in device order. The conformance harness
+fills the table for its `.multimem` directive.
+
+## Fabric endpoints (`fabric`)
+
+`fabric.*` runs in software over logical endpoints on the one GPU: entry `le`
+(64 bytes) of the table at 0x6ff000000000 holds the device count, the size of
+the endpoint's memory and up to 7 device buffers. `try_get`, `try_put`
+(`.counted::bytes`, `.cp_mask`), `try_red`, `try_pullred` and `try_atom`
+reach the first device, the `.multimem` forms each device in order, and
+offsets past the endpoint's size trap. The `.tensor` forms (tile mode,
+`.override::global_address`, `.override::global_dim`) copy as
+`cp.async.bulk.tensor` with the tensor map's global address replaced by the
+endpoint's memory at the offset. Every transfer completes at once, on its
+mbarrier: `try_get` and `try_pullred` count bytes, `try_put` and `try_red`
+16-byte units, `try_atom` one unit. `fabric.submit` and `fabric.wait` are
+no-ops. The conformance harness fills the table for its `.fabric` directive.
+
 ## Strict floating point mode
 
 `zoc --strict-fp` (`ptx::Options::strict_fp` with
@@ -886,8 +922,7 @@ Without it 1553 match. The other 175 are the floating point differences listed a
 - `-0.0` under `.sat`;
 - `div` and `sqrt` precision.
 
-The one skipped check follows the non-PTX `coll_test` of `collective.ptx`, and the harness has no `.multimem` and
-`.fabric` directives.
+The one skipped check follows the non-PTX `coll_test` of `collective.ptx`.
 
 A full run takes about 50 minutes with `-j 4` (most of it compiling the texture and `tcgen05` tests).
 
@@ -1270,7 +1305,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Area | Status |
 | --- | --- |
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
-| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. Not supported: `.multimem` and `.fabric` |
+| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. |
 | Warp-level and async | `mma`, `mma.sp`, `wmma`, `ldmatrix` / `stmatrix`, `wgmma`, `tcgen05` and the tensor memory accelerator (`cp.async.bulk.tensor`) are emulated; `cp.async`, mbarriers and thread block clusters (up to 1024 threads) run on ordinary instructions and threadgroup memory |
 | Textures and surfaces | sampled in software (the texture unit is not used yet, simulator task B29): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` (strict FP) for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
