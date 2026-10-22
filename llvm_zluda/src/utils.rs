@@ -51,7 +51,7 @@ impl Module {
     }
 
     pub fn try_from_bitcode(ctx: &Context, bitcode: &[u8], name: Option<&CStr>) -> Option<Self> {
-        let bitcode: Vec<i8> = bitcode.iter().map(|&v| i8::from_ne_bytes([v])).collect();
+        let bitcode: Vec<std::ffi::c_char> = bitcode.iter().map(|&v| v as std::ffi::c_char).collect();
         let memory_buffer: LLVMMemoryBufferRef = unsafe {
             LLVMCreateMemoryBufferWithMemoryRangeCopy(
                 bitcode.as_ptr(),

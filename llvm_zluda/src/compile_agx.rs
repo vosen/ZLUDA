@@ -326,7 +326,7 @@ fn init_globals() -> Result<(), String> {
     INIT_AGX
         .get_or_init(|| {
             let options = [c"llvm_zluda"];
-            let ptrs: Vec<*const i8> = options.iter().map(|s| s.as_ptr()).collect();
+            let ptrs: Vec<*const std::ffi::c_char> = options.iter().map(|s| s.as_ptr()).collect();
             let mut err_msg = std::ptr::null_mut();
             let success = unsafe {
                 LLVMZludaParseCommandLineOptions(ptrs.len() as i32, ptrs.as_ptr(), &mut err_msg)

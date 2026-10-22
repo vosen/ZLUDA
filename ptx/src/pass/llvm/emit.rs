@@ -4978,7 +4978,7 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuilderRef,
                 LLVMValueRef,
                 LLVMValueRef,
-                *const i8,
+                *const std::ffi::c_char,
             ) -> LLVMValueRef,
         ) = match data.kind {
             ptx_parser::RightShiftKind::Logical => {
@@ -5030,7 +5030,7 @@ impl<'a> MethodEmitContext<'a> {
             LLVMBuilderRef,
             LLVMValueRef,
             LLVMValueRef,
-            *const i8,
+            *const std::ffi::c_char,
         ) -> LLVMValueRef,
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(src1)?;
@@ -5599,7 +5599,7 @@ impl<'a> MethodEmitContext<'a> {
                 unsafe { LLVMBuildShl(self.builder, res_hi, shift_number, LLVM_UNNAMED.as_ptr()) };
 
             self.resolver
-                .with_result(arguments.dst, |dst: *const i8| unsafe {
+                .with_result(arguments.dst, |dst: *const std::ffi::c_char| unsafe {
                     LLVMBuildOr(self.builder, res_lo_shr, res_hi_shl, dst)
                 });
         }
@@ -8160,7 +8160,7 @@ fn get_pointer_type<'ctx>(
 }
 
 // https://llvm.org/docs/AMDGPUUsage.html#memory-scopes
-fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
+fn get_scope(scope: ast::MemScope) -> Result<*const std::ffi::c_char, TranslateError> {
     Ok(match scope {
         ast::MemScope::Cta => c"workgroup-one-as",
         ast::MemScope::Gpu => c"agent-one-as",
@@ -8170,7 +8170,7 @@ fn get_scope(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
     .as_ptr())
 }
 
-fn get_scope_membar(scope: ast::MemScope) -> Result<*const i8, TranslateError> {
+fn get_scope_membar(scope: ast::MemScope) -> Result<*const std::ffi::c_char, TranslateError> {
     Ok(match scope {
         ast::MemScope::Cta => c"workgroup",
         ast::MemScope::Gpu => c"agent",
@@ -8416,7 +8416,7 @@ impl ResolveIdent {
         self.get_or_ad_impl(word, |x| x)
     }
 
-    fn get_or_add_raw(&mut self, word: SpirvWord) -> *const i8 {
+    fn get_or_add_raw(&mut self, word: SpirvWord) -> *const std::ffi::c_char {
         self.get_or_add(word).as_ptr().cast()
     }
 
@@ -8434,7 +8434,7 @@ impl ResolveIdent {
     fn with_result(
         &mut self,
         word: SpirvWord,
-        fn_: impl FnOnce(*const i8) -> LLVMValueRef,
+        fn_: impl FnOnce(*const std::ffi::c_char) -> LLVMValueRef,
     ) -> LLVMValueRef {
         let t = self.get_or_ad_impl(word, |dst| fn_(dst.as_ptr().cast()));
         self.register(word, t);
@@ -8444,7 +8444,7 @@ impl ResolveIdent {
     fn with_result_option(
         &mut self,
         word: Option<SpirvWord>,
-        fn_: impl FnOnce(*const i8) -> LLVMValueRef,
+        fn_: impl FnOnce(*const std::ffi::c_char) -> LLVMValueRef,
     ) -> LLVMValueRef {
         match word {
             Some(word) => self.with_result(word, fn_),
