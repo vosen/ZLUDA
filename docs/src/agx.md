@@ -152,7 +152,17 @@ an error.
 
 The [strict floating point mode](#strict-floating-point-mode) removes these
 three differences.
-* `%clock` reads as zero. `nanosleep` does not sleep.
+* No special register is a clock (ptx-re-blockers B35). When a module that
+  reads `%clock`, `%clock64` or `%globaltimer` or calls `nanosleep` is loaded,
+  `zluda_agx` starts a CPU thread that keeps writing the CPU's generic timer
+  (24 MHz on Apple chips) into a small buffer of the context, which the kernel
+  reads with a volatile load (the invalidating barrier and a coherent load,
+  about 1 us): `%globaltimer` is in nanoseconds, `%clock64` in cycles of the
+  reported clock rate, both in steps of 41.7 ns, and `nanosleep` waits for the
+  time to pass (at most 2^16 reads). The thread keeps a CPU core busy;
+  `ZLUDA_AGX_TIMER=0` turns it off, and without it (also in the simulator) the
+  clocks count reads of a device-wide counter, later at each read of a thread
+  but not measuring time, and `nanosleep` returns at once.
 * `%dynamic_smem_size`, `%total_smem_size` (static and dynamic bytes in
   128-byte units), `%aggr_smem_size` and `%reserved_smem_offset_begin`,
   `_end` and `_cap` (a reserved region of 1 KiB after the CTA's shared memory,
@@ -1155,7 +1165,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`); cuSOLVER dense LU, Cholesky, QR, SVD and symmetric eigenvalues (`zluda_solver_agx`); NVRTC on clang and nvJitLink (`zluda_rtc_agx`); single-rank NCCL (`zluda_nccl_agx`) |
-| Not yet | peer access, IPC, the virtual memory management API (`cuMemCreate` / `cuMemMap`), multicast objects, `%clock` / `nanosleep`, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
+| Not yet | peer access, IPC, the virtual memory management API (`cuMemCreate` / `cuMemMap`), multicast objects, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
 | NVML | device count, name, UUID, memory, compute capability; the maximum clock (`nvmlDeviceGetMaxClockInfo`, 1,398 MHz on the M2 Max) and GPU utilisation (`nvmlDeviceGetUtilizationRates`: the share of time since the last call this process's kernels ran, from the firmware's command timestamps; other processes are not seen). Asahi exposes no current clock, temperature or power without root (B25), so those return `NVML_ERROR_NOT_SUPPORTED` |
 | Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
 | Hardware validation | M2 Max (G14C, Asahi), 2026-10-20 and 21, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` and `tasks/ptx-re-blockers-tracker.md`: the direct-DRM runner, `agx_cuda_smoke` and CUDA vectorAdd pass (B2); ZLUDA's scratch path runs on the GPU (B1, 262,144 threads); the `agx_libs` kernels give the right results in 817 of 819 cases on the GPU (B40; the 2 others are the test runner's missing scratch, Z6); checked mode on the GPU matches the simulator (B37); context teardown leaks nothing (B42, Z1); partial workgroups, the no-shared-memory word and 7-bit shift amounts (B2a, B2c, B47); forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), the whole uniform file (B9), memory ordering per scope (B10), source modifiers and other numeric corners (B11), calls and returns (B14), `simd_matrix_fmadd` (B15), barriers (B16, B28), lane-offset fmadd (B18), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B3, B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), native texture corners (B29), masked instruction cost (B31), submit cost (B32), vector alignment (B33), stack cost (B34), the absence of a shader clock (B35), dma-buf IPC (B36, B45), VMs and queues (B38, B43), allocation limits (B39), fault isolation (B44) and `rcp` / `rsqrt` error (B46). Open: async copies (B17), a real CUDA program (B23, B41) and the M2 Ultra / G13X items (B19, B24-7) |

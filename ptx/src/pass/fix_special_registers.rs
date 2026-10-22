@@ -93,12 +93,14 @@ impl<'a, 'b, 'input>
     fn visit(
         &mut self,
         operand: ast::ParsedOperand<SpirvWord>,
-        _type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
+        type_space: Option<(&ptx_parser::Type, ptx_parser::StateSpace)>,
         is_dst: bool,
         _relaxed_type_check: bool,
     ) -> Result<ast::ParsedOperand<SpirvWord>, TranslateError> {
+        let wanted = type_space.map(|(t, _)| t.clone());
         map_operand(operand, &mut |ident, vector_index| {
-            self.replace_sreg(ident, vector_index, is_dst)
+            let value = self.replace_sreg(ident, vector_index, is_dst)?;
+            self.as_integer_predicate(ident, value, wanted.as_ref())
         })
     }
 
@@ -114,6 +116,37 @@ impl<'a, 'b, 'input>
 }
 
 impl<'a, 'b, 'input> SpecialRegisterResolver<'a, 'input> {
+    // %is_explicit_cluster is a predicate; read as an integer (mov.u32), it is 1 or 0
+    fn as_integer_predicate(
+        &mut self,
+        name: SpirvWord,
+        value: Option<SpirvWord>,
+        wanted: Option<&ast::Type>,
+    ) -> Result<Option<SpirvWord>, TranslateError> {
+        let (Some(value), Some(ast::Type::Scalar(typ))) = (value, wanted) else {
+            return Ok(value);
+        };
+        if self.special_registers.get(name) != Some(PtxSpecialRegister::IsExplicitCluster)
+            || *typ == ast::ScalarType::Pred
+        {
+            return Ok(Some(value));
+        }
+        let dst = self
+            .resolver
+            .register_unnamed(Some((ast::Type::Scalar(*typ), ast::StateSpace::Reg)));
+        let constant = |v: u64| ast::ParsedOperand::Imm(ast::ImmediateValue::U64(v));
+        self.result.push(Statement::Instruction(ast::Instruction::Selp {
+            data: *typ,
+            arguments: ast::SelpArgs {
+                dst: ast::ParsedOperand::Reg(dst),
+                src1: constant(1),
+                src2: constant(0),
+                src3: ast::ParsedOperand::Reg(value),
+            },
+        }));
+        Ok(Some(dst))
+    }
+
     fn replace_sreg(
         &mut self,
         name: SpirvWord,

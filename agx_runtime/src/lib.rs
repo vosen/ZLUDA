@@ -1259,6 +1259,44 @@ pub fn heap_header(size: u32) -> [u8; 8] {
     h
 }
 
+/// Symbol of the address of the timer block the clocks of a module read (`ptx/lib/zluda_ptx_impl_agx.ll`, the
+/// clocks): `TIMER_BLOCK_BYTES` of device memory whose first 8 bytes a CPU thread keeps setting to `cpu_timer()`.
+pub const TIMER_SYMBOL: &str = "__zluda_agx_timer";
+pub const TIMER_BLOCK_BYTES: usize = 32;
+
+/// The CPU's generic timer: its count and its frequency in Hz. Elsewhere than on aarch64 (tests), a count of a
+/// monotonic clock at 24 MHz.
+pub fn cpu_timer() -> (u64, u64) {
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        let (count, freq): (u64, u64);
+        std::arch::asm!("mrs {}, cntvct_el0", out(reg) count);
+        std::arch::asm!("mrs {}, cntfrq_el0", out(reg) freq);
+        (count, freq)
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let ns = START.get_or_init(std::time::Instant::now).elapsed().as_nanos();
+        ((ns * 24 / 1000) as u64, 24_000_000)
+    }
+}
+
+/// The initial bytes of a timer block for a GPU clock of `clock_khz`: the count now (twice: the current count,
+/// and the base the clocks count from), the nanoseconds of the base, and nanoseconds and GPU cycles per tick in
+/// 16.16 fixed point.
+pub fn timer_block(clock_khz: u32) -> [u8; TIMER_BLOCK_BYTES] {
+    let (count, freq) = cpu_timer();
+    let freq = freq.max(1) as u128;
+    let mut b = [0u8; TIMER_BLOCK_BYTES];
+    b[0..8].copy_from_slice(&count.to_le_bytes());
+    b[8..16].copy_from_slice(&count.to_le_bytes());
+    b[16..24].copy_from_slice(&((count as u128 * 1_000_000_000 / freq) as u64).to_le_bytes());
+    b[24..28].copy_from_slice(&((1_000_000_000u128 << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
+    b[28..32].copy_from_slice(&(((clock_khz as u128 * 1000) << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
+    b
+}
+
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
 pub struct LoadedModule {
     pub module: module::Module,
@@ -1355,6 +1393,17 @@ impl LoadedModule {
     /// Whether the module calls `malloc` / `free`: it has the heap pointer `__zluda_agx_heap`.
     pub fn uses_heap(&self) -> bool {
         self.module.global_symbols.contains_key(HEAP_SYMBOL)
+    }
+
+    pub fn uses_timer(&self) -> bool {
+        self.module.global_symbols.contains_key(TIMER_SYMBOL)
+    }
+
+    /// Points the module's clocks at a timer block at `va` (`TIMER_SYMBOL`).
+    pub fn set_timer(&mut self, va: u64) {
+        let Some(&(off, _)) = self.module.global_symbols.get(TIMER_SYMBOL) else { return };
+        let Some(g) = self.globals.as_mut() else { return };
+        g.as_mut_slice()[off as usize..off as usize + 8].copy_from_slice(&va.to_le_bytes());
     }
 
     /// Points the module's `malloc` / `free` at a heap: zeroed device memory of `size` bytes at `va`, shared by the

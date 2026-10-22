@@ -3114,7 +3114,8 @@ fn operand_elements<'input>(operand: ParsedOperandStr<'input>) -> PResult<Vec<Pa
 
 fn take_geometry(modifiers: &mut Vec<&str>) -> Option<ast::TexGeometry> {
     use ast::TexGeometry::*;
-    [("1d", D1), ("2d", D2), ("3d", D3), ("a1d", A1d), ("a2d", A2d), ("cube", Cube), ("acube", ACube)]
+    [("1d", D1), ("2d", D2), ("3d", D3), ("a1d", A1d), ("a2d", A2d), ("cube", Cube), ("acube", ACube),
+     ("2dms", Ms2d), ("a2dms", AMs2d)]
         .iter()
         .find(|(name, _)| take_modifier(modifiers, name))
         .map(|&(_, g)| g)
@@ -3770,15 +3771,29 @@ fn texture_instruction<'a, 'input>(
             let Some(geometry) = take_geometry(&mut modifiers) else {
                 return backtrack();
             };
-            if !take_modifier(&mut modifiers, "v4") {
+            let v2 = take_modifier(&mut modifiers, "v2");
+            if !v2 && !take_modifier(&mut modifiers, "v4") {
                 return backtrack();
             }
-            let types = [("f32", ScalarType::F32), ("s32", ScalarType::S32), ("u32", ScalarType::U32)];
-            let (Some(dtype), Some(ctype)) = (take_type(&mut modifiers, &types), take_type(&mut modifiers, &types))
-            else {
+            // .dtype then .ctype, in that order; .v4.f16 (four halves) and .v2.f16x2 (pairs of them)
+            let type_of = |m: &str| match m {
+                "f32" => Some(ScalarType::F32),
+                "s32" => Some(ScalarType::S32),
+                "u32" => Some(ScalarType::U32),
+                "f16" => Some(ScalarType::F16),
+                "f16x2" => Some(ScalarType::F16x2),
+                _ => None,
+            };
+            let (Some(dtype), Some(ctype)) = (
+                modifiers.first().and_then(|m| type_of(m)),
+                modifiers.get(1).and_then(|m| type_of(m)),
+            ) else {
                 return backtrack();
             };
-            if !modifiers.is_empty() || ctype == ScalarType::U32 {
+            if modifiers.len() != 2
+                || !matches!(ctype, ScalarType::S32 | ScalarType::F32)
+                || v2 != (dtype == ScalarType::F16x2)
+            {
                 return backtrack();
             }
             let dst = operand(stream)?;
@@ -3788,7 +3803,7 @@ fn texture_instruction<'a, 'input>(
             let extra = rest_operands(stream)?;
             let simple_geometry = matches!(geometry, ast::TexGeometry::D1 | ast::TexGeometry::D2 | ast::TexGeometry::D3);
             if matches!(op, ast::TexOp::Tex) && plain && lod_mode == 0 && simple_geometry && dst_pred.is_none()
-                && handles.len() == 2 && extra.is_empty()
+                && handles.len() == 2 && extra.is_empty() && !matches!(dtype, ScalarType::F16 | ScalarType::F16x2)
             {
                 // the instruction grammar's form
                 return backtrack();
@@ -3799,9 +3814,13 @@ fn texture_instruction<'a, 'input>(
             let coords = operand_elements(handles.pop().unwrap())?;
             let src_sampler = if handles.len() == 2 { handles.pop() } else { None };
             let src_tex = handles.pop().unwrap();
-            let dsts = operand_elements(dst)?;
-            if dsts.len() != 4 || coords.len() > 4 {
+            let mut dsts = operand_elements(dst)?;
+            if dsts.len() != if v2 { 2 } else { 4 } || coords.len() > 4 {
                 return backtrack();
+            }
+            // the two pairs of .v2.f16x2 go to dst0 and dst1
+            while dsts.len() < 4 {
+                dsts.push(ast::ParsedOperand::Reg(discarded_register()));
             }
             let mut extra = extra.into_iter().peekable();
             let src_lod = if lod_mode == 1 { extra.next() } else { None };
@@ -3870,21 +3889,23 @@ fn texture_instruction<'a, 'input>(
             if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
                 return backtrack();
             }
-            // txq: the addr_mode_* fields read the same word; the others the helper does not know read 0
+            // txq: the addr_mode_* fields read the same word; channel_data_type, channel_order and num_samples 0
             let field = match (opcode, field) {
                 ("txq", 8 | 9) => 6,
-                ("txq", f) if f >= 10 => 255,
+                ("txq", 10 | 11) => 255,
                 (_, f) => f,
             } as u8;
             let dst = operand(stream)?;
             comma(stream)?;
             let mut handles = bracket(stream)?;
-            if handles.len() != 1 {
+            let mut extra = rest_operands(stream)?;
+            // txq.level.{width,height,depth} d, [t], lod
+            if handles.len() != 1 || extra.len() > 1 || (!extra.is_empty() && (opcode != "txq" || field > 2)) {
                 return backtrack();
             }
             Ok(ast::Instruction::TexQuery {
                 data: ast::TexQueryDetails { surface: opcode == "suq", field },
-                arguments: ast::TexQueryArgs { dst, src: handles.pop().unwrap() },
+                arguments: ast::TexQueryArgs { dst, src: handles.pop().unwrap(), src_level: extra.pop() },
             })
         }
         "istypep" => {
@@ -3919,7 +3940,8 @@ fn texture_instruction<'a, 'input>(
             } else {
                 None
             };
-            let Some(geometry) = take_geometry(&mut modifiers) else {
+            let Some(geometry) = take_geometry(&mut modifiers).filter(|g| !matches!(g, ast::TexGeometry::Ms2d | ast::TexGeometry::AMs2d))
+            else {
                 return backtrack();
             };
             let vector = if take_modifier(&mut modifiers, "v4") {

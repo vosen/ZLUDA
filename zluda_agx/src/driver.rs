@@ -67,6 +67,9 @@ pub(crate) struct Driver {
     /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
     /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
     heap: Option<agx_runtime::Bo>,
+    /// The timer block of the clocks (`%globaltimer`, `%clock64`, `nanosleep`), made when the first module that
+    /// reads them is loaded, with the CPU thread that keeps it current
+    timer: Option<Timer>,
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
@@ -378,7 +381,44 @@ fn new_driver() -> Result<Driver, CUerror> {
         launches: Default::default(),
         checked_launches: Default::default(),
         heap: None,
+        timer: None,
     })
+}
+
+/// A timer block and the CPU thread that writes the CPU's timer into it until the context goes (a shader sees time
+/// only through such a CPU-written word, ptx-re-blockers B35). The thread keeps a CPU core busy;
+/// ZLUDA_AGX_TIMER=0 leaves the clocks counting reads instead.
+struct Timer {
+    bo: agx_runtime::Bo,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Timer {
+    fn new(vm: &mut agx_runtime::Vm, clock_khz: u32) -> io::Result<Self> {
+        let mut bo = vm.alloc_data(agx_runtime::TIMER_BLOCK_BYTES as u64)?;
+        bo.as_mut_slice()[..agx_runtime::TIMER_BLOCK_BYTES].copy_from_slice(&agx_runtime::timer_block(clock_khz));
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let word = bo.as_mut_slice().as_mut_ptr() as usize;
+        let flag = stop.clone();
+        let thread = std::thread::Builder::new().name("zluda-agx-timer".into()).spawn(move || {
+            while !flag.load(std::sync::atomic::Ordering::Relaxed) {
+                // the mapping outlives the thread: Drop joins it before the buffer goes
+                unsafe { std::ptr::write_volatile(word as *mut u64, agx_runtime::cpu_timer().0) };
+                std::hint::spin_loop();
+            }
+        })?;
+        Ok(Timer { bo, stop, thread: Some(thread) })
+    }
+}
+
+impl Drop for Timer {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
 }
 
 /// Runs `f` on the registry of contexts.
@@ -998,6 +1038,13 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
                 d.heap = Some(heap);
             }
             loaded.set_heap(d.heap.as_ref().unwrap().va);
+        }
+        if loaded.uses_timer() && std::env::var("ZLUDA_AGX_TIMER").map_or(true, |v| v != "0") {
+            if d.timer.is_none() {
+                let khz = d.ctx.props.clock_khz;
+                d.timer = Some(Timer::new(&mut d.ctx.vm, khz).map_err(from_io)?);
+            }
+            loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
         }
         let h = d.handle();
         d.modules.insert(h, loaded);

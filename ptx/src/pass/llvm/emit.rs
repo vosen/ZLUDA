@@ -6729,8 +6729,9 @@ impl<'a> MethodEmitContext<'a> {
         let tex = self.descriptor(Some(arguments.src_tex))?;
         let sampler = self.descriptor(arguments.src_sampler)?;
         let geometry = self.const_u32(Self::geometry_code(data.geometry));
+        // the f16 forms sample as f32 and round
         let dtype = self.const_u32(match data.dtype {
-            ast::ScalarType::F32 => 0,
+            ast::ScalarType::F32 | ast::ScalarType::F16 | ast::ScalarType::F16x2 => 0,
             ast::ScalarType::S32 => 1,
             _ => 2,
         });
@@ -6755,7 +6756,14 @@ impl<'a> MethodEmitContext<'a> {
                     dtype,
                 ];
                 args.extend(coords);
-                args.push(self.f32_value(arguments.src_lod)?);
+                // the lod has the type of the coordinates
+                let lod = if data.ctype == ast::ScalarType::S32 && arguments.src_lod.is_some() {
+                    let i = self.i32_value(arguments.src_lod)?;
+                    unsafe { LLVMBuildSIToFP(self.builder, i, LLVMFloatTypeInContext(self.context), LLVM_UNNAMED.as_ptr()) }
+                } else {
+                    self.f32_value(arguments.src_lod)?
+                };
+                args.push(lod);
                 for g in [
                     arguments.src_dx0,
                     arguments.src_dx1,
@@ -6779,8 +6787,43 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
         let _ = i32_type;
-        for (i, dst) in [arguments.dst0, arguments.dst1, arguments.dst2, arguments.dst3].into_iter().enumerate() {
-            self.vector_element(result, i as u32, dst, data.dtype)?;
+        let dsts = [arguments.dst0, arguments.dst1, arguments.dst2, arguments.dst3];
+        if matches!(data.dtype, ast::ScalarType::F16 | ast::ScalarType::F16x2) {
+            // the f32 results rounded to f16: one per register, or pairs of them (.v2.f16x2: dst2 and dst3 unused)
+            let half = get_scalar_type(self.context, ast::ScalarType::F16);
+            let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
+            let mut halves = Vec::new();
+            for i in 0..4u64 {
+                let b = self.builder;
+                let h = unsafe {
+                    let e = LLVMBuildExtractElement(b, result, LLVMConstInt(i32_type, i, 0), LLVM_UNNAMED.as_ptr());
+                    let f = LLVMBuildBitCast(b, e, f32_type, LLVM_UNNAMED.as_ptr());
+                    LLVMBuildFPTrunc(b, f, half, LLVM_UNNAMED.as_ptr())
+                };
+                halves.push(h);
+            }
+            if data.dtype == ast::ScalarType::F16 {
+                for (dst, h) in dsts.into_iter().zip(halves) {
+                    self.resolver.register(dst, h);
+                }
+            } else {
+                let pair_type = get_scalar_type(self.context, ast::ScalarType::F16x2);
+                for (k, dst) in dsts.into_iter().enumerate() {
+                    let v = if k < 2 {
+                        unsafe {
+                            let v = LLVMBuildInsertElement(self.builder, LLVMGetPoison(pair_type), halves[2 * k], LLVMConstInt(i32_type, 0, 0), LLVM_UNNAMED.as_ptr());
+                            LLVMBuildInsertElement(self.builder, v, halves[2 * k + 1], LLVMConstInt(i32_type, 1, 0), LLVM_UNNAMED.as_ptr())
+                        }
+                    } else {
+                        unsafe { LLVMGetPoison(pair_type) }
+                    };
+                    self.resolver.register(dst, v);
+                }
+            }
+        } else {
+            for (i, dst) in dsts.into_iter().enumerate() {
+                self.vector_element(result, i as u32, dst, data.dtype)?;
+            }
         }
         // every level is resident
         if let Some(pred) = arguments.dst_pred {
@@ -6798,7 +6841,20 @@ impl<'a> MethodEmitContext<'a> {
         let handle = self.descriptor(Some(arguments.src))?;
         let field = self.const_u32(data.field as u64);
         let name = if data.surface { c"__zluda_ptx_impl_agx_suq" } else { c"__zluda_ptx_impl_agx_txq" };
-        self.emit_agx_helper(name, Some(arguments.dst), Some(ast::ScalarType::B32), &[handle, field])?;
+        let Some(level) = arguments.src_level else {
+            self.emit_agx_helper(name, Some(arguments.dst), Some(ast::ScalarType::B32), &[handle, field])?;
+            return Ok(());
+        };
+        // the size of a mipmap level: max(1, size >> level)
+        let size = self.emit_agx_helper(name, None, Some(ast::ScalarType::B32), &[handle, field])?;
+        let level = self.i32_value(Some(level))?;
+        let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
+        let shifted = unsafe {
+            let shift = LLVMBuildAnd(self.builder, level, LLVMConstInt(i32_type, 31, 0), LLVM_UNNAMED.as_ptr());
+            LLVMBuildLShr(self.builder, size, shift, LLVM_UNNAMED.as_ptr())
+        };
+        let one = unsafe { LLVMConstInt(i32_type, 1, 0) };
+        self.emit_intrinsic(c"llvm.umax.i32", Some(arguments.dst), vec![&ast::ScalarType::U32.into()], vec![(shifted, i32_type), (one, i32_type)])?;
         Ok(())
     }
 

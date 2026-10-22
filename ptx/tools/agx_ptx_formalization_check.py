@@ -69,7 +69,7 @@ def object_words(kind, t, addr, attrs, dims):
         if t not in TEX_CODE:
             raise Unsupported('texture type .' + t)
         return [0x54585854, addr, TEX_CODE[t]] + [nth(attrs, i) for i in range(6)] + [nth(dims, i) for i in range(3)] + \
-               [nth(attrs, 6, 1), nth(attrs, 7), 0, nth(attrs, 8)]
+               [nth(attrs, 6, 1), nth(attrs, 7) | nth(attrs, 9) << 8, 0, nth(attrs, 8)]
     return [0x53545446, addr, SIZES[t], nth(attrs, 0), nth(dims, 0), nth(dims, 1), nth(dims, 2), nth(attrs, 1, 11),
             nth(attrs, 2, 1), nth(attrs, 3), nth(attrs, 4), nth(attrs, 5, 1), nth(attrs, 6, int(nth(attrs, 0) > 1)),
             0, 0, 0]

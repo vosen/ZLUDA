@@ -1930,6 +1930,12 @@ ptx_parser_macros::generate_instruction_type!(
                     type: Type::Scalar(ScalarType::B64),
                     relaxed_type_check: true,
                 },
+                // txq.level: the mipmap level of width, height and depth
+                src_level: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
+                    relaxed_type_check: true,
+                },
             }
         },
         // suld.b
@@ -5397,6 +5403,9 @@ pub enum TexGeometry {
     A2d = 4,
     Cube = 5,
     ACube = 6,
+    // multi-sample textures (tex only)
+    Ms2d = 7,
+    AMs2d = 8,
 }
 
 #[derive(Copy, Clone)]
