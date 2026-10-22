@@ -1096,8 +1096,8 @@ impl<'a> MethodEmitContext<'a> {
                 Ok(())
             }
             // the emulated operations are complete: an arrive (count 1) on the mbarrier right away
-            ast::Instruction::Tcgen05Commit { arguments } => {
-                let mbar = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_mbar)?;
+            ast::Instruction::Tcgen05Commit { data, arguments } => {
+                let mbar = self.mbarrier_pointer(data, arguments.src_mbar)?;
                 let one = self.const_u32(1);
                 let zero = self.const_u32(0);
                 self.emit_agx_helper(
@@ -1110,8 +1110,8 @@ impl<'a> MethodEmitContext<'a> {
             }
             // replaced by a call to its agx_matrix helper
             ast::Instruction::Tcgen05Mma { .. } => Err(error_unreachable()),
-            ast::Instruction::Tcgen05Alloc { arguments, .. } => self.emit_tcgen05_alloc(arguments),
-            ast::Instruction::Tcgen05Dealloc { arguments, .. } => self.emit_tcgen05_dealloc(arguments),
+            ast::Instruction::Tcgen05Alloc { data, arguments } => self.emit_tcgen05_alloc(data, arguments),
+            ast::Instruction::Tcgen05Dealloc { data, arguments } => self.emit_tcgen05_dealloc(data, arguments),
             ast::Instruction::Tcgen05Ld { data, arguments } => self.emit_tcgen05_ld(data, arguments),
             ast::Instruction::Tcgen05LdRed { data, arguments } => self.emit_tcgen05_ld_red(data, arguments),
             ast::Instruction::Tcgen05St { data, arguments } => self.emit_tcgen05_st(data, arguments),
@@ -7087,14 +7087,19 @@ impl<'a> MethodEmitContext<'a> {
         Ok((leader, is))
     }
 
-    fn emit_tcgen05_alloc(&mut self, arguments: ast::Tcgen05AllocArgs<SpirvWord>) -> Result<(), TranslateError> {
+    fn emit_tcgen05_alloc(
+        &mut self,
+        data: ast::Tcgen05AllocDetails,
+        arguments: ast::Tcgen05AllocArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
         let ncols = self.i32_value(Some(arguments.src_ncols))?;
         let (leader, is_leader) = self.emit_is_leader()?;
+        let exclusive = self.const_u32(data.exclusive as u64);
         let column = self.emit_agx_helper(
             c"__zluda_ptx_impl_agx_tmem_alloc",
             None,
             Some(ast::ScalarType::B32),
-            &[ncols, is_leader],
+            &[ncols, is_leader, exclusive],
         )?;
         let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
         let column = self.emit_intrinsic(
@@ -7103,20 +7108,30 @@ impl<'a> MethodEmitContext<'a> {
             vec![&ast::Type::Scalar(ast::ScalarType::B32)],
             vec![(column, i32_type), (leader, i32_type)],
         )?;
-        let address = self.mbarrier_pointer(ast::StateSpace::Shared, arguments.src_addr)?;
+        let lane = self.emit_lane_id()?;
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_tmem_zero", None, None, &[column, ncols, lane])?;
+        let address = self.mbarrier_pointer(data.space, arguments.src_addr)?;
         unsafe { LLVMBuildStore(self.builder, column, address) };
         Ok(())
     }
 
-    fn emit_tcgen05_dealloc(&mut self, arguments: ast::Tcgen05DeallocArgs<SpirvWord>) -> Result<(), TranslateError> {
+    fn emit_tcgen05_dealloc(
+        &mut self,
+        data: ast::Tcgen05AllocDetails,
+        arguments: ast::Tcgen05DeallocArgs<SpirvWord>,
+    ) -> Result<(), TranslateError> {
         let taddr = self.i32_value(Some(arguments.src_taddr))?;
         let ncols = self.i32_value(Some(arguments.src_ncols))?;
         let (_, is_leader) = self.emit_is_leader()?;
-        self.emit_agx_helper(c"__zluda_ptx_impl_agx_tmem_dealloc", None, None, &[taddr, ncols, is_leader])?;
+        let exclusive = self.const_u32(data.exclusive as u64);
+        self.emit_agx_helper(c"__zluda_ptx_impl_agx_tmem_dealloc", None, None, &[taddr, ncols, is_leader, exclusive])?;
         Ok(())
     }
 
-    // The tensor memory word (lane, column) of register i of this thread (ptx-exec-tc.k tcCell), as a pointer
+    // The tensor memory word (lane, column) of register i of this thread (ISA 9.7.17.2.3, Figures 183-187: in the
+    // 16-lane shapes thread t covers lanes t / 4 and t / 4 + 8), as a pointer. With `half`, the 16-bit half of a
+    // .pack::16b / .unpack::16b register (Figure 193): the 32-bit cell's column relative to taddr doubles in the
+    // 16xNb shapes, and is that of element 2i + half in .32x32b and .16x32bx2.
     fn tmem_cell(
         &mut self,
         base: LLVMValueRef,
@@ -7125,36 +7140,59 @@ impl<'a> MethodEmitContext<'a> {
         thread: LLVMValueRef,
         split: LLVMValueRef,
         i: u32,
+        half: Option<u32>,
     ) -> LLVMValueRef {
         let b = self.builder;
         let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
         let c = |v: u32| unsafe { LLVMConstInt(i32_type, v as u64, 0) };
+        let wide = !matches!(shape, ast::Tcgen05Shape::S32x32b | ast::Tcgen05Shape::S16x32bx2);
+        let i = match half {
+            Some(h) if !wide => 2 * i + h,
+            _ => i,
+        };
         unsafe {
             let lane0 = LLVMBuildLShr(b, taddr, c(16), LLVM_UNNAMED.as_ptr());
             let column0 = LLVMBuildAnd(b, taddr, c(0xffff), LLVM_UNNAMED.as_ptr());
             let t16 = LLVMBuildAnd(b, thread, c(15), LLVM_UNNAMED.as_ptr());
-            let half = LLVMBuildLShr(b, thread, c(4), LLVM_UNNAMED.as_ptr());
+            let half16 = LLVMBuildLShr(b, thread, c(4), LLVM_UNNAMED.as_ptr());
+            let g = LLVMBuildLShr(b, thread, c(2), LLVM_UNNAMED.as_ptr());
+            let t4 = LLVMBuildAnd(b, thread, c(3), LLVM_UNNAMED.as_ptr());
             let (lane, column) = match shape {
-                ast::Tcgen05Shape::S32x32b => (LLVMBuildAdd(b, lane0, thread, LLVM_UNNAMED.as_ptr()), c(i)),
-                ast::Tcgen05Shape::S16x64b => (t16, LLVMBuildAdd(b, c(2 * i), half, LLVM_UNNAMED.as_ptr())),
-                ast::Tcgen05Shape::S16x128b => {
-                    let h = LLVMBuildShl(b, half, c(1), LLVM_UNNAMED.as_ptr());
-                    (t16, LLVMBuildAdd(b, c(4 * (i / 2) + i % 2), h, LLVM_UNNAMED.as_ptr()))
+                ast::Tcgen05Shape::S32x32b => (thread, c(i)),
+                ast::Tcgen05Shape::S16x64b => {
+                    let odd = LLVMBuildAnd(b, thread, c(1), LLVM_UNNAMED.as_ptr());
+                    let odd = LLVMBuildShl(b, odd, c(3), LLVM_UNNAMED.as_ptr());
+                    let col = LLVMBuildLShr(b, t4, c(1), LLVM_UNNAMED.as_ptr());
+                    (LLVMBuildAdd(b, g, odd, LLVM_UNNAMED.as_ptr()), LLVMBuildAdd(b, c(2 * i), col, LLVM_UNNAMED.as_ptr()))
                 }
+                ast::Tcgen05Shape::S16x128b => (
+                    LLVMBuildAdd(b, g, c(8 * (i % 2)), LLVM_UNNAMED.as_ptr()),
+                    LLVMBuildAdd(b, c(4 * (i / 2)), t4, LLVM_UNNAMED.as_ptr()),
+                ),
                 ast::Tcgen05Shape::S16x256b => {
-                    let h = LLVMBuildShl(b, half, c(2), LLVM_UNNAMED.as_ptr());
-                    (t16, LLVMBuildAdd(b, c(8 * (i / 4) + i % 4), h, LLVM_UNNAMED.as_ptr()))
+                    let col = LLVMBuildShl(b, t4, c(1), LLVM_UNNAMED.as_ptr());
+                    (
+                        LLVMBuildAdd(b, g, c(8 * ((i % 4) / 2)), LLVM_UNNAMED.as_ptr()),
+                        LLVMBuildAdd(b, c(8 * (i / 4) + i % 2), col, LLVM_UNNAMED.as_ptr()),
+                    )
                 }
                 ast::Tcgen05Shape::S16x32bx2 => {
-                    let h = LLVMBuildMul(b, half, split, LLVM_UNNAMED.as_ptr());
+                    let h = LLVMBuildMul(b, half16, split, LLVM_UNNAMED.as_ptr());
                     (t16, LLVMBuildAdd(b, c(i), h, LLVM_UNNAMED.as_ptr()))
                 }
             };
-            let lane = if shape == ast::Tcgen05Shape::S32x32b { lane } else { LLVMBuildAdd(b, lane0, lane, LLVM_UNNAMED.as_ptr()) };
+            let column = match half {
+                Some(h) if wide => {
+                    let x = LLVMBuildShl(b, column, c(1), LLVM_UNNAMED.as_ptr());
+                    LLVMBuildAdd(b, x, c(h), LLVM_UNNAMED.as_ptr())
+                }
+                _ => column,
+            };
+            let lane = LLVMBuildAdd(b, lane0, lane, LLVM_UNNAMED.as_ptr());
             let column = LLVMBuildAdd(b, column0, column, LLVM_UNNAMED.as_ptr());
             let lane = LLVMBuildAnd(b, lane, c(127), LLVM_UNNAMED.as_ptr());
-            let column = LLVMBuildAnd(b, column, c(511), LLVM_UNNAMED.as_ptr());
-            let word = LLVMBuildMul(b, lane, c(512), LLVM_UNNAMED.as_ptr());
+            let column = LLVMBuildAnd(b, column, c(crate::pass::agx_matrix::TMEM_COLS - 1), LLVM_UNNAMED.as_ptr());
+            let word = LLVMBuildMul(b, lane, c(crate::pass::agx_matrix::TMEM_COLS), LLVM_UNNAMED.as_ptr());
             let word = LLVMBuildAdd(b, word, column, LLVM_UNNAMED.as_ptr());
             let i64_type = LLVMInt64TypeInContext(self.context);
             let offset = LLVMBuildZExt(b, word, i64_type, LLVM_UNNAMED.as_ptr());
@@ -7187,8 +7225,8 @@ impl<'a> MethodEmitContext<'a> {
         let mut words = Vec::new();
         for i in 0..data.registers as u32 {
             let word = if data.packed {
-                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i);
-                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i + 1);
+                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, i, Some(0));
+                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, i, Some(1));
                 unsafe {
                     let lo = LLVMBuildLoad2(self.builder, i32_type, lo, LLVM_UNNAMED.as_ptr());
                     let hi = LLVMBuildLoad2(self.builder, i32_type, hi, LLVM_UNNAMED.as_ptr());
@@ -7197,7 +7235,7 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildOr(self.builder, lo, hi, LLVM_UNNAMED.as_ptr())
                 }
             } else {
-                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i, None);
                 unsafe { LLVMBuildLoad2(self.builder, i32_type, p, LLVM_UNNAMED.as_ptr()) }
             };
             words.push(word);
@@ -7215,7 +7253,7 @@ impl<'a> MethodEmitContext<'a> {
         let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
         let mut values = Vec::new();
         for i in 0..data.loaded as u32 {
-            let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+            let p = self.tmem_cell(base, data.shape, taddr, thread, split, i, None);
             values.push(unsafe { LLVMBuildLoad2(self.builder, i32_type, p, LLVM_UNNAMED.as_ptr()) });
         }
         let c = |this: &Self, v: u64| this.const_u32(v);
@@ -7296,8 +7334,8 @@ impl<'a> MethodEmitContext<'a> {
         for (i, value) in values.into_iter().enumerate() {
             let i = i as u32;
             if data.packed {
-                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i);
-                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, 2 * i + 1);
+                let lo = self.tmem_cell(base, data.shape, taddr, thread, split, i, Some(0));
+                let hi = self.tmem_cell(base, data.shape, taddr, thread, split, i, Some(1));
                 unsafe {
                     let low = LLVMBuildAnd(self.builder, value, LLVMConstInt(i32_type, 0xffff, 0), LLVM_UNNAMED.as_ptr());
                     let high = LLVMBuildLShr(self.builder, value, LLVMConstInt(i32_type, 16, 0), LLVM_UNNAMED.as_ptr());
@@ -7305,7 +7343,7 @@ impl<'a> MethodEmitContext<'a> {
                     LLVMBuildStore(self.builder, high, hi);
                 }
             } else {
-                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i);
+                let p = self.tmem_cell(base, data.shape, taddr, thread, split, i, None);
                 unsafe { LLVMBuildStore(self.builder, value, p) };
             }
         }

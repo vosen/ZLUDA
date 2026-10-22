@@ -1633,14 +1633,14 @@ ptx_parser_macros::generate_instruction_type!(
         },
         // tcgen05.fence / wait / relinquish_alloc_permit: the emulated operations complete in program order
         Tcgen05Sync { },
-        // tcgen05.alloc.cta_group::N.sync.aligned.shared::cta.b32 [dst], ncols
+        // tcgen05.alloc{.exclusive}.cta_group::N.sync.aligned{.shared::cta}.b32 [dst], ncols
         Tcgen05Alloc {
             type: Type::Scalar(ScalarType::B32),
-            data: u8,
+            data: Tcgen05AllocDetails,
             arguments<T>: {
                 src_addr: {
                     repr: T,
-                    space: { StateSpace::Shared },
+                    space: { data.space },
                 },
                 src_ncols: {
                     repr: T,
@@ -1664,7 +1664,7 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::Scalar(ScalarType::B64),
                 },
-                // .sp: the tensor memory address of the metadata
+                // .sp: the tensor memory address of the metadata; .decompress::lut::b: that of the lookup tables
                 src_meta: {
                     repr: Option<T>,
                     type: Type::Scalar(ScalarType::B32),
@@ -1728,16 +1728,17 @@ ptx_parser_macros::generate_instruction_type!(
         // tcgen05.commit.cta_group::1.mbarrier::arrive::one{.shared::cluster}.b64 [mbar]
         Tcgen05Commit {
             type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
             arguments<T>: {
                 src_mbar: {
                     repr: T,
-                    space: { StateSpace::Shared },
+                    space: { data.clone() },
                 },
             }
         },
-        // tcgen05.dealloc.cta_group::N.sync.aligned.b32 taddr, ncols
+        // tcgen05.dealloc{.exclusive}.cta_group::N.sync.aligned.b32 taddr, ncols
         Tcgen05Dealloc {
-            data: u8,
+            data: Tcgen05AllocDetails,
             arguments<T>: {
                 src_taddr: {
                     repr: T,
@@ -3042,6 +3043,15 @@ pub struct MbarrierWaitDetails {
     pub try_wait: bool,
     // .phase_type::conditional: the conditional phase of a .layout::v1 object
     pub conditional: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct Tcgen05AllocDetails {
+    pub cta_group: u8,
+    // the state space of the address alloc writes (shared or generic)
+    pub space: StateSpace,
+    // .exclusive (PTX 9.4): no other allocation is live while it is
+    pub exclusive: bool,
 }
 
 pub struct MbarrierInitDetails {
@@ -5096,6 +5106,8 @@ pub enum Tcgen05Kind {
     Tf32,
     I8,
     F8f6f4,
+    // .s1z4m11 (16-bit signed) elements and an .s32 D (PTX 9.4)
+    Ti16,
     // block scaled
     Mxf8f6f4,
     Mxf4,
@@ -5123,6 +5135,8 @@ pub struct Tcgen05MmaDetails {
     /// .block_scale: the scale vector size (0 the default of the kind, 2 for .scale_vec::2X, 4 for .scale_vec::4X,
     /// 16 for .block16, 32 for .block32)
     pub block: Option<u8>,
+    /// .decompress::lut::b: B holds 3-bit indices into 8-entry tables in tensor memory (the address in src_meta)
+    pub lut: bool,
 }
 
 /// The register <-> tensor memory shapes of tcgen05.ld / st

@@ -3495,6 +3495,7 @@ fn tcgen05_instruction<'a, 'input>(
             None => vec![m],
         })
         .collect();
+    let exclusive = take_modifier(&mut modifiers, "exclusive");
     let cta_group = if take_modifier(&mut modifiers, "cta_group::2") {
         2u8
     } else {
@@ -3528,13 +3529,17 @@ fn tcgen05_instruction<'a, 'input>(
             Ok(ast::Instruction::Tcgen05Sync {})
         }
         "alloc" => {
-            if !take_modifier(&mut modifiers, "shared::cta") || !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
+            let space = if take_modifier(&mut modifiers, "shared::cta") { StateSpace::Shared } else { StateSpace::Generic };
+            if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
                 return backtrack();
             }
             let addr = bracketed(stream)?;
             comma(stream)?;
             let ncols = operand(stream)?;
-            Ok(ast::Instruction::Tcgen05Alloc { data: cta_group, arguments: Tcgen05AllocArgs { src_addr: addr, src_ncols: ncols } })
+            Ok(ast::Instruction::Tcgen05Alloc {
+                data: ast::Tcgen05AllocDetails { cta_group, space, exclusive },
+                arguments: Tcgen05AllocArgs { src_addr: addr, src_ncols: ncols },
+            })
         }
         "mma" => {
             // .sp and .ws come before .cta_group
@@ -3544,6 +3549,7 @@ fn tcgen05_instruction<'a, 'input>(
                 ("kind::f16", ast::Tcgen05Kind::F16),
                 ("kind::tf32", ast::Tcgen05Kind::Tf32),
                 ("kind::i8", ast::Tcgen05Kind::I8),
+                ("kind::ti16", ast::Tcgen05Kind::Ti16),
                 ("kind::f8f6f4", ast::Tcgen05Kind::F8f6f4),
                 ("kind::mxf8f6f4", ast::Tcgen05Kind::Mxf8f6f4),
                 ("kind::mxf4", ast::Tcgen05Kind::Mxf4),
@@ -3556,6 +3562,7 @@ fn tcgen05_instruction<'a, 'input>(
                 return backtrack();
             };
             let block_scale = take_modifier(&mut modifiers, "block_scale");
+            let lut = take_modifier(&mut modifiers, "decompress::lut::b");
             let block = if !block_scale {
                 None
             } else if take_modifier(&mut modifiers, "scale_vec::2X") {
@@ -3594,7 +3601,10 @@ fn tcgen05_instruction<'a, 'input>(
             let ws = ws || ws_first;
             let b = operand(stream)?;
             comma(stream)?;
-            let meta = if sparse {
+            if lut && (sparse || !matches!(kind, ast::Tcgen05Kind::F8f6f4 | ast::Tcgen05Kind::Mxf8f6f4)) {
+                return backtrack();
+            }
+            let meta = if sparse || lut {
                 let m = bracketed(stream)?;
                 comma(stream)?;
                 Some(m)
@@ -3633,6 +3643,7 @@ fn tcgen05_instruction<'a, 'input>(
                 zmask: zmask.is_some(),
                 pair: cta_group == 2,
                 block,
+                lut,
             };
             Ok(ast::Instruction::Tcgen05Mma {
                 data,
@@ -3684,13 +3695,16 @@ fn tcgen05_instruction<'a, 'input>(
             Ok(ast::Instruction::Tcgen05Shift { data: cta_group, arguments: Tcgen05ShiftArgs { src_taddr: taddr } })
         }
         "commit" if cta_group == 1 => {
-            take_modifier(&mut modifiers, "shared::cluster");
-            take_modifier(&mut modifiers, "shared::cta");
+            let space = if take_modifier(&mut modifiers, "shared::cluster") | take_modifier(&mut modifiers, "shared::cta") {
+                StateSpace::Shared
+            } else {
+                StateSpace::Generic
+            };
             if !take_modifier(&mut modifiers, "mbarrier::arrive::one") || !take_modifier(&mut modifiers, "b64") || !modifiers.is_empty() {
                 return backtrack();
             }
             let mbar = bracketed(stream)?;
-            Ok(ast::Instruction::Tcgen05Commit { arguments: Tcgen05CommitArgs { src_mbar: mbar } })
+            Ok(ast::Instruction::Tcgen05Commit { data: space, arguments: Tcgen05CommitArgs { src_mbar: mbar } })
         }
         "dealloc" => {
             if !take_modifier(&mut modifiers, "b32") || !modifiers.is_empty() {
@@ -3699,7 +3713,9 @@ fn tcgen05_instruction<'a, 'input>(
             let taddr = operand(stream)?;
             comma(stream)?;
             let ncols = operand(stream)?;
-            Ok(ast::Instruction::Tcgen05Dealloc { data: cta_group, arguments: Tcgen05DeallocArgs { src_taddr: taddr, src_ncols: ncols } })
+            Ok(ast::Instruction::Tcgen05Dealloc {
+                data: ast::Tcgen05AllocDetails { cta_group, space: StateSpace::Generic, exclusive },
+                arguments: Tcgen05DeallocArgs { src_taddr: taddr, src_ncols: ncols } })
         }
         "ld" | "st" => {
             let shape = [

@@ -344,12 +344,15 @@ uint64 __zluda_ptx_impl_agx_spd_iter(uint32 es, uint32 ib, uint32 ns, uint32 nt,
 }
 
 // ---------------------------------------------------------------- tcgen05 tensor memory
-// The tensor memory of a CTA (128 lanes x 512 32-bit columns) is a slab of device memory. A CTA claims a free slab
-// at its first tcgen05.alloc (the owner word holds its linear CTA index + 1) and gives it back when its last
-// allocation is freed; the allocation map (16 granules of 32 columns) is next to the owner word. A CTA that finds no
-// free slab waits for one.
+// The tensor memory of a CTA (128 lanes x 576 32-bit columns, the most an exclusive allocation takes, in rows of
+// 1024 words) is a slab of device memory. A CTA claims a free slab at its first tcgen05.alloc (the owner word holds
+// its linear CTA index + 1) and gives it back when its last allocation is freed; the allocation map (18 granules of
+// 32 columns, bit 31 while an exclusive allocation is live) is next to the owner word. A CTA that finds no free slab
+// waits for one.
 #define TMEM_SLABS 4
-#define TMEM_WORDS (128 * 512)
+#define TMEM_COLS 1024
+#define TMEM_WORDS (128 * TMEM_COLS)
+#define TMEM_EXCLUSIVE 0x80000000u
 typedef __attribute__((address_space(1))) uint32 global_uint32;
 static global_uint32 __zluda_agx_tmem_owner[TMEM_SLABS];
 static global_uint32 __zluda_agx_tmem_map[TMEM_SLABS];
@@ -386,17 +389,28 @@ static int tmem_claim(uint32 key) {
     return slab;
 }
 
-// tcgen05.alloc (the elected lane of the warp): the column of a free, aligned run of ncols columns
-uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader) {
+// tcgen05.alloc (the elected lane of the warp): the column of a free, aligned run of ncols columns. An exclusive
+// allocation (any multiple of 32 columns up to 576) waits until the CTA has no other live allocation and starts at
+// column 0; the other allocations wait while it is live.
+uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader, uint32 exclusive) {
     if (!leader)
         return 0;
-    if (ncols < 32 || ncols > 512 || (ncols & (ncols - 1)))
+    if (exclusive ? (ncols < 32 || ncols > 576 || (ncols & 31)) : (ncols < 32 || ncols > 512 || (ncols & (ncols - 1))))
         __builtin_trap();
     int slab = tmem_claim(tmem_key());
     uint32 n = ncols / 32;
-    uint32 ones = n == 16 ? 0xffff : (1u << n) - 1;
+    uint32 ones = (1u << n) - 1;
     for (;;) {
         uint32 map = __atomic_load_n(&__zluda_agx_tmem_map[slab], __ATOMIC_ACQUIRE);
+        if (exclusive) {
+            uint32 expected = 0;
+            if (__atomic_compare_exchange_n(&__zluda_agx_tmem_map[slab], &expected, ones | TMEM_EXCLUSIVE, 0,
+                                            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                return 0;
+            continue;
+        }
+        if (map & TMEM_EXCLUSIVE)
+            continue;
         uint32 b = 0;
         while (b + n <= 16 && (map & (ones << b)))
             b += n;
@@ -408,16 +422,29 @@ uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader) {
     }
 }
 
+uint64 __zluda_ptx_impl_agx_tmem_base(void);
+
+// The tensor memory of a new CTA reads as zero: after tcgen05.alloc each lane of the warp zeroes the words lane,
+// lane + 32, ... of the 128 lanes x ncols columns at taddr
+void __zluda_ptx_impl_agx_tmem_zero(uint32 taddr, uint32 ncols, uint32 lane) {
+    global_uint32 *base = (global_uint32 *)(unsigned long)__zluda_ptx_impl_agx_tmem_base();
+    uint32 column = taddr & 0xffff;
+    for (uint32 w = lane; w < 128 * ncols; w += 32)
+        base[(w / ncols) * TMEM_COLS + ((column + w % ncols) & (TMEM_COLS - 1))] = 0;
+}
+
 // tcgen05.dealloc (the elected lane): frees the columns at taddr, and the slab with the last of them
-void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader) {
+void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader, uint32 exclusive) {
     if (!leader)
         return;
     int slab = tmem_find(tmem_key());
     uint32 column = taddr & 0xffff;
-    if (slab < 0 || (column & 31) || ncols < 32 || ncols > 512)
+    if (slab < 0 || (column & 31) || ncols < 32 || ncols > (exclusive ? 576 : 512))
         __builtin_trap();
     uint32 n = ncols / 32;
-    uint32 bits = (n == 16 ? 0xffff : (1u << n) - 1) << (column / 32);
+    uint32 bits = ((1u << n) - 1) << (column / 32);
+    if (exclusive)
+        bits |= TMEM_EXCLUSIVE;
     uint32 old = __atomic_fetch_and(&__zluda_agx_tmem_map[slab], ~bits, __ATOMIC_ACQ_REL);
     if ((old & bits) != bits)
         __builtin_trap();
@@ -425,7 +452,7 @@ void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader
         __atomic_store_n(&__zluda_agx_tmem_owner[slab], 0, __ATOMIC_RELEASE);
 }
 
-// The address of the CTA's tensor memory: lane l, column c is the 32-bit word l * 512 + c
+// The address of the CTA's tensor memory: lane l, column c is the 32-bit word l * TMEM_COLS + c
 uint64 __zluda_ptx_impl_agx_tmem_base(void) {
     int slab = tmem_find(tmem_key());
     if (slab < 0)
@@ -499,7 +526,7 @@ static uint32 tile_word(uint64 desc, uint32 i, uint32 w) {
 }
 
 static global_uint32 *tmem_word(global_uint32 *base, uint32 lane, uint32 column) {
-    return &base[(lane & 127) * 512 + (column & 511)];
+    return &base[(lane & 127) * TMEM_COLS + (column & (TMEM_COLS - 1))];
 }
 
 // The cluster placeholders of zluda_ptx_impl_agx.ll (llvm_zluda's LowerClusters): __zluda_agx_cluster(3..5) the
