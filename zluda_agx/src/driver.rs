@@ -74,6 +74,8 @@ pub(crate) struct Driver {
     /// properties; a mapping keeps its allocation alive after cuMemRelease
     vmm: HashMap<u64, (std::rc::Rc<agx_runtime::Bo>, CUmemAllocationProp)>,
     next_vmm: u64,
+    /// The multicast objects (cuMulticastCreate), by handle (from the numbers of `vmm`)
+    multicast: HashMap<u64, Multicast>,
     /// The address ranges of cuMemAddressReserve: start, size
     reserved: std::collections::BTreeMap<u64, u64>,
     /// The dma-bufs of exported allocations (cuIpcGetMemHandle), by the address of the handle, kept open for
@@ -397,6 +399,7 @@ fn new_driver() -> Result<Driver, CUerror> {
         timer: None,
         vmm: HashMap::new(),
         next_vmm: 1,
+        multicast: HashMap::new(),
         reserved: Default::default(),
         ipc_exports: HashMap::new(),
         ipc_imports: HashMap::new(),
@@ -876,6 +879,8 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
             A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 0,
             A::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY => 65536,
             A::CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT => 256,
+            // multicast objects of one device (cuMulticastCreate), on the virtual memory management API
+            A::CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED | A::CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED => 1,
             _ => 0,
         })
     })?;
@@ -2193,7 +2198,127 @@ pub(crate) unsafe fn cuMemCreate(
 }
 
 pub(crate) unsafe fn cuMemRelease(handle: CUmemGenericAllocationHandle) -> CUresult {
-    with(|d| d.vmm.remove(&handle).map(|_| ()).ok_or(CUerror::INVALID_VALUE))
+    with(|d| {
+        if d.multicast.remove(&handle).is_some() {
+            return Ok(());
+        }
+        d.vmm.remove(&handle).map(|_| ()).ok_or(CUerror::INVALID_VALUE)
+    })
+}
+
+/// A multicast object of a team of one device: what is bound to it (multicast offset, the physical allocation,
+/// the offset in it, the size). A mapping of it maps the bound memory, so that multimem.* on its addresses
+/// reach that device's memory (zluda_ptx_impl_agx_cvt.c: an address outside the multimem windows is a
+/// multicast object of one device).
+pub(crate) struct Multicast {
+    size: u64,
+    added: bool,
+    bound: Vec<(u64, std::rc::Rc<agx_runtime::Bo>, u64, u64)>,
+}
+
+pub(crate) unsafe fn cuMulticastCreate(handle: *mut CUmemGenericAllocationHandle, prop: *const CUmulticastObjectProp) -> CUresult {
+    let prop = *prop.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    if prop.size == 0 || prop.size as u64 % VMM_GRANULARITY != 0 || prop.flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    // one GPU: a team of more devices could never be completed
+    if prop.numDevices != 1 {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    let h = with(|d| {
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.multicast.insert(h, Multicast { size: prop.size as u64, added: false, bound: Vec::new() });
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+pub(crate) unsafe fn cuMulticastAddDevice(handle: CUmemGenericAllocationHandle, dev: CUdevice) -> CUresult {
+    if dev != 0 {
+        return Err(CUerror::INVALID_DEVICE);
+    }
+    with(|d| {
+        let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+        m.added = true;
+        Ok(())
+    })
+}
+
+fn multicast_bind(
+    d: &mut Driver,
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: u64,
+    phys: std::rc::Rc<agx_runtime::Bo>,
+    mem_offset: u64,
+    size: u64,
+) -> Result<(), CUerror> {
+    let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+    if !m.added {
+        // the team is never complete
+        return Err(CUerror::NOT_PERMITTED);
+    }
+    if size == 0 || (mc_offset | mem_offset | size) % VMM_GRANULARITY != 0 || mc_offset + size > m.size
+        || mem_offset + size > phys.size
+        || m.bound.iter().any(|&(o, _, _, s)| o < mc_offset + size && mc_offset < o + s)
+    {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    m.bound.push((mc_offset, phys, mem_offset, size));
+    Ok(())
+}
+
+pub(crate) unsafe fn cuMulticastBindMem(
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: usize,
+    mem_handle: CUmemGenericAllocationHandle,
+    mem_offset: usize,
+    size: usize,
+    flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        let phys = d.vmm.get(&mem_handle).ok_or(CUerror::INVALID_HANDLE)?.0.clone();
+        multicast_bind(d, handle, mc_offset as u64, phys, mem_offset as u64, size as u64)
+    })
+}
+
+pub(crate) unsafe fn cuMulticastBindAddr(
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: usize,
+    ptr: CUdeviceptr,
+    size: usize,
+    flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        let (phys, offset) = d.ctx.mapped_location(ptr.0 as u64).ok_or(CUerror::INVALID_VALUE)?;
+        multicast_bind(d, handle, mc_offset as u64, phys, offset, size as u64)
+    })
+}
+
+pub(crate) unsafe fn cuMulticastUnbind(handle: CUmemGenericAllocationHandle, dev: CUdevice, mc_offset: usize, size: usize) -> CUresult {
+    if dev != 0 {
+        return Err(CUerror::INVALID_DEVICE);
+    }
+    with(|d| {
+        let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+        let before = m.bound.len();
+        m.bound.retain(|&(o, _, _, s)| !(o == mc_offset as u64 && s == size as u64));
+        if m.bound.len() == before { Err(CUerror::INVALID_VALUE) } else { Ok(()) }
+    })
+}
+
+pub(crate) unsafe fn cuMulticastGetGranularity(
+    granularity: *mut usize,
+    _prop: *const CUmulticastObjectProp,
+    _option: CUmulticastGranularity_flags,
+) -> CUresult {
+    out(granularity, VMM_GRANULARITY as usize)
 }
 
 pub(crate) unsafe fn cuMemMap(
@@ -2212,6 +2337,20 @@ pub(crate) unsafe fn cuMemMap(
             .is_some_and(|(&lo, &len)| va + size as u64 <= lo + len);
         if !in_reserved || size == 0 {
             return Err(CUerror::INVALID_VALUE);
+        }
+        if let Some(m) = d.multicast.get(&handle) {
+            // each bound range in [offset, offset + size) at its place
+            let (lo, hi) = (offset as u64, offset as u64 + size as u64);
+            if hi > m.size {
+                return Err(CUerror::INVALID_VALUE);
+            }
+            let ranges: Vec<_> = m.bound.iter().filter(|b| b.0 < hi && lo < b.0 + b.3).cloned().collect();
+            for (o, phys, mem_offset, s) in ranges {
+                let start = o.max(lo);
+                let end = (o + s).min(hi);
+                d.ctx.mem_map(va + (start - lo), &phys, mem_offset + (start - o), end - start).map_err(from_io)?;
+            }
+            return Ok(());
         }
         let phys = d.vmm.get(&handle).ok_or(CUerror::INVALID_HANDLE)?.0.clone();
         d.ctx.mem_map(va, &phys, offset as u64, size as u64).map_err(from_io)

@@ -187,6 +187,15 @@ impl Context {
         }
     }
 
+    /// The physical allocation mapped at `va` and the offset of `va` in it (cuMulticastBindAddr).
+    pub fn mapped_location(&self, va: u64) -> Option<(std::rc::Rc<Bo>, u64)> {
+        let start = find(&self.allocs, va, 0, |a| a.1)?;
+        match &self.allocs[&start].0 {
+            Memory::Mapped { phys, offset, .. } => Some((phys.clone(), offset + (va - start))),
+            Memory::Bo(_) => None,
+        }
+    }
+
     /// Takes `bo` (bound) as an allocation of `size` bytes at its address, which mem_free releases: an imported
     /// dma-buf (cuIpcOpenMemHandle), registered host memory (cuMemHostRegister).
     pub fn insert_bo(&mut self, bo: Bo, size: u64) -> u64 {
