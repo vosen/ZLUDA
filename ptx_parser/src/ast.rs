@@ -2725,6 +2725,13 @@ where
                                     (self)(ident, type_space, is_dst, relaxed_type_check)?,
                                     member,
                                 )),
+                                Some(RegOrImmediate::MaskedAddress(ident, offset, shift)) => {
+                                    Some(RegOrImmediate::MaskedAddress(
+                                        (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                        offset,
+                                        shift,
+                                    ))
+                                }
                                 None => None,
                             })
                         })
@@ -3359,6 +3366,9 @@ pub enum RegOrImmediate<Ident> {
     /// an element of a vector register inside a vector operand (`{%r1, %V.z}`)
     #[display("{_0}.{_1}")]
     VecMember(Ident, u8),
+    /// in initializers, `mask(name + offset)`: the byte of the address under the mask 0xFF << shift
+    #[display("0xff<<{_2}({_0}+{_1})")]
+    MaskedAddress(Ident, i64, u8),
 }
 
 #[derive(Clone)]

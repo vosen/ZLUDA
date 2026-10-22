@@ -86,6 +86,7 @@ pub(crate) fn run<'input>(
             Directive2::Method(method) => emit_ctx.emit_method(method)?,
         }
     }
+    emit_ctx.emit_masked_inits()?;
     if let Some(d) = emit_ctx.debug.take() {
         d.finish();
     }
@@ -239,6 +240,9 @@ struct ModuleEmitContext<'a, 'input> {
     stack_size: u64,
     // AGX: kernels take the shared memory size of the launch as a hidden last argument
     threadgroup_bytes_argument: bool,
+    // AGX: the mask(name + offset) initializer elements, for __zluda_agx_masked_init: (the element's address, the
+    // masked address, shift | element bytes << 8)
+    masked_inits: Vec<[LLVMValueRef; 3]>,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -262,6 +266,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             strict_fp,
             stack_size: DYNAMIC_STACK_SIZE,
             threadgroup_bytes_argument: false,
+            masked_inits: Vec::new(),
         }
     }
 
@@ -491,6 +496,67 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         if !var.info.array_init.is_empty() {
             let initializer = self.get_array_init(&var.info.v_type, &*var.info.array_init)?;
             unsafe { LLVMSetInitializer(global, initializer) };
+            self.record_masked_inits(global, &var.info)?;
+        }
+        Ok(())
+    }
+
+    // The loader stores the byte of each masked address (agx_runtime Module::relocated_globals): LLVM has no
+    // constant expression for it
+    fn record_masked_inits(&mut self, global: LLVMValueRef, info: &ast::VariableInfo<SpirvWord>) -> Result<(), TranslateError> {
+        if !info.array_init.iter().any(|e| matches!(e, ast::RegOrImmediate::MaskedAddress(..))) {
+            return Ok(());
+        }
+        let scalar = match &info.v_type {
+            ast::Type::Scalar(s) | ast::Type::Array(None, s, _) => *s,
+            _ => return Err(error_todo_msg("mask() in an initializer of vectors")),
+        };
+        if self.target != Target::Agx {
+            return Err(error_todo_msg("mask() of an address in an initializer"));
+        }
+        // its initial value is not that of the initializer
+        unsafe { LLVMSetExternallyInitialized(global, 1) };
+        let bytes = scalar.size_of() as u64;
+        let i64_type = unsafe { LLVMInt64TypeInContext(self.context) };
+        for (i, elem) in info.array_init.iter().enumerate() {
+            if let ast::RegOrImmediate::MaskedAddress(reg, offset, shift) = elem {
+                let slot = self.address_init_of(global, i as i64 * bytes as i64, i64_type);
+                let address = self.address_init(*reg, *offset, i64_type)?;
+                let desc = unsafe { LLVMConstInt(i64_type, *shift as u64 | bytes << 8, 0) };
+                self.masked_inits.push([slot, address, desc]);
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_masked_inits(&mut self) -> Result<(), TranslateError> {
+        if self.masked_inits.is_empty() {
+            return Ok(());
+        }
+        unsafe {
+            let i64_type = LLVMInt64TypeInContext(self.context);
+            let entry_type = LLVMArrayType2(i64_type, 3);
+            let mut entries = self
+                .masked_inits
+                .iter_mut()
+                .map(|e| LLVMConstArray2(i64_type, e.as_mut_ptr(), 3))
+                .collect::<Vec<_>>();
+            let table = LLVMConstArray2(entry_type, entries.as_mut_ptr(), entries.len() as u64);
+            let global = LLVMAddGlobalInAddressSpace(
+                self.module,
+                LLVMTypeOf(table),
+                c"__zluda_agx_masked_init".as_ptr(),
+                get_state_space(ast::StateSpace::Global)?,
+            );
+            LLVMSetInitializer(global, table);
+            LLVMSetAlignment(global, 8);
+            let ptr_type = LLVMPointerTypeInContext(self.context, 0);
+            let mut used = [LLVMConstAddrSpaceCast(global, ptr_type)];
+            let used_init = LLVMConstArray2(ptr_type, used.as_mut_ptr(), 1);
+            let used_global = LLVMAddGlobal(self.module, LLVMTypeOf(used_init), c"llvm.used".as_ptr());
+            LLVMSetInitializer(used_global, used_init);
+            LLVMSetLinkage(used_global, LLVMLinkage::LLVMAppendingLinkage);
+            LLVMSetSection(used_global, c"llvm.metadata".as_ptr());
         }
         Ok(())
     }
@@ -537,6 +603,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                         ast::RegOrImmediate::Imm(imm) => {
                             Ok(get_immediate_value(self.context, scalar, imm))
                         }
+                        // stored by the loader (record_masked_inits)
+                        ast::RegOrImmediate::MaskedAddress(..) => Ok(unsafe { LLVMConstInt(type_, 0, 0) }),
                         ast::RegOrImmediate::VecMember(..) => Err(error_mismatched_type()),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
@@ -559,6 +627,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                     // the address of a variable (or function), plus an offset
                     [ast::RegOrImmediate::Reg(reg)] => self.address_init(*reg, 0, type_)?,
                     [ast::RegOrImmediate::RegOffset(reg, offset)] => self.address_init(*reg, *offset, type_)?,
+                    [ast::RegOrImmediate::MaskedAddress(..)] => unsafe { LLVMConstInt(type_, 0, 0) },
                     _ => return Err(error_mismatched_type()),
                 }
             }
@@ -570,12 +639,16 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 
     fn address_init(&self, reg: SpirvWord, offset: i64, type_: LLVMTypeRef) -> Result<LLVMValueRef, TranslateError> {
-        let address = unsafe { LLVMConstPtrToInt(self.resolver.value(reg)?, type_) };
-        Ok(if offset == 0 {
+        Ok(self.address_init_of(self.resolver.value(reg)?, offset, type_))
+    }
+
+    fn address_init_of(&self, value: LLVMValueRef, offset: i64, type_: LLVMTypeRef) -> LLVMValueRef {
+        let address = unsafe { LLVMConstPtrToInt(value, type_) };
+        if offset == 0 {
             address
         } else {
             unsafe { LLVMConstAdd(address, LLVMConstInt(type_, offset as u64, 1)) }
-        })
+        }
     }
 
     fn emit_fn_attribute_string(&self, llvm_object: LLVMValueRef, key: &str, value: &str) {

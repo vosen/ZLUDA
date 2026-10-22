@@ -303,6 +303,9 @@ fn run_array_init<'input, 'b>(
             ast::RegOrImmediate::RegOffset(name, offset) => {
                 Ok(ast::RegOrImmediate::RegOffset(resolver.get(name)?, *offset))
             }
+            ast::RegOrImmediate::MaskedAddress(name, offset, shift) => {
+                Ok(ast::RegOrImmediate::MaskedAddress(resolver.get(name)?, *offset, *shift))
+            }
             // registers are not initializer values
             ast::RegOrImmediate::VecMember(..) => Err(error_mismatched_type()),
         })

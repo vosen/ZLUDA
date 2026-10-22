@@ -142,6 +142,18 @@ def split_program(text):
     return ''.join(module), dirs
 
 
+def lower_coll_test(module):
+    """The model's internal coll_test.{sum,first}.u32 d, a, mask (semantics/ptx-exec-coll.k) as PTX: redux.sync.add,
+    or a shuffle from the lowest lane of the mask."""
+    def one(m):
+        kind, d, a, mask = m.group(1), m.group(2), m.group(3), m.group(4)
+        if kind == 'sum':
+            return f'redux.sync.add.u32 {d}, {a}, {mask};'
+        return (f'{{ .reg .b32 %coll_t<2>; brev.b32 %coll_t0, {mask}; bfind.shiftamt.u32 %coll_t1, %coll_t0; '
+                f'shfl.sync.idx.b32 {d}, {a}, %coll_t1, 0x1f, {mask}; }}')
+    return re.sub(r'coll_test\.(sum|first)\.u32\s+([^,;]+?)\s*,\s*([^,;]+?)\s*,\s*([^,;]+?)\s*;', one, module)
+
+
 def split_vals(s):
     """Flatten a (possibly nested) brace initializer list."""
     s = s.replace('{', ' ').replace('}', ' ')
@@ -364,6 +376,7 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             'tgb_half': None if tgb_half in (None, 0xffffffff) else tgb_half,
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
+    gsizes = {n: v[1] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
     # the relocations of address-valued initializers (.rela.agx.globals, AGXUsage.rst): (offset, size, symbol
     # offset in .agx.globals + addend), of symbols defined in .agx.globals
     relocs = []
@@ -377,7 +390,7 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             if shndx != gsec:
                 raise Unsupported('relocation against a symbol outside .agx.globals')
             relocs.append((offset, {1: 8, 2: 4}[info & 0xffffffff], value + addend))
-    return kernels, gdata, gsyms, relocs
+    return kernels, gdata, gsyms, gsizes, relocs
 
 
 # ------------------------------------------------------------------ running
@@ -405,6 +418,7 @@ class Memory:
 def run_test(path, args):
     with open(path) as f:
         module, dirs = split_program(f.read())
+    module = lower_coll_test(module)
     for d in dirs:
         if d.split()[0] in UNSUPPORTED:
             return 'UNSUPPORTED', 'harness directive ' + d.split()[0]
@@ -448,7 +462,7 @@ def run_test(path, args):
             return 'COMPILE-ERROR', ' | '.join(msg[:3])[:300]
         with open(os.path.join(tmp, 'm.asm')) as f:
             asm = f.read()
-        kernels, gdata, gsyms, relocs = kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
+        kernels, gdata, gsyms, gsizes, relocs = kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
         params = kernel_params(module)
 
         mem = Memory()
@@ -458,6 +472,14 @@ def run_test(path, args):
         globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
         for off, n, target in relocs:
             globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
+        # the mask(name + offset) initializer elements (agx_runtime MASKED_INIT_SYMBOL)
+        if '__zluda_agx_masked_init' in gsyms:
+            t = gsyms['__zluda_agx_masked_init']
+            words = lambda a: int.from_bytes(globals_mem[a:a + 8], 'little')
+            for e in range(t, t + gsizes.get('__zluda_agx_masked_init', 0), 24):
+                slot, address, desc = words(e) - GLOBALS_BASE, words(e + 8), words(e + 16)
+                n = desc >> 8
+                globals_mem[slot:slot + n] = ((address >> (desc & 63)) & 0xff).to_bytes(n, 'little')
         for n, off in gsyms.items():
             syms[n] = GLOBALS_BASE + off
         failures, launches, skipped, passed, skipped_launches = [], 0, 0, 0, []

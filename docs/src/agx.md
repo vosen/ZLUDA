@@ -78,6 +78,13 @@ an error.
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by
   -1 wraps.
+* Variable initializers may hold addresses (`name`, `generic(name)`, plus an
+  offset), which the object relocates (`R_AGX_ABS64` / `R_AGX_ABS32` in
+  `.rela.agx.globals`), and `mask(expr)` bytes (PTX ISA 5.4.4): of a
+  constant at compile time, of an address `mask(name + offset)` through the
+  table `__zluda_agx_masked_init` (per element its address, the address and
+  the shift with the element size), which the loader applies after the
+  relocations (`agx_runtime::Module::relocated_globals`).
 
 ## Limitations
 
@@ -922,7 +929,8 @@ Without it 1553 match. The other 175 are the floating point differences listed a
 - `-0.0` under `.sat`;
 - `div` and `sqrt` precision.
 
-The one skipped check follows the non-PTX `coll_test` of `collective.ptx`.
+The harness lowers the model's internal `coll_test.sum` / `coll_test.first` (used by `collective.ptx`) to
+`redux.sync.add` and a shuffle from the lowest lane of the mask.
 
 A full run takes about 50 minutes with `-j 4` (most of it compiling the texture and `tcgen05` tests).
 

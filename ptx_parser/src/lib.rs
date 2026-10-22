@@ -702,21 +702,27 @@ fn initializer_value<'a, 'input>(
             None => ast::RegOrImmediate::Reg(name),
         });
     }
-    // mask(expr): the bits of a constant under an 0xFF mask, moved down to bit 0 (PTX ISA 5.4.4). Masks of addresses
-    // are not supported.
+    // mask(expr): the bits of a constant, or of the address of a variable plus an offset, under an 0xFF mask, moved
+    // down to bit 0 (PTX ISA 5.4.4)
     let checkpoint = stream.checkpoint();
-    if let Ok((mask, _, value, _)) = (int_literal_value, Token::LParen, const_expr, Token::RParen).parse_next(stream) {
+    if let Ok(mask) = terminated(int_literal_value, Token::LParen).parse_next(stream) {
         let mask = match mask {
             ast::ImmediateValue::U64(x) => x,
             ast::ImmediateValue::S64(x) => x as u64,
             _ => 0,
         };
-        if mask != 0 && (mask >> mask.trailing_zeros()) == 0xff {
-            return Ok(ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(
-                (value as u64 & mask) >> mask.trailing_zeros(),
-            )));
+        if mask == 0 || (mask >> mask.trailing_zeros()) != 0xff {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
         }
-        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        let shift = mask.trailing_zeros();
+        let inner = stream.checkpoint();
+        if let Ok(value) = terminated(const_expr, Token::RParen).parse_next(stream) {
+            return Ok(ast::RegOrImmediate::Imm(ast::ImmediateValue::U64((value as u64 & mask) >> shift)));
+        }
+        stream.reset(&inner);
+        let (name, offset) =
+            terminated((ident, opt(preceded(Token::Plus, u32))), Token::RParen).parse_next(stream)?;
+        return Ok(ast::RegOrImmediate::MaskedAddress(name, offset.unwrap_or(0) as i64, shift as u8));
     }
     stream.reset(&checkpoint);
     let value = reg_or_immediate.parse_next(stream)?;
@@ -909,9 +915,10 @@ fn target<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<(u32, Optio
     .parse_next(stream)
 }
 
+// compute_NN is a synonym of sm_NN
 fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
     (
-        "sm_",
+        alt(("sm_", "compute_")),
         dec_uint,
         opt(token::any.verify(|c: &char| c.is_ascii_lowercase())),
         eof,
@@ -3112,7 +3119,7 @@ fn tensor_instruction<'a, 'input>(
     let tcgen05 = opcode == "tcgen05";
     if opcode != "cp" && opcode != "tensormap" && !texture && !arith && opcode != "cvt" && !sparse && !tcgen05
         && opcode != "vote" && opcode != "fence" && opcode != "createpolicy" && opcode != "mbarrier"
-        && opcode != "atom" && opcode != "red" && opcode != "multimem" && opcode != "fabric"
+        && opcode != "atom" && opcode != "red" && opcode != "multimem" && opcode != "fabric" && opcode != "ld"
     {
         return backtrack();
     }
@@ -3135,6 +3142,9 @@ fn tensor_instruction<'a, 'input>(
     }
     if opcode == "multimem" {
         return multimem_instruction(stream, modifiers);
+    }
+    if opcode == "ld" {
+        return ld_volatile_relaxed(stream, modifiers);
     }
     if opcode == "fabric" {
         return fabric_instruction(stream, modifiers);
@@ -4105,6 +4115,28 @@ fn mixed_float_instruction<'a, 'input>(
             arguments: FmaOobArgs { dst, src1, src2, src3 },
         });
     }
+    // fma.f32 without a rounding mode (which ptxas rejects for sm_20 and later): .rn
+    if opcode == "fma" && rounding.is_none() && types == [ScalarType::F32] && modifiers.is_empty() {
+        let operand = |stream: &mut PtxParser<'a, 'input>| ParsedOperandStr::parse.parse_next(stream);
+        let dst = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src1 = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src2 = operand(stream)?;
+        Token::Comma.parse_next(stream)?;
+        let src3 = operand(stream)?;
+        return Ok(ast::Instruction::Fma {
+            data: ast::ArithFloat {
+                type_: ScalarType::F32,
+                rounding: ast::RoundingMode::NearestEven,
+                flush_to_zero: Some(flush_to_zero),
+                saturate,
+                is_fusable: false,
+                relu: false,
+            },
+            arguments: ast::FmaArgs { dst, src1, src2, src3 },
+        });
+    }
     if !modifiers.is_empty() {
         return backtrack();
     }
@@ -4146,6 +4178,67 @@ fn mixed_float_instruction<'a, 'input>(
             saturate,
         },
         arguments: MixedFloatArgs { dst, src1, src2, src3 },
+    })
+}
+
+// ld.volatile.relaxed.scope{.ss}{.vec}.type d, [a] (which the ISA rules out): a volatile load
+fn ld_volatile_relaxed<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+    mut modifiers: Vec<&'input str>,
+) -> PResult<ast::Instruction<ParsedOperandStr<'input>>> {
+    if !take_modifier(&mut modifiers, "volatile") || !take_modifier(&mut modifiers, "relaxed") {
+        return backtrack();
+    }
+    if !["cta", "cluster", "gpu", "sys"].iter().any(|s| take_modifier(&mut modifiers, s)) {
+        return backtrack();
+    }
+    let space = [
+        ("global", StateSpace::Global),
+        ("shared", StateSpace::Shared),
+        ("shared::cta", StateSpace::Shared),
+        ("shared::cluster", StateSpace::SharedCluster),
+        ("local", StateSpace::Local),
+    ]
+    .iter()
+    .find(|(name, _)| take_modifier(&mut modifiers, name))
+    .map_or(StateSpace::Generic, |&(_, s)| s);
+    let vector = [("v2", 2u8), ("v4", 4), ("v8", 8)].iter().find(|(name, _)| take_modifier(&mut modifiers, name)).map(|&(_, n)| n);
+    let type_ = match modifiers.as_slice() {
+        [t] => match *t {
+            "b8" => ScalarType::B8,
+            "b16" => ScalarType::B16,
+            "b32" => ScalarType::B32,
+            "b64" => ScalarType::B64,
+            "u8" => ScalarType::U8,
+            "u16" => ScalarType::U16,
+            "u32" => ScalarType::U32,
+            "u64" => ScalarType::U64,
+            "s8" => ScalarType::S8,
+            "s16" => ScalarType::S16,
+            "s32" => ScalarType::S32,
+            "s64" => ScalarType::S64,
+            "f16" => ScalarType::F16,
+            "f32" => ScalarType::F32,
+            "f64" => ScalarType::F64,
+            _ => return backtrack(),
+        },
+        _ => return backtrack(),
+    };
+    let dst = ParsedOperandStr::parse.parse_next(stream)?;
+    Token::Comma.parse_next(stream)?;
+    let src = delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket).parse_next(stream)?;
+    Ok(ast::Instruction::Ld {
+        data: ast::LdDetails {
+            qualifier: ast::LdStQualifier::Volatile,
+            state_space: space,
+            caching: ast::LdCacheOperator::Cached,
+            typ: match vector {
+                Some(n) => ast::Type::Vector(n, type_),
+                None => ast::Type::Scalar(type_),
+            },
+            non_coherent: false,
+        },
+        arguments: ast::LdArgs { dst, src },
     })
 }
 

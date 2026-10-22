@@ -88,6 +88,18 @@ define i32 @__zluda_ptx_impl_sreg_lanemask_ge() #0 {
   ret i32 %m
 }
 
+define i32 @__zluda_ptx_impl_sreg_lanemask_eq() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %m = shl i32 1, %l
+  ret i32 %m
+}
+
+define i32 @__zluda_ptx_impl_sreg_lanemask_gt() #0 {
+  %l = call i32 @llvm.agx.thread.index.in.simdgroup()
+  %m = shl i32 -2, %l
+  ret i32 %m
+}
+
 ; The clocks. A context whose modules read them has a timer block, which a CPU thread of zluda_agx keeps
 ; updating with the CPU's generic timer (agx_runtime::TimerBlock): the counter at 0, at 8 its value when the block
 ; was made and at 16 the nanoseconds since boot then, at 24 the nanoseconds and at 28 the GPU cycles per tick

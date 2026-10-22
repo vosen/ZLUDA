@@ -130,6 +130,11 @@ impl KernelInfo {
     }
 }
 
+/// A table in the global data buffer of `mask(name + offset)` initializer elements (PTX ISA 5.4.4), which LLVM cannot
+/// express: per element three words, its address, the masked address and `shift | element bytes << 8`; the element is
+/// `(address >> shift) & 0xff` (`ptx/src/pass/llvm/emit.rs`).
+pub const MASKED_INIT_SYMBOL: &str = "__zluda_agx_masked_init";
+
 /// A compiled module: its code, the initial global data buffer, and its kernels.
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -437,12 +442,25 @@ impl Module {
         Ok(Module { text, globals, kernels, global_symbols, global_relocs, debug_object })
     }
 
-    /// The initial global data buffer once placed at `va`, with its relocations applied.
+    /// The initial global data buffer once placed at `va`, with its relocations applied, and then the masked
+    /// addresses of `MASKED_INIT_SYMBOL`.
     pub fn relocated_globals(&self, va: u64) -> Vec<u8> {
         let mut g = self.globals.clone();
         for &(offset, width, to) in &self.global_relocs {
             let v = (va + to).to_le_bytes();
             g[offset as usize..offset as usize + width as usize].copy_from_slice(&v[..width as usize]);
+        }
+        if let Some(&(table, size)) = self.global_symbols.get(MASKED_INIT_SYMBOL) {
+            let word = |g: &[u8], at: u64| u64::from_le_bytes(g[at as usize..at as usize + 8].try_into().unwrap());
+            for entry in (table..table + size).step_by(24) {
+                let (slot, address, desc) = (word(&g, entry), word(&g, entry + 8), word(&g, entry + 16));
+                let (shift, bytes) = (desc & 63, (desc >> 8) as usize);
+                let Some(at) = slot.checked_sub(va).map(|a| a as usize).filter(|&a| a + bytes <= g.len()) else {
+                    continue;
+                };
+                let v = (address >> shift) & 0xff;
+                g[at..at + bytes].copy_from_slice(&v.to_le_bytes()[..bytes]);
+            }
         }
         g
     }
@@ -883,6 +901,25 @@ mod tests {
         let word = |o: u64| u64::from_le_bytes(g[o as usize..o as usize + 8].try_into().unwrap());
         assert_eq!((word(p), word(p + 8)), (0x10_0000_0000 + x, 0x10_0000_0000 + y));
         assert_eq!((word(x), word(y + 8)), (1, 5));
+    }
+
+    // mask(name + offset) initializers: m = { 0xff(foo + 4), 0xff00(foo + 4) } with foo at 0x10 and m at 0x20
+    #[test]
+    fn stores_masked_addresses() {
+        let mut globals = vec![0u8; 0x60];
+        let entry = |g: &mut Vec<u8>, at: usize, desc: u64| g[at + 16..at + 24].copy_from_slice(&desc.to_le_bytes());
+        entry(&mut globals, 0x30, 1 << 8);
+        entry(&mut globals, 0x48, 8 | 1 << 8);
+        let m = Module {
+            text: Vec::new(),
+            globals,
+            kernels: HashMap::new(),
+            global_symbols: [(MASKED_INIT_SYMBOL.to_string(), (0x30, 48))].into_iter().collect(),
+            global_relocs: vec![(0x30, 8, 0x20), (0x38, 8, 0x14), (0x48, 8, 0x21), (0x50, 8, 0x14)],
+            debug_object: None,
+        };
+        let g = m.relocated_globals(0x1_2345_6700);
+        assert_eq!(g[0x20..0x22], [0x14, 0x67]);
     }
 
     // tests/data/byref.ll: the backend's .agx.kernels records, and packing cuLaunchKernel-style parameters.

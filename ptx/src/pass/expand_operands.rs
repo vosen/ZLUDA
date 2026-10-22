@@ -324,7 +324,9 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
                     )
                     .map(Some),
                 None if is_dst => Ok(None),
-                None | Some(ast::RegOrImmediate::RegOffset(..)) => Err(error_mismatched_type()),
+                None | Some(ast::RegOrImmediate::RegOffset(..) | ast::RegOrImmediate::MaskedAddress(..)) => {
+                    Err(error_mismatched_type())
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         let temporary_vector = self
