@@ -1395,6 +1395,18 @@ impl LoadedModule {
         self.module.global_symbols.contains_key(HEAP_SYMBOL)
     }
 
+    /// Writes `bytes` at the start of the module's global `name` (a `.texref` variable's handle, for example);
+    /// false if it has no such global or it is shorter.
+    pub fn write_global(&mut self, name: &str, bytes: &[u8]) -> bool {
+        let Some(&(off, size)) = self.module.global_symbols.get(name) else { return false };
+        let Some(g) = self.globals.as_mut() else { return false };
+        if (bytes.len() as u64) > size {
+            return false;
+        }
+        g.as_mut_slice()[off as usize..off as usize + bytes.len()].copy_from_slice(bytes);
+        true
+    }
+
     pub fn uses_timer(&self) -> bool {
         self.module.global_symbols.contains_key(TIMER_SYMBOL)
     }

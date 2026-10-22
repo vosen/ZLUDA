@@ -591,3 +591,172 @@ mod tests {
         assert_eq!(a.offset(8, 2, 1), (3 + 2) * 32 + 8);
     }
 }
+
+// ---------------------------------------------------------------- texture references (legacy API)
+
+/// A texture reference (cuModuleGetTexRef): a module's `.texref` variable, which holds the handle of a texture
+/// object that the driver makes from the reference's settings again at each change.
+pub(crate) struct TexRef {
+    module: usize,
+    name: String,
+    resource: Option<CUDA_RESOURCE_DESC>,
+    desc: CUDA_TEXTURE_DESC,
+    format: (CUarray_format, u32),
+    object: u64,
+}
+
+static TEXREFS: std::sync::Mutex<Vec<(usize, String, usize)>> = std::sync::Mutex::new(Vec::new());
+
+unsafe fn texref<'a>(h: CUtexref) -> Result<&'a mut TexRef, CUerror> {
+    (h as *mut TexRef).as_mut().ok_or(CUerror::INVALID_HANDLE)
+}
+
+pub(crate) unsafe fn cuModuleGetTexRef(p: *mut CUtexref, hmod: CUmodule, name: *const std::ffi::c_char) -> CUresult {
+    let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
+    let module = hmod.0 as usize;
+    with(|d| {
+        let m = d.modules.get(&module).ok_or(CUerror::INVALID_HANDLE)?;
+        if !m.module.global_symbols.contains_key(&name) {
+            return Err(CUerror::NOT_FOUND);
+        }
+        Ok(())
+    })?;
+    let mut refs = TEXREFS.lock().unwrap_or_else(|e| e.into_inner());
+    let h = match refs.iter().find(|(m, n, _)| *m == module && *n == name) {
+        Some(&(_, _, h)) => h,
+        None => {
+            let mut desc: CUDA_TEXTURE_DESC = std::mem::zeroed();
+            desc.addressMode = [CUaddress_mode::CU_TR_ADDRESS_MODE_CLAMP; 3];
+            let r = Box::new(TexRef {
+                module,
+                name: name.clone(),
+                resource: None,
+                desc,
+                format: (CUarray_format::CU_AD_FORMAT_FLOAT, 1),
+                object: 0,
+            });
+            let h = Box::into_raw(r) as usize;
+            refs.push((module, name, h));
+            h
+        }
+    };
+    out(p, h as CUtexref)
+}
+
+/// Makes the reference's texture object again and points the module's variable at it.
+unsafe fn rebind(r: &mut TexRef) -> CUresult {
+    let Some(resource) = r.resource else { return Ok(()) };
+    let words = texture_words(&image(&resource)?, &r.desc)?;
+    with(|d| {
+        let va = write_descriptor(d, &words)?;
+        let old = std::mem::replace(&mut r.object, va);
+        let m = d.modules.get_mut(&r.module).ok_or(CUerror::INVALID_HANDLE)?;
+        if !m.write_global(&r.name, &va.to_le_bytes()) {
+            return Err(CUerror::NOT_FOUND);
+        }
+        if old != 0 {
+            d.sync_all()?;
+            d.ctx.mem_free(old).map_err(from_io)?;
+        }
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuTexRefSetArray(h: CUtexref, a: CUarray, _flags: std::ffi::c_uint) -> CUresult {
+    let r = texref(h)?;
+    let mut res: CUDA_RESOURCE_DESC = std::mem::zeroed();
+    res.resType = CUresourcetype::CU_RESOURCE_TYPE_ARRAY;
+    res.res.array.hArray = a;
+    r.resource = Some(res);
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetMipmappedArray(h: CUtexref, a: CUmipmappedArray, _flags: std::ffi::c_uint) -> CUresult {
+    let r = texref(h)?;
+    let mut res: CUDA_RESOURCE_DESC = std::mem::zeroed();
+    res.resType = CUresourcetype::CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
+    res.res.mipmap.hMipmappedArray = a;
+    r.resource = Some(res);
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetAddress_v2(offset: *mut usize, h: CUtexref, dptr: CUdeviceptr, bytes: usize) -> CUresult {
+    let r = texref(h)?;
+    let mut res: CUDA_RESOURCE_DESC = std::mem::zeroed();
+    res.resType = CUresourcetype::CU_RESOURCE_TYPE_LINEAR;
+    res.res.linear.devPtr = dptr;
+    res.res.linear.format = r.format.0;
+    res.res.linear.numChannels = r.format.1;
+    res.res.linear.sizeInBytes = bytes;
+    r.resource = Some(res);
+    if !offset.is_null() {
+        *offset = 0;
+    }
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetAddress2D_v3(
+    h: CUtexref,
+    desc: *const CUDA_ARRAY_DESCRIPTOR,
+    dptr: CUdeviceptr,
+    pitch: usize,
+) -> CUresult {
+    let r = texref(h)?;
+    let a = desc.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    let mut res: CUDA_RESOURCE_DESC = std::mem::zeroed();
+    res.resType = CUresourcetype::CU_RESOURCE_TYPE_PITCH2D;
+    res.res.pitch2D.devPtr = dptr;
+    res.res.pitch2D.format = a.Format;
+    res.res.pitch2D.numChannels = a.NumChannels;
+    res.res.pitch2D.width = a.Width;
+    res.res.pitch2D.height = a.Height;
+    res.res.pitch2D.pitchInBytes = pitch;
+    r.format = (a.Format, a.NumChannels);
+    r.resource = Some(res);
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetFormat(h: CUtexref, fmt: CUarray_format, components: std::ffi::c_int) -> CUresult {
+    let r = texref(h)?;
+    r.format = (fmt, components.max(1) as u32);
+    if let Some(res) = r.resource.as_mut() {
+        if res.resType == CUresourcetype::CU_RESOURCE_TYPE_LINEAR {
+            res.res.linear.format = fmt;
+            res.res.linear.numChannels = components.max(1) as u32;
+        }
+    }
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetAddressMode(h: CUtexref, dim: std::ffi::c_int, am: CUaddress_mode) -> CUresult {
+    let r = texref(h)?;
+    *r.desc.addressMode.get_mut(dim as usize).ok_or(CUerror::INVALID_VALUE)? = am;
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetFilterMode(h: CUtexref, fm: CUfilter_mode) -> CUresult {
+    let r = texref(h)?;
+    r.desc.filterMode = fm;
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetMipmapFilterMode(h: CUtexref, fm: CUfilter_mode) -> CUresult {
+    let r = texref(h)?;
+    r.desc.mipmapFilterMode = fm;
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefSetFlags(h: CUtexref, flags: std::ffi::c_uint) -> CUresult {
+    let r = texref(h)?;
+    r.desc.flags = flags;
+    rebind(r)
+}
+
+pub(crate) unsafe fn cuTexRefGetAddress_v2(p: *mut CUdeviceptr, h: CUtexref) -> CUresult {
+    let r = texref(h)?;
+    match r.resource {
+        Some(res) if res.resType == CUresourcetype::CU_RESOURCE_TYPE_LINEAR => out(p, res.res.linear.devPtr),
+        Some(res) if res.resType == CUresourcetype::CU_RESOURCE_TYPE_PITCH2D => out(p, res.res.pitch2D.devPtr),
+        _ => Err(CUerror::INVALID_VALUE),
+    }
+}

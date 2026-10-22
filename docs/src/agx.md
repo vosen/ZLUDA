@@ -478,8 +478,9 @@ and sampling rules have not been measured (simulator task B29). The rules are th
 - texel offsets.
 
 Supported instructions:
-- `tex` (`.base`, `.level`, `.grad`, separate samplers, the residency predicate);
-- `tld4`, `txq`;
+- `tex` (`.base`, `.level`, `.grad`, separate samplers, the residency predicate, `.f16` and `.f16x2`
+  destinations, multi-sample `2dms` and `a2dms`);
+- `tld4`, `txq` (also `txq.level`), with PTX's encodings of the address modes;
 - `suld.b`, `sust.b` and `sust.p` (formatted), `sured.b` and `sured.p`, each with `.trap` (an out-of-bounds
   access reports `CUDA_ERROR_ASSERT`), `.clamp` and `.zero`;
 - `suq`, `istypep`.
@@ -491,17 +492,20 @@ The runtime supports:
 - `cuSurfObjectCreate` over arrays.
 
 Module `.texref`, `.samplerref` and `.surfref` variables compile: on AGX each holds the 64-bit handle of
-a texture, sampler or surface object, which the instructions load. The runtime does not fill them yet.
+a texture, sampler or surface object, which the instructions load. The legacy texture reference API
+(`cuModuleGetTexRef`, `cuTexRefSetArray`, `SetMipmappedArray`, `SetAddress`, `SetAddress2D`, `SetFormat`,
+`SetAddressMode`, `SetFilterMode`, `SetMipmapFilterMode`, `SetFlags`, `GetAddress`) fills a `.texref`
+variable with a texture object made from the reference's settings, again after each change.
 
 Not supported:
-- the legacy texture reference API (`cuTexRef*`, `cuModuleGetTexRef`), which would fill those variables;
+- surface and sampler references (`cuModuleGetSurfRef`, `cuSurfRefSetArray`);
 - arbitrary border colours (the border is zero);
 - the min/max mipmap level clamps and the level bias of `CUDA_TEXTURE_DESC`;
 - per-dimension address modes (the first one applies).
 
 All PTX-formalization texture and surface programs (`tex`, `tex-mip`, `surf`, `istypep`) match the formal
-semantics. A texture fetch runs a few thousand instructions, and kernels with many `tex` instructions take
-minutes to compile.
+semantics. A texture fetch runs a few thousand instructions; each `tex` is inlined, so kernels with many `tex`
+instructions take minutes to compile (`tex-mip`, 33 of them: 3 minutes).
 
 ## Asynchronous copies and mbarriers
 

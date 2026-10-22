@@ -41,7 +41,7 @@ enum Op {
 
 pub(crate) struct Driver {
     default_waits: Vec<Fence>,
-    modules: HashMap<usize, LoadedModule>,
+    pub(crate) modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
     events: HashMap<usize, Event>,
