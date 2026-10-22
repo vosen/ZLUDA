@@ -435,6 +435,74 @@ impl Vm {
     pub fn alloc_unbound(&mut self, size: u64) -> io::Result<Bo> {
         self.create(size, 0, 0, None)
     }
+
+    /// A range of `size` bytes of data addresses (pages, aligned to `align`) with nothing bound in it, for
+    /// `map_at` (cuMemAddressReserve).
+    pub fn reserve(&mut self, size: u64, align: u64) -> io::Result<u64> {
+        let size = round_up(size.max(1), PAGE);
+        self.data
+            .borrow_mut()
+            .alloc(size, align.max(PAGE))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "data heap full"))
+    }
+
+    /// Returns a range from `reserve`.
+    pub fn unreserve(&mut self, va: u64, size: u64) {
+        self.data.borrow_mut().free(va, round_up(size.max(1), PAGE));
+    }
+
+    /// Binds `size` bytes of `bo` from `offset` at `va` (in a reserved range; pages), read/write, until the
+    /// mapping is dropped.
+    pub fn map_at(&mut self, bo: &Bo, offset: u64, va: u64, size: u64) -> io::Result<Mapping> {
+        if va % PAGE != 0 || offset % PAGE != 0 || size % PAGE != 0 || offset + size > bo.size {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "mapping not page aligned or past the object"));
+        }
+        let op = drm_asahi_gem_bind_op {
+            flags: (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32,
+            handle: bo.handle,
+            offset,
+            range: size,
+            addr: va,
+        };
+        let mut vb = drm_asahi_vm_bind {
+            vm_id: self.id,
+            num_binds: 1,
+            stride: std::mem::size_of_val(&op) as u32,
+            pad: 0,
+            userptr: &op as *const _ as u64,
+        };
+        self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-bind")?;
+        Ok(Mapping { dev: self.dev.clone(), vm_id: self.id, va, size })
+    }
+}
+
+/// A binding of part of an object at an address chosen by the caller (`Vm::map_at`); dropping it unbinds it, and
+/// the range stays reserved.
+pub struct Mapping {
+    dev: Rc<DeviceInner>,
+    vm_id: u32,
+    pub va: u64,
+    pub size: u64,
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        let op = drm_asahi_gem_bind_op {
+            flags: DRM_ASAHI_BIND_UNBIND as u32,
+            handle: 0,
+            offset: 0,
+            range: self.size,
+            addr: self.va,
+        };
+        let mut vb = drm_asahi_vm_bind {
+            vm_id: self.vm_id,
+            num_binds: 1,
+            stride: std::mem::size_of_val(&op) as u32,
+            pad: 0,
+            userptr: &op as *const _ as u64,
+        };
+        let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-unbind");
+    }
 }
 
 impl Drop for Vm {

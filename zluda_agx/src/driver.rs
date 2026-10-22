@@ -70,6 +70,12 @@ pub(crate) struct Driver {
     /// The timer block of the clocks (`%globaltimer`, `%clock64`, `nanosleep`), made when the first module that
     /// reads them is loaded, with the CPU thread that keeps it current
     timer: Option<Timer>,
+    /// The physical allocations of the virtual memory management API (cuMemCreate), by handle, with their
+    /// properties; a mapping keeps its allocation alive after cuMemRelease
+    vmm: HashMap<u64, (std::rc::Rc<agx_runtime::Bo>, CUmemAllocationProp)>,
+    next_vmm: u64,
+    /// The address ranges of cuMemAddressReserve: start, size
+    reserved: std::collections::BTreeMap<u64, u64>,
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
@@ -382,6 +388,9 @@ fn new_driver() -> Result<Driver, CUerror> {
         checked_launches: Default::default(),
         heap: None,
         timer: None,
+        vmm: HashMap::new(),
+        next_vmm: 1,
+        reserved: Default::default(),
     })
 }
 
@@ -1941,6 +1950,158 @@ pub(crate) unsafe fn cuMemGetAddressRange_v2(pbase: *mut CUdeviceptr, psize: *mu
         out(psize, size as usize)?;
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------- virtual memory management
+
+/// The granularity of the virtual memory management API: the GPU page.
+const VMM_GRANULARITY: u64 = agx_runtime::PAGE;
+
+pub(crate) unsafe fn cuMemGetAllocationGranularity(
+    granularity: *mut usize,
+    _prop: *const CUmemAllocationProp,
+    _option: CUmemAllocationGranularity_flags,
+) -> CUresult {
+    out(granularity, VMM_GRANULARITY as usize)
+}
+
+pub(crate) unsafe fn cuMemAddressReserve(
+    ptr: *mut CUdeviceptr,
+    size: usize,
+    alignment: usize,
+    _addr: CUdeviceptr,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if size == 0 || size as u64 % VMM_GRANULARITY != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    // the address hint is not followed, as CUDA allows
+    let va = with(|d| {
+        let va = d.ctx.vm.reserve(size as u64, (alignment as u64).max(VMM_GRANULARITY)).map_err(from_io)?;
+        d.reserved.insert(va, size as u64);
+        Ok(va)
+    })?;
+    out(ptr, CUdeviceptr_v2(va as *mut c_void))
+}
+
+pub(crate) unsafe fn cuMemAddressFree(ptr: CUdeviceptr, size: usize) -> CUresult {
+    let va = ptr.0 as u64;
+    with(|d| {
+        if d.reserved.get(&va) != Some(&(size as u64)) {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        if d.ctx.allocation_ranges().iter().any(|&(lo, hi)| lo < va + size as u64 && va < hi) {
+            // still mapped
+            return Err(CUerror::INVALID_VALUE);
+        }
+        d.reserved.remove(&va);
+        d.ctx.vm.unreserve(va, size as u64);
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuMemCreate(
+    handle: *mut CUmemGenericAllocationHandle,
+    size: usize,
+    prop: *const CUmemAllocationProp,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    let prop = *prop.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    if size == 0 || size as u64 % VMM_GRANULARITY != 0
+        || prop.type_ != CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED
+        || prop.location.type_ != CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE
+        || prop.location.id != 0
+    {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let h = with(|d| {
+        let bo = d.ctx.vm.alloc_unbound(size as u64).map_err(from_io)?;
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (std::rc::Rc::new(bo), prop));
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+pub(crate) unsafe fn cuMemRelease(handle: CUmemGenericAllocationHandle) -> CUresult {
+    with(|d| d.vmm.remove(&handle).map(|_| ()).ok_or(CUerror::INVALID_VALUE))
+}
+
+pub(crate) unsafe fn cuMemMap(
+    ptr: CUdeviceptr,
+    size: usize,
+    offset: usize,
+    handle: CUmemGenericAllocationHandle,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    let va = ptr.0 as u64;
+    with(|d| {
+        let in_reserved = d
+            .reserved
+            .range(..=va)
+            .next_back()
+            .is_some_and(|(&lo, &len)| va + size as u64 <= lo + len);
+        if !in_reserved || size == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        let phys = d.vmm.get(&handle).ok_or(CUerror::INVALID_HANDLE)?.0.clone();
+        d.ctx.mem_map(va, &phys, offset as u64, size as u64).map_err(from_io)
+    })
+}
+
+pub(crate) unsafe fn cuMemUnmap(ptr: CUdeviceptr, size: usize) -> CUresult {
+    with(|d| d.ctx.mem_unmap(ptr.0 as u64, size as u64).map_err(from_io))
+}
+
+/// Mapped memory is always readable and writable by the device; the requested access is accepted as is.
+pub(crate) unsafe fn cuMemSetAccess(ptr: CUdeviceptr, size: usize, desc: *const CUmemAccessDesc, count: usize) -> CUresult {
+    if desc.is_null() || count == 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let va = ptr.0 as u64;
+    with(|d| {
+        let mapped = d.ctx.allocation_ranges().iter().any(|&(lo, hi)| lo <= va && va + size as u64 <= hi)
+            || d.ctx.mapped_allocation(va).is_some();
+        if mapped { Ok(()) } else { Err(CUerror::INVALID_VALUE) }
+    })
+}
+
+pub(crate) unsafe fn cuMemGetAccess(flags: *mut std::ffi::c_ulonglong, _location: *const CUmemLocation, ptr: CUdeviceptr) -> CUresult {
+    let mapped = with(|d| Ok(d.ctx.mapped_allocation(ptr.0 as u64).is_some()))?;
+    let f = if mapped { CUmemAccess_flags::CU_MEM_ACCESS_FLAGS_PROT_READWRITE.0 } else { 0 };
+    out(flags, f as std::ffi::c_ulonglong)
+}
+
+pub(crate) unsafe fn cuMemGetAllocationPropertiesFromHandle(
+    prop: *mut CUmemAllocationProp,
+    handle: CUmemGenericAllocationHandle,
+) -> CUresult {
+    let p = with(|d| d.vmm.get(&handle).map(|v| v.1).ok_or(CUerror::INVALID_VALUE))?;
+    out(prop, p)
+}
+
+/// The handle of the physical allocation mapped at `addr`, as a new reference (released with cuMemRelease).
+pub(crate) unsafe fn cuMemRetainAllocationHandle(handle: *mut CUmemGenericAllocationHandle, addr: *mut c_void) -> CUresult {
+    let h = with(|d| {
+        let phys = d.ctx.mapped_allocation(addr as u64).ok_or(CUerror::INVALID_VALUE)?.clone();
+        let prop = d
+            .vmm
+            .values()
+            .find(|(p, _)| std::rc::Rc::ptr_eq(p, &phys))
+            .map(|v| v.1)
+            .unwrap_or_else(|| {
+                let mut p: CUmemAllocationProp = unsafe { std::mem::zeroed() };
+                p.type_ = CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+                p.location.type_ = CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+                p
+            });
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (phys, prop));
+        Ok(h)
+    })?;
+    out(handle, h)
 }
 
 /// Rows are aligned to 128 bytes (the texture row alignment G13/G14 drivers use).
