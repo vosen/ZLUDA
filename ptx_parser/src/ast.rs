@@ -2484,6 +2484,11 @@ where
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
                 imm,
             ),
+            ParsedOperand::RegIndex(base, index, imm) => ParsedOperand::RegIndex(
+                (self)(base, type_space, is_dst, relaxed_type_check)?,
+                (self)(index, None, false, relaxed_type_check)?,
+                imm,
+            ),
             ParsedOperand::Imm(imm) => ParsedOperand::Imm(imm),
             ParsedOperand::VecMember(ident, index) => ParsedOperand::VecMember(
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
@@ -2501,6 +2506,10 @@ where
                                 Some(RegOrImmediate::RegOffset(ident, offset)) => Some(RegOrImmediate::RegOffset(
                                     (self)(ident, type_space, is_dst, relaxed_type_check)?,
                                     offset,
+                                )),
+                                Some(RegOrImmediate::VecMember(ident, member)) => Some(RegOrImmediate::VecMember(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                    member,
                                 )),
                                 None => None,
                             })
@@ -3026,12 +3035,18 @@ pub enum RegOrImmediate<Ident> {
     /// the address of a variable plus a byte offset (in initializers: `name + 4`)
     #[display("{_0}+{_1}")]
     RegOffset(Ident, i64),
+    /// an element of a vector register inside a vector operand (`{%r1, %V.z}`)
+    #[display("{_0}.{_1}")]
+    VecMember(Ident, u8),
 }
 
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),
     RegOffset(Ident, i32),
+    /// An array element with a register index, `a[r]` / `a[r + 8]`: the address `a` + `r` + the byte offset
+    /// (PTX ISA 6.4.2)
+    RegIndex(Ident, Ident, i32),
     Imm(ImmediateValue),
     VecMember(Ident, u8),
     // None denotes a sink; retain its position in the vector.
@@ -3055,6 +3070,7 @@ where
         match self {
             ParsedOperand::Reg(id) => write!(f, "{}", id)?,
             ParsedOperand::RegOffset(id, o) => write!(f, "{}+{}", id, o)?,
+            ParsedOperand::RegIndex(base, index, o) => write!(f, "{}[{}+{}]", base, index, o)?,
             ParsedOperand::Imm(imm) => write!(f, "{}", imm)?,
             ParsedOperand::VecMember(id, idx) => {
                 let suffix = match idx {

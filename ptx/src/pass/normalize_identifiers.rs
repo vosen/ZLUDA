@@ -231,10 +231,14 @@ impl<'a, 'input, 'b>
     fn visit_ident(
         &mut self,
         name: &'input str,
-        _: Option<(&ast::Type, ast::StateSpace)>,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
         _: bool,
         _: bool,
     ) -> Result<SpirvWord, TranslateError> {
+        // the return values a call leaves out (see `call` in ptx_parser)
+        if name.starts_with("%__discarded_return") {
+            return self.resolver.get_or_declare(name, type_space);
+        }
         self.resolver.get(&name)
     }
 }
@@ -299,6 +303,8 @@ fn run_array_init<'input, 'b>(
             ast::RegOrImmediate::RegOffset(name, offset) => {
                 Ok(ast::RegOrImmediate::RegOffset(resolver.get(name)?, *offset))
             }
+            // registers are not initializer values
+            ast::RegOrImmediate::VecMember(..) => Err(error_mismatched_type()),
         })
         .collect::<Result<Vec<_>, _>>()?)
 }

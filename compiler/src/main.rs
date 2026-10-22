@@ -58,6 +58,12 @@ pub struct Options {
     /// object (as nvcc -lineinfo), for tools that map a PC to a source line
     lineinfo: bool,
 
+    #[bpaf(long("stack-size"), argument("BYTES"), fallback(0))]
+    /// AGX: stack per thread for alloca of a dynamic size (CUDA's
+    /// CU_LIMIT_STACK_SIZE, 1024 by default); recursive functions get four
+    /// times as much
+    stack_size: u32,
+
     #[bpaf(positional("filename"), some("a PTX file"))]
     /// PTX files. AGX links several into one object (their kernels and
     /// functions, as cuLink does); the outputs are named after the first
@@ -117,6 +123,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.agx_strict,
             opts.agx_checked,
             opts.lineinfo,
+            opts.stack_size,
         );
     }
 
@@ -204,6 +211,7 @@ fn compile_agx(
     agx_strict: bool,
     checked: bool,
     lineinfo: bool,
+    stack_size: u32,
 ) -> Result<(), CompilerError> {
     let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
@@ -217,6 +225,7 @@ fn compile_agx(
             strict_fp,
             // checked mode names the source of a bad access
             debug_locations: checked || lineinfo,
+            stack_size,
         },
     )?;
     write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
@@ -231,6 +240,7 @@ fn compile_agx(
                 target: ptx::Target::Agx,
                 strict_fp,
                 debug_locations: checked || lineinfo,
+                stack_size,
             },
         )?;
         other_ir.push(other.llvm_ir);

@@ -101,6 +101,10 @@ pub struct Options {
     /// Keep `.loc` as LLVM debug locations (line tables only), for the AGX
     /// backend's checked mode to name the source of a bad access.
     pub debug_locations: bool,
+    /// AGX: bytes of stack per thread for `alloca` of a dynamic size (CUDA's
+    /// `CU_LIMIT_STACK_SIZE`; 0 for its default, 1024); the frames of recursive
+    /// functions get four times as much.
+    pub stack_size: u32,
 }
 
 /// Drops the `.loc` statements of every function.
@@ -136,7 +140,7 @@ pub fn to_llvm_module_with_options<'input>(
     options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
-    let Options { target, strict_fp, debug_locations } = options;
+    let Options { target, strict_fp, debug_locations, stack_size } = options;
     let strict_fp = strict_fp && target == Target::Agx;
     let mut ast = ast;
     if !debug_locations {
@@ -203,7 +207,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
     let llvm_ir =
-        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp, &files)?;
+        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp, stack_size, &files)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {

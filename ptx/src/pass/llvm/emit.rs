@@ -69,12 +69,16 @@ pub(crate) fn run<'input>(
     fp_mode: FloatingPointMode,
     target: Target,
     strict_fp: bool,
+    stack_size: u32,
     files: &[(u32, String)],
 ) -> Result<llvm::Module, TranslateError> {
     let module = llvm::Module::new(context, LLVM_UNNAMED);
     let mut emit_ctx =
         ModuleEmitContext::new(context, &module, &id_defs, fp_mode, target, strict_fp);
     emit_ctx.debug = DebugInfo::new(context.get(), module.get(), files);
+    if stack_size != 0 {
+        emit_ctx.stack_size = stack_size as u64;
+    }
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -86,6 +90,13 @@ pub(crate) fn run<'input>(
     }
     if target == Target::Agx {
         super::super::agx_matrix::define_helpers(context, &module)?;
+        // the backend sizes the stack of recursive functions from it
+        unsafe {
+            let i32_type = LLVMInt32TypeInContext(context.get());
+            let value = LLVMValueAsMetadata(LLVMConstInt(i32_type, emit_ctx.stack_size, 0));
+            let key = "agx-stack-size";
+            LLVMAddModuleFlag(module.get(), LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorWarning, key.as_ptr().cast(), key.len(), value);
+        }
     }
     if cfg!(debug_assertions) {
         if let Err(err) = module.verify() {
@@ -205,6 +216,7 @@ struct ModuleEmitContext<'a, 'input> {
     fp_mode: FloatingPointMode,
     target: Target,
     strict_fp: bool,
+    stack_size: u64,
 }
 
 impl<'a, 'input> ModuleEmitContext<'a, 'input> {
@@ -226,6 +238,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             fp_mode,
             target,
             strict_fp,
+            stack_size: DYNAMIC_STACK_SIZE,
         }
     }
 
@@ -432,13 +445,17 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
         array_init: &[ast::RegOrImmediate<SpirvWord>],
     ) -> Result<*mut LLVMValue, TranslateError> {
         let initializer = match type_ {
-            ast::Type::Array(None, scalar, dimensions) if dimensions.len() > 1 => {
-                // the elements are in row-major order: one constant array per row
+            ast::Type::Array(vector, scalar, dimensions) if dimensions.len() > 1 || vector.is_some() => {
+                // the elements are in row-major order: one constant array (or vector) per row
                 let rows = dimensions[0] as usize;
                 if rows == 0 || array_init.len() % rows != 0 {
                     return Err(error_unreachable());
                 }
-                let row_type = ast::Type::Array(None, *scalar, dimensions[1..].to_vec());
+                let row_type = if dimensions.len() > 1 {
+                    ast::Type::Array(*vector, *scalar, dimensions[1..].to_vec())
+                } else {
+                    ast::Type::Vector(vector.unwrap().get(), *scalar)
+                };
                 let mut items = array_init
                     .chunks(array_init.len() / rows)
                     .map(|row| self.get_array_init(&row_type, row))
@@ -464,9 +481,20 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
                         ast::RegOrImmediate::Imm(imm) => {
                             Ok(get_immediate_value(self.context, scalar, imm))
                         }
+                        ast::RegOrImmediate::VecMember(..) => Err(error_mismatched_type()),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 unsafe { LLVMConstArray2(type_, elements.as_mut_ptr(), elements.len() as u64) }
+            }
+            ast::Type::Vector(width, scalar) => {
+                if *width as usize != array_init.len() {
+                    return Err(error_unreachable());
+                }
+                let mut elements = array_init
+                    .iter()
+                    .map(|elem| self.get_array_init(&ast::Type::Scalar(*scalar), std::slice::from_ref(elem)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                unsafe { LLVMConstVector(elements.as_mut_ptr(), elements.len() as u32) }
             }
             ast::Type::Scalar(scalar) => {
                 let type_ = get_scalar_type(self.context, *scalar);
@@ -657,10 +685,13 @@ fn get_immediate_value(
         let mask = if bits < 64 { (1u64 << bits) - 1 } else { u64::MAX };
         return unsafe { LLVMConstBitCast(LLVMConstInt(int_type, value & mask, 0), type_) };
     }
-    // PTX immediates are 64-bit; LLVM requires them to fit the type.
+    // PTX immediates are 64-bit; LLVM requires them to fit the type. An integer used as a predicate is true when it
+    // is not zero (PTX ISA 4.5.3).
     let truncate = |x: u64| {
         let width = unsafe { LLVMGetIntTypeWidth(type_) };
-        if width < 64 {
+        if width == 1 {
+            (x != 0) as u64
+        } else if width < 64 {
             x & ((1u64 << width) - 1)
         } else {
             x
@@ -717,20 +748,31 @@ struct MethodEmitContext<'a> {
     target: Target,
     strict_fp: bool,
     stack: Option<PtxStack>,
+    dynamic_stack_size: u64,
     /// The function's subprogram and the module's debug info, if `.loc` is kept.
     debug: Option<(LLVMMetadataRef, &'a DebugInfo)>,
 }
 
 // The stack of alloca, stacksave and stackrestore: a private array (sized
-// when the function is complete) and the offset of its top. Restoring the
-// offset frees the allocations made since it was saved, so later
-// allocations reuse their addresses, as in PTX.
+// when the function is complete) and the offset of its top. As in PTX it grows
+// down from the end of the array, an allocation's address is the new top, and
+// restoring the offset frees the allocations made since it was saved, so later
+// allocations reuse their addresses. Allocations of a dynamic size share
+// the stack size of the options (DYNAMIC_STACK_SIZE bytes, CUDA's default,
+// unless set); on AGX a thread whose
+// allocation does not fit sets __agx_stack_overflow (see the backend's
+// AGXUsage.rst, Recursion) and ends.
 struct PtxStack {
     base: LLVMValueRef,
     top: LLVMValueRef,
+    // the store of the initial top, the size of the array
+    init: LLVMValueRef,
     size: u64,
     align: u32,
+    dynamic: bool,
 }
+
+const DYNAMIC_STACK_SIZE: u64 = 1024;
 
 impl<'a> MethodEmitContext<'a> {
     fn new(
@@ -761,6 +803,7 @@ impl<'a> MethodEmitContext<'a> {
             target: parent.target,
             strict_fp: parent.strict_fp,
             stack: None,
+            dynamic_stack_size: parent.stack_size,
             debug: subprogram.zip(parent.debug.as_ref()),
         }
     }
@@ -768,9 +811,12 @@ impl<'a> MethodEmitContext<'a> {
     fn finish(&mut self) {
         if let Some(stack) = self.stack.take() {
             let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+            let size = stack.size + if stack.dynamic { self.dynamic_stack_size } else { 0 };
+            let size = size.next_multiple_of(stack.align as u64).max(stack.align as u64);
             unsafe {
-                LLVMSetOperand(stack.base, 0, LLVMConstInt(i32_type, stack.size.max(1), 0));
+                LLVMSetOperand(stack.base, 0, LLVMConstInt(i32_type, size, 0));
                 LLVMSetAlignment(stack.base, stack.align);
+                LLVMSetOperand(stack.init, 0, LLVMConstInt(i32_type, size, 0));
             }
         }
     }
@@ -795,12 +841,14 @@ impl<'a> MethodEmitContext<'a> {
         let top = unsafe {
             LLVMZludaBuildAlloca(self.variables_builder.get(), i32_type, space, LLVM_UNNAMED.as_ptr())
         };
-        unsafe { LLVMBuildStore(self.variables_builder.get(), LLVMConstInt(i32_type, 0, 0), top) };
+        let init = unsafe { LLVMBuildStore(self.variables_builder.get(), LLVMConstInt(i32_type, 0, 0), top) };
         self.stack = Some(PtxStack {
             base,
             top,
+            init,
             size: 0,
             align: 16,
+            dynamic: false,
         });
         Ok((base, top))
     }
@@ -3684,6 +3732,7 @@ impl<'a> MethodEmitContext<'a> {
         let size = self.resolver.value(arguments.src)?;
         let i8_type = get_scalar_type(self.context, ast::ScalarType::B8);
         let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        let i64_type = get_scalar_type(self.context, ast::ScalarType::B64);
         let constant_size = unsafe {
             if LLVMIsAConstantInt(size) != ptr::null_mut() {
                 Some(LLVMConstIntGetZExtValue(size))
@@ -3691,13 +3740,9 @@ impl<'a> MethodEmitContext<'a> {
                 None
             }
         };
-        let Some(constant_size) = constant_size.filter(|s| *s < (1 << 24)) else {
+        let constant_size = constant_size.filter(|s| *s < (1 << 24));
+        if constant_size.is_none() && self.target != Target::Agx {
             // Allocations of a dynamic size are not freed by stackrestore
-            if self.target == Target::Agx {
-                return Err(TranslateError::Unsupported(
-                    "alloca of a dynamic size (the AGX stack has a fixed size)".to_string(),
-                ));
-            }
             let alloca = unsafe {
                 LLVMZludaBuildArrayAlloca(
                     self.builder,
@@ -3711,33 +3756,41 @@ impl<'a> MethodEmitContext<'a> {
             let address = self.emit_private_to_generic_int(alloca, data.type_)?;
             self.resolver.register(arguments.dst, address);
             return Ok(());
-        };
+        }
         let (base, top) = self.get_or_create_stack()?;
         let stack = self.stack.as_mut().ok_or_else(error_unreachable)?;
-        stack.size += constant_size + data.align as u64 - 1;
+        match constant_size {
+            Some(constant_size) => stack.size += constant_size + data.align as u64 - 1,
+            None => stack.dynamic = true,
+        }
         stack.align = stack.align.max(data.align);
         let align_mask = data.align as u64 - 1;
-        let address = unsafe {
-            let offset = LLVMBuildLoad2(self.builder, i32_type, top, LLVM_UNNAMED.as_ptr());
-            let offset = LLVMBuildAdd(
-                self.builder,
-                offset,
-                LLVMConstInt(i32_type, align_mask, 0),
-                LLVM_UNNAMED.as_ptr(),
-            );
+        let offset = unsafe {
+            let old_top = LLVMBuildLoad2(self.builder, i32_type, top, LLVM_UNNAMED.as_ptr());
+            let size = LLVMBuildZExtOrBitCast(self.builder, size, i64_type, LLVM_UNNAMED.as_ptr());
+            let old_top = LLVMBuildZExt(self.builder, old_top, i64_type, LLVM_UNNAMED.as_ptr());
+            if self.target == Target::Agx {
+                let overflow = LLVMBuildICmp(
+                    self.builder,
+                    LLVMIntPredicate::LLVMIntUGT,
+                    size,
+                    old_top,
+                    LLVM_UNNAMED.as_ptr(),
+                );
+                self.emit_stack_overflow_check(overflow)?;
+            }
+            let offset = LLVMBuildSub(self.builder, old_top, size, LLVM_UNNAMED.as_ptr());
             let offset = LLVMBuildAnd(
                 self.builder,
                 offset,
-                LLVMConstInt(i32_type, !align_mask & 0xffff_ffff, 0),
+                LLVMConstInt(i64_type, !align_mask, 0),
                 LLVM_UNNAMED.as_ptr(),
             );
-            let new_top = LLVMBuildAdd(
-                self.builder,
-                offset,
-                LLVMConstInt(i32_type, constant_size, 0),
-                LLVM_UNNAMED.as_ptr(),
-            );
-            LLVMBuildStore(self.builder, new_top, top);
+            let offset = LLVMBuildTrunc(self.builder, offset, i32_type, LLVM_UNNAMED.as_ptr());
+            LLVMBuildStore(self.builder, offset, top);
+            offset
+        };
+        let address = unsafe {
             let mut indices = [offset];
             LLVMBuildInBoundsGEP2(
                 self.builder,
@@ -3750,6 +3803,38 @@ impl<'a> MethodEmitContext<'a> {
         };
         let address = self.emit_private_to_generic_int(address, data.type_)?;
         self.resolver.register(arguments.dst, address);
+        Ok(())
+    }
+
+    // A thread for which `overflow` is true sets __agx_stack_overflow and ends.
+    fn emit_stack_overflow_check(&mut self, overflow: LLVMValueRef) -> Result<(), TranslateError> {
+        let i32_type = get_scalar_type(self.context, ast::ScalarType::B32);
+        unsafe {
+            let flag = match LLVMGetNamedGlobal(self.module, c"__agx_stack_overflow".as_ptr()) {
+                flag if !flag.is_null() => flag,
+                _ => {
+                    let flag = LLVMAddGlobalInAddressSpace(
+                        self.module,
+                        i32_type,
+                        c"__agx_stack_overflow".as_ptr(),
+                        get_state_space(ast::StateSpace::Global)?,
+                    );
+                    LLVMSetInitializer(flag, LLVMConstInt(i32_type, 0, 0));
+                    LLVMSetAlignment(flag, 4);
+                    // one word for the modules linked together
+                    LLVMSetLinkage(flag, LLVMLinkage::LLVMLinkOnceODRLinkage);
+                    flag
+                }
+            };
+            let fail = LLVMAppendBasicBlockInContext(self.context, self.method, LLVM_UNNAMED.as_ptr());
+            let ok = LLVMAppendBasicBlockInContext(self.context, self.method, LLVM_UNNAMED.as_ptr());
+            LLVMBuildCondBr(self.builder, overflow, fail, ok);
+            LLVMPositionBuilderAtEnd(self.builder, fail);
+            let store = LLVMBuildStore(self.builder, LLVMConstInt(i32_type, 1, 0), flag);
+            LLVMSetVolatile(store, 1);
+            self.emit_trap()?;
+            LLVMPositionBuilderAtEnd(self.builder, ok);
+        }
         Ok(())
     }
 

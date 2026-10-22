@@ -119,7 +119,8 @@ fn run_statement<'input>(
                 .iter_mut()
                 .zip(arguments.input_arguments.iter_mut())
             {
-                if *space == ptx_parser::StateSpace::Param {
+                // a .param variable may also be passed to a .reg parameter (PTX ISA 7.1): its value is passed
+                if *space == ptx_parser::StateSpace::Param || is_param(resolver, *ident) {
                     *space = ptx_parser::StateSpace::Reg;
                     // a register passed straight to a .param parameter
                     if is_register(resolver, *ident) {
@@ -148,7 +149,8 @@ fn run_statement<'input>(
                 .iter_mut()
                 .zip(arguments.return_arguments.iter_mut())
             {
-                if *space == ptx_parser::StateSpace::Param {
+                // and a .reg return value received in a .param variable
+                if *space == ptx_parser::StateSpace::Param || is_param(resolver, *ident) {
                     *space = ptx_parser::StateSpace::Reg;
                     if is_register(resolver, *ident) {
                         continue;
@@ -205,5 +207,12 @@ fn is_register(resolver: &GlobalStringIdentResolver2, ident: SpirvWord) -> bool 
     matches!(
         resolver.ident_map.get(&ident).and_then(|entry| entry.type_space.as_ref()),
         Some((_, ptx_parser::StateSpace::Reg))
+    )
+}
+
+fn is_param(resolver: &GlobalStringIdentResolver2, ident: SpirvWord) -> bool {
+    matches!(
+        resolver.ident_map.get(&ident).and_then(|entry| entry.type_space.as_ref()),
+        Some((_, ptx_parser::StateSpace::Param))
     )
 }

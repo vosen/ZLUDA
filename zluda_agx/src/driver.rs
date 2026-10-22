@@ -437,6 +437,10 @@ impl Driver {
                 let _ = so.flush();
             }
             failed |= m.take_assert_failure();
+            if m.take_stack_overflow() && self.sticky.is_none() {
+                eprintln!("zluda_agx: a thread ran out of its stack (recursion deeper than the backend's stack)");
+                self.sticky = Some(CUerror::LAUNCH_FAILED);
+            }
             if let Some(e) = m.checked_error().filter(|_| self.sticky.is_none()) {
                 eprintln!("zluda_agx: {e}");
                 if let Some((first, n)) = self.checked_launches.get(&(*h, site_kernel(&e.site_text).to_string())) {
@@ -590,6 +594,11 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if lineinfo {
         options.push("lineinfo");
     }
+    let stack_size = STACK_SIZE.load(std::sync::atomic::Ordering::Relaxed);
+    let stack_option = format!("stack-size={stack_size}");
+    if stack_size != DEFAULT_STACK_SIZE {
+        options.push(&stack_option);
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -604,6 +613,7 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
             .args(mesa.then_some("--agx-strict"))
             .args(checked.then_some("--agx-checked"))
             .args(lineinfo.then_some("--lineinfo"))
+            .args((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")))
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -1464,13 +1474,18 @@ pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *m
     Ok(())
 }
 
-/// Stack size per thread (scratch is not set up yet, ptx-re-blockers B1), the printf buffer of the runtime
-/// library (64 KiB per module) and the device heap (none).
-/// The limits a context keeps: what cuCtxSetLimit set, else the default. They change nothing here: the stack is sized
-/// per kernel from its compiled stack size, and the printf buffer is the module's.
+/// The stack per thread for `alloca` of a dynamic size, which zoc reserves in each kernel (`--stack-size`; recursive
+/// functions get four times as much): CU_LIMIT_STACK_SIZE, for the modules compiled after it is set.
+static STACK_SIZE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(DEFAULT_STACK_SIZE);
+const DEFAULT_STACK_SIZE: usize = 1024;
+
+/// Stack size per thread for dynamic allocations (see STACK_SIZE), the printf buffer of the runtime library
+/// (64 KiB per module) and the device heap (none).
+/// The limits a context keeps: what cuCtxSetLimit set, else the default. Only the stack size changes anything: the
+/// stack of the modules loaded later; the printf buffer is the module's.
 pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
     let default = match limit {
-        CUlimit_enum::CU_LIMIT_STACK_SIZE => 0,
+        CUlimit_enum::CU_LIMIT_STACK_SIZE => DEFAULT_STACK_SIZE,
         CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
         CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
         _ => return Err(CUerror::UNSUPPORTED_LIMIT),
@@ -1482,6 +1497,13 @@ pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresu
 pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => {
+            if limit == CUlimit_enum::CU_LIMIT_STACK_SIZE {
+                // zoc takes a 32-bit size; private memory is far smaller
+                if value > u32::MAX as usize / 4 {
+                    return Err(CUerror::INVALID_VALUE);
+                }
+                STACK_SIZE.store(value.max(1), std::sync::atomic::Ordering::Relaxed);
+            }
             with(|d| {
                 d.limits.insert(limit.0, value);
                 Ok(())

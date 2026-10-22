@@ -99,10 +99,19 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             return Err(TranslateError::UntypedSymbol);
         };
         if state_space == ast::StateSpace::Reg {
-            let (reg_type, reg_space) = self.resolver.get_typed(reg)?;
-            if *reg_space != ast::StateSpace::Reg {
-                return Err(error_mismatched_type());
-            }
+            let (_, reg_space) = self.resolver.get_typed(reg)?;
+            // The address of a variable plus an offset (`mov.u64 r, a+4`, `a[4]`): the address first.
+            let reg = if *reg_space != ast::StateSpace::Reg {
+                let address = self.resolver.register_unnamed(Some((type_.clone(), ast::StateSpace::Reg)));
+                self.result.push(Statement::Instruction(ast::Instruction::Mov {
+                    data: ast::MovDetails { typ: type_.clone() },
+                    arguments: ast::MovArgs { dst: address, src: reg },
+                }));
+                address
+            } else {
+                reg
+            };
+            let (reg_type, _) = self.resolver.get_typed(reg)?;
             let reg_scalar_type = match reg_type {
                 ast::Type::Scalar(underlying_type) => *underlying_type,
                 _ => return Err(error_mismatched_type()),
@@ -195,6 +204,38 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         Ok(id)
     }
 
+    /// The array element `base[index + offset]` of a memory operand: `base` + `index` + `offset` bytes.
+    fn reg_index(
+        &mut self,
+        base: SpirvWord,
+        index: SpirvWord,
+        offset: i32,
+        type_space: Option<(&ast::Type, ast::StateSpace)>,
+        is_dst: bool,
+    ) -> Result<SpirvWord, TranslateError> {
+        let (type_, state_space) = type_space.ok_or(TranslateError::UntypedSymbol)?;
+        if state_space == ast::StateSpace::Reg {
+            return Err(error_todo_msg("array elements with a register index outside memory operands"));
+        }
+        match self.resolver.get_typed(index)? {
+            (ast::Type::Scalar(t), ast::StateSpace::Reg) if t.size_of() == 8 && t.kind() != ast::ScalarKind::Float => {}
+            _ => return Err(error_mismatched_type()),
+        }
+        let dst = self.resolver.register_unnamed(Some((type_.clone(), state_space)));
+        self.result.push(Statement::PtrAccess(PtrAccess {
+            underlying_type: type_.clone(),
+            state_space,
+            dst,
+            ptr_src: base,
+            offset_src: index,
+        }));
+        if offset == 0 {
+            Ok(dst)
+        } else {
+            self.reg_offset(dst, offset, type_space, is_dst)
+        }
+    }
+
     fn vec_member(
         &mut self,
         vector_ident: SpirvWord,
@@ -251,10 +292,31 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
             }
             _ => return Err(error_mismatched_type()),
         };
+        // Elements of vector registers written by this operand: stored after the unpacking.
+        let mut member_writes = Vec::new();
         let vector_elements = vector_elements
             .into_iter()
             .map(|element| match element {
                 Some(ast::RegOrImmediate::Reg(name)) => self.reg(name).map(Some),
+                Some(ast::RegOrImmediate::VecMember(vector, member)) if is_dst => {
+                    let (vector_width, scalar_type, space) = match self.resolver.get_typed(vector)? {
+                        (ast::Type::Vector(w, t), space) => (*w, *t, *space),
+                        _ => return Err(error_mismatched_type()),
+                    };
+                    let temporary = self.resolver.register_unnamed(Some((scalar_type.into(), space)));
+                    member_writes.push(Statement::VectorWrite(VectorWrite {
+                        scalar_type,
+                        vector_width,
+                        vector_dst: vector,
+                        vector_src: vector,
+                        scalar_src: temporary,
+                        member,
+                    }));
+                    Ok(Some(temporary))
+                }
+                Some(ast::RegOrImmediate::VecMember(vector, member)) => {
+                    self.vec_member(vector, member, None, false).map(Some)
+                }
                 Some(ast::RegOrImmediate::Imm(immediate_value)) => self
                     .immediate(
                         immediate_value,
@@ -277,6 +339,7 @@ impl<'a, 'input> FlattenArguments<'a, 'input> {
         });
         if is_dst {
             self.post_stmts.push(statement);
+            self.post_stmts.extend(member_writes);
         } else {
             self.result.push(statement);
         }
@@ -299,6 +362,9 @@ impl<'a, 'b> ast::VisitorMap<ast::ParsedOperand<SpirvWord>, SpirvWord, Translate
             ast::ParsedOperand::Imm(x) => self.immediate(x, type_space),
             ast::ParsedOperand::RegOffset(reg, offset) => {
                 self.reg_offset(reg, offset, type_space, is_dst)
+            }
+            ast::ParsedOperand::RegIndex(base, index, offset) => {
+                self.reg_index(base, index, offset, type_space, is_dst)
             }
             ast::ParsedOperand::VecMember(vec, member) => {
                 self.vec_member(vec, member, type_space, is_dst)

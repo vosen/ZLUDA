@@ -1335,6 +1335,17 @@ impl LoadedModule {
         failed
     }
 
+    /// Whether a thread of a recursive kernel ran out of its stack since the last call (the backend sets the word
+    /// `__agx_stack_overflow`); clears it.
+    pub fn take_stack_overflow(&mut self) -> bool {
+        let Some(&(off, _)) = self.module.global_symbols.get("__agx_stack_overflow") else { return false };
+        let Some(g) = self.globals.as_mut() else { return false };
+        let w = &mut g.as_mut_slice()[off as usize..off as usize + 4];
+        let overflowed = w != [0; 4];
+        w.fill(0);
+        overflowed
+    }
+
     /// Formats and clears the device `printf` records written since the last drain. Strings outside the module's
     /// global data buffer (`%s` of a device buffer) are read through `read_other`. `None` if the module does not use
     /// `printf`. Call it after the launches that printed have finished.

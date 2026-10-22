@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compiles the PTX here with zoc for AGX and runs it on the AGX Performance Simulator's agx_run, checking each
 result against a reference model: prmt modes, szext and fns, the 3-input min/max, f32x2 arithmetic (default and
---strict-fp), fma.relu of the 16-bit types and two modules linked with zoc (cuLink).
+--strict-fp), fma.relu of the 16-bit types, two modules linked with zoc (cuLink) and recursion.
 
   run_sim.py --zoc ZOC --agx-run AGX_RUN --objcopy LLVM_OBJCOPY --readelf LLVM_READELF [--chip agx-g14c]
 
@@ -145,6 +145,21 @@ def link(a, tmp):
     return [] if struct.unpack("<Q", out)[0] == 8 and struct.unpack("<Q", v)[0] == 42 else ["link"]
 
 
+def recursion(a, tmp, strict):
+    obj = compile_ptx(a, tmp, "recursion.ptx", strict=strict)
+    out, w = t.run(a, obj, "recursion", [("buf", bytes(64 * 16), True), ("buf", bytes(64 * 128), True)], (64, 1), (64, 1),
+                   tmp)
+    fib = [0, 1]
+    while len(fib) < 16:
+        fib.append(fib[-1] + fib[-2])
+    f = lambda n: 0 if n == 0 else 1 + g(n - 1)
+    g = lambda n: 0 if n == 0 else 10 + f(n - 1)
+    h = lambda n: (h(n - 1) if n else 0) + n * (n % 4 + 1)
+    got, wrote = struct.unpack("<256I", out), struct.unpack("<2048I", w)
+    bad = [k for k in range(64) if got[4 * k:4 * k + 3] != (fib[k % 16], f(k), h(k % 8))]
+    return bad + [k for k in range(64) if wrote[32 * k:32 * k + 32] != tuple(range(1, k % 32 + 1)) + (0,) * (32 - k % 32)]
+
+
 def main():
     ap = argparse.ArgumentParser()
     for opt in ("--zoc", "--agx-run", "--objcopy", "--readelf"):
@@ -154,7 +169,9 @@ def main():
     failed = 0
     cases = [("prmt modes", prmt), ("szext and fns", szext_fns), ("3-input min/max", min3), ("3-input 16-bit", min3_16),
              ("f32x2", lambda a, tmp: f32x2(a, tmp, False)), ("f32x2 strict", lambda a, tmp: f32x2(a, tmp, True)),
-             ("fma.relu", fma_relu), ("cuLink extern_func", link)]
+             ("fma.relu", fma_relu), ("cuLink extern_func", link),
+             ("recursion", lambda a, tmp: recursion(a, tmp, False)),
+             ("recursion strict", lambda a, tmp: recursion(a, tmp, True))]
     for label, f in cases:
         with tempfile.TemporaryDirectory() as tmp:
             try:

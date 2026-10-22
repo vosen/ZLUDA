@@ -288,33 +288,6 @@ fn take_error<'a, 'input: 'a, O, E>(
     }
 }
 
-fn int_immediate<'a, 'input>(input: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
-    take_error((opt(Token::Minus), num).map(|(neg, x)| {
-        let (num, radix, is_unsigned) = x;
-        if neg.is_some() {
-            let full_number = format!("-{num}");
-            match i64::from_str_radix(&full_number, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::S64(x)),
-                Err(err) => Err((ast::ImmediateValue::S64(0), PtxError::from(err))),
-            }
-        } else if is_unsigned {
-            match u64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                Err(err) => Err((ast::ImmediateValue::U64(0), PtxError::from(err))),
-            }
-        } else {
-            match i64::from_str_radix(num, radix) {
-                Ok(x) => Ok(ast::ImmediateValue::S64(x)),
-                Err(_) => match u64::from_str_radix(num, radix) {
-                    Ok(x) => Ok(ast::ImmediateValue::U64(x)),
-                    Err(err) => Err((ast::ImmediateValue::U64(0), PtxError::from(err))),
-                },
-            }
-        }
-    }))
-    .parse_next(input)
-}
-
 fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
     take_error(token::any.verify_map(|(t, _)| match t {
         Token::F32Hex(f) => Some(match u32::from_str_radix(&f[2..], 16) {
@@ -344,17 +317,6 @@ fn f64_unsigned<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> 
             Err(err) => Err((0.0, PtxError::from(err))),
         }),
         _ => None,
-    }))
-    .parse_next(stream)
-}
-
-fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
-    take_error((opt(Token::Minus), num).map(|(sign, x)| {
-        let (text, radix, _) = x;
-        match i32::from_str_radix(text, radix) {
-            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
-            Err(err) => Err((0, PtxError::from(err))),
-        }
     }))
     .parse_next(stream)
 }
@@ -401,13 +363,313 @@ fn constant<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::Imme
 fn immediate_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
     trace(
         "immediate_value",
-        alt((
-            int_immediate,
-            f32.map(ast::ImmediateValue::F32),
-            f64.map(ast::ImmediateValue::F64),
-            constant,
-        )),
+        const_expression.map(|(value, literal)| {
+            literal.unwrap_or(match value {
+                ConstValue::Int(v, true) => ast::ImmediateValue::U64(v),
+                ConstValue::Int(v, false) => ast::ImmediateValue::S64(v as i64),
+                ConstValue::Float(f) => ast::ImmediateValue::F64(f),
+            })
+        }),
     )
+    .parse_next(stream)
+}
+
+// `.x` `.y` `.z` `.w` or `.r` `.g` `.b` `.a`: the element of a vector register. Matched by text, since some of these
+// are also instruction modifiers with their own tokens.
+fn vector_member_index(text: &str) -> Option<u8> {
+    match text {
+        ".x" | ".r" => Some(0),
+        ".y" | ".g" => Some(1),
+        ".z" | ".b" => Some(2),
+        ".w" | ".a" => Some(3),
+        _ => None,
+    }
+}
+
+fn vector_member<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<u8> {
+    match stream.input.first() {
+        Some((_, span)) => match vector_member_index(&stream.state.text[span.clone()]) {
+            Some(index) => {
+                stream.input = &stream.input[1..];
+                Ok(index)
+            }
+            None => backtrack(),
+        },
+        None => backtrack(),
+    }
+}
+
+fn int_literal_value<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ast::ImmediateValue> {
+    take_error(num.map(|(text, radix, is_unsigned)| {
+        if !is_unsigned {
+            if let Ok(x) = i64::from_str_radix(text, radix) {
+                return Ok(ast::ImmediateValue::S64(x));
+            }
+        }
+        match u64::from_str_radix(text, radix) {
+            Ok(x) => Ok(ast::ImmediateValue::U64(x)),
+            Err(err) => Err((ast::ImmediateValue::U64(0), PtxError::from(err))),
+        }
+    }))
+    .parse_next(stream)
+}
+
+// Constant expressions (PTX ISA 4.5.4 - 4.5.6): C operators and precedence over 64-bit integers, signed (.s64)
+// unless a literal has the U suffix or does not fit, with the usual arithmetic conversions, `%` on .u64 operands,
+// shifts of the first operand's type (arithmetic for signed), comparisons and logical operators giving .s64 0 / 1 and
+// casts `(.s64)` / `(.u64)`; and + - * / over floating point literals.
+#[derive(Clone, Copy, Debug)]
+enum ConstValue {
+    Int(u64, bool),
+    Float(f64),
+}
+
+impl ConstValue {
+    fn bits(self) -> u64 {
+        match self {
+            ConstValue::Int(v, _) => v,
+            ConstValue::Float(f) => f as i64 as u64,
+        }
+    }
+    fn is_true(self) -> bool {
+        match self {
+            ConstValue::Int(v, _) => v != 0,
+            ConstValue::Float(f) => f != 0.0,
+        }
+    }
+    fn as_f64(self) -> f64 {
+        match self {
+            ConstValue::Int(v, true) => v as f64,
+            ConstValue::Int(v, false) => v as i64 as f64,
+            ConstValue::Float(f) => f,
+        }
+    }
+    fn bool(b: bool) -> Self {
+        ConstValue::Int(b as u64, false)
+    }
+}
+
+fn const_binary(op: &str, a: ConstValue, b: ConstValue) -> ConstValue {
+    use ConstValue::*;
+    if let (Float(_), _) | (_, Float(_)) = (a, b) {
+        let (x, y) = (a.as_f64(), b.as_f64());
+        return match op {
+            "+" => Float(x + y),
+            "-" => Float(x - y),
+            "*" => Float(x * y),
+            "/" => Float(x / y),
+            "<" => ConstValue::bool(x < y),
+            ">" => ConstValue::bool(x > y),
+            "<=" => ConstValue::bool(x <= y),
+            ">=" => ConstValue::bool(x >= y),
+            "==" => ConstValue::bool(x == y),
+            "!=" => ConstValue::bool(x != y),
+            "&&" => ConstValue::bool(x != 0.0 && y != 0.0),
+            "||" => ConstValue::bool(x != 0.0 || y != 0.0),
+            _ => Float(f64::NAN),
+        };
+    }
+    let (Int(x, ua), Int(y, ub)) = (a, b) else { unreachable!() };
+    let u = ua || ub;
+    match op {
+        "+" => Int(x.wrapping_add(y), u),
+        "-" => Int(x.wrapping_sub(y), u),
+        "*" => Int(x.wrapping_mul(y), u),
+        "/" if y == 0 => Int(0, u),
+        "/" if u => Int(x / y, u),
+        "/" => Int((x as i64).wrapping_div(y as i64) as u64, u),
+        "%" if y == 0 => Int(0, true),
+        "%" => Int(x % y, true),
+        "<<" => Int(x.wrapping_shl(y as u32), ua),
+        ">>" if ua => Int(x.wrapping_shr(y as u32), ua),
+        ">>" => Int((x as i64).wrapping_shr(y as u32) as u64, ua),
+        "&" => Int(x & y, u),
+        "|" => Int(x | y, u),
+        "^" => Int(x ^ y, u),
+        "&&" => ConstValue::bool(x != 0 && y != 0),
+        "||" => ConstValue::bool(x != 0 || y != 0),
+        "==" => ConstValue::bool(x == y),
+        "!=" => ConstValue::bool(x != y),
+        "<" | ">" | "<=" | ">=" => {
+            let ord = if u { x.cmp(&y) } else { (x as i64).cmp(&(y as i64)) };
+            ConstValue::bool(match op {
+                "<" => ord.is_lt(),
+                ">" => ord.is_gt(),
+                "<=" => ord.is_le(),
+                _ => ord.is_ge(),
+            })
+        }
+        _ => Int(0, u),
+    }
+}
+
+// The binary operator at the head of the stream, by precedence level (0 = `||` ... 9 = `*`), without consuming it.
+fn peek_binary(stream: &PtxParser) -> Option<(&'static str, usize, u8)> {
+    let t = |i: usize| stream.input.get(i).map(|(t, _)| *t);
+    let two = |a: Token, b: Token| t(0) == Some(a) && t(1) == Some(b);
+    Some(match t(0)? {
+        Token::Pipe if two(Token::Pipe, Token::Pipe) => ("||", 2, 0),
+        Token::Amp if two(Token::Amp, Token::Amp) => ("&&", 2, 1),
+        Token::Pipe => ("|", 1, 2),
+        Token::Caret => ("^", 1, 3),
+        Token::Amp => ("&", 1, 4),
+        Token::Eq if two(Token::Eq, Token::Eq) => ("==", 2, 5),
+        Token::Exclamation if two(Token::Exclamation, Token::Eq) => ("!=", 2, 5),
+        Token::Lt if two(Token::Lt, Token::Lt) => ("<<", 2, 7),
+        Token::Gt if two(Token::Gt, Token::Gt) => (">>", 2, 7),
+        Token::Lt if two(Token::Lt, Token::Eq) => ("<=", 2, 6),
+        Token::Gt if two(Token::Gt, Token::Eq) => (">=", 2, 6),
+        Token::Lt => ("<", 1, 6),
+        Token::Gt => (">", 1, 6),
+        Token::Plus => ("+", 1, 8),
+        Token::Minus => ("-", 1, 8),
+        Token::Star => ("*", 1, 9),
+        Token::Slash => ("/", 1, 9),
+        Token::Percent => ("%", 1, 9),
+        _ => return None,
+    })
+}
+
+// A constant expression: its value, and the literal itself when it is a single literal (kept exactly, e.g. 0f...).
+fn const_expression<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<(ConstValue, Option<ast::ImmediateValue>)> {
+    fn primary<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<(ConstValue, Option<ast::ImmediateValue>)> {
+        let literal = alt((
+            int_literal_value,
+            f32.map(ast::ImmediateValue::F32),
+            f64_unsigned.map(ast::ImmediateValue::F64),
+            constant,
+        ))
+        .parse_next(stream);
+        if let Ok(imm) = literal {
+            let value = match imm {
+                ast::ImmediateValue::U64(v) => ConstValue::Int(v, true),
+                ast::ImmediateValue::S64(v) => ConstValue::Int(v as u64, false),
+                ast::ImmediateValue::F32(f) => ConstValue::Float(f as f64),
+                ast::ImmediateValue::F64(f) => ConstValue::Float(f),
+            };
+            return Ok((value, Some(imm)));
+        }
+        // a cast: (.s64) / (.u64)
+        let checkpoint = stream.input;
+        if eat(stream, Token::LParen) {
+            let cast = match stream.input.first() {
+                Some((_, span)) => match &stream.state.text[span.clone()] {
+                    ".s64" => Some(false),
+                    ".u64" => Some(true),
+                    _ => None,
+                },
+                None => None,
+            };
+            if let Some(unsigned) = cast {
+                stream.input = &stream.input[1..];
+                if !eat(stream, Token::RParen) {
+                    return backtrack();
+                }
+                let (v, _) = unary(stream)?;
+                return Ok((ConstValue::Int(v.bits(), unsigned), None));
+            }
+            stream.input = checkpoint;
+        }
+        let (v, _) = delimited(Token::LParen, const_expression, Token::RParen).parse_next(stream)?;
+        Ok((v, None))
+    }
+    fn unary<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+    ) -> PResult<(ConstValue, Option<ast::ImmediateValue>)> {
+        let op = match stream.input.first().map(|(t, _)| *t) {
+            Some(Token::Minus) => '-',
+            Some(Token::Plus) => '+',
+            Some(Token::Exclamation) => '!',
+            Some(Token::Tilde) => '~',
+            _ => return primary(stream),
+        };
+        stream.input = &stream.input[1..];
+        let (v, lit) = unary(stream)?;
+        Ok(match (op, v) {
+            ('+', _) => (v, lit),
+            ('-', ConstValue::Float(f)) => (ConstValue::Float(-f), lit.map(|_| ast::ImmediateValue::F64(-f))),
+            ('-', ConstValue::Int(x, u)) => {
+                // -literal stays a literal of the same kind, as `-5` always parsed
+                let lit = match lit {
+                    Some(ast::ImmediateValue::S64(x)) => Some(ast::ImmediateValue::S64(x.wrapping_neg())),
+                    _ => None,
+                };
+                (ConstValue::Int(x.wrapping_neg(), u), lit)
+            }
+            ('!', v) => (ConstValue::bool(!v.is_true()), None),
+            (_, v) => (ConstValue::Int(!v.bits(), matches!(v, ConstValue::Int(_, true))), None),
+        })
+    }
+    fn binary<'a, 'input>(
+        stream: &mut PtxParser<'a, 'input>,
+        min_level: u8,
+    ) -> PResult<(ConstValue, Option<ast::ImmediateValue>)> {
+        let (mut lhs, mut lit) = unary(stream)?;
+        while let Some((op, len, level)) = peek_binary(stream) {
+            if level < min_level {
+                break;
+            }
+            stream.input = &stream.input[len..];
+            let (rhs, _) = binary(stream, level + 1)?;
+            lhs = const_binary(op, lhs, rhs);
+            lit = None;
+        }
+        Ok((lhs, lit))
+    }
+    let (cond, lit) = binary(stream, 0)?;
+    if eat(stream, Token::Question) {
+        let (a, _) = const_expression(stream)?;
+        if !eat(stream, Token::Colon) {
+            return backtrack();
+        }
+        let (b, _) = const_expression(stream)?;
+        let pick = if cond.is_true() { a } else { b };
+        let value = match (pick, a, b) {
+            (ConstValue::Int(v, _), ConstValue::Int(_, ua), ConstValue::Int(_, ub)) => ConstValue::Int(v, ua || ub),
+            _ => pick,
+        };
+        return Ok((value, None));
+    }
+    Ok((cond, lit))
+}
+
+fn eat(stream: &mut PtxParser, token: Token) -> bool {
+    match stream.input.first() {
+        Some((t, _)) if *t == token => {
+            stream.input = &stream.input[1..];
+            true
+        }
+        _ => false,
+    }
+}
+
+// An integer constant expression, as an offset or a size.
+fn const_expr<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i64> {
+    const_expression.map(|(v, _)| v.bits() as i64).parse_next(stream)
+}
+
+// The constant byte offset of an address `r + offset`: everything up to the end of the operand, so that
+// `r + 72 - 8` is r + 64.
+fn const_offset<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
+    const_expr.map(|v| v as i32).parse_next(stream)
+}
+
+// The `[index]` of an array element operand: a constant expression (a byte offset) or a register plus or minus one.
+fn array_index<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<(Option<&'input str>, i64)> {
+    alt((
+        (
+            ident,
+            opt((alt((Token::Plus.value(1i64), Token::Minus.value(-1i64))), const_expr)),
+        )
+            .map(|(reg, offset)| (Some(reg), offset.map_or(0, |(sign, v)| sign * v))),
+        const_expr.map(|offset| (None, offset)),
+    ))
     .parse_next(stream)
 }
 
@@ -418,7 +680,10 @@ fn reg_or_immediate<'a, 'input>(
         "reg_or_immediate",
         alt((
             immediate_value.map(|imm| ast::RegOrImmediate::Imm(imm)),
-            ident.map(|id| ast::RegOrImmediate::Reg(id)),
+            (ident, opt(vector_member)).map(|(id, member)| match member {
+                Some(member) => ast::RegOrImmediate::VecMember(id, member),
+                None => ast::RegOrImmediate::Reg(id),
+            }),
         )),
     )
     .parse_next(stream)
@@ -430,10 +695,30 @@ fn initializer_value<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
 ) -> PResult<ast::RegOrImmediate<&'input str>> {
     if token_text(stream, "generic").is_ok() {
-        return delimited(Token::LParen, ident, Token::RParen)
-            .map(ast::RegOrImmediate::Reg)
-            .parse_next(stream);
+        let (name, offset) =
+            (delimited(Token::LParen, ident, Token::RParen), opt(preceded(Token::Plus, u32))).parse_next(stream)?;
+        return Ok(match offset {
+            Some(offset) => ast::RegOrImmediate::RegOffset(name, offset as i64),
+            None => ast::RegOrImmediate::Reg(name),
+        });
     }
+    // mask(expr): the bits of a constant under an 0xFF mask, moved down to bit 0 (PTX ISA 5.4.4). Masks of addresses
+    // are not supported.
+    let checkpoint = stream.checkpoint();
+    if let Ok((mask, _, value, _)) = (int_literal_value, Token::LParen, const_expr, Token::RParen).parse_next(stream) {
+        let mask = match mask {
+            ast::ImmediateValue::U64(x) => x,
+            ast::ImmediateValue::S64(x) => x as u64,
+            _ => 0,
+        };
+        if mask != 0 && (mask >> mask.trailing_zeros()) == 0xff {
+            return Ok(ast::RegOrImmediate::Imm(ast::ImmediateValue::U64(
+                (value as u64 & mask) >> mask.trailing_zeros(),
+            )));
+        }
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    stream.reset(&checkpoint);
     let value = reg_or_immediate.parse_next(stream)?;
     match value {
         ast::RegOrImmediate::Reg(name) => {
@@ -644,22 +929,23 @@ fn shader_model<'a>(stream: &mut &str) -> PResult<(u32, Option<char>)> {
 ///     - `Some` contains the actual directive to include in the AST.
 fn directive<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-) -> PResult<Option<Option<ast::Directive<'input, ast::ParsedOperand<&'input str>>>>> {
+) -> PResult<Option<Vec<ast::Directive<'input, ast::ParsedOperand<&'input str>>>>> {
     let errors = stream.state.errors.len();
     let directive = trace(
         "directive",
         with_recovery(
             alt((
                 // When adding a new variant here remember to add its first token into recovery parser down below
-                function.map(|(linking, func)| Some(ast::Directive::Method(linking, func))),
-                file.map(|_| None),
-                section.map(|_| None),
-                pragma.map(|_| None),
+                function.map(|(linking, func)| vec![ast::Directive::Method(linking, func)]),
+                file.map(|_| Vec::new()),
+                section.map(|_| Vec::new()),
+                pragma.map(|_| Vec::new()),
                 // .alias name, aliasee; (calls go to the aliasee by name)
                 (|stream: &mut PtxParser<'a, 'input>| token_text(stream, ".alias"), ident, Token::Comma, ident, Token::Semicolon)
-                    .map(|_| None),
-                (module_variable, Token::Semicolon)
-                    .map(|((linking, var), _)| Some(ast::Directive::Variable(linking, var))),
+                    .map(|_| Vec::new()),
+                (module_variable, Token::Semicolon).map(|((linking, vars), _)| {
+                    vars.into_iter().map(|var| ast::Directive::Variable(linking, var)).collect()
+                }),
             )),
             (
                 token::any,
@@ -688,7 +974,7 @@ fn directive<'a, 'input>(
 
 fn module_variable<'a, 'input>(
     stream: &mut PtxParser<'a, 'input>,
-) -> PResult<(ast::LinkingDirective, ast::Variable<&'input str>)> {
+) -> PResult<(ast::LinkingDirective, Vec<ast::Variable<&'input str>>)> {
     let linking = linking_directives.parse_next(stream)?;
     // .attribute(.managed): managed memory is ordinary device memory here
     let var = terminated(
@@ -699,13 +985,29 @@ fn module_variable<'a, 'input>(
         }),
     )
         .flat_map(|space| multi_variable(linking.contains(LinkingDirective::EXTERN), space))
-        // TODO: support multi var in globals
-        .verify_map(|multi_var| match multi_var {
-            MultiVariable::Names { info, names } if names.len() == 1 => Some(ast::Variable {
-                info,
-                name: names[0],
-            }),
-            _ => None,
+        .map(|multi_var| {
+            // Parameterized names (`g<3>` declares g0, g1, g2) are not in the text: their names are kept for the
+            // life of the program, a few bytes per declaration.
+            let numbered = |name: &str, count: u32| {
+                (0..count).map(move |i| &*Box::leak(format!("{name}{i}").into_boxed_str())).collect::<Vec<&'input str>>()
+            };
+            match multi_var {
+                MultiVariable::Names { info, names } => {
+                    names.into_iter().map(|name| ast::Variable { info: info.clone(), name }).collect()
+                }
+                MultiVariable::Parameterized { info, name, count } => numbered(name, count)
+                    .into_iter()
+                    .map(|name| ast::Variable { info: info.clone(), name })
+                    .collect(),
+                MultiVariable::List { info, names } => names
+                    .into_iter()
+                    .flat_map(|(name, count)| match count {
+                        Some(count) => numbered(name, count),
+                        None => vec![name],
+                    })
+                    .map(|name| ast::Variable { info: info.clone(), name })
+                    .collect::<Vec<_>>(),
+            }
         })
         .parse_next(stream)?;
     Ok((linking, var))
@@ -776,8 +1078,32 @@ fn function<'a, 'input>(
     ast::LinkingDirective,
     ast::Function<'input, &'input str, ast::Statement<ParsedOperand<&'input str>>>,
 )> {
-    let (linking, func_directive) =
+    let (linking, mut func_directive) =
         trace("function", (linking_directives, method_declaration)).parse_next(stream)?;
+    // A last unsized `.param .b8 va[]` takes variable arguments, which a call may leave out (PTX ISA 11.2.2). Calls
+    // must leave them out here: the parameter is a variable of the function, of one element.
+    let variadic = match func_directive.input_arguments.last() {
+        Some(ast::Variable {
+            info:
+                ast::VariableInfo {
+                    v_type: ast::Type::Array(_, _, dims),
+                    state_space: StateSpace::Param,
+                    ..
+                },
+            ..
+        }) if dims[0] == 0 => func_directive.input_arguments.pop().map(|mut var| {
+            if let ast::Type::Array(_, _, dims) = &mut var.info.v_type {
+                dims[0] = 1;
+            }
+            var
+        }),
+        _ => None,
+    };
+    if func_directive.input_arguments.iter().any(|var| {
+        matches!(&var.info.v_type, ast::Type::Array(_, _, dims) if dims[0] == 0)
+    }) {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
     // Recorded before the body, which can call the function recursively
     stream.state.record_function(&func_directive);
     prescan_branch_targets(stream);
@@ -788,13 +1114,31 @@ fn function<'a, 'input>(
             0..,
             alt((
                 tuning_directive.map(Some),
-                (Token::DotPragma, Token::String, opt(Token::Semicolon)).map(|_| None),
+                (
+                    Token::DotPragma,
+                    separated::<_, _, (), _, _, _, _>(1.., Token::String, Token::Comma),
+                    opt(Token::Semicolon),
+                )
+                    .map(|_| None),
             )),
         ),
         function_body,
     )
         .parse_next(stream)?;
     let tuning = tuning.into_iter().flatten().collect();
+    let body = match (body, variadic) {
+        (Some(mut body), Some(var)) => {
+            body.insert(
+                0,
+                ast::Statement::Variable(ast::MultiVariable::Names {
+                    info: var.info,
+                    names: vec![var.name],
+                }),
+            );
+            Some(body)
+        }
+        (body, _) => body,
+    };
     Ok((
         linking,
         ast::Function {
@@ -848,7 +1192,7 @@ fn method_declaration<'a, 'input>(
         (Token::DotEntry, _) => (ident, kernel_arguments).map(|(name, input_arguments)| ast::MethodDeclaration{
             return_arguments: Vec::new(), name: ast::MethodName::Kernel(name), input_arguments, shared_mem: None
         }),
-        (Token::DotFunc, _) => (opt(fn_arguments), ident, fn_arguments).map(|(return_arguments, name,input_arguments)| {
+        (Token::DotFunc, _) => (opt(function_attribute), opt(fn_arguments), ident, fn_arguments).map(|(_, r, n, i)| (r, n, i)).map(|(return_arguments, name,input_arguments)| {
             let return_arguments = return_arguments.unwrap_or_else(|| Vec::new());
             let name = ast::MethodName::Func(name);
             ast::MethodDeclaration{ return_arguments, name, input_arguments, shared_mem: None }
@@ -856,6 +1200,22 @@ fn method_declaration<'a, 'input>(
         _ => fail
     }
     .parse_next(stream)
+}
+
+// .func .attribute(.unified(0xAB, 0xCD)): ignored, the attributes (.unified) only name the function for unified
+// function pointers
+fn function_attribute<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
+    token_text(stream, ".attribute")?;
+    Token::LParen.parse_next(stream)?;
+    let mut depth = 1usize;
+    while depth > 0 {
+        match token::any.parse_next(stream)?.0 {
+            Token::LParen => depth += 1,
+            Token::RParen => depth -= 1,
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn fn_arguments<'a, 'input>(
@@ -1053,7 +1413,12 @@ fn with_recovery<'a, 'input: 'a, T>(
 fn pragma<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<()> {
     trace(
         "pragma",
-        (Token::DotPragma, Token::String, Token::Semicolon).void(),
+        (
+            Token::DotPragma,
+            separated::<_, _, (), _, _, _, _>(1.., Token::String, Token::Comma),
+            Token::Semicolon,
+        )
+            .void(),
     )
     .parse_next(stream)
 }
@@ -1092,8 +1457,9 @@ fn method_parameter<'a, 'input: 'a>(
                 None
             };
             // TODO: push this check into array_dimensions(...)
+            // (an unsized .param array of a .func is its variadic parameter, see `function`)
             if let Some(ref dims) = array_dimensions {
-                if dims[0] == 0 {
+                if dims[0] == 0 && (kernel_decl_rules || state_space != StateSpace::Param) {
                     return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
                 }
             }
@@ -1218,15 +1584,12 @@ fn multi_variable<'a, 'input: 'a>(
                     else {
                         return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
                     };
-                    if state_space != StateSpace::Reg {
-                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
-                    }
                     return Ok(MultiVariable::List {
                         info: VariableInfo {
                             align,
                             v_type: Type::maybe_vector_parsed(vector, scalar),
                             state_space,
-                            array_init: Vec::new(),
+                            array_init: zero_init(state_space, scalar, vector),
                         },
                         names: entries,
                     });
@@ -1265,22 +1628,20 @@ fn multi_variable<'a, 'input: 'a>(
                         align,
                         v_type: Type::maybe_vector_parsed(vector, type_),
                         state_space,
-                        array_init: Vec::new(),
+                        array_init: zero_init(state_space, type_, vector),
                     },
                     name,
                     count,
                 });
             }
-            let array_dimensions = if state_space != StateSpace::Reg {
+            let mut array_dimensions = if state_space != StateSpace::Reg {
                 opt(array_dimensions).parse_next(stream)?
             } else {
                 None
             };
             let initializer = match state_space {
                 StateSpace::Global | StateSpace::Const => match array_dimensions {
-                    Some(ref dimensions) => {
-                        array_initializer(type_, vector, dimensions).parse_next(stream)?
-                    }
+                    Some(ref mut dimensions) => array_initializer(stream, type_, vector, dimensions)?,
                     None => value_initializer(type_, vector).parse_next(stream)?,
                 },
                 _ => Vec::new(),
@@ -1303,52 +1664,77 @@ fn multi_variable<'a, 'input: 'a>(
     )
 }
 
-fn array_initializer<'b, 'a: 'b, 'input: 'a>(
+// The elements of an array (of vectors) in row-major order, missing ones (and missing sub-arrays) zero. An unsized
+// first dimension (`a[] = {...}`) takes its size from the initializer (PTX ISA 5.4.4).
+fn array_initializer<'a, 'input: 'a>(
+    stream: &mut PtxParser<'a, 'input>,
     type_: ScalarType,
     vector: Option<NonZeroU8>,
-    array_dimensions: &'b Vec<u32>,
-) -> impl Parser<PtxParser<'a, 'input>, Vec<RegOrImmediate<&'input str>>, ContextError> + 'b {
-    // The elements in row-major order, missing ones (and missing sub-arrays) zero
-    let total = move || array_dimensions.iter().map(|d| *d as usize).product::<usize>();
-    let pad_with_zeros = move |result: Option<Vec<RegOrImmediate<&'input str>>>| {
-        let mut result = result.unwrap_or(Vec::new());
-        let default = default_immediate_from_type(type_);
-        result.extend(iter::repeat(ast::RegOrImmediate::Imm(default)).take(total() - result.len()));
-        result
-    };
-    trace(
-        "array_initializer",
-        opt(move |stream: &mut PtxParser<'a, 'input>| {
-            Token::Eq.parse_next(stream)?;
-            let mut result = Vec::new();
-            // TODO: vector constants
-            if vector.is_some() || array_dimensions.iter().any(|d| *d == 0) {
+    array_dimensions: &mut Vec<u32>,
+) -> PResult<Vec<RegOrImmediate<&'input str>>> {
+    // a vector is one more (innermost) dimension of the initializer
+    let mut dimensions = array_dimensions.clone();
+    if let Some(v) = vector {
+        dimensions.push(v.get() as u32);
+    }
+    let default = || ast::RegOrImmediate::Imm(default_immediate_from_type(type_));
+    let mut result = Vec::new();
+    if opt(Token::Eq).parse_next(stream)?.is_some() {
+        if dimensions[1..].iter().any(|d| *d == 0) {
+            return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+        }
+        let rows = nested_initializer(stream, type_, &dimensions, &mut result)?;
+        if dimensions[0] == 0 {
+            if array_dimensions.len() > 1 || vector.is_some() {
+                // `{ {..}, {..} }` or a flat list: whole rows
+                let inner: usize = dimensions[1..].iter().map(|d| *d as usize).product();
+                dimensions[0] = match rows {
+                    Some(rows) => rows,
+                    None => result.len().div_ceil(inner) as u32,
+                };
+            } else {
+                dimensions[0] = result.len() as u32;
+            }
+            if dimensions[0] == 0 {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
-            nested_initializer(stream, type_, array_dimensions, &mut result)?;
-            Ok(result)
-        })
-        .map(pad_with_zeros),
-    )
+            array_dimensions[0] = dimensions[0];
+        }
+    } else if dimensions[0] == 0 {
+        // an unsized array without initializer: extern only
+        return Ok(Vec::new());
+    }
+    let total: usize = dimensions.iter().map(|d| *d as usize).product();
+    if result.len() > total {
+        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+    }
+    result.extend(iter::repeat_with(default).take(total - result.len()));
+    Ok(result)
 }
 
 // One level of an array initializer: `{a, b, ...}` for the last dimension, `{{...}, {...}}` (or a flat list of
 // all the elements) for the others
+// A first dimension of 0 is unknown (any number of rows). Returns the number of rows when they were braced.
 fn nested_initializer<'a, 'input: 'a>(
     stream: &mut PtxParser<'a, 'input>,
     type_: ScalarType,
     dimensions: &[u32],
     result: &mut Vec<RegOrImmediate<&'input str>>,
-) -> PResult<()> {
-    let size: usize = dimensions.iter().map(|d| *d as usize).product();
+) -> PResult<Option<u32>> {
+    let size: usize = if dimensions[0] == 0 {
+        usize::MAX
+    } else {
+        dimensions.iter().map(|d| *d as usize).product()
+    };
     let start = result.len();
     Token::LBrace.parse_next(stream)?;
     let nested = dimensions.len() > 1 && matches!(stream.input.first(), Some((Token::LBrace, _)));
+    let mut rows = None;
     if nested {
         let inner: usize = dimensions[1..].iter().map(|d| *d as usize).product();
         let mut count = 0;
         loop {
-            if count == dimensions[0] {
+            if dimensions[0] != 0 && count == dimensions[0] {
                 return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
             }
             let at = result.len();
@@ -1360,14 +1746,15 @@ fn nested_initializer<'a, 'input: 'a>(
                 break;
             }
         }
+        rows = Some(count);
     } else {
-        separated::<_, (), (), _, _, _, _>(0..=size, single_value_append(result), Token::Comma).parse_next(stream)?;
+        separated::<_, (), (), _, _, _, _>(0.., single_value_append(result), Token::Comma).parse_next(stream)?;
     }
     Token::RBrace.parse_next(stream)?;
     if result.len() - start > size {
         return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
     }
-    Ok(())
+    Ok(rows)
 }
 
 fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
@@ -1375,6 +1762,23 @@ fn default_immediate_from_type(type_: ScalarType) -> ast::ImmediateValue {
         ScalarKind::Bit | ScalarKind::Unsigned | ScalarKind::Pred => ast::ImmediateValue::U64(0),
         ScalarKind::Signed => ast::ImmediateValue::S64(0),
         ScalarKind::Float => ast::ImmediateValue::F64(0.0),
+    }
+}
+
+// Uninitialized .global / .const variables are zero, as `value_initializer` makes them when there is no `=`.
+fn zero_init<'input>(
+    state_space: StateSpace,
+    type_: ScalarType,
+    vector: Option<NonZeroU8>,
+) -> Vec<RegOrImmediate<&'input str>> {
+    match state_space {
+        StateSpace::Global | StateSpace::Const => {
+            let n = vector.map_or(1, |v| v.get() as usize);
+            iter::repeat_with(|| ast::RegOrImmediate::Imm(default_immediate_from_type(type_)))
+                .take(n)
+                .collect()
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -1387,17 +1791,23 @@ fn value_initializer<'a, 'input: 'a>(
         opt(move |stream: &mut PtxParser<'a, 'input>| {
             Token::Eq.parse_next(stream)?;
             let mut result = Vec::new();
-            // TODO: vector constants
-            if vector.is_some() {
-                return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+            match vector {
+                // a vector: `{x, y, ...}`, missing elements zero
+                Some(v) => {
+                    nested_initializer(stream, type_, &[v.get() as u32], &mut result)?;
+                }
+                None => single_value_append(&mut result).parse_next(stream)?,
             }
-            single_value_append(&mut result).parse_next(stream)?;
             Ok(result)
         })
         .map(move |maybe_vec| {
-            maybe_vec.unwrap_or_else(|| {
-                vec![ast::RegOrImmediate::Imm(default_immediate_from_type(type_))]
-            })
+            let n = vector.map_or(1, |v| v.get() as usize);
+            let mut result = maybe_vec.unwrap_or_default();
+            result.extend(
+                iter::repeat_with(|| ast::RegOrImmediate::Imm(default_immediate_from_type(type_)))
+                    .take(n - result.len().min(n)),
+            );
+            result
         }),
     )
 }
@@ -1415,10 +1825,15 @@ fn single_value_append<'b, 'a: 'b, 'input: 'a>(
     )
 }
 
+// A size: an integer constant expression (PTX ISA 4.5.4).
+fn const_u32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<u32> {
+    const_expr.verify_map(|v| u32::try_from(v).ok()).parse_next(stream)
+}
+
 fn array_dimensions<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<Vec<u32>> {
     let dimension = delimited(
         Token::LBracket,
-        opt(u32).verify(|dim| *dim != Some(0)),
+        opt(const_u32).verify(|dim| *dim != Some(0)),
         Token::RBracket,
     )
     .parse_next(stream)?;
@@ -1426,7 +1841,7 @@ fn array_dimensions<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<V
     repeat_fold_0_or_more(
         delimited(
             Token::LBracket,
-            u32.verify(|dim| *dim != 0),
+            const_u32.verify(|dim| *dim != 0),
             Token::RBracket,
         ),
         move || result,
@@ -1634,8 +2049,15 @@ fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PRes
                 .insert(name, (returns.unwrap_or_default(), inputs));
         }
         ".calltargets" | ".branchtargets" => {
-            let (targets, _): (Vec<_>, _) =
-                (separated(1.., ident, Token::Comma), Token::Semicolon).parse_next(stream)?;
+            let (targets, _): (Vec<(&str, Option<u32>)>, _) = (
+                separated(1.., (ident, opt(delimited(Token::Lt, u32, Token::Gt))), Token::Comma),
+                Token::Semicolon,
+            )
+                .parse_next(stream)?;
+            let targets = targets
+                .into_iter()
+                .flat_map(|(name, count)| label_range(name, count))
+                .collect::<Vec<_>>();
             if directive == ".branchtargets" {
                 stream.state.branch_targets.insert(name, targets);
             } else {
@@ -1651,6 +2073,15 @@ fn call_target_directive<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PRes
         _ => return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify)),
     }
     Ok(())
+}
+
+// The labels of `name<count>` (name0 to name{count-1}) or `name`; the generated names are kept for the life of the
+// program
+fn label_range<'input>(name: &'input str, count: Option<u32>) -> Vec<&'input str> {
+    match count {
+        Some(count) => (0..count).map(|i| &*Box::leak(format!("{name}{i}").into_boxed_str())).collect(),
+        None => vec![name],
+    }
 }
 
 // The .branchtargets tables of the function body that starts at the stream, which brx.idx
@@ -1674,8 +2105,17 @@ fn prescan_branch_targets<'a, 'input>(stream: &mut PtxParser<'a, 'input>) {
                 let mut targets = Vec::new();
                 let mut j = i + 2;
                 while j < tokens.len() && !matches!(tokens[j].0, Token::Semicolon) {
-                    if !matches!(tokens[j].0, Token::Comma) {
-                        targets.push(&text[tokens[j].1.clone()]);
+                    match tokens[j].0 {
+                        Token::Comma => {}
+                        // N<5>: N0 to N4
+                        Token::Lt if j + 2 < tokens.len() && matches!(tokens[j + 2].0, Token::Gt) => {
+                            let count = text[tokens[j + 1].1.clone()].parse::<u32>().ok();
+                            if let (Some(name), Some(_)) = (targets.pop(), count) {
+                                targets.extend(label_range(name, count));
+                            }
+                            j += 2;
+                        }
+                        _ => targets.push(&text[tokens[j].1.clone()]),
                     }
                     j += 1;
                 }
@@ -1862,8 +2302,17 @@ impl<Ident> ast::ParsedOperand<Ident> {
         ) -> PResult<ast::ParsedOperand<&'input str>> {
             let main_ident = ident.parse_next(stream)?;
             alt((
-                preceded(Token::Plus, s32)
+                preceded(Token::Plus, const_offset)
                     .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset)),
+                preceded(Token::Minus, const_offset)
+                    .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset.wrapping_neg())),
+                delimited(Token::LBracket, array_index, Token::RBracket).map(move |(index, offset)| {
+                    match index {
+                        Some(index) => ast::ParsedOperand::RegIndex(main_ident, index, offset as i32),
+                        None => ast::ParsedOperand::RegOffset(main_ident, offset as i32),
+                    }
+                }),
+                vector_member.map(move |index| ast::ParsedOperand::VecMember(main_ident, index)),
                 take_error(dot_ident.map(move |suffix| {
                     let vector_index = vector_index(suffix)
                         .map_err(move |e| (ast::ParsedOperand::VecMember(main_ident, 0), e))?;
@@ -2090,7 +2539,7 @@ fn call<'a, 'input>(
             opt((
                 Token::Comma.void(),
                 Token::LParen.void(),
-                separated(1.., ParsedOperand::<&'input str>::parse, Token::Comma)
+                separated(0.., ParsedOperand::<&'input str>::parse, Token::Comma)
                     .map(|x: Vec<_>| x),
                 Token::RParen.void(),
             )
@@ -2112,7 +2561,17 @@ fn call<'a, 'input>(
             return Ok(empty_call(uniform, name));
         }
     };
-    let return_arguments = return_arguments.unwrap_or(Vec::new());
+    // A call may leave out the return values (PTX ISA 9.7.13.4): they go to registers declared on first use
+    // (`get_or_declare`), whose names are kept for the life of the program.
+    let return_arguments = return_arguments.unwrap_or_else(|| {
+        static DISCARDED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        (0..recorded_fn.0.len())
+            .map(|_| {
+                let n = DISCARDED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                &*Box::leak(format!("%__discarded_return{n}").into_boxed_str())
+            })
+            .collect()
+    });
     let input_arguments = input_arguments.unwrap_or(Vec::new());
     if recorded_fn.0.len() != return_arguments.len() || recorded_fn.1.len() != input_arguments.len()
     {
@@ -2242,6 +2701,20 @@ fn take_layout(modifiers: &mut Vec<&str>) -> Option<ast::MatrixLayout> {
     } else {
         ast::MatrixLayout::Col
     })
+}
+
+/// A memory operand: `[address]`, or an array element `a[index]` written without the brackets (PTX ISA 6.4.2).
+fn memory_operand<'a, 'input>(
+    stream: &mut PtxParser<'a, 'input>,
+) -> PResult<ParsedOperandStr<'input>> {
+    alt((
+        delimited(Token::LBracket, ParsedOperandStr::parse, Token::RBracket),
+        ParsedOperandStr::parse.verify(|op| {
+            matches!(op, ast::ParsedOperand::RegIndex(..))
+                || matches!(op, ast::ParsedOperand::RegOffset(..))
+        }),
+    ))
+    .parse_next(stream)
 }
 
 fn bracketed_operand<'a, 'input>(
@@ -4753,6 +5226,20 @@ derive_parser!(
         Minus,
         #[token("+")]
         Plus,
+        #[token("*")]
+        Star,
+        #[token("/")]
+        Slash,
+        #[token("%")]
+        Percent,
+        #[token("&")]
+        Amp,
+        #[token("^")]
+        Caret,
+        #[token("~")]
+        Tilde,
+        #[token("?")]
+        Question,
         #[token("=")]
         Eq,
         #[token("WARP_SZ")]
@@ -8127,6 +8614,50 @@ mod tests {
         );
         assert_eq!(operand.to_string(), text);
         assert!(errors.is_empty());
+    }
+
+    fn parse_operand(text: &str) -> crate::ParsedOperand<&str> {
+        let tokens = Token::lexer(text)
+            .spanned()
+            .map(|(t, span)| t.map(|t| (t, span)))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let operand = crate::ParsedOperand::<&str>::parse.parse(stream).unwrap();
+        assert!(errors.is_empty());
+        operand
+    }
+
+    #[test]
+    fn vector_members_by_colour_and_in_vector_operands() {
+        // .r and .a are also modifier tokens
+        assert!(matches!(parse_operand("%V.r"), crate::ParsedOperand::VecMember("%V", 0)));
+        assert!(matches!(parse_operand("%V.a"), crate::ParsedOperand::VecMember("%V", 3)));
+        let crate::ParsedOperand::VecPack(elements) = parse_operand("{%r1, %V.z, %V.x}") else {
+            panic!("expected a vector operand");
+        };
+        assert_eq!(
+            elements,
+            vec![
+                Some(crate::RegOrImmediate::Reg("%r1")),
+                Some(crate::RegOrImmediate::VecMember("%V", 2)),
+                Some(crate::RegOrImmediate::VecMember("%V", 0)),
+            ]
+        );
+    }
+
+    #[test]
+    fn array_elements() {
+        assert!(matches!(parse_operand("a[%i]"), crate::ParsedOperand::RegIndex("a", "%i", 0)));
+        assert!(matches!(parse_operand("a[%i+8]"), crate::ParsedOperand::RegIndex("a", "%i", 8)));
+        assert!(matches!(parse_operand("a[%i - 4]"), crate::ParsedOperand::RegIndex("a", "%i", -4)));
+        assert!(matches!(parse_operand("a[3 * 4]"), crate::ParsedOperand::RegOffset("a", 12)));
+        assert!(matches!(parse_operand("a[(1 + 2) * 8 / 2 - 4]"), crate::ParsedOperand::RegOffset("a", 8)));
+        assert!(matches!(parse_operand("%rd1-4"), crate::ParsedOperand::RegOffset("%rd1", -4)));
     }
 
     #[test]

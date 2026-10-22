@@ -1,0 +1,129 @@
+// Recursion that is not a loop after tail recursion elimination, with call depths that differ between the threads
+// of a SIMD group: doubly recursive fib, mutual recursion, a local array in each frame and a store after the call.
+.version 8.0
+.target sm_80
+.address_size 64
+
+.func (.reg .u32 r) fib(.reg .u32 n)
+{
+    .reg .pred %p; .reg .u32 %a, %b, %m;
+    setp.lt.u32 %p, n, 2;
+    @%p bra BASE;
+    sub.u32 %m, n, 1;
+    call (%a), fib, (%m);
+    sub.u32 %m, n, 2;
+    call (%b), fib, (%m);
+    add.u32 r, %a, %b;
+    ret;
+BASE:
+    mov.u32 r, n;
+    ret;
+}
+
+// f(n) = n ? 1 + g(n - 1) : 0, g(n) = n ? 10 + f(n - 1) : 0
+.func (.param .b32 r) g(.param .b32 n);
+.func (.param .b32 r) f(.param .b32 n)
+{
+    .reg .pred %p; .reg .u32 %n, %v;
+    ld.param.u32 %n, [n];
+    mov.u32 %v, 0;
+    setp.eq.u32 %p, %n, 0;
+    @%p bra DONE;
+    sub.u32 %n, %n, 1;
+    {
+    .param .b32 a; .param .b32 b;
+    st.param.b32 [a], %n;
+    call (b), g, (a);
+    ld.param.b32 %v, [b];
+    }
+    add.u32 %v, %v, 1;
+DONE:
+    st.param.b32 [r], %v;
+    ret;
+}
+.func (.param .b32 r) g(.param .b32 n)
+{
+    .reg .pred %p; .reg .u32 %n, %v;
+    ld.param.u32 %n, [n];
+    mov.u32 %v, 0;
+    setp.eq.u32 %p, %n, 0;
+    @%p bra DONE;
+    sub.u32 %n, %n, 1;
+    {
+    .param .b32 a; .param .b32 b;
+    st.param.b32 [a], %n;
+    call (b), f, (a);
+    ld.param.b32 %v, [b];
+    }
+    add.u32 %v, %v, 10;
+DONE:
+    st.param.b32 [r], %v;
+    ret;
+}
+
+// each frame has its own a[4] = {n, 2n, 3n, 4n}: h(n) = (n ? h(n - 1) : 0) + a[n % 4]
+.func (.reg .u32 r) h(.reg .u32 n)
+{
+    .local .align 4 .u32 a[4];
+    .reg .pred %p; .reg .u32 %v, %m, %i; .reg .u64 %ad, %o;
+    mov.u64 %ad, a;
+    mul.lo.u32 %v, n, 1; st.local.u32 [a], %v;
+    mul.lo.u32 %v, n, 2; st.local.u32 [a+4], %v;
+    mul.lo.u32 %v, n, 3; st.local.u32 [a+8], %v;
+    mul.lo.u32 %v, n, 4; st.local.u32 [a+12], %v;
+    mov.u32 %v, 0;
+    setp.eq.u32 %p, n, 0;
+    @%p bra DONE;
+    sub.u32 %m, n, 1;
+    call (%v), h, (%m);
+DONE:
+    and.b32 %i, n, 3;
+    mul.wide.u32 %o, %i, 4;
+    add.u64 %ad, %ad, %o;
+    ld.local.u32 %m, [%ad];
+    add.u32 r, %v, %m;
+    ret;
+}
+
+// stores n after the recursive call: out[n - 1], ..., out[0] = n, ..., 1
+.func w(.reg .u64 out, .reg .u32 n)
+{
+    .reg .pred %p; .reg .u32 %m; .reg .u64 %o;
+    setp.eq.u32 %p, n, 0;
+    @%p ret;
+    sub.u32 %m, n, 1;
+    call w, (out, %m);
+    mul.wide.u32 %o, %m, 4;
+    add.u64 %o, out, %o;
+    st.global.u32 [%o], n;
+    ret;
+}
+
+// out[4 * tid + 0..2] = fib(tid % 16), f(tid), h(tid % 8); w(tid % 32) fills the first slots of thread tid's 32
+.visible .entry recursion(.param .u64 po, .param .u64 pw)
+{
+    .reg .b64 %o, %d, %w; .reg .u32 %t, %n, %v;
+    ld.param.u64 %o, [po];
+    ld.param.u64 %w, [pw];
+    mov.u32 %t, %tid.x;
+    mul.wide.u32 %d, %t, 16;
+    add.u64 %o, %o, %d;
+    and.b32 %n, %t, 15;
+    call (%v), fib, (%n);
+    st.global.u32 [%o], %v;
+    {
+    .param .b32 a; .param .b32 b;
+    st.param.b32 [a], %t;
+    call (b), f, (a);
+    ld.param.b32 %v, [b];
+    }
+    st.global.u32 [%o+4], %v;
+    and.b32 %n, %t, 7;
+    call (%v), h, (%n);
+    st.global.u32 [%o+8], %v;
+    mul.wide.u32 %d, %t, 128;
+    add.u64 %w, %w, %d;
+    and.b32 %n, %t, 31;
+    call w, (%w, %n);
+    ret;
+}

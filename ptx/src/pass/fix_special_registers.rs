@@ -251,6 +251,11 @@ pub fn map_operand<T: Copy, Err>(
         ast::ParsedOperand::RegOffset(ident, offset) => {
             ast::ParsedOperand::RegOffset(fn_(ident, None)?.unwrap_or(ident), offset)
         }
+        ast::ParsedOperand::RegIndex(base, index, offset) => ast::ParsedOperand::RegIndex(
+            fn_(base, None)?.unwrap_or(base),
+            fn_(index, None)?.unwrap_or(index),
+            offset,
+        ),
         ast::ParsedOperand::Imm(imm) => ast::ParsedOperand::Imm(imm),
         ast::ParsedOperand::VecMember(ident, member) => match fn_(ident, Some(member))? {
             Some(ident) => ast::ParsedOperand::Reg(ident),
