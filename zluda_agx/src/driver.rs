@@ -73,7 +73,7 @@ pub(crate) struct Driver {
     /// `ZLUDA_AGX_CAPTURE`: launches captured so far, per kernel name.
     captured_launches: HashMap<String, u32>,
     /// Launch-time specialization (specialize.rs): the PTX of the modules whose kernels may be specialized, and the
-    /// state of each (module, kernel, scalar arguments, block).
+    /// state of each (module, kernel, scalar arguments, 8-byte argument equalities, block).
     spec_sources: HashMap<usize, std::sync::Arc<str>>,
     specs: HashMap<SpecKey, Spec>,
     /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
@@ -102,7 +102,8 @@ pub(crate) struct Driver {
     pub(crate) ctx: Context,
 }
 
-/// (module, kernel, the bytes of its scalar arguments with their sizes, block) of a specialization.
+/// (module, kernel, the bytes of its scalar arguments with their sizes and the equality classes of 8-byte
+/// arguments, block) of a specialization.
 type SpecKey = (usize, String, Vec<u8>, [u32; 3]);
 
 /// Launches of a kernel with the same scalar arguments and block run generic code until `SPECIALIZE_AFTER` of them,
@@ -488,6 +489,10 @@ impl Driver {
             scalars.push(a.len() as u8);
             scalars.extend_from_slice(a);
         }
+        // The zero tag cannot be a 4-byte scalar size. A duplicate 8-byte argument may be
+        // rewritten as a read of its equal predecessor, so this pattern must be in the key.
+        scalars.push(0);
+        scalars.extend(crate::specialize::equal_eight_byte_args(args));
         let key: SpecKey = (m, name.to_string(), scalars, block);
         // arguments that change at every launch (a step counter) would never be specialized: stop counting new ones
         if self.specs.len() >= MAX_SPECS && !self.specs.contains_key(&key) {

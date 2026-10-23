@@ -944,7 +944,10 @@ instruction (`"source":"file:line:column"`). The objects also work with `llvm-ob
 A kernel of a PTX module launched 3 times with the same scalar arguments (4 bytes or smaller) and block size is
 compiled once more in the background with them as constants, and later launches with those arguments run that code
 (`specialize.rs`): `ld.param` of a `.u32`/`.s32`/`.b32`/`.f32` parameter becomes a `mov` of its value and
-`mov.u32 %r, %ntid.*` a `mov` of the block's size, in a copy of the module that holds only that kernel. Divisions by
+`mov.u32 %r, %ntid.*` a `mov` of the block's size, in a copy of the module that holds only that kernel. Equal 8-byte
+arguments of the same type share one parameter read; the specialization key records their equality pattern, not
+their values. This lets the compiler remove an in-place copy while keeping one compiled variant for any addresses
+with the same equality pattern. Divisions by
 the arguments become multiplications or shifts, loops over them get a known trip count, bounds checks against them
 fold: on Geekbench 7's GPU workloads the GPU time drops 22% (35.8 -> 28.0 s; gemm -33%, im2col -62%, depthwise
 convolutions -55%, separable convolutions -12%).

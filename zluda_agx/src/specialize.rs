@@ -1,8 +1,26 @@
 //! Launch-time specialization: a kernel launched again and again with the same scalar arguments and block size is
 //! compiled once more with them as constants (ZLUDA_AGX_SPECIALIZE, see the AGX docs). The PTX of the kernel is
 //! rewritten: `ld.param` of a 4-byte scalar parameter (`.u32`, `.s32`, `.b32`, `.f32`) becomes a `mov` of the
-//! argument's value, and `mov.u32 %r, %ntid.{x,y,z}` a `mov` of the block's size. Everything else, the other kernels
+//! argument's value; an 8-byte parameter equal to an earlier parameter of the same type reads that earlier parameter;
+//! and `mov.u32 %r, %ntid.{x,y,z}` becomes a `mov` of the block's size. Everything else, the other kernels
 //! and the parameter list included, stays as it is, so the specialized kernel takes the same arguments.
+
+/// Canonical equality classes of 8-byte launch arguments, appended to the specialization key. Each duplicate is
+/// its argument index followed by the first equal earlier index. Values are omitted, so different pointers with
+/// the same equality pattern share one compiled kernel.
+pub fn equal_eight_byte_args(args: &[&[u8]]) -> Vec<u8> {
+    let mut pairs = Vec::new();
+    for (i, arg) in args.iter().enumerate() {
+        if arg.len() != 8 {
+            continue;
+        }
+        if let Some(j) = args[..i].iter().position(|earlier| earlier.len() == 8 && *earlier == *arg) {
+            pairs.extend_from_slice(&(i as u32).to_le_bytes());
+            pairs.extend_from_slice(&(j as u32).to_le_bytes());
+        }
+    }
+    pairs
+}
 
 /// The module with `kernel` specialized for `args` (the launch's parameter bytes) and `block`, and the number of
 /// instructions rewritten; `None` if the kernel is not found or nothing in it depends on them.
@@ -10,12 +28,13 @@ pub fn specialize_ptx(src: &str, kernel: &str, args: &[&[u8]], block: [u32; 3]) 
     let entry = find_entry(src, kernel)?;
     let open = entry + src[entry..].find('(')?;
     let close = open + src[open..].find(')')?;
-    // index -> (type, name) of the 4-byte scalar parameters
-    let mut scalars: Vec<Option<(&str, &str)>> = Vec::new();
+    // index -> (type, name) of scalar parameters we can specialize
+    let mut params: Vec<Option<(&str, &str)>> = Vec::new();
     for p in src[open + 1..close].split(',') {
         let words: Vec<&str> = p.split_whitespace().collect();
-        scalars.push(match words.as_slice() {
-            [".param", ty @ (".u32" | ".s32" | ".b32" | ".f32"), name] if !name.contains('[') => Some((&ty[1..], *name)),
+        params.push(match words.as_slice() {
+            [".param", ty @ (".u32" | ".s32" | ".b32" | ".f32" | ".u64" | ".s64" | ".b64"), name]
+                if !name.contains('[') => Some((&ty[1..], *name)),
             _ => None,
         });
     }
@@ -25,7 +44,7 @@ pub fn specialize_ptx(src: &str, kernel: &str, args: &[&[u8]], block: [u32; 3]) 
     out.push_str(&src[..body_start]);
     let mut rewritten = 0;
     for line in src[body_start..body_end].split_inclusive('\n') {
-        match rewrite(line, &scalars, args, block) {
+        match rewrite(line, &params, args, block) {
             Some(new) => {
                 out.push_str(&new);
                 rewritten += 1;
@@ -120,7 +139,7 @@ fn matching_brace(s: &str) -> Option<usize> {
 }
 
 /// The replacement of one line of the kernel body, if it reads a specialized value.
-fn rewrite(line: &str, scalars: &[Option<(&str, &str)>], args: &[&[u8]], block: [u32; 3]) -> Option<String> {
+fn rewrite(line: &str, params: &[Option<(&str, &str)>], args: &[&[u8]], block: [u32; 3]) -> Option<String> {
     let indent = &line[..line.len() - line.trim_start().len()];
     let text = line.trim();
     let newline = if line.ends_with('\n') { "\n" } else { "" };
@@ -141,10 +160,24 @@ fn rewrite(line: &str, scalars: &[Option<(&str, &str)>], args: &[&[u8]], block: 
     let (dst, addr) = operands(rest)?;
     let name = addr.strip_prefix('[')?.strip_suffix(']')?;
     let name = name.strip_suffix("+0").unwrap_or(name).trim();
-    let index = scalars.iter().position(|s| s.is_some_and(|(_, n)| n == name))?;
-    let (pty, _) = scalars[index]?;
+    let index = params.iter().position(|s| s.is_some_and(|(_, n)| n == name))?;
+    let (pty, _) = params[index]?;
+    if ty != pty {
+        return None;
+    }
+    if matches!(ty, "u64" | "s64" | "b64") {
+        let value = args.get(index)?;
+        if value.len() != 8 {
+            return None;
+        }
+        let (_, earlier) = params[..index].iter().enumerate().find_map(|(j, p)| {
+            let (earlier_ty, earlier) = (*p)?;
+            (earlier_ty == ty && args.get(j).is_some_and(|a| *a == *value)).then_some((j, earlier))
+        })?;
+        return Some(format!("{indent}ld.param.{ty} \t{dst}, [{earlier}];{newline}"));
+    }
     let bytes: [u8; 4] = args.get(index)?.get(..4)?.try_into().ok()?;
-    if args[index].len() != 4 || ty != pty {
+    if args[index].len() != 4 {
         return None;
     }
     let v = u32::from_le_bytes(bytes);
@@ -211,5 +244,29 @@ mod tests {
         assert!(out.contains("\n.visible .const .align 4 .b8 table[8] = {1, 0, 0, 0, 2};\n"));
         assert!(out.contains("\n.visible .global .align 4 .u32 counter;\n"));
         assert!(specialize_ptx(PTX, "missing", &args, [1, 1, 1]).is_none());
+    }
+
+    #[test]
+    fn equal_64_bit_arguments_share_a_parameter_only_for_that_equality_class() {
+        let ptx = ".version 7.0\n.target sm_75\n.address_size 64\n.visible .entry copy(\n\
+            \t.param .u64 src,\n\
+            \t.param .u64 dst,\n\
+            \t.param .u32 count\n\
+            ) {\n\
+            \t.reg .b64 %rd<3>;\n\
+            \tld.param.u64 %rd1, [src];\n\
+            \tld.param.u64 %rd2, [dst+0];\n\
+            \tld.param.u32 %r1, [count];\n\
+            \tret;\n}\n";
+        let a = 0x1100_4000u64.to_le_bytes();
+        let b = 0x1100_8000u64.to_le_bytes();
+        let n = 128u32.to_le_bytes();
+        let equal: [&[u8]; 3] = [&a, &a, &n];
+        let distinct: [&[u8]; 3] = [&a, &b, &n];
+        assert_ne!(equal_eight_byte_args(&equal), equal_eight_byte_args(&distinct));
+        let (same, _) = specialize_ptx(ptx, "copy", &equal, [64, 1, 1]).unwrap();
+        assert!(same.contains("ld.param.u64 \t%rd2, [src];"));
+        let (different, _) = specialize_ptx(ptx, "copy", &distinct, [64, 1, 1]).unwrap();
+        assert!(different.contains("ld.param.u64 %rd2, [dst+0];"));
     }
 }
