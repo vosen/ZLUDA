@@ -1679,12 +1679,31 @@ pub struct LoadedModule {
     /// USC offset of each kernel's copy in `code`.
     entries: std::collections::HashMap<String, u32>,
     globals: Option<Bo>,
+    /// The address of another module's global data buffer that this module's kernels use (`new_sharing_globals`).
+    shared_globals: Option<u64>,
     /// The error record of the module's checked kernels (zeroed; the first bad access fills it).
     record: Option<Bo>,
 }
 
 impl LoadedModule {
     pub fn new(vm: &mut Vm, module: module::Module) -> io::Result<LoadedModule> {
+        Self::load(vm, module, None)
+    }
+
+    /// The module with its global data in `other`'s buffer (a recompilation of `other`'s source, such as a
+    /// launch-time specialization, whose kernels must see the same device variables): the modules must lay their
+    /// global data out alike, every symbol at the same offset with the same size. The buffer stays `other`'s, which
+    /// must outlive this module; this module's own accessors of global data (`globals`, `write_global`, ...) see none.
+    pub fn new_sharing_globals(vm: &mut Vm, module: module::Module, other: &LoadedModule) -> io::Result<LoadedModule> {
+        let alike = module.globals.len() == other.module.globals.len()
+            && module.global_symbols.iter().all(|(name, at)| other.module.global_symbols.get(name) == Some(at));
+        if !alike {
+            return Err(invalid("the modules lay out their global data differently".to_string()));
+        }
+        Self::load(vm, module, other.globals_va())
+    }
+
+    fn load(vm: &mut Vm, module: module::Module, shared_globals: Option<u64>) -> io::Result<LoadedModule> {
         // Every kernel is copied to its own 64-byte aligned slot (the Shader word's code address has only been
         // measured 64-byte aligned, and the backend aligns kernels to 2 bytes). Kernels are self-contained:
         // branches are PC-relative and there are no calls between them. 64 bytes of slack follow each one.
@@ -1701,7 +1720,7 @@ impl LoadedModule {
             code.as_mut_slice()[at as usize..at as usize + size].copy_from_slice(&module.text[off..off + size]);
             entries.insert(name, base + at as u32);
         }
-        let globals = if module.globals.is_empty() {
+        let globals = if module.globals.is_empty() || shared_globals.is_some() {
             None
         } else {
             let mut g = vm.alloc_data(module.globals.len() as u64)?;
@@ -1716,7 +1735,7 @@ impl LoadedModule {
         } else {
             None
         };
-        Ok(LoadedModule { module, code, entries, globals, record })
+        Ok(LoadedModule { module, code, entries, globals, shared_globals, record })
     }
 
     /// Whether the module has kernels built in checked mode.
@@ -1756,7 +1775,7 @@ impl LoadedModule {
 
     /// GPU address of the global data buffer, if the module has one.
     pub fn globals_va(&self) -> Option<u64> {
-        self.globals.as_ref().map(|g| g.va)
+        self.globals.as_ref().map(|g| g.va).or(self.shared_globals)
     }
 
     /// Whether a device `assert` failed since the last call (CUDA_ERROR_ASSERT); clears the flag.

@@ -2533,6 +2533,17 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::CosArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
+        // launch-time specialized kernel gives the bits of the generic one)
+        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+            self.emit_intrinsic(
+                c"llvm.agx.cos.f32",
+                Some(arguments.dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            )?;
+            return Ok(());
+        }
         let cos = self.fp.cos_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(cos, LLVMZludaFastMathApproxFunc) }
         Ok(())
@@ -2858,6 +2869,17 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SinArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
+        // launch-time specialized kernel gives the bits of the generic one)
+        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+            self.emit_intrinsic(
+                c"llvm.agx.sin.f32",
+                Some(arguments.dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            )?;
+            return Ok(());
+        }
         let sin = self.fp.sin_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(sin, LLVMZludaFastMathApproxFunc) }
         Ok(())
@@ -5201,6 +5223,20 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let mode = self.fp.mode;
+        if self.target == Target::Agx && data.type_ == ast::ScalarType::F32 && !self.strict_fp && mode == FloatingPointMode::Normal {
+            // x * rsqrt_special(x), the code of llvm.sqrt without strict floating point (a hardware approximation),
+            // which LLVM does not fold on the host for a constant x: a launch-time specialized kernel gives the bits
+            // of the generic one
+            let src = self.resolver.value(arguments.src)?;
+            let r = self.emit_intrinsic(
+                c"llvm.agx.rsqrt.special.f32",
+                None,
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, type_)],
+            )?;
+            self.resolver.with_result(arguments.dst, |dst| unsafe { LLVMBuildFMul(self.builder, src, r, dst) });
+            return Ok(());
+        }
         let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, mode) {
             (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
                 (c"llvm.sqrt.f32", &[])
@@ -5463,7 +5499,9 @@ impl<'a> MethodEmitContext<'a> {
                     ast::ScalarType::BF16x2 => "v2bf16",
                     _ => return Err(error_unreachable()),
                 };
-                agx_name = CString::new(format!("llvm.exp2.{suffix}")).map_err(|_| error_unreachable())?;
+                // f32: the hardware's exp2, which LLVM does not fold on the host for a constant argument
+                let name = if data.type_ == ast::ScalarType::F32 { "llvm.agx.exp2" } else { "llvm.exp2" };
+                agx_name = CString::new(format!("{name}.{suffix}")).map_err(|_| error_unreachable())?;
                 agx_name.as_c_str()
             }
             (ast::ScalarType::F16, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f16",
@@ -5501,7 +5539,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::Lg2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let intrinsic = match self.fp.mode {
-            _ if self.target == Target::Agx => c"llvm.log2.f32",
+            // the hardware's log2, which LLVM does not fold on the host for a constant argument
+            _ if self.target == Target::Agx => c"llvm.agx.log2.f32",
             FloatingPointMode::Normal => c"llvm.amdgcn.log.f32",
             FloatingPointMode::Constrained => c"llvm.amdgcn.constrained.log.f32",
         };

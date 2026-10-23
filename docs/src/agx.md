@@ -946,12 +946,17 @@ compiled once more in the background with them as constants, and later launches 
 (`specialize.rs`): `ld.param` of a `.u32`/`.s32`/`.b32`/`.f32` parameter becomes a `mov` of its value and
 `mov.u32 %r, %ntid.*` a `mov` of the block's size, in a copy of the module that holds only that kernel. Divisions by
 the arguments become multiplications or shifts, loops over them get a known trip count, bounds checks against them
-fold: on Geekbench 7's GPU workloads the GPU time drops 17% (gemm -33%, im2col -62%, depthwise convolutions -55%).
+fold: on Geekbench 7's GPU workloads the GPU time drops 22% (35.8 -> 28.0 s; gemm -33%, im2col -62%, depthwise
+convolutions -55%, separable convolutions -12%).
 
-The specialized code computes what the generic code computes, bit for bit: `div.approx.f32` uses the hardware's
-reciprocal (`llvm.agx.rcp.f32`, as `rcp.approx`), which LLVM does not fold. Modules with global or constant data, a
-`malloc` heap or the clock are not specialized (their copy would have its own), nor are launches in checked mode or
-captured ones. Compilations go through the compilation cache. `ZLUDA_AGX_SPECIALIZE=0` turns this off;
+The specialized code computes what the generic code computes, bit for bit: the approximate operations use the
+hardware's functions in a form LLVM does not fold on the host for constant arguments (`div.approx` and `rcp.approx`
+`llvm.agx.rcp`, `sin`/`cos`/`ex2`/`lg2.approx` `llvm.agx.sin` and the others, `sqrt.approx` without strict floating
+point `x * llvm.agx.rsqrt.special(x)`). The copy's module-scope variables are `.visible`, so that it lays out its
+global data like the module, and it runs on the module's global data buffer (`LoadedModule::new_sharing_globals`;
+a copy laid out otherwise is not used). Modules with a `malloc` heap or the clock are not specialized, nor are
+launches in checked mode or captured ones. Compilations go through the compilation cache and run on half the CPUs;
+an argument set already in the cache is used from its first launch. `ZLUDA_AGX_SPECIALIZE=0` turns this off;
 `ZLUDA_AGX_LOG=1` prints each specialization when it is ready. `agx_specialize PTX KERNEL --block x,y,z ARG...` prints
 the PTX that a launch with these argument bytes (hex) would compile.
 

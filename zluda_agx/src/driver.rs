@@ -113,6 +113,33 @@ enum Spec {
     Failed,
 }
 
+/// One of the background compilations that run at a time (half the CPUs: an application can have thousands of
+/// argument sets, ~0.1 s of compilation each), held while it runs.
+struct CompileSlot;
+
+static COMPILE_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) = (std::sync::Mutex::new(0), std::sync::Condvar::new());
+
+impl CompileSlot {
+    fn take() -> CompileSlot {
+        let limit = std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1));
+        let (running, freed) = &COMPILE_SLOTS;
+        let mut n = running.lock().unwrap_or_else(|e| e.into_inner());
+        while *n >= limit {
+            n = freed.wait(n).unwrap_or_else(|e| e.into_inner());
+        }
+        *n += 1;
+        CompileSlot
+    }
+}
+
+impl Drop for CompileSlot {
+    fn drop(&mut self) {
+        let (running, freed) = &COMPILE_SLOTS;
+        *running.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+        freed.notify_one();
+    }
+}
+
 /// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
 fn specialize_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -398,9 +425,7 @@ impl Driver {
                 let (out, cpu, name) = (slot.clone(), self.ctx.props.llvm_cpu.clone(), name.to_string());
                 let owned: Vec<Vec<u8>> = args.iter().map(|a| a.to_vec()).collect();
                 std::thread::spawn(move || {
-                    // one compilation at a time: a kernel can have dozens of argument sets
-                    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-                    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+                    let _slot = CompileSlot::take();
                     let refs: Vec<&[u8]> = owned.iter().map(|a| &a[..]).collect();
                     let r = match crate::specialize::specialize_ptx(&src, &name, &refs, block) {
                         Some((text, _)) => compile_ptx(text.as_bytes(), &cpu),
@@ -415,10 +440,11 @@ impl Driver {
                 match done {
                     None => (Spec::Pending(slot), false),
                     Some(Ok((object, asm))) => {
+                        let generic = &self.modules[&m];
                         let loaded = module::Module::load(&object, &asm)
                             .ok()
-                            .and_then(|module| LoadedModule::new(&mut self.ctx.vm, module).ok())
-                            .filter(|l| l.module.kernels.contains_key(name) && l.globals_va().is_none());
+                            .and_then(|module| LoadedModule::new_sharing_globals(&mut self.ctx.vm, module, generic).ok())
+                            .filter(|l| l.module.kernels.contains_key(name));
                         if crate::log_enabled() {
                             eprintln!("[zluda_agx] specialized {name} block {block:?}: {}", if loaded.is_some() { "ready" } else { "failed to load" });
                         }
@@ -1385,17 +1411,16 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
         }
         let h = d.handle();
-        // the PTX of a module without global data, heap or clock (a specialized copy would have its own) for
-        // launch-time specialization
+        // the PTX of a module without heap or clock for launch-time specialization (its kernels' copies use the
+        // module's global data)
         let ptx = !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
-        if ptx && specialize_enabled() && !agx_checked() && loaded.globals_va().is_none() && !loaded.uses_heap() && !loaded.uses_timer() {
+        if ptx && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
             if let Ok(text) = std::str::from_utf8(image) {
                 d.spec_sources.insert(h, std::sync::Arc::from(text));
             }
         } else if crate::log_enabled() {
             eprintln!(
-                "[zluda_agx] module {h:#x} not specialized: ptx {ptx} globals {} heap {} timer {}",
-                loaded.globals_va().is_some(),
+                "[zluda_agx] module {h:#x} not specialized: ptx {ptx} heap {} timer {}",
                 loaded.uses_heap(),
                 loaded.uses_timer()
             );

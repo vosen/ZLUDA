@@ -37,8 +37,11 @@ pub fn specialize_ptx(src: &str, kernel: &str, args: &[&[u8]], block: [u32; 3]) 
     (rewritten > 0).then(|| (without_other_entries(&out, kernel), rewritten))
 }
 
-/// `src` without the kernels other than `kernel` (they would only add compile time); functions and globals stay.
+/// `src` without the kernels other than `kernel` (they would only add compile time); functions and globals stay,
+/// and module-scope `.global` and `.const` variables become `.visible`, so that LLVM keeps all of them: the
+/// specialized module then lays out its global data as the module does and uses the module's buffer.
 fn without_other_entries(src: &str, kernel: &str) -> String {
+    let src = &visible_globals(src);
     let mut out = String::with_capacity(src.len());
     let mut at = 0;
     while let Some(i) = src[at..].find(".entry") {
@@ -61,6 +64,24 @@ fn without_other_entries(src: &str, kernel: &str) -> String {
         }
     }
     out.push_str(&src[at..]);
+    out
+}
+
+/// `src` with `.visible` before the module-scope `.global` / `.const` declarations that have no linkage directive.
+fn visible_globals(src: &str) -> String {
+    let mut out = String::with_capacity(src.len() + 64);
+    let mut depth = 0i32;
+    for line in src.split_inclusive('\n') {
+        let t = line.trim_start();
+        if depth == 0 && (t.starts_with(".global ") || t.starts_with(".const ")) {
+            out.push_str(&line[..line.len() - t.len()]);
+            out.push_str(".visible ");
+            out.push_str(t);
+        } else {
+            out.push_str(line);
+        }
+        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+    }
     out
 }
 
@@ -149,6 +170,8 @@ mod tests {
     const PTX: &str = ".version 7.0
 .target sm_75
 .address_size 64
+.const .align 4 .b8 table[8] = {1, 0, 0, 0, 2};
+.visible .global .align 4 .u32 counter;
 .visible .entry other(.param .u32 other_param_0) { ld.param.u32 %r1, [other_param_0]; ret; }
 .visible .entry k(
 	.param .u64 k_param_0,
@@ -184,6 +207,9 @@ mod tests {
         assert!(out.contains("mov.u32 \t%r4, %tid.x;"));
         // the other kernel is left out
         assert!(!out.contains("other") && out.contains(".visible .entry k("));
+        // the module's variables are all kept
+        assert!(out.contains("\n.visible .const .align 4 .b8 table[8] = {1, 0, 0, 0, 2};\n"));
+        assert!(out.contains("\n.visible .global .align 4 .u32 counter;\n"));
         assert!(specialize_ptx(PTX, "missing", &args, [1, 1, 1]).is_none());
     }
 }
