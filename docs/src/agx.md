@@ -939,6 +939,22 @@ When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`,
 instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
 `llvm-addr2line`.
 
+### Launch-time specialization
+
+A kernel of a PTX module launched 3 times with the same scalar arguments (4 bytes or smaller) and block size is
+compiled once more in the background with them as constants, and later launches with those arguments run that code
+(`specialize.rs`): `ld.param` of a `.u32`/`.s32`/`.b32`/`.f32` parameter becomes a `mov` of its value and
+`mov.u32 %r, %ntid.*` a `mov` of the block's size, in a copy of the module that holds only that kernel. Divisions by
+the arguments become multiplications or shifts, loops over them get a known trip count, bounds checks against them
+fold: on Geekbench 7's GPU workloads the GPU time drops 17% (gemm -33%, im2col -62%, depthwise convolutions -55%).
+
+The specialized code computes what the generic code computes, bit for bit: `div.approx.f32` uses the hardware's
+reciprocal (`llvm.agx.rcp.f32`, as `rcp.approx`), which LLVM does not fold. Modules with global or constant data, a
+`malloc` heap or the clock are not specialized (their copy would have its own), nor are launches in checked mode or
+captured ones. Compilations go through the compilation cache. `ZLUDA_AGX_SPECIALIZE=0` turns this off;
+`ZLUDA_AGX_LOG=1` prints each specialization when it is ready. `agx_specialize PTX KERNEL --block x,y,z ARG...` prints
+the PTX that a launch with these argument bytes (hex) would compile.
+
 ### Launch profiles and captures
 
 `ZLUDA_AGX_PROFILE=FILE` appends one JSON line per finished launch: the kernel, grid, block, dynamic shared memory,

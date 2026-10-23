@@ -66,6 +66,10 @@ pub(crate) struct Driver {
     checked_launches: HashMap<(usize, String), (String, u32)>,
     /// `ZLUDA_AGX_CAPTURE`: launches captured so far, per kernel name.
     captured_launches: HashMap<String, u32>,
+    /// Launch-time specialization (specialize.rs): the PTX of the modules whose kernels may be specialized, and the
+    /// state of each (module, kernel, scalar arguments, block).
+    spec_sources: HashMap<usize, std::sync::Arc<str>>,
+    specs: HashMap<SpecKey, Spec>,
     /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
     /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
     heap: Option<agx_runtime::Bo>,
@@ -90,6 +94,29 @@ pub(crate) struct Driver {
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
+}
+
+/// (module, kernel, the bytes of its scalar arguments with their sizes, block) of a specialization.
+type SpecKey = (usize, String, Vec<u8>, [u32; 3]);
+
+/// Launches of a kernel with the same scalar arguments and block run generic code until `SPECIALIZE_AFTER` of them,
+/// then while the specialized module compiles in the background, then the specialized code.
+const SPECIALIZE_AFTER: u32 = 3;
+
+/// At most this many (kernel, arguments, block) states are kept.
+const MAX_SPECS: usize = 4096;
+
+enum Spec {
+    Count(u32),
+    Pending(std::sync::Arc<std::sync::Mutex<Option<Result<(Vec<u8>, String), String>>>>),
+    Ready(LoadedModule),
+    Failed,
+}
+
+/// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
+fn specialize_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_SPECIALIZE").map_or(true, |v| v != "0"))
 }
 
 /// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
@@ -234,9 +261,16 @@ impl Driver {
             None => Vec::new(),
         };
         let allocations = if k.checked.as_ref().is_some_and(|c| c.table.is_some()) { self.live_allocations() } else { Vec::new() };
+        let unchecked = k.checked.is_none();
         let capture = self.capture_before(m, &name, grid, block, shared, args)?;
         let g14x = self.ctx.device.g14x();
-        let Driver { ctx, default_waits, modules, streams, .. } = self;
+        // a captured launch runs the generic code it saved
+        let spec = if unchecked && capture.is_none() { self.specialized(m, &name, args, block) } else { None };
+        let Driver { ctx, default_waits, modules, streams, specs, .. } = self;
+        let code = match spec.as_ref().map(|key| &specs[key]) {
+            Some(Spec::Ready(specialized)) => specialized,
+            _ => &modules[&m],
+        };
         let (queue, waits) = if sh <= 2 {
             (&mut ctx.stream, default_waits)
         } else {
@@ -244,7 +278,7 @@ impl Driver {
             (&mut s.queue, &mut s.waits)
         };
         let w = std::mem::take(waits);
-        let fence = modules[&m]
+        let fence = code
             .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
             .map_err(from_io)?;
         if let Some(dir) = capture {
@@ -331,6 +365,83 @@ impl Driver {
     /// `agx_run`: the kernel's code, the launch's uniforms, and the current contents of the memory it can reach (the
     /// allocations its pointer arguments point into, the module's global data, parameter block and error record),
     /// with `replay.sh`. Memory is as the fault left it, not as the launch found it.
+    /// The specialization to launch for these arguments, once it is ready (see `Spec`); counts the launches and starts
+    /// its compilation in the background.
+    fn specialized(&mut self, m: usize, name: &str, args: &[&[u8]], block: [u32; 3]) -> Option<SpecKey> {
+        let src = self.spec_sources.get(&m)?.clone();
+        let mut scalars = Vec::new();
+        for a in args.iter().filter(|a| a.len() <= 4) {
+            scalars.push(a.len() as u8);
+            scalars.extend_from_slice(a);
+        }
+        let key: SpecKey = (m, name.to_string(), scalars, block);
+        // arguments that change at every launch (a step counter) would never be specialized: stop counting new ones
+        if self.specs.len() >= MAX_SPECS && !self.specs.contains_key(&key) {
+            return None;
+        }
+        let state = match self.specs.remove(&key) {
+            Some(state) => state,
+            // a specialization compiled before (in an earlier run: it is in the compilation cache) is used from
+            // the first launch, so that an application that times its launches to choose a block size (Geekbench)
+            // times the code it will run
+            None => match crate::specialize::specialize_ptx(&src, name, args, block)
+                .and_then(|(text, _)| cached_ptx(text.as_bytes(), &self.ctx.props.llvm_cpu))
+            {
+                Some(compiled) => Spec::Pending(std::sync::Arc::new(std::sync::Mutex::new(Some(Ok(compiled))))),
+                None => Spec::Count(0),
+            },
+        };
+        let (state, ready) = match state {
+            Spec::Count(n) if n + 1 < SPECIALIZE_AFTER => (Spec::Count(n + 1), false),
+            Spec::Count(_) => {
+                let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+                let (out, cpu, name) = (slot.clone(), self.ctx.props.llvm_cpu.clone(), name.to_string());
+                let owned: Vec<Vec<u8>> = args.iter().map(|a| a.to_vec()).collect();
+                std::thread::spawn(move || {
+                    // one compilation at a time: a kernel can have dozens of argument sets
+                    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+                    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+                    let refs: Vec<&[u8]> = owned.iter().map(|a| &a[..]).collect();
+                    let r = match crate::specialize::specialize_ptx(&src, &name, &refs, block) {
+                        Some((text, _)) => compile_ptx(text.as_bytes(), &cpu),
+                        None => Err(format!("{name}: nothing to specialize")),
+                    };
+                    *out.lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
+                });
+                (Spec::Pending(slot), false)
+            }
+            Spec::Pending(slot) => {
+                let done = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+                match done {
+                    None => (Spec::Pending(slot), false),
+                    Some(Ok((object, asm))) => {
+                        let loaded = module::Module::load(&object, &asm)
+                            .ok()
+                            .and_then(|module| LoadedModule::new(&mut self.ctx.vm, module).ok())
+                            .filter(|l| l.module.kernels.contains_key(name) && l.globals_va().is_none());
+                        if crate::log_enabled() {
+                            eprintln!("[zluda_agx] specialized {name} block {block:?}: {}", if loaded.is_some() { "ready" } else { "failed to load" });
+                        }
+                        match loaded {
+                            Some(l) => (Spec::Ready(l), true),
+                            None => (Spec::Failed, false),
+                        }
+                    }
+                    Some(Err(e)) => {
+                        if crate::log_enabled() {
+                            eprintln!("[zluda_agx] specialization of {name} failed: {e}");
+                        }
+                        (Spec::Failed, false)
+                    }
+                }
+            }
+            Spec::Ready(l) => (Spec::Ready(l), true),
+            Spec::Failed => (Spec::Failed, false),
+        };
+        self.specs.insert(key.clone(), state);
+        ready.then_some(key)
+    }
+
     /// `ZLUDA_AGX_CAPTURE=DIR`: saves a launch as it is about to run (the same files as a fault dump, with memory
     /// as the launch finds it) to `DIR/<pid>-cap<n>-<kernel>`, for replaying it in the AGX Performance Simulator,
     /// after waiting for the earlier work. `ZLUDA_AGX_CAPTURE_KERNELS` lists the kernels (comma separated, or `all`,
@@ -556,6 +667,8 @@ fn new_driver() -> Result<Driver, CUerror> {
         launches: Default::default(),
         checked_launches: Default::default(),
         captured_launches: Default::default(),
+        spec_sources: Default::default(),
+        specs: Default::default(),
         heap: None,
         timer: None,
         vmm: HashMap::new(),
@@ -812,6 +925,15 @@ pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), St
 /// Compiles PTX modules into one AGX object: one module, or several linked together (`cuLink*`: functions declared
 /// `.extern` in one are defined `.visible` in another).
 pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8>, String), String> {
+    compile_or_cached(sources, cpu, false).map(|o| o.expect("compiled"))
+}
+
+/// The compilation cache's object for PTX, without compiling it on a miss (`None`).
+pub(crate) fn cached_ptx(ptx: &[u8], cpu: &str) -> Option<(Vec<u8>, String)> {
+    compile_or_cached(&[ptx], cpu, true).ok().flatten()
+}
+
+fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<Option<(Vec<u8>, String)>, String> {
     let zoc = zoc_path();
     let stamp = std::fs::metadata(&zoc)
         .and_then(|m| m.modified())
@@ -883,8 +1005,10 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         Ok((object, asm))
     };
     match Cache::from_env() {
-        Some(c) => c.get_or_compile(&key, compile),
-        None => compile(),
+        Some(c) if cached_only => Ok(c.get(&key)),
+        None if cached_only => Ok(None),
+        Some(c) => c.get_or_compile(&key, compile).map(Some),
+        None => compile().map(Some),
     }
 }
 
@@ -1261,6 +1385,21 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
         }
         let h = d.handle();
+        // the PTX of a module without global data, heap or clock (a specialized copy would have its own) for
+        // launch-time specialization
+        let ptx = !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
+        if ptx && specialize_enabled() && !agx_checked() && loaded.globals_va().is_none() && !loaded.uses_heap() && !loaded.uses_timer() {
+            if let Ok(text) = std::str::from_utf8(image) {
+                d.spec_sources.insert(h, std::sync::Arc::from(text));
+            }
+        } else if crate::log_enabled() {
+            eprintln!(
+                "[zluda_agx] module {h:#x} not specialized: ptx {ptx} globals {} heap {} timer {}",
+                loaded.globals_va().is_some(),
+                loaded.uses_heap(),
+                loaded.uses_timer()
+            );
+        }
         d.modules.insert(h, loaded);
         Ok(h)
     })?;
@@ -1418,6 +1557,8 @@ pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
         let h = hmod.0 as usize;
         d.modules.remove(&h).ok_or(CUerror::INVALID_HANDLE)?;
         d.functions.retain(|_, (m, _)| *m != h);
+        d.spec_sources.remove(&h);
+        d.specs.retain(|(m, ..), _| *m != h);
         Ok(())
     })
 }

@@ -2720,13 +2720,12 @@ impl<'a> MethodEmitContext<'a> {
         }
         if self.target == Target::Agx && float_div.type_ == ast::ScalarType::F32 {
             // d = a * (1/b), where 1/b of 2^126 < |b| is a zero of the sign of b (PTX ISA 9.7.3.8): infinite a
-            // gives NaN, any other a a zero
+            // gives NaN, any other a a zero. 1/b is the hardware's reciprocal (as rcp.approx), which LLVM does not
+            // fold: a constant b (from launch-time specialization) gives the same result as a variable one.
             let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
             let b = self.builder;
             unsafe {
-                let one = LLVMConstReal(f32_type, 1.0);
-                let recip = LLVMBuildFDiv(b, one, src2, LLVM_UNNAMED.as_ptr());
-                LLVMZludaSetFastMathFlags(recip, LLVMZludaFastMathAllowReciprocal | LLVMZludaFastMathApproxFunc);
+                let recip = self.emit_intrinsic(c"llvm.agx.rcp.f32", None, vec![&ast::Type::Scalar(ast::ScalarType::F32)], vec![(src2, f32_type)])?;
                 let magnitude = self.emit_intrinsic(c"llvm.fabs.f32", None, vec![&ast::Type::Scalar(ast::ScalarType::F32)], vec![(src2, f32_type)])?;
                 let big = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealOGT, magnitude, LLVMConstReal(f32_type, 2f64.powi(126)), LLVM_UNNAMED.as_ptr());
                 let zero = self.emit_intrinsic(

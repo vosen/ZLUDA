@@ -10,6 +10,7 @@
 mod contexts;
 mod dark;
 mod driver;
+pub mod specialize;
 mod texture;
 
 use cuda_types::cuda::*;
