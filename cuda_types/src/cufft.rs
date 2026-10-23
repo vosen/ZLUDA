@@ -86,7 +86,9 @@ impl cufftCompatibility_t {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cufftCompatibility_t(pub ::core::ffi::c_uint);
 pub use self::cufftCompatibility_t as cufftCompatibility;
-pub type cufftHandle = ::core::ffi::c_int;
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cufftHandle(pub ::core::ffi::c_int);
 impl cufftProperty_t {
     pub const NVFFT_PLAN_PROPERTY_INT64_PATIENT_JIT: cufftProperty_t = cufftProperty_t(
         1,
@@ -484,3 +486,9 @@ pub type cufftResult = ::core::result::Result<(), cufftError_t>;
 const _: fn() = || {
     let _ = std::mem::transmute::<cufftResult, u32>;
 };
+
+impl From<hipfft_sys::hipfftError> for cufftError_t {
+    fn from(error: hipfft_sys::hipfftError) -> Self {
+        Self(error.0)
+    }
+}

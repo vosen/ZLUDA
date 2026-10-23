@@ -21,6 +21,6 @@ pub(crate) unsafe fn get_attribute(
     attrib: CUfunction_attribute,
     kernel: &Function,
     _dev: hipDevice_t,
-) -> hipError_t {
+) -> Result<(), CUerror> {
     function::get_attribute(pi, attrib, kernel)
 }

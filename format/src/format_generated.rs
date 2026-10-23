@@ -23814,6 +23814,68 @@ impl crate::CudaDisplay for cuda_types::cuda::cudaEmulationStrategy_t {
         }
     }
 }
+impl crate::CudaDisplay for cuda_types::cuda::cudaEmulationMantissaControl_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::cudaEmulationMantissaControl_t::CUDA_EMULATION_MANTISSA_CONTROL_DYNAMIC => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_MANTISSA_CONTROL_DYNAMIC).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::cudaEmulationMantissaControl_t::CUDA_EMULATION_MANTISSA_CONTROL_FIXED => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_MANTISSA_CONTROL_FIXED).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::cudaEmulationSpecialValuesSupport_t {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::cudaEmulationSpecialValuesSupport_t::CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_DEFAULT => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_DEFAULT)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::cudaEmulationSpecialValuesSupport_t::CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NONE => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NONE).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::cudaEmulationSpecialValuesSupport_t::CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_INFINITY => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_INFINITY)
+                            .as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::cudaEmulationSpecialValuesSupport_t::CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NAN => {
+                writer
+                    .write_all(
+                        stringify!(CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NAN).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
 impl crate::CudaDisplay for cuda_types::cuda::libraryPropertyType_t {
     fn write(
         &self,
@@ -23862,6 +23924,1675 @@ impl crate::CudaDisplay for cuda_types::cuda::double2 {
         crate::CudaDisplay::write(&self.y, "", 0, writer)?;
         writer.write_all(b" }")
     }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUd3d9DeviceList_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUd3d9DeviceList_enum::CU_D3D9_DEVICE_LIST_ALL => {
+                writer.write_all(stringify!(CU_D3D9_DEVICE_LIST_ALL).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d9DeviceList_enum::CU_D3D9_DEVICE_LIST_CURRENT_FRAME => {
+                writer
+                    .write_all(stringify!(CU_D3D9_DEVICE_LIST_CURRENT_FRAME).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d9DeviceList_enum::CU_D3D9_DEVICE_LIST_NEXT_FRAME => {
+                writer.write_all(stringify!(CU_D3D9_DEVICE_LIST_NEXT_FRAME).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+pub fn write_cuD3D9GetDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    pszAdapterName: *const ::core::ffi::c_char,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D9GetDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pszAdapterName), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pszAdapterName, "cuD3D9GetDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9GetDevices(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDeviceCount: *mut ::core::ffi::c_uint,
+    pCudaDevices: *mut cuda_types::cuda::CUdevice,
+    cudaDeviceCount: ::core::ffi::c_uint,
+    pD3D9Device: *mut cuda_types::cuda::IDirect3DDevice9,
+    deviceList: cuda_types::cuda::CUd3d9DeviceList,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDeviceCount, "cuD3D9GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevices), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevices, "cuD3D9GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDeviceCount, "cuD3D9GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3D9Device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3D9Device, "cuD3D9GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(deviceList), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&deviceList, "cuD3D9GetDevices", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9CtxCreate_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D9CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D9CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D9CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D9CtxCreate_v2", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9CtxCreateOnDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+    cudaDevice: cuda_types::cuda::CUdevice,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D9CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuD3D9CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D9CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDevice, "cuD3D9CtxCreateOnDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9GetDirect3DDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    ppD3DDevice: *mut *mut cuda_types::cuda::IDirect3DDevice9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(ppD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ppD3DDevice, "cuD3D9GetDirect3DDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuGraphicsD3D9RegisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+    pD3DResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pCudaResource,
+        "cuGraphicsD3D9RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pD3DResource,
+        "cuGraphicsD3D9RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Flags,
+        "cuGraphicsD3D9RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUd3d9register_flags_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUd3d9register_flags_enum::CU_D3D9_REGISTER_FLAGS_NONE => {
+                writer.write_all(stringify!(CU_D3D9_REGISTER_FLAGS_NONE).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d9register_flags_enum::CU_D3D9_REGISTER_FLAGS_ARRAY => {
+                writer.write_all(stringify!(CU_D3D9_REGISTER_FLAGS_ARRAY).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUd3d9map_flags_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUd3d9map_flags_enum::CU_D3D9_MAPRESOURCE_FLAGS_NONE => {
+                writer.write_all(stringify!(CU_D3D9_MAPRESOURCE_FLAGS_NONE).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d9map_flags_enum::CU_D3D9_MAPRESOURCE_FLAGS_READONLY => {
+                writer
+                    .write_all(stringify!(CU_D3D9_MAPRESOURCE_FLAGS_READONLY).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d9map_flags_enum::CU_D3D9_MAPRESOURCE_FLAGS_WRITEDISCARD => {
+                writer
+                    .write_all(
+                        stringify!(CU_D3D9_MAPRESOURCE_FLAGS_WRITEDISCARD).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+pub fn write_cuD3D9RegisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pResource, "cuD3D9RegisterResource", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D9RegisterResource", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9UnregisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pResource, "cuD3D9UnregisterResource", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9MapResources(
+    writer: &mut (impl std::io::Write + ?Sized),
+    count: ::core::ffi::c_uint,
+    ppResource: *mut *mut cuda_types::cuda::IDirect3DResource9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&count, "cuD3D9MapResources", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ppResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ppResource, "cuD3D9MapResources", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9UnmapResources(
+    writer: &mut (impl std::io::Write + ?Sized),
+    count: ::core::ffi::c_uint,
+    ppResource: *mut *mut cuda_types::cuda::IDirect3DResource9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&count, "cuD3D9UnmapResources", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ppResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ppResource, "cuD3D9UnmapResources", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceSetMapFlags(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pResource, "cuD3D9ResourceSetMapFlags", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D9ResourceSetMapFlags", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetSurfaceDimensions_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pWidth: *mut usize,
+    pHeight: *mut usize,
+    pDepth: *mut usize,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pWidth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pWidth,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeight), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeight,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pDepth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDepth,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Face,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedArray(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pArray: *mut cuda_types::cuda::CUarray,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pArray), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pArray, "cuD3D9ResourceGetMappedArray", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedArray",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Face, "cuD3D9ResourceGetMappedArray", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Level, "cuD3D9ResourceGetMappedArray", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedPointer_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDevPtr,
+        "cuD3D9ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Face,
+        "cuD3D9ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedSize_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pSize: *mut usize,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pSize,
+        "cuD3D9ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Face, "cuD3D9ResourceGetMappedSize_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedPitch_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pPitch: *mut usize,
+    pPitchSlice: *mut usize,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitch,
+        "cuD3D9ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pPitchSlice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitchSlice,
+        "cuD3D9ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Face,
+        "cuD3D9ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9Begin(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pDevice, "cuD3D9Begin", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9End(
+    writer: &mut (impl std::io::Write + ?Sized),
+) -> std::io::Result<()> {
+    writer.write_all(b"()")
+}
+pub fn write_cuD3D9RegisterVertexBuffer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pVB), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pVB, "cuD3D9RegisterVertexBuffer", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9MapVertexBuffer_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+    pSize: *mut usize,
+    pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pDevPtr, "cuD3D9MapVertexBuffer_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pSize, "cuD3D9MapVertexBuffer_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pVB), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pVB, "cuD3D9MapVertexBuffer_v2", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9UnmapVertexBuffer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pVB), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pVB, "cuD3D9UnmapVertexBuffer", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9UnregisterVertexBuffer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pVB), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pVB, "cuD3D9UnregisterVertexBuffer", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9CtxCreate(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::IDirect3DDevice9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D9CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D9CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D9CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D9CtxCreate", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetSurfaceDimensions(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pWidth: *mut ::core::ffi::c_uint,
+    pHeight: *mut ::core::ffi::c_uint,
+    pDepth: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pWidth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pWidth,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeight), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeight,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pDepth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDepth,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Face,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedPointer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDevPtr,
+        "cuD3D9ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Face, "cuD3D9ResourceGetMappedPointer", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Level,
+        "cuD3D9ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedSize(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pSize: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pSize, "cuD3D9ResourceGetMappedSize", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedSize",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Face, "cuD3D9ResourceGetMappedSize", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Level, "cuD3D9ResourceGetMappedSize", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9ResourceGetMappedPitch(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pPitch: *mut ::core::ffi::c_uint,
+    pPitchSlice: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::IDirect3DResource9,
+    Face: ::core::ffi::c_uint,
+    Level: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pPitch, "cuD3D9ResourceGetMappedPitch", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pPitchSlice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitchSlice,
+        "cuD3D9ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D9ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Face), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Face, "cuD3D9ResourceGetMappedPitch", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Level), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Level, "cuD3D9ResourceGetMappedPitch", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D9MapVertexBuffer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+    pSize: *mut ::core::ffi::c_uint,
+    pVB: *mut cuda_types::cuda::IDirect3DVertexBuffer9,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pDevPtr, "cuD3D9MapVertexBuffer", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pSize, "cuD3D9MapVertexBuffer", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pVB), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pVB, "cuD3D9MapVertexBuffer", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUd3d10DeviceList_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUd3d10DeviceList_enum::CU_D3D10_DEVICE_LIST_ALL => {
+                writer.write_all(stringify!(CU_D3D10_DEVICE_LIST_ALL).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d10DeviceList_enum::CU_D3D10_DEVICE_LIST_CURRENT_FRAME => {
+                writer
+                    .write_all(stringify!(CU_D3D10_DEVICE_LIST_CURRENT_FRAME).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d10DeviceList_enum::CU_D3D10_DEVICE_LIST_NEXT_FRAME => {
+                writer.write_all(stringify!(CU_D3D10_DEVICE_LIST_NEXT_FRAME).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+pub fn write_cuD3D10GetDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    pAdapter: *mut cuda_types::cuda::IDXGIAdapter,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D10GetDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pAdapter), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pAdapter, "cuD3D10GetDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10GetDevices(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDeviceCount: *mut ::core::ffi::c_uint,
+    pCudaDevices: *mut cuda_types::cuda::CUdevice,
+    cudaDeviceCount: ::core::ffi::c_uint,
+    pD3D10Device: *mut cuda_types::cuda::ID3D10Device,
+    deviceList: cuda_types::cuda::CUd3d10DeviceList,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDeviceCount, "cuD3D10GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevices), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevices, "cuD3D10GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDeviceCount, "cuD3D10GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3D10Device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3D10Device, "cuD3D10GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(deviceList), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&deviceList, "cuD3D10GetDevices", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuGraphicsD3D10RegisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+    pD3DResource: *mut cuda_types::cuda::ID3D10Resource,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pCudaResource,
+        "cuGraphicsD3D10RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pD3DResource,
+        "cuGraphicsD3D10RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Flags,
+        "cuGraphicsD3D10RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUD3D10register_flags_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUD3D10register_flags_enum::CU_D3D10_REGISTER_FLAGS_NONE => {
+                writer.write_all(stringify!(CU_D3D10_REGISTER_FLAGS_NONE).as_bytes())
+            }
+            &cuda_types::cuda::CUD3D10register_flags_enum::CU_D3D10_REGISTER_FLAGS_ARRAY => {
+                writer.write_all(stringify!(CU_D3D10_REGISTER_FLAGS_ARRAY).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUD3D10map_flags_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUD3D10map_flags_enum::CU_D3D10_MAPRESOURCE_FLAGS_NONE => {
+                writer.write_all(stringify!(CU_D3D10_MAPRESOURCE_FLAGS_NONE).as_bytes())
+            }
+            &cuda_types::cuda::CUD3D10map_flags_enum::CU_D3D10_MAPRESOURCE_FLAGS_READONLY => {
+                writer
+                    .write_all(
+                        stringify!(CU_D3D10_MAPRESOURCE_FLAGS_READONLY).as_bytes(),
+                    )
+            }
+            &cuda_types::cuda::CUD3D10map_flags_enum::CU_D3D10_MAPRESOURCE_FLAGS_WRITEDISCARD => {
+                writer
+                    .write_all(
+                        stringify!(CU_D3D10_MAPRESOURCE_FLAGS_WRITEDISCARD).as_bytes(),
+                    )
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+pub fn write_cuD3D10CtxCreate_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D10CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D10CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D10CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D10CtxCreate_v2", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10CtxCreateOnDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+    cudaDevice: cuda_types::cuda::CUdevice,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D10CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuD3D10CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D10CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDevice, "cuD3D10CtxCreateOnDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10GetDirect3DDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    ppD3DDevice: *mut *mut cuda_types::cuda::ID3D10Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(ppD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &ppD3DDevice,
+        "cuD3D10GetDirect3DDevice",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10RegisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pResource, "cuD3D10RegisterResource", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D10RegisterResource", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10UnregisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pResource, "cuD3D10UnregisterResource", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10MapResources(
+    writer: &mut (impl std::io::Write + ?Sized),
+    count: ::core::ffi::c_uint,
+    ppResources: *mut *mut cuda_types::cuda::ID3D10Resource,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&count, "cuD3D10MapResources", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ppResources), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ppResources, "cuD3D10MapResources", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10UnmapResources(
+    writer: &mut (impl std::io::Write + ?Sized),
+    count: ::core::ffi::c_uint,
+    ppResources: *mut *mut cuda_types::cuda::ID3D10Resource,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(count), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&count, "cuD3D10UnmapResources", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(ppResources), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&ppResources, "cuD3D10UnmapResources", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceSetMapFlags(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceSetMapFlags",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D10ResourceSetMapFlags", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedArray(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pArray: *mut cuda_types::cuda::CUarray,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pArray), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pArray,
+        "cuD3D10ResourceGetMappedArray",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedArray",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedArray",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedPointer_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDevPtr,
+        "cuD3D10ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedPointer_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedSize_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pSize: *mut usize,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pSize,
+        "cuD3D10ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedSize_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedPitch_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pPitch: *mut usize,
+    pPitchSlice: *mut usize,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitch,
+        "cuD3D10ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pPitchSlice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitchSlice,
+        "cuD3D10ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedPitch_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetSurfaceDimensions_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pWidth: *mut usize,
+    pHeight: *mut usize,
+    pDepth: *mut usize,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pWidth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pWidth,
+        "cuD3D10ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeight), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeight,
+        "cuD3D10ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pDepth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDepth,
+        "cuD3D10ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetSurfaceDimensions_v2",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10CtxCreate(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D10Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D10CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D10CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D10CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D10CtxCreate", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedPitch(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pPitch: *mut ::core::ffi::c_uint,
+    pPitchSlice: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pPitch), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitch,
+        "cuD3D10ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pPitchSlice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pPitchSlice,
+        "cuD3D10ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedPitch",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedPointer(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pDevPtr: *mut cuda_types::cuda::CUdeviceptr_v1,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pDevPtr), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDevPtr,
+        "cuD3D10ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedPointer",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetMappedSize(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pSize: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pSize), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pSize, "cuD3D10ResourceGetMappedSize", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetMappedSize",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetMappedSize",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D10ResourceGetSurfaceDimensions(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pWidth: *mut ::core::ffi::c_uint,
+    pHeight: *mut ::core::ffi::c_uint,
+    pDepth: *mut ::core::ffi::c_uint,
+    pResource: *mut cuda_types::cuda::ID3D10Resource,
+    SubResource: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pWidth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pWidth,
+        "cuD3D10ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pHeight), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pHeight,
+        "cuD3D10ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pDepth), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pDepth,
+        "cuD3D10ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pResource,
+        "cuD3D10ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(SubResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &SubResource,
+        "cuD3D10ResourceGetSurfaceDimensions",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+impl crate::CudaDisplay for cuda_types::cuda::CUd3d11DeviceList_enum {
+    fn write(
+        &self,
+        _fn_name: &'static str,
+        _index: usize,
+        writer: &mut (impl std::io::Write + ?Sized),
+    ) -> std::io::Result<()> {
+        match self {
+            &cuda_types::cuda::CUd3d11DeviceList_enum::CU_D3D11_DEVICE_LIST_ALL => {
+                writer.write_all(stringify!(CU_D3D11_DEVICE_LIST_ALL).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d11DeviceList_enum::CU_D3D11_DEVICE_LIST_CURRENT_FRAME => {
+                writer
+                    .write_all(stringify!(CU_D3D11_DEVICE_LIST_CURRENT_FRAME).as_bytes())
+            }
+            &cuda_types::cuda::CUd3d11DeviceList_enum::CU_D3D11_DEVICE_LIST_NEXT_FRAME => {
+                writer.write_all(stringify!(CU_D3D11_DEVICE_LIST_NEXT_FRAME).as_bytes())
+            }
+            _ => write!(writer, "{}", self.0),
+        }
+    }
+}
+pub fn write_cuD3D11GetDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    pAdapter: *mut cuda_types::cuda::IDXGIAdapter,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D11GetDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pAdapter), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pAdapter, "cuD3D11GetDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D11GetDevices(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaDeviceCount: *mut ::core::ffi::c_uint,
+    pCudaDevices: *mut cuda_types::cuda::CUdevice,
+    cudaDeviceCount: ::core::ffi::c_uint,
+    pD3D11Device: *mut cuda_types::cuda::ID3D11Device,
+    deviceList: cuda_types::cuda::CUd3d11DeviceList,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDeviceCount, "cuD3D11GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevices), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevices, "cuD3D11GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDeviceCount), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDeviceCount, "cuD3D11GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3D11Device), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3D11Device, "cuD3D11GetDevices", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(deviceList), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&deviceList, "cuD3D11GetDevices", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuGraphicsD3D11RegisterResource(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCudaResource: *mut cuda_types::cuda::CUgraphicsResource,
+    pD3DResource: *mut cuda_types::cuda::ID3D11Resource,
+    Flags: ::core::ffi::c_uint,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCudaResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pCudaResource,
+        "cuGraphicsD3D11RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DResource), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &pD3DResource,
+        "cuGraphicsD3D11RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &Flags,
+        "cuGraphicsD3D11RegisterResource",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D11CtxCreate_v2(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D11CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D11CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D11CtxCreate_v2", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D11CtxCreate_v2", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D11CtxCreateOnDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+    cudaDevice: cuda_types::cuda::CUdevice,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D11CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&flags, "cuD3D11CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D11CtxCreateOnDevice", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(cudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&cudaDevice, "cuD3D11CtxCreateOnDevice", arg_idx, writer)?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D11GetDirect3DDevice(
+    writer: &mut (impl std::io::Write + ?Sized),
+    ppD3DDevice: *mut *mut cuda_types::cuda::ID3D11Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(ppD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(
+        &ppD3DDevice,
+        "cuD3D11GetDirect3DDevice",
+        arg_idx,
+        writer,
+    )?;
+    writer.write_all(b")")
+}
+pub fn write_cuD3D11CtxCreate(
+    writer: &mut (impl std::io::Write + ?Sized),
+    pCtx: *mut cuda_types::cuda::CUcontext,
+    pCudaDevice: *mut cuda_types::cuda::CUdevice,
+    Flags: ::core::ffi::c_uint,
+    pD3DDevice: *mut cuda_types::cuda::ID3D11Device,
+) -> std::io::Result<()> {
+    let mut arg_idx = 0usize;
+    writer.write_all(b"(")?;
+    writer.write_all(concat!(stringify!(pCtx), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCtx, "cuD3D11CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pCudaDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pCudaDevice, "cuD3D11CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(Flags), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&Flags, "cuD3D11CtxCreate", arg_idx, writer)?;
+    arg_idx += 1;
+    writer.write_all(b", ")?;
+    writer.write_all(concat!(stringify!(pD3DDevice), ": ").as_bytes())?;
+    crate::CudaDisplay::write(&pD3DDevice, "cuD3D11CtxCreate", arg_idx, writer)?;
+    writer.write_all(b")")
 }
 impl crate::CudaDisplay for cuda_types::cuda::CUresult {
     fn write(

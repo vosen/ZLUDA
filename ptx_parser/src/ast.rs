@@ -923,14 +923,14 @@ ptx_parser_macros::generate_instruction_type!(
                 src_ptr:  {
                     repr: T,
                     type: {
-                        if data.type_ == TexType::Texref {
+                        if data.type_ == TexType::Ref {
                             Type::Texref
                         } else {
                             Type::Scalar(ScalarType::U64)
                         }
                     },
                     space: {
-                        if data.type_ == TexType::Texref {
+                        if data.type_ == TexType::Ref {
                             StateSpace::Global
                         } else {
                             StateSpace::Reg
@@ -942,6 +942,71 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: { data.coord_type() },
 
+                },
+            }
+        },
+        Suld {
+            type: !,
+            data: SuldData,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { &data.dst_type },
+                    relaxed_type_check: true,
+                },
+                src_ptr: {
+                    repr: T,
+                    type: {
+                        if data.type_ == TexType::Ref {
+                            Type::Surfref
+                        } else {
+                            Type::Scalar(ScalarType::U64)
+                        }
+                    },
+                    space: {
+                        if data.type_ == TexType::Ref {
+                            StateSpace::Global
+                        } else {
+                            StateSpace::Reg
+                        }
+                    },
+                },
+                src_coord:  {
+                    repr: T,
+                    type: { data.coord_type() },
+                },
+            }
+        },
+        Sust {
+            type: !,
+            data: SuldData,
+            arguments<T>: {
+                src_ptr: {
+                    repr: T,
+                    type: {
+                        if data.type_ == TexType::Ref {
+                            Type::Surfref
+                        } else {
+                            Type::Scalar(ScalarType::U64)
+                        }
+                    },
+                    space: {
+                        if data.type_ == TexType::Ref {
+                            StateSpace::Global
+                        } else {
+                            StateSpace::Reg
+                        }
+                    },
+                },
+                src_coord:  {
+                    repr: T,
+                    type: { data.coord_type() },
+
+                },
+                src_data:  {
+                    repr: T,
+                    type: { &data.dst_type },
+                    relaxed_type_check: true,
                 },
             }
         },
@@ -1071,21 +1136,21 @@ where
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
                 index,
             ),
-            ParsedOperand::VecPack(vec) => ParsedOperand::VecPack(
-                vec.into_iter()
-                    .map(|reg_or_immediate| {
-                        Ok(match reg_or_immediate {
-                            RegOrImmediate::Reg(ident) => RegOrImmediate::Reg((self)(
-                                ident,
-                                type_space,
-                                is_dst,
-                                relaxed_type_check,
-                            )?),
-                            RegOrImmediate::Imm(imm) => RegOrImmediate::Imm(imm),
+            ParsedOperand::VecPack(vec) => {
+                ParsedOperand::VecPack(
+                    vec.into_iter()
+                        .map(|element| {
+                            Ok(match element {
+                                Some(RegOrImmediate::Reg(ident)) => Some(RegOrImmediate::Reg(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                )),
+                                Some(RegOrImmediate::Imm(imm)) => Some(RegOrImmediate::Imm(imm)),
+                                None => None,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
         })
     }
 
@@ -1256,6 +1321,9 @@ impl<ID: std::fmt::Display> std::fmt::Display for Variable<ID> {
             Type::Texref => {
                 return write!(f, " .texref");
             }
+            Type::Surfref => {
+                return write!(f, " .surfref");
+            }
         };
 
         if let Some(size) = vector_size {
@@ -1290,6 +1358,7 @@ pub enum Type {
     // .param.b32 foo[4];
     Array(Option<NonZeroU8>, ScalarType, Vec<u32>),
     Texref,
+    Surfref,
 }
 
 impl std::fmt::Display for Type {
@@ -1351,6 +1420,7 @@ impl Type {
                 }
             }
             Type::Texref => return None,
+            Type::Surfref => return None,
         })
     }
 }
@@ -1558,10 +1628,11 @@ pub enum RegOrImmediate<Ident> {
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),
-    RegOffset(Ident, i32),
+    RegOffset(Ident, i64),
     Imm(ImmediateValue),
     VecMember(Ident, u8),
-    VecPack(Vec<RegOrImmediate<Ident>>),
+    // None denotes a sink; retain its position in the vector.
+    VecPack(Vec<Option<RegOrImmediate<Ident>>>),
 }
 
 impl<Ident> ParsedOperand<Ident> {
@@ -1598,7 +1669,10 @@ where
                     if idx != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    match item {
+                        Some(item) => write!(f, "{}", item)?,
+                        None => f.write_char('_')?,
+                    }
                 }
                 f.write_char('}')?
             }
@@ -2902,12 +2976,29 @@ impl TexData {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum TexType {
-    Texref,
-    Texobj,
+    Ref,
+    Obj,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VshData {
     pub mode: FunnelShiftMode,
     pub op2: VshOp,
+}
+
+pub struct SuldData {
+    pub type_: TexType,
+    pub dst_type: Type,
+    pub dims: TexDimensions,
+}
+
+impl SuldData {
+    pub fn coord_type(&self) -> Type {
+        let dims = match self.dims {
+            TexDimensions::D1 => 1,
+            TexDimensions::D2 => 2,
+            TexDimensions::D3 => 4,
+        };
+        Type::Vector(dims, ScalarType::S32)
+    }
 }

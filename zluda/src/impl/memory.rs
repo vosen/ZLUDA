@@ -319,6 +319,15 @@ pub(crate) unsafe fn copy_hto_a_v2(
     hipMemcpyHtoA(dst_array, dst_offset, src_host, byte_count)
 }
 
+pub(crate) unsafe fn copy_ato_h_v2(
+    dst_host: *mut ::core::ffi::c_void,
+    src_array: hipArray_t,
+    src_offset: usize,
+    byte_count: usize,
+) -> hipError_t {
+    hipMemcpyAtoH(dst_host, src_array, src_offset, byte_count)
+}
+
 pub(crate) unsafe fn copy_dto_d_v2(
     dst_device: hipDeviceptr_t,
     src_device: hipDeviceptr_t,

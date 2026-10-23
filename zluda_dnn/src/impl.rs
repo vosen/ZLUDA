@@ -1323,12 +1323,90 @@ pub(crate) unsafe fn get_convolution_backward_filter_workspace_size(
     )
 }
 
+pub(crate) unsafe fn create_dropout_descriptor(
+    dropout_desc: &mut miopenDropoutDescriptor_t,
+) -> miopenStatus_t {
+    miopen()?.miopenCreateDropoutDescriptor(dropout_desc)
+}
+
+pub(crate) unsafe fn destroy_dropout_descriptor(
+    dropout_desc: miopenDropoutDescriptor_t,
+) -> miopenStatus_t {
+    miopen()?.miopenDestroyDropoutDescriptor(dropout_desc)
+}
+
+pub(crate) unsafe fn dropout_get_states_size(
+    handle: &Context,
+    size_in_bytes: *mut usize,
+) -> miopenStatus_t {
+    miopen()?.miopenDropoutGetStatesSize(handle.base, size_in_bytes)
+}
+
+pub(crate) unsafe fn set_dropout_descriptor(
+    dropout_desc: miopenDropoutDescriptor_t,
+    handle: &Context,
+    dropout: f32,
+    states: *mut ::core::ffi::c_void,
+    state_size_in_bytes: usize,
+    seed: ::core::ffi::c_ulonglong,
+) -> miopenStatus_t {
+    miopen()?.miopenSetDropoutDescriptor(
+        dropout_desc,
+        handle.base,
+        dropout,
+        states,
+        state_size_in_bytes,
+        seed,
+        false,
+        false,
+        miopenRNGType_t::MIOPEN_RNG_PSEUDO_XORWOW,
+    )
+}
+
+pub(crate) unsafe fn restore_dropout_descriptor(
+    dropout_desc: miopenDropoutDescriptor_t,
+    handle: &Context,
+    dropout: f32,
+    states: *mut ::core::ffi::c_void,
+    state_size_in_bytes: usize,
+    seed: ::core::ffi::c_ulonglong,
+) -> miopenStatus_t {
+    miopen()?.miopenRestoreDropoutDescriptor(
+        dropout_desc,
+        handle.base,
+        dropout,
+        states,
+        state_size_in_bytes,
+        seed,
+        false,
+        false,
+        miopenRNGType_t::MIOPEN_RNG_PSEUDO_XORWOW,
+    )
+}
+
 pub mod dnn8 {
     use cuda_types::cudnn8::*;
     use static_assertions::assert_eq_size;
 
     pub(crate) fn get_version() -> usize {
         return cuda_types::cudnn8::CUDNN_VERSION as usize;
+    }
+
+    pub(crate) unsafe fn get_property(
+        property_type: libraryPropertyType,
+        value: *mut i32,
+    ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
+        let version = match property_type {
+            libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn8::CUDNN_MAJOR,
+            libraryPropertyType::MINOR_VERSION => cuda_types::cudnn8::CUDNN_MINOR,
+            libraryPropertyType::PATCH_LEVEL => cuda_types::cudnn8::CUDNN_PATCHLEVEL,
+            _ => return Err(cudnnError_t::INVALID_VALUE),
+        };
+        *value = version as i32;
+        Ok(())
     }
 
     pub(crate) fn get_error_string(
@@ -1478,6 +1556,23 @@ pub mod dnn9 {
 
     pub(crate) fn get_version() -> usize {
         return cuda_types::cudnn9::CUDNN_VERSION as usize;
+    }
+
+    pub(crate) unsafe fn get_property(
+        property_type: libraryPropertyType,
+        value: *mut i32,
+    ) -> Result<(), cudnnError_t> {
+        let Some(value) = value.as_mut() else {
+            return Err(cudnnError_t::INVALID_VALUE);
+        };
+        let version = match property_type {
+            libraryPropertyType::MAJOR_VERSION => cuda_types::cudnn9::CUDNN_MAJOR,
+            libraryPropertyType::MINOR_VERSION => cuda_types::cudnn9::CUDNN_MINOR,
+            libraryPropertyType::PATCH_LEVEL => cuda_types::cudnn9::CUDNN_PATCHLEVEL,
+            _ => return Err(cudnnError_t::INVALID_VALUE),
+        };
+        *value = version as i32;
+        Ok(())
     }
 
     pub(crate) fn get_error_string(status: cudnnStatus_t) -> *const ::core::ffi::c_char {

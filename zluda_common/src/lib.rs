@@ -3,6 +3,7 @@ use cuda_types::{
     cublaslt::*,
     cuda::*,
     cudnn9,
+    cufft::*,
     cusparse::*,
     dark_api::{FatbinHeader, FatbincWrapper},
     nvml::*,
@@ -25,6 +26,7 @@ use constants::*;
 #[cfg_attr(windows, path = "os_win.rs")]
 #[cfg_attr(not(windows), path = "os_unix.rs")]
 pub mod os;
+pub mod test;
 
 pub fn append_suffix(name: *mut ::core::ffi::c_char, len: usize) {
     let buffer = unsafe { std::slice::from_raw_parts(name, len) };
@@ -86,6 +88,11 @@ impl CudaErrorType for cusparseError_t {
 impl CudaErrorType for rocsparse_error {
     const INVALID_VALUE: Self = Self::invalid_value;
     const NOT_SUPPORTED: Self = Self::not_implemented;
+}
+
+impl CudaErrorType for cufftError_t {
+    const INVALID_VALUE: Self = Self::INVALID_VALUE;
+    const NOT_SUPPORTED: Self = Self::NOT_SUPPORTED;
 }
 
 /// Used to try to convert CUDA API values into our internal representation.
@@ -168,6 +175,15 @@ macro_rules! from_cuda_transmute {
                     Ok(x.cast::<*const $to>())
                 }
             }
+
+            impl<'a, E: CudaErrorType> FromCuda<'a, *const $from, E> for &'a $to {
+                fn from_cuda(x: &'a *const $from) -> Result<Self, E> {
+                    match unsafe { x.cast::<$to>().as_ref() } {
+                        Some(x) => Ok(x),
+                        None => Err(E::INVALID_VALUE),
+                    }
+                }
+            }
         )*
     };
 }
@@ -197,10 +213,14 @@ from_cuda_nop!(
     *mut i8,
     *mut i32,
     *const i32,
+    *mut i64,
     *mut u64,
     *mut usize,
     *const f32,
     *mut f32,
+    *mut f64,
+    *mut float2,
+    *mut double2,
     *const ::core::ffi::c_void,
     *const *const ::core::ffi::c_void,
     *const *mut ::core::ffi::c_void,
@@ -213,6 +233,7 @@ from_cuda_nop!(
     u32,
     u64,
     i64,
+    f32,
     usize,
     cuda_types::cuda::CUdevprop,
     CUdevice_attribute,
@@ -257,7 +278,9 @@ from_cuda_nop!(
     cudnn9::cudnnConvolutionBwdFilterAlgoPerf_t,
     cublasLtMatmulPreferenceAttributes_t,
     CUfunc_cache,
-    CUctxCreateParams
+    CUctxCreateParams,
+    cufftHandle,
+    cuda_types::cuda::libraryPropertyType
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -279,6 +302,7 @@ from_cuda_transmute!(
     cudnn9::cudnnTensorDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnFilterDescriptor_t => miopenTensorDescriptor_t,
     cudnn9::cudnnConvolutionDescriptor_t => miopenConvolutionDescriptor_t,
+    cudnn9::cudnnDropoutDescriptor_t => miopenDropoutDescriptor_t,
     cusparseHandle_t => rocsparse_handle,
     cusparseMatrixType_t => rocsparse_matrix_type,
     cusparseConstSpMatDescr_t => rocsparse_const_spmat_descr,
@@ -295,10 +319,10 @@ from_cuda_transmute!(
     CUDA_ARRAY_DESCRIPTOR => HIP_ARRAY_DESCRIPTOR,
     CUDA_ARRAY3D_DESCRIPTOR => HIP_ARRAY3D_DESCRIPTOR,
     CUtexref => *mut textureReference,
-    CUsurfref => *mut textureReference,
     CUarray_format => hipArray_Format,
     CUaddress_mode => hipTextureAddressMode,
-    CUfilter_mode => hipTextureFilterMode
+    CUfilter_mode => hipTextureFilterMode,
+    cufftType_t => hipfft_sys::hipfftType
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY3D, E> for HIP_MEMCPY3D {

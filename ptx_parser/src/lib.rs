@@ -2,6 +2,7 @@ use derive_more::Display;
 use logos::Logos;
 use ptx_parser_macros::derive_parser;
 use rustc_hash::FxHashMap;
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::num::{NonZeroU8, ParseFloatError, ParseIntError};
 use std::{iter, usize};
@@ -299,27 +300,39 @@ fn f32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f32> {
 }
 
 fn f64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<f64> {
-    take_error(token::any.verify_map(|(t, _)| match t {
-        Token::F64Hex(f) => Some(match u64::from_str_radix(&f[2..], 16) {
-            Ok(x) => Ok(f64::from_bits(x)),
-            Err(err) => Err((0.0, PtxError::from(err))),
+    take_error(
+        (opt(Token::Minus), token::any).verify_map(|(neg, (t, _))| match (neg, t) {
+            (None, Token::F64Hex(f)) => Some(match u64::from_str_radix(&f[2..], 16) {
+                Ok(x) => Ok(f64::from_bits(x)),
+                Err(err) => Err((0.0, PtxError::from(err))),
+            }),
+            (neg, Token::F64(f)) => {
+                let full_number = if neg.is_some() {
+                    Cow::Owned(format!("-{f}"))
+                } else {
+                    Cow::Borrowed(f)
+                };
+
+                Some(match full_number.parse::<f64>() {
+                    Ok(x) => Ok(x),
+                    Err(err) => Err((0.0, PtxError::from(err))),
+                })
+            }
+            _ => None,
         }),
-        Token::F64(f) => Some(match f.parse::<f64>() {
-            Ok(x) => Ok(x),
-            Err(err) => Err((0.0, PtxError::from(err))),
-        }),
-        _ => None,
-    }))
+    )
     .parse_next(stream)
 }
 
-fn s32<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i32> {
+fn s64<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<i64> {
     take_error((opt(Token::Minus), num).map(|(sign, x)| {
         let (text, radix, _) = x;
-        match i32::from_str_radix(text, radix) {
-            Ok(x) => Ok(if sign.is_some() { -x } else { x }),
-            Err(err) => Err((0, PtxError::from(err))),
-        }
+        let signed_text = if sign.is_some() {
+            Cow::Owned(format!("-{text}"))
+        } else {
+            Cow::Borrowed(text)
+        };
+        i64::from_str_radix(&signed_text, radix).map_err(|err| (0, PtxError::from(err)))
     }))
     .parse_next(stream)
 }
@@ -975,7 +988,8 @@ fn method_parameter<'a, 'input: 'a>(
                 ident,
             ),
         )
-        .map(|(vector, type_, _, align, name)| ((align, vector, type_), name))
+        // The alignment after .ptr is that of the data pointed to, not of the parameter.
+        .map(|(vector, type_, _, _, name)| ((None, vector, type_), name))
         .parse_next(stream)
     }
     trace(
@@ -1011,6 +1025,7 @@ fn method_parameter<'a, 'input: 'a>(
 
 enum ParsedType {
     Texref,
+    Surfref,
     Type {
         align: Option<u32>,
         vector: Option<NonZeroU8>,
@@ -1018,10 +1033,13 @@ enum ParsedType {
     },
 }
 
-fn texref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
+fn texref_or_surfref<'a, 'input>(stream: &mut PtxParser<'a, 'input>) -> PResult<ParsedType> {
     trace(
-        "texref",
-        alt((Token::DotTexref, Token::DotSurfref)).map(|_| ParsedType::Texref),
+        "texref_or_surfref",
+        alt((
+            Token::DotTexref.map(|_| ParsedType::Texref),
+            Token::DotSurfref.map(|_| ParsedType::Surfref),
+        )),
     )
     .parse_next(stream)
 }
@@ -1051,7 +1069,7 @@ fn variable_info<'a, 'input: 'a>(
         "variable_info",
         move |stream: &mut PtxParser<'a, 'input>| {
             alt((
-                parse_if(state_space == StateSpace::Global, texref),
+                parse_if(state_space == StateSpace::Global, texref_or_surfref),
                 variable_info_non_texref.map(|(align, vector, scalar)| ParsedType::Type {
                     align,
                     vector,
@@ -1101,6 +1119,20 @@ fn multi_variable<'a, 'input: 'a>(
                         info: VariableInfo {
                             align: None,
                             v_type: Type::Texref,
+                            state_space,
+                            array_init: Vec::new(),
+                        },
+                        names,
+                    });
+                }
+                ParsedType::Surfref => {
+                    if count.is_some() {
+                        return Err(ErrMode::from_error_kind(stream, ErrorKind::Verify));
+                    }
+                    return Ok(MultiVariable::Names {
+                        info: VariableInfo {
+                            align: None,
+                            v_type: Type::Surfref,
                             state_space,
                             array_init: Vec::new(),
                         },
@@ -1503,7 +1535,7 @@ impl<Ident> ast::ParsedOperand<Ident> {
         ) -> PResult<ast::ParsedOperand<&'input str>> {
             let main_ident = ident.parse_next(stream)?;
             alt((
-                preceded(Token::Plus, s32)
+                preceded(Token::Plus, s64)
                     .map(move |offset| ast::ParsedOperand::RegOffset(main_ident, offset)),
                 take_error(dot_ident.map(move |suffix| {
                     let vector_index = vector_index(suffix)
@@ -1516,10 +1548,14 @@ impl<Ident> ast::ParsedOperand<Ident> {
         }
         fn vector_operand<'a, 'input>(
             stream: &mut PtxParser<'a, 'input>,
-        ) -> PResult<Vec<ast::RegOrImmediate<&'input str>>> {
+        ) -> PResult<Vec<Option<ast::RegOrImmediate<&'input str>>>> {
             delimited(
                 Token::LBrace,
-                separated(1..=8, reg_or_immediate, Token::Comma),
+                separated(
+                    1..=8,
+                    alt((Token::Sink.value(None), reg_or_immediate.map(Some))),
+                    Token::Comma,
+                ),
                 Token::RBrace,
             )
             .parse_next(stream)
@@ -1943,6 +1979,8 @@ derive_parser!(
         At,
         #[regex(r"[a-zA-Z][a-zA-Z0-9_$]*|[_$%][a-zA-Z0-9_$]+", |lex| lex.slice(), priority = 0)]
         Ident(&'input str),
+        #[token("_")]
+        Sink,
         #[regex(r"\.[a-zA-Z][a-zA-Z0-9_$]*|\.[_$%][a-zA-Z0-9_$]+", |lex| lex.slice(), priority = 0)]
         DotIdent(&'input str),
         #[regex(r#""[^"]*""#)]
@@ -4111,14 +4149,17 @@ derive_parser!(
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync
 
-    vote.sync.mode.pred  d, {!}a, membermask => {
+    vote{.sync}.mode.pred  d, {!}a{, membermask} => {
+        if sync != membermask.is_some() {
+            state.errors.push(PtxError::SyntaxError("vote instruction with inconsistent sync and membermask".to_string()));
+        }
         let (negate, a) = a;
         Instruction::Vote {
             data: VoteDetails {
                 mode,
                 negate
             },
-            arguments: VoteArgs { dst: d, src1: a, src2: Some(membermask) }
+            arguments: VoteArgs { dst: d, src1: a, src2: membermask }
         }
     }
     vote.ballot.b32 d, {!}a => {
@@ -4411,7 +4452,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D1,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4422,7 +4463,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D2,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4433,7 +4474,7 @@ derive_parser!(
                 dtype,
                 ctype,
                 dims: TexDimensions::D3,
-                type_: TexType::Texref
+                type_: TexType::Ref
             },
             arguments: TexArgs { dst: d, src_ptr: a, src_coord: c }
         }
@@ -4441,6 +4482,90 @@ derive_parser!(
 
     .dtype: ScalarType = { .u32, .s32, .f32 };
     .ctype: ScalarType = { .s32, .f32 };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/#surface-instructions-suld
+    suld.b.1d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D1,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    suld.b.2d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D2,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    suld.b.3d{.vec}.dtype.clamp  d, [a, b] => {
+        let _ = clamp;
+        Instruction::Suld {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, dtype),
+                dims: TexDimensions::D3,
+                type_: TexType::Ref
+            },
+            arguments: SuldArgs { dst: d, src_ptr: a, src_coord: b }
+        }
+    }
+
+    // .cop   = { .ca, .cg, .cs, .cv };
+    .vec: VectorPrefix = { .v2, .v4 };
+    .dtype: ScalarType = { .b8 , .b16, .b32, .b64 };
+    .clamp: ClampMode = { .trap, .clamp, .zero };
+
+    // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#surface-instructions-sust
+
+    sust.b.1d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D1,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    sust.b.2d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D2,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    sust.b.3d{.vec}.ctype.clamp  [a, b], c => {
+        let _ = clamp;
+        Instruction::Sust {
+            data: SuldData {
+                dst_type: Type::maybe_vector(vec, ctype),
+                dims: TexDimensions::D3,
+                type_: TexType::Ref
+            },
+            arguments: SustArgs { src_ptr: a, src_coord: b, src_data: c }
+        }
+    }
+
+    .vec: VectorPrefix   = { .v2, .v4 };
+    .ctype: ScalarType = { .b8 , .b16, .b32, .b64 };
+    .clamp: ClampMode = { .trap, .clamp, .zero };
 
     // https://docs.nvidia.com/cuda/parallel-thread-execution/
     match.any.sync.type  d, a, membermask => {
@@ -4476,6 +4601,51 @@ mod tests {
     use logos::Logos;
     use logos::Span;
     use winnow::prelude::*;
+
+    #[test]
+    fn sink_is_not_an_identifier() {
+        let tokens = Token::lexer("_ _reg __ %r1")
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Sink,
+                Token::Ident("_reg"),
+                Token::Ident("__"),
+                Token::Ident("%r1")
+            ]
+        );
+    }
+
+    #[test]
+    fn vector_operand_preserves_sink_positions() {
+        let text = "{_, %r1, _, 7}";
+        let tokens = Token::lexer(text)
+            .map(|t| t.map(|t| (t, Span::default())))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let mut errors = Vec::new();
+        let stream = super::PtxParser {
+            input: &tokens[..],
+            state: PtxParserState::new(text, &mut errors),
+        };
+        let operand = crate::ParsedOperand::<&str>::parse.parse(stream).unwrap();
+        let crate::ParsedOperand::VecPack(ref elements) = operand else {
+            panic!("expected a vector operand");
+        };
+        assert_eq!(
+            elements,
+            &vec![
+                None,
+                Some(crate::RegOrImmediate::Reg("%r1")),
+                None,
+                Some(crate::RegOrImmediate::Imm(crate::ImmediateValue::S64(7))),
+            ]
+        );
+        assert_eq!(operand.to_string(), text);
+        assert!(errors.is_empty());
+    }
 
     #[test]
     fn first_optional_present() {
@@ -4572,6 +4742,17 @@ mod tests {
         };
         assert!(target.parse(stream).is_err());
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn ptr_param_alignment_is_the_pointees() {
+        let text = ".version 7.0\n.target sm_80\n.address_size 64\n.visible .entry k(.param .u8 a, .param .u64 .ptr .global .align 1 p)\n{\n\tret;\n}\n";
+        let module = super::parse_module_checked(text).unwrap();
+        let [super::ast::Directive::Method(_, method)] = &module.directives[..] else {
+            panic!()
+        };
+        let params = &method.func_directive.input_arguments;
+        assert_eq!((params[1].name, params[1].info.align), ("p", None));
     }
 
     #[test]
@@ -4895,5 +5076,28 @@ mod tests {
             result.array_init,
             vec![crate::RegOrImmediate::Imm(crate::ImmediateValue::U64(0))]
         );
+    }
+
+    #[test]
+    fn signed_immediate() {
+        fn parse_value(text: &str) -> crate::ImmediateValue {
+            let tokens = Token::lexer(text)
+                .map(|t| t.map(|t| (t, Span::default())))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let mut errors = Vec::new();
+            let stream = super::PtxParser {
+                input: &tokens[..],
+                state: PtxParserState::new(text, &mut errors),
+            };
+            let result = super::immediate_value.parse(stream).unwrap();
+            assert!(errors.is_empty());
+            result
+        }
+
+        assert_eq!(parse_value("-42"), crate::ImmediateValue::S64(-42));
+        assert_eq!(parse_value("-1.5"), crate::ImmediateValue::F64(-1.5));
+        assert_eq!(parse_value("-1.5e-2"), crate::ImmediateValue::F64(-0.015));
+        assert_eq!(parse_value("-1.5E+2"), crate::ImmediateValue::F64(-150.0));
     }
 }

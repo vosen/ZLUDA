@@ -8832,6 +8832,63 @@ impl cudaEmulationStrategy_t {
 pub struct cudaEmulationStrategy_t(pub ::core::ffi::c_uint);
 /// Enum for specifying how to leverage floating-point emulation algorithms
 pub use self::cudaEmulationStrategy_t as cudaEmulationStrategy;
+impl cudaEmulationMantissaControl_t {
+    /** The number of retained mantissa bits are computed at runtime to
+  ensure the same or better accuracy than the floating point
+  representation being emulated*/
+    pub const CUDA_EMULATION_MANTISSA_CONTROL_DYNAMIC: cudaEmulationMantissaControl_t = cudaEmulationMantissaControl_t(
+        0,
+    );
+}
+impl cudaEmulationMantissaControl_t {
+    /// The number of retained mantissa bits are known at runtime
+    pub const CUDA_EMULATION_MANTISSA_CONTROL_FIXED: cudaEmulationMantissaControl_t = cudaEmulationMantissaControl_t(
+        1,
+    );
+}
+#[repr(transparent)]
+/** Enum to configure the mantissa related parameters for floating-point
+  emulation algorithms*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaEmulationMantissaControl_t(pub ::core::ffi::c_uint);
+/** Enum to configure the mantissa related parameters for floating-point
+  emulation algorithms*/
+pub use self::cudaEmulationMantissaControl_t as cudaEmulationMantissaControl;
+impl cudaEmulationSpecialValuesSupport_t {
+    /** The default special value support mask which contains support for
+  signed infinities and NaN values*/
+    pub const CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_DEFAULT: cudaEmulationSpecialValuesSupport_t = cudaEmulationSpecialValuesSupport_t(
+        65535,
+    );
+}
+impl cudaEmulationSpecialValuesSupport_t {
+    /** There are no requirements for emulation algorithms to support special
+  values*/
+    pub const CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NONE: cudaEmulationSpecialValuesSupport_t = cudaEmulationSpecialValuesSupport_t(
+        0,
+    );
+}
+impl cudaEmulationSpecialValuesSupport_t {
+    /** Require emulation algorithms to handle signed infinity inputs and
+  outputs*/
+    pub const CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_INFINITY: cudaEmulationSpecialValuesSupport_t = cudaEmulationSpecialValuesSupport_t(
+        1,
+    );
+}
+impl cudaEmulationSpecialValuesSupport_t {
+    /// Require emulation algorithms to handle NaN inputs and outputs
+    pub const CUDA_EMULATION_SPECIAL_VALUES_SUPPORT_NAN: cudaEmulationSpecialValuesSupport_t = cudaEmulationSpecialValuesSupport_t(
+        2,
+    );
+}
+#[repr(transparent)]
+/** Enum to configure how special floating-point values will be handled by
+  emulation algorithms*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct cudaEmulationSpecialValuesSupport_t(pub ::core::ffi::c_uint);
+/** Enum to configure how special floating-point values will be handled by
+  emulation algorithms*/
+pub use self::cudaEmulationSpecialValuesSupport_t as cudaEmulationSpecialValuesSupport;
 impl libraryPropertyType_t {
     pub const MAJOR_VERSION: libraryPropertyType_t = libraryPropertyType_t(0);
 }
@@ -8862,6 +8919,190 @@ pub struct double2 {
 pub type cuFloatComplex = float2;
 pub type cuDoubleComplex = double2;
 pub type cuComplex = cuFloatComplex;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct IDirect3DDevice9 {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct IDirect3DResource9 {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct IDirect3DVertexBuffer9 {
+    _unused: [u8; 0],
+}
+impl CUd3d9DeviceList_enum {
+    ///< The CUDA devices for all GPUs used by a D3D9 device
+    pub const CU_D3D9_DEVICE_LIST_ALL: CUd3d9DeviceList_enum = CUd3d9DeviceList_enum(1);
+}
+impl CUd3d9DeviceList_enum {
+    ///< The CUDA devices for the GPUs used by a D3D9 device in its currently rendering frame
+    pub const CU_D3D9_DEVICE_LIST_CURRENT_FRAME: CUd3d9DeviceList_enum = CUd3d9DeviceList_enum(
+        2,
+    );
+}
+impl CUd3d9DeviceList_enum {
+    ///< The CUDA devices for the GPUs to be used by a D3D9 device in the next frame
+    pub const CU_D3D9_DEVICE_LIST_NEXT_FRAME: CUd3d9DeviceList_enum = CUd3d9DeviceList_enum(
+        3,
+    );
+}
+#[repr(transparent)]
+/// CUDA devices corresponding to a D3D9 device
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUd3d9DeviceList_enum(pub ::core::ffi::c_uint);
+/// CUDA devices corresponding to a D3D9 device
+pub use self::CUd3d9DeviceList_enum as CUd3d9DeviceList;
+impl CUd3d9register_flags_enum {
+    pub const CU_D3D9_REGISTER_FLAGS_NONE: CUd3d9register_flags_enum = CUd3d9register_flags_enum(
+        0,
+    );
+}
+impl CUd3d9register_flags_enum {
+    pub const CU_D3D9_REGISTER_FLAGS_ARRAY: CUd3d9register_flags_enum = CUd3d9register_flags_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Flags to register a resource
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUd3d9register_flags_enum(pub ::core::ffi::c_uint);
+/// Flags to register a resource
+pub use self::CUd3d9register_flags_enum as CUd3d9register_flags;
+impl CUd3d9map_flags_enum {
+    pub const CU_D3D9_MAPRESOURCE_FLAGS_NONE: CUd3d9map_flags_enum = CUd3d9map_flags_enum(
+        0,
+    );
+}
+impl CUd3d9map_flags_enum {
+    pub const CU_D3D9_MAPRESOURCE_FLAGS_READONLY: CUd3d9map_flags_enum = CUd3d9map_flags_enum(
+        1,
+    );
+}
+impl CUd3d9map_flags_enum {
+    pub const CU_D3D9_MAPRESOURCE_FLAGS_WRITEDISCARD: CUd3d9map_flags_enum = CUd3d9map_flags_enum(
+        2,
+    );
+}
+#[repr(transparent)]
+/// Flags to map or unmap a resource
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUd3d9map_flags_enum(pub ::core::ffi::c_uint);
+/// Flags to map or unmap a resource
+pub use self::CUd3d9map_flags_enum as CUd3d9map_flags;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct IDXGIAdapter {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ID3D10Device {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ID3D10Resource {
+    _unused: [u8; 0],
+}
+impl CUd3d10DeviceList_enum {
+    ///< The CUDA devices for all GPUs used by a D3D10 device
+    pub const CU_D3D10_DEVICE_LIST_ALL: CUd3d10DeviceList_enum = CUd3d10DeviceList_enum(
+        1,
+    );
+}
+impl CUd3d10DeviceList_enum {
+    ///< The CUDA devices for the GPUs used by a D3D10 device in its currently rendering frame
+    pub const CU_D3D10_DEVICE_LIST_CURRENT_FRAME: CUd3d10DeviceList_enum = CUd3d10DeviceList_enum(
+        2,
+    );
+}
+impl CUd3d10DeviceList_enum {
+    ///< The CUDA devices for the GPUs to be used by a D3D10 device in the next frame
+    pub const CU_D3D10_DEVICE_LIST_NEXT_FRAME: CUd3d10DeviceList_enum = CUd3d10DeviceList_enum(
+        3,
+    );
+}
+#[repr(transparent)]
+/// CUDA devices corresponding to a D3D10 device
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUd3d10DeviceList_enum(pub ::core::ffi::c_uint);
+/// CUDA devices corresponding to a D3D10 device
+pub use self::CUd3d10DeviceList_enum as CUd3d10DeviceList;
+impl CUD3D10register_flags_enum {
+    pub const CU_D3D10_REGISTER_FLAGS_NONE: CUD3D10register_flags_enum = CUD3D10register_flags_enum(
+        0,
+    );
+}
+impl CUD3D10register_flags_enum {
+    pub const CU_D3D10_REGISTER_FLAGS_ARRAY: CUD3D10register_flags_enum = CUD3D10register_flags_enum(
+        1,
+    );
+}
+#[repr(transparent)]
+/// Flags to register a resource
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUD3D10register_flags_enum(pub ::core::ffi::c_uint);
+/// Flags to register a resource
+pub use self::CUD3D10register_flags_enum as CUD3D10register_flags;
+impl CUD3D10map_flags_enum {
+    pub const CU_D3D10_MAPRESOURCE_FLAGS_NONE: CUD3D10map_flags_enum = CUD3D10map_flags_enum(
+        0,
+    );
+}
+impl CUD3D10map_flags_enum {
+    pub const CU_D3D10_MAPRESOURCE_FLAGS_READONLY: CUD3D10map_flags_enum = CUD3D10map_flags_enum(
+        1,
+    );
+}
+impl CUD3D10map_flags_enum {
+    pub const CU_D3D10_MAPRESOURCE_FLAGS_WRITEDISCARD: CUD3D10map_flags_enum = CUD3D10map_flags_enum(
+        2,
+    );
+}
+#[repr(transparent)]
+/// Flags to map or unmap a resource
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUD3D10map_flags_enum(pub ::core::ffi::c_uint);
+/// Flags to map or unmap a resource
+pub use self::CUD3D10map_flags_enum as CUD3D10map_flags;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ID3D11Device {
+    _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ID3D11Resource {
+    _unused: [u8; 0],
+}
+impl CUd3d11DeviceList_enum {
+    ///< The CUDA devices for all GPUs used by a D3D11 device
+    pub const CU_D3D11_DEVICE_LIST_ALL: CUd3d11DeviceList_enum = CUd3d11DeviceList_enum(
+        1,
+    );
+}
+impl CUd3d11DeviceList_enum {
+    ///< The CUDA devices for the GPUs used by a D3D11 device in its currently rendering frame
+    pub const CU_D3D11_DEVICE_LIST_CURRENT_FRAME: CUd3d11DeviceList_enum = CUd3d11DeviceList_enum(
+        2,
+    );
+}
+impl CUd3d11DeviceList_enum {
+    ///< The CUDA devices for the GPUs to be used by a D3D11 device in the next frame
+    pub const CU_D3D11_DEVICE_LIST_NEXT_FRAME: CUd3d11DeviceList_enum = CUd3d11DeviceList_enum(
+        3,
+    );
+}
+#[repr(transparent)]
+/// CUDA devices corresponding to a D3D11 device
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct CUd3d11DeviceList_enum(pub ::core::ffi::c_uint);
+/// CUDA devices corresponding to a D3D11 device
+pub use self::CUd3d11DeviceList_enum as CUd3d11DeviceList;
 impl CUerror {
     pub const r#INVALID_VALUE: CUerror = CUerror(unsafe {
         ::core::num::NonZeroU32::new_unchecked(1)

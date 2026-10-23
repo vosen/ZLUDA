@@ -714,6 +714,16 @@ extern "C"
         return ballot(value, true) != 0;
     }
 
+    bool FUNC(vote_any_pred)(bool value)
+    {
+        return FUNC_CALL(vote_sync_any_pred)(value, UINT32_MAX);
+    }
+
+    bool FUNC(vote_any_pred_negate)(bool value)
+    {
+        return FUNC_CALL(vote_sync_any_pred_negate)(value, UINT32_MAX);
+    }
+
     // IMPORTANT: exec mask must be a subset of membermask, the behavior is undefined otherwise
     bool FUNC(vote_sync_all_pred)(bool value, uint32_t membermask __attribute__((unused)))
     {
@@ -724,6 +734,16 @@ extern "C"
     bool FUNC(vote_sync_all_pred_negate)(bool value, uint32_t membermask __attribute__((unused)))
     {
         return ballot(value, false) == 0;
+    }
+
+    bool FUNC(vote_all_pred)(bool value)
+    {
+        return FUNC_CALL(vote_sync_all_pred)(value, UINT32_MAX);
+    }
+
+    bool FUNC(vote_all_pred_negate)(bool value)
+    {
+        return FUNC_CALL(vote_sync_all_pred_negate)(value, UINT32_MAX);
     }
 
     uint32_t FUNC(vote_sync_ballot_b32)(bool value, uint32_t membermask __attribute__((unused)))
@@ -1043,7 +1063,7 @@ extern "C"
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
     // passes from optimizing away the intrinsic call
-    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
+    static __device__ float4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32_optnone [[clang::optnone]](uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, float4::Native_vec_ c_reg)
     {
         __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k16.f32.bf16.bf16.f32");
         return std::bit_cast<float4::Native_vec_>(__llvm_zluda_mma_m16n8k16_f32_bf16_bf16_f32(a_reg, b_reg, std::bit_cast<uint4::Native_vec_>(c_reg)));
@@ -1063,7 +1083,7 @@ extern "C"
 
     // We wrap the intrinsic in an optnone function to prevent ZLUDA-specific
     // passes from optimizing away the intrinsic call
-    static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]] (uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
+    static __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32_optnone [[clang::optnone]](uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg)
     {
         __device__ uint4::Native_vec_ __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(uint4::Native_vec_ a_reg, uint2::Native_vec_ b_reg, uint4::Native_vec_ c_reg) __asm("llvm.zluda.mma.m16n8k32.s32.s8.s8.s32");
         return __llvm_zluda_mma_m16n8k32_s32_s8_s8_fs32(a_reg, b_reg, c_reg);
@@ -1235,6 +1255,362 @@ extern "C"
     tex_3d(s32, s32);
     tex_3d(f32, s32);
     tex_3d(s32, f32);
+}
+
+template <size_t Size>
+struct surface_pixel_type
+{
+    using type = std::conditional_t<Size <= sizeof(float), float,
+                                    std::conditional_t<Size == sizeof(v2f32), v2f32, v4f32>>;
+};
+
+template <typename T>
+using surface_pixel_type_t = typename surface_pixel_type<sizeof(T)>::type;
+
+template <typename To, typename From>
+constexpr To zext_or_trunc(From from) noexcept
+{
+    std::array<std::byte, sizeof(To)> buffer{};
+    memcpy(buffer.data(), &from, std::min(sizeof(To), sizeof(From)));
+    return std::bit_cast<To>(buffer);
+}
+
+const uint32_t RESERVED_SURFACE_BOTTOM_BITS = 3;
+
+static uint64_t adjust_surfobj(uint64_t surfobj) __device__
+{
+    return (surfobj >> RESERVED_SURFACE_BOTTOM_BITS) << RESERVED_SURFACE_BOTTOM_BITS;
+}
+
+template <typename T>
+struct UnpackedCoord
+{
+    uint64_t surfobj;
+    uint32_t shift;
+    T coord;
+};
+
+static UnpackedCoord<int32_t> unpack_coord(uint64_t surfobj, int32_t x) __device__
+{
+    uint64_t mask = (1ULL << RESERVED_SURFACE_BOTTOM_BITS) - 1ULL;
+    uint64_t shift = surfobj & mask;
+    return {adjust_surfobj(surfobj), static_cast<uint32_t>(shift), x >> shift};
+}
+
+static UnpackedCoord<v2s32> unpack_coord(uint64_t surfobj, v2s32 coord) __device__
+{
+    UnpackedCoord<int32_t> unpacked = unpack_coord(surfobj, coord.x);
+    return {unpacked.surfobj, unpacked.shift, v2s32{unpacked.coord, coord.y}};
+}
+
+static UnpackedCoord<v4s32> unpack_coord(uint64_t surfobj, v4s32 coord) __device__
+{
+    UnpackedCoord<int32_t> unpacked = unpack_coord(surfobj, coord.x);
+    return {unpacked.surfobj, unpacked.shift, v4s32{unpacked.coord, coord.y, coord.z, coord.w}};
+}
+
+static void surface_store_impl(v8s32 surface, int32_t raw_coord, float value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_1d_f32(f32, uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.1d.f32.i32");
+    __llvm_amdgcn_image_store_pck_1d_f32(value, 0x1, raw_coord, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, int32_t raw_coord, v2f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_1d_v2f32(v2f32, uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.1d.v2f32.i32");
+    __llvm_amdgcn_image_store_pck_1d_v2f32(value, 0x3, raw_coord, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, int32_t raw_coord, v4f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_1d_v4f32(v4f32, uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.1d.v4f32.i32");
+    __llvm_amdgcn_image_store_pck_1d_v4f32(value, 0xf, raw_coord, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v2s32 raw_coord, float value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_2d_f32(f32, uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.2d.f32.i32");
+    __llvm_amdgcn_image_store_pck_2d_f32(value, 0x1, raw_coord.x, raw_coord.y, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v2s32 raw_coord, v2f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_2d_v2f32(v2f32, uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.2d.v2f32.i32");
+    __llvm_amdgcn_image_store_pck_2d_v2f32(value, 0x3, raw_coord.x, raw_coord.y, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v2s32 raw_coord, v4f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_2d_v4f32(v4f32, uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.2d.v4f32.i32");
+    __llvm_amdgcn_image_store_pck_2d_v4f32(value, 0xf, raw_coord.x, raw_coord.y, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v4s32 raw_coord, float value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_3d_f32(f32, uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.3d.f32.i32");
+    __llvm_amdgcn_image_store_pck_3d_f32(value, 0x1, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v4s32 raw_coord, v2f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_3d_v2f32(v2f32, uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.3d.v2f32.i32");
+    __llvm_amdgcn_image_store_pck_3d_v2f32(value, 0x3, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+}
+
+static void surface_store_impl(v8s32 surface, v4s32 raw_coord, v4f32 value) __device__
+{
+    __attribute__((device)) void __llvm_amdgcn_image_store_pck_3d_v4f32(v4f32, uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.store.pck.3d.v4f32.i32");
+    __llvm_amdgcn_image_store_pck_3d_v4f32(value, 0xf, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+}
+
+template <typename T>
+static T surface_load_impl(v8s32 surface, int32_t raw_coord) __device__
+{
+    if constexpr (std::is_same_v<T, float>)
+    {
+        __attribute__((device)) f32 __llvm_amdgcn_image_load_pck_1d_f32(uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.1d.f32.i32");
+        return __llvm_amdgcn_image_load_pck_1d_f32(0x1, raw_coord, surface, 0, 0);
+    }
+    else if constexpr (std::is_same_v<T, v2f32>)
+    {
+        __attribute__((device)) v2f32 __llvm_amdgcn_image_load_pck_1d_v2f32(uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.1d.v2f32.i32");
+        return __llvm_amdgcn_image_load_pck_1d_v2f32(0x3, raw_coord, surface, 0, 0);
+    }
+    else
+    {
+        static_assert(std::is_same_v<T, v4f32>, "unsupported surface load type");
+        __attribute__((device)) v4f32 __llvm_amdgcn_image_load_pck_1d_v4f32(uint32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.1d.v4f32.i32");
+        return __llvm_amdgcn_image_load_pck_1d_v4f32(0xf, raw_coord, surface, 0, 0);
+    }
+}
+
+template <typename T>
+static T surface_load_impl(v8s32 surface, v2s32 raw_coord) __device__
+{
+    if constexpr (std::is_same_v<T, float>)
+    {
+        __attribute__((device)) f32 __llvm_amdgcn_image_load_pck_2d_f32(uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.2d.f32.i32");
+        return __llvm_amdgcn_image_load_pck_2d_f32(0x1, raw_coord.x, raw_coord.y, surface, 0, 0);
+    }
+    else if constexpr (std::is_same_v<T, v2f32>)
+    {
+        __attribute__((device)) v2f32 __llvm_amdgcn_image_load_pck_2d_v2f32(uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.2d.v2f32.i32");
+        return __llvm_amdgcn_image_load_pck_2d_v2f32(0x3, raw_coord.x, raw_coord.y, surface, 0, 0);
+    }
+    else
+    {
+        static_assert(std::is_same_v<T, v4f32>, "unsupported surface load type");
+        __attribute__((device)) v4f32 __llvm_amdgcn_image_load_pck_2d_v4f32(uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.2d.v4f32.i32");
+        return __llvm_amdgcn_image_load_pck_2d_v4f32(0xf, raw_coord.x, raw_coord.y, surface, 0, 0);
+    }
+}
+
+template <typename T>
+static T surface_load_impl(v8s32 surface, v4s32 raw_coord) __device__
+{
+    if constexpr (std::is_same_v<T, float>)
+    {
+        __attribute__((device)) f32 __llvm_amdgcn_image_load_pck_3d_f32(uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.3d.f32.i32");
+        return __llvm_amdgcn_image_load_pck_3d_f32(0x1, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+    }
+    else if constexpr (std::is_same_v<T, v2f32>)
+    {
+        __attribute__((device)) v2f32 __llvm_amdgcn_image_load_pck_3d_v2f32(uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.3d.v2f32.i32");
+        return __llvm_amdgcn_image_load_pck_3d_v2f32(0x3, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+    }
+    else
+    {
+        static_assert(std::is_same_v<T, v4f32>, "unsupported surface load type");
+        __attribute__((device)) v4f32 __llvm_amdgcn_image_load_pck_3d_v4f32(uint32_t, int32_t, int32_t, int32_t, v8s32, int32_t, int32_t) __asm("llvm.amdgcn.image.load.pck.3d.v4f32.i32");
+        return __llvm_amdgcn_image_load_pck_3d_v4f32(0xf, raw_coord.x, raw_coord.y, raw_coord.z, surface, 0, 0);
+    }
+}
+
+template <typename T, typename Coord>
+void surface_store(uint64_t raw_surfobj, Coord raw_coord, T value) __device__
+{
+    auto [surfobj, shift, coord] = unpack_coord(raw_surfobj, raw_coord);
+    uint32_t actual_pixel_size = 1U << shift;
+    if (sizeof(T) < sizeof(v4f32) && actual_pixel_size > sizeof(T)) [[unlikely]]
+    {
+        v4f32 tmp = surface_load_impl<v4f32>(*(GLOBAL_SPACE v8s32 *)surfobj, coord);
+        memcpy(&tmp, &value, sizeof(T));
+        surface_store_impl(*(GLOBAL_SPACE v8s32 *)surfobj, coord, tmp);
+    }
+    else
+    {
+        surface_store_impl(*(GLOBAL_SPACE v8s32 *)surfobj, coord, zext_or_trunc<surface_pixel_type_t<T>>(value));
+    }
+}
+
+template <typename T, typename Coord>
+T surface_load(uint64_t raw_surfobj, Coord raw_coord) __device__
+{
+    auto [surfobj, shift, coord] = unpack_coord(raw_surfobj, raw_coord);
+    return zext_or_trunc<T, surface_pixel_type_t<T>>(surface_load_impl<surface_pixel_type_t<T>>(*(GLOBAL_SPACE v8s32 *)surfobj, coord));
+}
+
+extern "C"
+{
+#define SULD_ARGS_1d int32_t
+#define SULD_ARGS_2d int32_t, int32_t
+#define SULD_ARGS_3d int32_t, int32_t, int32_t
+
+#define SULD_COORD_1d int32_t
+#define SULD_COORD_2d v2s32
+#define SULD_COORD_3d v4s32
+
+// `suld`/`sust` pack raw pixel bytes contiguously into the fewest 32-bit float
+// lanes instead of spreading them one component per lane:
+//   * <= 4 bytes  -> f32
+//   * <= 8 bytes  -> v2f32
+//   * <= 16 bytes -> v4f32
+// Pixel byte 0 resides in the least significant byte of lane 0, so the packed
+// value is just the little-endian byte sequence of the result components.
+// dmask selects the valid packed lanes and is derived from the pixel byte
+// size, not the component count.
+#define SULD_PACKED_PIXEL_v1_b8 f32
+#define SULD_PACKED_PIXEL_v2_b8 f32
+#define SULD_PACKED_PIXEL_v4_b8 f32
+#define SULD_PACKED_PIXEL_v1_b16 f32
+#define SULD_PACKED_PIXEL_v2_b16 f32
+#define SULD_PACKED_PIXEL_v4_b16 v2f32
+#define SULD_PACKED_PIXEL_v1_b32 f32
+#define SULD_PACKED_PIXEL_v2_b32 v2f32
+#define SULD_PACKED_PIXEL_v4_b32 v4f32
+
+#define SULD_PACKED_DMASK_v1_b8 0x1
+#define SULD_PACKED_DMASK_v2_b8 0x1
+#define SULD_PACKED_DMASK_v4_b8 0x1
+#define SULD_PACKED_DMASK_v1_b16 0x1
+#define SULD_PACKED_DMASK_v2_b16 0x1
+#define SULD_PACKED_DMASK_v4_b16 0x3
+#define SULD_PACKED_DMASK_v1_b32 0x1
+#define SULD_PACKED_DMASK_v2_b32 0x3
+#define SULD_PACKED_DMASK_v4_b32 0xf
+
+#define SULD_UNPACK_ARGS_1d coord
+#define SULD_UNPACK_ARGS_2d coord.x, coord.y
+#define SULD_UNPACK_ARGS_3d coord.x, coord.y, coord.z
+
+#define STRINGIFY2(X) #X
+#define STRINGIFY(X) STRINGIFY2(X)
+
+    using b8 = uint8_t;
+    using v1_b8 = uint8_t;
+    typedef uint8_t v2_b8 __attribute__((ext_vector_type(2)));
+    typedef uint8_t v4_b8 __attribute__((ext_vector_type(4)));
+
+    using b16 = uint16_t;
+    using v1_b16 = uint16_t;
+    typedef uint16_t v2_b16 __attribute__((ext_vector_type(2)));
+    typedef uint16_t v4_b16 __attribute__((ext_vector_type(4)));
+
+    using b32 = uint32_t;
+    using v1_b32 = uint32_t;
+    typedef uint32_t v2_b32 __attribute__((ext_vector_type(2)));
+    typedef uint32_t v4_b32 __attribute__((ext_vector_type(4)));
+
+    using b64 = uint64_t;
+    using v1_b64 = uint64_t;
+    typedef uint64_t v2_b64 __attribute__((ext_vector_type(2)));
+    typedef uint64_t v4_b64 __attribute__((ext_vector_type(4)));
+
+#define suld(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                                   \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord)                              \
+    {                                                                                                                                                          \
+        return surface_load<RETURN_VEC##_##RETURN_TYPE>(surfobj, coord);                                                                                       \
+    }                                                                                                                                                          \
+                                                                                                                                                               \
+    RETURN_VEC##_##RETURN_TYPE FUNC(suldref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(struct textureReference GLOBAL_SPACE * texref, SULD_COORD_##COORD coord) \
+    {                                                                                                                                                          \
+        return surface_load<RETURN_VEC##_##RETURN_TYPE>(uint64_t(texref->textureObject), coord);                                                               \
+    }
+
+    suld(v1, b8, 1d);
+    suld(v1, b8, 2d);
+    suld(v1, b8, 3d);
+    suld(v2, b8, 1d);
+    suld(v2, b8, 2d);
+    suld(v2, b8, 3d);
+    suld(v4, b8, 1d);
+    suld(v4, b8, 2d);
+    suld(v4, b8, 3d);
+    suld(v1, b16, 1d);
+    suld(v1, b16, 2d);
+    suld(v1, b16, 3d);
+    suld(v2, b16, 1d);
+    suld(v2, b16, 2d);
+    suld(v2, b16, 3d);
+    suld(v4, b16, 1d);
+    suld(v4, b16, 2d);
+    suld(v4, b16, 3d);
+    suld(v1, b32, 1d);
+    suld(v1, b32, 2d);
+    suld(v1, b32, 3d);
+    suld(v2, b32, 1d);
+    suld(v2, b32, 2d);
+    suld(v2, b32, 3d);
+    suld(v4, b32, 1d);
+    suld(v4, b32, 2d);
+    suld(v4, b32, 3d);
+    suld(v1, b64, 1d);
+    suld(v1, b64, 2d);
+    suld(v1, b64, 3d);
+    suld(v2, b64, 1d);
+    suld(v2, b64, 2d);
+    suld(v2, b64, 3d);
+    // suld(v4_b64, 1d);
+    // suld(v4_b64, 2d);
+    // suld(v4_b64, 3d);
+
+#define sust(RETURN_VEC, RETURN_TYPE, COORD)                                                                                                                               \
+    void FUNC(sustobj_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(uint64_t surfobj, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value)                              \
+    {                                                                                                                                                                      \
+        surface_store(surfobj, coord, value);                                                                                                                              \
+    }                                                                                                                                                                      \
+                                                                                                                                                                           \
+    void FUNC(sustref_b_##COORD##_##RETURN_VEC##_##RETURN_TYPE)(struct textureReference GLOBAL_SPACE * texref, SULD_COORD_##COORD coord, RETURN_VEC##_##RETURN_TYPE value) \
+    {                                                                                                                                                                      \
+        surface_store(uint64_t(texref->textureObject), coord, value);                                                                                                      \
+    }
+
+    sust(v1, b8, 1d);
+    sust(v1, b8, 2d);
+    sust(v1, b8, 3d);
+    sust(v2, b8, 1d);
+    sust(v2, b8, 2d);
+    sust(v2, b8, 3d);
+    sust(v4, b8, 1d);
+    sust(v4, b8, 2d);
+    sust(v4, b8, 3d);
+    sust(v1, b16, 1d);
+    sust(v1, b16, 2d);
+    sust(v1, b16, 3d);
+    sust(v2, b16, 1d);
+    sust(v2, b16, 2d);
+    sust(v2, b16, 3d);
+    sust(v4, b16, 1d);
+    sust(v4, b16, 2d);
+    sust(v4, b16, 3d);
+    sust(v1, b32, 1d);
+    sust(v1, b32, 2d);
+    sust(v1, b32, 3d);
+    sust(v2, b32, 1d);
+    sust(v2, b32, 2d);
+    sust(v2, b32, 3d);
+    sust(v4, b32, 1d);
+    sust(v4, b32, 2d);
+    sust(v4, b32, 3d);
+    sust(v1, b64, 1d);
+    sust(v1, b64, 2d);
+    sust(v1, b64, 3d);
+    sust(v2, b64, 1d);
+    sust(v2, b64, 2d);
+    sust(v2, b64, 3d);
+    // sust(v4_b64, 1d);
+    // sust(v4_b64, 2d);
+    // sust(v4_b64, 3d);
 
     __device__ half __ocml_tanh_f16(half);
     half FUNC(tanh_f16)(half a)

@@ -129,6 +129,7 @@ macro_rules! test_ptx_warp {
 test_ptx!(ld_st, [1u64], [1u64]);
 test_ptx!(ld_st_implicit, [0.5f32, 0.25f32], [0.5f32]);
 test_ptx!(mov, [1u64], [1u64]);
+test_ptx!(sink, [1u32, 2u32, 3u32, 4u32], [2u32, 1u32, 3u32]);
 test_ptx!(mul_lo, [1u64], [2u64]);
 test_ptx!(mul_hi, [u64::max_value()], [1u64]);
 test_ptx_with_32!(add, [1u64], [2u64]);
@@ -209,6 +210,7 @@ test_ptx!(setp, [10u64, 11u64], [1u64, 0u64]);
 test_ptx!(setp_gt, [f32::NAN, 1f32], [1f32]);
 test_ptx!(setp_leu, [1f32, f32::NAN], [1f32]);
 test_ptx!(setp_bool_and, [1u32, 2u32, 0u32], [1u32]);
+test_ptx!(setp_pred2, [1u32, 2u32], [1u32, 0u32, 1u32, 0u32, 1u32]);
 test_ptx!(bra, [10u64], [11u64]);
 test_ptx!(not, [0u64], [u64::max_value()]);
 test_ptx!(shl, [11u64], [44u64]);
@@ -756,6 +758,14 @@ test_ptx_warp!(
 );
 test_ptx_warp!(
     vote_any,
+    [
+        1u32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0
+    ]
+);
+test_ptx_warp!(
+    vote_any_nosync,
     [
         1u32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

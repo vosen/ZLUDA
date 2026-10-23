@@ -26,6 +26,9 @@ use windows::{
                 GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
                 LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
             },
+            StationsAndDesktops::{
+                GetProcessWindowStation, GetUserObjectInformationW, UOI_FLAGS, USEROBJECTFLAGS,
+            },
         },
         UI::{
             Controls::{
@@ -33,7 +36,7 @@ use windows::{
                 TASKDIALOG_NOTIFICATIONS, TDCBF_CLOSE_BUTTON, TDF_ENABLE_HYPERLINKS,
                 TDN_HYPERLINK_CLICKED, TD_ERROR_ICON,
             },
-            WindowsAndMessaging::IDCLOSE,
+            WindowsAndMessaging::{IDCLOSE, WSF_VISIBLE},
         },
     },
 };
@@ -447,13 +450,34 @@ pub unsafe fn try_load_from_self_or_hip(redirect_name: &'static str) -> Option<H
     try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
 }
 
+// Taken from .NET Environment.UserInteractive
+unsafe fn is_interactive_session() -> bool {
+    let Ok(station) = GetProcessWindowStation() else {
+        return false;
+    };
+    let mut flags: USEROBJECTFLAGS = mem::zeroed();
+    let mut dummy = 0;
+    if GetUserObjectInformationW(
+        HANDLE(station.0),
+        UOI_FLAGS,
+        Some(ptr::from_mut(&mut flags).cast()),
+        mem::size_of::<USEROBJECTFLAGS>() as u32,
+        Some(&mut dummy),
+    )
+    .is_err()
+    {
+        return false;
+    }
+    return (flags.dwFlags & (WSF_VISIBLE as u32)) != 0;
+}
+
 pub unsafe fn try_load_from_self_or_hip_with_message(
     redirect_names: &[&'static str],
 ) -> Option<HMODULE> {
     let result = redirect_names.iter().copied().find_map(|redirect_name| {
         try_load_from_self_dir(redirect_name).or_else(|| try_load_from_hip_path(redirect_name))
     });
-    if result.is_none() {
+    if result.is_none() && is_interactive_session() {
         let mut title = U16String::from_str("ZLUDA failed to load ");
         title.push_str(redirect_names[0]);
         redirect_names.iter().copied().skip(1).for_each(|name| {

@@ -200,10 +200,10 @@ pub fn map_operand<T: Copy, Err>(
             elements
                 .into_iter()
                 .map(|element| match element {
-                    ast::RegOrImmediate::Reg(ident) => {
-                        Ok(ast::RegOrImmediate::Reg(fn_(ident, None)?.unwrap_or(ident)))
-                    }
-                    ast::RegOrImmediate::Imm(imm) => Ok(ast::RegOrImmediate::Imm(imm)),
+                    Some(ast::RegOrImmediate::Reg(ident)) => Ok(Some(ast::RegOrImmediate::Reg(
+                        fn_(ident, None)?.unwrap_or(ident),
+                    ))),
+                    other => Ok(other),
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         ),

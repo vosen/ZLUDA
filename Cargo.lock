@@ -780,6 +780,7 @@ dependencies = [
  "cuda_macros",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "hipfft-sys",
  "miopen-sys",
  "rocblas-sys",
  "rocm_smi-sys",
@@ -793,6 +794,7 @@ dependencies = [
  "bit-vec",
  "cglue",
  "cuda_types",
+ "flate2",
  "format",
  "lz4-sys",
  "paste",
@@ -2465,6 +2467,13 @@ version = "0.0.0"
 [[package]]
 name = "hipblaslt-sys"
 version = "0.1.0"
+dependencies = [
+ "hip_runtime-sys",
+]
+
+[[package]]
+name = "hipfft-sys"
+version = "0.0.0"
 dependencies = [
  "hip_runtime-sys",
 ]
@@ -5097,6 +5106,7 @@ name = "zluda_bindgen"
 version = "0.1.0"
 dependencies = [
  "bindgen 0.70.1",
+ "bpaf",
  "cuda_types",
  "libloading",
  "prettyplease",
@@ -5156,6 +5166,8 @@ dependencies = [
  "dark_api",
  "hip_runtime-sys",
  "hipblaslt-sys",
+ "hipfft-sys",
+ "libloading",
  "miopen-sys",
  "rocblas-sys",
  "rocsparse-sys",
@@ -5214,6 +5226,15 @@ version = "0.0.0"
 dependencies = [
  "cuda_macros",
  "cuda_types",
+ "embed-resource",
+ "hip_runtime-sys",
+ "hipfft-sys",
+ "libloading",
+ "paste",
+ "rustc-hash 2.1.2",
+ "unwrap_or",
+ "zluda_common",
+ "zluda_windows",
 ]
 
 [[package]]
