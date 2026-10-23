@@ -963,6 +963,14 @@ an argument set already in the cache is used from its first launch. `ZLUDA_AGX_S
 `ZLUDA_AGX_LOG=1` prints each specialization when it is ready. `agx_specialize PTX KERNEL --block x,y,z ARG...` prints
 the PTX that a launch with these argument bytes (hex) would compile.
 
+For Geekbench 7's exact `gemm_block_size_bias` PTX template at a 32×4 block, specialization also transposes the B tile
+within its existing 8 KiB threadgroup allocation. Four scalar B reads in the inner loop become two 2-wide reads; the
+floating-point accumulation order is unchanged. The whole specialized PTX is fingerprinted after masking only its two
+size constants, so a changed kernel shape keeps the ordinary specialization. On an M2 Max, captured-output hashes were
+identical for the original and transposed code; one captured launch took 33.0 → 30.8 µs. Alternating warm driver runs
+of the dominant 2304×64×576 shape took 99.1 → 95.5 µs (-3.6%) with identical output hashes.
+`ZLUDA_AGX_GEMM_TILE=0` disables this layout experiment.
+
 ### Streams, graphs and host costs
 
 Destroyed streams keep their queue (up to 32) for the next `cuStreamCreate`: creating a queue (a DRM queue, its

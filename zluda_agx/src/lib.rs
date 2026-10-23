@@ -10,6 +10,7 @@
 mod contexts;
 mod dark;
 mod driver;
+mod gemm_tile;
 pub mod specialize;
 mod texture;
 
