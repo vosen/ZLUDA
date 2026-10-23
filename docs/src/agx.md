@@ -1392,6 +1392,34 @@ divides by one, and `ncclRedOpCreatePreMulSum` operators scale the result (f32
 and f64). Sends and receives to rank 0 pair up in order. `ncclMemAlloc`,
 buffer registration, groups and the asynchronous-error query are supported.
 
+## Performance against Metal (estimate, not measured)
+
+There is no Metal baseline from the same machine yet: macOS does not run under Asahi, and Geekbench 7's Linux preview
+prints no score when its upload fails. What the Geekbench 7 GPU (CUDA) runs on an M2 Max (G14C, 38 cores, October
+2026) show:
+
+- **Compute-bound kernels: probably a large gap.** The two GEMM shapes that dominate Geekbench (M = 2304, K = 576,
+  N = 64 and 1024) reach about 1.6 and 2.5 TFLOPS of an fp32 peak of about 13.6 (12-18%). They are bound by
+  threadgroup-memory loads (about 2.1 cycles per load per core when saturated; the inner loop has 12 loads per 32
+  FMAs after the xyzw vectorization). Tuned Metal kernels likely reach a much larger share of peak.
+- **Memory-bound image kernels: probably a small gap.** About half of the GPU time; ablations showed the
+  separable convolutions (about 15%) bound by their image loads, which Metal shares (same caches and DRAM). A gap
+  there would come from a different tiling in the source, not from the compiler.
+- **Driver overhead per launch: probably a large gap.** A launch costs about 25 us of host time (mostly the submit
+  ioctl) and the GPU idles about 15-20 us between commands. Metal encodes many dispatches into one command buffer
+  for a few us each. Graph launches are now gathered into one command (see "Streams, graphs and host costs");
+  ordinary launches are not. Geekbench makes about 318,000 launches a run, most under 10 us of GPU work; only about
+  30 s of a 133 s run is GPU time (the rest includes Geekbench's own CPU work, which Metal would not remove).
+- **Not a like-for-like comparison:** Geekbench's CUDA and Metal workloads are separate implementations.
+
+Rough guess: compute-bound kernels several times slower than tuned Metal, memory-bound ones within tens of percent,
+launch-heavy workloads losing further to driver overhead. The largest remaining levers: gathering ordinary launches
+into fewer commands (with a policy that submits when the GPU goes idle), and better GEMM code generation.
+
+To measure the gap: run Geekbench 7 Metal on macOS on the same M2 Max and the CUDA run with network access (both
+scores uploaded); and time the same kernels (GEMM, a separable convolution, the particle kernel) as Metal compute
+shaders on macOS and through ZLUDA, which separates compiler quality from driver overhead.
+
 ## Building a release for Asahi
 
 ```
