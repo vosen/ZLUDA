@@ -107,6 +107,7 @@ cuda_macros::cuda_function_declarations!(
             cuGetExportTable,
             cuGetProcAddress,
             cuGetProcAddress_v2,
+            cuGraphCreate,
             cuGraphDestroy,
             cuGraphExecDestroy,
             cuGraphInstantiateWithFlags,

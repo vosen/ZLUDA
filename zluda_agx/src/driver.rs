@@ -10,7 +10,7 @@ use agx_runtime::{error, module, Fence, LoadedModule, Queue};
 use cuda_types::cuda::*;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_uint, c_void, CStr};
-use std::io;
+use std::io::{self, Write};
 use std::num::NonZeroU32;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -129,6 +129,42 @@ impl LaunchRecord {
             args.join(", ")
         )
     }
+}
+
+impl LaunchRecord {
+    /// One JSON line of the `ZLUDA_AGX_PROFILE` file: the launch and its GPU time from the firmware timestamps.
+    fn profile_line(&self, ns: u64) -> String {
+        let params: Vec<String> = self.params.iter().map(|p| format!("\"{}\"", p.iter().map(|b| format!("{b:02x}")).collect::<String>())).collect();
+        format!(
+            "{{\"kernel\":\"{}\",\"module\":{},\"grid\":[{},{},{}],\"block\":[{},{},{}],\"shared\":{},\"stream\":{},\"command\":{},\"ns\":{},\"t\":{},\"params\":[{}]}}",
+            self.kernel,
+            self.module,
+            self.grid[0],
+            self.grid[1],
+            self.grid[2],
+            self.block[0],
+            self.block[1],
+            self.block[2],
+            self.shared,
+            self.stream,
+            self.fence.point,
+            ns,
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis()),
+            params.join(",")
+        )
+    }
+}
+
+/// `ZLUDA_AGX_PROFILE=FILE`: append one JSON line per finished launch (kernel, geometry, argument bytes, GPU
+/// nanoseconds by the firmware timestamps and `t`, the Unix time in milliseconds when it was seen to finish). Launches are seen when their command is waited for; at most
+/// `MAX_LAUNCH_RECORDS` unwaited launches are kept, so a longer run of launches without a wait loses the oldest.
+fn profile_file() -> Option<&'static std::sync::Mutex<std::fs::File>> {
+    static FILE: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = std::env::var_os("ZLUDA_AGX_PROFILE")?;
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(std::sync::Mutex::new)
+    })
+    .as_ref()
 }
 
 fn drop_finished(launches: &mut std::collections::VecDeque<LaunchRecord>, syncobj: u32, point: u64) {
@@ -338,13 +374,17 @@ impl Driver {
             self.streams.values().map(|s| &s.queue).find(|q| q.last().syncobj == syncobj)
         };
         if let Some(q) = queue {
-            let busy: u64 = self
-                .launches
-                .iter()
-                .filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point)
-                .filter_map(|r| q.timing(r.fence))
-                .map(|(start, end)| end.saturating_sub(start))
-                .sum();
+            let finished = self.launches.iter().filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point);
+            if let Some(profile) = profile_file() {
+                let mut out = profile.lock().unwrap_or_else(|e| e.into_inner());
+                for r in finished.clone() {
+                    if let Some((start, end)) = q.timing(r.fence) {
+                        let ns = end.saturating_sub(start) as u128 * 1_000_000_000 / freq;
+                        let _ = writeln!(out, "{}", r.profile_line(ns as u64));
+                    }
+                }
+            }
+            let busy: u64 = finished.filter_map(|r| q.timing(r.fence)).map(|(start, end)| end.saturating_sub(start)).sum();
             GPU_BUSY_NS.fetch_add((busy as u128 * 1_000_000_000 / freq) as u64, std::sync::atomic::Ordering::Relaxed);
         }
         drop_finished(&mut self.launches, syncobj, point);
@@ -468,6 +508,9 @@ fn err(code: u32) -> CUerror {
 }
 
 pub(crate) fn from_io(e: io::Error) -> CUerror {
+    if crate::log_enabled() {
+        eprintln!("[zluda_agx] {e}");
+    }
     err(error::cuda_error(&e))
 }
 
@@ -2630,6 +2673,19 @@ pub(crate) unsafe fn cuStreamBeginCapture_v2(s: CUstream, _mode: CUstreamCapture
         d.capturing.insert(k, Vec::new());
         Ok(())
     })
+}
+
+/// An empty graph (nodes are only added by stream capture, which makes its own graph).
+pub(crate) unsafe fn cuGraphCreate(graph: *mut CUgraph, flags: c_uint) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let h = with(|d| {
+        let h = d.handle();
+        d.graphs.insert(h, Vec::new());
+        Ok(h)
+    })?;
+    out(graph, h as CUgraph)
 }
 
 pub(crate) unsafe fn cuStreamEndCapture(s: CUstream, graph: *mut CUgraph) -> CUresult {
