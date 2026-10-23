@@ -17,8 +17,10 @@
 //!   shuffles and the columns of B with SIMD-group shuffles, then computes its
 //!   elements of D. Floating point sums are exact: the products and C are
 //!   added as integers in a fixed point accumulator anchored at the largest
-//!   term (120 bits, 248 for `f64`), and the sum is rounded once to nearest
-//!   even into the type of D, like the model of PTX-formalization. Terms more
+//!   term (120 bits), and the sum is rounded once to nearest even into the
+//!   type of D, like the model of PTX-formalization. `f64` elements are
+//!   instead the chain of fused multiply-adds along k from C that the PTX
+//!   ISA specifies, rounded in the instruction's direction. Terms more
 //!   than that below the largest one only contribute a sticky bit. The
 //!   elements of D are computed one at a time in a loop (with the shuffles
 //!   in it) to keep the registers of a sum, and narrow terms are added in
@@ -26,6 +28,9 @@
 //!   same dot product of +-1, +-0, infinities and NaNs in `f32`, computed
 //!   only when an input of the SIMD-group is a NaN or an infinity or an
 //!   element of C is -0.
+//! * `mma.m8n8k4` with `f16` A and B is four independent 8x8x4 products, one
+//!   per quad pair, with every layout of A and B; each element of D gathers
+//!   its row of A and column of B from the pair with SIMD-group shuffles.
 //! * `wmma` fragments are tiles of `mma.sync` fragments (16x8, or 8x8 for
 //!   8-row matrices): A is made of the A fragments of its row tiles, B of the
 //!   B fragments of its column tiles, C and D of the C fragments of the tiles
@@ -40,6 +45,33 @@ use std::ffi::CStr;
 use std::fmt::Write;
 
 const AGX_PREFIX: &str = "agx_";
+// the words of a row (lane) of the emulated tensor memory (TMEM_COLS in zluda_ptx_impl_agx_cvt.c)
+pub(crate) const TMEM_COLS: u32 = 1024;
+
+thread_local! {
+    static FAST_MMA: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `Options::fast_mma` for the module being translated on this thread.
+pub(super) fn set_fast_mma(fast: bool) {
+    FAST_MMA.with(|f| f.set(fast));
+}
+
+/// The `mma` tiles that `fast_mma` computes with the SIMD-group matrix
+/// multiply-accumulate.
+fn is_fast(d: &ast::MmaDetails) -> bool {
+    use ast::MmaType::*;
+    d.sparse.is_none()
+        && d.block_scale.is_none()
+        && !d.satfinite
+        && matches!(d.atype, F16 | Bf16 | Tf32)
+        && d.btype == d.atype
+        && matches!(d.ctype, F16 | F32)
+        && matches!(d.dtype, F16 | F32)
+        && d.n == 8
+        && matches!(d.m, 8 | 16)
+        && (d.m, d.k) != (8, 4)
+}
 
 #[derive(Copy, Clone)]
 enum Helper {
@@ -71,7 +103,13 @@ pub(super) fn helper_name(instruction: &ast::Instruction<SpirvWord>) -> Option<S
         ast::Instruction::Tcgen05Mma { data, .. } => Helper::Tcgen05Mma(*data),
         _ => return None,
     };
-    Some(helper.name())
+    let mut name = helper.name();
+    if let Helper::Mma(d) | Helper::WmmaMma(d) = helper {
+        if is_fast(&d) && FAST_MMA.with(|f| f.get()) {
+            name.push_str("_fast");
+        }
+    }
+    Some(name)
 }
 
 // ---------------------------------------------------------------- names
@@ -105,10 +143,11 @@ const SPACES: [(&str, ast::StateSpace); 3] = [
     ("shared", ast::StateSpace::Shared),
     ("generic", ast::StateSpace::Generic),
 ];
-const KINDS: [(&str, ast::Tcgen05Kind); 7] = [
+const KINDS: [(&str, ast::Tcgen05Kind); 8] = [
     ("f16", ast::Tcgen05Kind::F16),
     ("tf32", ast::Tcgen05Kind::Tf32),
     ("i8", ast::Tcgen05Kind::I8),
+    ("ti16", ast::Tcgen05Kind::Ti16),
     ("f8f6f4", ast::Tcgen05Kind::F8f6f4),
     ("mxf8f6f4", ast::Tcgen05Kind::Mxf8f6f4),
     ("mxf4", ast::Tcgen05Kind::Mxf4),
@@ -147,6 +186,18 @@ fn mma_name(d: &ast::MmaDetails) -> String {
     if let Some(selector) = d.sparse {
         write!(name, "_sp{selector}").unwrap();
     }
+    match d.rounding {
+        Some(ast::RoundingMode::Zero) => name.push_str("_rz"),
+        Some(ast::RoundingMode::NegativeInf) => name.push_str("_rm"),
+        Some(ast::RoundingMode::PositiveInf) => name.push_str("_rp"),
+        Some(ast::RoundingMode::NearestEven) | None => {}
+    }
+    if d.alayout == ast::MatrixLayout::Col {
+        name.push_str("_acol");
+    }
+    if d.blayout == ast::MatrixLayout::Row {
+        name.push_str("_brow");
+    }
     if let Some(s) = d.block_scale {
         let stype = if s.ue4m3 { "ue4m3" } else { "ue8m0" };
         write!(
@@ -177,8 +228,8 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
         m,
         n,
         k,
-        alayout: ast::MatrixLayout::Row,
-        blayout: ast::MatrixLayout::Col,
+        alayout: if flags.contains(&"acol") { ast::MatrixLayout::Col } else { ast::MatrixLayout::Row },
+        blayout: if flags.contains(&"brow") { ast::MatrixLayout::Row } else { ast::MatrixLayout::Col },
         dtype: types[0],
         atype: types[1],
         btype: types[2],
@@ -208,6 +259,15 @@ fn parse_mma(parts: &[&str]) -> Option<ast::MmaDetails> {
         sparse: flags
             .iter()
             .find_map(|f| f.strip_prefix("sp").and_then(|s| s.parse().ok())),
+        rounding: if flags.contains(&"rz") {
+            Some(ast::RoundingMode::Zero)
+        } else if flags.contains(&"rm") {
+            Some(ast::RoundingMode::NegativeInf)
+        } else if flags.contains(&"rp") {
+            Some(ast::RoundingMode::PositiveInf)
+        } else {
+            None
+        },
     })
 }
 
@@ -273,6 +333,7 @@ impl Helper {
                     ("ws", d.ws),
                     ("zm", d.zmask),
                     ("pair", d.pair),
+                    ("lut", d.lut),
                 ] {
                     if on {
                         write!(name, "_{flag}").unwrap();
@@ -319,6 +380,7 @@ impl Helper {
                 ws: flags.contains(&"ws"),
                 zmask: flags.contains(&"zm"),
                 pair: flags.contains(&"pair"),
+                lut: flags.contains(&"lut"),
                 block: flags.iter().find_map(|f| f.strip_prefix("bs")).and_then(|b| b.parse().ok()),
             })),
             ["mma", ref rest @ ..] => parse_mma(rest).map(Helper::Mma),
@@ -437,6 +499,7 @@ fn define(
     declarations: &mut BTreeSet<String>,
 ) -> Result<String, TranslateError> {
     let mut ir = Ir::default();
+    ir.fast_mma = name.ends_with("_fast");
     let args = params
         .iter()
         .enumerate()
@@ -481,7 +544,9 @@ fn define(
             } else {
                 None
             };
-            if d.sparse.is_some() {
+            if (d.m, d.k, d.atype) == (8, 4, ast::MmaType::F16) {
+                Some(mma_m8n8k4_f16(&mut ir, &lane, &d, &a, &b, &c)?)
+            } else if d.sparse.is_some() {
                 let metadata = param(3)?.0;
                 Some(sparse_tile(&mut ir, &lane, &d, &a, &b, &c, &metadata, scales)?)
             } else {
@@ -559,6 +624,8 @@ struct Ir {
     // when set, `special_dot` computes the special values only when this i1
     // is true, and is +0 otherwise
     special_guard: Option<String>,
+    // the tiles of `is_fast` mma are computed by `fast_tile`
+    fast_mma: bool,
 }
 
 struct Lane {
@@ -583,6 +650,7 @@ impl Default for Ir {
             block: "entry".to_string(),
             declarations: BTreeSet::new(),
             special_guard: None,
+            fast_mma: false,
         }
     }
 }
@@ -1089,6 +1157,389 @@ fn register_bits(type_: ast::MmaType) -> u32 {
 
 // ---------------------------------------------------------------- mma
 
+// `f(lane)` as an i32 expression of the bits of `lane`, c0 + sum of c_j *
+// bit j, when f has that form for the lanes where it is defined (Some). The
+// coefficients name the expression, so equal functions share it (and their
+// shuffles).
+fn lane_function(
+    ir: &mut Ir,
+    cache: &mut HashMap<Vec<i64>, String>,
+    lane: &str,
+    f: &dyn Fn(u32) -> Option<u32>,
+) -> Result<String, TranslateError> {
+    let fail = || todo("fast mma: fragment layout");
+    let x0 = (0..32).find(|&x| f(x).is_some()).ok_or_else(fail)?;
+    // c_j from two defined lanes that differ only in bit j
+    let c = (0..5)
+        .map(|j| {
+            (0..32u32)
+                .filter(|x| x & (1 << j) == 0)
+                .find_map(|x| Some(f(x | (1 << j))? as i64 - f(x)? as i64))
+                .unwrap_or(0)
+        })
+        .collect::<Vec<_>>();
+    let at = |x: u32| (0..5).filter(|j| (x >> j) & 1 == 1).map(|j| c[j]).sum::<i64>();
+    let c0 = f(x0).ok_or_else(fail)? as i64 - at(x0);
+    for x in 0..32u32 {
+        if f(x).is_some_and(|v| v as i64 != c0 + at(x)) {
+            return Err(fail());
+        }
+    }
+    let key = std::iter::once(c0).chain(c.iter().copied()).collect::<Vec<_>>();
+    if let Some(v) = cache.get(&key) {
+        return Ok(v.clone());
+    }
+    let mut acc = c0.to_string();
+    for (j, cj) in c.iter().enumerate() {
+        if *cj != 0 {
+            let bit = ir.op("lshr", "i32", lane, &j.to_string());
+            let bit = ir.op("and", "i32", &bit, "1");
+            let term = ir.op("mul", "i32", &bit, &cj.to_string());
+            acc = ir.op("add", "i32", &acc, &term);
+        }
+    }
+    cache.insert(key, acc.clone());
+    Ok(acc)
+}
+
+// Row and column of slot s of lane t in an operand of
+// llvm.agx.simdgroup.matrix.fma, and the lane and slot of (row, column).
+fn unit_position(t: u32, s: u32) -> (u32, u32) {
+    (4 * (t / 16) + (t / 2) % 4, 4 * ((t / 8) % 2) + 2 * (t % 2) + s)
+}
+
+fn unit_holder(row: u32, col: u32) -> (u32, u32) {
+    (16 * (row / 4) + 2 * (row % 4) + 8 * (col / 4) + (col / 2) % 2, col % 2)
+}
+
+// `Options::fast_mma`: an mma tile of f16, bf16 or tf32 A and B as 8x8x8
+// llvm.agx.simdgroup.matrix.fma products in f32 (the G14 matrix unit, or the
+// same chain of fused multiply-adds in k order with shuffles elsewhere):
+// each operand is gathered from the PTX fragments with SIMD-group shuffles,
+// A and B converted to f32 exactly, k padded with zeros to a multiple of 8,
+// and D rounded once from f32 when it is f16. Not the exact sum of the
+// default emulation: the products are rounded at every step and f32
+// denormals are flushed.
+fn fast_tile(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    c: &[String],
+) -> Result<Vec<String>, TranslateError> {
+    use ast::MmaMatrix;
+    let (m, k) = (d.m, d.k);
+    let l = ir.linear(4, &lane.g, 1, &lane.t, 0);
+    let mut functions = HashMap::new();
+    let mut shuffled: HashMap<(usize, usize, String), String> = HashMap::new();
+    // the element of each position of a fragment: (lane, index)
+    let owners = |matrix, bits: u32, count: u32| -> Result<HashMap<(u32, u32), (u32, u32)>, TranslateError> {
+        let mut map = HashMap::new();
+        for lane in 0..32 {
+            for i in 0..count {
+                let p = position(matrix, m, k, bits, lane, i).ok_or_else(|| todo("mma shape"))?;
+                map.insert(p, (lane, i));
+            }
+        }
+        Ok(map)
+    };
+    // f32 bits of element `index` (an i32) of `bits`-bit elements of `type_`
+    let to_f32 = |ir: &mut Ir, regs: &[String], index: &str, type_: ast::MmaType| -> String {
+        let bits = type_.bits();
+        let per = 32 / bits;
+        let reg = ir.op("udiv", "i32", index, &per.to_string());
+        let mut r = regs[0].clone();
+        for (i, x) in regs.iter().enumerate().skip(1) {
+            let is = ir.icmp("eq", "i32", &reg, &i.to_string());
+            r = ir.select(&is, "i32", x, &r);
+        }
+        let x = if per == 1 {
+            r
+        } else {
+            let shift = ir.op("urem", "i32", index, &per.to_string());
+            let shift = ir.op("mul", "i32", &shift, &bits.to_string());
+            ir.op("lshr", "i32", &r, &shift)
+        };
+        match type_ {
+            ast::MmaType::F16 => {
+                let h = ir.cast("trunc", "i32", &x, "i16");
+                let h = ir.cast("bitcast", "i16", &h, "half");
+                let f = ir.cast("fpext", "half", &h, "float");
+                ir.cast("bitcast", "float", &f, "i32")
+            }
+            ast::MmaType::Bf16 => ir.op("shl", "i32", &x, "16"),
+            ast::MmaType::Tf32 => ir.op("and", "i32", &x, "-8192"),
+            _ => x,
+        }
+    };
+    // f32 bits of the operand slot s of this thread for the 8x8 tile of
+    // `matrix` at (row0, col0), zero past `cols`
+    let mut gather = |ir: &mut Ir,
+                      which: usize,
+                      regs: &[String],
+                      type_: ast::MmaType,
+                      owners: &HashMap<(u32, u32), (u32, u32)>,
+                      (row0, col0, cols): (u32, u32, u32),
+                      s: u32|
+     -> Result<String, TranslateError> {
+        let at = |t: u32| {
+            let (r, col) = unit_position(t, s);
+            owners.get(&(row0 + r, col0 + col)).copied().filter(|_| col0 + col < cols)
+        };
+        let valid = |t: u32| Some(at(t).is_some() as u32);
+        if (0..32).all(|t| at(t).is_none()) {
+            return Ok("0".to_string());
+        }
+        let source = |t: u32| at(t).map(|(lane, _)| lane);
+        let index = |t: u32| at(t).map(|(_, i)| i);
+        let source = lane_function(ir, &mut functions, &l, &source)?;
+        let index = lane_function(ir, &mut functions, &l, &index)?;
+        let values = regs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                shuffled
+                    .entry((which, i, source.clone()))
+                    .or_insert_with(|| ir.shuffle(r, 32, &source, false))
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+        let x = to_f32(ir, &values, &index, type_);
+        if (0..32).all(|t| at(t).is_some()) {
+            return Ok(x);
+        }
+        let valid = lane_function(ir, &mut functions, &l, &valid)?;
+        let valid = ir.icmp("ne", "i32", &valid, "0");
+        Ok(ir.select(&valid, "i32", &x, "0"))
+    };
+    let vector = |ir: &mut Ir, x: &str, y: &str| {
+        let x = ir.cast("bitcast", "i32", x, "float");
+        let y = ir.cast("bitcast", "i32", y, "float");
+        let v = ir.def(&format!("insertelement <2 x float> poison, float {x}, i32 0"));
+        ir.def(&format!("insertelement <2 x float> {v}, float {y}, i32 1"))
+    };
+    let a_owners = owners(MmaMatrix::A, d.atype.bits(), m * k / 32)?;
+    let b_owners = owners(MmaMatrix::B, d.btype.bits(), k * 8 / 32)?;
+    let c_owners = owners(MmaMatrix::C, d.ctype.bits(), m * 8 / 32)?;
+    ir.declarations.insert(
+        "declare <2 x float> @llvm.agx.simdgroup.matrix.fma.v2f32(<2 x float>, <2 x float>, <2 x float>)".to_string(),
+    );
+    let steps = k.div_ceil(8);
+    let mut b_tiles = Vec::new();
+    for kt in 0..steps {
+        let x = gather(ir, 1, b, d.btype, &b_owners, (8 * kt, 0, 8), 0)?;
+        // (the rows of B past k have no element, and are zero)
+        let y = gather(ir, 1, b, d.btype, &b_owners, (8 * kt, 0, 8), 1)?;
+        b_tiles.push(vector(ir, &x, &y));
+    }
+    let mut tiles = Vec::new();
+    for h in 0..m / 8 {
+        let x = gather(ir, 2, c, d.ctype, &c_owners, (8 * h, 0, 8), 0)?;
+        let y = gather(ir, 2, c, d.ctype, &c_owners, (8 * h, 0, 8), 1)?;
+        let mut acc = vector(ir, &x, &y);
+        for (kt, bt) in b_tiles.iter().enumerate() {
+            let kt = kt as u32;
+            let x = gather(ir, 0, a, d.atype, &a_owners, (8 * h, 8 * kt, k), 0)?;
+            let y = gather(ir, 0, a, d.atype, &a_owners, (8 * h, 8 * kt, k), 1)?;
+            let at = vector(ir, &x, &y);
+            acc = ir.def(&format!(
+                "call <2 x float> @llvm.agx.simdgroup.matrix.fma.v2f32(<2 x float> {at}, <2 x float> {bt}, <2 x float> {acc})"
+            ));
+        }
+        let slots = (0..2)
+            .map(|s| {
+                let x = ir.def(&format!("extractelement <2 x float> {acc}, i32 {s}"));
+                ir.cast("bitcast", "float", &x, "i32")
+            })
+            .collect::<Vec<_>>();
+        tiles.push(slots);
+    }
+    // the elements of D in the PTX layout (that of C)
+    let mut elements = Vec::new();
+    for j in 0..m * 8 / 32 {
+        let at = |t: u32| -> (u32, u32, u32) {
+            let (r, col) = position(MmaMatrix::C, m, k, d.ctype.bits(), t, j).unwrap_or((0, 0));
+            let (holder, slot) = unit_holder(r % 8, col);
+            (r / 8, holder, slot)
+        };
+        let tile = lane_function(ir, &mut functions, &l, &|t| Some(at(t).0))?;
+        let source = lane_function(ir, &mut functions, &l, &|t| Some(at(t).1))?;
+        let slot = lane_function(ir, &mut functions, &l, &|t| Some(at(t).2))?;
+        let mut value = "0".to_string();
+        for (h, slots) in tiles.iter().enumerate() {
+            for (s, x) in slots.iter().enumerate() {
+                let key = (3 + h, s, source.clone());
+                let v = shuffled
+                    .entry(key)
+                    .or_insert_with(|| ir.shuffle(x, 32, &source, false))
+                    .clone();
+                let is_tile = ir.icmp("eq", "i32", &tile, &h.to_string());
+                let is_slot = ir.icmp("eq", "i32", &slot, &s.to_string());
+                let is = ir.op("and", "i1", &is_tile, &is_slot);
+                value = ir.select(&is, "i32", &v, &value);
+            }
+        }
+        elements.push(if d.dtype == ast::MmaType::F16 {
+            let f = ir.cast("bitcast", "i32", &value, "float");
+            let h = ir.cast("fptrunc", "float", &f, "half");
+            let h = ir.cast("bitcast", "half", &h, "i16");
+            ir.cast("zext", "i16", &h, "i32")
+        } else {
+            value
+        });
+    }
+    Ok(pack_d(ir, d, &elements))
+}
+
+// mma.m8n8k4 with .f16 A and B: four independent 8x8x4 products, product q
+// by the quad pair of lanes 4q..4q+3 and 4q+16..4q+19. Rows 4-7 of A, C and
+// D and columns 4-7 of B are held by the upper half of the pair (lanes 16 and
+// above); a thread computes the elements of D of its own half.
+fn mma_m8n8k4_f16(
+    ir: &mut Ir,
+    lane: &Lane,
+    d: &ast::MmaDetails,
+    a: &[String],
+    b: &[String],
+    c: &[String],
+) -> Result<Vec<String>, TranslateError> {
+    let l = ir.linear(4, &lane.g, 1, &lane.t, 0);
+    let base = ir.op("and", "i32", &l, "12");
+    let half = ir.op("and", "i32", &l, "16");
+    let low = ir.op("and", "i32", &l, "3");
+    let pair = ir.op("or", "i32", &base, &half);
+    // element `index` (an i32) of registers holding `bits`-bit elements
+    let element = |ir: &mut Ir, regs: &[String], index: &str, bits: u32| {
+        let per = 32 / bits;
+        if per == 1 {
+            let mut r = regs[0].clone();
+            for (i, x) in regs.iter().enumerate().skip(1) {
+                let is = ir.icmp("eq", "i32", index, &i.to_string());
+                r = ir.select(&is, "i32", x, &r);
+            }
+            return r;
+        }
+        let reg = ir.op("udiv", "i32", index, &per.to_string());
+        let mut r = regs[0].clone();
+        for (i, x) in regs.iter().enumerate().skip(1) {
+            let is = ir.icmp("eq", "i32", &reg, &i.to_string());
+            r = ir.select(&is, "i32", x, &r);
+        }
+        let shift = ir.op("urem", "i32", index, &per.to_string());
+        let shift = ir.op("mul", "i32", &shift, &bits.to_string());
+        let x = ir.op("lshr", "i32", &r, &shift);
+        ir.op("and", "i32", &x, &((1u64 << bits) - 1).to_string())
+    };
+    let mut lanes: HashMap<(bool, String, u32), String> = HashMap::new();
+    let mut shuffled: HashMap<(usize, usize, String), String> = HashMap::new();
+    // registers `regs` (matrix `which`) of lane offset + add of the quad pair
+    // (of the thread's half of it for A and C)
+    let mut fetch = |ir: &mut Ir, which: usize, regs: &[String], offset: &str, add: u32| {
+        let key = (which == 1, offset.to_string(), add);
+        if !lanes.contains_key(&key) {
+            let start = if which == 1 { &base } else { &pair };
+            let x = ir.op("add", "i32", start, offset);
+            let x = ir.op("add", "i32", &x, &add.to_string());
+            lanes.insert(key.clone(), x);
+        }
+        let source = lanes[&key].clone();
+        regs.iter()
+            .enumerate()
+            .map(|(i, r)| {
+                shuffled
+                    .entry((which, i, source.clone()))
+                    .or_insert_with(|| ir.shuffle(r, 32, &source, false))
+                    .clone()
+            })
+            .collect::<Vec<_>>()
+    };
+    // row % 4 and column of element i of a C or D fragment of type `type_`
+    let position = |ir: &mut Ir, type_: ast::MmaType, i: u32| -> (String, String) {
+        if type_ == ast::MmaType::F16 {
+            (low.clone(), i.to_string())
+        } else {
+            let r = ir.op("and", "i32", &low, "1");
+            let r = ir.op("add", "i32", &r, &(i & 2).to_string());
+            let col = ir.op("and", "i32", &low, "2");
+            let col = ir.op("add", "i32", &col, &(i & 5).to_string());
+            (r, col)
+        }
+    };
+    // the special values are only computed when an input of the SIMD-group
+    // is a NaN or an infinity, or an element of C is -0
+    let mut guard = "false".to_string();
+    for r in a.iter().chain(b) {
+        for i in 0..2 {
+            let x = fragment_element(ir, &[r.clone()], 32, 16, i)?;
+            let special = is_special(ir, ast::MmaType::F16, &x, "i32")?;
+            guard = ir.op("or", "i1", &guard, &special);
+        }
+    }
+    let c_bits = d.ctype.bits();
+    for j in 0..8 {
+        let x = fragment_element(ir, c, 32, c_bits, j)?;
+        let special = is_special(ir, d.ctype, &x, "i32")?;
+        let sign = if c_bits == 32 { "-2147483648".to_string() } else { (1u64 << 15).to_string() };
+        let minus_zero = ir.icmp("eq", "i32", &x, &sign);
+        guard = ir.op("or", "i1", &guard, &special);
+        guard = ir.op("or", "i1", &guard, &minus_zero);
+    }
+    let votes = ir.def(&format!("call i32 @llvm.agx.simd.ballot(i1 {guard})"));
+    ir.declarations.insert("declare i32 @llvm.agx.simd.ballot(i1)".to_string());
+    ir.special_guard = Some(ir.icmp("ne", "i32", &votes, "0"));
+    let a_col = d.alayout == ast::MatrixLayout::Col;
+    let b_col = d.blayout == ast::MatrixLayout::Col;
+    let mut elements = Vec::new();
+    for i in 0..8 {
+        let (row, col) = position(ir, d.dtype, i);
+        let upper = i & 4 != 0;
+        let col4 = ir.op("and", "i32", &col, "3");
+        let cu = if upper { 16 } else { 0 };
+        let mut av = Vec::new();
+        let mut bv = Vec::new();
+        for kk in 0..4 {
+            // A[row][kk]: .row in lane row, element kk; .col in lane kk, element row
+            av.push(if a_col {
+                let regs = fetch(ir, 0, a, "0", kk);
+                element(ir, &regs, &row, 16)
+            } else {
+                let regs = fetch(ir, 0, a, &row, 0);
+                element(ir, &regs, &kk.to_string(), 16)
+            });
+            // B[kk][col]: .row in lane kk (upper half for columns 4-7),
+            // element col % 4; .col in lane col % 4, element kk
+            bv.push(if b_col {
+                let regs = fetch(ir, 1, b, &col4, cu);
+                element(ir, &regs, &kk.to_string(), 16)
+            } else {
+                let regs = fetch(ir, 1, b, "0", kk + cu);
+                element(ir, &regs, &col4, 16)
+            });
+        }
+        let ce = if d.ctype == d.dtype {
+            fragment_element(ir, c, 32, c_bits, i)?
+        } else if d.ctype == ast::MmaType::F16 {
+            // f16 C: lane row, element col
+            let regs = fetch(ir, 2, c, &row, 0);
+            element(ir, &regs, &col, 16)
+        } else {
+            // f32 C: lane (row & 1) + (col & 2), element (col & 5) + (row & 2)
+            let r1 = ir.op("and", "i32", &row, "1");
+            let c2 = ir.op("and", "i32", &col, "2");
+            let offset = ir.op("add", "i32", &r1, &c2);
+            let regs = fetch(ir, 2, c, &offset, 0);
+            let c5 = ir.op("and", "i32", &col, "5");
+            let r2 = ir.op("and", "i32", &row, "2");
+            let index = ir.op("add", "i32", &c5, &r2);
+            element(ir, &regs, &index, 32)
+        };
+        elements.push(float_dot(ir, d, &av, &bv, &ce)?);
+    }
+    ir.special_guard = None;
+    Ok(pack_d(ir, d, &elements))
+}
+
 /// One `mma.sync` tile (m x 8 x k, m = 8 or 16): the registers of D from
 /// those of A, B and C.
 fn mma_tile(
@@ -1104,6 +1555,14 @@ fn mma_tile(
     let (m, k) = (d.m, d.k);
     if d.n != 8 || (m != 8 && m != 16) {
         return Err(todo("mma shape"));
+    }
+    if ir.fast_mma && is_fast(d) && scales.is_none() {
+        // (the exact form where the layouts are not linear in the lane bits)
+        let saved = (ir.out.len(), ir.next, ir.block.clone(), ir.declarations.clone());
+        match fast_tile(ir, lane, d, a, b, c) {
+            Ok(regs) => return Ok(regs),
+            Err(_) => (ir.out, ir.next, ir.block, ir.declarations) = (ir.out[..saved.0].to_string(), saved.1, saved.2, saved.3),
+        }
     }
     let ab_bits = d.atype.bits();
     let ab_reg_bits = register_bits(d.atype);
@@ -1472,6 +1931,12 @@ fn sparse_tile(
             if !nibbles.contains_key(&(rh, chunk)) {
                 let (thread, shift) = match chunks {
                     4 => (selector, 16 * rh + 4 * chunk),
+                    // f16 / bf16 m16n8k32 and tf32 m16n8k16 (ISA Figures 122
+                    // and 125): thread 2 * sel + chunk / 4 holds chunks 4 to
+                    // 4h + 3 of row g and, in its upper half, of row g + 8
+                    8 if bits >= 16 => (2 * selector + chunk / 4, 16 * rh + 4 * (chunk % 4)),
+                    // 8-bit m16n8k32 (Figure 129): thread 2 * sel + h holds
+                    // the 8 chunks of row g + 8h
                     8 => (2 * selector + rh, 4 * chunk),
                     16 => (2 * (chunk / 8) + rh, 4 * (chunk % 8)),
                     _ => return Err(todo("mma.sp shape")),
@@ -1625,6 +2090,16 @@ fn block_scales(
 // A scale factor: ue8m0 is 2^(x - 127); ue4m3 an unsigned e4m3 (as in
 // PTX-formalization, the NaN encodings are not special).
 fn scale_factor(ir: &mut Ir, x: &str, ue4m3: bool) -> Term {
+    // NaN: ue4m3 0x7f (the most significant bit of the byte is ignored),
+    // ue8m0 0xff
+    let (x, nan) = if ue4m3 {
+        let x = ir.op("and", "i32", x, "127");
+        let nan = ir.icmp("eq", "i32", &x, "127");
+        (x, nan)
+    } else {
+        (x.to_string(), ir.icmp("eq", "i32", x, "255"))
+    };
+    let x = x.as_str();
     let (mantissa, exponent, width) = if ue4m3 {
         let m = ir.op("and", "i32", x, "7");
         let e = ir.op("lshr", "i32", x, "3");
@@ -1636,14 +2111,17 @@ fn scale_factor(ir: &mut Ir, x: &str, ue4m3: bool) -> Term {
     } else {
         ("1".to_string(), ir.op("sub", "i32", x, "127"), 1)
     };
+    let mantissa = ir.select(&nan, "i64", "0", &mantissa);
     let zero = ir.icmp("eq", "i64", &mantissa, "0");
+    let not_nan = ir.op("xor", "i1", &nan, "true");
+    let zero = ir.op("and", "i1", &zero, &not_nan);
     Term {
         sign: "false".to_string(),
         mantissa,
         mantissa_type: "i64",
         exponent,
         width,
-        nan: "false".to_string(),
+        nan,
         inf: "false".to_string(),
         zero,
     }
@@ -1887,6 +2365,9 @@ fn type_bits(ty: &str) -> u32 {
 }
 
 fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> Result<String, TranslateError> {
+    if d.atype == ast::MmaType::F64 {
+        return Ok(f64_fma_chain(ir, d, a, b, c));
+    }
     let ab_ty = if register_bits(d.atype) == 64 { "i64" } else { "i32" };
     let c_ty = if register_bits(d.ctype) == 64 { "i64" } else { "i32" };
     let narrow = [d.atype, d.btype, d.ctype, d.dtype].iter().all(|t| register_bits(*t) <= 32);
@@ -1898,6 +2379,35 @@ fn float_dot(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &s
     }
     let special = if narrow { Some((d, a, b, c)) } else { None };
     exact_sum(ir, &terms, d.dtype, special)
+}
+
+// An element of an f64 mma: the fused multiply-adds of the products along k
+// in order, from C, rounded in the instruction's direction.
+fn f64_fma_chain(ir: &mut Ir, d: &ast::MmaDetails, a: &[String], b: &[String], c: &str) -> String {
+    let rounding = match d.rounding {
+        Some(ast::RoundingMode::Zero) => Some("towardzero"),
+        Some(ast::RoundingMode::NegativeInf) => Some("downward"),
+        Some(ast::RoundingMode::PositiveInf) => Some("upward"),
+        Some(ast::RoundingMode::NearestEven) | None => None,
+    };
+    match rounding {
+        Some(_) => ir.declarations.insert(
+            "declare double @llvm.experimental.constrained.fma.f64(double, double, double, metadata, metadata)".to_string(),
+        ),
+        None => ir.declarations.insert("declare double @llvm.fma.f64(double, double, double)".to_string()),
+    };
+    let mut acc = ir.cast("bitcast", "i64", c, "double");
+    for (x, y) in a.iter().zip(b) {
+        let x = ir.cast("bitcast", "i64", x, "double");
+        let y = ir.cast("bitcast", "i64", y, "double");
+        acc = match rounding {
+            Some(r) => ir.def(&format!(
+                "call double @llvm.experimental.constrained.fma.f64(double {x}, double {y}, double {acc}, metadata !\"round.{r}\", metadata !\"fpexcept.ignore\")"
+            )),
+            None => ir.def(&format!("call double @llvm.fma.f64(double {x}, double {y}, double {acc})")),
+        };
+    }
+    ir.cast("bitcast", "double", &acc, "i64")
 }
 
 // A float whose infinities, NaN and zero sign are those of the value: +-1 for
@@ -2301,8 +2811,10 @@ fn add_limbs(ir: &mut Ir, a: &[String], b: &[String], subtract: bool) -> Vec<Str
 
 // The fields of a matrix descriptor (an i64 value), as i32 values: start
 // address, leading and stride offsets (in elements of `bits` bits), swizzle
-// mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56) and the rows of a
-// swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling).
+// mode (0 to 3, 4 to 6 for the sm_100 sub-modes of bit 56), the rows of a
+// swizzle atom (8 for 128B, 4 for 64B, 2 for 32B, 1 without swizzling) and
+// the base offset (bits 49-51: the swizzle pattern starts that many 128-byte
+// lines before a multiple of its size).
 #[derive(Clone)]
 struct Descriptor {
     start: String,
@@ -2310,6 +2822,7 @@ struct Descriptor {
     stride: String,
     mode: String,
     atom: String,
+    base: String,
 }
 
 fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
@@ -2323,6 +2836,7 @@ fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
     let sbo = field(32, 0x3fff);
     let mode = field(62, 3);
     let sub = field(56, 1);
+    let base = field(49, 7);
     let start = ir.op("shl", "i32", &start, "4");
     // bytes (16 * field) to elements: 128 / bits elements per 16 bytes
     let elements = |ir: &mut Ir, f: &str| {
@@ -2340,17 +2854,21 @@ fn descriptor(ir: &mut Ir, desc: &str, bits: u32) -> Descriptor {
         let c = ir.icmp("eq", "i32", &mode, &m.to_string());
         atom = ir.select(&c, "i32", &rows.to_string(), &atom);
     }
-    Descriptor { start, leading, stride, mode, atom }
+    Descriptor { start, leading, stride, mode, atom, base }
 }
 
-// The swizzled byte address of byte `a` of a tile (PTX ISA canonical layouts)
-fn swizzle(ir: &mut Ir, mode: &str, a: &str) -> String {
-    let line = ir.op("lshr", "i32", a, "7");
+// The swizzled byte address of byte `a` of a tile (PTX ISA canonical
+// layouts), the phase of the pattern counted from `base` 128-byte lines
+// before `a`'s line (the descriptor's base offset)
+fn swizzle(ir: &mut Ir, mode: &str, a: &str, base: &str) -> String {
+    let shift = ir.op("shl", "i32", base, "7");
+    let p = ir.op("sub", "i32", a, &shift);
+    let line = ir.op("lshr", "i32", &p, "7");
     // modes 1 to 3: Swizzle<B, 4, 3> with B = 3, 2, 1
     let mut result = a.to_string();
     for (m, b) in [(1u32, 3u32), (2, 2), (3, 1)] {
         let mask = ((1u32 << b) - 1) << 7;
-        let x = ir.op("and", "i32", a, &mask.to_string());
+        let x = ir.op("and", "i32", &p, &mask.to_string());
         let x = ir.op("lshr", "i32", &x, "3");
         let v = ir.op("xor", "i32", a, &x);
         let c = ir.icmp("eq", "i32", mode, &m.to_string());
@@ -2421,7 +2939,7 @@ fn tile_element(ir: &mut Ir, d: &Descriptor, k_major: bool, bits: u32, mn: &str,
     let bit_offset = ir.op("mul", "i32", &offset, &bits.to_string());
     let byte = ir.op("lshr", "i32", &bit_offset, "3");
     let byte = ir.op("add", "i32", &d.start, &byte);
-    let address = swizzle(ir, &d.mode, &byte);
+    let address = swizzle(ir, &d.mode, &byte, &d.base);
     let p = ir.def(&format!("inttoptr i32 {address} to ptr addrspace(3)"));
     let (ty, align) = match bits {
         32 => ("i32", 4),
@@ -2598,7 +3116,8 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
     ir.declarations.insert("declare i32 @__zluda_ptx_impl_agx_mma_elem_f32(i32, i32)".to_string());
     let (d_addr, a, b) = (&p[0], &p[1], &p[2]);
     let mut params = p[3..].iter().cloned();
-    let meta = if d.sparse { params.next() } else { None };
+    let meta_or_lut = if d.sparse || d.lut { params.next() } else { None };
+    let (meta, lut) = if d.lut { (None, meta_or_lut) } else { (meta_or_lut, None) };
     let idesc = &params.next().ok_or_else(|| todo("tcgen05.mma operands"))?;
     let (scale_a, scale_b) = if d.block.is_some() { (params.next(), params.next()) } else { (None, None) };
     let mask = if d.mask { params.next() } else { None };
@@ -2610,6 +3129,7 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
         ast::Tcgen05Kind::F16 => (16u32, 16u32),
         ast::Tcgen05Kind::Tf32 => (32, 8),
         ast::Tcgen05Kind::I8 => (8, 32),
+        ast::Tcgen05Kind::Ti16 => (16, 16),
         ast::Tcgen05Kind::F8f6f4 | ast::Tcgen05Kind::Mxf8f6f4 => (8, 64),
         // two e2m1 elements per byte
         ast::Tcgen05Kind::Mxf4 | ast::Tcgen05Kind::Mxf4nvf4 => (4, 128),
@@ -2629,6 +3149,7 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
         let m = field(ir, 24, 31);
         ir.op("mul", "i32", &m, "16")
     };
+    let m_full = m.clone();
     // .cta_group::2: each CTA of the pair holds half the rows of A and D (ptx-exec-tc.k tcMmaG2)
     let m = if d.pair { ir.op("lshr", "i32", &m, "1") } else { m };
     let n = field(ir, 17, 63);
@@ -2678,14 +3199,16 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
     };
     // block scaling: the block of K each scale factor covers, the scale factor format (0 ue4m3, 1 ue8m0, 2 ue5m3)
     // and the byte selectors (ptx-exec-tc.k tcBlk, tcScaleTy, tcScalesA, tcScalesB)
+    // (of the full K: twice the Dense-K dimension with .sp, ptx-exec-tc.k tcKS)
+    let k_full = if d.sparse { ir.op("shl", "i32", &k_count, "1") } else { k_count.clone() };
     let block_size = match (d.kind, d.block) {
-        (ast::Tcgen05Kind::Mxf8f6f4, _) => k_count.clone(),
+        (ast::Tcgen05Kind::Mxf8f6f4, _) => k_full.clone(),
         (_, Some(16)) => "16".to_string(),
-        (_, Some(4)) => ir.op("lshr", "i32", &k_count, "2"),
-        (_, Some(2)) => ir.op("lshr", "i32", &k_count, "1"),
+        (_, Some(4)) => ir.op("lshr", "i32", &k_full, "2"),
+        (_, Some(2)) => ir.op("lshr", "i32", &k_full, "1"),
         _ => "32".to_string(),
     };
-    let scale_type = if d.kind == ast::Tcgen05Kind::Mxf4nvf4 { field(ir, 23, 3) } else { "1".to_string() };
+    let scale_type = if fp4x2 { field(ir, 23, 3) } else { "1".to_string() };
     let sfa_id = field(ir, 29, 3);
     let sfb_id = field(ir, 4, 3);
     let satfinite = field(ir, 3, 1);
@@ -2784,9 +3307,9 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
         None => vec!["0".to_string(); 4],
     };
     let word_ptr = |ir: &mut Ir, row: &str, col: &str| -> String {
-        let col = ir.op("and", "i32", col, "511");
+        let col = ir.op("and", "i32", col, &(TMEM_COLS - 1).to_string());
         let row = ir.op("and", "i32", row, "127");
-        let w = ir.op("mul", "i32", &row, "512");
+        let w = ir.op("mul", "i32", &row, &TMEM_COLS.to_string());
         let w = ir.op("add", "i32", &w, &col);
         let w = ir.cast("zext", "i32", &w, "i64");
         let w = ir.op("shl", "i64", &w, "2");
@@ -2877,6 +3400,8 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
     };
     let mut a_elements = Vec::new();
     let mut b_elements = Vec::new();
+    // the K position (in the dense K) of each product, for the scale factor blocks
+    let mut k_positions = Vec::new();
     for kk in 0..k {
         let kk_s = kk.to_string();
         let a_raw = match &a_desc {
@@ -2897,36 +3422,91 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
                 let ptr = word_ptr(ir, &a_row, &col);
                 let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
                 let w = ir.op("lshr", "i32", &w, &((kk * bits) % 32).to_string());
-                if bits == 32 { w } else { ir.op("and", "i32", &w, &element_mask) }
+                let plain = if bits == 32 { w } else { ir.op("and", "i32", &w, &element_mask) };
+                if f8 {
+                    // FP6 with Dense K = 64: 6-bit containers contiguously packed (Table 68, Figures 205, 206),
+                    // element kk at bits 6 kk .. 6 kk + 5 of the row's columns read as one bit string
+                    let bit = 6 * kk;
+                    let col = ir.op("add", "i32", &a_col, &(bit / 32).to_string());
+                    let ptr = word_ptr(ir, &a_row, &col);
+                    let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                    let mut x = ir.op("lshr", "i32", &w, &(bit % 32).to_string());
+                    if bit % 32 > 26 {
+                        let col = ir.op("add", "i32", &col, "1");
+                        let ptr = word_ptr(ir, &a_row, &col);
+                        let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+                        let w = ir.op("shl", "i32", &w, &(32 - bit % 32).to_string());
+                        x = ir.op("or", "i32", &x, &w);
+                    }
+                    let x = ir.op("and", "i32", &x, "63");
+                    let fp6 = ir.icmp("eq", "i32", &a_nb, "6");
+                    let fp6 = ir.op("and", "i1", &fp6, &a_sub);
+                    let fp6 = ir.op("and", "i1", &fp6, &k64);
+                    ir.select(&fp6, "i32", &x, &plain)
+                } else {
+                    plain
+                }
             }
         };
         // .sp: the row of B of packed element kk (ptx-exec-tc.k tcSpExp, tcNib)
+        // .sp: the row of B of packed element kk (ptx-exec-tc.k tcSpExp, tcNib): chunks of cw elements with nz
+        // kept, 2:4 (4, 2), .kind::tf32 1:2 (2, 1), and for .kind::mxf4 / .kind::mxf4nvf4 SparsityVersion (idesc
+        // bit 12) v0 pair-wise 4:8 (8, 4) or v1 2:4
+        let sparse_row = |ir: &mut Ir, meta: &str, cw: u32, nz: u32| -> String {
+            let chunk = kk / nz;
+            let single = matches!(d.kind, ast::Tcgen05Kind::F16 | ast::Tcgen05Kind::Tf32 | ast::Tcgen05Kind::Ti16);
+            let mc = ir.op("and", "i32", meta, "65535");
+            let col = if single {
+                let sel = ir.op("and", "i32", idesc, "3");
+                ir.op("add", "i32", &mc, &sel)
+            } else {
+                ir.op("add", "i32", &mc, &(chunk / 8).to_string())
+            };
+            // eight chunks per row (Figures 262-265): in each block of 16 rows, lane 8 (c / 4) + r % 8 holds
+            // chunks 4 (c / 4) .. + 3 of rows r % 8 (nibbles 0-3) and r % 8 + 8 (nibbles 4-7); more chunks
+            // (Figures 266, 267, 285, 286): lane r, chunk c in column mc + c / 8
+            let (lane, shift) = if single {
+                let block = ir.op("and", "i32", &a_row, "-16");
+                let low = ir.op("and", "i32", &a_row, "7");
+                let lane = ir.op("add", "i32", &block, &low);
+                let lane = ir.op("add", "i32", &lane, &(8 * (chunk / 4)).to_string());
+                let upper = ir.op("lshr", "i32", &a_row, "3");
+                let upper = ir.op("and", "i32", &upper, "1");
+                let upper = ir.op("shl", "i32", &upper, "4");
+                (lane, ir.op("add", "i32", &upper, &(4 * (chunk % 4)).to_string()))
+            } else {
+                (a_row.clone(), (4 * (chunk % 8)).to_string())
+            };
+            let ptr = word_ptr(ir, &lane, &col);
+            let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+            let nib = ir.op("lshr", "i32", &w, &shift);
+            let nib = ir.op("and", "i32", &nib, "15");
+            let pos = if cw == 2 {
+                let x = ir.op("and", "i32", &nib, "3");
+                ir.op("lshr", "i32", &x, "1")
+            } else if cw == 8 {
+                // element j of the chunk is in the two-wide sub-chunk (nib >> 2 (j / 2)) & 3
+                let j = kk % nz;
+                let x = ir.op("lshr", "i32", &nib, &(2 * (j / 2)).to_string());
+                let x = ir.op("and", "i32", &x, "3");
+                let x = ir.op("shl", "i32", &x, "1");
+                ir.op("add", "i32", &x, &(j % 2).to_string())
+            } else {
+                let x = ir.op("lshr", "i32", &nib, &(2 * (kk % nz)).to_string());
+                ir.op("and", "i32", &x, "3")
+            };
+            ir.op("add", "i32", &pos, &(cw * chunk).to_string())
+        };
         let b_k = match &meta {
-            Some(meta) => {
-                let (cw, nz) = if d.kind == ast::Tcgen05Kind::Tf32 { (2, 1) } else { (4, 2) };
-                let chunk = kk / nz;
-                let single = matches!(d.kind, ast::Tcgen05Kind::F16 | ast::Tcgen05Kind::Tf32);
-                let mc = ir.op("and", "i32", meta, "65535");
-                let col = if single {
-                    let sel = ir.op("and", "i32", idesc, "3");
-                    ir.op("add", "i32", &mc, &sel)
-                } else {
-                    ir.op("add", "i32", &mc, &(chunk / 8).to_string())
-                };
-                let ptr = word_ptr(ir, &a_row, &col);
-                let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
-                let shift = if single { 4 * chunk } else { 4 * (chunk % 8) };
-                let nib = ir.op("lshr", "i32", &w, &shift.to_string());
-                let nib = ir.op("and", "i32", &nib, "15");
-                let pos = if d.kind == ast::Tcgen05Kind::Tf32 {
-                    let x = ir.op("and", "i32", &nib, "3");
-                    ir.op("lshr", "i32", &x, "1")
-                } else {
-                    let x = ir.op("lshr", "i32", &nib, &(2 * (kk % nz)).to_string());
-                    ir.op("and", "i32", &x, "3")
-                };
-                ir.op("add", "i32", &pos, &(cw * chunk).to_string())
+            Some(meta) if fp4x2 => {
+                let v1 = sparse_row(ir, meta, 4, 2);
+                let v0 = sparse_row(ir, meta, 8, 4);
+                let version = field(ir, 12, 1);
+                let is_v1 = ir.icmp("ne", "i32", &version, "0");
+                ir.select(&is_v1, "i32", &v1, &v0)
             }
+            Some(meta) if d.kind == ast::Tcgen05Kind::Tf32 => sparse_row(ir, meta, 2, 1),
+            Some(meta) => sparse_row(ir, meta, 4, 2),
             None => kk_s.clone(),
         };
         let x = tile_element(ir, &b_desc, true, bits, &b_col, &b_k);
@@ -2934,11 +3514,39 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
         let mut b_raw = ir.select(&b_k_major, "i32", &x, &y);
         let mut a_raw = a_raw;
         if f8 {
-            // the dense K of B is 64 or more for .sp (contiguous)
-            let contiguous = if meta.is_some() { "true".to_string() } else { k64.clone() };
-            let packed = packed_element(ir, &b_desc, &b_col, &b_k, &b_nb, &contiguous);
+            // padding after every 16 elements with a Dense-K dimension of 32, also for .sp (9.7.18.10.4.4)
+            let packed = packed_element(ir, &b_desc, &b_col, &b_k, &b_nb, &k64);
             let use_packed = ir.op("and", "i1", &b_sub, &b_k_major);
             b_raw = ir.select(&use_packed, "i32", &packed, &b_raw);
+        }
+        if let Some(lut) = &lut {
+            // .decompress::lut::b (9.7.18.10.8): the 3-bit index of element kk, least significant bit first, in the
+            // first or second 24 bytes (descriptor bit 53) of row n of a K-major tile of bytes; the 8-entry table of
+            // the N slice n / 8 in tensor memory lane n / 8, entry j in column lut + j / 4, byte j % 4
+            let second = ir.op("lshr", "i64", b, "53");
+            let second = ir.op("and", "i64", &second, "1");
+            let second = ir.cast("trunc", "i64", &second, "i32");
+            let bp = ir.op("mul", "i32", &second, "192");
+            let bp = ir.op("add", "i32", &bp, &(3 * kk).to_string());
+            let byte = ir.op("lshr", "i32", &bp, "3");
+            let next = ir.op("add", "i32", &byte, "1");
+            let b0 = tile_element(ir, &b_desc, true, 8, &b_col, &byte);
+            let b1 = tile_element(ir, &b_desc, true, 8, &b_col, &next);
+            let b1 = ir.op("shl", "i32", &b1, "8");
+            let x = ir.op("or", "i32", &b0, &b1);
+            let shift = ir.op("and", "i32", &bp, "7");
+            let x = ir.op("lshr", "i32", &x, &shift);
+            let j = ir.op("and", "i32", &x, "7");
+            let lc = ir.op("and", "i32", lut, "65535");
+            let col = ir.op("lshr", "i32", &j, "2");
+            let col = ir.op("add", "i32", &lc, &col);
+            let lane = ir.op("lshr", "i32", &b_col, "3");
+            let ptr = word_ptr(ir, &lane, &col);
+            let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+            let sh = ir.op("and", "i32", &j, "3");
+            let sh = ir.op("shl", "i32", &sh, "3");
+            let w = ir.op("lshr", "i32", &w, &sh);
+            b_raw = ir.op("and", "i32", &w, "255");
         }
         if fp4x2 {
             // e2m1 in the central bits of its byte for __zluda_ptx_impl_agx_mma_elem_f32
@@ -2955,11 +3563,33 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
         }
         a_elements.push(a_raw);
         b_elements.push(b_raw);
+        k_positions.push(b_k);
     }
     let d_column = ir.op("add", "i32", &d_col, &c);
     let d_ptr = word_ptr(ir, &r, &d_column);
     let old = ir.load("i32", &d_ptr, "ptr addrspace(1)", 4);
-    let result = if d.kind == ast::Tcgen05Kind::I8 {
+    let result = if d.kind == ast::Tcgen05Kind::Ti16 {
+        // .s1z4m11 read as 16-bit two's complement, negated with idesc bits 13 / 14, the .s32 sum wrapped
+        let c64 = ir.cast("sext", "i32", &old, "i64");
+        let mut sum = ir.select(&enabled, "i64", &c64, "0");
+        let negate_a = field(ir, 13, 1);
+        let negate_a = ir.icmp("ne", "i32", &negate_a, "0");
+        let negate_b = field(ir, 14, 1);
+        let negate_b = ir.icmp("ne", "i32", &negate_b, "0");
+        for (x, y) in a_elements.iter().zip(&b_elements) {
+            let mut v = Vec::new();
+            for (e, negate) in [(x, &negate_a), (y, &negate_b)] {
+                let h = ir.cast("trunc", "i32", e, "i16");
+                let w = ir.cast("sext", "i16", &h, "i32");
+                let n = ir.op("sub", "i32", "0", &w);
+                v.push(ir.select(negate, "i32", &n, &w));
+            }
+            let p = ir.op("mul", "i32", &v[0], &v[1]);
+            let p = ir.cast("sext", "i32", &p, "i64");
+            sum = ir.op("add", "i64", &sum, &p);
+        }
+        ir.cast("trunc", "i64", &sum, "i32")
+    } else if d.kind == ast::Tcgen05Kind::I8 {
         // in 64 bits, saturated to s32 with .satfinite (bit 3 of the descriptor), wrapped otherwise
         let c64 = ir.cast("sext", "i32", &old, "i64");
         let mut sum = ir.select(&enabled, "i64", &c64, "0");
@@ -2995,8 +3625,13 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
             .collect();
         // the scale factors of row r of A and column c of B for each block of K
         let scale_term = |ir: &mut Ir, byte: &str| -> Term {
+            // UE4M3 (the top bit ignored, NaN 0x7f), UE5M3 (bias 15, NaN 0xff), UE8M0 (NaN 0xff)
             let low = ir.op("and", "i32", byte, "7");
             let e = ir.op("lshr", "i32", byte, "3");
+            let e4 = ir.op("and", "i32", &e, "15");
+            let is8 = ir.icmp("eq", "i32", &scale_type, "1");
+            let is5 = ir.icmp("eq", "i32", &scale_type, "2");
+            let e = ir.select(&is5, "i32", &e, &e4);
             let normal = ir.icmp("ne", "i32", &e, "0");
             let hidden = ir.op("or", "i32", &low, "8");
             let m3 = ir.select(&normal, "i32", &hidden, &low);
@@ -3004,60 +3639,73 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
             let e4 = ir.select(&normal, "i32", &e4, "-9");
             let e5 = ir.op("sub", "i32", &e, "18");
             let e5 = ir.select(&normal, "i32", &e5, "-17");
-            let is8 = ir.icmp("eq", "i32", &scale_type, "1");
-            let is5 = ir.icmp("eq", "i32", &scale_type, "2");
             let mantissa = ir.select(&is8, "i32", "1", &m3);
             let e8 = ir.op("sub", "i32", byte, "127");
             let exponent = ir.select(&is5, "i32", &e5, &e4);
             let exponent = ir.select(&is8, "i32", &e8, &exponent);
             let mantissa = ir.cast("zext", "i32", &mantissa, "i64");
             let zero = ir.icmp("eq", "i64", &mantissa, "0");
+            let b7 = ir.op("and", "i32", byte, "127");
+            let nan4 = ir.icmp("eq", "i32", &b7, "127");
+            let nan8 = ir.icmp("eq", "i32", byte, "255");
+            let wide = ir.op("or", "i1", &is8, &is5);
+            let nan = ir.select(&wide, "i1", &nan8, &nan4);
+            let zero = ir.select(&nan, "i1", "false", &zero);
             Term {
                 sign: "false".to_string(),
                 mantissa,
                 mantissa_type: "i64",
                 exponent,
                 width: 4,
-                nan: "false".to_string(),
+                nan,
                 inf: "false".to_string(),
                 zero,
             }
         };
-        let scales: Option<(String, String)> = match (&scale_a, &scale_b) {
-            (Some(sa), Some(sb)) => {
-                let sa_col = ir.op("and", "i32", sa, "65535");
-                let ptr = word_ptr(ir, &r, &sa_col);
-                let wa = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
-                let sb_col = ir.op("and", "i32", sb, "65535");
-                let lane = ir.op("and", "i32", &c, "31");
-                let col32 = ir.op("lshr", "i32", &c, "5");
-                let sb_col = ir.op("add", "i32", &sb_col, &col32);
-                let ptr = word_ptr(ir, &lane, &sb_col);
-                let wb = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
-                Some((wa, wb))
-            }
-            _ => None,
+        // scale factor byte b (SF ID + the block) of row / column x of the scale matrix at column x0 (ISA 9.7.18.10.7,
+        // Figures 231-258): lane x % 32, column x0 + x / 32, byte b % 4, bytes 4.. of the K = 96 / 128 forms in the
+        // next group of columns, 4 on (8 when the dimension is over 128); the 128-lane layout of scale_A (idesc bit
+        // 26): lane x, column x0 + b / 4
+        let sf_byte = |ir: &mut Ir, x0: &str, b: &str, x: &str, dim: &str, l128: Option<&str>| -> String {
+            let x0 = ir.op("and", "i32", x0, "65535");
+            let group = ir.op("lshr", "i32", b, "2");
+            let wide = ir.icmp("ugt", "i32", dim, "128");
+            let step = ir.select(&wide, "i32", "8", "4");
+            let gcol = ir.op("mul", "i32", &group, &step);
+            let x32 = ir.op("lshr", "i32", x, "5");
+            let col = ir.op("add", "i32", &x0, &gcol);
+            let col = ir.op("add", "i32", &col, &x32);
+            let lane = ir.op("and", "i32", x, "31");
+            let (lane, col) = match l128 {
+                Some(l) => {
+                    let on = ir.icmp("ne", "i32", l, "0");
+                    let col128 = ir.op("add", "i32", &x0, &group);
+                    (ir.select(&on, "i32", x, &lane), ir.select(&on, "i32", &col128, &col))
+                }
+                None => (lane, col),
+            };
+            let ptr = word_ptr(ir, &lane, &col);
+            let w = ir.load("i32", &ptr, "ptr addrspace(1)", 4);
+            let shift = ir.op("and", "i32", b, "3");
+            let shift = ir.op("shl", "i32", &shift, "3");
+            let w = ir.op("lshr", "i32", &w, &shift);
+            ir.op("and", "i32", &w, "255")
         };
-        let scaled = |ir: &mut Ir, p: Term, kk: usize| -> Term {
-            match &scales {
-                Some((wa, wb)) => {
-                    let blk = ir.op("udiv", "i32", &kk.to_string(), &block_size);
+        let a_l128 = field(ir, 26, 1);
+        let scaled = |ir: &mut Ir, p: Term, kk: &str| -> Term {
+            match (&scale_a, &scale_b) {
+                (Some(sa), Some(sb)) => {
+                    let blk = ir.op("udiv", "i32", kk, &block_size);
                     let ia = ir.op("add", "i32", &sfa_id, &blk);
-                    let ia = ir.op("shl", "i32", &ia, "3");
-                    let ia = ir.intrinsic("umin", "i32", &[&ia, "31"]);
-                    let xa = ir.op("lshr", "i32", wa, &ia);
-                    let xa = ir.op("and", "i32", &xa, "255");
+                    let xa = sf_byte(ir, sa, &ia, &r, &m_full, Some(&a_l128));
                     let ib = ir.op("add", "i32", &sfb_id, &blk);
-                    let ib = ir.op("shl", "i32", &ib, "3");
-                    let ib = ir.intrinsic("umin", "i32", &[&ib, "31"]);
-                    let xb = ir.op("lshr", "i32", wb, &ib);
-                    let xb = ir.op("and", "i32", &xb, "255");
+                    let xb = sf_byte(ir, sb, &ib, &c, &n, None);
                     let ta = scale_term(ir, &xa);
                     let tb = scale_term(ir, &xb);
                     let s = product(ir, &ta, &tb);
                     product(ir, &p, &s)
                 }
-                None => p,
+                _ => p,
             }
         };
         let mut results = Vec::new();
@@ -3074,7 +3722,7 @@ fn tcgen05_mma(ir: &mut Ir, d: &ast::Tcgen05MmaDetails, p: &[String]) -> Result<
                 let x = decode(ir, ast::MmaType::F32, x, "i32")?;
                 let y = decode(ir, ast::MmaType::F32, y, "i32")?;
                 let p = product(ir, &x, &y);
-                terms.push(scaled(ir, p, kk));
+                terms.push(scaled(ir, p, &k_positions[kk]));
             }
             results.push(exact_sum(ir, &terms, dtype, None)?);
         }

@@ -40,9 +40,8 @@ enum Op {
 }
 
 pub(crate) struct Driver {
-    pub(crate) ctx: Context,
     default_waits: Vec<Fence>,
-    modules: HashMap<usize, LoadedModule>,
+    pub(crate) modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
     events: HashMap<usize, Event>,
@@ -65,6 +64,30 @@ pub(crate) struct Driver {
     /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
     /// followed: the launches a reported bad access may come from.
     checked_launches: HashMap<(usize, String), (String, u32)>,
+    /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
+    /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
+    heap: Option<agx_runtime::Bo>,
+    /// The timer block of the clocks (`%globaltimer`, `%clock64`, `nanosleep`), made when the first module that
+    /// reads them is loaded, with the CPU thread that keeps it current
+    timer: Option<Timer>,
+    /// The physical allocations of the virtual memory management API (cuMemCreate), by handle, with their
+    /// properties; a mapping keeps its allocation alive after cuMemRelease
+    vmm: HashMap<u64, (std::rc::Rc<agx_runtime::Bo>, CUmemAllocationProp)>,
+    next_vmm: u64,
+    /// The multicast objects (cuMulticastCreate), by handle (from the numbers of `vmm`)
+    multicast: HashMap<u64, Multicast>,
+    /// The address ranges of cuMemAddressReserve: start, size
+    reserved: std::collections::BTreeMap<u64, u64>,
+    /// The dma-bufs of exported allocations (cuIpcGetMemHandle), by the address of the handle, kept open for
+    /// other processes to take
+    ipc_exports: HashMap<u64, std::os::fd::OwnedFd>,
+    /// Imported allocations (cuIpcOpenMemHandle): the address returned, and the allocation's base
+    ipc_imports: HashMap<u64, u64>,
+    /// Registered host memory (cuMemHostRegister), by page-aligned start: its length, its GPU address and flags
+    registered: std::collections::BTreeMap<u64, (u64, u64, c_uint)>,
+    /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
+    /// context's VM is destroyed (B42).
+    pub(crate) ctx: Context,
 }
 
 /// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
@@ -207,9 +230,18 @@ impl Driver {
 
     /// Every allocation a pointer can point into, for a checked kernel's allocation table: device memory and the
     /// modules' global data buffers.
+    /// The size of the device heap: CU_LIMIT_MALLOC_HEAP_SIZE (8 MiB by default, as in CUDA), at most 4 GiB less
+    /// 16 bytes (the heap's offsets are 32-bit).
+    fn heap_size(&self) -> u32 {
+        let limit = self.limits.get(&CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE.0).copied().unwrap_or(DEFAULT_HEAP_SIZE);
+        (limit.min(u32::MAX as usize & !15) as u32).max(4096)
+    }
+
     fn live_allocations(&self) -> Vec<(u64, u64)> {
         let mut all = self.ctx.allocation_ranges();
         all.extend(self.modules.values().filter_map(|m| m.globals_va().map(|va| (va, va + m.globals().len() as u64))));
+        // the blocks of malloc are not told apart: the heap is one allocation
+        all.extend(self.heap.as_ref().map(|h| (h.va, h.va + self.heap_size() as u64)));
         all
     }
 
@@ -223,6 +255,9 @@ impl Driver {
             if let Some(va) = m.globals_va().filter(|&va| p >= va && p < va + m.globals().len() as u64) {
                 return (va, va + m.globals().len() as u64);
             }
+        }
+        if let Some(h) = self.heap.as_ref().filter(|h| p >= h.va && p < h.va + self.heap_size() as u64) {
+            return (h.va, h.va + self.heap_size() as u64);
         }
         (p, p)
     }
@@ -263,7 +298,8 @@ impl Driver {
         const PARAM_BLOCK: u64 = 0x7f_0000_0000;
         const TABLE: u64 = 0x7e_0000_0000;
         let allocations = self.live_allocations();
-        let replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
+        let mut replay = m.replay(&r.kernel, &params, r.grid, r.block, r.shared, &bounds, &allocations, TABLE, PARAM_BLOCK)?;
+        replay.add_textures(&self.ctx.vm);
         let mut regions = replay.regions.clone();
         // every allocation an 8-byte word of the arguments points into
         let words = r.params.iter().flat_map(|p| p.chunks_exact(8)).chain(replay.regions.first().filter(|(va, _)| *va == PARAM_BLOCK).into_iter().flat_map(|(_, b)| b.chunks_exact(8)));
@@ -273,6 +309,19 @@ impl Driver {
                     regions.push((start, bytes.to_vec()));
                 }
             }
+        }
+        // the texels of the texture objects among them (word 1 of a texture descriptor)
+        let mut i = 0;
+        while i < regions.len() {
+            let b = &regions[i].1;
+            if b.len() >= 16 && u64::from_le_bytes(b[..8].try_into().unwrap()) == TEXTURE_MAGIC {
+                if let Some((start, bytes)) = self.ctx.allocation(u64::from_le_bytes(b[8..16].try_into().unwrap())) {
+                    if !regions.iter().any(|(va, _)| *va == start) {
+                        regions.push((start, bytes.to_vec()));
+                    }
+                }
+            }
+            i += 1;
         }
         let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
         write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;
@@ -360,7 +409,52 @@ fn new_driver() -> Result<Driver, CUerror> {
         sticky: None,
         launches: Default::default(),
         checked_launches: Default::default(),
+        heap: None,
+        timer: None,
+        vmm: HashMap::new(),
+        next_vmm: 1,
+        multicast: HashMap::new(),
+        reserved: Default::default(),
+        ipc_exports: HashMap::new(),
+        ipc_imports: HashMap::new(),
+        registered: Default::default(),
     })
+}
+
+/// A timer block and the CPU thread that writes the CPU's timer into it until the context goes (a shader sees time
+/// only through such a CPU-written word, ptx-re-blockers B35). The thread keeps a CPU core busy;
+/// ZLUDA_AGX_TIMER=0 leaves the clocks counting reads instead.
+struct Timer {
+    bo: agx_runtime::Bo,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Timer {
+    fn new(vm: &mut agx_runtime::Vm, clock_khz: u32) -> io::Result<Self> {
+        let mut bo = vm.alloc_data(agx_runtime::TIMER_BLOCK_BYTES as u64)?;
+        bo.as_mut_slice()[..agx_runtime::TIMER_BLOCK_BYTES].copy_from_slice(&agx_runtime::timer_block(clock_khz));
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let word = bo.as_mut_slice().as_mut_ptr() as usize;
+        let flag = stop.clone();
+        let thread = std::thread::Builder::new().name("zluda-agx-timer".into()).spawn(move || {
+            while !flag.load(std::sync::atomic::Ordering::Relaxed) {
+                // the mapping outlives the thread: Drop joins it before the buffer goes
+                unsafe { std::ptr::write_volatile(word as *mut u64, agx_runtime::cpu_timer().0) };
+                std::hint::spin_loop();
+            }
+        })?;
+        Ok(Timer { bo, stop, thread: Some(thread) })
+    }
+}
+
+impl Drop for Timer {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
 }
 
 /// Runs `f` on the registry of contexts.
@@ -435,6 +529,10 @@ impl Driver {
                 let _ = so.flush();
             }
             failed |= m.take_assert_failure();
+            if m.take_stack_overflow() && self.sticky.is_none() {
+                eprintln!("zluda_agx: a thread ran out of its stack (recursion deeper than the backend's stack)");
+                self.sticky = Some(CUerror::LAUNCH_FAILED);
+            }
             if let Some(e) = m.checked_error().filter(|_| self.sticky.is_none()) {
                 eprintln!("zluda_agx: {e}");
                 if let Some((first, n)) = self.checked_launches.get(&(*h, site_kernel(&e.site_text).to_string())) {
@@ -550,6 +648,12 @@ fn agx_lineinfo() -> bool {
     std::env::var("ZLUDA_AGX_LINEINFO").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// `ZLUDA_AGX_FAST_MMA=1`: compute `mma` and `wmma` of f16, bf16 and tf32 with the SIMD-group matrix
+/// multiply-accumulate (zoc --fast-mma) instead of exact sums.
+fn agx_fast_mma() -> bool {
+    std::env::var("ZLUDA_AGX_FAST_MMA").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
     compile_ptx_linked(&[ptx], cpu)
@@ -588,6 +692,15 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if lineinfo {
         options.push("lineinfo");
     }
+    let fast_mma = agx_fast_mma();
+    if fast_mma {
+        options.push("fast-mma");
+    }
+    let stack_size = STACK_SIZE.load(std::sync::atomic::Ordering::Relaxed);
+    let stack_option = format!("stack-size={stack_size}");
+    if stack_size != DEFAULT_STACK_SIZE {
+        options.push(&stack_option);
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -602,6 +715,8 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
             .args(mesa.then_some("--agx-strict"))
             .args(checked.then_some("--agx-checked"))
             .args(lineinfo.then_some("--lineinfo"))
+            .args(fast_mma.then_some("--fast-mma"))
+            .args((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")))
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -630,24 +745,34 @@ pub(crate) fn load_image(image: &[u8], cpu: &str) -> Result<module::Module, CUer
     module::Module::load(&object, &asm).map_err(|_| CUerror::INVALID_IMAGE)
 }
 
+/// Whether PTX targets an architecture-specific or family-specific variant (`.target sm_90a`, `sm_100f`), whose
+/// features (wgmma, tcgen05, ...) are emulated at a cost or not at all on AGX.
+fn arch_specific_ptx(text: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(&text[..text.len().min(4096)]);
+    text.lines().map(str::trim).filter(|l| l.starts_with(".target")).any(|l| {
+        l.split(|c: char| c.is_whitespace() || c == ',')
+            .any(|t| t.starts_with("sm_") && t.ends_with(|c: char| c == 'a' || c == 'f'))
+    })
+}
+
 /// The PTX of a CUDA fat binary (a `__fatBinC_Wrapper_t` or a bare fatbin header): of the PTX files it holds, the
-/// one for the newest architecture. NVIDIA machine code (SASS) cannot run here.
+/// one for the newest architecture, portable PTX before architecture-specific PTX (sm_90a, sm_100f) of any
+/// architecture. NVIDIA machine code (SASS) cannot run here.
 unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     use dark_api::fatbin::{Fatbin, FatbinSubmodule};
-    let mut best: Option<(u32, Vec<u8>)> = None;
+    let mut best: Option<((bool, u32), Vec<u8>)> = None;
     let mut take = |sub: FatbinSubmodule| {
         let mut files = sub.get_files();
         while let Some(Ok(f)) = files.next() {
             if f.header.kind != cuda_types::dark_api::FatbinFileHeader::HEADER_KIND_PTX {
                 continue;
             }
-            let sm = f.header.sm_version;
-            if best.as_ref().is_some_and(|(b, _)| *b >= sm) {
+            let Ok(text) = f.get_or_decompress_content(true) else { continue };
+            let key = (!arch_specific_ptx(&text), f.header.sm_version);
+            if best.as_ref().is_some_and(|(b, _)| *b >= key) {
                 continue;
             }
-            if let Ok(text) = f.get_or_decompress_content(true) {
-                best = Some((sm, text.into_owned()));
-            }
+            best = Some((key, text.into_owned()));
         }
     };
     let magic = std::ptr::read_unaligned(image as *const u32);
@@ -768,6 +893,8 @@ pub(crate) unsafe fn cuDeviceGetAttribute(pi: *mut c_int, attrib: CUdevice_attri
             A::CU_DEVICE_ATTRIBUTE_KERNEL_EXEC_TIMEOUT => 0,
             A::CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY => 65536,
             A::CU_DEVICE_ATTRIBUTE_TEXTURE_ALIGNMENT => 256,
+            // multicast objects of one device (cuMulticastCreate), on the virtual memory management API
+            A::CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED | A::CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED => 1,
             _ => 0,
         })
     })?;
@@ -961,7 +1088,23 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             CStr::from_ptr(bytes as *const c_char).to_bytes()
         };
         let m = load_image(image, &cpu)?;
-        let loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
+        let mut loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
+        if loaded.uses_heap() {
+            if d.heap.is_none() {
+                let size = d.heap_size();
+                let mut heap = d.ctx.vm.alloc_data(size as u64).map_err(from_io)?;
+                heap.as_mut_slice()[..8].copy_from_slice(&agx_runtime::heap_header(size));
+                d.heap = Some(heap);
+            }
+            loaded.set_heap(d.heap.as_ref().unwrap().va);
+        }
+        if loaded.uses_timer() && std::env::var("ZLUDA_AGX_TIMER").map_or(true, |v| v != "0") {
+            if d.timer.is_none() {
+                let khz = d.ctx.props.clock_khz;
+                d.timer = Some(Timer::new(&mut d.ctx.vm, khz).map_err(from_io)?);
+            }
+            loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
+        }
         let h = d.handle();
         d.modules.insert(h, loaded);
         Ok(h)
@@ -1462,15 +1605,22 @@ pub(crate) unsafe fn cuCtxGetStreamPriorityRange(least: *mut c_int, greatest: *m
     Ok(())
 }
 
-/// Stack size per thread (scratch is not set up yet, ptx-re-blockers B1), the printf buffer of the runtime
-/// library (64 KiB per module) and the device heap (none).
-/// The limits a context keeps: what cuCtxSetLimit set, else the default. They change nothing here: the stack is sized
-/// per kernel from its compiled stack size, and the printf buffer is the module's.
+/// The stack per thread for `alloca` of a dynamic size, which zoc reserves in each kernel (`--stack-size`; recursive
+/// functions get four times as much): CU_LIMIT_STACK_SIZE, for the modules compiled after it is set.
+static STACK_SIZE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(DEFAULT_STACK_SIZE);
+const DEFAULT_STACK_SIZE: usize = 1024;
+const DEFAULT_HEAP_SIZE: usize = 8 << 20;
+
+/// Stack size per thread for dynamic allocations (see STACK_SIZE), the printf buffer of the runtime library
+/// (64 KiB per module) and the device heap of `malloc` (8 MiB).
+/// The limits a context keeps: what cuCtxSetLimit set, else the default. The stack size applies to the modules
+/// loaded later, the heap size until the first module that uses `malloc` is loaded; the printf buffer is the
+/// module's.
 pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresult {
     let default = match limit {
-        CUlimit_enum::CU_LIMIT_STACK_SIZE => 0,
+        CUlimit_enum::CU_LIMIT_STACK_SIZE => DEFAULT_STACK_SIZE,
         CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE => 65536,
-        CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => 0,
+        CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => DEFAULT_HEAP_SIZE,
         _ => return Err(CUerror::UNSUPPORTED_LIMIT),
     };
     let v = with(|d| Ok(d.limits.get(&limit.0).copied().unwrap_or(default)))?;
@@ -1480,6 +1630,20 @@ pub(crate) unsafe fn cuCtxGetLimit(pvalue: *mut usize, limit: CUlimit) -> CUresu
 pub(crate) unsafe fn cuCtxSetLimit(limit: CUlimit, value: usize) -> CUresult {
     match limit {
         CUlimit_enum::CU_LIMIT_STACK_SIZE | CUlimit_enum::CU_LIMIT_PRINTF_FIFO_SIZE | CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE => {
+            if limit == CUlimit_enum::CU_LIMIT_MALLOC_HEAP_SIZE {
+                // as in CUDA, the heap's size is fixed once a module that uses it is loaded
+                let fixed = with(|d| Ok(d.heap.is_some()))?;
+                if fixed {
+                    return Err(CUerror::INVALID_VALUE);
+                }
+            }
+            if limit == CUlimit_enum::CU_LIMIT_STACK_SIZE {
+                // zoc takes a 32-bit size; private memory is far smaller
+                if value > u32::MAX as usize / 4 {
+                    return Err(CUerror::INVALID_VALUE);
+                }
+                STACK_SIZE.store(value.max(1), std::sync::atomic::Ordering::Relaxed);
+            }
             with(|d| {
                 d.limits.insert(limit.0, value);
                 Ok(())
@@ -1792,16 +1956,163 @@ pub(crate) unsafe fn cuMemHostGetDevicePointer_v2(pdptr: *mut CUdeviceptr, p: *m
     if flags != 0 {
         return Err(CUerror::INVALID_VALUE);
     }
-    let ok = with(|d| Ok(d.ctx.is_unified(p as u64)))?;
-    if !ok {
-        return Err(CUerror::INVALID_VALUE);
-    }
-    out(pdptr, CUdeviceptr_v2(p))
+    let va = with(|d| {
+        if d.ctx.is_unified(p as u64) {
+            return Ok(p as u64);
+        }
+        registered_at(d, p as u64).map(|(start, _, va, _)| va + (p as u64 - start)).ok_or(CUerror::INVALID_VALUE)
+    })?;
+    out(pdptr, CUdeviceptr_v2(va as *mut c_void))
 }
 
 pub(crate) unsafe fn cuMemHostGetFlags(pflags: *mut c_uint, p: *mut c_void) -> CUresult {
-    let f = with(|d| d.host_allocs.get(&(p as u64)).copied().ok_or(CUerror::INVALID_VALUE))?;
+    let f = with(|d| {
+        d.host_allocs
+            .get(&(p as u64))
+            .copied()
+            .or_else(|| registered_at(d, p as u64).map(|r| r.3))
+            .ok_or(CUerror::INVALID_VALUE)
+    })?;
     out(pflags, f)
+}
+
+/// The registration of host memory containing `p`: page-aligned start, length, GPU address, flags.
+fn registered_at(d: &Driver, p: u64) -> Option<(u64, u64, u64, c_uint)> {
+    let (&start, &(len, va, flags)) = d.registered.range(..=p).next_back()?;
+    (p < start + len).then_some((start, len, va, flags))
+}
+
+/// cuMemHostRegister: the pages of the range become those of a GPU object, mapped over them at the same CPU
+/// address with their contents (there is no user-pointer import in the Asahi UAPI, ptx-re-blockers B36), so the
+/// CPU keeps its pointer and the GPU reaches the memory at the address cuMemHostGetDevicePointer gives. The
+/// whole pages are registered.
+pub(crate) unsafe fn cuMemHostRegister_v2(p: *mut c_void, bytes: usize, flags: c_uint) -> CUresult {
+    if p.is_null() || bytes == 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let page = agx_runtime::PAGE;
+    let start = p as u64 & !(page - 1);
+    let len = (p as u64 + bytes as u64).next_multiple_of(page) - start;
+    with(|d| {
+        if d.registered.range(..start + len).next_back().is_some_and(|(&s, &(l, _, _))| s + l > start) {
+            return Err(CUerror::HOST_MEMORY_ALREADY_REGISTERED);
+        }
+        let mut bo = d.ctx.vm.alloc_data(len).map_err(from_io)?;
+        bo.as_mut_slice()[..len as usize].copy_from_slice(std::slice::from_raw_parts(start as *const u8, len as usize));
+        bo.alias_at(start as *mut u8).map_err(from_io)?;
+        let va = d.ctx.insert_bo(bo, len);
+        d.registered.insert(start, (len, va, flags));
+        Ok(())
+    })
+}
+
+/// Puts ordinary memory with the same contents back under the registered pages.
+pub(crate) unsafe fn cuMemHostUnregister(p: *mut c_void) -> CUresult {
+    with(|d| {
+        let (start, len, va, _) = registered_at(d, p as u64).ok_or(CUerror::HOST_MEMORY_NOT_REGISTERED)?;
+        d.sync_all()?;
+        agx_runtime::restore_anonymous(start as *mut u8, len as usize).map_err(from_io)?;
+        d.registered.remove(&start);
+        d.ctx.mem_free(va).map_err(from_io)
+    })
+}
+
+/// A physical allocation as a dma-buf file descriptor (CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR), which the caller
+/// owns and may pass to another process.
+pub(crate) unsafe fn cuMemExportToShareableHandle(
+    shareable: *mut c_void,
+    handle: CUmemGenericAllocationHandle,
+    kind: CUmemAllocationHandleType,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if kind != CUmemAllocationHandleType::CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    let fd = with(|d| d.vmm.get(&handle).ok_or(CUerror::INVALID_VALUE)?.0.export_dmabuf().map_err(from_io))?;
+    out(shareable as *mut c_int, std::os::fd::IntoRawFd::into_raw_fd(fd))
+}
+
+pub(crate) unsafe fn cuMemImportFromShareableHandle(
+    handle: *mut CUmemGenericAllocationHandle,
+    os_handle: *mut c_void,
+    kind: CUmemAllocationHandleType,
+) -> CUresult {
+    if kind != CUmemAllocationHandleType::CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    // the descriptor is passed as the pointer's value
+    let fd = os_handle as usize as c_int;
+    let h = with(|d| {
+        let bo = d.ctx.vm.import_dmabuf_unbound(fd).map_err(from_io)?;
+        let mut prop: CUmemAllocationProp = std::mem::zeroed();
+        prop.type_ = CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type_ = CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+        prop.requestedHandleTypes = kind;
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (std::rc::Rc::new(bo), prop));
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+// ---------------------------------------------------------------- IPC (dma-buf)
+
+/// The bytes of a CUipcMemHandle: "ZAGXIPC1", the exporting process, its dma-buf descriptor, the object's size and
+/// the offset of the address in it.
+const IPC_MAGIC: &[u8; 8] = b"ZAGXIPC1";
+
+pub(crate) unsafe fn cuIpcGetMemHandle(handle: *mut CUipcMemHandle, dptr: CUdeviceptr) -> CUresult {
+    let va = dptr.0 as u64;
+    let bytes = with(|d| {
+        let (fd, offset, size) = d.ctx.export_dmabuf(va).map_err(from_io)?;
+        let raw = std::os::fd::AsRawFd::as_raw_fd(&fd);
+        d.ipc_exports.insert(va, fd);
+        let mut b = [0u8; 64];
+        b[..8].copy_from_slice(IPC_MAGIC);
+        b[8..12].copy_from_slice(&std::process::id().to_le_bytes());
+        b[12..16].copy_from_slice(&raw.to_le_bytes());
+        b[16..24].copy_from_slice(&size.to_le_bytes());
+        b[24..32].copy_from_slice(&offset.to_le_bytes());
+        Ok(b)
+    })?;
+    let h = handle.as_mut().ok_or(CUerror::INVALID_VALUE)?;
+    for (o, b) in h.reserved.iter_mut().zip(bytes) {
+        *o = b as c_char;
+    }
+    Ok(())
+}
+
+/// Opens another process's allocation: takes its dma-buf descriptor with pidfd_getfd (which needs the right to
+/// ptrace that process: the same user, and kernel.yama.ptrace_scope 0 or a parent) and binds the object here.
+pub(crate) unsafe fn cuIpcOpenMemHandle_v2(pdptr: *mut CUdeviceptr, handle: CUipcMemHandle, _flags: c_uint) -> CUresult {
+    let b: Vec<u8> = handle.reserved.iter().map(|&c| c as u8).collect();
+    if &b[..8] != IPC_MAGIC {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let word = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap());
+    let quad = |i: usize| u64::from_le_bytes(b[i..i + 8].try_into().unwrap());
+    let (pid, remote_fd, size, offset) = (word(8), word(12) as i32, quad(16), quad(24));
+    if pid == std::process::id() {
+        // CUDA refuses a handle of the same process
+        return Err(CUerror::INVALID_CONTEXT);
+    }
+    let fd = agx_runtime::take_fd(pid, remote_fd).map_err(|_| CUerror::NOT_PERMITTED)?;
+    let va = with(|d| {
+        let bo = d.ctx.vm.import_dmabuf(std::os::fd::AsRawFd::as_raw_fd(&fd), size).map_err(from_io)?;
+        let base = d.ctx.insert_bo(bo, size);
+        d.ipc_imports.insert(base + offset, base);
+        Ok(base + offset)
+    })?;
+    out(pdptr, CUdeviceptr_v2(va as *mut c_void))
+}
+
+pub(crate) unsafe fn cuIpcCloseMemHandle(dptr: CUdeviceptr) -> CUresult {
+    with(|d| {
+        let base = d.ipc_imports.remove(&(dptr.0 as u64)).ok_or(CUerror::INVALID_VALUE)?;
+        d.sync_all()?;
+        d.ctx.mem_free(base).map_err(from_io)
+    })
 }
 
 /// Managed memory is a GPU allocation mapped at its GPU address. The CPU must not touch it while kernels that use
@@ -1826,6 +2137,292 @@ pub(crate) unsafe fn cuMemGetAddressRange_v2(pbase: *mut CUdeviceptr, psize: *mu
         out(psize, size as usize)?;
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------- virtual memory management
+
+/// The granularity of the virtual memory management API: the GPU page.
+const VMM_GRANULARITY: u64 = agx_runtime::PAGE;
+
+pub(crate) unsafe fn cuMemGetAllocationGranularity(
+    granularity: *mut usize,
+    _prop: *const CUmemAllocationProp,
+    _option: CUmemAllocationGranularity_flags,
+) -> CUresult {
+    out(granularity, VMM_GRANULARITY as usize)
+}
+
+pub(crate) unsafe fn cuMemAddressReserve(
+    ptr: *mut CUdeviceptr,
+    size: usize,
+    alignment: usize,
+    _addr: CUdeviceptr,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if size == 0 || size as u64 % VMM_GRANULARITY != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    // the address hint is not followed, as CUDA allows
+    let va = with(|d| {
+        let va = d.ctx.vm.reserve(size as u64, (alignment as u64).max(VMM_GRANULARITY)).map_err(from_io)?;
+        d.reserved.insert(va, size as u64);
+        Ok(va)
+    })?;
+    out(ptr, CUdeviceptr_v2(va as *mut c_void))
+}
+
+pub(crate) unsafe fn cuMemAddressFree(ptr: CUdeviceptr, size: usize) -> CUresult {
+    let va = ptr.0 as u64;
+    with(|d| {
+        if d.reserved.get(&va) != Some(&(size as u64)) {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        if d.ctx.allocation_ranges().iter().any(|&(lo, hi)| lo < va + size as u64 && va < hi) {
+            // still mapped
+            return Err(CUerror::INVALID_VALUE);
+        }
+        d.reserved.remove(&va);
+        d.ctx.vm.unreserve(va, size as u64);
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuMemCreate(
+    handle: *mut CUmemGenericAllocationHandle,
+    size: usize,
+    prop: *const CUmemAllocationProp,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    let prop = *prop.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    if size == 0 || size as u64 % VMM_GRANULARITY != 0
+        || prop.type_ != CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED
+        || prop.location.type_ != CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE
+        || prop.location.id != 0
+    {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let h = with(|d| {
+        let bo = d.ctx.vm.alloc_unbound(size as u64).map_err(from_io)?;
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (std::rc::Rc::new(bo), prop));
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+pub(crate) unsafe fn cuMemRelease(handle: CUmemGenericAllocationHandle) -> CUresult {
+    with(|d| {
+        if d.multicast.remove(&handle).is_some() {
+            return Ok(());
+        }
+        d.vmm.remove(&handle).map(|_| ()).ok_or(CUerror::INVALID_VALUE)
+    })
+}
+
+/// A multicast object of a team of one device: what is bound to it (multicast offset, the physical allocation,
+/// the offset in it, the size). A mapping of it maps the bound memory, so that multimem.* on its addresses
+/// reach that device's memory (zluda_ptx_impl_agx_cvt.c: an address outside the multimem windows is a
+/// multicast object of one device).
+pub(crate) struct Multicast {
+    size: u64,
+    added: bool,
+    bound: Vec<(u64, std::rc::Rc<agx_runtime::Bo>, u64, u64)>,
+}
+
+pub(crate) unsafe fn cuMulticastCreate(handle: *mut CUmemGenericAllocationHandle, prop: *const CUmulticastObjectProp) -> CUresult {
+    let prop = *prop.as_ref().ok_or(CUerror::INVALID_VALUE)?;
+    if prop.size == 0 || prop.size as u64 % VMM_GRANULARITY != 0 || prop.flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    // one GPU: a team of more devices could never be completed
+    if prop.numDevices != 1 {
+        return Err(CUerror::NOT_SUPPORTED);
+    }
+    let h = with(|d| {
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.multicast.insert(h, Multicast { size: prop.size as u64, added: false, bound: Vec::new() });
+        Ok(h)
+    })?;
+    out(handle, h)
+}
+
+pub(crate) unsafe fn cuMulticastAddDevice(handle: CUmemGenericAllocationHandle, dev: CUdevice) -> CUresult {
+    if dev != 0 {
+        return Err(CUerror::INVALID_DEVICE);
+    }
+    with(|d| {
+        let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+        m.added = true;
+        Ok(())
+    })
+}
+
+fn multicast_bind(
+    d: &mut Driver,
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: u64,
+    phys: std::rc::Rc<agx_runtime::Bo>,
+    mem_offset: u64,
+    size: u64,
+) -> Result<(), CUerror> {
+    let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+    if !m.added {
+        // the team is never complete
+        return Err(CUerror::NOT_PERMITTED);
+    }
+    if size == 0 || (mc_offset | mem_offset | size) % VMM_GRANULARITY != 0 || mc_offset + size > m.size
+        || mem_offset + size > phys.size
+        || m.bound.iter().any(|&(o, _, _, s)| o < mc_offset + size && mc_offset < o + s)
+    {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    m.bound.push((mc_offset, phys, mem_offset, size));
+    Ok(())
+}
+
+pub(crate) unsafe fn cuMulticastBindMem(
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: usize,
+    mem_handle: CUmemGenericAllocationHandle,
+    mem_offset: usize,
+    size: usize,
+    flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        let phys = d.vmm.get(&mem_handle).ok_or(CUerror::INVALID_HANDLE)?.0.clone();
+        multicast_bind(d, handle, mc_offset as u64, phys, mem_offset as u64, size as u64)
+    })
+}
+
+pub(crate) unsafe fn cuMulticastBindAddr(
+    handle: CUmemGenericAllocationHandle,
+    mc_offset: usize,
+    ptr: CUdeviceptr,
+    size: usize,
+    flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    with(|d| {
+        let (phys, offset) = d.ctx.mapped_location(ptr.0 as u64).ok_or(CUerror::INVALID_VALUE)?;
+        multicast_bind(d, handle, mc_offset as u64, phys, offset, size as u64)
+    })
+}
+
+pub(crate) unsafe fn cuMulticastUnbind(handle: CUmemGenericAllocationHandle, dev: CUdevice, mc_offset: usize, size: usize) -> CUresult {
+    if dev != 0 {
+        return Err(CUerror::INVALID_DEVICE);
+    }
+    with(|d| {
+        let m = d.multicast.get_mut(&handle).ok_or(CUerror::INVALID_VALUE)?;
+        let before = m.bound.len();
+        m.bound.retain(|&(o, _, _, s)| !(o == mc_offset as u64 && s == size as u64));
+        if m.bound.len() == before { Err(CUerror::INVALID_VALUE) } else { Ok(()) }
+    })
+}
+
+pub(crate) unsafe fn cuMulticastGetGranularity(
+    granularity: *mut usize,
+    _prop: *const CUmulticastObjectProp,
+    _option: CUmulticastGranularity_flags,
+) -> CUresult {
+    out(granularity, VMM_GRANULARITY as usize)
+}
+
+pub(crate) unsafe fn cuMemMap(
+    ptr: CUdeviceptr,
+    size: usize,
+    offset: usize,
+    handle: CUmemGenericAllocationHandle,
+    _flags: std::ffi::c_ulonglong,
+) -> CUresult {
+    let va = ptr.0 as u64;
+    with(|d| {
+        let in_reserved = d
+            .reserved
+            .range(..=va)
+            .next_back()
+            .is_some_and(|(&lo, &len)| va + size as u64 <= lo + len);
+        if !in_reserved || size == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        if let Some(m) = d.multicast.get(&handle) {
+            // each bound range in [offset, offset + size) at its place
+            let (lo, hi) = (offset as u64, offset as u64 + size as u64);
+            if hi > m.size {
+                return Err(CUerror::INVALID_VALUE);
+            }
+            let ranges: Vec<_> = m.bound.iter().filter(|b| b.0 < hi && lo < b.0 + b.3).cloned().collect();
+            for (o, phys, mem_offset, s) in ranges {
+                let start = o.max(lo);
+                let end = (o + s).min(hi);
+                d.ctx.mem_map(va + (start - lo), &phys, mem_offset + (start - o), end - start).map_err(from_io)?;
+            }
+            return Ok(());
+        }
+        let phys = d.vmm.get(&handle).ok_or(CUerror::INVALID_HANDLE)?.0.clone();
+        d.ctx.mem_map(va, &phys, offset as u64, size as u64).map_err(from_io)
+    })
+}
+
+pub(crate) unsafe fn cuMemUnmap(ptr: CUdeviceptr, size: usize) -> CUresult {
+    with(|d| d.ctx.mem_unmap(ptr.0 as u64, size as u64).map_err(from_io))
+}
+
+/// Mapped memory is always readable and writable by the device; the requested access is accepted as is.
+pub(crate) unsafe fn cuMemSetAccess(ptr: CUdeviceptr, size: usize, desc: *const CUmemAccessDesc, count: usize) -> CUresult {
+    if desc.is_null() || count == 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let va = ptr.0 as u64;
+    with(|d| {
+        let mapped = d.ctx.allocation_ranges().iter().any(|&(lo, hi)| lo <= va && va + size as u64 <= hi)
+            || d.ctx.mapped_allocation(va).is_some();
+        if mapped { Ok(()) } else { Err(CUerror::INVALID_VALUE) }
+    })
+}
+
+pub(crate) unsafe fn cuMemGetAccess(flags: *mut std::ffi::c_ulonglong, _location: *const CUmemLocation, ptr: CUdeviceptr) -> CUresult {
+    let mapped = with(|d| Ok(d.ctx.mapped_allocation(ptr.0 as u64).is_some()))?;
+    let f = if mapped { CUmemAccess_flags::CU_MEM_ACCESS_FLAGS_PROT_READWRITE.0 } else { 0 };
+    out(flags, f as std::ffi::c_ulonglong)
+}
+
+pub(crate) unsafe fn cuMemGetAllocationPropertiesFromHandle(
+    prop: *mut CUmemAllocationProp,
+    handle: CUmemGenericAllocationHandle,
+) -> CUresult {
+    let p = with(|d| d.vmm.get(&handle).map(|v| v.1).ok_or(CUerror::INVALID_VALUE))?;
+    out(prop, p)
+}
+
+/// The handle of the physical allocation mapped at `addr`, as a new reference (released with cuMemRelease).
+pub(crate) unsafe fn cuMemRetainAllocationHandle(handle: *mut CUmemGenericAllocationHandle, addr: *mut c_void) -> CUresult {
+    let h = with(|d| {
+        let phys = d.ctx.mapped_allocation(addr as u64).ok_or(CUerror::INVALID_VALUE)?.clone();
+        let prop = d
+            .vmm
+            .values()
+            .find(|(p, _)| std::rc::Rc::ptr_eq(p, &phys))
+            .map(|v| v.1)
+            .unwrap_or_else(|| {
+                let mut p: CUmemAllocationProp = unsafe { std::mem::zeroed() };
+                p.type_ = CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+                p.location.type_ = CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+                p
+            });
+        let h = d.next_vmm;
+        d.next_vmm += 1;
+        d.vmm.insert(h, (phys, prop));
+        Ok(h)
+    })?;
+    out(handle, h)
 }
 
 /// Rows are aligned to 128 bytes (the texture row alignment G13/G14 drivers use).
@@ -2527,6 +3124,8 @@ mod tests {
         let mut files = file(1, 52, b"old\0\0\0\0\0");
         files.extend(file(2, 86, b"SASS....")); // machine code, ignored
         files.extend(file(1, 86, b"new\0\0\0\0\0"));
+        // architecture-specific PTX comes after portable PTX of any architecture
+        files.extend(file(1, 90, b".target sm_90a\n\0\0"));
         let mut bin = vec![0u8; 16];
         bin[0..4].copy_from_slice(&0xba55ed50u32.to_le_bytes());
         bin[4..6].copy_from_slice(&1u16.to_le_bytes());

@@ -1,10 +1,13 @@
-//! `agx_run_hw MAIN.bin --grid X[,Y,Z] --wg x[,y,z] [--regs HALVES] [--shared BYTES] [--uniform I=V ...]
+//! `agx_run_hw MAIN.bin --grid X[,Y,Z] --wg x[,y,z] [--regs HALVES] [--shared BYTES] [--stack BYTES] [--uniform I=V ...]
 //!            [--map VA=FILE ...] [--alloc VA=BYTES ...] [--dump VA=BYTES:FILE ...] [--node PATH] [--timeout-ms N]`
 //!
 //! Runs a whole AGX compute kernel on the GPU with the command line of the AGX Performance Simulator's `agx_run`, so
 //! that any simulator test (the LLVM AGX backend's kernels, ZLUDA's PTX tests, the Sail-derived difftests) can also
 //! run on hardware. The options have the same meaning as in `agx_run`:
-//! - `--grid` is in threads and must be a multiple of `--wg`;
+//! - `--grid` is in threads; when it is not a multiple of `--wg`, the last workgroups are partial (the hardware runs
+//!   them exactly, ptx-re-blockers B2a);
+//! - `--stack` is the stack (scratch) per thread of a kernel that uses `stack_*` instructions, set up through the
+//!   helper program as zluda_agx does (the kernel record's stack bytes; 0, the default, gives none);
 //! - `--uniform I=V` sets the 32-bit uniform register pair `u(2I)_u(2I+1)`, i.e. 32-bit uniform I;
 //! - `--map` / `--alloc` place memory at fixed GPU addresses (rounded out to 16 KiB pages, which must not overlap);
 //! - `--dump` writes a region back after the run.
@@ -41,6 +44,7 @@ fn main() {
     let code = std::fs::read(&a[0]).unwrap_or_else(|e| die(&format!("{}: {e}", a[0])));
     let (mut grid, mut wg) = ([1u32; 3], [1u32; 3]);
     let (mut regs, mut shared, mut node, mut timeout) = (256u32, 0u32, "/dev/dri/renderD128".to_string(), 3000u64);
+    let mut stack = 0u32;
     let mut uniforms: BTreeMap<usize, u32> = BTreeMap::new();
     let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut dumps: Vec<(u64, usize, String)> = Vec::new();
@@ -56,6 +60,7 @@ fn main() {
             "--wg" => wg = dims(&v),
             "--regs" => regs = num(&v) as u32,
             "--shared" => shared = num(&v) as u32,
+            "--stack" => stack = num(&v) as u32,
             "--node" => node = v.clone(),
             "--timeout-ms" => timeout = num(&v),
             "--uniform" => {
@@ -83,8 +88,8 @@ fn main() {
         die("--regs must be 8..=256 halves and --shared at most 65536 bytes");
     }
     for d in 0..3 {
-        if wg[d] == 0 || grid[d] == 0 || grid[d] % wg[d] != 0 {
-            die("--grid must be a nonzero multiple of --wg in every dimension");
+        if wg[d] == 0 || grid[d] == 0 {
+            die("--grid and --wg must be nonzero in every dimension");
         }
     }
     if wg.iter().map(|&x| x as u64).product::<u64>() > 1024 {
@@ -121,6 +126,10 @@ fn main() {
         unif.as_mut_slice()[4 * k..4 * k + 4].copy_from_slice(&v.to_le_bytes());
     }
 
+    // the stack, from the helper program
+    let stack_dwords = stack.div_ceil(4);
+    let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords).unwrap_or_else(|e| die(&e.to_string()))) } else { None };
+
     // USC object: pipeline words at 0, code at 0x400 (64-byte aligned, with 64 bytes of slack after it).
     let code_off = 0x400u64;
     let mut usc = vm.alloc_usc(code_off + code.len() as u64 + 64).unwrap_or_else(|e| die(&e.to_string()));
@@ -130,7 +139,7 @@ fn main() {
         gpr_halves: regs,
         uniforms: if n32 > 0 { vec![(0, 2 * n32 as u32, unif.va)] } else { vec![] },
         shared_bytes: shared,
-        spill_bucket: 0,
+        spill_bucket: if stack_dwords > 0 { scratch::Layout::new(stack_dwords).bucket } else { 0 },
     };
     let words = pipeline.usc_words();
     if words.len() > code_off as usize {
@@ -145,7 +154,9 @@ fn main() {
 
     let mut queue = Queue::new(&mut vm).unwrap_or_else(|e| die(&e.to_string()));
     queue.timeout = Duration::from_millis(timeout);
-    let t = queue.run_compute(cdm.va, cdm.va + stream.len() as u64).unwrap_or_else(|e| die(&e.to_string()));
+    let t = queue
+        .run_compute_with_helper(cdm.va, cdm.va + stream.len() as u64, helper)
+        .unwrap_or_else(|e| die(&e.to_string()));
 
     for (va, n, f) in &dumps {
         let bo = bos

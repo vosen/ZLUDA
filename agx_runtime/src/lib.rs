@@ -116,6 +116,16 @@ struct drm_syncobj_handle {
 const DRM_SYNCOBJ_HANDLE_TO_FD_FLAGS_EXPORT_SYNC_FILE: u32 = 1;
 const DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0xc1, std::mem::size_of::<drm_syncobj_handle>());
 
+// drm.h: PRIME (dma-buf) export / import
+#[repr(C)]
+struct drm_prime_handle {
+    handle: u32,
+    flags: u32,
+    fd: i32,
+}
+const DRM_IOCTL_PRIME_HANDLE_TO_FD: u64 = drm_ioc(IOC_READWRITE, 0x2d, std::mem::size_of::<drm_prime_handle>());
+const DRM_IOCTL_PRIME_FD_TO_HANDLE: u64 = drm_ioc(IOC_READWRITE, 0x2e, std::mem::size_of::<drm_prime_handle>());
+
 // linux/sync_file.h
 #[repr(C)]
 struct sync_file_info {
@@ -203,6 +213,8 @@ pub struct Bo {
     /// GPU virtual address, or 0 if the object is not bound.
     pub va: u64,
     map: *mut u8,
+    /// The offset to mmap the object at through the device (DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET).
+    mmap_offset: u64,
     /// The VM the object is bound in, and the allocator its range returns to.
     binding: Option<(u32, Option<Rc<RefCell<RangeAllocator>>>)>,
 }
@@ -211,6 +223,33 @@ impl Bo {
     /// Whether the CPU mapping is at the GPU address, so that the GPU address is also a valid CPU pointer.
     pub fn unified(&self) -> bool {
         self.va != 0 && self.map as u64 == self.va
+    }
+
+    /// Maps the object's memory also at the CPU address `addr` (page aligned), replacing what was there
+    /// (cuMemHostRegister: existing host memory becomes the object's). The caller restores that range before the
+    /// object goes.
+    pub fn alias_at(&self, addr: *mut u8) -> io::Result<()> {
+        let map = unsafe {
+            libc::mmap(
+                addr as *mut libc::c_void,
+                self.size as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_FIXED,
+                self.dev.fd.as_raw_fd(),
+                self.mmap_offset as libc::off_t,
+            )
+        };
+        if map == libc::MAP_FAILED {
+            return Err(stage_error("mmap", io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    /// Export as a dma-buf file descriptor (PRIME), for another process or device (B36).
+    pub fn export_dmabuf(&self) -> io::Result<OwnedFd> {
+        let mut ph = drm_prime_handle { handle: self.handle, flags: (libc::O_CLOEXEC | libc::O_RDWR) as u32, fd: -1 };
+        self.dev.ioctl(DRM_IOCTL_PRIME_HANDLE_TO_FD, &mut ph, "prime-handle-to-fd")?;
+        Ok(unsafe { OwnedFd::from_raw_fd(ph.fd) })
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -267,7 +306,29 @@ pub struct Vm {
     /// Counts USC allocations (module code, rings): a queue's next command invalidates the USC cache when this has
     /// changed since its last one.
     pub usc_generation: u64,
+    textures: Option<Textures>,
 }
+
+/// The texture and sampler heaps of an address space, for bindless sampling (llvm.agx.texture.sample): 24-byte
+/// hardware texture descriptors at byte offsets from the texture heap, whose address the kernels of a module that
+/// samples receive (`.agx.kernels` extension 5), and 8-byte samplers by index, the heap every compute command names
+/// (`drm_asahi_cmd_compute.sampler_heap`). Descriptors are laid out as in Mesa's `cmdbuf.xml` (Texture, Sampler).
+struct Textures {
+    textures: Bo,
+    /// Free texture slots, and the number of slots ever used.
+    free: Vec<u32>,
+    used: u32,
+    samplers: Bo,
+    /// Each sampler slot's descriptor and reference count (0: free).
+    sampler_slots: Vec<([u8; 8], u32)>,
+}
+
+pub const TEXTURE_DESCRIPTOR_BYTES: u32 = 24;
+pub const SAMPLER_DESCRIPTOR_BYTES: u32 = 8;
+/// Texture slots of an address space; a texture past them is sampled in software.
+pub const TEXTURE_SLOTS: u32 = 1 << 16;
+/// The firmware's limit on a command's sampler heap.
+pub const SAMPLER_SLOTS: u32 = 1024;
 
 /// The helper program and the scratch buffer of an address space.
 struct Scratch {
@@ -307,7 +368,78 @@ impl Vm {
             core_entries: scratch::core_entries(&p.core_masks, p.num_clusters_total, p.num_cores_per_cluster),
             scratch: None,
             usc_generation: 0,
+            textures: None,
         })
+    }
+
+    fn textures(&mut self) -> io::Result<&mut Textures> {
+        if self.textures.is_none() {
+            let textures = self.alloc_data((TEXTURE_SLOTS * TEXTURE_DESCRIPTOR_BYTES) as u64)?;
+            let samplers = self.alloc_data((SAMPLER_SLOTS * SAMPLER_DESCRIPTOR_BYTES) as u64)?;
+            self.textures = Some(Textures { textures, free: Vec::new(), used: 0, samplers, sampler_slots: Vec::new() });
+        }
+        Ok(self.textures.as_mut().unwrap())
+    }
+
+    /// Puts a hardware texture descriptor in the texture heap: its byte offset there, or None when the heap is
+    /// full. The caller removes it only when no command in flight can sample it.
+    pub fn add_texture(&mut self, descriptor: &[u8; TEXTURE_DESCRIPTOR_BYTES as usize]) -> io::Result<Option<u32>> {
+        let t = self.textures()?;
+        let slot = match t.free.pop() {
+            Some(slot) => slot,
+            None if t.used < TEXTURE_SLOTS => {
+                t.used += 1;
+                t.used - 1
+            }
+            None => return Ok(None),
+        };
+        let offset = slot * TEXTURE_DESCRIPTOR_BYTES;
+        t.textures.as_mut_slice()[offset as usize..(offset + TEXTURE_DESCRIPTOR_BYTES) as usize].copy_from_slice(descriptor);
+        Ok(Some(offset))
+    }
+
+    pub fn remove_texture(&mut self, offset: u32) {
+        if let Some(t) = self.textures.as_mut() {
+            t.free.push(offset / TEXTURE_DESCRIPTOR_BYTES);
+        }
+    }
+
+    /// The index of a hardware sampler descriptor in the sampler heap (shared by equal samplers), or None when
+    /// the heap is full. Each `add_sampler` is undone by a `remove_sampler`.
+    pub fn add_sampler(&mut self, descriptor: &[u8; SAMPLER_DESCRIPTOR_BYTES as usize]) -> io::Result<Option<u16>> {
+        let t = self.textures()?;
+        if let Some(i) = t.sampler_slots.iter().position(|s| s.1 > 0 && s.0 == *descriptor) {
+            t.sampler_slots[i].1 += 1;
+            return Ok(Some(i as u16));
+        }
+        let i = match t.sampler_slots.iter().position(|s| s.1 == 0) {
+            Some(i) => i,
+            None if t.sampler_slots.len() < SAMPLER_SLOTS as usize => {
+                t.sampler_slots.push(([0; 8], 0));
+                t.sampler_slots.len() - 1
+            }
+            None => return Ok(None),
+        };
+        t.sampler_slots[i] = (*descriptor, 1);
+        let at = i * SAMPLER_DESCRIPTOR_BYTES as usize;
+        t.samplers.as_mut_slice()[at..at + SAMPLER_DESCRIPTOR_BYTES as usize].copy_from_slice(descriptor);
+        Ok(Some(i as u16))
+    }
+
+    pub fn remove_sampler(&mut self, index: u16) {
+        if let Some(s) = self.textures.as_mut().and_then(|t| t.sampler_slots.get_mut(index as usize)) {
+            s.1 = s.1.saturating_sub(1);
+        }
+    }
+
+    /// The texture heap's address (0 before the first texture).
+    pub fn texture_heap(&self) -> u64 {
+        self.textures.as_ref().map_or(0, |t| t.textures.va)
+    }
+
+    /// The sampler heap's address and the number of its slots that commands may name, if any.
+    pub fn sampler_heap(&self) -> Option<(u64, u32)> {
+        self.textures.as_ref().filter(|t| !t.sampler_slots.is_empty()).map(|t| (t.samplers.va, t.sampler_slots.len() as u32))
     }
 
     /// The helper program of a command whose shader uses `dwords` 32-bit words of stack per thread: its tagged USC
@@ -351,8 +483,13 @@ impl Vm {
         let size = round_up(size.max(1), PAGE);
         let mut gc = drm_asahi_gem_create { size, flags: DRM_ASAHI_GEM_WRITEBACK as u32, vm_id: 0, handle: 0, pad: 0 };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_CREATE as u64, &mut gc, "gem-create")?;
-        let mut mo = drm_asahi_gem_mmap_offset { handle: gc.handle, flags: 0, offset: 0 };
-        let mut bo = Bo { dev: self.dev.clone(), handle: gc.handle, size, va: 0, map: std::ptr::null_mut(), binding: None };
+        self.wrap(gc.handle, size, va, bind_flags, heap, true)
+    }
+
+    /// Map (and, with a nonzero `va`, bind) an existing GEM handle of `size` bytes.
+    fn wrap(&self, handle: u32, size: u64, va: u64, bind_flags: u32, heap: Option<&Rc<RefCell<RangeAllocator>>>, zero: bool) -> io::Result<Bo> {
+        let mut mo = drm_asahi_gem_mmap_offset { handle, flags: 0, offset: 0 };
+        let mut bo = Bo { dev: self.dev.clone(), handle, size, va: 0, map: std::ptr::null_mut(), mmap_offset: 0, binding: None };
         self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_MMAP_OFFSET as u64, &mut mo, "gem-mmap-offset")?;
         // Bound objects are mapped at their GPU address when that CPU range is free, so that one pointer works on
         // both sides (unified memory: cuMemAllocManaged, GPU-visible host allocations).
@@ -379,7 +516,10 @@ impl Vm {
             return Err(stage_error("mmap", io::Error::last_os_error()));
         }
         bo.map = map as *mut u8;
-        bo.as_mut_slice().fill(0);
+        bo.mmap_offset = mo.offset;
+        if zero {
+            bo.as_mut_slice().fill(0);
+        }
         if va != 0 {
             let op = drm_asahi_gem_bind_op { flags: bind_flags, handle: bo.handle, offset: 0, range: size, addr: va };
             let mut vb = drm_asahi_vm_bind {
@@ -434,6 +574,98 @@ impl Vm {
     /// An unbound object (e.g. firmware timestamps).
     pub fn alloc_unbound(&mut self, size: u64) -> io::Result<Bo> {
         self.create(size, 0, 0, None)
+    }
+
+    /// A range of `size` bytes of data addresses (pages, aligned to `align`) with nothing bound in it, for
+    /// `map_at` (cuMemAddressReserve).
+    pub fn reserve(&mut self, size: u64, align: u64) -> io::Result<u64> {
+        let size = round_up(size.max(1), PAGE);
+        self.data
+            .borrow_mut()
+            .alloc(size, align.max(PAGE))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "data heap full"))
+    }
+
+    /// Returns a range from `reserve`.
+    pub fn unreserve(&mut self, va: u64, size: u64) {
+        self.data.borrow_mut().free(va, round_up(size.max(1), PAGE));
+    }
+
+    /// Binds `size` bytes of `bo` from `offset` at `va` (in a reserved range; pages), read/write, until the
+    /// mapping is dropped.
+    pub fn map_at(&mut self, bo: &Bo, offset: u64, va: u64, size: u64) -> io::Result<Mapping> {
+        if va % PAGE != 0 || offset % PAGE != 0 || size % PAGE != 0 || offset + size > bo.size {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "mapping not page aligned or past the object"));
+        }
+        let op = drm_asahi_gem_bind_op {
+            flags: (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32,
+            handle: bo.handle,
+            offset,
+            range: size,
+            addr: va,
+        };
+        let mut vb = drm_asahi_vm_bind {
+            vm_id: self.id,
+            num_binds: 1,
+            stride: std::mem::size_of_val(&op) as u32,
+            pad: 0,
+            userptr: &op as *const _ as u64,
+        };
+        self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-bind")?;
+        Ok(Mapping { dev: self.dev.clone(), vm_id: self.id, va, size })
+    }
+
+    /// Import a dma-buf without binding it (a physical allocation of the virtual memory management API), of its
+    /// whole size.
+    pub fn import_dmabuf_unbound(&mut self, fd: i32) -> io::Result<Bo> {
+        let size = unsafe { libc::lseek(fd, 0, libc::SEEK_END) };
+        if size <= 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a dma-buf"));
+        }
+        let mut ph = drm_prime_handle { handle: 0, flags: 0, fd };
+        self.dev.ioctl(DRM_IOCTL_PRIME_FD_TO_HANDLE, &mut ph, "prime-fd-to-handle")?;
+        self.wrap(ph.handle, size as u64, 0, 0, None, false)
+    }
+
+    /// Import a dma-buf (another process's or device's buffer, B36) and bind it at the next free data address.
+    /// `size` must not exceed the dma-buf's size.
+    pub fn import_dmabuf(&mut self, fd: i32, size: u64) -> io::Result<Bo> {
+        let mut ph = drm_prime_handle { handle: 0, flags: 0, fd };
+        self.dev.ioctl(DRM_IOCTL_PRIME_FD_TO_HANDLE, &mut ph, "prime-fd-to-handle")?;
+        let size = round_up(size.max(1), PAGE);
+        let heap = self.data.clone();
+        let va = heap.borrow_mut().alloc(size, PAGE).ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "data heap full"))?;
+        self.wrap(ph.handle, size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, Some(&heap), false)
+            .inspect_err(|_| heap.borrow_mut().free(va, size))
+    }
+}
+
+/// A binding of part of an object at an address chosen by the caller (`Vm::map_at`); dropping it unbinds it, and
+/// the range stays reserved.
+pub struct Mapping {
+    dev: Rc<DeviceInner>,
+    vm_id: u32,
+    pub va: u64,
+    pub size: u64,
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        let op = drm_asahi_gem_bind_op {
+            flags: DRM_ASAHI_BIND_UNBIND as u32,
+            handle: 0,
+            offset: 0,
+            range: self.size,
+            addr: self.va,
+        };
+        let mut vb = drm_asahi_vm_bind {
+            vm_id: self.vm_id,
+            num_binds: 1,
+            stride: std::mem::size_of_val(&op) as u32,
+            pad: 0,
+            userptr: &op as *const _ as u64,
+        };
+        let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_VM_BIND as u64, &mut vb, "vm-unbind");
     }
 }
 
@@ -518,7 +750,8 @@ impl Pipeline {
 }
 
 /// The CDM control stream of one direct dispatch, followed by a USC-cache-invalidating barrier and the stream
-/// terminator. `global` is in threads and must be a multiple of `local` in every dimension.
+/// terminator. `global` is in threads; when it is not a multiple of `local`, the last workgroups of a dimension
+/// are partial, which the hardware runs exactly (ptx-re-blockers B2a).
 pub fn cdm_dispatch(pipeline_words: u32, uniform_halves: u32, g14x: bool, global: [u32; 3], local: [u32; 3]) -> Vec<u8> {
     cdm_dispatch_with(pipeline_words, uniform_halves, g14x, global, local, true)
 }
@@ -537,9 +770,7 @@ pub fn cdm_dispatch_with(
     assert!(pipeline_words % 64 == 0);
     let threads: u64 = local.iter().map(|&x| x as u64).product();
     assert!(threads >= 1 && threads <= 1024);
-    for i in 0..3 {
-        assert!(global[i] >= 1 && global[i] % local[i] == 0, "partial workgroups are not supported");
-    }
+    assert!(global.iter().all(|&g| g >= 1));
     let mut c = Vec::new();
     let put = |c: &mut Vec<u8>, v: u32| c.extend_from_slice(&v.to_le_bytes());
     // Launch word 0: uniform registers in groups of 64 halves at bit 1 (3 bits, 8 groups as 0); direct mode; block
@@ -633,10 +864,17 @@ pub enum RingKind {
     Usc,
 }
 
-/// `ZLUDA_AGX_USC_BARRIER=1`: invalidate the USC cache after every command, as Mesa's command stream does.
+/// Every command invalidates the USC cache, as Mesa's command stream does: each launch stages its pipeline words in
+/// the USC ring, and with 45 or more launches queued the GPU can run stale words it cached while earlier commands ran
+/// (AGX Performance Simulator tasks/zluda-issues.md, Z2). `ZLUDA_AGX_USC_BARRIER=0` invalidates only after new code
+/// was allocated, which saves about 1.8 us per launch but is only safe with short queues.
 fn always_usc_barrier() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_USC_BARRIER").is_ok_and(|v| !v.is_empty() && v != "0"))
+    *ON.get_or_init(|| usc_barrier_from(std::env::var("ZLUDA_AGX_USC_BARRIER").ok().as_deref()))
+}
+
+fn usc_barrier_from(v: Option<&str>) -> bool {
+    v != Some("0")
 }
 
 /// How long a queue waits for a command: `$ZLUDA_AGX_WAIT_MS` milliseconds, or without limit. The hardware has no
@@ -710,15 +948,17 @@ impl Queue {
     /// queues) and the earlier commands of this queue. Does not wait. Its timestamps stay readable with `timing`
     /// until `TIMESTAMP_SLOTS` more commands are submitted.
     pub fn submit_compute(&mut self, cdm_base: u64, cdm_end: u64, wait_for: &[Fence]) -> io::Result<Fence> {
-        self.submit_compute_with_helper(cdm_base, cdm_end, None, wait_for)
+        self.submit_compute_with_helper(cdm_base, cdm_end, None, None, wait_for)
     }
 
-    /// `submit_compute` with a helper program: `(binary, data)` of `Vm::scratch` for a shader that uses the stack.
+    /// `submit_compute` with a helper program: `(binary, data)` of `Vm::scratch` for a shader that uses the stack,
+    /// and a sampler heap: `(address, count)` of `Vm::sampler_heap` for a shader that samples.
     pub fn submit_compute_with_helper(
         &mut self,
         cdm_base: u64,
         cdm_end: u64,
         helper: Option<(u32, u64)>,
+        samplers: Option<(u64, u32)>,
         wait_for: &[Fence],
     ) -> io::Result<Fence> {
         let point = self.submitted + 1;
@@ -738,6 +978,10 @@ impl Queue {
         cmd.c.cdm_ctrl_stream_end = cdm_end;
         if let Some((binary, data)) = helper {
             cmd.c.helper = drm_asahi_helper_program { binary, cfg: 0, data };
+        }
+        if let Some((heap, count)) = samplers {
+            cmd.c.sampler_heap = heap;
+            cmd.c.sampler_count = count;
         }
         cmd.c.ts.start = drm_asahi_timestamp { handle: self.ts_handle, offset: slot };
         cmd.c.ts.end = drm_asahi_timestamp { handle: self.ts_handle, offset: slot + 8 };
@@ -901,8 +1145,13 @@ impl Queue {
 
     /// Submits one compute command and waits for it.
     pub fn run_compute(&mut self, cdm_base: u64, cdm_end: u64) -> io::Result<Timing> {
+        self.run_compute_with_helper(cdm_base, cdm_end, None)
+    }
+
+    /// `run_compute` with the helper program of `Vm::scratch` (a shader that uses the stack).
+    pub fn run_compute_with_helper(&mut self, cdm_base: u64, cdm_end: u64, helper: Option<(u32, u64)>) -> io::Result<Timing> {
         let h0 = Instant::now();
-        let fence = self.submit_compute(cdm_base, cdm_end, &[])?;
+        let fence = self.submit_compute_with_helper(cdm_base, cdm_end, helper, None, &[])?;
         self.wait(fence, self.timeout)?;
         let host = h0.elapsed();
         let (start, end) = self.timing(fence).unwrap();
@@ -930,6 +1179,18 @@ impl Queue {
 
 impl Drop for Queue {
     fn drop(&mut self) {
+        // The timestamp object was bound with GEM_BIND_OBJECT; a bound object strands its memory (B42).
+        let mut unbind = drm_asahi_gem_bind_object {
+            op: DRM_ASAHI_BIND_OBJECT_OP_UNBIND as u32,
+            flags: 0,
+            handle: 0,
+            vm_id: 0,
+            offset: 0,
+            range: 0,
+            object_handle: self.ts_handle,
+            pad: 0,
+        };
+        let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_GEM_BIND_OBJECT as u64, &mut unbind, "unbind-timestamps");
         let mut qd = drm_asahi_queue_destroy { queue_id: self.id, pad: 0 };
         let _ = self.dev.ioctl(DRM_IOCTL_ASAHI_QUEUE_DESTROY as u64, &mut qd, "queue-destroy");
         let mut sd = drm_syncobj_destroy { handle: self.timeline, pad: 0 };
@@ -939,6 +1200,43 @@ impl Drop for Queue {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn replay_of_a_sampling_kernel_names_the_sampler_heap() {
+        let r = super::Replay {
+            code: vec![],
+            grid: [32, 1, 1],
+            local: [32, 1, 1],
+            shared_bytes: 0,
+            stack_bytes: 0,
+            uniforms: vec![0x5000, 0x0013, 0, 0, 7],
+            regions: vec![],
+            text_offset: 0,
+            debug_object: None,
+            texture_heap_half: Some(0),
+            sampler_heap: Some((0x13_0000_8000, 3)),
+        };
+        let heaps = vec![(0x13_0000_5000, vec![0; 24]), (0x13_0000_8000, vec![0; 24])];
+        let a = r.agx_run_args(&heaps, "r");
+        let at = |s: &str| a.iter().position(|x| x == s).unwrap();
+        // the texture heap address in u0_u1, both heaps mapped, the sampler heap and its count
+        assert_eq!(a[at("--uniform") + 1], format!("0={}", 0x0013_5000u32));
+        assert_eq!(a[at("--sampler-heap") + 1], "0x1300008000=3");
+        assert!(a.contains(&"0x1300005000=r0.bin".to_string()) && a.contains(&"0x1300008000=r1.bin".to_string()));
+    }
+
+    #[test]
+    fn restore_anonymous_keeps_the_contents() {
+        let len = super::PAGE as usize * 2;
+        let p = unsafe {
+            libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED | libc::MAP_ANONYMOUS, -1, 0)
+        } as *mut u8;
+        assert_ne!(p as *mut libc::c_void, libc::MAP_FAILED);
+        unsafe { std::slice::from_raw_parts_mut(p, len) }.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
+        super::restore_anonymous(p, len).unwrap();
+        assert!(unsafe { std::slice::from_raw_parts(p, len) }.iter().enumerate().all(|(i, &b)| b == i as u8));
+        unsafe { libc::munmap(p as *mut libc::c_void, len) };
+    }
+
     use super::*;
 
     #[test]
@@ -951,6 +1249,14 @@ mod tests {
         assert!(words(&with).contains(&(3 << 29 | 0xfffff)));
         assert!(!words(&without).contains(&(3 << 29 | 0xfffff)));
         assert_eq!(words(&without)[words(&without).len() - 2..], [2 << 29, 0], "still terminated");
+    }
+
+    #[test]
+    fn the_usc_barrier_is_on_unless_turned_off() {
+        assert!(usc_barrier_from(None));
+        assert!(usc_barrier_from(Some("1")));
+        assert!(usc_barrier_from(Some("")));
+        assert!(!usc_barrier_from(Some("0")));
     }
 
     #[test]
@@ -1110,6 +1416,12 @@ fn uniforms(
     param_block: u64,
 ) -> io::Result<(Vec<u16>, Vec<u8>)> {
     let (mut halves, block) = module::pack_params(k, params, threadgroups, globals, param_block).map_err(|e| invalid(e.to_string()))?;
+    if let Some(half) = k.threadgroup_bytes_half.filter(|&h| h != u32::MAX) {
+        let bytes = k.threadgroup_bytes + dynamic_shared;
+        for (i, h) in halves.get_mut(half as usize..half as usize + 2).ok_or_else(|| invalid(format!("{}: hidden argument outside the uniforms", k.name)))?.iter_mut().enumerate() {
+            *h = (bytes >> (16 * i)) as u16;
+        }
+    }
     if k.checked.is_some() {
         module::pack_checked(k, &mut halves, record.unwrap_or(0), k.threadgroup_bytes + dynamic_shared, bounds, table)
             .map_err(|e| invalid(e.to_string()))?;
@@ -1167,6 +1479,8 @@ pub fn replay(
         regions,
         text_offset: k.offset as u64,
         debug_object: module.debug_object.clone(),
+        texture_heap_half: k.texture_heap_half,
+        sampler_heap: None,
     })
 }
 
@@ -1187,9 +1501,27 @@ pub struct Replay {
     /// Where the kernel's code starts in the module's `.text`, and the module's object if it has a line table.
     pub text_offset: u64,
     pub debug_object: Option<Vec<u8>>,
+    /// The kernel's texture heap uniform (`KernelInfo::texture_heap_half`), and the sampler heap's address and
+    /// count once `add_textures` has added the heaps.
+    pub texture_heap_half: Option<u32>,
+    pub sampler_heap: Option<(u64, u32)>,
 }
 
 impl Replay {
+    /// For a kernel that samples with the texture unit: the address space's texture and sampler heaps as regions,
+    /// the texture heap's address in its uniform and the sampler heap for `agx_run --sampler-heap`.
+    pub fn add_textures(&mut self, vm: &Vm) {
+        let (Some(h), Some(t)) = (self.texture_heap_half, vm.textures.as_ref()) else { return };
+        for (i, x) in self.uniforms.iter_mut().skip(h as usize).take(4).enumerate() {
+            *x = (t.textures.va >> (16 * i)) as u16;
+        }
+        let used = (t.used * TEXTURE_DESCRIPTOR_BYTES) as usize;
+        self.regions.push((t.textures.va, t.textures.as_slice()[..used.max(16)].to_vec()));
+        let samplers = t.sampler_slots.len() * SAMPLER_DESCRIPTOR_BYTES as usize;
+        self.regions.push((t.samplers.va, t.samplers.as_slice()[..samplers.max(16)].to_vec()));
+        self.sampler_heap = vm.sampler_heap();
+    }
+
     /// The `agx_run` arguments of the launch, with each region `i` of `regions` (the module's and the caller's)
     /// read from `<prefix><i>.bin` and dumped to `<prefix><i>.out`, the code from `code.bin`.
     pub fn agx_run_args(&self, regions: &[(u64, Vec<u8>)], prefix: &str) -> Vec<String> {
@@ -1208,11 +1540,98 @@ impl Replay {
             a.extend(["--map".into(), format!("{va:#x}={prefix}{i}.bin")]);
             a.extend(["--dump".into(), format!("{va:#x}={}:{prefix}{i}.out", bytes.len())]);
         }
+        if let Some((va, count)) = self.sampler_heap {
+            a.extend(["--sampler-heap".into(), format!("{va:#x}={count}")]);
+        }
         if self.debug_object.is_some() {
             a.extend(["--lines".into(), "module.o".into(), "--lines-offset".into(), self.text_offset.to_string()]);
         }
         a
     }
+}
+
+/// The global of a module that holds the address of the device heap of `malloc` / `free`.
+pub const HEAP_SYMBOL: &str = "__zluda_agx_heap";
+
+/// The header of a device heap of `size` bytes, to write at its start (`ptx/lib/zluda_ptx_impl_agx_heap.c`: the
+/// bump offset, the size, then empty free lists).
+pub fn heap_header(size: u32) -> [u8; 8] {
+    let mut h = [0u8; 8];
+    h[4..].copy_from_slice(&size.to_le_bytes());
+    h
+}
+
+/// Symbol of the address of the timer block the clocks of a module read (`ptx/lib/zluda_ptx_impl_agx.ll`, the
+/// clocks): `TIMER_BLOCK_BYTES` of device memory whose first 8 bytes a CPU thread keeps setting to `cpu_timer()`.
+pub const TIMER_SYMBOL: &str = "__zluda_agx_timer";
+pub const TIMER_BLOCK_BYTES: usize = 32;
+
+/// The CPU's generic timer: its count and its frequency in Hz. Elsewhere than on aarch64 (tests), a count of a
+/// monotonic clock at 24 MHz.
+pub fn cpu_timer() -> (u64, u64) {
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        let (count, freq): (u64, u64);
+        std::arch::asm!("mrs {}, cntvct_el0", out(reg) count);
+        std::arch::asm!("mrs {}, cntfrq_el0", out(reg) freq);
+        (count, freq)
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let ns = START.get_or_init(std::time::Instant::now).elapsed().as_nanos();
+        ((ns * 24 / 1000) as u64, 24_000_000)
+    }
+}
+
+/// The initial bytes of a timer block for a GPU clock of `clock_khz`: the count now (twice: the current count,
+/// and the base the clocks count from), the nanoseconds of the base, and nanoseconds and GPU cycles per tick in
+/// 16.16 fixed point.
+pub fn timer_block(clock_khz: u32) -> [u8; TIMER_BLOCK_BYTES] {
+    let (count, freq) = cpu_timer();
+    let freq = freq.max(1) as u128;
+    let mut b = [0u8; TIMER_BLOCK_BYTES];
+    b[0..8].copy_from_slice(&count.to_le_bytes());
+    b[8..16].copy_from_slice(&count.to_le_bytes());
+    b[16..24].copy_from_slice(&((count as u128 * 1_000_000_000 / freq) as u64).to_le_bytes());
+    b[24..28].copy_from_slice(&((1_000_000_000u128 << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
+    b[28..32].copy_from_slice(&(((clock_khz as u128 * 1000) << 16) / freq).min(u32::MAX as u128).to_le_bytes()[..4]);
+    b
+}
+
+/// Puts private anonymous memory with the same contents under `len` bytes of CPU memory at `addr` (pages), for
+/// memory that `Bo::alias_at` mapped an object over.
+pub fn restore_anonymous(addr: *mut u8, len: usize) -> io::Result<()> {
+    let contents = unsafe { std::slice::from_raw_parts(addr, len) }.to_vec();
+    let m = unsafe {
+        libc::mmap(
+            addr as *mut libc::c_void,
+            len,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
+            -1,
+            0,
+        )
+    };
+    if m == libc::MAP_FAILED {
+        return Err(io::Error::last_os_error());
+    }
+    unsafe { std::ptr::copy_nonoverlapping(contents.as_ptr(), addr, len) };
+    Ok(())
+}
+
+/// A copy of file descriptor `fd` of process `pid` (pidfd_getfd, which needs the right to ptrace it).
+pub fn take_fd(pid: u32, fd: i32) -> io::Result<OwnedFd> {
+    let pidfd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::c_long, 0 as libc::c_long) };
+    if pidfd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let pidfd = unsafe { OwnedFd::from_raw_fd(pidfd as i32) };
+    let copy = unsafe { libc::syscall(libc::SYS_pidfd_getfd, pidfd.as_raw_fd() as libc::c_long, fd as libc::c_long, 0 as libc::c_long) };
+    if copy < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe { OwnedFd::from_raw_fd(copy as i32) })
 }
 
 /// A module uploaded to the GPU: its code in the USC heap and its global data buffer.
@@ -1306,6 +1725,53 @@ impl LoadedModule {
         let failed = w != [0; 4];
         w.fill(0);
         failed
+    }
+
+    /// Whether the module calls `malloc` / `free`: it has the heap pointer `__zluda_agx_heap`.
+    pub fn uses_heap(&self) -> bool {
+        self.module.global_symbols.contains_key(HEAP_SYMBOL)
+    }
+
+    /// Writes `bytes` at the start of the module's global `name` (a `.texref` variable's handle, for example);
+    /// false if it has no such global or it is shorter.
+    pub fn write_global(&mut self, name: &str, bytes: &[u8]) -> bool {
+        let Some(&(off, size)) = self.module.global_symbols.get(name) else { return false };
+        let Some(g) = self.globals.as_mut() else { return false };
+        if (bytes.len() as u64) > size {
+            return false;
+        }
+        g.as_mut_slice()[off as usize..off as usize + bytes.len()].copy_from_slice(bytes);
+        true
+    }
+
+    pub fn uses_timer(&self) -> bool {
+        self.module.global_symbols.contains_key(TIMER_SYMBOL)
+    }
+
+    /// Points the module's clocks at a timer block at `va` (`TIMER_SYMBOL`).
+    pub fn set_timer(&mut self, va: u64) {
+        let Some(&(off, _)) = self.module.global_symbols.get(TIMER_SYMBOL) else { return };
+        let Some(g) = self.globals.as_mut() else { return };
+        g.as_mut_slice()[off as usize..off as usize + 8].copy_from_slice(&va.to_le_bytes());
+    }
+
+    /// Points the module's `malloc` / `free` at a heap: zeroed device memory of `size` bytes at `va`, shared by the
+    /// modules of a context (see `ptx/lib/zluda_ptx_impl_agx_heap.c`), its header written (`heap_header`).
+    pub fn set_heap(&mut self, va: u64) {
+        let Some(&(off, _)) = self.module.global_symbols.get(HEAP_SYMBOL) else { return };
+        let Some(g) = self.globals.as_mut() else { return };
+        g.as_mut_slice()[off as usize..off as usize + 8].copy_from_slice(&va.to_le_bytes());
+    }
+
+    /// Whether a thread of a recursive kernel ran out of its stack since the last call (the backend sets the word
+    /// `__agx_stack_overflow`); clears it.
+    pub fn take_stack_overflow(&mut self) -> bool {
+        let Some(&(off, _)) = self.module.global_symbols.get("__agx_stack_overflow") else { return false };
+        let Some(g) = self.globals.as_mut() else { return false };
+        let w = &mut g.as_mut_slice()[off as usize..off as usize + 4];
+        let overflowed = w != [0; 4];
+        w.fill(0);
+        overflowed
     }
 
     /// Formats and clears the device `printf` records written since the last drain. Strings outside the module's
@@ -1483,6 +1949,19 @@ impl LoadedModule {
             // a shader that uses the stack gets its scratch from the helper program
             let stack_dwords = k.stack_bytes.div_ceil(4);
             let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords)?) } else { None };
+            let mut halves = halves.to_vec();
+            if let Some(h) = k.texture_heap_half {
+                let heap = vm.texture_heap();
+                for (i, x) in halves
+                    .get_mut(h as usize..h as usize + 4)
+                    .ok_or_else(|| invalid(format!("{}: texture heap outside the uniforms", k.name)))?
+                    .iter_mut()
+                    .enumerate()
+                {
+                    *x = (heap >> (16 * i)) as u16;
+                }
+            }
+            let samplers = if k.texture_heap_half.is_some() { vm.sampler_heap() } else { None };
             let bytes: Vec<u8> = halves.iter().flat_map(|h| h.to_le_bytes()).collect();
             let unif = if bytes.is_empty() { 0 } else { queue.stage(RingKind::Data, &bytes, 64)? };
             let pipeline = Pipeline {
@@ -1495,14 +1974,14 @@ impl LoadedModule {
             // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
             let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-            // The USC cache is invalidated after new code was allocated (a module load), and always with
-            // ZLUDA_AGX_USC_BARRIER=1 (Mesa's stream).
+            // The USC cache is invalidated on every command, or with ZLUDA_AGX_USC_BARRIER=0 only after new code
+            // was allocated (a module load).
             let barrier = queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
             queue.usc_seen.set(vm.usc_generation);
             let stream =
                 cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
-            queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, wait_for)
+            queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
         })();
         let fence = r.inspect_err(|_| queue.unstage())?;
         if !keep.is_empty() {

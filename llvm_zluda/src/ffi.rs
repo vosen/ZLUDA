@@ -46,7 +46,7 @@ extern "C" {
         B: LLVMBuilderRef,
         Ty: LLVMTypeRef,
         AddrSpace: u32,
-        Name: *const i8,
+        Name: *const std::ffi::c_char,
     ) -> LLVMValueRef;
 
     pub fn LLVMZludaBuildArrayAlloca(
@@ -55,7 +55,7 @@ extern "C" {
         AddrSpace: u32,
         ArraySize: LLVMValueRef,
         Align: u32,
-        Name: *const i8,
+        Name: *const std::ffi::c_char,
     ) -> LLVMValueRef;
 
     pub fn LLVMZludaBuildAtomicRMW(
@@ -63,7 +63,7 @@ extern "C" {
         op: LLVMZludaAtomicRMWBinOp,
         PTR: LLVMValueRef,
         Val: LLVMValueRef,
-        scope: *const i8,
+        scope: *const std::ffi::c_char,
         ordering: LLVMAtomicOrdering,
     ) -> LLVMValueRef;
 
@@ -72,7 +72,7 @@ extern "C" {
         Ptr: LLVMValueRef,
         Cmp: LLVMValueRef,
         New: LLVMValueRef,
-        scope: *const i8,
+        scope: *const std::ffi::c_char,
         SuccessOrdering: LLVMAtomicOrdering,
         FailureOrdering: LLVMAtomicOrdering,
     ) -> LLVMValueRef;
@@ -82,28 +82,28 @@ extern "C" {
     pub fn LLVMZludaBuildFence(
         B: LLVMBuilderRef,
         ordering: LLVMAtomicOrdering,
-        scope: *const i8,
-        Name: *const i8,
+        scope: *const std::ffi::c_char,
+        Name: *const std::ffi::c_char,
     ) -> LLVMValueRef;
 
     pub fn LLVMZludaSetAtomic(
         AtomicInst: LLVMValueRef,
         Ordering: LLVMAtomicOrdering,
-        SSID: *const i8,
+        SSID: *const std::ffi::c_char,
     );
 
     #[cfg(feature = "amdgpu")]
     pub fn LLVMZludaLinkWithLLD(
         inputs: u32,
-        input_paths: *const *const i8,
-        output_path: *const i8,
-        error_message: *mut *mut i8,
+        input_paths: *const *const std::ffi::c_char,
+        output_path: *const std::ffi::c_char,
+        error_message: *mut *mut std::ffi::c_char,
     ) -> i32;
 
     pub fn LLVMZludaParseCommandLineOptions(
         argc: i32,
-        argv: *const *const i8,
-        error_message: *mut *mut i8,
+        argv: *const *const std::ffi::c_char,
+        error_message: *mut *mut std::ffi::c_char,
     ) -> bool;
 
     pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
@@ -114,7 +114,8 @@ extern "C" {
 
     pub fn LLVMZludaAgxKeepGlobals(module: LLVMModuleRef);
 
-    pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut i8) -> i32;
+    pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
+    pub fn LLVMZludaAgxSpillClusterShared(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

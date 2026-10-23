@@ -207,7 +207,11 @@ impl InstructionModes {
     }
 
     fn from_arith_float(arith: &ast::ArithFloat) -> InstructionModes {
-        let denormal = arith.flush_to_zero.map(DenormalMode::from_ftz);
+        // f64 arithmetic has no .ftz and always keeps subnormals
+        let denormal = match (arith.flush_to_zero, arith.type_) {
+            (None, ast::ScalarType::F64) => Some(DenormalMode::Preserve),
+            (ftz, _) => ftz.map(DenormalMode::from_ftz),
+        };
         let rounding = Some(RoundingMode::from_ast(arith.rounding));
         let mut modes = InstructionModes::new(arith.type_, denormal, rounding);
         // Directed rounding of 16-bit floats is computed in f32 on AGX (see
@@ -2159,7 +2163,30 @@ enum ExtendedMode<T: Eq + PartialEq> {
     Kernel(SpirvWord),
 }
 
+thread_local! {
+    // .target sm_1x: every single-precision instruction flushes subnormals (PTX ISA 9.7.3), with or without .ftz
+    static F32_ALWAYS_FTZ: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Sets whether the module's target is sm_1x (see F32_ALWAYS_FTZ) for the runs of this pass on this thread.
+pub(crate) fn set_f32_always_ftz(on: bool) {
+    F32_ALWAYS_FTZ.with(|f| f.set(on));
+}
+
+/// Whether the module's target is sm_1x (set_f32_always_ftz).
+pub(crate) fn sm_1x() -> bool {
+    F32_ALWAYS_FTZ.with(|f| f.get())
+}
+
 fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
+    let mut modes = get_instruction_modes(inst);
+    if modes.denormal_f32.is_some() && F32_ALWAYS_FTZ.with(|f| f.get()) {
+        modes.denormal_f32 = Some(DenormalMode::FlushToZero);
+    }
+    modes
+}
+
+fn get_instruction_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
     match inst {
         // TODO: review it when implementing virtual calls
         ast::Instruction::Call { .. }
@@ -2184,6 +2211,11 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         | ast::Instruction::StBulk { .. }
         | ast::Instruction::SetMaxNReg { .. }
         | ast::Instruction::ClusterLaunchTryCancel { .. }
+        | ast::Instruction::AltFpX4 { .. }
+        | ast::Instruction::CvtRs { .. }
+        | ast::Instruction::CvtPzo { .. }
+        | ast::Instruction::Multimem { .. }
+        | ast::Instruction::Fabric { .. }
         | ast::Instruction::ClusterLaunchQuery { .. }
         | ast::Instruction::Testp { .. }
         | ast::Instruction::MatchAllSync { .. }
@@ -2323,6 +2355,7 @@ fn get_modes<T: ast::Operand>(inst: &ast::Instruction<T>) -> InstructionModes {
         }
         | ast::Instruction::Vshr { .. } => InstructionModes::none(),
         ast::Instruction::Fma { data, .. }
+        | ast::Instruction::FmaOob { data, .. }
         | ast::Instruction::Sub {
             data: ast::ArithDetails::Float(data),
             ..

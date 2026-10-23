@@ -9,7 +9,10 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/ReplaceConstant.h>
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
 #include <optional>
@@ -306,12 +309,16 @@ void LLVMZludaUpgradeFunctionAttributes(LLVMModuleRef M)
 // The address space a generic address comes from: looks through integer
 // casts, constant offsets, address space casts and pointer arithmetic.
 // Addresses of unknown origin are device (global) addresses.
-static unsigned zludaAgxSourceAddressSpace(Value *V)
+static unsigned zludaAgxSourceAddressSpace(Value *V, Value **Source = nullptr)
 {
     for (unsigned depth = 0; depth < 64; depth++)
     {
         if (V->getType()->isPointerTy() && V->getType()->getPointerAddressSpace() != 0)
+        {
+            if (Source)
+                *Source = V;
             return V->getType()->getPointerAddressSpace();
+        }
         if (auto *Op = dyn_cast<Operator>(V))
         {
             switch (Op->getOpcode())
@@ -497,6 +504,11 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
         {"__zluda_agx_isspacep_const", [](unsigned as) { return as == 4; }, 0},
         {"__zluda_agx_isspacep_param", [](unsigned) { return false; }, 0},
     };
+    // Kernel parameters are constant memory too (address space 4); their window is in the .global window, and
+    // not in the .const one (PTX ISA 6.4.1.1)
+    auto isParam = [](Value *Source) {
+        return Source && isa<Argument>(getUnderlyingObject(Source));
+    };
     Module *Mod = unwrap(M);
     bool found = false;
     for (Function &F : *Mod)
@@ -514,9 +526,34 @@ bool LLVMZludaAgxLowerAddressSpaces(LLVMModuleRef M)
             auto *Call = dyn_cast<CallInst>(U);
             if (!Call)
                 continue;
-            unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0));
+            Value *Source = nullptr;
+            unsigned as = zludaAgxSourceAddressSpace(Call->getArgOperand(0), &Source);
             Value *Result;
-            if (as != 0 || space.tags == 0)
+            if (as == 4 && isParam(Source))
+            {
+                StringRef name = space.name;
+                Result = ConstantInt::getBool(Call->getContext(),
+                                              name.ends_with("_param") || name.ends_with("_global"));
+            }
+            else if (as == 0 && StringRef(space.name).ends_with("_const"))
+            {
+                // a device address of unknown origin: in one of the module's .const variables, which are in the
+                // global data buffer
+                IRBuilder<> Builder(Call);
+                Value *A = Call->getArgOperand(0);
+                Result = Builder.getFalse();
+                for (GlobalVariable &GV : Mod->globals())
+                {
+                    uint64_t size = GV.getValueType()->isSized() ? Mod->getDataLayout().getTypeAllocSize(GV.getValueType()) : 0;
+                    if (GV.getAddressSpace() != 4 || GV.isDeclaration() || size == 0)
+                        continue;
+                    Value *Start = Builder.CreatePtrToInt(
+                        Builder.CreateAddrSpaceCast(&GV, PointerType::get(Call->getContext(), 0)), A->getType());
+                    Value *Offset = Builder.CreateSub(A, Start);
+                    Result = Builder.CreateOr(Result, Builder.CreateICmpULT(Offset, ConstantInt::get(A->getType(), size)));
+                }
+            }
+            else if (as != 0 || space.tags == 0)
                 Result = ConstantInt::getBool(Call->getContext(), space.test(as));
             else
             {
@@ -710,8 +747,11 @@ namespace
                 for (Instruction &I : BB)
                     for (Value *op : I.operands())
                         zludaSharedVariables(op, used, seen);
+            // except the shared memory size of the launch and the end of the static shared memory
+            // (zluda_ptx_impl_agx.ll's %..._smem_... registers), which stay the threadgroup's
             for (GlobalVariable &GV : M.globals())
-                if (used.count(&GV))
+                if (used.count(&GV) && GV.getName() != "__zluda_agx_smem_bytes" &&
+                    GV.getName() != "__zluda_agx_smem_end")
                     shared.insert(&GV);
         }
 
@@ -773,9 +813,10 @@ namespace
                 stride += size;
             }
             stride = alignTo(stride, max_align);
+            // more than the 32 KiB of a threadgroup: the windows move to device memory after the address spaces
+            // are lowered (LLVMZludaAgxSpillClusterShared)
             if (stride * C > 32768)
-                return "the shared memory of a cluster (" + std::to_string(C) + " x " + std::to_string(stride) +
-                       " bytes) exceeds the 32 KiB of a threadgroup";
+                F.addFnAttr("agx-spill-shared", std::to_string(stride * C));
             auto *array = ArrayType::get(Type::getInt8Ty(ctx), stride * C);
             windows = new GlobalVariable(M, array, false, GlobalValue::InternalLinkage, UndefValue::get(array),
                                          F.getName() + ".cluster_shared", nullptr,
@@ -926,6 +967,194 @@ int LLVMZludaAgxLowerClusters(LLVMModuleRef M, char **error)
             *error = LLVMCreateMessage((F->getName().str() + ": " + e).c_str());
             return -1;
         }
+    }
+    return changed ? 1 : 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+// A cluster kernel whose shared memory (the windows of its CTAs) is more than the 32 KiB of a threadgroup keeps it
+// in device memory: a pool of slabs of the windows' size per kernel, the threadgroup claiming a free slab at its
+// start (its first thread, the others waiting at a barrier) and freeing it when its last thread returns. Every
+// threadgroup memory access of the kernel (after the address spaces are lowered, generic ones included) becomes a
+// device memory access at the slab plus its offset in the windows, and threadgroup scope fences and atomics become
+// device scope ones. A threadgroup that finds no free slab waits for one, as the tensor memory slabs do.
+namespace
+{
+    const unsigned SPILL_SLABS = 8;
+
+    std::string zludaSpillClusterShared(Function &F, uint64_t size)
+    {
+        Module &M = *F.getParent();
+        LLVMContext &ctx = M.getContext();
+        Type *I8 = Type::getInt8Ty(ctx), *I32 = Type::getInt32Ty(ctx), *I64 = Type::getInt64Ty(ctx);
+        GlobalVariable *windows = M.getNamedGlobal((F.getName() + ".cluster_shared").str());
+        if (!windows)
+            return "";
+        auto global = [&](Type *T, const Twine &name, unsigned as) {
+            return new GlobalVariable(M, T, false, GlobalValue::InternalLinkage,
+                                      as == 3 ? static_cast<Constant *>(UndefValue::get(T)) : Constant::getNullValue(T),
+                                      F.getName() + name, nullptr, GlobalValue::NotThreadLocal, as);
+        };
+        GlobalVariable *pool = global(ArrayType::get(I8, size * SPILL_SLABS), ".cluster_pool", 1);
+        pool->setAlignment(std::max(windows->getAlign().valueOrOne(), Align(16)));
+        GlobalVariable *owner = global(ArrayType::get(I32, SPILL_SLABS), ".cluster_owner", 1);
+        GlobalVariable *count = global(ArrayType::get(I32, SPILL_SLABS), ".cluster_count", 1);
+        GlobalVariable *slab_var = global(I32, ".cluster_slab", 3);
+        slab_var->setAlignment(Align(4));
+        auto call = [&](IRBuilder<> &B, const char *name) {
+            return B.CreateCall(M.getOrInsertFunction(name, FunctionType::get(I32, false)));
+        };
+        auto barrier = [&](IRBuilder<> &B) {
+            B.CreateFence(AtomicOrdering::SequentiallyConsistent);
+            B.CreateCall(M.getOrInsertFunction("llvm.agx.threadgroup.barrier", FunctionType::get(B.getVoidTy(), false)));
+            B.CreateFence(AtomicOrdering::SequentiallyConsistent);
+        };
+
+        // the claim: the first thread takes a free slab (spinning over the pool) and sets its count of threads
+        BasicBlock *entry = &F.getEntryBlock();
+        BasicBlock *body = entry->splitBasicBlock(entry->getFirstInsertionPt(), "spill.body");
+        entry->getTerminator()->eraseFromParent();
+        BasicBlock *claim = BasicBlock::Create(ctx, "spill.claim", &F, body);
+        BasicBlock *join = BasicBlock::Create(ctx, "spill.join", &F, body);
+        IRBuilder<> B(entry);
+        Value *first = B.CreateICmpEQ(call(B, "llvm.agx.thread.index.in.threadgroup"), B.getInt32(0));
+        Value *threads = B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.x"),
+                                     B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.y"),
+                                                 call(B, "llvm.agx.threads.per.threadgroup.z")));
+        B.CreateCondBr(first, claim, join);
+        B.SetInsertPoint(claim);
+        PHINode *i = B.CreatePHI(I32, 2);
+        i->addIncoming(B.getInt32(0), entry);
+        Value *slot = B.CreateInBoundsGEP(I32, owner, i);
+        Value *taken = B.CreateExtractValue(
+            B.CreateAtomicCmpXchg(slot, B.getInt32(0), B.getInt32(1), MaybeAlign(4), AtomicOrdering::AcquireRelease,
+                                  AtomicOrdering::Acquire),
+            1);
+        Value *next = B.CreateURem(B.CreateAdd(i, B.getInt32(1)), B.getInt32(SPILL_SLABS));
+        i->addIncoming(next, claim);
+        BasicBlock *got = BasicBlock::Create(ctx, "spill.got", &F, join);
+        B.CreateCondBr(taken, got, claim);
+        B.SetInsertPoint(got);
+        B.CreateAlignedStore(threads, B.CreateInBoundsGEP(I32, count, i), MaybeAlign(4));
+        B.CreateAlignedStore(i, slab_var, MaybeAlign(4));
+        B.CreateBr(join);
+        B.SetInsertPoint(join);
+        barrier(B);
+        Value *slab = B.CreateAlignedLoad(I32, slab_var, MaybeAlign(4));
+        Value *base = B.CreateAdd(B.CreatePtrToInt(pool, I64), B.CreateMul(B.CreateZExt(slab, I64), B.getInt64(size)));
+        B.CreateBr(body);
+
+        // the accesses
+        Value *windows_address = ConstantExpr::getPtrToInt(windows, I32);
+        auto device = [&](Instruction *at, Value *p) -> Value * {
+            IRBuilder<> A(at);
+            Value *offset = A.CreateSub(A.CreatePtrToInt(p, I32), windows_address);
+            Value *address = A.CreateAdd(base, A.CreateZExt(offset, I64));
+            return A.CreateIntToPtr(address, PointerType::get(ctx, 1));
+        };
+        auto shared = [&](Value *p) { return p->getType()->isPointerTy() && p->getType()->getPointerAddressSpace() == 3 && p != slab_var; };
+        SmallVector<Instruction *, 64> work;
+        for (BasicBlock &BB : F)
+            for (Instruction &I : BB)
+                work.push_back(&I);
+        SmallVector<ReturnInst *, 4> returns;
+        for (Instruction *I : work)
+        {
+            if (auto *L = dyn_cast<LoadInst>(I))
+            {
+                if (shared(L->getPointerOperand()))
+                    L->setOperand(0, device(L, L->getPointerOperand()));
+                if (L->isAtomic() && L->getSyncScopeID() != SyncScope::SingleThread)
+                    L->setSyncScopeID(SyncScope::System);
+            }
+            else if (auto *S = dyn_cast<StoreInst>(I))
+            {
+                if (shared(S->getPointerOperand()))
+                    S->setOperand(1, device(S, S->getPointerOperand()));
+                if (S->isAtomic() && S->getSyncScopeID() != SyncScope::SingleThread)
+                    S->setSyncScopeID(SyncScope::System);
+            }
+            else if (auto *R = dyn_cast<AtomicRMWInst>(I))
+            {
+                if (shared(R->getPointerOperand()))
+                    R->setOperand(0, device(R, R->getPointerOperand()));
+                R->setSyncScopeID(SyncScope::System);
+            }
+            else if (auto *X = dyn_cast<AtomicCmpXchgInst>(I))
+            {
+                if (shared(X->getPointerOperand()))
+                    X->setOperand(0, device(X, X->getPointerOperand()));
+                X->setSyncScopeID(SyncScope::System);
+            }
+            else if (auto *Fe = dyn_cast<FenceInst>(I))
+                Fe->setSyncScopeID(SyncScope::System);
+            else if (auto *MI = dyn_cast<MemIntrinsic>(I))
+            {
+                if (shared(MI->getRawDest()))
+                    MI->setDest(device(MI, MI->getRawDest()));
+                if (auto *MT = dyn_cast<MemTransferInst>(MI))
+                    if (shared(MT->getRawSource()))
+                        MT->setSource(device(MT, MT->getRawSource()));
+                // the address spaces are part of the intrinsic's name
+                SmallVector<Type *, 3> types;
+                for (Value *op : MI->args())
+                    types.push_back(op->getType());
+                if (isa<MemTransferInst>(MI))
+                    MI->setCalledFunction(Intrinsic::getOrInsertDeclaration(&M, MI->getIntrinsicID(),
+                                                                            {types[0], types[1], types[2]}));
+                else
+                    MI->setCalledFunction(Intrinsic::getOrInsertDeclaration(&M, MI->getIntrinsicID(),
+                                                                            {types[0], types[2]}));
+            }
+            else if (auto *CI = dyn_cast<CallInst>(I))
+            {
+                for (Value *op : CI->args())
+                    if (shared(op))
+                        return "a call with a threadgroup memory pointer (" +
+                               CI->getCalledOperand()->getName().str() + ") in a kernel whose cluster shared memory is in device memory";
+            }
+            else if (auto *Ret = dyn_cast<ReturnInst>(I))
+                returns.push_back(Ret);
+        }
+        // the last thread of the threadgroup frees the slab
+        for (ReturnInst *Ret : returns)
+        {
+            IRBuilder<> A(Ret);
+            Value *old = A.CreateAtomicRMW(AtomicRMWInst::Sub, A.CreateInBoundsGEP(I32, count, slab), A.getInt32(1),
+                                           MaybeAlign(4), AtomicOrdering::AcquireRelease);
+            Instruction *then = SplitBlockAndInsertIfThen(A.CreateICmpEQ(old, A.getInt32(1)), Ret, false);
+            IRBuilder<> T(then);
+            T.CreateAlignedStore(T.getInt32(0), T.CreateInBoundsGEP(I32, owner, slab), MaybeAlign(4))
+                ->setAtomic(AtomicOrdering::Release);
+        }
+        // the windows' addresses are offsets now
+        windows->replaceAllUsesWith(ConstantExpr::getIntToPtr(ConstantInt::get(I32, 0), windows->getType()));
+        windows->eraseFromParent();
+        F.removeFnAttr("agx-spill-shared");
+        return "";
+    }
+}
+
+LLVM_C_EXTERN_C_BEGIN
+
+// Returns 1 if the module changed, 0 if not, and -1 with a message if a kernel's shared memory cannot be moved.
+int LLVMZludaAgxSpillClusterShared(LLVMModuleRef M, char **error)
+{
+    bool changed = false;
+    for (Function &F : *unwrap(M))
+    {
+        Attribute A = F.getFnAttribute("agx-spill-shared");
+        uint64_t size = 0;
+        if (!A.isValid() || A.getValueAsString().getAsInteger(10, size))
+            continue;
+        std::string e = zludaSpillClusterShared(F, size);
+        if (!e.empty())
+        {
+            *error = LLVMCreateMessage((F.getName().str() + ": " + e).c_str());
+            return -1;
+        }
+        changed = true;
     }
     return changed ? 1 : 0;
 }

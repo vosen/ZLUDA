@@ -10,9 +10,10 @@ typedef int int32;
 typedef unsigned long long uint64;
 typedef long long int64;
 
-enum { K_E4M3, K_E5M2, K_E2M3, K_E3M2, K_E2M1, K_UE5M3, K_S2F6 };
-enum { R_RN, R_RZ, R_RP };
-enum { F_RELU = 4, F_PZO = 8, F_N1 = 16, F_N2 = 32 };
+enum { K_E4M3, K_E5M2, K_E2M3, K_E3M2, K_E2M1, K_UE5M3, K_S2F6, K_UE8M0 };
+// R_RP rounds a magnitude up (away from zero); the instructions' .rp / .rm (R_RM) are signed
+enum { R_RN, R_RZ, R_RP, R_RM };
+enum { F_RELU = 4, F_PZO = 8, F_N1 = 16, F_N2 = 32, F_SATFINITE = 64 };
 enum { S_F32, S_F16X2, S_BF16X2 };
 
 typedef struct {
@@ -122,8 +123,44 @@ static value prepare(value v, uint32 flags, uint32 scale, int flush_exponent) {
     return v;
 }
 
+// the rounding of the magnitude for the instruction's rounding of a value of the sign: .rp and .rm toward positive
+// and negative infinity
+static int magnitude_rounding(int rounding, int neg) {
+    if (rounding == R_RP)
+        return neg ? R_RZ : R_RP;
+    if (rounding == R_RM)
+        return neg ? R_RP : R_RZ;
+    return rounding;
+}
+
+// .ue8m0 (.satfinite): an |x| beyond 2^127 (infinities too) gives 0xfe, also for a negative x; other negative
+// values and zero give 0; .rz rounds the exponent down, .rp up, .rn to the nearest power of two (ties, 1.5 * 2^e, to
+// the even code)
+static uint32 ue8m0_element(int rounding, value v) {
+    if (v.nan)
+        return 255;
+    if (v.inf || (v.m && v.e + bit_length(v.m) - 1 >= 127 && !(v.e + bit_length(v.m) - 1 == 127 && !(v.m & (v.m - 1)))))
+        return 254;
+    if (v.neg || !v.m)
+        return 0;
+    int length = bit_length(v.m);
+    int p = v.e + length - 1;
+    int power = !(v.m & (v.m - 1));
+    if (rounding == R_RP && !power)
+        p++;
+    else if (rounding == R_RN && !power) {
+        uint64 half = 3ull << (length - 2);
+        if (v.m > half || (v.m == half && ((p + 127) & 1)))
+            p++;
+    }
+    int code = p + 127;
+    return code < 0 ? 0 : code > 254 ? 254 : (uint32)code;
+}
+
 static uint32 narrow_element(uint32 kind, uint32 flags, value v) {
-    int rounding = flags & 3;
+    if (kind == K_UE8M0)
+        return ue8m0_element(flags & 3, v);
+    int rounding = magnitude_rounding(flags & 3, v.neg);
     int relu = (flags & F_RELU) != 0;
     if (kind == K_S2F6) {
         if (v.nan)
@@ -139,6 +176,10 @@ static uint32 narrow_element(uint32 kind, uint32 flags, value v) {
     }
     if (v.nan)
         return kind == K_E4M3 || kind == K_E5M2 ? 127 : kind == K_UE5M3 ? 255 : (uint32)top(kind);
+    // .satfinite gives .ue5m3 the positive MAX_NORM for an |x| beyond it, also for a negative x (without .relu)
+    if (kind == K_UE5M3 && !relu && v.neg &&
+        (v.inf || (v.m && encode(v.m, v.e, exponent_bits(kind), mantissa_bits(kind), R_RP) > top(kind))))
+        return (uint32)top(kind);
     if ((relu || kind == K_UE5M3) && v.neg)
         return 0;
     uint32 sign = v.neg && kind != K_UE5M3 ? 1u << (element_bits(kind) - 1) : 0;
@@ -214,19 +255,23 @@ static value decode_element(uint32 kind, uint32 c) {
     return v;
 }
 
-// round to nearest even into f16 (bf16 = 0) or bf16, overflowing to infinity
-static uint32 to_half(value v, int bf16) {
+// round to nearest even into f16 (bf16 = 0) or bf16, overflowing to infinity; .relu makes a negative result 0 and a
+// NaN the canonical 0x7fff, .satfinite an |x| beyond the largest finite value that value with its sign
+static uint32 to_half(value v, int bf16, uint32 flags) {
     int eb = bf16 ? 8 : 5, mb = bf16 ? 7 : 10;
     uint32 infinity = ((1u << eb) - 1) << mb;
     if (v.nan)
-        return bf16 ? 0x7fc0 : 0x7e00;
+        return (flags & F_RELU) ? 0x7fff : bf16 ? 0x7fc0 : 0x7e00;
+    if ((flags & F_RELU) && v.neg)
+        return 0;
     uint32 sign = v.neg ? 0x8000 : 0;
+    uint32 over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
     if (v.inf)
-        return sign | infinity;
+        return sign | over;
     if (!v.m)
         return sign;
     int64 code = encode(v.m, v.e, eb, mb, R_RN);
-    return sign | (code >= infinity ? infinity : (uint32)code);
+    return sign | (code >= infinity ? over : (uint32)code);
 }
 
 // cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
@@ -239,7 +284,219 @@ uint32 __zluda_ptx_impl_agx_cvt_widen(uint32 kind, uint32 to_bf16, uint32 flags,
         if (s == 255)
             v.nan = 1;
         v.e += (int)s - 127;
-        result |= to_half(v, (int)to_bf16) << (16 * i);
+        result |= to_half(v, (int)to_bf16, flags) << (16 * i);
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------- .pzo (PTX ISA 9.4 9.7.10.24)
+// cvt.rn{.relu}{.satfinite}.pzo.{f16,bf16}.f32 (kinds 0, 1), .tf32.f32 (2) and {f16x2,bf16x2}.f32 a, b (3, 4: a in the
+// high half): a -0.0 result is +0.0
+static uint32 pzo_half(value v, int bf16, uint32 flags) {
+    uint32 h = v.nan ? 0x7fff : to_half(v, bf16, flags);
+    return h == 0x8000 ? 0 : h;
+}
+
+uint32 __zluda_ptx_impl_agx_cvt_pzo(uint32 kind, uint32 flags, uint32 a, uint32 b) {
+    value v = from_f32(a);
+    if (kind == 2) {
+        if (v.nan)
+            return 0x7fffffff;
+        if ((flags & F_RELU) && v.neg)
+            return 0;
+        uint32 sign = v.neg ? 0x80000000u : 0;
+        uint32 infinity = 255u << 10, over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
+        int64 code = v.inf ? infinity : v.m ? encode(v.m, v.e, 8, 10, R_RN) : 0;
+        uint32 bits = sign | (code >= infinity ? over : (uint32)code) << 13;
+        return bits == 0x80000000u ? 0 : bits;
+    }
+    if (kind <= 1)
+        return pzo_half(v, (int)kind, flags);
+    return pzo_half(v, kind == 4, flags) << 16 | pzo_half(from_f32(b), kind == 4, flags);
+}
+
+// ---------------------------------------------------------------- stochastic rounding (cvt.rs, PTX ISA 9.7.9.22)
+// The magnitude code of v (unbounded above) rounded toward zero, or away from zero when the k random bits r added to
+// the k most significant discarded bits carry out
+static int64 encode_rs(value v, int exponent_bits_, int mantissa_bits_, uint32 r, int k) {
+    int bias = (1 << (exponent_bits_ - 1)) - 1;
+    int p = v.e + bit_length(v.m) - 1;
+    if (p < 1 - bias)
+        p = 1 - bias;
+    int discarded = (p - mantissa_bits_) - v.e;
+    uint64 t = 0;
+    if (discarded > 0) {
+        if (discarded >= k)
+            t = discarded - k >= 64 ? 0 : (v.m >> (discarded - k)) & ((1ull << k) - 1);
+        else
+            t = (v.m & ((1ull << discarded) - 1)) << (k - discarded);
+    }
+    int away = discarded > 0 && t + r >= (1ull << k);
+    return encode(v.m, v.e, exponent_bits_, mantissa_bits_, away ? R_RP : R_RZ);
+}
+
+static uint32 rs_half(value v, int bf16, uint32 flags, uint32 r) {
+    int eb = bf16 ? 8 : 5, mb = bf16 ? 7 : 10;
+    uint32 infinity = ((1u << eb) - 1) << mb;
+    uint32 result;
+    if (v.nan)
+        result = 0x7fff;
+    else if ((flags & F_RELU) && v.neg)
+        result = 0;
+    else {
+        uint32 sign = v.neg ? 0x8000 : 0;
+        uint32 over = (flags & F_SATFINITE) ? infinity - 1 : infinity;
+        int64 code = v.inf ? infinity : v.m ? encode_rs(v, eb, mb, r, bf16 ? 16 : 13) : 0;
+        result = sign | (code >= infinity ? over : (uint32)code);
+    }
+    return (flags & F_PZO) && result == 0x8000 ? 0 : result;
+}
+
+static uint32 rs_mini(uint32 kind, value v, uint32 flags, uint32 r) {
+    int k = kind == K_E2M1 ? 8 : 16;
+    uint32 sign = v.neg ? 1u << (element_bits(kind) - 1) : 0;
+    uint32 code;
+    if (v.nan)
+        return kind == K_E4M3 || kind == K_E5M2 ? 127 : (uint32)top(kind);
+    if ((flags & F_RELU) && v.neg)
+        return 0;
+    if (v.inf)
+        code = sign | (uint32)top(kind);
+    else {
+        int64 c = v.m ? encode_rs(v, exponent_bits(kind), mantissa_bits(kind), r, k) : 0;
+        code = sign | (uint32)(c > top(kind) ? top(kind) : c);
+    }
+    return (flags & F_PZO) && code == (1u << (element_bits(kind) - 1)) ? 0 : code;
+}
+
+// cvt.rs{.relu}{.satfinite}{.pzo}.{f16x2,bf16x2}.f32 d, a, b, rbits (kind 8, 9: a in the high half, rbits[28:16] /
+// rbits[12:0] for f16, rbits[31:16] / rbits[15:0] for bf16) and
+// cvt.rs{.relu}.satfinite{.pzo}.{e4m3x4,e5m2x4,e2m3x4,e3m2x4,e2m1x4}.f32 d, {a, b, e, f}, rbits (a in the most
+// significant element; rbits[31:24], [15:8], [23:16], [7:0] for the elements of .e2m1x4, rbits[31:16] for a and b
+// and rbits[15:0] for e and f otherwise)
+uint32 __zluda_ptx_impl_agx_cvt_rs(uint32 kind, uint32 flags, uint32 a, uint32 b, uint32 e, uint32 f, uint32 rbits) {
+    if (kind >= 8) {
+        int bf16 = kind == 9;
+        uint32 mask = bf16 ? 0xffff : 0x1fff;
+        return rs_half(from_f32(a), bf16, flags, (rbits >> 16) & mask) << 16 | rs_half(from_f32(b), bf16, flags, rbits & mask);
+    }
+    if (kind == K_E2M1)
+        return rs_mini(kind, from_f32(a), flags, rbits >> 24) << 12 | rs_mini(kind, from_f32(b), flags, (rbits >> 8) & 255) << 8 |
+               rs_mini(kind, from_f32(e), flags, (rbits >> 16) & 255) << 4 | rs_mini(kind, from_f32(f), flags, rbits & 255);
+    return rs_mini(kind, from_f32(a), flags, rbits >> 16) << 24 | rs_mini(kind, from_f32(b), flags, rbits >> 16) << 16 |
+           rs_mini(kind, from_f32(e), flags, rbits & 0xffff) << 8 | rs_mini(kind, from_f32(f), flags, rbits & 0xffff);
+}
+
+// ---------------------------------------------------------------- alternate floating point x4 (PTX ISA 9.4 9.7.6)
+// add / sub{.rn}{.satfinite}.dtype.atype d, a, c; mul.dtype.atype.ctype d, a, c; fma.dtype.atype.btype d, a, b, c:
+// four elements, each operation exact and rounded to nearest even into the .e4m3 / .e5m2 elements of d (and c of
+// add / sub / fma). Without .satfinite an .e4m3 overflow is NaN (0x7f), an .e5m2 one infinity; a NaN is 0x7f.
+enum { X_E4M3, X_E5M2, X_E2M3, X_E3M2, X_E2M1, X_UE8M0, X_E2M1P4 };
+enum { A_ADD, A_SUB, A_MUL, A_FMA };
+
+static value x4_element(uint32 kind, uint32 v, uint32 i) {
+    if (kind == X_UE8M0) {
+        uint32 c = (v >> (8 * i)) & 255;
+        value r = {0, c == 255, 0, 1, (int)c - 127};
+        return r;
+    }
+    if (kind == X_E2M1)
+        return decode_element(K_E2M1, (v >> (4 * i)) & 15);
+    if (kind == X_E2M1P4)
+        return decode_element(K_E2M1, (v >> (8 * i)) & 15);
+    uint32 k = kind == X_E4M3 ? K_E4M3 : kind == X_E5M2 ? K_E5M2 : kind == X_E2M3 ? K_E2M3 : K_E3M2;
+    return decode_element(k, (v >> (8 * i)) & ((1u << element_bits(k)) - 1));
+}
+
+static value x4_mul(value x, value y) {
+    value r = {x.neg ^ y.neg, 0, 0, 0, 0};
+    if (x.nan || y.nan || ((x.inf || y.inf) && ((!x.m && !x.inf) || (!y.m && !y.inf)))) {
+        r.nan = 1;
+        return r;
+    }
+    if (x.inf || y.inf) {
+        r.inf = 1;
+        return r;
+    }
+    r.m = x.m * y.m;
+    r.e = x.e + y.e;
+    return r;
+}
+
+// x + y exactly; a much smaller operand only decides the rounding, as a sticky bit below the larger one's
+static value x4_add(value x, value y) {
+    value r = {0, 0, 0, 0, 0};
+    if (x.nan || y.nan || (x.inf && y.inf && x.neg != y.neg)) {
+        r.nan = 1;
+        return r;
+    }
+    if (x.inf || y.inf) {
+        r.inf = 1;
+        r.neg = x.inf ? x.neg : y.neg;
+        return r;
+    }
+    if (!x.m || !y.m) {
+        if (!x.m && !y.m) {
+            r.neg = x.neg && y.neg;
+            return r;
+        }
+        return x.m ? x : y;
+    }
+    int px = x.e + bit_length(x.m), py = y.e + bit_length(y.m);
+    if (px < py || (px == py && x.e > y.e)) {
+        value t = x;
+        x = y;
+        y = t;
+        int u = px;
+        px = py;
+        py = u;
+    }
+    // x is the larger in magnitude
+    if (px - py > 40) {
+        r.neg = x.neg;
+        r.m = (x.m << 3) + (x.neg == y.neg ? 1 : (uint64)-1);
+        r.e = x.e - 3;
+        return r;
+    }
+    int e = x.e < y.e ? x.e : y.e;
+    int64 a = (int64)(x.m << (x.e - e)), b = (int64)(y.m << (y.e - e));
+    int64 sum = (x.neg ? -a : a) + (y.neg ? -b : b);
+    r.neg = sum < 0;
+    r.m = (uint64)(sum < 0 ? -sum : sum);
+    r.e = e;
+    return r;
+}
+
+static uint32 x4_encode(uint32 kind, value z, uint32 satfinite) {
+    uint32 k = kind == X_E5M2 ? K_E5M2 : K_E4M3;
+    uint32 sign = z.neg ? 128 : 0;
+    uint32 over = satfinite ? sign + (uint32)top(k) : k == K_E5M2 ? sign + 124 : 127;
+    if (z.nan)
+        return 127;
+    if (z.inf)
+        return over;
+    if (!z.m)
+        return sign;
+    int64 code = encode(z.m, z.e, exponent_bits(k), mantissa_bits(k), R_RN);
+    return code <= top(k) ? sign + (uint32)code : over;
+}
+
+// kinds: d | a << 4 | b << 8 | c << 12
+uint32 __zluda_ptx_impl_agx_altfp_x4(uint32 op, uint32 kinds, uint32 satfinite, uint32 a, uint32 b, uint32 c) {
+    uint32 dk = kinds & 15, ak = (kinds >> 4) & 15, bk = (kinds >> 8) & 15, ck = (kinds >> 12) & 15;
+    uint32 result = 0;
+    for (uint32 i = 0; i < 4; i++) {
+        value x = x4_element(ak, a, i), y = x4_element(ck, c, i), z;
+        if (op == A_MUL)
+            z = x4_mul(x, y);
+        else if (op == A_FMA)
+            z = x4_add(x4_mul(x, x4_element(bk, b, i)), y);
+        else {
+            if (op == A_SUB)
+                y.neg ^= 1;
+            z = x4_add(x, y);
+        }
+        result |= x4_encode(dk, z, satfinite) << (8 * i);
     }
     return result;
 }
@@ -344,12 +601,15 @@ uint64 __zluda_ptx_impl_agx_spd_iter(uint32 es, uint32 ib, uint32 ns, uint32 nt,
 }
 
 // ---------------------------------------------------------------- tcgen05 tensor memory
-// The tensor memory of a CTA (128 lanes x 512 32-bit columns) is a slab of device memory. A CTA claims a free slab
-// at its first tcgen05.alloc (the owner word holds its linear CTA index + 1) and gives it back when its last
-// allocation is freed; the allocation map (16 granules of 32 columns) is next to the owner word. A CTA that finds no
-// free slab waits for one.
+// The tensor memory of a CTA (128 lanes x 576 32-bit columns, the most an exclusive allocation takes, in rows of
+// 1024 words) is a slab of device memory. A CTA claims a free slab at its first tcgen05.alloc (the owner word holds
+// its linear CTA index + 1) and gives it back when its last allocation is freed; the allocation map (18 granules of
+// 32 columns, bit 31 while an exclusive allocation is live) is next to the owner word. A CTA that finds no free slab
+// waits for one.
 #define TMEM_SLABS 4
-#define TMEM_WORDS (128 * 512)
+#define TMEM_COLS 1024
+#define TMEM_WORDS (128 * TMEM_COLS)
+#define TMEM_EXCLUSIVE 0x80000000u
 typedef __attribute__((address_space(1))) uint32 global_uint32;
 static global_uint32 __zluda_agx_tmem_owner[TMEM_SLABS];
 static global_uint32 __zluda_agx_tmem_map[TMEM_SLABS];
@@ -386,17 +646,28 @@ static int tmem_claim(uint32 key) {
     return slab;
 }
 
-// tcgen05.alloc (the elected lane of the warp): the column of a free, aligned run of ncols columns
-uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader) {
+// tcgen05.alloc (the elected lane of the warp): the column of a free, aligned run of ncols columns. An exclusive
+// allocation (any multiple of 32 columns up to 576) waits until the CTA has no other live allocation and starts at
+// column 0; the other allocations wait while it is live.
+uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader, uint32 exclusive) {
     if (!leader)
         return 0;
-    if (ncols < 32 || ncols > 512 || (ncols & (ncols - 1)))
+    if (exclusive ? (ncols < 32 || ncols > 576 || (ncols & 31)) : (ncols < 32 || ncols > 512 || (ncols & (ncols - 1))))
         __builtin_trap();
     int slab = tmem_claim(tmem_key());
     uint32 n = ncols / 32;
-    uint32 ones = n == 16 ? 0xffff : (1u << n) - 1;
+    uint32 ones = (1u << n) - 1;
     for (;;) {
         uint32 map = __atomic_load_n(&__zluda_agx_tmem_map[slab], __ATOMIC_ACQUIRE);
+        if (exclusive) {
+            uint32 expected = 0;
+            if (__atomic_compare_exchange_n(&__zluda_agx_tmem_map[slab], &expected, ones | TMEM_EXCLUSIVE, 0,
+                                            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                return 0;
+            continue;
+        }
+        if (map & TMEM_EXCLUSIVE)
+            continue;
         uint32 b = 0;
         while (b + n <= 16 && (map & (ones << b)))
             b += n;
@@ -408,16 +679,29 @@ uint32 __zluda_ptx_impl_agx_tmem_alloc(uint32 ncols, uint32 leader) {
     }
 }
 
+uint64 __zluda_ptx_impl_agx_tmem_base(void);
+
+// The tensor memory of a new CTA reads as zero: after tcgen05.alloc each lane of the warp zeroes the words lane,
+// lane + 32, ... of the 128 lanes x ncols columns at taddr
+void __zluda_ptx_impl_agx_tmem_zero(uint32 taddr, uint32 ncols, uint32 lane) {
+    global_uint32 *base = (global_uint32 *)(unsigned long)__zluda_ptx_impl_agx_tmem_base();
+    uint32 column = taddr & 0xffff;
+    for (uint32 w = lane; w < 128 * ncols; w += 32)
+        base[(w / ncols) * TMEM_COLS + ((column + w % ncols) & (TMEM_COLS - 1))] = 0;
+}
+
 // tcgen05.dealloc (the elected lane): frees the columns at taddr, and the slab with the last of them
-void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader) {
+void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader, uint32 exclusive) {
     if (!leader)
         return;
     int slab = tmem_find(tmem_key());
     uint32 column = taddr & 0xffff;
-    if (slab < 0 || (column & 31) || ncols < 32 || ncols > 512)
+    if (slab < 0 || (column & 31) || ncols < 32 || ncols > (exclusive ? 576 : 512))
         __builtin_trap();
     uint32 n = ncols / 32;
-    uint32 bits = (n == 16 ? 0xffff : (1u << n) - 1) << (column / 32);
+    uint32 bits = ((1u << n) - 1) << (column / 32);
+    if (exclusive)
+        bits |= TMEM_EXCLUSIVE;
     uint32 old = __atomic_fetch_and(&__zluda_agx_tmem_map[slab], ~bits, __ATOMIC_ACQ_REL);
     if ((old & bits) != bits)
         __builtin_trap();
@@ -425,7 +709,7 @@ void __zluda_ptx_impl_agx_tmem_dealloc(uint32 taddr, uint32 ncols, uint32 leader
         __atomic_store_n(&__zluda_agx_tmem_owner[slab], 0, __ATOMIC_RELEASE);
 }
 
-// The address of the CTA's tensor memory: lane l, column c is the 32-bit word l * 512 + c
+// The address of the CTA's tensor memory: lane l, column c is the 32-bit word l * TMEM_COLS + c
 uint64 __zluda_ptx_impl_agx_tmem_base(void) {
     int slab = tmem_find(tmem_key());
     if (slab < 0)
@@ -499,7 +783,7 @@ static uint32 tile_word(uint64 desc, uint32 i, uint32 w) {
 }
 
 static global_uint32 *tmem_word(global_uint32 *base, uint32 lane, uint32 column) {
-    return &base[(lane & 127) * 512 + (column & 511)];
+    return &base[(lane & 127) * TMEM_COLS + (column & (TMEM_COLS - 1))];
 }
 
 // The cluster placeholders of zluda_ptx_impl_agx.ll (llvm_zluda's LowerClusters): __zluda_agx_cluster(3..5) the
@@ -664,4 +948,484 @@ uint32 __zluda_ptx_impl_agx_tcgen05_spc_f32(uint32 op, uint32 e0, uint32 e1, uin
     if (keep3)
         result |= 3u << (2 * count++);
     return result;
+}
+
+// ---------------------------------------------------------------- multimem (PTX ISA 9.7.10.15), on one GPU
+// A multimem address in a window of the table at MM_BASE (filled by whoever maps the windows: the runtime, the
+// conformance harness's .multimem) stands for the same offset in each of the window's device buffers: window k
+// starts at MM_BASE + (k + 1) * MM_WINDOW and table entry k holds the count and the buffers. Any other address is a
+// multicast object of one device (its own memory). ld_reduce loads each device's element and folds them in device
+// order; st and red store or reduce on each device in device order.
+#define MM_BASE 0x700000000000ull
+#define MM_WINDOW (1ull << 36)
+typedef __attribute__((address_space(1))) uint64 global_uint64;
+typedef __attribute__((address_space(1))) unsigned short global_uint16;
+typedef __attribute__((address_space(1))) unsigned char global_uint8;
+
+static uint32 mm_count(uint64 a) {
+    if (a < MM_BASE + MM_WINDOW || a >= MM_BASE + 256 * MM_WINDOW)
+        return 1;
+    uint64 k = (a - MM_BASE) / MM_WINDOW - 1;
+    return *(global_uint32 *)(unsigned long)(MM_BASE + 64 * k);
+}
+
+static uint64 mm_device(uint64 a, uint32 i) {
+    if (a < MM_BASE + MM_WINDOW || a >= MM_BASE + 256 * MM_WINDOW)
+        return a;
+    uint64 k = (a - MM_BASE) / MM_WINDOW - 1;
+    return *(global_uint64 *)(unsigned long)(MM_BASE + 64 * k + 8 + 8 * i) + (a - MM_BASE) % MM_WINDOW;
+}
+
+enum { M_ADD, M_MIN, M_MAX, M_AND, M_OR, M_XOR };
+enum { T_B32, T_U32, T_S32, T_B64, T_U64, T_S64, T_F32, T_F64, T_F16, T_BF16, T_F16X2, T_BF16X2, T_E4M3, T_E5M2,
+       T_E4M3X2, T_E5M2X2, T_E4M3X4, T_E5M2X4 };
+// the floating point formats of a lane and of an accumulator
+enum { P_F32, P_F16, P_BF16, P_E4M3, P_E5M2, P_F64 };
+
+typedef union {
+    double d;
+    uint64 u;
+} f64_bits;
+
+static value from_f64(uint64 x) {
+    value v = {(int)(x >> 63), 0, 0, 0, 0};
+    uint32 exponent = (x >> 52) & 2047;
+    uint64 fraction = x & ((1ull << 52) - 1);
+    if (exponent == 2047) {
+        v.nan = fraction != 0;
+        v.inf = fraction == 0;
+    } else if (exponent == 0) {
+        v.m = fraction;
+        v.e = -1074;
+    } else {
+        v.m = fraction | (1ull << 52);
+        v.e = (int)exponent - 1075;
+    }
+    return v;
+}
+
+// the value as a double (exact for the formats here)
+static double to_f64(value v) {
+    f64_bits b;
+    if (v.nan)
+        b.u = 0x7ff8000000000000ull;
+    else if (v.inf)
+        b.u = 0x7ff0000000000000ull;
+    else if (!v.m)
+        b.u = 0;
+    else {
+        // a normal double: the significands here have at most 53 bits
+        int length = bit_length(v.m);
+        b.u = (uint64)(v.e + length - 1 + 1023) << 52 | ((v.m << (53 - length)) & ((1ull << 52) - 1));
+    }
+    if (v.neg)
+        b.u |= 1ull << 63;
+    return b.d;
+}
+
+static double mm_decode(uint32 p, uint32 bits) {
+    switch (p) {
+    case P_F32:
+        return to_f64(from_f32(bits));
+    case P_F16:
+        return to_f64(from_f16(bits));
+    case P_BF16:
+        return to_f64(from_f32(bits << 16));
+    case P_E4M3:
+        return to_f64(decode_element(K_E4M3, bits & 255));
+    default:
+        return to_f64(decode_element(K_E5M2, bits & 255));
+    }
+}
+
+// x rounded to nearest even into the format (an infinity on overflow, saturating for the fp8 formats), as its bits
+static uint32 mm_encode(uint32 p, double x) {
+    f64_bits b;
+    b.d = x;
+    value v = from_f64(b.u);
+    if (p == P_E4M3 || p == P_E5M2)
+        return narrow_element(p == P_E4M3 ? K_E4M3 : K_E5M2, R_RN, v);
+    if (p == P_F32) {
+        if (v.nan)
+            return 0x7fffffff;
+        uint32 sign = v.neg ? 0x80000000u : 0;
+        int64 code = v.inf ? 255ll << 23 : v.m ? encode(v.m, v.e, 8, 23, R_RN) : 0;
+        return sign | (uint32)(code > (255ll << 23) ? 255ll << 23 : code);
+    }
+    return v.nan ? 0x7fff : to_half(v, p == P_BF16, 0);
+}
+
+// PTX min / max: a NaN operand gives the other one, -0 is below +0
+static double mm_op(uint32 op, double x, double y) {
+    if (op == M_ADD)
+        return x + y;
+    if (x != x)
+        return y;
+    if (y != y)
+        return x;
+    if (x == y) {
+        f64_bits a, b;
+        a.d = x;
+        b.d = y;
+        a.u = op == M_MIN ? a.u | b.u : a.u & b.u;
+        return a.d;
+    }
+    return (op == M_MIN) == (x < y) ? x : y;
+}
+
+static double mm_round(uint32 p, double x) { return p == P_F64 ? x : mm_decode(p, mm_encode(p, x)); }
+
+// one step of the reduction in the accumulator format (the fp8 formats operate in f16)
+static double mm_comb(uint32 op, uint32 a, double x, double y) {
+    double r = mm_op(op, x, y);
+    if (a == P_E4M3 || a == P_E5M2)
+        r = mm_round(P_F16, r);
+    return mm_round(a, r);
+}
+
+static uint32 mm_lane_format(uint32 type) {
+    switch (type) {
+    case T_F16:
+    case T_F16X2:
+        return P_F16;
+    case T_BF16:
+    case T_BF16X2:
+        return P_BF16;
+    case T_E4M3:
+    case T_E4M3X2:
+    case T_E4M3X4:
+        return P_E4M3;
+    case T_E5M2:
+    case T_E5M2X2:
+    case T_E5M2X4:
+        return P_E5M2;
+    case T_F64:
+        return P_F64;
+    default:
+        return P_F32;
+    }
+}
+
+static uint32 mm_lanes(uint32 type) {
+    return type == T_F16X2 || type == T_BF16X2 || type == T_E4M3X2 || type == T_E5M2X2 ? 2
+           : type == T_E4M3X4 || type == T_E5M2X4                                     ? 4
+                                                                                       : 1;
+}
+
+static uint32 mm_bytes(uint32 type) {
+    if (type == T_E4M3 || type == T_E5M2)
+        return 1;
+    if (type == T_F16 || type == T_BF16 || type == T_E4M3X2 || type == T_E5M2X2)
+        return 2;
+    if (type == T_B64 || type == T_U64 || type == T_S64 || type == T_F64)
+        return 8;
+    return 4;
+}
+
+static uint64 mm_load(uint64 a, uint32 bytes) {
+    if (bytes == 1)
+        return *(global_uint8 *)(unsigned long)a;
+    if (bytes == 2)
+        return *(global_uint16 *)(unsigned long)a;
+    if (bytes == 4)
+        return *(global_uint32 *)(unsigned long)a;
+    return *(global_uint64 *)(unsigned long)a;
+}
+
+// acc and x combined as the type's elements (the integers as in atom)
+static uint64 mm_combine(uint32 op, uint32 type, uint32 acc_format, uint64 acc, uint64 x) {
+    if (type <= T_S64) {
+        int wide = type >= T_B64;
+        int is_signed = type == T_S32 || type == T_S64;
+        uint64 mask = wide ? ~0ull : 0xffffffffull;
+        int64 sa = wide ? (int64)acc : (int64)(int32)(uint32)acc, sx = wide ? (int64)x : (int64)(int32)(uint32)x;
+        uint64 ua = acc & mask, ux = x & mask;
+        switch (op) {
+        case M_ADD:
+            return (ua + ux) & mask;
+        case M_MIN:
+            return (is_signed ? (sx < sa ? x : acc) : (ux < ua ? x : acc)) & mask;
+        case M_MAX:
+            return (is_signed ? (sx > sa ? x : acc) : (ux > ua ? x : acc)) & mask;
+        case M_AND:
+            return ua & ux;
+        case M_OR:
+            return ua | ux;
+        default:
+            return ua ^ ux;
+        }
+    }
+    if (type == T_F64) {
+        f64_bits a, b;
+        a.u = acc;
+        b.u = x;
+        a.d = mm_op(op, a.d, b.d);
+        return a.u;
+    }
+    uint32 l = mm_lane_format(type), width = 8 * mm_bytes(type) / mm_lanes(type);
+    uint64 out = 0;
+    for (uint32 j = 0; j < mm_lanes(type); j++) {
+        uint32 lane_mask = width == 32 ? 0xffffffffu : (1u << width) - 1;
+        double y = mm_decode(l, (uint32)(acc >> (width * j)) & lane_mask);
+        double z = mm_decode(l, (uint32)(x >> (width * j)) & lane_mask);
+        out |= (uint64)(mm_encode(l, mm_comb(op, l, y, z)) & lane_mask) << (width * j);
+    }
+    (void)acc_format;
+    return out;
+}
+
+// multimem.ld_reduce of the element at a: desc = op | type << 3 | acc << 8 (0 none, 1 .acc::f32, 2 .acc::f16)
+uint64 __zluda_ptx_impl_agx_mm_ld_reduce(uint64 a, uint32 desc) {
+    uint32 op = desc & 7, type = (desc >> 3) & 31, acc = (desc >> 8) & 3;
+    uint32 n = mm_count(a), bytes = mm_bytes(type);
+    if (type <= T_S64 || type == T_F64 || acc == 0) {
+        uint64 r = mm_load(mm_device(a, 0), bytes);
+        for (uint32 i = 1; i < n; i++)
+            r = mm_combine(op, type, 0, r, mm_load(mm_device(a, i), bytes));
+        return r;
+    }
+    // in the accumulator's format, each lane rounded back at the end
+    uint32 l = mm_lane_format(type), p = acc == 1 ? P_F32 : P_F16;
+    uint32 width = 8 * bytes / mm_lanes(type), lane_mask = width == 32 ? 0xffffffffu : (1u << width) - 1;
+    uint64 out = 0;
+    for (uint32 j = 0; j < mm_lanes(type); j++) {
+        double r = 0;
+        for (uint32 i = 0; i < n; i++) {
+            double x = mm_round(p, mm_decode(l, (uint32)(mm_load(mm_device(a, i), bytes) >> (width * j)) & lane_mask));
+            r = i == 0 ? x : mm_comb(op, p, r, x);
+        }
+        out |= (uint64)(mm_encode(l, r) & lane_mask) << (width * j);
+    }
+    return out;
+}
+
+void __zluda_ptx_impl_agx_mm_st(uint64 a, uint64 v, uint32 bytes) {
+    for (uint32 i = 0; i < mm_count(a); i++) {
+        uint64 d = mm_device(a, i);
+        if (bytes == 1)
+            *(global_uint8 *)(unsigned long)d = (unsigned char)v;
+        else if (bytes == 2)
+            *(global_uint16 *)(unsigned long)d = (unsigned short)v;
+        else if (bytes == 4)
+            *(global_uint32 *)(unsigned long)d = (uint32)v;
+        else
+            *(global_uint64 *)(unsigned long)d = v;
+    }
+}
+
+// .f32 additions in device memory flush subnormal operands and results to zero (red.global.add.f32)
+static uint32 mm_ftz32(uint32 x) { return (x & 0x7f800000) == 0 ? x & 0x80000000u : x; }
+
+// multimem.red: an atomic update of each device's element (compare and swap on the aligned word holding it)
+void __zluda_ptx_impl_agx_mm_red(uint64 a, uint64 v, uint32 desc) {
+    uint32 op = desc & 7, type = (desc >> 3) & 31, bytes = mm_bytes(type);
+    for (uint32 i = 0; i < mm_count(a); i++) {
+        uint64 d = mm_device(a, i);
+        if (bytes == 8) {
+            global_uint64 *p = (global_uint64 *)(unsigned long)d;
+            uint64 old = *p;
+            while (!__atomic_compare_exchange_n(p, &old, mm_combine(op, type, 0, old, v), 0, __ATOMIC_RELAXED,
+                                                __ATOMIC_RELAXED))
+                ;
+            continue;
+        }
+        global_uint32 *p = (global_uint32 *)(unsigned long)(d & ~3ull);
+        uint32 shift = 8 * (uint32)(d & 3), mask = bytes == 4 ? 0xffffffffu : ((1u << (8 * bytes)) - 1) << shift;
+        uint32 old = *p;
+        for (;;) {
+            uint32 e = (old & mask) >> shift, x = (uint32)v;
+            uint32 r = type == T_F32 && op == M_ADD ? mm_ftz32((uint32)mm_combine(op, type, 0, mm_ftz32(e), mm_ftz32(x)))
+                                                    : (uint32)mm_combine(op, type, 0, e, x);
+            uint32 next = (old & ~mask) | ((r << shift) & mask);
+            if (__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+                break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------- cp.reduce.async.bulk on .f16 / .bf16
+// each element updated atomically (a compare and swap on its aligned word): op 10 add (keeping subnormals, as .noftz),
+// 11 min, 12 max (PTX's: a NaN operand gives the other one), with bit 8 for .bf16
+typedef __attribute__((address_space(3))) uint32 shared_word;
+static uint32 h16_update(uint32 op, uint32 e, uint32 x) {
+    uint32 p = (op >> 8) & 1 ? P_BF16 : P_F16;
+    uint32 o = (op & 255) == 10 ? M_ADD : (op & 255) == 11 ? M_MIN : M_MAX;
+    return mm_encode(p, mm_op(o, mm_decode(p, e), mm_decode(p, x))) & 0xffff;
+}
+
+void __zluda_ptx_impl_agx_cp_reduce_bulk_h16_global(global_uint16 *dst, __attribute__((address_space(3))) unsigned short *src,
+                                                     uint32 size, uint32 op) {
+    for (uint32 i = 0; i < size / 2; i++) {
+        uint64 a = (uint64)(unsigned long)(dst + i);
+        global_uint32 *w = (global_uint32 *)(unsigned long)(a & ~3ull);
+        uint32 shift = 8 * (uint32)(a & 3), x = src[i];
+        uint32 old = *w;
+        while (!__atomic_compare_exchange_n(w, &old, (old & ~(0xffffu << shift)) | h16_update(op, (old >> shift) & 0xffff, x) << shift,
+                                            0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            ;
+    }
+}
+
+void __zluda_ptx_impl_agx_cp_reduce_bulk_h16_shared(__attribute__((address_space(3))) unsigned short *dst,
+                                                     __attribute__((address_space(3))) unsigned short *src, uint32 size, uint32 op) {
+    for (uint32 i = 0; i < size / 2; i++) {
+        uint32 a = (uint32)(unsigned long)(dst + i);
+        shared_word *w = (shared_word *)(unsigned long)(a & ~3u);
+        uint32 shift = 8 * (a & 3), x = src[i];
+        uint32 old = *w;
+        while (!__atomic_compare_exchange_n(w, &old, (old & ~(0xffffu << shift)) | h16_update(op, (old >> shift) & 0xffff, x) << shift,
+                                            0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            ;
+    }
+}
+
+// ---------------------------------------------------------------- fabric.* (PTX ISA 9.4 9.7.10.4-5), on one GPU
+// The logical endpoints are those of the table at FAB_TABLE (filled by the conformance harness's .fabric): entry le
+// (64 bytes) holds the device count, the size of the endpoint's memory and up to 7 device buffers. A unicast
+// operation reaches the first device, a .multimem one each device in order. The transfers complete at once, on the
+// mbarrier: try_get and try_pullred count bytes, try_put and try_red 16-byte units, try_atom one unit.
+#define FAB_TABLE 0x6ff000000000ull
+typedef __attribute__((address_space(3))) unsigned char shared_byte;
+typedef __attribute__((address_space(3))) uint64 shared_uint64;
+void __zluda_ptx_impl_agx_mbarrier_complete_tx(shared_uint64 *mbar, uint32 count);
+
+static uint32 fab_count(uint32 le) { return *(global_uint32 *)(unsigned long)(FAB_TABLE + 64ull * (le & 255)); }
+
+// the device address of [le, off .. off + n) on device i, trapping outside the endpoint
+static uint64 fab_device(uint32 le, uint64 off, uint64 n, uint32 i) {
+    uint64 entry = FAB_TABLE + 64ull * (le & 255);
+    uint64 size = *(global_uint32 *)(unsigned long)(entry + 4);
+    if (le > 255 || i >= fab_count(le) || off + n > size)
+        __builtin_trap();
+    return *(global_uint64 *)(unsigned long)(entry + 8 + 8 * i) + off;
+}
+
+void __zluda_ptx_impl_agx_fabric_get(shared_byte *dst, uint32 le, uint64 off, uint32 n, shared_uint64 *mbar) {
+    global_uint8 *src = (global_uint8 *)(unsigned long)fab_device(le, off, n, 0);
+    for (uint32 i = 0; i < n; i++)
+        dst[i] = src[i];
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n);
+}
+
+// flags: bit 0 .multimem, bit 1 a byte mask (.cp_mask: byte i is written when bit i % 16 is set), bit 2 a counter
+// (.counted::bytes: n added to the 64-bit word at counter on each destination device)
+void __zluda_ptx_impl_agx_fabric_put(uint32 le, uint64 off, uint64 counter, shared_byte *src, uint32 n, uint32 mask,
+                                     uint32 flags, shared_uint64 *mbar) {
+    uint32 devices = (flags & 1) ? fab_count(le) : 1;
+    for (uint32 d = 0; d < devices; d++) {
+        global_uint8 *dst = (global_uint8 *)(unsigned long)fab_device(le, off, n, d);
+        for (uint32 i = 0; i < n; i++)
+            if (!(flags & 2) || ((mask >> (i % 16)) & 1))
+                dst[i] = src[i];
+        if (flags & 4)
+            __atomic_fetch_add((global_uint64 *)(unsigned long)fab_device(le, counter, 8, d), (uint64)n, __ATOMIC_RELAXED);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n / 16);
+}
+
+static uint64 fab_load(shared_byte *p, uint32 bytes) {
+    uint64 v = 0;
+    for (uint32 i = 0; i < bytes; i++)
+        v |= (uint64)p[i] << (8 * i);
+    return v;
+}
+
+// an atomic update of the element at a: op as multimem (0 add, 1 min, 2 max, 3 and, 4 or, 5 xor) or 6 inc, 7 dec,
+// 8 exch, 9 cas (with y); returns the old value
+static uint64 fab_atomic(uint64 a, uint32 op, uint32 type, uint64 x, uint64 y) {
+    uint32 bytes = mm_bytes(type);
+    if (bytes == 8) {
+        global_uint64 *p = (global_uint64 *)(unsigned long)a;
+        uint64 old = *p, next;
+        do {
+            next = op == 8 ? x : op == 9 ? (old == x ? y : old) : mm_combine(op, type, 0, old, x);
+        } while (!__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
+        return old;
+    }
+    global_uint32 *p = (global_uint32 *)(unsigned long)(a & ~3ull);
+    uint32 shift = 8 * (uint32)(a & 3), mask = bytes == 4 ? 0xffffffffu : ((1u << (8 * bytes)) - 1) << shift;
+    uint32 old = *p, e, r;
+    for (;;) {
+        e = (old & mask) >> shift;
+        uint32 xv = (uint32)x;
+        if (op == 6)
+            r = e >= xv ? 0 : e + 1;
+        else if (op == 7)
+            r = e == 0 || e > xv ? xv : e - 1;
+        else if (op == 8)
+            r = xv;
+        else if (op == 9)
+            r = e == xv ? (uint32)y : e;
+        else
+            r = (uint32)mm_combine(op, type, 0, e, xv);
+        uint32 next = (old & ~mask) | ((r << shift) & mask);
+        if (__atomic_compare_exchange_n(p, &old, next, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            break;
+    }
+    return e;
+}
+
+// desc = op | type << 4 (the multimem type numbers)
+void __zluda_ptx_impl_agx_fabric_red(uint32 le, uint64 off, uint64 counter, shared_byte *src, uint32 n, uint32 desc,
+                                     uint32 flags, shared_uint64 *mbar) {
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type);
+    uint32 devices = (flags & 1) ? fab_count(le) : 1;
+    for (uint32 d = 0; d < devices; d++) {
+        uint64 dst = fab_device(le, off, n, d);
+        for (uint32 i = 0; i + bytes <= n; i += bytes)
+            fab_atomic(dst + i, op, type, fab_load(src + i, bytes), 0);
+        if (flags & 4)
+            __atomic_fetch_add((global_uint64 *)(unsigned long)fab_device(le, counter, 8, d), (uint64)n, __ATOMIC_RELAXED);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n / 16);
+}
+
+// try_pullred (lane 0): each device's elements, folded in device order as multimem.ld_reduce does
+void __zluda_ptx_impl_agx_fabric_pullred(shared_byte *dst, uint32 le, uint64 off, uint32 n, uint32 desc, uint32 lane,
+                                         shared_uint64 *mbar) {
+    if (lane != 0)
+        return;
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type);
+    for (uint32 i = 0; i + bytes <= n; i += bytes) {
+        uint64 r = mm_load(fab_device(le, off + i, bytes, 0), bytes);
+        for (uint32 d = 1; d < fab_count(le); d++)
+            r = mm_combine(op, type, 0, r, mm_load(fab_device(le, off + i, bytes, d), bytes));
+        for (uint32 k = 0; k < bytes; k++)
+            dst[i + k] = (unsigned char)(r >> (8 * k));
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, n);
+}
+
+// try_atom [le, off], [dst], [src], [mbar]: the operand at src + off % 16 (and, for cas, the new value 16 bytes on),
+// the old value to dst + off % 16
+void __zluda_ptx_impl_agx_fabric_atom(uint32 le, uint64 off, shared_byte *dst, shared_byte *src, uint32 desc,
+                                      shared_uint64 *mbar) {
+    uint32 op = desc & 15, type = (desc >> 4) & 31, bytes = mm_bytes(type), so = (uint32)(off % 16);
+    uint64 x = fab_load(src + so, bytes), y = op == 9 ? fab_load(src + 16 + so, bytes) : 0;
+    uint64 old = fab_atomic(fab_device(le, off, bytes, 0), op, type, x, y);
+    for (uint32 k = 0; k < bytes; k++)
+        dst[so + k] = (unsigned char)(old >> (8 * k));
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, 1);
+}
+
+// the .tensor forms (tile mode): the tensor map with its global address replaced by the endpoint's memory at off on
+// each device (and, with .override::global_dim, its nd dimensions), copied as cp.async.bulk.tensor does. flags: bit 0
+// .multimem, bit 1 try_put. try_get counts bytes on the mbarrier, try_put size in 16-byte units.
+void __zluda_ptx_impl_agx_tma_override(uint64 *dst, const uint64 *tm, _Bool has_address, uint64 address, uint32 nd,
+                                       uint32 d0, uint32 d1, uint32 d2, uint32 d3, uint32 d4, uint32 ns, uint32 s0,
+                                       uint32 s1, uint32 s2, uint32 s3, uint32 up);
+uint32 __zluda_ptx_impl_agx_tma_copy(const uint64 *tm, uint32 c0, uint32 c1, uint32 c2, uint32 c3, uint32 c4,
+                                     uint32 imode, uint32 i0, uint32 i1, uint32 i2, uint32 smem, uint32 dir);
+void __zluda_ptx_impl_agx_fabric_tensor(const uint64 *tm, uint32 le, uint64 off, uint32 nd, uint32 d0, uint32 d1,
+                                        uint32 d2, uint32 d3, uint32 d4, uint32 c0, uint32 c1, uint32 c2, uint32 c3,
+                                        uint32 c4, shared_byte *smem, uint32 size, uint32 flags, shared_uint64 *mbar) {
+    uint64 map[16];
+    uint32 store = flags & 2, devices = store && (flags & 1) ? fab_count(le) : 1, bytes = 0;
+    for (uint32 d = 0; d < devices; d++) {
+        __zluda_ptx_impl_agx_tma_override(map, tm, 1, fab_device(le, off, 0, d), nd, d0, d1, d2, d3, d4, 0, 0, 0, 0,
+                                          0, 0);
+        bytes = __zluda_ptx_impl_agx_tma_copy(map, c0, c1, c2, c3, c4, ~0u, 0, 0, 0, (uint32)(unsigned long)smem,
+                                              store ? ~1u : ~0u);
+    }
+    __zluda_ptx_impl_agx_mbarrier_complete_tx(mbar, store ? size / 16 : bytes);
 }

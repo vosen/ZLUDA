@@ -67,18 +67,66 @@ fn system_memory() -> u64 {
     s.totalram as u64 * s.mem_unit as u64
 }
 
+/// The memory limit of the process's cgroup (v2 memory.max) and its current use, if it has a limit.
+fn cgroup_memory() -> Option<(u64, u64)> {
+    let cgroup = std::fs::read_to_string("/proc/self/cgroup").ok()?;
+    let path = cgroup.lines().find_map(|l| l.strip_prefix("0::"))?;
+    let dir = std::path::Path::new("/sys/fs/cgroup").join(path.trim_start_matches('/'));
+    let max = std::fs::read_to_string(dir.join("memory.max")).ok()?.trim().parse::<u64>().ok()?;
+    let current = std::fs::read_to_string(dir.join("memory.current")).ok()?.trim().parse::<u64>().unwrap_or(0);
+    Some((max, current))
+}
+
 /// The allocation containing `[va, va + len)`, by its start address.
 fn find<T>(allocs: &BTreeMap<u64, T>, va: u64, len: u64, size: impl Fn(&T) -> u64) -> Option<u64> {
     let (&start, a) = allocs.range(..=va).next_back()?;
     (va.checked_add(len)? <= start + size(a)).then_some(start)
 }
 
+/// The memory of an allocation: an object of its own, or part of a physical allocation mapped at the address
+/// (the virtual memory management API: cuMemCreate, cuMemMap).
+enum Memory {
+    Bo(Bo),
+    // the mapping first: fields drop in order, and the binding goes before the object can
+    Mapped { mapping: crate::Mapping, phys: std::rc::Rc<Bo>, offset: u64 },
+}
+
+impl Memory {
+    fn unified(&self) -> bool {
+        match self {
+            Memory::Bo(bo) => bo.unified(),
+            Memory::Mapped { .. } => false,
+        }
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Memory::Bo(bo) => bo.as_slice(),
+            Memory::Mapped { phys, offset, mapping } => unsafe {
+                std::slice::from_raw_parts(phys.map.add(*offset as usize), mapping.size as usize)
+            },
+        }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            Memory::Bo(bo) => bo.as_mut_slice(),
+            // the physical allocation's pages, which other mappings may also show
+            Memory::Mapped { phys, offset, mapping } => unsafe {
+                std::slice::from_raw_parts_mut(phys.map.add(*offset as usize), mapping.size as usize)
+            },
+        }
+    }
+}
+
+/// Fields drop in declaration order: the allocations and the queue are unbound before the VM is destroyed (a VM
+/// destroyed with objects still bound strands their memory in the kernel, also past process exit; B42).
 pub struct Context {
-    pub device: Device,
-    pub props: DeviceProps,
-    pub vm: Vm,
+    allocs: BTreeMap<u64, (Memory, u64)>,
     pub stream: Queue,
-    allocs: BTreeMap<u64, (Bo, u64)>,
+    pub vm: Vm,
+    pub props: DeviceProps,
+    pub device: Device,
 }
 
 fn invalid(m: impl Into<String>) -> io::Error {
@@ -98,13 +146,76 @@ impl Context {
     pub fn mem_alloc(&mut self, size: u64) -> io::Result<u64> {
         let bo = self.vm.alloc_data(size)?;
         let va = bo.va;
-        self.allocs.insert(va, (bo, size.max(1)));
+        self.allocs.insert(va, (Memory::Bo(bo), size.max(1)));
         Ok(va)
+    }
+
+    /// cuMemMap: `size` bytes of the physical allocation `phys` from `offset`, at `va` (in a range from
+    /// `vm.reserve`).
+    pub fn mem_map(&mut self, va: u64, phys: &std::rc::Rc<Bo>, offset: u64, size: u64) -> io::Result<()> {
+        if find(&self.allocs, va, 0, |a| a.1).is_some() || find(&self.allocs, va + size.max(1) - 1, 0, |a| a.1).is_some()
+            || self.allocs.range(va..va + size).next().is_some()
+        {
+            return Err(invalid(format!("{va:#x}+{size} overlaps a mapping")));
+        }
+        let mapping = self.vm.map_at(phys, offset, va, size)?;
+        self.allocs.insert(va, (Memory::Mapped { mapping, phys: phys.clone(), offset }, size));
+        Ok(())
+    }
+
+    /// cuMemUnmap: the mappings in `[va, va + size)` (each wholly inside it), after the default stream.
+    pub fn mem_unmap(&mut self, va: u64, size: u64) -> io::Result<()> {
+        let starts: Vec<u64> = self.allocs.range(va..va + size).map(|(&s, _)| s).collect();
+        if starts.is_empty()
+            || starts.iter().any(|s| !matches!(self.allocs[s].0, Memory::Mapped { .. }) || s + self.allocs[s].1 > va + size)
+        {
+            return Err(invalid(format!("{va:#x}+{size} is not a range of mappings")));
+        }
+        self.stream.synchronize()?;
+        for s in starts {
+            self.allocs.remove(&s);
+        }
+        Ok(())
+    }
+
+    /// The physical allocation mapped at `va`, if any (cuMemRetainAllocationHandle).
+    pub fn mapped_allocation(&self, va: u64) -> Option<&std::rc::Rc<Bo>> {
+        let start = find(&self.allocs, va, 0, |a| a.1)?;
+        match &self.allocs[&start].0 {
+            Memory::Mapped { phys, .. } => Some(phys),
+            Memory::Bo(_) => None,
+        }
+    }
+
+    /// The physical allocation mapped at `va` and the offset of `va` in it (cuMulticastBindAddr).
+    pub fn mapped_location(&self, va: u64) -> Option<(std::rc::Rc<Bo>, u64)> {
+        let start = find(&self.allocs, va, 0, |a| a.1)?;
+        match &self.allocs[&start].0 {
+            Memory::Mapped { phys, offset, .. } => Some((phys.clone(), offset + (va - start))),
+            Memory::Bo(_) => None,
+        }
+    }
+
+    /// Takes `bo` (bound) as an allocation of `size` bytes at its address, which mem_free releases: an imported
+    /// dma-buf (cuIpcOpenMemHandle), registered host memory (cuMemHostRegister).
+    pub fn insert_bo(&mut self, bo: Bo, size: u64) -> u64 {
+        let va = bo.va;
+        self.allocs.insert(va, (Memory::Bo(bo), size.max(1)));
+        va
+    }
+
+    /// A dma-buf of the object behind `va`, with the offset of `va` in it and its size (cuIpcGetMemHandle).
+    pub fn export_dmabuf(&self, va: u64) -> io::Result<(std::os::fd::OwnedFd, u64, u64)> {
+        let start = find(&self.allocs, va, 0, |a| a.1).ok_or_else(|| invalid(format!("{va:#x} is not allocated")))?;
+        match &self.allocs[&start].0 {
+            Memory::Bo(bo) => Ok((bo.export_dmabuf()?, va - start, bo.size)),
+            Memory::Mapped { phys, offset, .. } => Ok((phys.export_dmabuf()?, offset + (va - start), phys.size)),
+        }
     }
 
     /// cuMemFree: waits for the default stream first, as CUDA does.
     pub fn mem_free(&mut self, va: u64) -> io::Result<()> {
-        if !self.allocs.contains_key(&va) {
+        if !self.allocs.get(&va).is_some_and(|a| matches!(a.0, Memory::Bo(_))) {
             return Err(invalid(format!("{va:#x} is not an allocation")));
         }
         self.stream.synchronize()?;
@@ -119,7 +230,7 @@ impl Context {
             return Err(io::Error::new(io::ErrorKind::Unsupported, "the CPU range of the GPU address is in use"));
         }
         let va = bo.va;
-        self.allocs.insert(va, (bo, size.max(1)));
+        self.allocs.insert(va, (Memory::Bo(bo), size.max(1)));
         Ok(va)
     }
 
@@ -210,11 +321,28 @@ impl Context {
         Some(s[..s.iter().position(|&c| c == 0)?].to_vec())
     }
 
-    /// cuMemGetInfo: (free, total). The GPU shares system memory, so free is the system's available memory.
+    /// cuMemGetInfo: (free, total). The GPU shares system memory and the UAPI reports no figures of its own
+    /// (ptx-re-blockers B39): free is the system's available memory (MemAvailable, which counts reclaimable
+    /// caches), both within the process's cgroup limit if it has one.
     pub fn mem_info(&self) -> (u64, u64) {
+        let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+        let field = |name: &str| {
+            meminfo
+                .lines()
+                .find_map(|l| l.strip_prefix(name)?.trim().strip_suffix("kB")?.trim().parse::<u64>().ok())
+                .map(|kb| kb * 1024)
+        };
         let mut s: libc::sysinfo = unsafe { std::mem::zeroed() };
-        let free = if unsafe { libc::sysinfo(&mut s) } == 0 { s.freeram as u64 * s.mem_unit as u64 } else { 0 };
-        (free, self.props.total_memory)
+        let free = field("MemAvailable:").unwrap_or_else(|| {
+            if unsafe { libc::sysinfo(&mut s) } == 0 { s.freeram as u64 * s.mem_unit as u64 } else { 0 }
+        });
+        let mut total = self.props.total_memory;
+        let mut free = free.min(total);
+        if let Some((limit, used)) = cgroup_memory() {
+            total = total.min(limit);
+            free = free.min(limit.saturating_sub(used));
+        }
+        (free, total)
     }
 }
 

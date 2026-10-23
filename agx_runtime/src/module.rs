@@ -48,6 +48,13 @@ pub struct KernelInfo {
     /// The hidden arguments of a kernel built with the backend's `agx-checked` feature (`.agx.kernels`
     /// extension 2), which checks its memory accesses and reports the first bad one in an error record.
     pub checked: Option<Checked>,
+    /// Half of the hidden 32-bit argument that the launch sets to the threadgroup memory of the dispatch, static
+    /// and dynamic bytes (`.agx.kernels` extension 4, for kernels that read the shared memory size).
+    pub threadgroup_bytes_half: Option<u32>,
+    /// Half of the 64-bit texture heap address (`.agx.kernels` extension 5, a module that samples textures with
+    /// llvm.agx.texture.sample): the address of the 24-byte hardware texture descriptors whose offsets the samples
+    /// name.
+    pub texture_heap_half: Option<u32>,
 }
 
 /// Where a checked kernel takes its hidden arguments (LLVM's AGXUsage.rst, "Checked mode").
@@ -126,6 +133,11 @@ impl KernelInfo {
         (32 * self.simd_groups_per_core()).min(1024) / (self.cluster[0] * self.cluster[1] * self.cluster[2]).max(1)
     }
 }
+
+/// A table in the global data buffer of `mask(name + offset)` initializer elements (PTX ISA 5.4.4), which LLVM cannot
+/// express: per element three words, its address, the masked address and `shift | element bytes << 8`; the element is
+/// `(address >> shift) & 0xff` (`ptx/src/pass/llvm/emit.rs`).
+pub const MASKED_INIT_SYMBOL: &str = "__zluda_agx_masked_init";
 
 /// A compiled module: its code, the initial global data buffer, and its kernels.
 #[derive(Clone, Debug)]
@@ -252,6 +264,8 @@ impl<'a> Elf<'a> {
                 .collect::<Result<_, Error>>()?;
             // tagged extensions up to the end of the record
             let (mut cluster, mut checked, mut e, end) = ([1, 1, 1], None, f + 7 + 3 * nargs, at + size / 4);
+            let mut threadgroup_bytes_half = None;
+            let mut texture_heap_half = None;
             while e < end {
                 match word(e)? {
                     1 if e + 4 <= end => {
@@ -283,6 +297,14 @@ impl<'a> Elf<'a> {
                         c.table = Some((word(e + 1)?, word(e + 2)?));
                         e += 3;
                     }
+                    4 if e + 2 <= end => {
+                        threadgroup_bytes_half = Some(word(e + 1)?);
+                        e += 2;
+                    }
+                    5 if e + 2 <= end => {
+                        texture_heap_half = Some(word(e + 1)?);
+                        e += 2;
+                    }
                     _ => break,
                 }
             }
@@ -301,6 +323,8 @@ impl<'a> Elf<'a> {
                     args,
                     cluster,
                     checked,
+                    threadgroup_bytes_half,
+                    texture_heap_half,
                 },
             );
             at += size / 4;
@@ -415,6 +439,8 @@ impl Module {
                     args: Vec::new(),
                     cluster: [1, 1, 1],
                     checked: None,
+                    threadgroup_bytes_half: None,
+                    texture_heap_half: None,
                 },
             );
         }
@@ -427,12 +453,25 @@ impl Module {
         Ok(Module { text, globals, kernels, global_symbols, global_relocs, debug_object })
     }
 
-    /// The initial global data buffer once placed at `va`, with its relocations applied.
+    /// The initial global data buffer once placed at `va`, with its relocations applied, and then the masked
+    /// addresses of `MASKED_INIT_SYMBOL`.
     pub fn relocated_globals(&self, va: u64) -> Vec<u8> {
         let mut g = self.globals.clone();
         for &(offset, width, to) in &self.global_relocs {
             let v = (va + to).to_le_bytes();
             g[offset as usize..offset as usize + width as usize].copy_from_slice(&v[..width as usize]);
+        }
+        if let Some(&(table, size)) = self.global_symbols.get(MASKED_INIT_SYMBOL) {
+            let word = |g: &[u8], at: u64| u64::from_le_bytes(g[at as usize..at as usize + 8].try_into().unwrap());
+            for entry in (table..table + size).step_by(24) {
+                let (slot, address, desc) = (word(&g, entry), word(&g, entry + 8), word(&g, entry + 16));
+                let (shift, bytes) = (desc & 63, (desc >> 8) as usize);
+                let Some(at) = slot.checked_sub(va).map(|a| a as usize).filter(|&a| a + bytes <= g.len()) else {
+                    continue;
+                };
+                let v = (address >> shift) & 0xff;
+                g[at..at + bytes].copy_from_slice(&v.to_le_bytes()[..bytes]);
+            }
         }
         g
     }
@@ -875,6 +914,25 @@ mod tests {
         assert_eq!((word(x), word(y + 8)), (1, 5));
     }
 
+    // mask(name + offset) initializers: m = { 0xff(foo + 4), 0xff00(foo + 4) } with foo at 0x10 and m at 0x20
+    #[test]
+    fn stores_masked_addresses() {
+        let mut globals = vec![0u8; 0x60];
+        let entry = |g: &mut Vec<u8>, at: usize, desc: u64| g[at + 16..at + 24].copy_from_slice(&desc.to_le_bytes());
+        entry(&mut globals, 0x30, 1 << 8);
+        entry(&mut globals, 0x48, 8 | 1 << 8);
+        let m = Module {
+            text: Vec::new(),
+            globals,
+            kernels: HashMap::new(),
+            global_symbols: [(MASKED_INIT_SYMBOL.to_string(), (0x30, 48))].into_iter().collect(),
+            global_relocs: vec![(0x30, 8, 0x20), (0x38, 8, 0x14), (0x48, 8, 0x21), (0x50, 8, 0x14)],
+            debug_object: None,
+        };
+        let g = m.relocated_globals(0x1_2345_6700);
+        assert_eq!(g[0x20..0x22], [0x14, 0x67]);
+    }
+
     // tests/data/byref.ll: the backend's .agx.kernels records, and packing cuLaunchKernel-style parameters.
     #[test]
     fn packs_parameters_from_the_kernel_records() {
@@ -922,6 +980,8 @@ mod tests {
                 args: vec![],
                 cluster: [1, 1, 1],
                 checked: None,
+                threadgroup_bytes_half: None,
+                texture_heap_half: None,
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -944,6 +1004,8 @@ mod tests {
             args: vec![],
             cluster: [1, 1, 1],
             checked: None,
+            threadgroup_bytes_half: None,
+            texture_heap_half: None,
         };
         let u = pack_uniforms(
             &k,

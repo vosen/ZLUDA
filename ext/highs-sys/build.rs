@@ -34,6 +34,10 @@ fn generate_bindings<'a>(include_paths: impl Iterator<Item = &'a Path>) {
 #[cfg(feature = "build")]
 fn build() -> bool {
     use cmake::Config;
+    // ext/HiGHS is a git submodule; without it cmake fails with an unrelated message.
+    if !std::path::Path::new("../HiGHS/CMakeLists.txt").exists() {
+        panic!("ext/HiGHS is missing: run `git submodule update --init ext/HiGHS` in the ZLUDA checkout");
+    }
     let mut dst = Config::new("../HiGHS");
     try_use_sccache(&mut dst);
     try_use_ninja(&mut dst);

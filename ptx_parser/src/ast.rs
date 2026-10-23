@@ -263,6 +263,139 @@ ptx_parser_macros::generate_instruction_type!(
                 src3: Option<T>,
             }
         },
+        // fabric.* (PTX ISA 9.4 9.7.10.4-5) on the logical endpoints of zluda_ptx_impl_agx_cvt.c
+        Fabric {
+            type: Type::Scalar(ScalarType::B8),
+            data: FabricDetails,
+            arguments<T>: {
+                src_le: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_off: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_counter: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_mem: {
+                    repr: Option<T>,
+                    space: { StateSpace::Shared },
+                },
+                src_mem2: {
+                    repr: Option<T>,
+                    space: { StateSpace::Shared },
+                },
+                src_size: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                },
+                src_mbar: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B64),
+                    space: { StateSpace::Shared },
+                },
+                src_mask: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_tm: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_d0: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_d4: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c0: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c1: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c2: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c3: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+                src_c4: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::B32) },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // multimem.ld_reduce / st / red (PTX ISA 9.7.10.15) over the multimem windows (zluda_ptx_impl_agx_cvt.c)
+        Multimem {
+            data: MultimemDetails,
+            arguments<T>: {
+                dst: {
+                    repr: Option<T>,
+                    type: { data.value_type() },
+                },
+                src_addr: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B64) },
+                },
+                src_value: {
+                    repr: Option<T>,
+                    type: { data.value_type() },
+                },
+            }
+        },
+        // add / sub / mul / fma of the alternate floating point x4 types (PTX ISA 9.4 9.7.6), in software
+        AltFpX4 {
+            type: Type::Scalar(ScalarType::B32),
+            data: AltFpX4Details,
+            arguments<T>: {
+                dst: T,
+                src_a: {
+                    repr: T,
+                    type: { data.register_type(data.a) },
+                },
+                src_b: {
+                    repr: Option<T>,
+                    type: { data.register_type(data.b) },
+                },
+                src_c: {
+                    repr: T,
+                    type: { data.register_type(data.c) },
+                },
+            }
+        },
         Slct {
             type: { Type::Scalar(data.type_) },
             data: SlctDetails,
@@ -663,7 +796,58 @@ ptx_parser_macros::generate_instruction_type!(
                 },
                 src_scale: {
                     repr: Option<T>,
-                    type: { Type::Scalar(ScalarType::B16) },
+                    type: { data.scale_type() },
+                    relaxed_type_check: true,
+                },
+            }
+        },
+        // cvt.rn.pzo to .f16 / .bf16 / .tf32 / .f16x2 / .bf16x2 from .f32, in software
+        CvtPzo {
+            data: CvtRsDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.pzo_dst_type() },
+                    relaxed_type_check: true,
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_b: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+            }
+        },
+        // cvt.rs (stochastic rounding) to .f16x2 / .bf16x2 from two .f32 or to the x4 mini formats from four, in software
+        CvtRs {
+            data: CvtRsDetails,
+            arguments<T>: {
+                dst: {
+                    repr: T,
+                    type: { data.dst_type() },
+                    relaxed_type_check: true,
+                },
+                src_a: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_b: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_e: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_f: {
+                    repr: Option<T>,
+                    type: { Type::Scalar(ScalarType::F32) },
+                },
+                src_rbits: {
+                    repr: T,
+                    type: { Type::Scalar(ScalarType::B32) },
                     relaxed_type_check: true,
                 },
             }
@@ -758,6 +942,18 @@ ptx_parser_macros::generate_instruction_type!(
                 src3: T,
             }
         },
+        // fma.rn.oob{.relu}.{f16,bf16,f16x2,bf16x2}: 0 (per element) when an operand is the OOB NaN of the tensor
+        // memory accelerator (0x7e00, 0x7fc0)
+        FmaOob {
+            type: { Type::from(data.type_) },
+            data: ArithFloat,
+            arguments<T>: {
+                dst: T,
+                src1: T,
+                src2: T,
+                src3: T,
+            }
+        },
         Ld {
             type: { &data.typ },
             data: LdDetails,
@@ -827,11 +1023,11 @@ ptx_parser_macros::generate_instruction_type!(
         },
         MbarrierInit {
             type: Type::Scalar(ScalarType::B64),
-            data: StateSpace,
+            data: MbarrierInitDetails,
             arguments<T>: {
                 src_mbarrier: {
                     repr: T,
-                    space: { data.clone() },
+                    space: { data.space },
                 },
                 src_count: {
                     repr: T,
@@ -897,6 +1093,15 @@ ptx_parser_macros::generate_instruction_type!(
                 dst: {
                     repr: T,
                     type: Type::Scalar(ScalarType::Pred),
+                },
+                // .phase_type::primary: the payload report of the completed phase
+                dst_report_pred: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::Pred),
+                },
+                dst_report_value: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
                 },
                 src_mbarrier: {
                     repr: T,
@@ -1540,8 +1745,10 @@ ptx_parser_macros::generate_instruction_type!(
         SetMaxNReg {
             data: u32,
         },
+        // data: .multicast::cluster::all
         ClusterLaunchTryCancel {
             type: Type::Scalar(ScalarType::B128),
+            data: bool,
             arguments<T>: {
                 src_addr: {
                     repr: T,
@@ -1624,14 +1831,14 @@ ptx_parser_macros::generate_instruction_type!(
         },
         // tcgen05.fence / wait / relinquish_alloc_permit: the emulated operations complete in program order
         Tcgen05Sync { },
-        // tcgen05.alloc.cta_group::N.sync.aligned.shared::cta.b32 [dst], ncols
+        // tcgen05.alloc{.exclusive}.cta_group::N.sync.aligned{.shared::cta}.b32 [dst], ncols
         Tcgen05Alloc {
             type: Type::Scalar(ScalarType::B32),
-            data: u8,
+            data: Tcgen05AllocDetails,
             arguments<T>: {
                 src_addr: {
                     repr: T,
-                    space: { StateSpace::Shared },
+                    space: { data.space },
                 },
                 src_ncols: {
                     repr: T,
@@ -1655,7 +1862,7 @@ ptx_parser_macros::generate_instruction_type!(
                     repr: T,
                     type: Type::Scalar(ScalarType::B64),
                 },
-                // .sp: the tensor memory address of the metadata
+                // .sp: the tensor memory address of the metadata; .decompress::lut::b: that of the lookup tables
                 src_meta: {
                     repr: Option<T>,
                     type: Type::Scalar(ScalarType::B32),
@@ -1719,16 +1926,17 @@ ptx_parser_macros::generate_instruction_type!(
         // tcgen05.commit.cta_group::1.mbarrier::arrive::one{.shared::cluster}.b64 [mbar]
         Tcgen05Commit {
             type: Type::Scalar(ScalarType::B64),
+            data: StateSpace,
             arguments<T>: {
                 src_mbar: {
                     repr: T,
-                    space: { StateSpace::Shared },
+                    space: { data.clone() },
                 },
             }
         },
-        // tcgen05.dealloc.cta_group::N.sync.aligned.b32 taddr, ncols
+        // tcgen05.dealloc{.exclusive}.cta_group::N.sync.aligned.b32 taddr, ncols
         Tcgen05Dealloc {
-            data: u8,
+            data: Tcgen05AllocDetails,
             arguments<T>: {
                 src_taddr: {
                     repr: T,
@@ -1928,6 +2136,12 @@ ptx_parser_macros::generate_instruction_type!(
                 src: {
                     repr: T,
                     type: Type::Scalar(ScalarType::B64),
+                    relaxed_type_check: true,
+                },
+                // txq.level: the mipmap level of width, height and depth
+                src_level: {
+                    repr: Option<T>,
+                    type: Type::Scalar(ScalarType::B32),
                     relaxed_type_check: true,
                 },
             }
@@ -2484,6 +2698,11 @@ where
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
                 imm,
             ),
+            ParsedOperand::RegIndex(base, index, imm) => ParsedOperand::RegIndex(
+                (self)(base, type_space, is_dst, relaxed_type_check)?,
+                (self)(index, None, false, relaxed_type_check)?,
+                imm,
+            ),
             ParsedOperand::Imm(imm) => ParsedOperand::Imm(imm),
             ParsedOperand::VecMember(ident, index) => ParsedOperand::VecMember(
                 (self)(ident, type_space, is_dst, relaxed_type_check)?,
@@ -2502,6 +2721,17 @@ where
                                     (self)(ident, type_space, is_dst, relaxed_type_check)?,
                                     offset,
                                 )),
+                                Some(RegOrImmediate::VecMember(ident, member)) => Some(RegOrImmediate::VecMember(
+                                    (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                    member,
+                                )),
+                                Some(RegOrImmediate::MaskedAddress(ident, offset, shift)) => {
+                                    Some(RegOrImmediate::MaskedAddress(
+                                        (self)(ident, type_space, is_dst, relaxed_type_check)?,
+                                        offset,
+                                        shift,
+                                    ))
+                                }
                                 None => None,
                             })
                         })
@@ -2986,6 +3216,10 @@ pub struct CpAsyncBulkDetails {
     pub dst_space: StateSpace,
     pub src_space: StateSpace,
     pub multicast: bool,
+    /// The data inspection of .mbarrier::report::validity (PTX ISA 9.4
+    /// 9.7.10.28.1.3): 0 none, 1 .per_element::ff, 2 to 5 .per_16bytes::
+    /// 80000000, 8000, 80 and 8
+    pub report: u32,
 }
 
 pub struct CpReduceAsyncBulkDetails {
@@ -3012,6 +3246,109 @@ pub struct MbarrierWaitDetails {
     pub parity: bool,
     // try_wait (potentially blocking) instead of test_wait
     pub try_wait: bool,
+    // .phase_type::conditional: the conditional phase of a .layout::v1 object
+    pub conditional: bool,
+}
+
+#[derive(Copy, Clone)]
+pub struct FabricDetails {
+    /// 0 submit / wait, 1 try_get, 2 try_put, 3 try_red, 4 try_pullred, 5 try_atom, 6 try_get.tensor, 7 try_put.tensor
+    pub kind: u8,
+    /// the dimensions of a .tensor form
+    pub rank: u8,
+    /// 0 add, 1 min, 2 max, 3 and, 4 or, 5 xor, 6 inc, 7 dec, 8 exch, 9 cas
+    pub op: u8,
+    /// as MultimemDetails::type_
+    pub type_: u8,
+    /// bit 0 .multimem, bit 1 .cp_mask, bit 2 .counted::bytes
+    pub flags: u8,
+}
+
+#[derive(Copy, Clone)]
+pub struct MultimemDetails {
+    /// 0 ld_reduce, 1 st, 2 red
+    pub kind: u8,
+    /// 0 add, 1 min, 2 max, 3 and, 4 or, 5 xor
+    pub op: u8,
+    /// b32 u32 s32 b64 u64 s64 f32 f64 f16 bf16 f16x2 bf16x2 e4m3 e5m2 e4m3x2 e5m2x2 e4m3x4 e5m2x4, numbered from 0
+    pub type_: u8,
+    /// .v2 / .v4 / .v8 (1 without)
+    pub vector: u8,
+    /// 0, 1 .acc::f32, 2 .acc::f16
+    pub acc: u8,
+}
+
+impl MultimemDetails {
+    pub fn element_bytes(&self) -> u32 {
+        match self.type_ {
+            12 | 13 => 1,
+            8 | 9 | 14 | 15 => 2,
+            3 | 4 | 5 | 7 => 8,
+            _ => 4,
+        }
+    }
+
+    pub fn value_type(&self) -> Type {
+        let scalar = match self.element_bytes() {
+            1 => ScalarType::B8,
+            2 => ScalarType::B16,
+            8 => ScalarType::B64,
+            _ => ScalarType::B32,
+        };
+        if self.vector > 1 {
+            Type::Vector(self.vector, scalar)
+        } else {
+            Type::Scalar(scalar)
+        }
+    }
+}
+
+/// The element kinds of the alternate floating point x4 types, as __zluda_ptx_impl_agx_altfp_x4 numbers them
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum AltFpKind {
+    E4m3 = 0,
+    E5m2 = 1,
+    E2m3 = 2,
+    E3m2 = 3,
+    // four 4-bit elements in a .b16
+    E2m1 = 4,
+    Ue8m0 = 5,
+    // a 4-bit element in the low bits of each byte
+    E2m1p4 = 6,
+}
+
+#[derive(Copy, Clone)]
+pub struct AltFpX4Details {
+    // 0 add, 1 sub, 2 mul, 3 fma
+    pub op: u8,
+    pub d: AltFpKind,
+    pub a: AltFpKind,
+    // fma only
+    pub b: AltFpKind,
+    // d's kind for add / sub / fma
+    pub c: AltFpKind,
+    pub satfinite: bool,
+}
+
+impl AltFpX4Details {
+    pub fn register_type(&self, kind: AltFpKind) -> Type {
+        Type::Scalar(if kind == AltFpKind::E2m1 { ScalarType::B16 } else { ScalarType::B32 })
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Tcgen05AllocDetails {
+    pub cta_group: u8,
+    // the state space of the address alloc writes (shared or generic)
+    pub space: StateSpace,
+    // .exclusive (PTX 9.4): no other allocation is live while it is
+    pub exclusive: bool,
+}
+
+pub struct MbarrierInitDetails {
+    pub space: StateSpace,
+    // .layout::v1: with a payload report and a conditional phase
+    pub v1: bool,
 }
 
 pub struct ShfDetails {
@@ -3026,12 +3363,21 @@ pub enum RegOrImmediate<Ident> {
     /// the address of a variable plus a byte offset (in initializers: `name + 4`)
     #[display("{_0}+{_1}")]
     RegOffset(Ident, i64),
+    /// an element of a vector register inside a vector operand (`{%r1, %V.z}`)
+    #[display("{_0}.{_1}")]
+    VecMember(Ident, u8),
+    /// in initializers, `mask(name + offset)`: the byte of the address under the mask 0xFF << shift
+    #[display("0xff<<{_2}({_0}+{_1})")]
+    MaskedAddress(Ident, i64, u8),
 }
 
 #[derive(Clone)]
 pub enum ParsedOperand<Ident> {
     Reg(Ident),
     RegOffset(Ident, i32),
+    /// An array element with a register index, `a[r]` / `a[r + 8]`: the address `a` + `r` + the byte offset
+    /// (PTX ISA 6.4.2)
+    RegIndex(Ident, Ident, i32),
     Imm(ImmediateValue),
     VecMember(Ident, u8),
     // None denotes a sink; retain its position in the vector.
@@ -3055,6 +3401,7 @@ where
         match self {
             ParsedOperand::Reg(id) => write!(f, "{}", id)?,
             ParsedOperand::RegOffset(id, o) => write!(f, "{}+{}", id, o)?,
+            ParsedOperand::RegIndex(base, index, o) => write!(f, "{}[{}+{}]", base, index, o)?,
             ParsedOperand::Imm(imm) => write!(f, "{}", imm)?,
             ParsedOperand::VecMember(id, idx) => {
                 let suffix = match idx {
@@ -3718,10 +4065,11 @@ impl SetpData {
         ftz: bool,
         type_: ScalarType,
     ) -> Self {
-        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them
+        // comparisons depend on subnormal inputs: without .ftz the f16 / f64 forms keep them; .ftz
+        // applies to .f32 (and here .f16) only, and is ignored on the others (PTX ISA 9.7.4.1)
         let flush_to_zero = match (ftz, type_) {
             (_, ScalarType::F32 | ScalarType::F16 | ScalarType::F16x2) => Some(ftz),
-            (false, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
+            (_, ScalarType::BF16 | ScalarType::BF16x2 | ScalarType::F64) => Some(false),
             (true, _) => {
                 state.errors.push(PtxError::NonF32Ftz);
                 None
@@ -4311,6 +4659,8 @@ pub struct MinMaxFloat {
     // .xorsign.abs: compare the magnitudes, the result has the sign
     // sign(a) xor sign(b)
     pub xorsign_abs: bool,
+    // .abs without .xorsign: the magnitudes of the inputs
+    pub abs: bool,
     pub type_: ScalarType,
 }
 
@@ -4345,6 +4695,8 @@ pub struct AtomDetails {
     pub scope: MemScope,
     pub space: StateSpace,
     pub op: AtomicOp,
+    /// .noftz (f32 add on global memory): subnormal inputs and results are kept
+    pub noftz: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -4464,6 +4816,9 @@ impl VoteMode {
 pub struct ReduxSyncData {
     pub type_: ScalarType,
     pub reduction: Reduction,
+    // .f32: the absolute values, and a NaN result if any input is a NaN
+    pub abs: bool,
+    pub nan: bool,
 }
 
 /// Element types of the warp-level matrix instructions (`mma`, `wmma`).
@@ -4609,6 +4964,9 @@ pub struct MmaDetails {
     /// metadata operand their positions; the value is the sparsity selector
     /// (an immediate).
     pub sparse: Option<u32>,
+    /// The rounding of the fused multiply-adds of an `f64` mma (`None` for
+    /// `.rn`, the default).
+    pub rounding: Option<RoundingMode>,
 }
 
 impl MmaDetails {
@@ -4630,7 +4988,7 @@ impl MmaDetails {
             return shape == (16, 8, 32) && f8f6f4(a) && f8f6f4(b) && float_accumulator;
         }
         match (a, b) {
-            (F16, F16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && float_accumulator,
+            (F16, F16) => matches!(shape, (8, 8, 4) | (16, 8, 8) | (16, 8, 16)) && float_accumulator,
             (Bf16, Bf16) => matches!(shape, (16, 8, 8) | (16, 8, 16)) && c == F32 && d == F32,
             (Tf32, Tf32) => matches!(shape, (16, 8, 4) | (16, 8, 8)) && c == F32 && d == F32,
             (F64, F64) => {
@@ -4758,7 +5116,9 @@ impl MmaDetails {
         let register_bits = if type_ == MmaType::F64 { 64 } else { 32 };
         // half of the elements of a sparse A
         let sparsity = if self.sparse.is_some() && matrix == MmaMatrix::A { 2 } else { 1 };
-        (rows * cols / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
+        // m8n8k4 with f16 A and B: four products, one per quad pair
+        let products = if (self.m, self.n, self.k, self.atype) == (8, 8, 4, MmaType::F16) { 4 } else { 1 };
+        (rows * cols * products / 32 / sparsity * type_.bits()).div_ceil(register_bits) as u8
     }
 
     /// Number of registers of a fragment of `wmma`, as given by the PTX ISA:
@@ -4888,6 +5248,7 @@ impl WmmaLoadStoreDetails {
             b1_op: None,
             block_scale: None,
             sparse: None,
+            rounding: None,
         }
     }
 
@@ -5039,6 +5400,8 @@ pub enum Tcgen05Kind {
     Tf32,
     I8,
     F8f6f4,
+    // .s1z4m11 (16-bit signed) elements and an .s32 D (PTX 9.4)
+    Ti16,
     // block scaled
     Mxf8f6f4,
     Mxf4,
@@ -5066,6 +5429,8 @@ pub struct Tcgen05MmaDetails {
     /// .block_scale: the scale vector size (0 the default of the kind, 2 for .scale_vec::2X, 4 for .scale_vec::4X,
     /// 16 for .block16, 32 for .block32)
     pub block: Option<u8>,
+    /// .decompress::lut::b: B holds 3-bit indices into 8-entry tables in tensor memory (the address in src_meta)
+    pub lut: bool,
 }
 
 /// The register <-> tensor memory shapes of tcgen05.ld / st
@@ -5119,9 +5484,9 @@ pub fn registers(n: u8) -> Type {
 /// and cvt.rn{.scaled::n2::ue8m0}.{f16x2,bf16x2}.<kind>x2 d, a{, scale}
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CvtNarrowDetails {
-    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6
+    /// 0 e4m3, 1 e5m2, 2 e2m3, 3 e3m2, 4 e2m1, 5 ue5m3, 6 s2f6, 7 ue8m0
     pub kind: u8,
-    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2
+    /// bits 1:0 rounding (0 rn, 1 rz, 2 rp, 3 rm), 2 relu, 3 pzo, 4 scaled::n1, 5 scaled::n2, 6 satfinite (widening)
     pub flags: u8,
     /// narrowing: 0 f32 pair, 1 f16x2, 2 bf16x2; widening: 0 f16x2, 1 bf16x2
     pub other: u8,
@@ -5130,7 +5495,19 @@ pub struct CvtNarrowDetails {
 
 impl CvtNarrowDetails {
     pub fn dst_type(&self) -> Type {
-        Type::Scalar(if self.widen { ScalarType::B32 } else { ScalarType::B16 })
+        // .e2m1x2 is a .b8
+        Type::Scalar(if self.widen {
+            ScalarType::B32
+        } else if self.kind == 4 {
+            ScalarType::B8
+        } else {
+            ScalarType::B16
+        })
+    }
+
+    // a .ue8m0x2 pair of scale factors with .scaled::n2::ue8m0, one .ue8m0 with .scaled::n1::ue8m0
+    pub fn scale_type(&self) -> Type {
+        Type::Scalar(if self.flags & 16 != 0 { ScalarType::B8 } else { ScalarType::B16 })
     }
 
     pub fn src_type(&self) -> Type {
@@ -5139,6 +5516,25 @@ impl CvtNarrowDetails {
             (false, 0) => ScalarType::F32,
             _ => ScalarType::B32,
         })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CvtRsDetails {
+    /// 0 e4m3x4, 1 e5m2x4, 2 e2m3x4, 3 e3m2x4, 4 e2m1x4 (a .b16), 8 f16x2, 9 bf16x2
+    pub kind: u8,
+    /// 2 relu, 3 pzo, 6 satfinite
+    pub flags: u8,
+}
+
+impl CvtRsDetails {
+    pub fn dst_type(&self) -> Type {
+        Type::Scalar(if self.kind == 4 { ScalarType::B16 } else { ScalarType::B32 })
+    }
+
+    // CvtPzo: 0 f16, 1 bf16, 2 tf32, 3 f16x2, 4 bf16x2
+    pub fn pzo_dst_type(&self) -> Type {
+        Type::Scalar(if self.kind <= 1 { ScalarType::B16 } else { ScalarType::B32 })
     }
 }
 
@@ -5335,6 +5731,8 @@ pub struct CpAsyncBulkTensorDetails {
     pub im2col: Option<u8>,
     // .override::global_address (the address operand replaces the map's)
     pub override_address: bool,
+    /// .mbarrier::report::validity of loads: the code of CpAsyncBulkDetails::report
+    pub report: u32,
 }
 
 impl CpAsyncBulkTensorDetails {
@@ -5378,6 +5776,9 @@ pub enum TexGeometry {
     A2d = 4,
     Cube = 5,
     ACube = 6,
+    // multi-sample textures (tex only)
+    Ms2d = 7,
+    AMs2d = 8,
 }
 
 #[derive(Copy, Clone)]

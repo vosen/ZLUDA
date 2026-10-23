@@ -290,7 +290,7 @@ fn init_globals() -> Result<(), String> {
                 ]
             };
             */
-            let llvm_args_ptrs: Vec<*const i8> = common_options
+            let llvm_args_ptrs: Vec<*const std::ffi::c_char> = common_options
                 //.chain(opt_options)
                 .map(|s| s.as_ptr())
                 .collect();

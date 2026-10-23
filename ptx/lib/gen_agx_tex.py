@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Compile zluda_ptx_impl_agx_tex.c and zluda_ptx_impl_agx_cvt.c to LLVM IR
+"""Compile zluda_ptx_impl_agx_tex.c, zluda_ptx_impl_agx_cvt.c, zluda_ptx_impl_agx_heap.c and
+zluda_ptx_impl_agx_math.c to LLVM IR
 and splice them into the generated section at the end of zluda_ptx_impl_agx.ll.
 
     python3 ptx/lib/gen_agx_tex.py [clang]
@@ -16,7 +17,9 @@ from pathlib import Path
 
 LIB = Path(__file__).resolve().parent
 # source, prefix of its internal functions, first metadata number
-SOURCES = [('zluda_ptx_impl_agx_tex.c', '__zluda_agx_tex_', 10000), ('zluda_ptx_impl_agx_cvt.c', '__zluda_agx_cvt_', 20000)]
+SOURCES = [('zluda_ptx_impl_agx_tex.c', '__zluda_agx_tex_', 10000), ('zluda_ptx_impl_agx_cvt.c', '__zluda_agx_cvt_', 20000),
+           ('zluda_ptx_impl_agx_heap.c', '__zluda_agx_heap_', 30000),
+           ('zluda_ptx_impl_agx_math.c', '__zluda_agx_math_', 40000)]
 TARGET = LIB / 'zluda_ptx_impl_agx.ll'
 BEGIN = '; ---------------------------------------------------------------- BEGIN GENERATED (gen_agx_tex.py)\n'
 END = '; ---------------------------------------------------------------- END GENERATED (gen_agx_tex.py)\n'
@@ -32,6 +35,10 @@ def convert(clang, source, prefix, metadata_base, declared, defined):
         if line.startswith(('source_filename', 'target datalayout', 'target triple', 'attributes #', '; ModuleID')):
             continue
         if 'llvm.experimental.noalias.scope.decl' in line:
+            continue
+        # globals of the hand-written part (the heap pointer)
+        m = re.match(r'^@([\w.$]+) = external ', line)
+        if m and m.group(1) in defined:
             continue
         m = re.match(r'^declare [^@]*@([\w.$]+)\(', line)
         if m:
@@ -70,7 +77,7 @@ def main():
     else:
         head, tail = text, ''
     declared = set(re.findall(r'^declare [^@]*@([\w.$]+)\(', head, re.M))
-    defined = set(re.findall(r'^define [^@]*@([\w.$]+)\(', head, re.M))
+    defined = set(re.findall(r'^define [^@]*@([\w.$]+)\(', head, re.M)) | set(re.findall(r'^@([\w.$]+) = ', head, re.M))
     bodies = [convert(clang, *source, declared, defined) for source in SOURCES]
     TARGET.write_text(head + BEGIN + '; regenerate with ptx/lib/gen_agx_tex.py\n\n' + '\n'.join(bodies) + END + tail)
 

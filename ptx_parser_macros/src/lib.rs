@@ -827,12 +827,19 @@ fn emit_definition_parser(
                 empty
             }
         };
-        let operand = {
+        // `[a]` is also written as an array element, `a[r + 8]`: the brackets are part of the operand then
+        let memory = arg.pre_bracket && arg.post_bracket;
+        let pre_bracket = if memory { quote! { empty } } else { pre_bracket };
+        let operand = if memory {
+            quote! {
+                memory_operand
+            }
+        } else {
             quote! {
                 ParsedOperandStr::parse
             }
         };
-        let post_bracket = if arg.post_bracket {
+        let post_bracket = if arg.post_bracket && !memory {
             quote! {
                 winnow::token::any.verify(|(t, _)| *t == #token_type::RBracket).void()
             }

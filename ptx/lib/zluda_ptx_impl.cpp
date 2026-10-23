@@ -169,6 +169,18 @@ extern "C"
         return (~0U) << lane_idx;
     }
 
+    uint32_t FUNC(sreg_lanemask_eq)()
+    {
+        uint32_t lane_idx = FUNC_CALL(sreg_laneid)();
+        return 1U << lane_idx;
+    }
+
+    uint32_t FUNC(sreg_lanemask_gt)()
+    {
+        uint32_t lane_idx = FUNC_CALL(sreg_laneid)();
+        return (~1U) << lane_idx;
+    }
+
     uint32_t __ockl_bfe_u32(uint32_t, uint32_t, uint32_t) __device__;
     uint32_t FUNC(bfe_u32)(uint32_t base, uint32_t pos_32, uint32_t len_32)
     {

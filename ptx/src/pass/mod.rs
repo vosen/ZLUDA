@@ -101,6 +101,15 @@ pub struct Options {
     /// Keep `.loc` as LLVM debug locations (line tables only), for the AGX
     /// backend's checked mode to name the source of a bad access.
     pub debug_locations: bool,
+    /// AGX: bytes of stack per thread for `alloca` of a dynamic size (CUDA's
+    /// `CU_LIMIT_STACK_SIZE`; 0 for its default, 1024); the frames of recursive
+    /// functions get four times as much.
+    pub stack_size: u32,
+    /// AGX: compute `mma` and `wmma` with f16, bf16 or tf32 A and B as 8x8x8
+    /// SIMD-group matrix products in f32 (the matrix unit on G14): much
+    /// faster, but the sums are a chain of rounded fused multiply-adds with
+    /// f32 denormals flushed instead of exact sums rounded once.
+    pub fast_mma: bool,
 }
 
 /// Drops the `.loc` statements of every function.
@@ -136,7 +145,7 @@ pub fn to_llvm_module_with_options<'input>(
     options: Options,
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
-    let Options { target, strict_fp, debug_locations } = options;
+    let Options { target, strict_fp, debug_locations, stack_size, fast_mma } = options;
     let strict_fp = strict_fp && target == Target::Agx;
     let mut ast = ast;
     if !debug_locations {
@@ -179,6 +188,8 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("normalize_basic_blocks");
     let directives = remove_unreachable_basic_blocks::run(directives, target == Target::Agx)?;
     on_pass_end("remove_unreachable_basic_blocks");
+    instruction_mode_to_global_mode::set_f32_always_ftz(sm_version < 20);
+    agx_matrix::set_fast_mma(fast_mma && target == Target::Agx);
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
     let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
@@ -195,7 +206,7 @@ pub fn to_llvm_module_with_options<'input>(
         insert_implicit_conversions::run(ast.address_size == 32, &mut flat_resolver, directives)?;
     on_pass_end("insert_implicit_conversions");
     let directives =
-        replace_instructions_with_functions::run(&mut flat_resolver, target, directives)?;
+        replace_instructions_with_functions::run(&mut flat_resolver, target, strict_fp, directives)?;
     on_pass_end("replace_instructions_with_functions");
     let directives = hoist_globals::run(directives)?;
     on_pass_end("hoist_globals");
@@ -203,7 +214,7 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("get_fp_mode");
     let context = llvm_zluda::utils::Context::new();
     let llvm_ir =
-        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp, &files)?;
+        llvm::emit::run(&context, flat_resolver, directives, fp_mode, target, strict_fp, stack_size, &files)?;
     let attributes_ir = llvm::attributes::run(&context, attributes)?;
     on_pass_end("emit_llvm");
     Ok(Module {
@@ -357,6 +368,8 @@ enum PtxSpecialRegister {
     LanemaskLe,
     LanemaskLt,
     LanemaskGe,
+    LanemaskEq,
+    LanemaskGt,
     Laneid,
     Warpid,
     Nwarpid,
@@ -370,6 +383,12 @@ enum PtxSpecialRegister {
     ClusterCtarank,
     ClusterNctarank,
     IsExplicitCluster,
+    DynamicSmemSize,
+    TotalSmemSize,
+    AggrSmemSize,
+    ReservedSmemOffsetBegin,
+    ReservedSmemOffsetEnd,
+    ReservedSmemOffsetCap,
     #[strum(disabled)]
     Envreg(u8),
     #[strum(disabled)]
@@ -395,6 +414,8 @@ impl PtxSpecialRegister {
             Self::LanemaskLe => "%lanemask_le",
             Self::LanemaskLt => "%lanemask_lt",
             Self::LanemaskGe => "%lanemask_ge",
+            Self::LanemaskEq => "%lanemask_eq",
+            Self::LanemaskGt => "%lanemask_gt",
             Self::Laneid => "%laneid",
             Self::Warpid => "%warpid",
             Self::Nwarpid => "%nwarpid",
@@ -408,6 +429,12 @@ impl PtxSpecialRegister {
             Self::ClusterCtarank => "%cluster_ctarank",
             Self::ClusterNctarank => "%cluster_nctarank",
             Self::IsExplicitCluster => "%is_explicit_cluster",
+            Self::DynamicSmemSize => "%dynamic_smem_size",
+            Self::TotalSmemSize => "%total_smem_size",
+            Self::AggrSmemSize => "%aggr_smem_size",
+            Self::ReservedSmemOffsetBegin => "%reserved_smem_offset_begin",
+            Self::ReservedSmemOffsetEnd => "%reserved_smem_offset_end",
+            Self::ReservedSmemOffsetCap => "%reserved_smem_offset_cap",
             Self::Envreg(n) => return Cow::Owned(format!("%envreg{}", n)),
             Self::Pm(n) => return Cow::Owned(format!("%pm{}", n)),
         })
@@ -487,6 +514,7 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::Clock64 | PtxSpecialRegister::Globaltimer => {
                 ast::ScalarType::U64
             }
+            PtxSpecialRegister::IsExplicitCluster => ast::ScalarType::Pred,
             _ => ast::ScalarType::U32,
         }
     }
@@ -511,6 +539,8 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::LanemaskLt => "sreg_lanemask_lt",
             PtxSpecialRegister::LanemaskLe => "sreg_lanemask_le",
             PtxSpecialRegister::LanemaskGe => "sreg_lanemask_ge",
+            PtxSpecialRegister::LanemaskEq => "sreg_lanemask_eq",
+            PtxSpecialRegister::LanemaskGt => "sreg_lanemask_gt",
             PtxSpecialRegister::Laneid => "sreg_laneid",
             PtxSpecialRegister::Warpid => "sreg_warpid",
             PtxSpecialRegister::Nwarpid => "sreg_nwarpid",
@@ -522,6 +552,12 @@ impl PtxSpecialRegister {
             PtxSpecialRegister::ClusterCtarank => "sreg_cluster_ctarank",
             PtxSpecialRegister::ClusterNctarank => "sreg_cluster_nctarank",
             PtxSpecialRegister::IsExplicitCluster => "sreg_is_explicit_cluster",
+            PtxSpecialRegister::DynamicSmemSize => "sreg_dynamic_smem_size",
+            PtxSpecialRegister::TotalSmemSize => "sreg_total_smem_size",
+            PtxSpecialRegister::AggrSmemSize => "sreg_aggr_smem_size",
+            PtxSpecialRegister::ReservedSmemOffsetBegin => "sreg_reserved_smem_offset_begin",
+            PtxSpecialRegister::ReservedSmemOffsetEnd => "sreg_reserved_smem_offset_end",
+            PtxSpecialRegister::ReservedSmemOffsetCap => "sreg_reserved_smem_offset_cap",
             _ => "",
         }
     }

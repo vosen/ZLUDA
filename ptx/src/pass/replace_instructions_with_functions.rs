@@ -5,13 +5,14 @@ use std::collections::{btree_map, BTreeMap};
 pub(super) fn run<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     target: Target,
+    strict_fp: bool,
     directives: Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>,
 ) -> Result<Vec<Directive2<ast::Instruction<SpirvWord>, SpirvWord>>, TranslateError> {
     // We use BTreeMap here to have deterministic ordering of function declarations.
     let mut fn_declarations = BTreeMap::default();
     let remapped_directives = directives
         .into_iter()
-        .map(|directive| run_directive(resolver, target, &mut fn_declarations, directive))
+        .map(|directive| run_directive(resolver, target, strict_fp, &mut fn_declarations, directive))
         .collect::<Result<Vec<_>, _>>()?;
     let mut result = fn_declarations
         .into_iter()
@@ -36,6 +37,7 @@ pub(super) fn run<'input>(
 fn run_directive<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     target: Target,
+    strict_fp: bool,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -51,7 +53,7 @@ fn run_directive<'input>(
         Directive2::Method(mut method) => {
             method.body = method
                 .body
-                .map(|statements| run_statements(resolver, target, fn_declarations, statements))
+                .map(|statements| run_statements(resolver, target, strict_fp, fn_declarations, statements))
                 .transpose()?;
             Directive2::Method(method)
         }
@@ -92,6 +94,7 @@ fn get_or_declare_function<'input, S: Into<Cow<'input, str>>>(
 fn run_statements<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     target: Target,
+    strict_fp: bool,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -341,7 +344,7 @@ fn run_statements<'input>(
                 Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(instruction) => {
                     smallvec![
                         Statement::<ast::Instruction<SpirvWord>, SpirvWord>::Instruction(
-                            run_instruction(resolver, target, fn_declarations, instruction)?
+                            run_instruction(resolver, target, strict_fp, fn_declarations, instruction)?
                         )
                     ]
                 }
@@ -358,6 +361,7 @@ fn run_statements<'input>(
 fn run_instruction<'input>(
     resolver: &mut GlobalStringIdentResolver2<'input>,
     target: Target,
+    strict_fp: bool,
     fn_declarations: &mut BTreeMap<
         Cow<'input, str>,
         (
@@ -376,6 +380,24 @@ fn run_instruction<'input>(
         }
     }
     Ok(match instruction {
+        // the 1.11.20 forms of PTX ISA 9.7.3.13 / 9.7.3.16 (zluda_ptx_impl_agx_math.c)
+        i @ ptx_parser::Instruction::Rcp {
+            data:
+                ast::RcpData {
+                    kind: ast::RcpKind::Approx,
+                    type_: ast::ScalarType::F64,
+                    ..
+                },
+            ..
+        } if target == Target::Agx => to_call(resolver, fn_declarations, "rcp_approx_ftz_f64".into(), i)?,
+        i @ ptx_parser::Instruction::Rsqrt {
+            data:
+                ast::TypeFtz {
+                    type_: ast::ScalarType::F64,
+                    flush_to_zero: Some(true),
+                },
+            ..
+        } if target == Target::Agx => to_call(resolver, fn_declarations, "rsqrt_approx_ftz_f64".into(), i)?,
         i @ ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {
@@ -417,6 +439,14 @@ fn run_instruction<'input>(
                 },
                 coord = scalar_to_ptx_name(ctype)
             );
+            // tex.1d / tex.2d with float coordinates may use AGX's texture unit (zluda_ptx_impl_agx_tex.c), which
+            // is not bit exact for linear filtering
+            let unit = target == Target::Agx
+                && !strict_fp
+                && matches!(type_, ast::TexType::Texobj)
+                && ctype == ast::ScalarType::F32
+                && matches!(dims, ast::TexDimensions::D1 | ast::TexDimensions::D2);
+            let name = if unit { name + "_unit" } else { name };
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Sqrt {
@@ -595,9 +625,11 @@ fn run_instruction<'input>(
                 _ => return Err(error_unreachable()),
             };
             let name = format!(
-                "redux_sync_{}_{}",
+                "redux_sync_{}_{}{}{}",
                 op,
-                data.type_.to_string().replace(".", "")
+                data.type_.to_string().replace(".", ""),
+                if data.abs { "_abs" } else { "" },
+                if data.nan { "_nan" } else { "" }
             );
             to_call(
                 resolver,

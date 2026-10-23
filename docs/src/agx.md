@@ -1,12 +1,15 @@
 # Apple GPUs (AGX, experimental)
 
 ZLUDA can compile PTX for the GPUs of Apple silicon with the experimental
-AGX LLVM backend. This covers the compiler only: there is no runtime yet, so
-CUDA applications cannot run on Apple GPUs. The output is useful for
-inspecting and testing code generation, and as the starting point of a
-runtime.
+AGX LLVM backend, and run it on M1 and M2 GPUs under Asahi Linux with
+`zluda_agx` (the CUDA driver API, see "The CUDA driver on Asahi") and the
+`*_agx` libraries. The compiler also runs on its own (`zoc`), for inspecting
+and testing code generation.
 
 ## Building
+
+The `compiler` crate (and so `zoc`) needs the HiGHS submodule:
+`git submodule update --init ext/HiGHS`.
 
 The AGX backend is not part of upstream LLVM. It lives in a fork of
 llvm-project, branch `claude/bold-davinci-46xi9q` of
@@ -75,6 +78,13 @@ an error.
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by
   -1 wraps.
+* Variable initializers may hold addresses (`name`, `generic(name)`, plus an
+  offset), which the object relocates (`R_AGX_ABS64` / `R_AGX_ABS32` in
+  `.rela.agx.globals`), and `mask(expr)` bytes (PTX ISA 5.4.4): of a
+  constant at compile time, of an address `mask(name + offset)` through the
+  table `__zluda_agx_masked_init` (per element its address, the address and
+  the shift with the element size), which the loader applies after the
+  relocations (`agx_runtime::Module::relocated_globals`).
 
 ## Limitations
 
@@ -84,8 +94,23 @@ an error.
   rounding modes, checked by `ptx/tools/agx_f64_check.py`; it is slow
   (hundreds of instructions per operation). 64- and 128-bit atomics are
   emulated with locks by the backend, and indirect calls are dispatched over
-  the module's address-taken functions.
-* `alloca` takes a constant size (the AGX stack has a fixed size).
+  the module's address-taken functions. Recursive functions run over an
+  explicit stack of frames in each thread's private memory (four times
+  `CU_LIMIT_STACK_SIZE`, 4 KiB by default; see the
+  backend's `AGXUsage.rst`, *Recursion*); a thread that runs out of it ends and
+  the launch fails with `CUDA_ERROR_LAUNCH_FAILED`.
+* Device-side `malloc` / `free` allocate from one heap per context of
+  `CU_LIMIT_MALLOC_HEAP_SIZE` bytes (8 MiB by default, fixed once a module that
+  uses `malloc` is loaded), shared by its modules: power-of-two blocks from 32
+  bytes with lock-free free lists per size, reused but never merged
+  (`ptx/lib/zluda_ptx_impl_agx_heap.c`). `malloc` returns NULL when no block
+  fits. In checked mode the heap counts as one allocation.
+* `alloca` / `stacksave` / `stackrestore` work on a per-thread stack in private
+  memory that grows down, as in PTX. Allocations of a constant size are
+  reserved in full; those of a dynamic size share `CU_LIMIT_STACK_SIZE` bytes
+  (1024 by default; `zoc --stack-size`, applied to the modules loaded after
+  `cuCtxSetLimit`). A thread whose allocation does not fit ends and the
+  launch fails with `CUDA_ERROR_LAUNCH_FAILED`.
   `bar.red` with a thread count reduces over the SIMD-group when the count
   is 32 (threads arrive at barriers in whole warps) and over the whole
   threadgroup otherwise. `isspacep` is decided at compile time where it can
@@ -102,7 +127,15 @@ an error.
   `lop3` (any lookup table, also in a register, and the predicate output
   form `lop3.and`/`lop3.or`) is the OR of the table's minterms.
   `set` of packed integer lanes (`u8x4`, `s8x4`, `u16x2`, `s16x2`) gives
-  all-ones lanes where the comparison holds.
+  all-ones lanes where the comparison holds. `set` and `setp` of `f16x2` and
+  `bf16x2` take every destination type (`.u32`, `.s32`, `.f16x2`, `.bf16x2`)
+  and the `BoolOp` forms, scalar `set` also `.u16`, `.s16`, `.f16` and
+  `.bf16` destinations; a `setp` destination may be the sink `_`. `min` and
+  `max` with `.abs` and no `.xorsign` take the magnitudes of their inputs.
+  Their NaN results, and those of `.relu`, are the canonical NaN.
+  `.ftz` of comparisons, `min`/`max` and `neg`/`abs` in a function whose
+  instructions take several denormal modes (a mode register switched at run
+  time) flushes with bit operations.
   `ptx/src/test/agx_sim/run_sim.py` checks these instructions and `cuLink` on
   the simulator against reference models.
 * Every `f32x2` instruction PTX has (`add`, `sub`, `mul`, `fma`, also with
@@ -126,7 +159,32 @@ an error.
 
 The [strict floating point mode](#strict-floating-point-mode) removes these
 three differences.
-* `%clock` reads as zero. `nanosleep` does not sleep.
+* No special register is a clock (ptx-re-blockers B35). When a module that
+  reads `%clock`, `%clock64` or `%globaltimer` or calls `nanosleep` is loaded,
+  `zluda_agx` starts a CPU thread that keeps writing the CPU's generic timer
+  (24 MHz on Apple chips) into a small buffer of the context, which the kernel
+  reads with a volatile load (the invalidating barrier and a coherent load,
+  about 1 us): `%globaltimer` is in nanoseconds, `%clock64` in cycles of the
+  reported clock rate, both in steps of 41.7 ns, and `nanosleep` waits for the
+  time to pass (at most 2^16 reads). The thread keeps a CPU core busy;
+  `ZLUDA_AGX_TIMER=0` turns it off, and without it (also in the simulator) the
+  clocks count reads of a device-wide counter, later at each read of a thread
+  but not measuring time, and `nanosleep` returns at once.
+* Modules for `.target sm_1x` get its rules: single-precision instructions flush subnormals with or without
+  `.ftz`, and `mad.f32` without a rounding mode truncates the product to 24 bits before the addition (as on
+  those GPUs; `mad.rn.f32` and later targets fuse). The deprecated `vote.{all,any,uni}.pred` and
+  `vote.ballot.b32` without `.sync` vote over the active threads.
+* `%dynamic_smem_size`, `%total_smem_size` (static and dynamic bytes in
+  128-byte units), `%aggr_smem_size` and `%reserved_smem_offset_begin`,
+  `_end` and `_cap` (a reserved region of 1 KiB after the CTA's shared memory,
+  which nothing uses and no memory backs) read the shared memory of the
+  launch: the kernels of a module that reads them take it in a hidden argument
+  that the driver sets (the backend's `"agx-hidden"="threadgroup-bytes"`,
+  `.agx.kernels` extension 4). In a cluster kernel they are the
+  threadgroup's.
+* Modules with `.address_size 32` take kernels only, and their `.global` and
+  `.const` variables only as byte arrays; their shared and local memory has
+  no 32-bit generic addresses.
 
 ### Instructions
 
@@ -143,11 +201,22 @@ three differences.
 * The mixed-precision forms (`add`/`sub`/`mul`/`fma` of `.f32.{f16,bf16}`,
   `.f32x2.{f16x2,bf16x2}.f32x2`, `.{f16x2,bf16x2}.f32x2.f32x2` and
   `mul.bf16x2.bf16x2.f16x2`) convert their operands exactly and compute in
-  `f32` (in `.rz`, then rounded with `.rz`, for 16-bit pair results).
-* The PTX ISA 9.x conversions (`.pzo`, `.scaled::n1::ue8m0` and
-  `.scaled::n2::ue8m0`, `ue5m3x2` and `s2f6x2`) and `spcompress` /
-  `spdecompress` run in software (`ptx/lib/zluda_ptx_impl_agx_cvt.c`), with
-  every value held as an integer significand and a power of two.
+  `f32` (in `.rz`, then rounded with `.rz`, for 16-bit pair results; with
+  `.ftz` an `.f16x2` result's subnormal halves are flushed too).
+* The PTX ISA 9.x conversions (`.pzo`, also on `f16`, `bf16`, `tf32`,
+  `f16x2` and `bf16x2` results, `.scaled::n1::ue8m0` and
+  `.scaled::n2::ue8m0`, `ue5m3x2` and `s2f6x2`, `.rp` / `.rm` to the mini
+  formats (toward positive / negative infinity on the signed value), `.rn`
+  to `ue8m0x2` (the nearest power of two, ties to the even code), the
+  `.relu` / `.satfinite` up-conversions, stochastic rounding `cvt.rs` to
+  `f16x2` / `bf16x2` and to the x4 formats), the alternate floating point x4
+  arithmetic (`add` / `sub` / `mul` / `fma` of `e4m3x4`, `e5m2x4`, `e2m3x4`,
+  `e3m2x4`, `e2m1x4`, `e2m1p4x4` and `ue8m0x4`, each element exact and
+  rounded once) and `spcompress` / `spdecompress` run in software
+  (`ptx/lib/zluda_ptx_impl_agx_cvt.c`), with every value held as an integer
+  significand and a power of two. `fma.oob` gives 0 for an element whose
+  operand is the OOB NaN of the tensor memory accelerator (`0x7e00` for f16,
+  `0x7fc0` for bf16).
 * The conversions to and from `e4m3x2`, `e5m2x2`, `e2m3x2`, `e3m2x2`,
   `e2m1x2` and `ue8m0x2`, `cvt` to `tf32`, `.relu`/`.satfinite`, `bfind`,
   `bmsk`, `clmad`, the packed byte arithmetic (`.u8x4`, `.s8x4`) and
@@ -166,6 +235,9 @@ three differences.
 * `isspacep`: the front end emits calls to `@__zluda_agx_isspacep_<space>`,
   which `llvm_zluda` replaces after optimization by a constant when the
   address's memory is known, and otherwise by a test of the tag bits. The
+  address of a kernel parameter (`cvta.param`) is in the `.param` and
+  `.global` windows, not the `.const` one; a device address of unknown
+  origin is `.const` when it is in one of the module's `.const` variables. The
   same step rewrites generic addresses of threadgroup and private memory that
   went through integer arithmetic into pointer arithmetic, and turns those
   only used as integers (compared, masked) into their 32-bit offsets, which
@@ -173,6 +245,11 @@ three differences.
 * `alloca`, `stacksave` and `stackrestore` use a per-function stack (a
   private array and the offset of its top), so that allocations made after
   a `stackrestore` reuse the freed addresses as in PTX.
+* `sub.cc` / `subc.cc` leave CC.CF as the carry of `a + ~b + 1` (1 when there
+  is no borrow), as NVIDIA GPUs do (`ptx/src/test/spirv_run/subc_cc_s32`,
+  recorded on one), and `subc` computes `a + ~b + CC.CF`; PTX-formalization's
+  `sub-borrow` follows the PTX ISA's wording instead (CC.CF as the borrow),
+  which only differs when the flag is read by `addc`.
 * Registers start as zero, and a register used without a declaration is
   declared with the type of its first use (ptxas rejects such code, the K
   semantics of PTX accept it); `.ftz` in a `cvt` without an `f32` type is
@@ -282,16 +359,25 @@ inlined.
   the type of D, like the model of PTX-formalization (tensor cores round in
   implementation-defined ways, which PTX does not specify): the products and
   C are decoded into integer significands and exponents, added in a fixed
-  point accumulator of 120 bits below the top of the largest term (248 bits,
-  in two 128-bit limbs, for `f64`), normalized and rounded with denormals,
-  overflow to infinity and canonical NaNs. Terms that fall below the window
-  only contribute a sticky bit, so a sum is exact unless its terms span more
-  than about 100 bits (200 for `f64`) and cancel. The products of `f16`,
+  point accumulator of 120 bits below the top of the largest term,
+  normalized and rounded with denormals, overflow to infinity and canonical
+  NaNs. Terms that fall below the window only contribute a sticky bit, so a
+  sum is exact unless its terms span more than about 100 bits and cancel.
+* `f64` elements are what the PTX ISA specifies instead: the chain of `f64`
+  fused multiply-adds along k starting from C, rounded in the direction of
+  the instruction's `.rn`, `.rz`, `.rm` or `.rp`.
+* `mma.m8n8k4` with `f16` A and B is four independent 8x8x4 products, one
+  per quad pair (threads 4q to 4q + 3 and 4q + 16 to 4q + 19), with every
+  `.row`/`.col` layout of A and B and `f16` or `f32` C and D: each element of
+  D gathers its row of A, its column of B (and, when C and D have different
+  types and so different layouts, its element of C) from the quad pair with
+  SIMD-group shuffles. The products of `f16`,
   fp8, fp6 and fp4 elements have bounded exponents and are first summed in
   fixed point. An exact zero sum is -0 only if all terms are -0 (for `mma.sp`
   the omitted zeros of A are not counted).
 * Block scaled `mma` (`kind::mxf8f6f4`, `mxf4`, `mxf4nvf4`) multiplies each
-  block's sum exactly by its `ue8m0` or `ue4m3` scale factors; the
+  block's sum exactly by its `ue8m0` or `ue4m3` scale factors (NaN factors,
+  `ue8m0` 0xff and `ue4m3` 0x7f, make the products NaN); the
   `{byte-id, thread-id}` selectors must be immediates, and so must the
   sparsity selector of `mma.sp`.
 * `wmma` fragments, whose layout PTX leaves unspecified, are tiles of
@@ -306,22 +392,43 @@ inlined.
 
 The emulation is large: in instructions per thread (whole test kernels),
 130 for `ldmatrix.x2` with `stmatrix.x2`, 170 to 570 for 8-bit and 4-bit integer
-`mma`, 80 for `m8n8k128.b1`, 3,000 for `m8n8k4.f64`, 4,300 for
-`m16n8k4.tf32`, 6,600 for `m16n8k8.f32.f16`, 12,000 for `m16n8k16.f32.f16`,
-11,000 for `m16n8k16.f64` (whose elements are computed in a loop, unrolled
-they need more registers than the hardware has), 7,000 to 15,000 for fp8,
+`mma`, 80 for `m8n8k128.b1`, 4,300 for
+`m16n8k4.tf32`, 6,600 for `m16n8k8.f32.f16`, 12,000 for `m16n8k16.f32.f16`
+(the elements of `f64` mma are computed in a loop of software fused
+multiply-adds), 7,000 to 15,000 for fp8,
 10,000 to 20,000 for block scaled fp8 and fp4, and 23,000 for a
 `wmma.load`/`mma`/`store` of `m16n16k16.f32.f16`.
 
-Not supported: `mma.m8n8k4` with `f16` A and B (its four quad-pair
-products), `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
+Not supported: `.satfinite` and `.relu` of floating point `mma`, `wmma` with a
 rounding mode other than `.rn`, and register selectors of block scaled and
 sparse `mma`.
 
+The metadata of `mma.sp` with two chunks of rows per thread follows the
+ISA's figures: for `f16` / `bf16` `m16n8k32` and `tf32` `m16n8k16`, thread
+`2 sel + c / 4` of the quad holds chunks `c` of rows `g` (bits 0-15) and
+`g + 8` (bits 16-31); for 8-bit `m16n8k32`, thread `2 sel + h` holds the 8
+chunks of row `g + 8h`.
+
+`zoc --fast-mma` (`ZLUDA_AGX_FAST_MMA=1` for `zluda_agx`) computes `mma` and
+`wmma` with `f16`, `bf16` or `tf32` A and B and `f16` or `f32` C and D as
+8x8x8 `llvm.agx.simdgroup.matrix.fma` products in `f32`: the matrix unit
+(`simd_matrix_fmadd32`) on G14, the same chain of fused multiply-adds with
+shuffles on other chips. The operands are gathered from the PTX fragments
+with SIMD-group shuffles (whose lanes are fitted at compile time as linear
+functions of the lane bits; layouts that do not fit keep the exact form), A
+and B are converted to `f32` exactly, `k` is padded with zeros to a multiple
+of 8, and an `f16` D is rounded once from `f32`. It is not the exact sum of
+the default emulation: the products are summed by rounded fused
+multiply-adds in `k` order and `f32` denormals are flushed (the `mma-*`
+programs of PTX-formalization then differ from the model by a few units in
+the last place). A kernel with an `m16n8k16.f32.f16` mma has 298 instead of
+1,237 instructions on G14 (4 `simd_matrix_fmadd32`), 728 on G13.
+
 ### Fifth-generation tensor core (`tcgen05`)
 
-The tensor memory of a CTA (128 lanes of 512 32-bit columns) is a 256 KiB slab
-of device memory: a pool of 4 slabs is a module global
+The tensor memory of a CTA (128 lanes of 512 32-bit columns, 576 for an
+exclusive allocation, in rows of 1024 words) is a 512 KiB slab of device
+memory: a pool of 4 slabs is a module global
 (`ptx/lib/zluda_ptx_impl_agx_cvt.c`). A CTA claims a free slab at its first
 `tcgen05.alloc` (the slab's owner word holds the CTA's linear index + 1, found
 again by every later instruction), allocates columns first fit from the slab's
@@ -331,17 +438,28 @@ CTAs that use tensor memory run at once. The wait cannot deadlock: a CTA that
 holds a slab is running, and a resident CTA is not preempted by the ones
 spinning (B30), so it reaches its `dealloc` unless it waits on a CTA that has
 not started. `alloc` and `dealloc` are done by the
-lowest active lane of the warp; `relinquish_alloc_permit`, `fence` and `wait`
-do nothing (every operation completes before the next instruction).
+lowest active lane of the warp, and the warp then zeroes the allocated columns
+(the tensor memory of a new CTA reads as zero). `alloc` writes the address
+through a shared or (without `.shared::cta`) generic pointer, as `commit`
+takes its mbarrier. `.exclusive` (PTX 9.4) allocates any multiple of 32
+columns up to 576 from column 0, waiting until the CTA has no other live
+allocation; other allocations wait while it is live. `relinquish_alloc_permit`,
+`fence` and `wait` do nothing (every operation completes before the next
+instruction).
 
 * `tcgen05.ld` / `st` (shapes `32x32b`, `16x64b`, `16x128b`, `16x256b`,
   `16x32bx2`, `.pack::16b` / `.unpack::16b`), `ld.red` (min / max of f32 with
   `.abs` / `.NaN`, u32, s32) and `ld.spcompress` are loads and stores of the
-  slab words.
-* `tcgen05.mma` (kinds `f16`, `tf32`, `i8`, `f8f6f4`, `mxf8f6f4`, `mxf4`,
-  `mxf4nvf4`; `.sp`, `.ws` with its zero-column mask, `.ashift`, the
-  disable-output-lane mask, `scale-input-d`, `.block_scale` with every scale
-  vector size, `.cta_group::2`) is computed by the issuing thread: a loop over
+  slab words. In the 16-lane shapes thread t covers lanes t / 4 and t / 4 + 8
+  (ISA Figures 184-186); with `.pack::16b` a 32-bit cell takes two adjacent
+  16-bit columns.
+* `tcgen05.mma` (kinds `f16`, `tf32`, `i8`, `ti16`, `f8f6f4`, `mxf8f6f4`,
+  `mxf4`, `mxf4nvf4`; `.sp` (with the SparsityVersion of the `mxf4` kinds),
+  `.ws` with its zero-column mask, `.ashift`, the disable-output-lane mask,
+  `scale-input-d`, `.block_scale` with every scale vector size and the UE8M0,
+  UE4M3 and UE5M3 scale types (scale_A in the 32- or 128-lane layout),
+  `.decompress::lut::b`, `.cta_group::2`; the `.collector` qualifiers have no
+  effect) is computed by the issuing thread: a loop over
   the elements of D, reading A and B through their shared memory descriptors
   (or A from tensor memory), each element the exactly rounded sum of its
   products and of C (the helper is generated by `agx_matrix.rs`). The
@@ -354,9 +472,9 @@ do nothing (every operation completes before the next instruction).
   the pair (its rows of A and D, the odd CTA's half of B), through the
   cluster's shared memory windows and the peer's slab.
 
-All 33 PTX-formalization `tcgen05` programs but `tcg2-1` match the formal
-semantics. `tcg2-1` needs 2 x 19 KiB of shared memory per cluster, more than
-the 32 KiB of a threadgroup the cluster runs in. A shared memory address
+All 56 PTX-formalization `tcgen05` programs match the formal semantics
+(`tcg2-1`, with 2 x 19 KiB of shared memory per cluster, keeps it in device
+memory: see thread block clusters). A shared memory address
 written as a constant in a cluster kernel is the address of the first CTA's
 window (addresses taken from shared variables are right in every CTA).
 
@@ -367,15 +485,17 @@ as `mma.sync` tiles. Warp `w % 4` of the warpgroup computes rows
 `16w..16w+15` of D as `n / 8` tiles of `m16n8kK`, through one tile helper
 that is inlined at each use (AGX has no calls). A comes from the registers or,
 like B, from shared memory through its matrix descriptor (start address, LBO,
-SBO and swizzle modes 0 to 6, following `ptx-exec-wg.k`), K-major or
+SBO, swizzle modes 0 to 6 and the base offset of bits 49-51, which starts the
+swizzle pattern that many 128-byte lines before the address, following
+`ptx-exec-wg.k`), K-major or
 transposed with `.trans`. Sparse A in shared memory is the packed
 `M x K/2` tile, read in the element order of the `mma.sp` fragment.
 `imm-scale-a/b` = -1 negate the elements, and `scale-d` is either an
 immediate or a predicate. Every `wgmma` is synchronous on AGX, so
 `wgmma.fence`, `commit_group` and `wait_group` compile to nothing. D can have
 up to 128 registers (`n256` with `f32`). A vector operand can now hold up to
-256 elements. All 34 `wg-*` and `wgsp-*` programs of PTX-formalization
-match the formal semantics on agx-g13g and agx-g14c.
+256 elements. All `wg-*`, `wg-baseoff-*` and `wgsp-*` programs of
+PTX-formalization match the formal semantics.
 
 ### Tensor memory accelerator (`cp.async.bulk.tensor`)
 
@@ -385,9 +505,11 @@ issued). Supported:
 
 * tile loads, stores and reductions (`add`, `min`, `max`, `inc`, `dec`,
   `and`, `or`, `xor`; signedness and float from the tensor map's element
-  type), 1D to 5D, with element strides, out-of-bounds zero or NaN fill and
-  the shared-memory swizzles (32B, 64B, 128B, and 128B with 32B, 32B + 8-byte
-  flip and 64B atomicity), by the CTA-relative shared address;
+  type), 1D to 5D, with element strides (a box dimension of `n` elements with
+  stride `s` holds `ceil(n / s)` of them), out-of-bounds zero or NaN fill and
+  the shared-memory swizzles (32B, 64B, 128B, 96B, which has the pattern of
+  32B, and 128B with 32B, 32B + 8-byte flip and 64B atomicity), by the
+  CTA-relative shared address;
 * `.multicast::cluster` (16- and 32-bit masks) and `.cta_group::2`;
 * the im2col modes `.im2col`, `.im2col::w`, `.im2col::w::128` and stores with
   `.im2col_no_offs::w`;
@@ -401,17 +523,18 @@ The 128-byte tensor map is opaque to PTX. `cuTensorMapEncodeTiled`,
 `cuTensorMapEncodeIm2col` and `cuTensorMapReplaceAddress` write the encoding
 of PTX-formalization's model (16 64-bit words: element type, rank, address,
 dims, strides, box, swizzle, fill, interleave, element strides, im2col
-corners), and the emulation reads the same one. All 28 `tma*` and `tma-*`
-programs of PTX-formalization match the formal semantics on agx-g13g and
-agx-g14c. The interleaved layouts are plain copies of the dims, as in the
+corners), and the emulation reads the same one. Tensor maps are read with
+ordinary loads, so `fence.proxy.tensormap::generic` is a fence of its scope.
+The `tma*` and `tma-*` programs of PTX-formalization match the formal
+semantics, except `.report_mechanism` (`tma-report`). The interleaved layouts are plain copies of the dims, as in the
 model. `cp.async.bulk.prefetch.tensor` and `.tile::gather4` / `scatter4` are
 not supported yet.
 
 ### Textures and surfaces
 
 Textures and surfaces are sampled in software (`ptx/lib/zluda_ptx_impl_agx_tex.c`, compiled to the generated
-part of `zluda_ptx_impl_agx.ll` by `ptx/lib/gen_agx_tex.py`). AGX's texture unit is not used yet: its descriptors
-and sampling rules have not been measured (simulator task B29). The rules are those of PTX-formalization's model:
+part of `zluda_ptx_impl_agx.ll` by `ptx/lib/gen_agx_tex.py`), except where the texture unit can sample as the
+software does (below). The software follows PTX-formalization's model:
 - coordinates scale by the extent when normalized;
 - point and linear filtering, with weights quantised to 1/256 and the sum computed exactly (in software fp64)
   and rounded once;
@@ -423,8 +546,9 @@ and sampling rules have not been measured (simulator task B29). The rules are th
 - texel offsets.
 
 Supported instructions:
-- `tex` (`.base`, `.level`, `.grad`, separate samplers, the residency predicate);
-- `tld4`, `txq`;
+- `tex` (`.base`, `.level`, `.grad`, separate samplers, the residency predicate, `.f16` and `.f16x2`
+  destinations, multi-sample `2dms` and `a2dms`);
+- `tld4`, `txq` (also `txq.level`), with PTX's encodings of the address modes;
 - `suld.b`, `sust.b` and `sust.p` (formatted), `sured.b` and `sured.p`, each with `.trap` (an out-of-bounds
   access reports `CUDA_ERROR_ASSERT`), `.clamp` and `.zero`;
 - `suq`, `istypep`.
@@ -435,18 +559,45 @@ The runtime supports:
 - `cuTexObjectCreate` over arrays, mipmapped arrays, linear and pitch-linear memory;
 - `cuSurfObjectCreate` over arrays.
 
+**The texture unit.** `tex.1d` and `tex.2d` of a texture object with float coordinates, automatic LOD and no
+separate sampler, offsets or depth compare sample with the hardware's `texture_sample`
+(`llvm.agx.texture.sample`, bindless: LLVM's AGXUsage.rst, "Textures"), outside `--strict-fp`, on a texture that
+`cuTexObjectCreate` (or a texture reference) gave hardware descriptors. Those are the 24-byte texture and 8-byte
+sampler descriptors of Mesa's `cmdbuf.xml` layout (read for their bit layout only), which `agx_runtime` keeps per
+address space: the texture heap, whose address a module that samples receives in `u0_u1` (`.agx.kernels`
+extension 5), and the sampler heap of every compute command (`drm_asahi_cmd_compute.sampler_heap`, equal samplers
+shared, at most 1024). A texture gets them when it is:
+- a linear 1D or 2D image (an array or pitch-linear memory) of one level and one layer, not a cubemap, at most
+  16384 texels wide and high, its address and row pitch multiples of 16 bytes;
+- read as floats (float or half texels, or normalized 8- and 16-bit integers; linear filtering allowed) or as
+  integers with point filtering, the PTX destination type matching;
+- addressed with clamp or border (border only for four channels), or with wrap or mirror on normalized
+  coordinates;
+- not sRGB.
+
+Word 16 of the software descriptor names the hardware ones (bit 63; bit 62 integer results, bit 61 2D, the
+sampler index at bit 32, the texture heap offset in the low 32 bits); any other texture, form or the
+`ZLUDA_AGX_SOFTWARE_TEXTURES` environment variable keeps the software path. Point sampling gives the same
+results; linear filtering uses the hardware's weights rather than the model's 1/256 steps, and the f16 forms' results
+are rounded once more, which is why `--strict-fp` does not use the unit. The
+formalization harness builds the same descriptors (`agx_run --sampler-heap`), and the texture tests pass both
+ways. Not yet validated on the GPU (simulator only).
+
 Module `.texref`, `.samplerref` and `.surfref` variables compile: on AGX each holds the 64-bit handle of
-a texture, sampler or surface object, which the instructions load. The runtime does not fill them yet.
+a texture, sampler or surface object, which the instructions load. The legacy texture reference API
+(`cuModuleGetTexRef`, `cuTexRefSetArray`, `SetMipmappedArray`, `SetAddress`, `SetAddress2D`, `SetFormat`,
+`SetAddressMode`, `SetFilterMode`, `SetMipmapFilterMode`, `SetFlags`, `GetAddress`) fills a `.texref`
+variable with a texture object made from the reference's settings, again after each change.
 
 Not supported:
-- the legacy texture reference API (`cuTexRef*`, `cuModuleGetTexRef`), which would fill those variables;
+- surface and sampler references (`cuModuleGetSurfRef`, `cuSurfRefSetArray`);
 - arbitrary border colours (the border is zero);
 - the min/max mipmap level clamps and the level bias of `CUDA_TEXTURE_DESC`;
 - per-dimension address modes (the first one applies).
 
 All PTX-formalization texture and surface programs (`tex`, `tex-mip`, `surf`, `istypep`) match the formal
-semantics. A texture fetch runs a few thousand instructions, and kernels with many `tex` instructions take
-minutes to compile.
+semantics. A texture fetch runs a few thousand instructions; each `tex` is inlined, so kernels with many `tex`
+instructions take minutes to compile (`tex-mip`, 33 of them: 3 minutes).
 
 ## Asynchronous copies and mbarriers
 
@@ -487,13 +638,28 @@ section; cluster scope fences are GPU scope ones):
   waiting SIMD-groups meet each other and those of `bar.sync`, so a
   `try_wait` can release a `bar.sync` of another SIMD-group early.
   `test_wait` only polls.
+* `mbarrier.init.layout::v1` sets bit 24 of word 1 (bits 0-23 hold the
+  expected count), and `.layout::v1` objects record more state there: bit 25
+  enables the report of the last completed phase, which `test_wait` and
+  `try_wait` with a report destination (a predicate or a value) read from
+  bit 26, and bit 27 holds the parity of the conditional phase that
+  `.phase::conditional` waits test. `mbarrier.arrive_drop` with
+  `.multicast::cluster` drops on each CTA in the mask.
+* `cp.async.bulk` and `cp.async.bulk.tensor` with a `.report` mechanism
+  (PTX 9.4) record the outcome of the copy in the destination mbarrier
+  before its transaction completes: `.report::mbarrier::inspect` writes the
+  report code to the mbarrier's report bits, which the waits then return.
+  The PTX 9.4 cache hints (`prefetch` with `.l1_size` and `.valid_addr`,
+  `ld` with `.proxy::readonly`) are accepted and ignored, as are the
+  `fence.proxy.alias` and `fence.proxy.async::generic...sync_restrict`
+  variants, which are CTA fences.
 
 Limitations: an mbarrier counts at most 4095 pending arrivals and
 transaction counts between -2^18 and 2^18 - 1 bytes; phases are only
 distinguished by their parity; the `.multicast::cluster::32b` mbarrier
 operations (`expect_tx`, `complete_tx`, `arrive` and `arrive.expect_tx`)
-apply to the mbarrier at the same offset of each CTA in the mask. Tensor
-copies (`cp.async.bulk.tensor`) are not supported. `ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
+apply to the mbarrier at the same offset of each CTA in the mask.
+`ptx/tools/agx_tests/async.ptx` checks the bulk copies, the
 reductions and the mbarrier operations with two SIMD-groups.
 
 ## Thread block clusters
@@ -526,8 +692,17 @@ has a multiple of 32 threads. After inlining, `LLVMZludaAgxLowerClusters`
   barrier does not wait for SIMD-groups that have ended is what the
   functional simulator does; the hardware question is ptx-re-blockers B28.
 
-Limitations: at most 1024 threads per cluster and 32 KiB of shared memory per
-cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
+A cluster whose shared memory is more than the 32 KiB of a threadgroup keeps
+it in device memory (`LLVMZludaAgxSpillClusterShared`, after the address
+spaces are lowered): each such kernel has a pool of 8 slabs of its windows'
+size, the first thread of a threadgroup claims a free one (the others wait at
+a barrier) and the last thread to return frees it. Every threadgroup memory
+access of the kernel, generic ones included, is then a device memory access
+at the slab plus its window offset, with device scope fences and atomics; a
+threadgroup that finds no free slab waits for one, as with the tensor memory
+slabs.
+
+Limitations: at most 1024 threads per cluster; no dynamic shared memory (`extern .shared`) in cluster kernels; the
 grid must be a multiple of the cluster (else `CUDA_ERROR_INVALID_CLUSTER_SIZE`);
 a function that reads thread ids and is not inlined cannot be shared by kernels
 of different cluster shapes; cluster dimensions set at launch
@@ -535,10 +710,47 @@ of different cluster shapes; cluster dimensions set at launch
 `red.async` store (or update atomically) and complete their bytes on the
 destination's mbarrier; `clusterlaunchcontrol.try_cancel` never cancels a
 cluster (a valid outcome: the response is 0 and `query_cancel.is_canceled`
-false); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formalization
+false; `.multicast::cluster::all` writes it and completes its 16 bytes in each
+CTA of the cluster); `st.bulk` is a memset and `setmaxnreg` a no-op. PTX-formalization
 `cluster.ptx`, `cluster-exit.ptx`, `cluster-generic.ptx`,
 `mbarrier-cluster.ptx`, `mbar-mc.ptx`, `misc-async.ptx` and `bulk.ptx` pass. On AMD GPUs clusters still have a
 single CTA.
+
+## Multicast memory (`multimem`)
+
+There is one GPU, so a multicast object (`cuMulticastCreate`) has a team of
+one device (`numDevices` 1, else `CUDA_ERROR_NOT_SUPPORTED`): binding memory
+to it (`cuMulticastBindMem`, `cuMulticastBindAddr`) records the physical
+allocation, and `cuMemMap` of the multicast handle maps the bound memory at
+the range, so that its addresses are that memory's.
+`CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED` is 1.
+
+`multimem.ld_reduce`, `multimem.st` and `multimem.red` (every type of the
+PTX ISA tables, `.vec`, `.acc::f32` / `.acc::f16`) run in software
+(`ptx/lib/zluda_ptx_impl_agx_cvt.c`) over the devices of an address: an
+address in a window of the table at 0x700000000000 (window k from
+0x700000000000 + (k + 1) * 2^36, entry k of 64 bytes holding the count and up
+to 7 buffers) is the same offset in each of its buffers, any other address
+the memory of one device. `ld_reduce` loads each device's element and folds
+them in device order (each step rounded in the type, or in the `.acc_prec`
+type, the fp8 types through f16), `st` stores on each device and `red`
+updates each one atomically, in device order. The conformance harness
+fills the table for its `.multimem` directive.
+
+## Fabric endpoints (`fabric`)
+
+`fabric.*` runs in software over logical endpoints on the one GPU: entry `le`
+(64 bytes) of the table at 0x6ff000000000 holds the device count, the size of
+the endpoint's memory and up to 7 device buffers. `try_get`, `try_put`
+(`.counted::bytes`, `.cp_mask`), `try_red`, `try_pullred` and `try_atom`
+reach the first device, the `.multimem` forms each device in order, and
+offsets past the endpoint's size trap. The `.tensor` forms (tile mode,
+`.override::global_address`, `.override::global_dim`) copy as
+`cp.async.bulk.tensor` with the tensor map's global address replaced by the
+endpoint's memory at the offset. Every transfer completes at once, on its
+mbarrier: `try_get` and `try_pullred` count bytes, `try_put` and `try_red`
+16-byte units, `try_atom` one unit. `fabric.submit` and `fabric.wait` are
+no-ops. The conformance harness fills the table for its `.fabric` directive.
 
 ## Strict floating point mode
 
@@ -586,6 +798,15 @@ PTX-formalization):
   operand's payload: the M2 Max's native float atomic add does
   (AGX-Performance-Simulator `tasks/ptx-re-blockers.md`, B24). `min.ftz.f32`
   waits on B11.
+
+`f32` atomic additions without `.ftz` semantics (`atom.add.noftz.f32`, and
+`atom.add.f32` and `red.add.f32` on shared memory, which PTX defines without
+flushing) keep subnormals: they are compare-and-swap loops whose sum is
+computed in `f64` and rounded once to `f32`, as are the `f32` additions of
+`cp.reduce.async.bulk`. Vector atomics (`.v2`, `.v4`, `.v8`) apply the
+operation per element. `redux.sync` takes `.f32` with `.min` and `.max`, with
+`.abs` (of each operand) and `.nan` (a NaN operand gives the canonical NaN),
+and `ld.global.nc` takes `.v8`.
 
 `ptx/tools/agx_strict_fp_check.py` checks the mode bit by bit: it compiles
 one kernel per operation, runs it on the functional simulator over generated
@@ -733,8 +954,8 @@ Without it 1553 match. The other 175 are the floating point differences listed a
 - `-0.0` under `.sat`;
 - `div` and `sqrt` precision.
 
-The one skipped check follows the non-PTX `coll_test` of `collective.ptx`; `tcg2-1.ptx` does not compile (its
-cluster needs more than 32 KiB of shared memory) and the harness has no `.multimem` and `.fabric` directives.
+The harness lowers the model's internal `coll_test.sum` / `coll_test.first` (used by `collective.ptx`) to
+`redux.sync.add` and a shuffle from the lowest lane of the mask.
 
 A full run takes about 50 minutes with `-j 4` (most of it compiling the texture and `tcgen05` tests).
 
@@ -778,8 +999,25 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   its scratch size bucket. The buffer grows to the largest kernel's stack
   size (for example 57 MiB for 320 bytes per thread on 38 cores, 912 MiB for
   4 KiB) and is kept until the context is destroyed.
+* `cuMemGetInfo` reports the system's available memory (MemAvailable) as free and its memory as total, both
+  within the process's cgroup limit (`memory.max`), since the GPU shares system memory and the UAPI reports no
+  figures of its own (ptx-re-blockers B39). Streams have one priority (`cuCtxGetStreamPriorityRange` gives [0, 0]:
+  the queue priorities change nothing, B38).
+* IPC and host memory (dma-buf, ptx-re-blockers B36): `cuIpcGetMemHandle` exports the allocation's object as a
+  dma-buf and puts the process id and the descriptor in the handle; `cuIpcOpenMemHandle` in another process takes
+  the descriptor with `pidfd_getfd` (the same user, and `kernel.yama.ptrace_scope` 0 or a parent process) and binds
+  the object; `cuIpcCloseMemHandle`. `cuMemExportToShareableHandle` / `cuMemImportFromShareableHandle` give and take
+  POSIX file descriptors of physical allocations. `cuMemHostRegister` maps a GPU object over the registered pages
+  with their contents (the UAPI cannot import a user pointer), so the CPU keeps its pointer and
+  `cuMemHostGetDevicePointer` gives the GPU address; `cuMemHostUnregister` puts ordinary memory back. Whole 16 KiB
+  pages are registered. IPC events (`cuIpcGetEventHandle`) are not supported.
+* Virtual memory management: `cuMemAddressReserve` / `Free` reserve GPU addresses (the address hint is not
+  followed), `cuMemCreate` makes a physical allocation (an unbound GEM object), `cuMemMap` / `Unmap` bind parts
+  of it in a reserved range (one allocation may be mapped at several addresses), `cuMemRelease`,
+  `cuMemRetainAllocationHandle` and `cuMemGetAllocationPropertiesFromHandle`; the granularity is the 16 KiB GPU
+  page, and `cuMemSetAccess` accepts any access (mappings are always readable and writable).
 * Modules: `cuModuleLoadData` takes PTX text, a fat binary (its PTX for the
-  newest architecture is used; SASS-only fat binaries cannot load) or an AGX
+  newest architecture is used, portable PTX before architecture-specific PTX such as `sm_90a` or `sm_100f`; SASS-only fat binaries cannot load) or an AGX
   object. PTX is compiled by `zoc` (found through `ZLUDA_AGX_ZOC`, next to the
   executable or on `PATH`) and the result is cached in `ZLUDA_CACHE_DIR`
   (default `$XDG_CACHE_HOME/zluda/agx` or `~/.cache/zluda/agx`; disabled by
@@ -794,11 +1032,13 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   so a command whose timestamps are both still 0 is returned as
   `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
   is sticky until `cuCtxDestroy` (see "Fault dumps").
-* A launch's command stream invalidates the USC (shader) cache only on a
-  queue's first command after new code was loaded: code rewritten in place is
-  seen without it (simulator `tasks/ptx-re-blockers.md`, B8), and it costs
-  about 1.8 us per command. `ZLUDA_AGX_USC_BARRIER=1` emits it on every
-  command, as Mesa does.
+* Every launch's command stream invalidates the USC (shader) cache, as Mesa's
+  does: each launch stages its pipeline words in the USC ring, and with 45 or
+  more launches queued on a stream the GPU can run stale words cached while
+  earlier commands ran (simulator `tasks/zluda-issues.md`, Z2, which corrects
+  B8). The invalidate costs about 1.8 us per launch; `ZLUDA_AGX_USC_BARRIER=0`
+  emits it only on a queue's first command after new code was loaded, which
+  is safe only with short queues.
 * `cuLaunchCooperativeKernel` and `cuLaunchKernelEx`'s cooperative attribute
   take grids up to the threadgroups resident together on the device (the
   co-residency limit `cuOccupancyMaxActiveBlocksPerMultiprocessor` reports,
@@ -1098,9 +1338,9 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Area | Status |
 | --- | --- |
 | Chips | G13 (M1 family) and G14 (M2 family) code generation; G14C (M2 Max) is the measured target. Apple9 (M3 and later) is not supported by the backend. |
-| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). Of the 1729 PTX-formalization checks on agx-g14c, 1728 run and all of them match the formal semantics with `--strict-fp` (1553 without). Not supported: `.multimem` and `.fabric`, `f32x2` forms other than `add` / `sub` / `mul` / `fma`, clusters with more than 32 KiB of shared memory |
+| PTX | 194 of 195 ZLUDA run tests compile on their own, and `extern_func` compiles when linked (`cuLink*`). PTX-formalization (PTX ISA 9.4 suite, 2026-10-22, agx-g14c): 268 of 413 files pass and 1677 of 1920 checks match the formal semantics with `--strict-fp` (251 files, 1546 checks without). The rest are mostly sm_90a / sm_100a features (tcgen05 and wgmma 9.4 forms, new low-precision formats, TMA and mbarrier additions), f64 NaN payloads and newer syntax. |
 | Warp-level and async | `mma`, `mma.sp`, `wmma`, `ldmatrix` / `stmatrix`, `wgmma`, `tcgen05` and the tensor memory accelerator (`cp.async.bulk.tensor`) are emulated; `cp.async`, mbarriers and thread block clusters (up to 1024 threads) run on ordinary instructions and threadgroup memory |
-| Textures and surfaces | sampled in software (the texture unit is not used yet, simulator task B29): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
+| Textures and surfaces | sampled in software, `tex.1d` / `tex.2d` of linear one-level texture objects on the texture unit outside `--strict-fp` (simulator only): `tex`, `tld4`, `txq`, `suld` / `sust` / `sured`, `suq`, `istypep`; CUDA arrays, mipmapped arrays, texture and surface objects. No legacy texture references, border colours or per-dimension address modes |
 | Floating point | f32 hardware semantics by default (denormals flushed); `--strict-fp` (strict FP) for exact PTX semantics; f64 in software; f16 / bf16 / fp8 conversions |
 | Atomics | 32-bit native; f32 add and u64 min/max without result native on G14; other 64-bit and 128-bit through a lock table |
 | Memory model | fences of every scope lower to measured barrier sequences |
@@ -1108,7 +1348,7 @@ or point `ZLUDA_AGX_ZOC` at it, and run the application with `LD_LIBRARY_PATH=ta
 | Device code features | `printf`, `assert` (`CUDA_ERROR_ASSERT`) |
 | Checked mode | `zoc --agx-checked` / `ZLUDA_AGX_CHECKED=1`: every memory access bounds- and alignment-checked, the first bad one reported with its thread and launch (see "Checked mode"); faulted launches saved for `agx_run` with `ZLUDA_AGX_DUMP` |
 | Libraries | cuBLAS: f32, f16 and f64 GEMM (f64 in software), f32 and f64 level 1, gemv / ger, geam / dgmm / syrk / syr2k / symm / trmm / trsm and batched GEMM, and complex (C / Z) level 1, gemv / hemv / ger / her / her2, gemm / hemm / symm / herk / her2k / syrk / syr2k (`zluda_blas_agx`); cuBLASLt matmul with bias / ReLU / GELU epilogues (`zluda_blaslt_agx`); cuDNN 2-D convolutions, activations, softmax, pooling and batch normalization (`zluda_dnn_agx`); cuFFT single and double precision (`zluda_fft_agx`); cuSPARSE SpMV, SpMM, SpGEMM, sparse vectors, conversions, SDDMM, SpSV and SpSM in f32 and f64 (`zluda_sparse_agx`); cuRAND's host API on Philox (`zluda_rand_agx`); cuSOLVER dense LU, Cholesky, QR, SVD and symmetric eigenvalues (`zluda_solver_agx`); NVRTC on clang and nvJitLink (`zluda_rtc_agx`); single-rank NCCL (`zluda_nccl_agx`) |
-| Not yet | recursion and non-inlined calls, peer access, IPC, the cuDNN graph API and f16 beyond convolutions, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
+| Not yet | peer access, IPC events, multicast objects, cuSPARSE's blocked formats, cuRAND's quasi-random generators |
 | NVML | device count, name, UUID, memory, compute capability; the maximum clock (`nvmlDeviceGetMaxClockInfo`, 1,398 MHz on the M2 Max) and GPU utilisation (`nvmlDeviceGetUtilizationRates`: the share of time since the last call this process's kernels ran, from the firmware's command timestamps; other processes are not seen). Asahi exposes no current clock, temperature or power without root (B25), so those return `NVML_ERROR_NOT_SUPPORTED` |
 | Strict instruction mode | `zoc --agx-strict` / `ZLUDA_AGX_STRICT=1`: only the instructions Mesa's asahi compiler emits, on M1 and M2 (see "Strict instruction mode"); PTX-formalization results identical, library kernels built for it |
-| Hardware validation | M2 Max (G14C, Asahi), 2026-10-20, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md`: the direct-DRM runner and `agx_cuda_smoke` pass (B2); scratch with Mesa's helper (B1), forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), code rewrites (B8), the whole uniform file (B9), barriers (B16, B28), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), masked instruction cost (B31), submit cost (B32), vector alignment (B33) and stack cost (B34) are measured and used. Open: float atomic add under contention (B3), hardware calls (B14), async copies (B17), lane-offset fmadd recording (B18), native textures (B29), a real CUDA program (B23, B41), and B35-B45 (shader clock, IPC, checked mode, VMs and queues, allocation limits, cost model, context teardown, multiple VMs) |
+| Hardware validation | M2 Max (G14C, Asahi), 2026-10-20 and 21, in the AGX Performance Simulator's `tasks/ptx-re-blockers.md` and `tasks/ptx-re-blockers-tracker.md`: the direct-DRM runner, `agx_cuda_smoke` and CUDA vectorAdd pass (B2); ZLUDA's scratch path runs on the GPU (B1, 262,144 threads); the `agx_libs` kernels give the right results in 817 of 819 cases on the GPU (B40; the 2 others are the test runner's missing scratch, Z6); checked mode on the GPU matches the simulator (B37); context teardown leaks nothing (B42, Z1); partial workgroups, the no-shared-memory word and 7-bit shift amounts (B2a, B2c, B47); forward progress and co-residency (B4, B5, B30), command duration (B6), CPU visibility (B7), the whole uniform file (B9), memory ordering per scope (B10), source modifiers and other numeric corners (B11), calls and returns (B14), `simd_matrix_fmadd` (B15), barriers (B16, B28), lane-offset fmadd (B18), fault reporting (B20), `trap` (B21), launch limits (B22), atomic corners (B3, B24), telemetry (B25), register and threadgroup limits (B26), conversions (B27), native texture corners (B29), masked instruction cost (B31), submit cost (B32), vector alignment (B33), stack cost (B34), the absence of a shader clock (B35), dma-buf IPC (B36, B45), VMs and queues (B38, B43), allocation limits (B39), fault isolation (B44) and `rcp` / `rsqrt` error (B46). Open: async copies (B17), a real CUDA program (B23, B41) and the M2 Ultra / G13X items (B19, B24-7) |
