@@ -1114,6 +1114,23 @@ impl Queue {
         self.usc_ring.1.retire(done);
     }
 
+    /// Submits the dispatches whose control stream words (`LoadedModule::launch_params_words`) are `words` as one
+    /// command, after `wait_for` and the earlier commands of this queue. The stream ends with a terminate.
+    pub fn submit_words(
+        &mut self,
+        words: &[u8],
+        helper: Option<(u32, u64)>,
+        samplers: Option<(u64, u32)>,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
+        let mut stream = Vec::with_capacity(words.len() + 8);
+        stream.extend_from_slice(words);
+        stream.extend_from_slice(&(2u32 << 29).to_le_bytes());
+        stream.extend_from_slice(&0u32.to_le_bytes());
+        let cdm = self.stage(RingKind::Data, &stream, 64)?;
+        self.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
+    }
+
     /// Frees what `stage` reserved for a command that was not submitted.
     pub fn unstage(&mut self) {
         let point = self.submitted + 1;
@@ -1895,7 +1912,7 @@ impl LoadedModule {
         let k = self.kernel(kernel, dynamic_shared)?;
         let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
         let halves = module::pack_uniforms(k, args, threadgroups, self.globals_va()).map_err(|e| invalid(e.to_string()))?;
-        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for, None, &mut (None, None))
     }
 
     /// `launch_async` with the bytes of each source-level argument, as cuLaunchKernel's `kernelParams` point to
@@ -1936,7 +1953,7 @@ impl LoadedModule {
             let va = queue.stage(RingKind::Data, &block, 16)?;
             halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, table, va)?.0;
         }
-        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for, None, &mut (None, None))
     }
 
     fn uniforms(
@@ -2005,8 +2022,12 @@ impl LoadedModule {
         local: [u32; 3],
         dynamic_shared: u32,
         wait_for: &[Fence],
+        mut words_only: Option<&mut Vec<u8>>,
+        words_helper: &mut (Option<(u32, u64)>, Option<(u64, u32)>),
     ) -> io::Result<Fence> {
+        let batched = words_only.is_some();
         let r = (|| {
+            let words_only = words_only.as_deref_mut();
             // a shader that uses the stack gets its scratch from the helper program
             let stack_dwords = k.stack_bytes.div_ceil(4);
             let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords)?) } else { None };
@@ -2041,13 +2062,61 @@ impl LoadedModule {
             queue.usc_seen.set(vm.usc_generation);
             let stream =
                 cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
+            if let Some(words) = words_only {
+                // the launch and its barrier, without the stream terminate, for a stream of several dispatches
+                words.extend_from_slice(&stream[..stream.len() - 8]);
+                *words_helper = (helper, samplers);
+                return Ok(Fence { syncobj: queue.timeline, point: queue.submitted + 1 });
+            }
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
             queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
         })();
-        let fence = r.inspect_err(|_| queue.unstage())?;
+        // a batched dispatch's staging belongs to the command its stream will be part of: not rolled back here
+        let fence = match r {
+            Ok(f) => f,
+            Err(e) => {
+                if !batched {
+                    queue.unstage();
+                }
+                return Err(e);
+            }
+        };
         if !keep.is_empty() {
             queue.retire_after(fence, keep);
         }
         Ok(fence)
+    }
+
+    /// `launch_params_async` without the submit: stages what the dispatch reads in `queue`'s rings for its next
+    /// command and appends the dispatch's control stream words (launch and barrier) to `words`; `Queue::submit_words`
+    /// then submits the dispatches gathered as one command. Returns the fence that command will have, and the helper
+    /// program and sampler heap the dispatch needs (every dispatch of one command must need the same).
+    pub fn launch_params_words(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        kernel: &str,
+        params: &[&[u8]],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        bounds: &[(u64, u64)],
+        words: &mut Vec<u8>,
+    ) -> io::Result<(Fence, Option<(u32, u64)>, Option<(u64, u32)>)> {
+        let k = self.kernel(kernel, dynamic_shared)?;
+        if k.checked.is_some() {
+            return Err(invalid(format!("{kernel}: checked kernels are launched one per command")));
+        }
+        let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
+        let (mut halves, block) = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, (0, 0), 0)?;
+        if !block.is_empty() {
+            let va = queue.stage(RingKind::Data, &block, 16)?;
+            halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, (0, 0), va)?.0;
+        }
+        let mut helper = (None, None);
+        let fence =
+            self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, &[], Some(words), &mut helper)?;
+        Ok((fence, helper.0, helper.1))
     }
 }

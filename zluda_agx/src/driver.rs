@@ -44,6 +44,12 @@ pub(crate) struct Driver {
     pub(crate) modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
+    /// Queues of destroyed streams, idle, for the next streams (creating a queue costs ~1 ms: applications create
+    /// and destroy a stream per operation).
+    free_queues: Vec<Queue>,
+    /// While a graph runs (cuGraphLaunch): its kernel launches gathered into one compute command (`Batch`).
+    batching: bool,
+    batch: Option<Batch>,
     events: HashMap<usize, Event>,
     /// cuCtxSetLimit values of this context.
     limits: HashMap<u32, usize>,
@@ -138,6 +144,43 @@ impl Drop for CompileSlot {
         *running.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
         freed.notify_one();
     }
+}
+
+/// The queue of stream `sh` (0, 1 and 2: the context's own).
+fn queue_of<'a>(ctx: &'a mut Context, streams: &'a mut HashMap<usize, Stream>, sh: usize) -> Result<&'a mut Queue, CUerror> {
+    if sh <= 2 {
+        Ok(&mut ctx.stream)
+    } else {
+        Ok(&mut streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?.queue)
+    }
+}
+
+/// Submits a batch's dispatches as one command of `queue`.
+fn submit_batch(queue: &mut Queue, b: Batch) -> Result<(), CUerror> {
+    if b.count > 0 {
+        queue.submit_words(&b.words, None, None, &b.waits).map_err(from_io)?;
+    }
+    Ok(())
+}
+
+/// Kernel launches of a graph gathered into the control stream of one compute command: each dispatch followed by
+/// the barrier after a launch (the dispatches run in order and see each other's stores, as consecutive commands of a
+/// queue do), submitted at the end of the graph, before any other operation and every `MAX_BATCH` launches. One
+/// command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between commands on the GPU;
+/// gathered, the launches of a graph cost a few us each.
+struct Batch {
+    stream: usize,
+    words: Vec<u8>,
+    waits: Vec<Fence>,
+    count: u32,
+}
+
+const MAX_BATCH: u32 = 64;
+
+/// ZLUDA_AGX_GRAPH_BATCH=0: one command per kernel launch of a graph.
+fn graph_batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").map_or(true, |v| v != "0"))
 }
 
 /// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
@@ -260,6 +303,13 @@ impl Driver {
         }
     }
 
+    /// Submits the launches gathered so far (see `Batch`).
+    fn flush_batch(&mut self) -> CUresult {
+        let Some(b) = self.batch.take() else { return Ok(()) };
+        let Driver { ctx, streams, .. } = self;
+        submit_batch(queue_of(ctx, streams, b.stream)?, b)
+    }
+
     fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
         let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let threads = block.iter().map(|&b| b as u64).product::<u64>();
@@ -293,21 +343,58 @@ impl Driver {
         let g14x = self.ctx.device.g14x();
         // a captured launch runs the generic code it saved
         let spec = if unchecked && capture.is_none() { self.specialized(m, &name, args, block) } else { None };
-        let Driver { ctx, default_waits, modules, streams, specs, .. } = self;
+        let Driver { ctx, default_waits, modules, streams, specs, batching, batch, .. } = self;
         let code = match spec.as_ref().map(|key| &specs[key]) {
             Some(Spec::Ready(specialized)) => specialized,
             _ => &modules[&m],
         };
-        let (queue, waits) = if sh <= 2 {
-            (&mut ctx.stream, default_waits)
+        let has_waits =
+            !(if sh <= 2 { &*default_waits } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.waits }).is_empty();
+        let k = &code.module.kernels[&name];
+        let batchable = *batching && unchecked && capture.is_none() && k.stack_bytes == 0 && k.texture_heap_half.is_none();
+        let fence = if batchable {
+            // a batch of another stream, or one that this launch's waits would delay, goes first
+            if batch.as_ref().is_some_and(|b| b.stream != sh || has_waits) {
+                let b = batch.take().unwrap();
+                submit_batch(queue_of(ctx, streams, b.stream)?, b)?;
+            }
+            let (queue, waits) = if sh <= 2 {
+                (&mut ctx.stream, &mut *default_waits)
+            } else {
+                let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
+                (&mut s.queue, &mut s.waits)
+            };
+            let b = batch.get_or_insert_with(|| Batch { stream: sh, words: Vec::new(), waits: std::mem::take(waits), count: 0 });
+            let r = code.launch_params_words(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &mut b.words);
+            match r {
+                Ok((fence, _, _)) => {
+                    b.count += 1;
+                    if b.count >= MAX_BATCH {
+                        submit_batch(queue, batch.take().unwrap())?;
+                    }
+                    fence
+                }
+                // the rings are full of the batch's data: submit it, then this launch on its own
+                Err(_) => {
+                    submit_batch(queue, batch.take().unwrap())?;
+                    code.launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &[])
+                        .map_err(from_io)?
+                }
+            }
         } else {
-            let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
-            (&mut s.queue, &mut s.waits)
+            if let Some(b) = batch.take() {
+                submit_batch(queue_of(ctx, streams, b.stream)?, b)?;
+            }
+            let (queue, waits) = if sh <= 2 {
+                (&mut ctx.stream, default_waits)
+            } else {
+                let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
+                (&mut s.queue, &mut s.waits)
+            };
+            let w = std::mem::take(waits);
+            code.launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
+                .map_err(from_io)?
         };
-        let w = std::mem::take(waits);
-        let fence = code
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
-            .map_err(from_io)?;
         if let Some(dir) = capture {
             // the command, to find the launch's time in a ZLUDA_AGX_PROFILE file
             let _ = std::fs::write(dir.join("command.txt"), format!("{}\n", fence.point));
@@ -576,15 +663,23 @@ impl Driver {
         if let Some(q) = queue {
             let finished = self.launches.iter().filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point);
             if let Some(profile) = profile_file() {
+                // the launches of a batch (one command) share its time equally
+                let mut per_command: HashMap<u64, u128> = HashMap::new();
+                for r in finished.clone() {
+                    *per_command.entry(r.fence.point).or_insert(0) += 1;
+                }
                 let mut out = profile.lock().unwrap_or_else(|e| e.into_inner());
                 for r in finished.clone() {
                     if let Some((start, end)) = q.timing(r.fence) {
-                        let ns = end.saturating_sub(start) as u128 * 1_000_000_000 / freq;
+                        let ns = end.saturating_sub(start) as u128 * 1_000_000_000 / freq / per_command[&r.fence.point];
                         let _ = writeln!(out, "{}", r.profile_line(ns as u64));
                     }
                 }
             }
-            let busy: u64 = finished.filter_map(|r| q.timing(r.fence)).map(|(start, end)| end.saturating_sub(start)).sum();
+            // once per command, also for a batch
+            let mut commands: Vec<Fence> = finished.map(|r| r.fence).collect();
+            commands.dedup_by_key(|f| f.point);
+            let busy: u64 = commands.into_iter().filter_map(|f| q.timing(f)).map(|(start, end)| end.saturating_sub(start)).sum();
             GPU_BUSY_NS.fetch_add((busy as u128 * 1_000_000_000 / freq) as u64, std::sync::atomic::Ordering::Relaxed);
         }
         drop_finished(&mut self.launches, syncobj, point);
@@ -682,6 +777,9 @@ fn new_driver() -> Result<Driver, CUerror> {
         modules: HashMap::new(),
         functions: HashMap::new(),
         streams: HashMap::new(),
+        free_queues: Vec::new(),
+        batching: false,
+        batch: None,
         events: HashMap::new(),
         limits: HashMap::new(),
         capturing: HashMap::new(),
@@ -1669,13 +1767,19 @@ pub(crate) unsafe fn cuLaunchKernel(
 
 pub(crate) unsafe fn cuStreamCreate(ph: *mut CUstream, _flags: c_uint) -> CUresult {
     let h = with(|d| {
-        let queue = Queue::new(&mut d.ctx.vm).map_err(from_io)?;
+        let queue = match d.free_queues.pop() {
+            Some(q) => q,
+            None => Queue::new(&mut d.ctx.vm).map_err(from_io)?,
+        };
         let h = d.handle();
         d.streams.insert(h, Stream { queue, waits: Vec::new() });
         Ok(h)
     })?;
     out(ph, CUstream(h as *mut _))
 }
+
+/// At most this many idle queues are kept for new streams.
+const MAX_FREE_QUEUES: usize = 32;
 
 pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
     with(|d| {
@@ -1684,6 +1788,11 @@ pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
         match st.queue.synchronize() {
             Ok(()) => {
                 d.finished(last.syncobj, last.point);
+                // idle now: kept for the next stream (its timeline only moves on, so fences of this stream that
+                // events still hold stay signalled)
+                if d.free_queues.len() < MAX_FREE_QUEUES {
+                    d.free_queues.push(st.queue);
+                }
                 Ok(())
             }
             Err(e) => Err(d.failed(last.syncobj, e)),
@@ -3011,10 +3120,23 @@ pub(crate) unsafe fn cuGraphInstantiate_v2(
 pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
     with(|d| {
         let ops = d.execs.get(&(exec as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        // consecutive kernel launches go into one command (Batch); anything else submits them first
+        d.batching = graph_batching_enabled();
+        let mut r = Ok(());
         for op in &ops {
-            d.run(op, s.0 as usize)?;
+            if !matches!(op, Op::Launch { .. }) {
+                r = d.flush_batch();
+            }
+            if r.is_ok() {
+                r = d.run(op, s.0 as usize);
+            }
+            if r.is_err() {
+                break;
+            }
         }
-        Ok(())
+        d.batching = false;
+        let flushed = d.flush_batch();
+        r.and(flushed)
     })
 }
 

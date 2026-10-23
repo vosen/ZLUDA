@@ -960,6 +960,24 @@ an argument set already in the cache is used from its first launch. `ZLUDA_AGX_S
 `ZLUDA_AGX_LOG=1` prints each specialization when it is ready. `agx_specialize PTX KERNEL --block x,y,z ARG...` prints
 the PTX that a launch with these argument bytes (hex) would compile.
 
+### Streams, graphs and host costs
+
+Destroyed streams keep their queue (up to 32) for the next `cuStreamCreate`: creating a queue (a DRM queue, its
+rings and timestamp buffer) costs ~1 ms, and applications that create and destroy a stream per operation (Geekbench 7:
+~7,800 times a run) spent ~10 s of a 156 s run in it.
+
+The kernel launches of a graph (`cuGraphLaunch`) are gathered into the control stream of one compute command, each
+dispatch followed by the barrier after a launch, up to 64 per command; any other operation of the graph submits the
+launches gathered first. One command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between
+commands on the GPU; gathered, 64 small launches take ~34 us of host time and ~5-7 us each on the GPU
+(`agx_cdm_batch`, which also checks that the dispatches of a command run in order and see each other's stores).
+Launches of checked kernels, captured launches and kernels that use the stack or textures are not gathered.
+`ZLUDA_AGX_GRAPH_BATCH=0` submits one command per launch; with `ZLUDA_AGX_PROFILE`, the launches of a command share
+its time equally.
+
+`ZLUDA_AGX_API_STATS=FILE` appends, about once a second, a JSON line with the Unix time in milliseconds (`t`) and per
+CUDA function the calls so far and the host time spent in them (`[calls, ns]`, cumulative).
+
 ### Launch profiles and captures
 
 `ZLUDA_AGX_PROFILE=FILE` appends one JSON line per finished launch: the kernel, grid, block, dynamic shared memory,

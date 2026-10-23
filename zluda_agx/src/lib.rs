@@ -37,13 +37,66 @@ macro_rules! unimplemented {
     };
 }
 
+/// `ZLUDA_AGX_API_STATS=FILE`: every second (at the next API call), a JSON line with the Unix time in milliseconds
+/// (`t`) and, per CUDA function called so far, its calls and the host time spent in it (`{"name": [calls, ns]}`),
+/// cumulative: the difference of two lines is the host cost of the API between them.
+mod api_stats {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+    struct Stats {
+        file: std::fs::File,
+        calls: HashMap<&'static str, (u64, u64)>,
+        written: Instant,
+    }
+
+    fn stats() -> Option<&'static Mutex<Stats>> {
+        static S: OnceLock<Option<Mutex<Stats>>> = OnceLock::new();
+        S.get_or_init(|| {
+            let path = std::env::var_os("ZLUDA_AGX_API_STATS")?;
+            let file = std::fs::OpenOptions::new().create(true).append(true).open(path).ok()?;
+            Some(Mutex::new(Stats { file, calls: HashMap::new(), written: Instant::now() }))
+        })
+        .as_ref()
+    }
+
+    pub(crate) fn enabled() -> bool {
+        stats().is_some()
+    }
+
+    pub(crate) fn record(name: &'static str, start: Instant) {
+        let Some(s) = stats() else { return };
+        let ns = start.elapsed().as_nanos() as u64;
+        let mut s = s.lock().unwrap_or_else(|e| e.into_inner());
+        let e = s.calls.entry(name).or_insert((0, 0));
+        e.0 += 1;
+        e.1 += ns;
+        if s.written.elapsed().as_secs() >= 1 {
+            use std::io::Write;
+            let t = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis());
+            let mut line = format!("{{\"t\":{t}");
+            for (k, (c, n)) in &s.calls {
+                line.push_str(&format!(",\"{k}\":[{c},{n}]"));
+            }
+            line.push_str("}\n");
+            let _ = s.file.write_all(line.as_bytes());
+            s.written = Instant::now();
+        }
+    }
+}
+
 macro_rules! implemented {
     ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
         $(
             #[cfg_attr(not(test), no_mangle)]
             #[allow(improper_ctypes, improper_ctypes_definitions, non_snake_case)]
             pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                let start = api_stats::enabled().then(std::time::Instant::now);
                 let r = driver::$fn_name($($arg_id),*);
+                if let Some(start) = start {
+                    api_stats::record(stringify!($fn_name), start);
+                }
                 if let Err(e) = r {
                     if log_enabled() {
                         eprintln!("[zluda_agx] {} failed with CUDA error {}", stringify!($fn_name), e.0);
