@@ -141,6 +141,7 @@ cuda_macros::cuda_function_declarations!(
             cuDeviceGetUuid,
             cuDeviceGetUuid_v2,
             cuDevicePrimaryCtxGetState,
+            cuDevicePrimaryCtxRelease,
             cuDevicePrimaryCtxRelease_v2,
             cuDevicePrimaryCtxReset_v2,
             cuDevicePrimaryCtxRetain,

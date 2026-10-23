@@ -1322,6 +1322,10 @@ pub(crate) unsafe fn cuDevicePrimaryCtxRelease_v2(dev: CUdevice) -> CUresult {
     with_contexts(|c| c.release_primary().map_err(|_| CUerror::INVALID_CONTEXT))
 }
 
+pub(crate) unsafe fn cuDevicePrimaryCtxRelease(dev: CUdevice) -> CUresult {
+    cuDevicePrimaryCtxRelease_v2(dev)
+}
+
 /// cudaDeviceReset: waits for the primary context's work, frees all its memory, modules, streams, events and
 /// graphs, and leaves a fresh context under the same handle (a sticky error ends here).
 pub(crate) unsafe fn cuDevicePrimaryCtxReset_v2(dev: CUdevice) -> CUresult {

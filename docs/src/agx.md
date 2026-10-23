@@ -1416,6 +1416,19 @@ divides by one, and `ncclRedOpCreatePreMulSum` operators scale the result (f32
 and f64). Sends and receives to rank 0 pair up in order. `ncclMemAlloc`,
 buffer registration, groups and the asynchronous-error query are supported.
 
+## Blender Cycles headless status
+
+Blender 5.1.0 ARM64 starts in background mode on the M2 Max and enumerates ZLUDA's CUDA device after its system X11
+library dependencies are supplied. Its Cycles build chooses a bundled `sm_86` cubin, which the AGX driver cannot load.
+Hiding that cubin makes Blender select its PTX fallback (13 MiB, 75 kernels, 383 functions, 1,593 calls). A one-sample
+32×32 render did not finish compiling the module within 600 seconds. The AGX LLVM backend currently inlines every
+function because code generation has no callable-function ABI; direct and register call/return encodings have now been
+added to LLVM MC, but LLVM IR calls are still inlined. No Blender GPU render time or Metal comparison is available.
+The probe details and retained simulator checks are in the playground's
+`results/2026-10-23-blender-call-compile/README.md`.
+The legacy `cuDevicePrimaryCtxRelease` entry point is exported as an alias of the implemented v2 form for Blender's
+cleanup path.
+
 ## Performance against Metal (estimate, not measured)
 
 There is no Metal baseline from the same machine yet: macOS does not run under Asahi, and Geekbench 7's Linux preview
