@@ -56,6 +56,7 @@ cuda_macros::cublas_function_declarations!(
         <= [
             cublasCreate_v2,
             cublasDestroy_v2,
+            cublasGemmBatchedEx,
             cublasGemmEx,
             cublasGemmStridedBatchedEx,
             cublasGetCudartVersion,
@@ -111,6 +112,7 @@ cuda_macros::cublas_function_declarations!(
             cublasStrmm_v2_64,
             cublasStrsm_v2,
             cublasStrsm_v2_64,
+            cublasStrsmBatched,
             cublasXerbla,
             cublasCtrmm_v2,
             cublasCtrmm_v2_64,
@@ -717,6 +719,44 @@ mod imp {
         gemm(t, half, h, transa, transb, m, n, k, alpha, a, lda, 0, b, ldb, 0, beta, c, ldc, 0, 1)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasGemmBatchedEx(
+        h: cublasHandle_t,
+        transa: cublasOperation_t,
+        transb: cublasOperation_t,
+        m: c_int,
+        n: c_int,
+        k: c_int,
+        alpha: *const c_void,
+        a: *const *const c_void,
+        a_type: cudaDataType,
+        lda: c_int,
+        b: *const *const c_void,
+        b_type: cudaDataType,
+        ldb: c_int,
+        beta: *const c_void,
+        c: *const *mut c_void,
+        c_type: cudaDataType,
+        ldc: c_int,
+        batch: c_int,
+        compute: cublasComputeType_t,
+        _algo: cublasGemmAlgo_t,
+    ) -> cublasStatus_t {
+        let (t, half) = ex_types([a_type, b_type, c_type], compute)?;
+        let h_ref = handle(h)?;
+        if batch < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if batch == 0 || m == 0 || n == 0 {
+            return gemm(t, half, h, transa, transb, m, n, k, alpha, std::ptr::null(), lda, 0, std::ptr::null(), ldb, 0, beta, std::ptr::null_mut(), ldc, 0, batch);
+        }
+        let [pa, pb, pc] = pointer_arrays(h_ref, [a.cast(), b.cast(), c.cast()], batch as usize)?;
+        for i in 0..batch as usize {
+            gemm(t, half, h, transa, transb, m, n, k, alpha, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta, pc[i] as *mut c_void, ldc, 0, 1)?;
+        }
+        Ok(())
+    }
+
     pub(crate) unsafe fn cublasGemmStridedBatchedEx(
         h: cublasHandle_t,
         transa: cublasOperation_t,
@@ -1301,6 +1341,20 @@ mod imp {
         )
     }
 
+    /// Read arrays of device pointers after earlier operations on the handle's stream finish.
+    unsafe fn pointer_arrays<const N: usize>(h: &Handle, arrays: [*const c_void; N], batch: usize) -> Result<[Vec<usize>; N], cublasError_t> {
+        if arrays.iter().any(|p| p.is_null()) {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        let bytes = batch.checked_mul(std::mem::size_of::<usize>()).ok_or(cublasError_t::INVALID_VALUE)?;
+        engine::synchronize(h.stream).map_err(status)?;
+        let mut result = std::array::from_fn(|_| vec![0usize; batch]);
+        for (dst, src) in result.iter_mut().zip(arrays) {
+            engine::read(dst.as_mut_ptr().cast(), src, bytes).map_err(status)?;
+        }
+        Ok(result)
+    }
+
     /// GEMM over arrays of device pointers to the matrices (read back after the stream is idle).
     #[allow(clippy::too_many_arguments)]
     unsafe fn gemm_batched<T: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const T, a: *const *const T, lda: i64, b: *const *const T, ldb: i64, beta: *const T, c: *const *mut T, ldc: i64, batch: i64) -> cublasStatus_t {
@@ -1326,6 +1380,22 @@ mod imp {
         let (pa, pb, pc) = (fetch(a as *const c_void)?, fetch(b as *const c_void)?, fetch(c as *const c_void)?);
         for i in 0..batch as usize {
             gemm(T::GEMM, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta as *const c_void, pc[i] as *mut c_void, ldc, 0, 1)?;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) unsafe fn cublasStrsmBatched(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: c_int, n: c_int, alpha: *const f32, a: *const *const f32, lda: c_int, b: *const *mut f32, ldb: c_int, batch: c_int) -> cublasStatus_t {
+        let h_ref = handle(h)?;
+        if batch < 0 {
+            return Err(cublasError_t::INVALID_VALUE);
+        }
+        if batch == 0 || m == 0 || n == 0 {
+            return trsm::<f32>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha, std::ptr::null(), lda as i64, std::ptr::null_mut(), ldb as i64);
+        }
+        let [pa, pb] = pointer_arrays(h_ref, [a.cast(), b.cast()], batch as usize)?;
+        for i in 0..batch as usize {
+            trsm::<f32>(h, sd, uplo, trans, diag, m as i64, n as i64, alpha, pa[i] as *const f32, lda as i64, pb[i] as *mut f32, ldb as i64)?;
         }
         Ok(())
     }
