@@ -1,5 +1,6 @@
 //! `agx_run_hw MAIN.bin --grid X[,Y,Z] --wg x[,y,z] [--regs HALVES] [--shared BYTES] [--stack BYTES] [--uniform I=V ...]
-//!            [--map VA=FILE ...] [--alloc VA=BYTES ...] [--dump VA=BYTES:FILE ...] [--node PATH] [--timeout-ms N]`
+//!            [--map VA=FILE ...] [--alloc VA=BYTES ...] [--dump VA=BYTES:FILE ...] [--node PATH] [--timeout-ms N]
+//!            [--repeat N] [--warm-ms MS] [--keep-memory]`
 //!
 //! Runs a whole AGX compute kernel on the GPU with the command line of the AGX Performance Simulator's `agx_run`, so
 //! that any simulator test (the LLVM AGX backend's kernels, ZLUDA's PTX tests, the Sail-derived difftests) can also
@@ -14,6 +15,11 @@
 //!
 //! `--regs` is the register allocation in 16-bit halves (default 256, the maximum, which is always safe).
 //! Run every kernel through `agx_run` first: a kernel that does not terminate there must not reach the GPU.
+//! `--repeat N` runs the launch N times from the same initial memory (restored before each run; the dumps are the
+//! last run's), and `--warm-ms MS` keeps repeating (up to 5000 runs) until the runs add up to MS of GPU time: the GPU
+//! clock ramps up over the first runs, so `min_fw_ns` / `median_fw_ns` are the warm times. `--keep-memory` skips the
+//! restore between runs (for kernels whose time does not depend on their earlier results): restoring large regions
+//! from the CPU leaves the GPU idle long enough that its clock stays low.
 //! Prints one JSON line with the firmware command time.
 
 use agx_runtime::*;
@@ -45,11 +51,17 @@ fn main() {
     let (mut grid, mut wg) = ([1u32; 3], [1u32; 3]);
     let (mut regs, mut shared, mut node, mut timeout) = (256u32, 0u32, "/dev/dri/renderD128".to_string(), 3000u64);
     let mut stack = 0u32;
+    let (mut repeat, mut warm_ms, mut keep_memory) = (1u64, 0u64, false);
     let mut uniforms: BTreeMap<usize, u32> = BTreeMap::new();
     let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut dumps: Vec<(u64, usize, String)> = Vec::new();
     let mut i = 1;
     while i < a.len() {
+        if a[i] == "--keep-memory" {
+            keep_memory = true;
+            i += 1;
+            continue;
+        }
         let v = a.get(i + 1).cloned().unwrap_or_else(|| die(&format!("{} needs a value", a[i])));
         let kv = |sep: char| -> (String, String) {
             let (k, x) = v.split_once(sep).unwrap_or_else(|| die(&format!("{} expects K{sep}V", a[i])));
@@ -63,6 +75,8 @@ fn main() {
             "--stack" => stack = num(&v) as u32,
             "--node" => node = v.clone(),
             "--timeout-ms" => timeout = num(&v),
+            "--repeat" => repeat = num(&v).max(1),
+            "--warm-ms" => warm_ms = num(&v),
             "--uniform" => {
                 let (k, x) = kv('=');
                 uniforms.insert(num(&k) as usize, num(&x) as u32);
@@ -154,9 +168,26 @@ fn main() {
 
     let mut queue = Queue::new(&mut vm).unwrap_or_else(|e| die(&e.to_string()));
     queue.timeout = Duration::from_millis(timeout);
-    let t = queue
-        .run_compute_with_helper(cdm.va, cdm.va + stream.len() as u64, helper)
-        .unwrap_or_else(|e| die(&e.to_string()));
+    let hz = dev.params.command_timestamp_frequency_hz.max(1) as u128;
+    let initial: Vec<Vec<u8>> = bos.iter().map(|b| b.as_slice().to_vec()).collect();
+    let (mut times, mut busy_ns, mut t) = (Vec::new(), 0u128, None);
+    while (times.len() as u64) < repeat || (busy_ns < warm_ms as u128 * 1_000_000 && times.len() < 5000) {
+        if !times.is_empty() && !keep_memory {
+            for (bo, init) in bos.iter_mut().zip(&initial) {
+                bo.as_mut_slice().copy_from_slice(init);
+            }
+        }
+        let tr = queue
+            .run_compute_with_helper(cdm.va, cdm.va + stream.len() as u64, helper)
+            .unwrap_or_else(|e| die(&e.to_string()));
+        let ns = tr.end.wrapping_sub(tr.start) as u128 * 1_000_000_000 / hz;
+        times.push(ns);
+        busy_ns += ns;
+        t = Some(tr);
+    }
+    let t = t.unwrap();
+    let first_ns = times[0];
+    times.sort();
 
     for (va, n, f) in &dumps {
         let bo = bos
@@ -166,13 +197,16 @@ fn main() {
         let off = (va - bo.va) as usize;
         std::fs::write(f, &bo.as_slice()[off..off + n]).unwrap_or_else(|e| die(&format!("{f}: {e}")));
     }
-    let hz = dev.params.command_timestamp_frequency_hz.max(1);
     println!(
-        "{{\"completed\":true,\"cpu\":\"{}\",\"cores\":{},\"fw_ticks\":{},\"fw_ns\":{},\"host_us\":{}}}",
+        "{{\"completed\":true,\"cpu\":\"{}\",\"cores\":{},\"fw_ticks\":{},\"fw_ns\":{},\"host_us\":{},\"repeat\":{},\"first_fw_ns\":{},\"min_fw_ns\":{},\"median_fw_ns\":{}}}",
         dev.llvm_cpu(),
         dev.core_count(),
         t.end.wrapping_sub(t.start),
-        (t.end.wrapping_sub(t.start) as u128 * 1_000_000_000 / hz as u128),
-        t.host.as_micros()
+        (t.end.wrapping_sub(t.start) as u128 * 1_000_000_000 / hz),
+        t.host.as_micros(),
+        times.len(),
+        first_ns,
+        times[0],
+        times[times.len() / 2]
     );
 }
