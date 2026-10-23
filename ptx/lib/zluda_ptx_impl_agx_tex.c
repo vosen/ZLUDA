@@ -33,8 +33,8 @@ enum { TEX_MAGIC = 0x54585854, SAMPLER_MAGIC = 0x5343504d, SURF_MAGIC = 0x535454
 // texture: 1 base, 2 type code, 3 channels, 4 filter, 5 address mode,
 // 6 normalized, 7 read-normalized, 8 layers, 9..11 dims, 12 levels,
 // 13 flags (bit 0 depth, bit 1 cube, bits 8-15 samples of a multi-sample texture), 14 row pitch (0: dense; not in the model), 15 mip filter,
-// 16 hardware descriptors (zluda_agx texture.rs: bit 63 present, 62 integer results, 61 2D, 32..47 sampler
-// index, 0..31 texture heap offset; not in the model)
+// 16 hardware descriptors (zluda_agx texture.rs: bit 63 present, 62 integer results, 61 2D, 32..47 texture_sample's
+// sampler index (heap index + 28), 0..31 texture heap offset; not in the model)
 // sampler: 1 filter, 2 address mode, 3 normalized, 4 mip filter, 5 min lod,
 // 6 max lod (1/256 units, signed)
 // surface: 1 base, 2 texel bytes, 3 layers, 4..6 dims, 7 sample format,

@@ -605,7 +605,8 @@ def run_test(path, args):
                         tex, smp, tag = native
                         if smp not in samplers:
                             samplers.append(smp)
-                        words = words + [tag | samplers.index(smp) << 32 | 24 * len(textures)]
+                        # texture_sample's index of heap sampler k is k + 28 (zluda_agx texture.rs SAMPLER_HEAP_BASE)
+                        words = words + [tag | (28 + samplers.index(smp)) << 32 | 24 * len(textures)]
                         textures.append(tex)
                 addr = BASE + ((mem.top + 255) & ~255)
                 mem.top = (addr - BASE) + 8 * len(words)

@@ -581,9 +581,12 @@ sampler index at bit 32, the texture heap offset in the low 32 bits); any other 
 results; linear filtering uses the hardware's weights rather than the model's 1/256 steps, and the f16 forms' results
 are rounded once more, which is why `--strict-fp` does not use the unit. The
 formalization harness builds the same descriptors (`agx_run --sampler-heap`), and the texture tests pass both
-ways. **On the GPU the texture unit's results are wrong** (2026-10-23, M2 Max: `agx_texture_check` reads zeros from
-an RGBA8 array where the software sampler reads its texels, as integers and as normalized floats), so the texture unit
-is only used when `ZLUDA_AGX_HARDWARE_TEXTURES` is set; by default every texture takes the software path.
+ways. On the GPU the texture unit first read zeros: `texture_sample`'s register sampler index of heap sampler k is
+k + 28 (the lower indices are sampler state slots; Mesa's Honeykrisp stores heap index + 28), which word 16 now holds.
+With it, `agx_texture_check` (a random RGBA8 1024 x 512 array at 2^20 coordinates, normalized, wrap) gives the
+software sampler's results on the M2 Max: identical integers, and normalized floats with linear filtering within
+1.3e-4. Until more forms are checked on the GPU, the texture unit is only used when `ZLUDA_AGX_HARDWARE_TEXTURES` is
+set; by default every texture takes the software path.
 
 Textures read as integers (`CU_TRSF_READ_AS_INTEGER` on 8- and 16-bit formats, and 32-bit integer formats) are point
 sampled even when linear filtering is asked for: CUDA documents linear filtering only for textures that return

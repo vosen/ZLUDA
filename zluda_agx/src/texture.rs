@@ -267,13 +267,17 @@ unsafe fn write_descriptor(d: &mut Driver, words: &[u64]) -> Result<u64, CUerror
     Ok(va)
 }
 
+/// texture_sample's register sampler index of heap sampler k is k + 28; the lower indices are sampler state slots
+/// (Mesa's Honeykrisp, hk_descriptor_set.c; on the M2 Max index k reads zeros, k + 28 the texels).
+const SAMPLER_HEAP_BASE: u64 = 28;
+
 /// A texture object's descriptor, with word 16 naming its hardware descriptors when it has them (see
 /// `native_descriptors`; a full heap leaves it to the software sampler).
 unsafe fn write_texture(d: &mut Driver, img: &Image, t: &CUDA_TEXTURE_DESC) -> Result<u64, CUerror> {
     let mut words = texture_words(img, t)?.to_vec();
     let mut native = 0;
-    // The texture unit's results are not yet right on the GPU (agx_texture_check: zeros where the software sampler
-    // reads the texels, M2 Max, 2026-10-23), so it is only used when ZLUDA_AGX_HARDWARE_TEXTURES is set.
+    // The texture unit is checked on the GPU for RGBA8 arrays only (agx_texture_check, M2 Max, 2026-10-23), so it is
+    // only used when ZLUDA_AGX_HARDWARE_TEXTURES is set.
     if std::env::var_os("ZLUDA_AGX_HARDWARE_TEXTURES").is_some() && std::env::var_os("ZLUDA_AGX_SOFTWARE_TEXTURES").is_none() {
         let why = match native_descriptors(img, t) {
             None => Some("not a form the texture unit samples as the software sampler does"),
@@ -284,7 +288,7 @@ unsafe fn write_texture(d: &mut Driver, img: &Image, t: &CUDA_TEXTURE_DESC) -> R
                         native = NATIVE
                             | if integer { NATIVE_INTEGER } else { 0 }
                             | if rank == 2 { NATIVE_2D } else { 0 }
-                            | (index as u64) << 32
+                            | (index as u64 + SAMPLER_HEAP_BASE) << 32
                             | offset as u64;
                         None
                     }
