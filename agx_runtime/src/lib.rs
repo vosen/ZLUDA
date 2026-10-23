@@ -867,6 +867,7 @@ pub struct Queue {
     /// Objects the GPU may still read, freed once their fence has signalled.
     in_flight: std::collections::VecDeque<(u64, Vec<Bo>)>,
     /// The last point whose timestamps were checked for a fault (`wait`).
+    /// Highest timeline point successfully waited on and checked for a GPU fault.
     verified: std::cell::Cell<u64>,
     /// The VM's `usc_generation` at this queue's last command.
     usc_seen: std::cell::Cell<u64>,
@@ -1037,6 +1038,11 @@ impl Queue {
         if fence.point == 0 {
             return Ok(());
         }
+        // A successful wait validated every earlier point of this queue. In particular,
+        // repeated cuCtxSynchronize calls need not issue another wait and status query.
+        if fence.syncobj == self.timeline && fence.point <= self.verified.get() {
+            return Ok(());
+        }
         let mut wait: drm_syncobj_timeline_wait = unsafe { std::mem::zeroed() };
         wait.handles = &fence.syncobj as *const _ as u64;
         wait.points = &fence.point as *const _ as u64;
@@ -1056,10 +1062,10 @@ impl Queue {
             let faulted = first_faulted(self.verified.get(), fence.point, self.submitted, |p| {
                 self.timing(Fence { syncobj: self.timeline, point: p })
             });
-            self.verified.set(self.verified.get().max(fence.point));
             if let Some(point) = faulted {
                 return Err(io::Error::other(error::GpuError { fence_status: -libc::EFAULT, point: Some(point) }));
             }
+            self.verified.set(self.verified.get().max(fence.point));
         }
         Ok(())
     }

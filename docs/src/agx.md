@@ -983,6 +983,10 @@ In a Geekbench 7 GPU run on the M2 Max, `cuGraphLaunch` accumulated 2.12 s over 
 3.61 s over 8,770 calls (0.412 ms/call) in the previous run. These full-run figures include other host load and
 different kernel choices, so they are a workload comparison rather than an isolated cost of the copy.
 
+A queue remembers the last timeline point it successfully waited on and checked for GPU faults. Synchronizing that
+same point again needs no DRM wait or status query. On the M2 Max, 50,000 empty `cuCtxSynchronize` calls after one
+completed launch take 122 ns each instead of 2,076 ns; a new launch still advances the point and is waited on.
+
 `ZLUDA_AGX_API_STATS=FILE` appends, about once a second, a JSON line with the Unix time in milliseconds (`t`) and per
 CUDA function the calls so far and the host time spent in them (`[calls, ns]`, cumulative).
 
