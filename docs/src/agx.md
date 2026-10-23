@@ -939,6 +939,17 @@ When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`,
 instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
 `llvm-addr2line`.
 
+### Lazy PTX kernel compilation
+
+`ZLUDA_AGX_LAZY_KERNELS=1` makes `cuModuleLoadData` compile only the first kernel of a PTX image. By default, each other kernel is compiled when `cuModuleGetFunction` first requests it, then cached for that module. All images keep the module globals and use one shared GPU buffer; a mismatched global layout is rejected. ELF objects, linked images, single-kernel PTX, and checked mode keep the eager path. Module unload removes the compiled child kernels.
+
+With lazy mode enabled, `ZLUDA_AGX_PARALLEL_KERNELS=N` (up to 16) starts N background workers for the remaining kernels after module load. A lookup waits for its kernel if compilation is still running. Module unload cancels unstarted work; an active compiler process finishes independently. This mode trades CPU and memory use for shorter serial registration time. `ZLUDA_AGX_LOG=1` prints the time each requested kernel spent waiting and loading.
+In the Blender Cycles probe, four workers together exceeded 20 GiB resident memory and still waited on a long shading kernel, so set N according to available memory.
+
+This is opt-in while large applications are being tested. It moves compilation to kernel lookup and does not reduce the cost of a kernel that is itself expensive to compile. For Blender Cycles, a scratch LLVM probe compiled its small reset kernel in about 7 seconds, while a surface-shading kernel still exceeded 180 seconds; see the playground's Blender call profile. These are offline `llc` measurements, not render or GPU-speed results.
+
+Blender also asks `cuOccupancyMaxPotentialBlockSize` when it registers each kernel. The AGX driver now chooses a block size that maximizes guaranteed co-resident threads under the measured G14 register and threadgroup-memory limits, and returns the corresponding minimum grid size. This is a launch recommendation; it does not change the simulator's throughput occupancy model.
+
 ### Launch-time specialization
 
 A kernel of a PTX module launched 3 times with the same scalar arguments (4 bytes or smaller) and block size is

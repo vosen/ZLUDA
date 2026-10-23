@@ -43,6 +43,8 @@ pub(crate) struct Driver {
     default_waits: Vec<Fence>,
     pub(crate) modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
+    /// PTX modules whose remaining kernels are compiled when requested.
+    lazy_sources: HashMap<usize, LazySource>,
     streams: HashMap<usize, Stream>,
     /// Queues of destroyed streams, idle, for the next streams (creating a queue costs ~1 ms: applications create
     /// and destroy a stream per operation).
@@ -100,6 +102,64 @@ pub(crate) struct Driver {
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
+}
+
+struct LazySource {
+    ptx: std::sync::Arc<str>,
+    kernels: std::collections::HashSet<String>,
+    compiled: HashMap<String, usize>,
+    pending: HashMap<String, CompileResultSlot>,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+type CompileResultSlot = std::sync::Arc<(
+    Mutex<Option<Result<(Vec<u8>, String), String>>>,
+    std::sync::Condvar,
+)>;
+
+fn precompile_kernels(
+    ptx: std::sync::Arc<str>,
+    names: &[String],
+    cpu: String,
+    workers: usize,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> HashMap<String, CompileResultSlot> {
+    let pending: HashMap<_, _> = names
+        .iter()
+        .map(|name| {
+            (
+                name.clone(),
+                std::sync::Arc::new((Mutex::new(None), std::sync::Condvar::new())),
+            )
+        })
+        .collect();
+    let worker_slots = std::sync::Arc::new(pending.clone());
+    let queue = std::sync::Arc::new(Mutex::new(std::collections::VecDeque::from(names.to_vec())));
+    for _ in 0..workers.min(names.len()) {
+        let (ptx, cpu, pending, queue, cancelled) = (
+            ptx.clone(),
+            cpu.clone(),
+            worker_slots.clone(),
+            queue.clone(),
+            cancelled.clone(),
+        );
+        std::thread::spawn(move || loop {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            let name = queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
+            let Some(name) = name else { break; };
+            let result = std::panic::catch_unwind(|| {
+                let image = crate::specialize::without_other_entries(&ptx, &name);
+                compile_ptx(image.as_bytes(), &cpu)
+            })
+            .unwrap_or_else(|_| Err(format!("{name}: background compiler panicked")));
+            let (lock, ready) = &*pending[&name];
+            *lock.lock().unwrap_or_else(|e| e.into_inner()) = Some(result);
+            ready.notify_all();
+        });
+    }
+    pending
 }
 
 /// (module, kernel, the bytes of its scalar arguments with their sizes and the equality classes of 8-byte
@@ -781,6 +841,7 @@ fn new_driver() -> Result<Driver, CUerror> {
         default_waits: Vec::new(),
         modules: HashMap::new(),
         functions: HashMap::new(),
+        lazy_sources: HashMap::new(),
         streams: HashMap::new(),
         free_queues: Vec::new(),
         batching: false,
@@ -1499,7 +1560,23 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
         } else {
             CStr::from_ptr(bytes as *const c_char).to_bytes()
         };
-        let m = load_image(image, &cpu)?;
+        // For large PTX modules, compile one entry now and defer the others
+        // until cuModuleGetFunction. Keep all globals visible in each image so
+        // that the later kernels can share this module's data buffer.
+        let lazy = if std::env::var("ZLUDA_AGX_LAZY_KERNELS").is_ok_and(|v| !v.is_empty() && v != "0")
+            && !agx_checked()
+            && !image.starts_with(b"\x7fELF")
+            && image.get(..8) != Some(&module::FAT_MAGIC[..])
+        {
+            std::str::from_utf8(image).ok().and_then(|text| {
+                let names = crate::specialize::entry_names(text);
+                (names.len() > 1).then(|| (std::sync::Arc::<str>::from(text), names))
+            })
+        } else {
+            None
+        };
+        let initial_ptx = lazy.as_ref().map(|(text, names)| crate::specialize::without_other_entries(text, &names[0]));
+        let m = load_image(initial_ptx.as_deref().map_or(image, str::as_bytes), &cpu)?;
         let mut loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
         if loaded.uses_heap() {
             if d.heap.is_none() {
@@ -1533,6 +1610,22 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             );
         }
         d.modules.insert(h, loaded);
+        if let Some((ptx, names)) = lazy {
+            let workers = std::env::var("ZLUDA_AGX_PARALLEL_KERNELS").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(16);
+            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let pending = if workers > 0 {
+                precompile_kernels(ptx.clone(), &names[1..], cpu, workers, cancelled.clone())
+            } else {
+                HashMap::new()
+            };
+            d.lazy_sources.insert(h, LazySource {
+                ptx,
+                kernels: names.into_iter().collect(),
+                compiled: HashMap::new(),
+                pending,
+                cancelled,
+            });
+        }
         Ok(h)
     })?;
     out(module, CUmodule(h as *mut _))
@@ -1688,9 +1781,17 @@ pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
         d.sync_all()?;
         let h = hmod.0 as usize;
         d.modules.remove(&h).ok_or(CUerror::INVALID_HANDLE)?;
-        d.functions.retain(|_, (m, _)| *m != h);
+        let children: Vec<usize> = d.lazy_sources.remove(&h).map_or_else(Vec::new, |s| {
+            s.cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+            s.compiled.into_values().collect()
+        });
+        for child in &children {
+            d.modules.remove(child);
+            d.spec_sources.remove(child);
+        }
+        d.functions.retain(|_, (m, _)| *m != h && !children.contains(m));
         d.spec_sources.remove(&h);
-        d.specs.retain(|(m, ..), _| *m != h);
+        d.specs.retain(|(m, ..), _| *m != h && !children.contains(m));
         Ok(())
     })
 }
@@ -1698,12 +1799,56 @@ pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
 pub(crate) unsafe fn cuModuleGetFunction(hfunc: *mut CUfunction, hmod: CUmodule, name: *const c_char) -> CUresult {
     let name = CStr::from_ptr(name).to_string_lossy().into_owned();
     let h = with(|d| {
-        let m = d.modules.get(&(hmod.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
-        if !m.module.kernels.contains_key(&name) {
-            return Err(CUerror::NOT_FOUND);
-        }
+        let parent = hmod.0 as usize;
+        let m = d.modules.get(&parent).ok_or(CUerror::INVALID_HANDLE)?;
+        let module = if m.module.kernels.contains_key(&name) {
+            parent
+        } else {
+            let source = d.lazy_sources.get(&parent).ok_or(CUerror::NOT_FOUND)?;
+            if !source.kernels.contains(&name) {
+                return Err(CUerror::NOT_FOUND);
+            }
+            if let Some(&child) = source.compiled.get(&name) {
+                child
+            } else {
+                let start = Instant::now();
+                let ptx = source.ptx.clone();
+                let pending = source.pending.get(&name).cloned();
+                let module = if let Some(slot) = pending {
+                    let (lock, ready) = &*slot;
+                    let mut result = lock.lock().unwrap_or_else(|e| e.into_inner());
+                    while result.is_none() {
+                        result = ready.wait(result).unwrap_or_else(|e| e.into_inner());
+                    }
+                    let (object, asm) = result.as_ref().unwrap().clone().map_err(|e| {
+                        eprintln!("zluda_agx: {e}");
+                        CUerror::INVALID_PTX
+                    })?;
+                    module::Module::load(&object, &asm).map_err(|_| CUerror::INVALID_IMAGE)?
+                } else {
+                    let image = crate::specialize::without_other_entries(&ptx, &name);
+                    let cpu = d.ctx.props.llvm_cpu.clone();
+                    load_image(image.as_bytes(), &cpu)?
+                };
+                let loaded = LoadedModule::new_sharing_globals(&mut d.ctx.vm, module, &d.modules[&parent]).map_err(from_io)?;
+                if !loaded.module.kernels.contains_key(&name) {
+                    return Err(CUerror::NOT_FOUND);
+                }
+                let can_specialize = specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer();
+                let child = d.handle();
+                d.modules.insert(child, loaded);
+                if can_specialize {
+                    d.spec_sources.insert(child, ptx);
+                }
+                d.lazy_sources.get_mut(&parent).unwrap().compiled.insert(name.clone(), child);
+                if crate::log_enabled() {
+                    eprintln!("[zluda_agx] loaded {name} on request in {:.3} s", start.elapsed().as_secs_f64());
+                }
+                child
+            }
+        };
         let h = d.handle();
-        d.functions.insert(h, (hmod.0 as usize, name));
+        d.functions.insert(h, (module, name));
         Ok(h)
     })?;
     out(hfunc, CUfunction(h as *mut _))
@@ -2280,6 +2425,68 @@ fn co_resident_threadgroups(fit: u32) -> u32 {
 
 pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, f: CUfunction, block: c_int, dynamic_shared: usize) -> CUresult {
     cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(n, f, block, dynamic_shared, 0)
+}
+
+pub(crate) unsafe fn cuOccupancyMaxPotentialBlockSizeWithFlags(
+    min_grid_size: *mut c_int,
+    block_size: *mut c_int,
+    f: CUfunction,
+    block_to_dynamic_shared: CUoccupancyB2DSize,
+    dynamic_shared: usize,
+    block_size_limit: c_int,
+    _flags: c_uint,
+) -> CUresult {
+    if min_grid_size.is_null() || block_size.is_null() || block_size_limit < 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let (grid, block) = with(|d| {
+        let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        let k = &d.modules[m].module.kernels[name];
+        let max = k.max_threads_per_threadgroup().min(if block_size_limit == 0 { u32::MAX } else { block_size_limit as u32 });
+        let mut best = (0u32, 0u32, 0u32); // occupied threads, resident blocks, block size
+        let mut candidates: Vec<u32> = (32..=max).step_by(32).collect();
+        if max % 32 != 0 {
+            candidates.push(max);
+        }
+        for threads in candidates {
+            let groups = threads.div_ceil(32);
+            let mut blocks = co_resident_threadgroups(k.simd_groups_per_core() / groups);
+            let dynamic = block_to_dynamic_shared.map_or(dynamic_shared, |callback| unsafe { callback(threads as c_int) });
+            let shared = (k.threadgroup_bytes as usize).saturating_add(dynamic);
+            if shared > 0 {
+                blocks = blocks.min((65536 / shared) as u32);
+            }
+            let occupied = blocks * threads;
+            if occupied > best.0 || (occupied == best.0 && threads > best.2) {
+                best = (occupied, blocks, threads);
+            }
+        }
+        if best.1 == 0 {
+            return Err(CUerror::INVALID_VALUE);
+        }
+        Ok((best.1 * d.ctx.props.cores, best.2))
+    })?;
+    out(min_grid_size, grid as c_int)?;
+    out(block_size, block as c_int)
+}
+
+pub(crate) unsafe fn cuOccupancyMaxPotentialBlockSize(
+    min_grid_size: *mut c_int,
+    block_size: *mut c_int,
+    f: CUfunction,
+    block_to_dynamic_shared: CUoccupancyB2DSize,
+    dynamic_shared: usize,
+    block_size_limit: c_int,
+) -> CUresult {
+    cuOccupancyMaxPotentialBlockSizeWithFlags(
+        min_grid_size,
+        block_size,
+        f,
+        block_to_dynamic_shared,
+        dynamic_shared,
+        block_size_limit,
+        0,
+    )
 }
 
 // Copies are CPU copies of shared memory after the stream's earlier work, so the asynchronous forms are synchronous.
@@ -3574,6 +3781,76 @@ mod tests {
         .unwrap();
         assert!(block.is_empty());
         assert_eq!(&u[0..14], &[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0]);
+    }
+
+    #[test]
+    fn lazy_kernel_images_have_matching_global_layouts() {
+        let zoc = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug/zoc");
+        if std::env::var_os("ZLUDA_AGX_ZOC").is_none() {
+            if !zoc.exists() {
+                eprintln!("skipped: no zoc");
+                return;
+            }
+            std::env::set_var("ZLUDA_AGX_ZOC", &zoc);
+        }
+        let ptx = ".version 7.0\n.target sm_80\n.address_size 64\n\
+                   .visible .global .align 4 .u32 counter;\n\
+                   .visible .entry first() { ret; }\n\
+                   .visible .entry second() { ret; }\n";
+        let first = crate::specialize::without_other_entries(ptx, "first");
+        let second = crate::specialize::without_other_entries(ptx, "second");
+        let a = load_image(first.as_bytes(), "agx-g14c").unwrap();
+        let b = load_image(second.as_bytes(), "agx-g14c").unwrap();
+        assert!(a.kernels.contains_key("first") && !a.kernels.contains_key("second"));
+        assert!(b.kernels.contains_key("second") && !b.kernels.contains_key("first"));
+        assert_eq!(a.globals, b.globals);
+        assert_eq!(a.global_symbols, b.global_symbols);
+        assert!(a.global_symbols.contains_key("counter"));
+    }
+
+    #[test]
+    fn lazy_module_loads_requested_kernel_and_unloads_children() {
+        let zoc = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug/zoc");
+        if std::env::var_os("ZLUDA_AGX_ZOC").is_none() {
+            if !zoc.exists() {
+                eprintln!("skipped: no zoc");
+                return;
+            }
+            std::env::set_var("ZLUDA_AGX_ZOC", &zoc);
+        }
+        std::env::set_var("ZLUDA_AGX_LAZY_KERNELS", "1");
+        std::env::set_var("ZLUDA_AGX_PARALLEL_KERNELS", "2");
+        let ptx = b".version 7.0\n.target sm_80\n.address_size 64\n\
+                    .visible .global .align 4 .u32 counter;\n\
+                    .visible .entry first() { ret; }\n\
+                    .visible .entry second() { ret; }\n\0";
+        unsafe {
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let mut module = CUmodule(std::ptr::null_mut());
+            cuModuleLoadData(&mut module, ptx.as_ptr().cast()).unwrap();
+            let parent = module.0 as usize;
+            let mut first = CUfunction(std::ptr::null_mut());
+            cuModuleGetFunction(&mut first, module, c"first".as_ptr()).unwrap();
+            assert_eq!(with(|d| Ok(d.lazy_sources[&parent].compiled.len())), Ok(0));
+            let mut second = CUfunction(std::ptr::null_mut());
+            cuModuleGetFunction(&mut second, module, c"second".as_ptr()).unwrap();
+            let child = with(|d| Ok(d.lazy_sources[&parent].compiled["second"])).unwrap();
+            assert_ne!(parent, child);
+            let (mut grid, mut block) = (0, 0);
+            cuOccupancyMaxPotentialBlockSize(&mut grid, &mut block, second, None, 0, 0).unwrap();
+            assert!(grid > 0 && block > 0 && block <= 1024);
+            let mut global = CUdeviceptr_v2(std::ptr::null_mut());
+            let mut size = 0;
+            cuModuleGetGlobal_v2(&mut global, &mut size, module, c"counter".as_ptr()).unwrap();
+            assert_eq!(size, 4);
+            cuModuleUnload(module).unwrap();
+            assert_eq!(with(|d| Ok((d.modules.contains_key(&parent), d.modules.contains_key(&child)))), Ok((false, false)));
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+        std::env::remove_var("ZLUDA_AGX_LAZY_KERNELS");
+        std::env::remove_var("ZLUDA_AGX_PARALLEL_KERNELS");
     }
 
     // A fat binary as nvcc lays it out: a wrapper, a fatbin header, then file headers with their payloads.

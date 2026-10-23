@@ -266,6 +266,8 @@ cuda_macros::cuda_function_declarations!(
             cuModuleUnload,
             cuOccupancyMaxActiveBlocksPerMultiprocessor,
             cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags,
+            cuOccupancyMaxPotentialBlockSize,
+            cuOccupancyMaxPotentialBlockSizeWithFlags,
             cuPointerGetAttribute,
             cuStreamBeginCapture_v2,
             cuStreamCreate,

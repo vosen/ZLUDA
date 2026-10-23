@@ -67,7 +67,7 @@ pub fn specialize_ptx(src: &str, kernel: &str, args: &[&[u8]], block: [u32; 3]) 
 /// `src` without the kernels other than `kernel` (they would only add compile time); functions and globals stay,
 /// and module-scope `.global` and `.const` variables become `.visible`, so that LLVM keeps all of them: the
 /// specialized module then lays out its global data as the module does and uses the module's buffer.
-fn without_other_entries(src: &str, kernel: &str) -> String {
+pub(crate) fn without_other_entries(src: &str, kernel: &str) -> String {
     let src = &visible_globals(src);
     let mut out = String::with_capacity(src.len());
     let mut at = 0;
@@ -92,6 +92,23 @@ fn without_other_entries(src: &str, kernel: &str) -> String {
     }
     out.push_str(&src[at..]);
     out
+}
+
+/// Kernel names in a PTX image, in source order. This is used to defer AGX
+/// code generation until a CUDA module asks for a particular kernel.
+pub(crate) fn entry_names(src: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut at = 0;
+    while let Some(i) = src[at..].find(".entry") {
+        let start = at + i + ".entry".len();
+        let rest = src[start..].trim_start();
+        let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$').collect();
+        if !name.is_empty() && rest[name.len()..].trim_start().starts_with('(') {
+            names.push(name);
+        }
+        at = start;
+    }
+    names
 }
 
 /// `src` with `.visible` before the module-scope `.global` / `.const` declarations that have no linkage directive.
@@ -252,6 +269,15 @@ mod tests {
         assert!(out.contains("\n.visible .const .align 4 .b8 table[8] = {1, 0, 0, 0, 2};\n"));
         assert!(out.contains("\n.visible .global .align 4 .u32 counter;\n"));
         assert!(specialize_ptx(PTX, "missing", &args, [1, 1, 1]).is_none());
+    }
+
+    #[test]
+    fn generic_kernel_images_keep_globals_and_one_entry() {
+        assert_eq!(entry_names(PTX), ["other", "k"]);
+        let only_k = without_other_entries(PTX, "k");
+        assert_eq!(entry_names(&only_k), ["k"]);
+        assert!(only_k.contains(".visible .const .align 4 .b8 table[8]"));
+        assert!(only_k.contains(".visible .global .align 4 .u32 counter"));
     }
 
     #[test]
