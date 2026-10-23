@@ -5,6 +5,11 @@ use cl3::{
     gl::{cl_context, cl_int, cl_mem, cl_mem_flags, cl_uint},
 };
 use cuda_types::cuda::*;
+use hip_runtime_sys::{
+    hipArray_t, hipError_t, hipGraphicsMapResources, hipGraphicsResource_t,
+    hipGraphicsSubResourceGetMappedArray, hipGraphicsUnmapResources, hipGraphicsUnregisterResource,
+    hipStream_t,
+};
 use std::{ffi::c_void, mem, ptr};
 use windows::{
     core::Interface,
@@ -40,7 +45,6 @@ pub(crate) unsafe fn d3d11_register_resource(
     let cu_ctx: CUcontext = context::get_current_context()?;
     let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
     let mut state = ctx.state.lock().map_err(|_| CUerror::UNKNOWN)?;
-    //state.opencl_context.get
     if let Ok(d3d_dresource) = d3d_dresource.cast::<ID3D11Texture3D>() {
         let device = d3d_dresource
             .GetDevice()
@@ -157,4 +161,41 @@ fn initialize_context(device: &ID3D11Device) -> opencl3::Result<OpenCLContext> {
     Err(opencl3::error_codes::ClError(
         opencl3::error_codes::CL_DEVICE_NOT_FOUND,
     ))
+}
+
+pub(crate) unsafe fn map_resources(
+    count: ::core::ffi::c_uint,
+    resources: *mut hipGraphicsResource_t,
+    stream: hipStream_t,
+) -> hipError_t {
+    hipGraphicsMapResources(count as i32, resources, stream)
+}
+
+pub(crate) unsafe fn unregister_resource(resource: hipGraphicsResource_t) -> hipError_t {
+    // hipGraphicsUnregisterResource(resource)
+    Ok(())
+}
+
+pub(crate) unsafe fn resource_set_map_flags_v2(
+    _resource: hipGraphicsResource_t,
+    _flags: ::core::ffi::c_uint,
+) -> CUresult {
+    Ok(())
+}
+
+pub(crate) unsafe fn unmap_resources(
+    count: ::core::ffi::c_uint,
+    resources: *mut hipGraphicsResource_t,
+    stream: hipStream_t,
+) -> hipError_t {
+    hipGraphicsUnmapResources(count as i32, resources, stream)
+}
+
+pub(crate) unsafe fn sub_resource_get_mapped_array(
+    array: *mut hipArray_t,
+    resource: hipGraphicsResource_t,
+    array_index: ::core::ffi::c_uint,
+    mip_level: ::core::ffi::c_uint,
+) -> hipError_t {
+    hipGraphicsSubResourceGetMappedArray(array, resource, array_index, mip_level)
 }

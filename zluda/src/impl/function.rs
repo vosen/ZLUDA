@@ -75,7 +75,12 @@ pub(crate) fn get_attribute(
     Ok(())
 }
 
-pub(crate) fn launch_kernel(
+const CU_LAUNCH_PARAM_BUFFER_POINTER: usize = 0x01;
+const CU_LAUNCH_PARAM_BUFFER_SIZE: usize = 0x02;
+const CU_LAUNCH_PARAM_END: usize = 0x00;
+const HIP_LAUNCH_PARAM_END: usize = 0x03;
+
+pub(crate) unsafe fn launch_kernel(
     f: &Function,
     grid_dim_x: ::core::ffi::c_uint,
     grid_dim_y: ::core::ffi::c_uint,
@@ -88,11 +93,34 @@ pub(crate) fn launch_kernel(
     kernel_params: *mut *mut ::core::ffi::c_void,
     extra: *mut *mut ::core::ffi::c_void,
 ) -> hipError_t {
-    // TODO: fix constants in extra
-    if !extra.is_null() {
-        return hipError_t::ErrorNotSupported;
-    }
-    unsafe {
+    if let Some(extra) = extra.cast::<[usize; 5]>().as_ref() {
+        match extra {
+            [CU_LAUNCH_PARAM_BUFFER_POINTER, pointer, CU_LAUNCH_PARAM_BUFFER_SIZE, size, CU_LAUNCH_PARAM_END] =>
+            {
+                let mut hip_extra: [_; 5] = [
+                    CU_LAUNCH_PARAM_BUFFER_POINTER,
+                    *pointer,
+                    CU_LAUNCH_PARAM_BUFFER_SIZE,
+                    *size,
+                    HIP_LAUNCH_PARAM_END,
+                ];
+                hipModuleLaunchKernel(
+                    f.base,
+                    grid_dim_x,
+                    grid_dim_y,
+                    grid_dim_z,
+                    block_dim_x,
+                    block_dim_y,
+                    block_dim_z,
+                    shared_mem_bytes,
+                    stream,
+                    kernel_params,
+                    hip_extra.as_mut_ptr().cast(),
+                )
+            }
+            _ => hipError_t::ErrorInvalidValue,
+        }
+    } else {
         hipModuleLaunchKernel(
             f.base,
             grid_dim_x,

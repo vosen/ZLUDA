@@ -281,7 +281,8 @@ from_cuda_nop!(
     CUctxCreateParams,
     cufftHandle,
     cuda_types::cuda::libraryPropertyType,
-    CUgraphicsResource
+    CUgraphicsResource,
+    CUsharedconfig
 );
 from_cuda_transmute!(
     CUuuid => hipUUID,
@@ -323,7 +324,8 @@ from_cuda_transmute!(
     CUarray_format => hipArray_Format,
     CUaddress_mode => hipTextureAddressMode,
     CUfilter_mode => hipTextureFilterMode,
-    cufftType_t => hipfft_sys::hipfftType
+    cufftType_t => hipfft_sys::hipfftType,
+    CUgraphicsResource => hipGraphicsResource_t
 );
 
 impl<'a, E: CudaErrorType> FromCuda<'a, *const CUDA_MEMCPY3D, E> for HIP_MEMCPY3D {

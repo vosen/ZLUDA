@@ -337,6 +337,15 @@ pub(crate) unsafe fn get_api_version(
     Ok(())
 }
 
+pub(crate) unsafe fn get_shared_memory_config(config: &mut CUsharedconfig) -> CUresult {
+    *config = CUsharedconfig::CU_SHARED_MEM_CONFIG_DEFAULT_BANK_SIZE;
+    Ok(())
+}
+
+pub(crate) unsafe fn set_shared_memory_config(_: CUsharedconfig) -> CUresult {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
