@@ -581,7 +581,14 @@ sampler index at bit 32, the texture heap offset in the low 32 bits); any other 
 results; linear filtering uses the hardware's weights rather than the model's 1/256 steps, and the f16 forms' results
 are rounded once more, which is why `--strict-fp` does not use the unit. The
 formalization harness builds the same descriptors (`agx_run --sampler-heap`), and the texture tests pass both
-ways. Not yet validated on the GPU (simulator only).
+ways. **On the GPU the texture unit's results are wrong** (2026-10-23, M2 Max: `agx_texture_check` reads zeros from
+an RGBA8 array where the software sampler reads its texels, as integers and as normalized floats), so the texture unit
+is only used when `ZLUDA_AGX_HARDWARE_TEXTURES` is set; by default every texture takes the software path.
+
+Textures read as integers (`CU_TRSF_READ_AS_INTEGER` on 8- and 16-bit formats, and 32-bit integer formats) are point
+sampled even when linear filtering is asked for: CUDA documents linear filtering only for textures that return
+floating-point data (and as unsupported with `CU_TRSF_READ_AS_INTEGER`). Geekbench 7's path tracer creates its 8-bit
+environment map that way.
 
 Module `.texref`, `.samplerref` and `.surfref` variables compile: on AGX each holds the 64-bit handle of
 a texture, sampler or surface object, which the instructions load. The legacy texture reference API
