@@ -787,6 +787,11 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if stack_size != DEFAULT_STACK_SIZE {
         options.push(&stack_option);
     }
+    // zoc passes ZLUDA_AGX_LLVM_ARGS to LLVM, so they change its output
+    let llvm_args = std::env::var("ZLUDA_AGX_LLVM_ARGS").map(|a| format!("llvm-args={a}")).unwrap_or_default();
+    if !llvm_args.is_empty() {
+        options.push(&llvm_args);
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
