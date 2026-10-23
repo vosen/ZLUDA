@@ -1,6 +1,6 @@
 //! `agx_run_hw MAIN.bin --grid X[,Y,Z] --wg x[,y,z] [--regs HALVES] [--shared BYTES] [--stack BYTES] [--uniform I=V ...]
 //!            [--map VA=FILE ...] [--alloc VA=BYTES ...] [--dump VA=BYTES:FILE ...] [--node PATH] [--timeout-ms N]
-//!            [--repeat N] [--warm-ms MS] [--keep-memory]`
+//!            [--repeat N] [--warm-ms MS] [--keep-memory] [--back-to-back N]`
 //!
 //! Runs a whole AGX compute kernel on the GPU with the command line of the AGX Performance Simulator's `agx_run`, so
 //! that any simulator test (the LLVM AGX backend's kernels, ZLUDA's PTX tests, the Sail-derived difftests) can also
@@ -19,7 +19,9 @@
 //! last run's), and `--warm-ms MS` keeps repeating (up to 5000 runs) until the runs add up to MS of GPU time: the GPU
 //! clock ramps up over the first runs, so `min_fw_ns` / `median_fw_ns` are the warm times. `--keep-memory` skips the
 //! restore between runs (for kernels whose time does not depend on their earlier results): restoring large regions
-//! from the CPU leaves the GPU idle long enough that its clock stays low.
+//! from the CPU leaves the GPU idle long enough that its clock stays low. `--back-to-back N` (at most 1000) instead
+//! submits the launch N times without waiting in between, as an application keeps the GPU busy, and reports the median
+//! firmware time of the second half (`b2b_median_fw_ns`; memory is not restored between them).
 //! Prints one JSON line with the firmware command time.
 
 use agx_runtime::*;
@@ -51,7 +53,7 @@ fn main() {
     let (mut grid, mut wg) = ([1u32; 3], [1u32; 3]);
     let (mut regs, mut shared, mut node, mut timeout) = (256u32, 0u32, "/dev/dri/renderD128".to_string(), 3000u64);
     let mut stack = 0u32;
-    let (mut repeat, mut warm_ms, mut keep_memory) = (1u64, 0u64, false);
+    let (mut repeat, mut warm_ms, mut keep_memory, mut back_to_back) = (1u64, 0u64, false, 0u64);
     let mut uniforms: BTreeMap<usize, u32> = BTreeMap::new();
     let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
     let mut dumps: Vec<(u64, usize, String)> = Vec::new();
@@ -77,6 +79,7 @@ fn main() {
             "--timeout-ms" => timeout = num(&v),
             "--repeat" => repeat = num(&v).max(1),
             "--warm-ms" => warm_ms = num(&v),
+            "--back-to-back" => back_to_back = num(&v).min(1000),
             "--uniform" => {
                 let (k, x) = kv('=');
                 uniforms.insert(num(&k) as usize, num(&x) as u32);
@@ -188,6 +191,25 @@ fn main() {
     let t = t.unwrap();
     let first_ns = times[0];
     times.sort();
+    // the launch queued N times, the GPU never idle in between
+    let mut b2b = Vec::new();
+    if back_to_back > 0 {
+        let mut fences = Vec::new();
+        for _ in 0..back_to_back {
+            fences.push(
+                queue
+                    .submit_compute_with_helper(cdm.va, cdm.va + stream.len() as u64, helper, None, &[])
+                    .unwrap_or_else(|e| die(&e.to_string())),
+            );
+        }
+        queue.wait(*fences.last().unwrap(), queue.timeout * back_to_back as u32).unwrap_or_else(|e| die(&e.to_string()));
+        for f in &fences[fences.len() / 2..] {
+            if let Some((start, end)) = queue.timing(*f) {
+                b2b.push(end.wrapping_sub(start) as u128 * 1_000_000_000 / hz);
+            }
+        }
+        b2b.sort();
+    }
 
     for (va, n, f) in &dumps {
         let bo = bos
@@ -198,7 +220,7 @@ fn main() {
         std::fs::write(f, &bo.as_slice()[off..off + n]).unwrap_or_else(|e| die(&format!("{f}: {e}")));
     }
     println!(
-        "{{\"completed\":true,\"cpu\":\"{}\",\"cores\":{},\"fw_ticks\":{},\"fw_ns\":{},\"host_us\":{},\"repeat\":{},\"first_fw_ns\":{},\"min_fw_ns\":{},\"median_fw_ns\":{}}}",
+        "{{\"completed\":true,\"cpu\":\"{}\",\"cores\":{},\"fw_ticks\":{},\"fw_ns\":{},\"host_us\":{},\"repeat\":{},\"first_fw_ns\":{},\"min_fw_ns\":{},\"median_fw_ns\":{},\"b2b_median_fw_ns\":{}}}",
         dev.llvm_cpu(),
         dev.core_count(),
         t.end.wrapping_sub(t.start),
@@ -207,6 +229,7 @@ fn main() {
         times.len(),
         first_ns,
         times[0],
-        times[times.len() / 2]
+        times[times.len() / 2],
+        b2b.get(b2b.len() / 2).copied().unwrap_or(0)
     );
 }

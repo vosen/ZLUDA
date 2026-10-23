@@ -85,6 +85,22 @@ impl RangeAllocator {
     pub fn free_bytes(&self) -> u64 {
         self.free.values().sum()
     }
+
+    /// Takes the range `at..at + size` if all of it is free.
+    pub fn take(&mut self, at: u64, size: u64) -> bool {
+        let Some((&start, &len)) = self.free.range(..=at).next_back() else { return false };
+        if at + size > start + len {
+            return false;
+        }
+        self.free.remove(&start);
+        if at > start {
+            self.free.insert(start, at - start);
+        }
+        if at + size < start + len {
+            self.free.insert(at + size, start + len - at - size);
+        }
+        true
+    }
 }
 
 // The generic DRM ioctls are function-like macros in drm.h, so they are computed here: _IOC(dir, 'd', nr, size).
@@ -563,12 +579,19 @@ impl Vm {
         self.create(size, va, flags, Some(heap)).inspect_err(|_| heap.borrow_mut().free(va, size))
     }
 
-    /// A read/write data object at a fixed GPU address (page aligned, below the USC heap).
+    /// A read/write data object at a fixed GPU address (page aligned): below the USC heap, or a free range of the data
+    /// heap (where zluda_agx's allocations are, so that a launch it saved replays at its own addresses).
     pub fn alloc_at(&mut self, va: u64, size: u64) -> io::Result<Bo> {
-        if va % PAGE != 0 || va + round_up(size, PAGE) > self.usc_base {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fixed address {va:#x} not usable")));
+        let size = round_up(size.max(1), PAGE);
+        let flags = (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32;
+        if va % PAGE == 0 && va + size <= self.usc_base {
+            return self.create(size, va, flags, None);
         }
-        self.create(size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, None)
+        if va % PAGE == 0 && self.data.borrow_mut().take(va, size) {
+            let heap = self.data.clone();
+            return self.create(size, va, flags, Some(&heap)).inspect_err(|_| heap.borrow_mut().free(va, size));
+        }
+        Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fixed address {va:#x} not usable")))
     }
 
     /// An unbound object (e.g. firmware timestamps).
@@ -1310,6 +1333,19 @@ mod tests {
         a.free(y, 0x4000);
         assert_eq!(a.free_bytes(), 0x10000);
         assert_eq!(a.alloc(0x10000, 0x4000), Some(0x10000));
+    }
+
+    #[test]
+    fn take_reserves_a_fixed_range() {
+        let mut a = RangeAllocator::new(0x10000, 0x10000);
+        assert!(a.take(0x14000, 0x4000));
+        assert!(!a.take(0x14000, 0x4000), "taken twice");
+        assert!(!a.take(0x1c000, 0x8000), "past the end");
+        assert_eq!(a.free_bytes(), 0xc000);
+        assert_eq!(a.alloc(0x4000, 0x4000), Some(0x10000));
+        assert_eq!(a.alloc(0x4000, 0x4000), Some(0x18000));
+        a.free(0x14000, 0x4000);
+        assert_eq!(a.free_bytes(), 0x8000);
     }
 
     #[test]
