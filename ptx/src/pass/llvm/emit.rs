@@ -2533,6 +2533,17 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ast::CosArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
+        // launch-time specialized kernel gives the bits of the generic one)
+        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+            self.emit_intrinsic(
+                c"llvm.agx.cos.f32",
+                Some(arguments.dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            )?;
+            return Ok(());
+        }
         let cos = self.fp.cos_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(cos, LLVMZludaFastMathApproxFunc) }
         Ok(())
@@ -2660,7 +2671,11 @@ impl<'a> MethodEmitContext<'a> {
     /// where PTX leaves them unspecified (and LLVM's instructions are
     /// undefined): division by zero gives all ones, the remainder of a
     /// division by zero is the dividend, and signed division of the minimum
-    /// value by -1 wraps. The divisor is replaced by 1 in those cases.
+    /// value by -1 wraps. The divisor is replaced by 1 for a zero divisor and,
+    /// in signed division, for -1, whose quotient is the negated dividend and
+    /// remainder zero: the divisor then depends on the divisor alone, so a
+    /// loop-invariant or constant one keeps its reciprocal out of the loop or
+    /// folded.
     fn emit_defined_int_div(
         &mut self,
         dst: SpirvWord,
@@ -2675,21 +2690,24 @@ impl<'a> MethodEmitContext<'a> {
             let one = LLVMConstInt(ty, 1, 0);
             let by_zero = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, zero, LLVM_UNNAMED.as_ptr());
             let mut unsafe_divisor = by_zero;
+            let mut minus_one = None;
             if signed {
-                let width = LLVMGetIntTypeWidth(ty);
-                let min = LLVMConstInt(ty, 1u64 << (width - 1), 0);
-                let is_min = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src1, min, LLVM_UNNAMED.as_ptr());
                 let is_minus_one = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, LLVMConstAllOnes(ty), LLVM_UNNAMED.as_ptr());
-                let overflow = LLVMBuildAnd(self.builder, is_min, is_minus_one, LLVM_UNNAMED.as_ptr());
-                unsafe_divisor = LLVMBuildOr(self.builder, by_zero, overflow, LLVM_UNNAMED.as_ptr());
+                unsafe_divisor = LLVMBuildOr(self.builder, by_zero, is_minus_one, LLVM_UNNAMED.as_ptr());
+                minus_one = Some(is_minus_one);
             }
             let divisor = LLVMBuildSelect(self.builder, unsafe_divisor, one, src2, LLVM_UNNAMED.as_ptr());
-            let result = match (signed, rem) {
+            let mut result = match (signed, rem) {
                 (false, false) => LLVMBuildUDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (true, false) => LLVMBuildSDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (false, true) => LLVMBuildURem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (true, true) => LLVMBuildSRem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
             };
+            if let Some(is_minus_one) = minus_one {
+                // x / -1 = -x (wrapping: the minimum value stays), x % -1 = 0
+                let by_minus_one = if rem { zero } else { LLVMBuildSub(self.builder, zero, src1, LLVM_UNNAMED.as_ptr()) };
+                result = LLVMBuildSelect(self.builder, is_minus_one, by_minus_one, result, LLVM_UNNAMED.as_ptr());
+            }
             let by_zero_result = if rem { src1 } else { LLVMConstAllOnes(ty) };
             self.resolver.with_result(dst, |dst| {
                 LLVMBuildSelect(self.builder, by_zero, by_zero_result, result, dst)
@@ -2720,13 +2738,12 @@ impl<'a> MethodEmitContext<'a> {
         }
         if self.target == Target::Agx && float_div.type_ == ast::ScalarType::F32 {
             // d = a * (1/b), where 1/b of 2^126 < |b| is a zero of the sign of b (PTX ISA 9.7.3.8): infinite a
-            // gives NaN, any other a a zero
+            // gives NaN, any other a a zero. 1/b is the hardware's reciprocal (as rcp.approx), which LLVM does not
+            // fold: a constant b (from launch-time specialization) gives the same result as a variable one.
             let f32_type = get_scalar_type(self.context, ast::ScalarType::F32);
             let b = self.builder;
             unsafe {
-                let one = LLVMConstReal(f32_type, 1.0);
-                let recip = LLVMBuildFDiv(b, one, src2, LLVM_UNNAMED.as_ptr());
-                LLVMZludaSetFastMathFlags(recip, LLVMZludaFastMathAllowReciprocal | LLVMZludaFastMathApproxFunc);
+                let recip = self.emit_intrinsic(c"llvm.agx.rcp.f32", None, vec![&ast::Type::Scalar(ast::ScalarType::F32)], vec![(src2, f32_type)])?;
                 let magnitude = self.emit_intrinsic(c"llvm.fabs.f32", None, vec![&ast::Type::Scalar(ast::ScalarType::F32)], vec![(src2, f32_type)])?;
                 let big = LLVMBuildFCmp(b, LLVMRealPredicate::LLVMRealOGT, magnitude, LLVMConstReal(f32_type, 2f64.powi(126)), LLVM_UNNAMED.as_ptr());
                 let zero = self.emit_intrinsic(
@@ -2859,6 +2876,17 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::SinArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
+        // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
+        // launch-time specialized kernel gives the bits of the generic one)
+        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+            self.emit_intrinsic(
+                c"llvm.agx.sin.f32",
+                Some(arguments.dst),
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, get_scalar_type(self.context, ast::ScalarType::F32))],
+            )?;
+            return Ok(());
+        }
         let sin = self.fp.sin_f32(self.resolver, arguments.dst, src)?;
         unsafe { LLVMZludaSetFastMathFlags(sin, LLVMZludaFastMathApproxFunc) }
         Ok(())
@@ -5202,6 +5230,20 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let mode = self.fp.mode;
+        if self.target == Target::Agx && data.type_ == ast::ScalarType::F32 && !self.strict_fp && mode == FloatingPointMode::Normal {
+            // x * rsqrt_special(x), the code of llvm.sqrt without strict floating point (a hardware approximation),
+            // which LLVM does not fold on the host for a constant x: a launch-time specialized kernel gives the bits
+            // of the generic one
+            let src = self.resolver.value(arguments.src)?;
+            let r = self.emit_intrinsic(
+                c"llvm.agx.rsqrt.special.f32",
+                None,
+                vec![&ast::ScalarType::F32.into()],
+                vec![(src, type_)],
+            )?;
+            self.resolver.with_result(arguments.dst, |dst| unsafe { LLVMBuildFMul(self.builder, src, r, dst) });
+            return Ok(());
+        }
         let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, mode) {
             (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
                 (c"llvm.sqrt.f32", &[])
@@ -5464,7 +5506,9 @@ impl<'a> MethodEmitContext<'a> {
                     ast::ScalarType::BF16x2 => "v2bf16",
                     _ => return Err(error_unreachable()),
                 };
-                agx_name = CString::new(format!("llvm.exp2.{suffix}")).map_err(|_| error_unreachable())?;
+                // f32: the hardware's exp2, which LLVM does not fold on the host for a constant argument
+                let name = if data.type_ == ast::ScalarType::F32 { "llvm.agx.exp2" } else { "llvm.exp2" };
+                agx_name = CString::new(format!("{name}.{suffix}")).map_err(|_| error_unreachable())?;
                 agx_name.as_c_str()
             }
             (ast::ScalarType::F16, FloatingPointMode::Normal) => c"llvm.amdgcn.exp2.f16",
@@ -5502,7 +5546,8 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::Lg2Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let intrinsic = match self.fp.mode {
-            _ if self.target == Target::Agx => c"llvm.log2.f32",
+            // the hardware's log2, which LLVM does not fold on the host for a constant argument
+            _ if self.target == Target::Agx => c"llvm.agx.log2.f32",
             FloatingPointMode::Normal => c"llvm.amdgcn.log.f32",
             FloatingPointMode::Constrained => c"llvm.amdgcn.constrained.log.f32",
         };

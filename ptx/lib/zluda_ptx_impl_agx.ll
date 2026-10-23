@@ -1000,7 +1000,9 @@ define float @__zluda_ptx_impl_redux_sync_max_f32_abs_nan(float %src, i32 %membe
   %r = call float @__zluda_ptx_impl_agx_redux_f32(float %src, i1 true, i1 true, i1 true)
   ret float %r
 }
-; Approximate math maps to the hardware functions.
+; Approximate math maps to the hardware functions (llvm.agx.exp2 and
+; llvm.agx.log2 rather than llvm.exp2 and llvm.log2, which LLVM folds with the
+; host's libm for constant arguments: specialized kernels give the same bits).
 define float @__zluda_ptx_impl_sqrt_approx_f32(float %x) #0 {
   %r = call float @llvm.sqrt.f32(float %x)
   ret float %r
@@ -1017,12 +1019,12 @@ define float @__zluda_ptx_impl_rcp_approx_f32(float %x) #0 {
 }
 
 define float @__zluda_ptx_impl_ex2_approx_f32(float %x) #0 {
-  %r = call float @llvm.exp2.f32(float %x)
+  %r = call float @llvm.agx.exp2.f32(float %x)
   ret float %r
 }
 
 define float @__zluda_ptx_impl_lg2_approx_f32(float %x) #0 {
-  %r = call float @llvm.log2.f32(float %x)
+  %r = call float @llvm.agx.log2.f32(float %x)
   ret float %r
 }
 
@@ -1495,7 +1497,7 @@ define float @__zluda_ptx_impl_div_f32_part2(float %x, float %y, float %fma4, fl
 define float @__zluda_ptx_impl_tanh_f32(float %x) #0 {
   %ax = call float @llvm.fabs.f32(float %x)
   %s = fmul float %ax, 0xC007154760000000
-  %e = call float @llvm.exp2.f32(float %s)
+  %e = call float @llvm.agx.exp2.f32(float %s)
   %num = fsub float 1.0, %e
   %den = fadd float 1.0, %e
   %t = fdiv float %num, %den
@@ -3803,8 +3805,8 @@ declare void @llvm.agx.threadgroup.barrier()
 declare float @llvm.agx.rsqrt.f32(float)
 declare float @llvm.agx.rcp.f32(float)
 declare float @llvm.sqrt.f32(float)
-declare float @llvm.exp2.f32(float)
-declare float @llvm.log2.f32(float)
+declare float @llvm.agx.exp2.f32(float)
+declare float @llvm.agx.log2.f32(float)
 declare {i32, i1} @llvm.uadd.with.overflow.i32(i32, i32)
 declare void @llvm.trap()
 

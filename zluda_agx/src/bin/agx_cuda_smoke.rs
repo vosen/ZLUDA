@@ -3,7 +3,8 @@
 //! result; then replays it as a CUDA graph, runs it on managed and mapped host memory, and does a 2D copy. Without
 //! an argument the PTX is compiled by zoc (`ZLUDA_AGX_ZOC`, next to this binary, or on PATH); with one, that AGX
 //! object (zoc's output for the same PTX) is loaded instead, so no LLVM is needed. Without an argument it also links
-//! two PTX modules with cuLink* and runs the result (`link_ok`). Prints one JSON line.
+//! two PTX modules with cuLink* and runs the result (`link_ok`), and sets a `.const` variable through cuModuleGetGlobal
+//! and cuMemcpyHtoD, also from a captured graph (`globals_ok`). Prints one JSON line.
 
 use cuda_types::cuda::*;
 use nvcuda_agx::*;
@@ -22,6 +23,22 @@ const LINK_LIB: &str = ".version 6.5
     ld.param.u64 a, [x];
     add.u64 a, a, 1;
     st.param.u64 [r+0], a;
+    ret;
+}
+\0";
+/// A `.const` variable that the host sets (cuModuleGetGlobal, as for `__constant__`): out = scale.
+const GLOBALS: &str = ".version 6.5
+.target sm_30
+.address_size 64
+.const .align 4 .f32 scale;
+.visible .entry get_scale(.param .u64 out)
+{
+    .reg .u64 o;
+    .reg .f32 s;
+    ld.param.u64 o, [out];
+    cvta.to.global.u64 o, o;
+    ld.const.f32 s, [scale];
+    st.global.f32 [o], s;
     ret;
 }
 \0";
@@ -182,13 +199,48 @@ fn main() {
             (got == 8).to_string()
         };
 
+        // cuModuleGetGlobal + cuMemcpyHtoD into a module's global data, then the same from a captured graph
+        let globals_ok = if object.is_some() {
+            "null".to_string()
+        } else {
+            let mut gm = CUmodule(null_mut());
+            check("cuModuleLoadData(globals)", cuModuleLoadData(&mut gm, GLOBALS.as_ptr() as *const c_void));
+            let (mut gs, mut gsize) = (CUdeviceptr_v2(null_mut()), 0usize);
+            check("cuModuleGetGlobal", cuModuleGetGlobal_v2(&mut gs, &mut gsize, gm, c"scale".as_ptr()));
+            let mut gf = CUfunction(null_mut());
+            check("cuModuleGetFunction(get_scale)", cuModuleGetFunction(&mut gf, gm, c"get_scale".as_ptr()));
+            let mut dout = CUdeviceptr_v2(null_mut());
+            check("cuMemAlloc", cuMemAlloc_v2(&mut dout, 4));
+            let mut gp: [*mut c_void; 1] = [&mut dout as *mut _ as *mut c_void];
+            let mut got = [0f32; 2];
+            for (i, v) in [2.5f32, -7.0].into_iter().enumerate() {
+                if i == 0 {
+                    check("cuMemcpyHtoD(global)", cuMemcpyHtoD_v2(gs, &v as *const f32 as *const c_void, 4));
+                    check("cuLaunchKernel(get_scale)", cuLaunchKernel(gf, 1, 1, 1, 1, 1, 1, 0, stream, gp.as_mut_ptr(), null_mut()));
+                } else {
+                    check("cuStreamBeginCapture", cuStreamBeginCapture_v2(s1, CUstreamCaptureMode_enum::CU_STREAM_CAPTURE_MODE_GLOBAL));
+                    check("cuMemcpyHtoDAsync(global)", cuMemcpyHtoDAsync_v2(gs, &v as *const f32 as *const c_void, 4, s1));
+                    check("cuLaunchKernel(get_scale)", cuLaunchKernel(gf, 1, 1, 1, 1, 1, 1, 0, s1, gp.as_mut_ptr(), null_mut()));
+                    let (mut g, mut e) = (null_mut(), null_mut());
+                    check("cuStreamEndCapture", cuStreamEndCapture(s1, &mut g));
+                    check("cuGraphInstantiate", cuGraphInstantiateWithFlags(&mut e, g, 0));
+                    check("cuGraphLaunch", cuGraphLaunch(e, s1));
+                    check("cuStreamSynchronize", cuStreamSynchronize(s1));
+                }
+                check("cuMemcpyDtoH", cuMemcpyDtoH_v2(&mut got[i] as *mut f32 as *mut c_void, dout, 4));
+            }
+            let mut back = 0f32;
+            check("cuMemcpyDtoH(global)", cuMemcpyDtoH_v2(&mut back as *mut f32 as *mut c_void, gs, 4));
+            (gsize == 4 && got == [2.5, -7.0] && back == -7.0).to_string()
+        };
+
         let name = CStr::from_ptr(name.as_ptr()).to_string_lossy();
         println!(
-            "{{\"device\":{name:?},\"link_ok\":{link_ok},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"unified\":{},\"unified_wrong\":{unified_wrong},\"copy2d_wrong\":{copy2d_wrong},\"kernel_ms\":{ms}}}",
+            "{{\"device\":{name:?},\"link_ok\":{link_ok},\"globals_ok\":{globals_ok},\"n\":{n},\"wrong\":{wrong},\"graph_wrong\":{graph_wrong},\"unified\":{},\"unified_wrong\":{unified_wrong},\"copy2d_wrong\":{copy2d_wrong},\"kernel_ms\":{ms}}}",
             managed && mapped
         );
         // unified memory needs the CPU range of the GPU addresses to be free; its absence is reported, not a failure
-        let ok = wrong == 0 && graph_wrong == 0 && unified_wrong <= 0 && copy2d_wrong == 0 && link_ok != "false";
+        let ok = wrong == 0 && graph_wrong == 0 && unified_wrong <= 0 && copy2d_wrong == 0 && link_ok != "false" && globals_ok != "false";
         std::process::exit(if ok { 0 } else { 2 });
     }
 }

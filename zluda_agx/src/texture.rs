@@ -267,25 +267,43 @@ unsafe fn write_descriptor(d: &mut Driver, words: &[u64]) -> Result<u64, CUerror
     Ok(va)
 }
 
+/// texture_sample's register sampler index of heap sampler k is k + 28; the lower indices are sampler state slots
+/// (Mesa's Honeykrisp, hk_descriptor_set.c; on the M2 Max index k reads zeros, k + 28 the texels).
+const SAMPLER_HEAP_BASE: u64 = 28;
+
 /// A texture object's descriptor, with word 16 naming its hardware descriptors when it has them (see
 /// `native_descriptors`; a full heap leaves it to the software sampler).
 unsafe fn write_texture(d: &mut Driver, img: &Image, t: &CUDA_TEXTURE_DESC) -> Result<u64, CUerror> {
     let mut words = texture_words(img, t)?.to_vec();
     let mut native = 0;
-    if std::env::var_os("ZLUDA_AGX_SOFTWARE_TEXTURES").is_none() {
-        if let Some((texture, sampler, integer, rank)) = native_descriptors(img, t) {
-            if let Some(offset) = d.ctx.vm.add_texture(&texture).map_err(from_io)? {
-                match d.ctx.vm.add_sampler(&sampler).map_err(from_io)? {
+    // The texture unit is checked on the GPU for RGBA8 arrays only (agx_texture_check, M2 Max, 2026-10-23), so it is
+    // only used when ZLUDA_AGX_HARDWARE_TEXTURES is set.
+    if std::env::var_os("ZLUDA_AGX_HARDWARE_TEXTURES").is_some() && std::env::var_os("ZLUDA_AGX_SOFTWARE_TEXTURES").is_none() {
+        let why = match native_descriptors(img, t) {
+            None => Some("not a form the texture unit samples as the software sampler does"),
+            Some((texture, sampler, integer, rank)) => match d.ctx.vm.add_texture(&texture).map_err(from_io)? {
+                None => Some("texture heap full"),
+                Some(offset) => match d.ctx.vm.add_sampler(&sampler).map_err(from_io)? {
                     Some(index) => {
                         native = NATIVE
                             | if integer { NATIVE_INTEGER } else { 0 }
                             | if rank == 2 { NATIVE_2D } else { 0 }
-                            | (index as u64) << 32
-                            | offset as u64
+                            | (index as u64 + SAMPLER_HEAP_BASE) << 32
+                            | offset as u64;
+                        None
                     }
-                    None => d.ctx.vm.remove_texture(offset),
-                }
-            }
+                    None => {
+                        d.ctx.vm.remove_texture(offset);
+                        Some("sampler heap full")
+                    }
+                },
+            },
+        };
+        if let Some(why) = why.filter(|_| crate::log_enabled()) {
+            eprintln!(
+                "[zluda_agx] software texture ({why}): format {:?} x{} dims {:?} layers {} levels {} pitch {} flags {:#x} filter {:?} address {:?}",
+                img.format, img.channels, img.dims, img.layers, img.levels, img.pitch, t.flags, t.filterMode, t.addressMode
+            );
         }
     }
     words.push(native);
@@ -324,13 +342,13 @@ fn native_descriptors(img: &Image, t: &CUDA_TEXTURE_DESC) -> Option<([u8; 24], [
     let rank: usize = if img.dims[1] > 1 || img.pitch != 0 { 2 } else { 1 };
     let pitch = if img.pitch != 0 { img.pitch } else { img.dims[0] * texel };
     let normalized = t.flags & CU_TRSF_NORMALIZED_COORDINATES != 0;
-    let linear = t.filterMode == CUfilter_mode::CU_TR_FILTER_MODE_LINEAR;
+    let linear = filters_linearly(img, t);
     let small_integer = matches!(bytes, 1 | 2) && img.format != F::CU_AD_FORMAT_HALF;
     let read_normalized = small_integer && t.flags & CU_TRSF_READ_AS_INTEGER == 0;
     let float = matches!(img.format, F::CU_AD_FORMAT_HALF | F::CU_AD_FORMAT_FLOAT) || read_normalized;
     let signed = matches!(img.format, F::CU_AD_FORMAT_SIGNED_INT8 | F::CU_AD_FORMAT_SIGNED_INT16 | F::CU_AD_FORMAT_SIGNED_INT32);
     if img.dims[2] > 1 || img.layers > 1 || img.levels > 1 || img.cube || img.base % 16 != 0 || pitch % 16 != 0
-        || img.dims[0] > 16384 || img.dims[1] > 16384 || (linear && !float)
+        || img.dims[0] > 16384 || img.dims[1] > 16384
         || t.flags & CU_TRSF_SRGB != 0
     {
         return None;
@@ -465,6 +483,18 @@ fn address_mode(m: CUaddress_mode) -> u64 {
     }
 }
 
+/// Whether a texture is filtered linearly: when its filter mode asks for it and it returns floats (float or half
+/// texels, or 8- and 16-bit integers read normalized). Textures read as integers are point sampled: the CUDA driver
+/// API does not support linear filtering with CU_TRSF_READ_AS_INTEGER (cuTexRefSetFilterMode), and Geekbench 7's path
+/// tracer creates its 8-bit environment map that way.
+fn filters_linearly(img: &Image, t: &CUDA_TEXTURE_DESC) -> bool {
+    let small_integer =
+        matches!(element_bytes(img.format), Some(1 | 2)) && img.format != CUarray_format::CU_AD_FORMAT_HALF;
+    let float = matches!(img.format, CUarray_format::CU_AD_FORMAT_HALF | CUarray_format::CU_AD_FORMAT_FLOAT)
+        || (small_integer && t.flags & CU_TRSF_READ_AS_INTEGER == 0);
+    t.filterMode == CUfilter_mode::CU_TR_FILTER_MODE_LINEAR && float
+}
+
 /// The descriptor of a texture object.
 fn texture_words(img: &Image, t: &CUDA_TEXTURE_DESC) -> Result<[u64; 16], CUerror> {
     if element_bytes(img.format).is_none() || !matches!(img.channels, 1 | 2 | 4) {
@@ -481,7 +511,7 @@ fn texture_words(img: &Image, t: &CUDA_TEXTURE_DESC) -> Result<[u64; 16], CUerro
         img.base,
         type_code(img.format),
         img.channels as u64,
-        linear(t.filterMode),
+        filters_linearly(img, t) as u64,
         address_mode(t.addressMode[0]),
         normalized as u64,
         read_normalized as u64,
@@ -708,7 +738,9 @@ mod tests {
         assert_eq!(w[..12], [TEXTURE_MAGIC, 0x10000, 0, 4, 1, 3, 1, 1, 1, 30, 20, 1]);
         assert_eq!((w[12], w[13], w[14], w[15]), (1, 0, 128, 0));
         t.flags |= CU_TRSF_READ_AS_INTEGER;
-        assert_eq!(texture_words(&unsafe { image(&r) }.unwrap(), &t).unwrap()[7], 0);
+        // read as integers: not normalized, and point sampled
+        let w = texture_words(&unsafe { image(&r) }.unwrap(), &t).unwrap();
+        assert_eq!((w[4], w[7]), (0, 0));
     }
 
     #[test]
@@ -737,9 +769,11 @@ mod tests {
         // linear magnify and minify, mirrored repeat, normalized coordinates
         assert_eq!((bits(&sampler, 23, 2), bits(&sampler, 25, 2), bits(&sampler, 29, 9), bits(&sampler, 38, 1)), (1, 1, 0o222, 0));
         assert_eq!((integer, rank), (false, 2));
-        // integers are not filtered; mirror needs normalized coordinates; a 3D image is not linear
+        // integers are point sampled (linear filtering asked for or not), with integer results; mirror needs
+        // normalized coordinates; a 3D image is not linear
         t.flags |= CU_TRSF_READ_AS_INTEGER;
-        assert!(native_descriptors(&img, &t).is_none());
+        let (tex, sampler, integer, _) = native_descriptors(&img, &t).unwrap();
+        assert_eq!((bits(&tex, 13, 3), bits(&sampler, 23, 4), integer), (2, 0, true));
         t.flags = 0;
         t.filterMode = CUfilter_mode::CU_TR_FILTER_MODE_POINT;
         assert!(native_descriptors(&img, &t).is_none());

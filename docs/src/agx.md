@@ -581,7 +581,17 @@ sampler index at bit 32, the texture heap offset in the low 32 bits); any other 
 results; linear filtering uses the hardware's weights rather than the model's 1/256 steps, and the f16 forms' results
 are rounded once more, which is why `--strict-fp` does not use the unit. The
 formalization harness builds the same descriptors (`agx_run --sampler-heap`), and the texture tests pass both
-ways. Not yet validated on the GPU (simulator only).
+ways. On the GPU the texture unit first read zeros: `texture_sample`'s register sampler index of heap sampler k is
+k + 28 (the lower indices are sampler state slots; Mesa's Honeykrisp stores heap index + 28), which word 16 now holds.
+With it, `agx_texture_check` (a random RGBA8 1024 x 512 array at 2^20 coordinates, normalized, wrap) gives the
+software sampler's results on the M2 Max: identical integers, and normalized floats with linear filtering within
+1.3e-4. Until more forms are checked on the GPU, the texture unit is only used when `ZLUDA_AGX_HARDWARE_TEXTURES` is
+set; by default every texture takes the software path.
+
+Textures read as integers (`CU_TRSF_READ_AS_INTEGER` on 8- and 16-bit formats, and 32-bit integer formats) are point
+sampled even when linear filtering is asked for: CUDA documents linear filtering only for textures that return
+floating-point data (and as unsupported with `CU_TRSF_READ_AS_INTEGER`). Geekbench 7's path tracer creates its 8-bit
+environment map that way.
 
 Module `.texref`, `.samplerref` and `.surfref` variables compile: on AGX each holds the 64-bit handle of
 a texture, sampler or surface object, which the instructions load. The legacy texture reference API
@@ -928,6 +938,66 @@ When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`,
 `replay.sh` passes `--lines module.o`: a fault in the replay then prints the source line of the faulting
 instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
 `llvm-addr2line`.
+
+### Launch-time specialization
+
+A kernel of a PTX module launched 3 times with the same scalar arguments (4 bytes or smaller) and block size is
+compiled once more in the background with them as constants, and later launches with those arguments run that code
+(`specialize.rs`): `ld.param` of a `.u32`/`.s32`/`.b32`/`.f32` parameter becomes a `mov` of its value and
+`mov.u32 %r, %ntid.*` a `mov` of the block's size, in a copy of the module that holds only that kernel. Divisions by
+the arguments become multiplications or shifts, loops over them get a known trip count, bounds checks against them
+fold: on Geekbench 7's GPU workloads the GPU time drops 22% (35.8 -> 28.0 s; gemm -33%, im2col -62%, depthwise
+convolutions -55%, separable convolutions -12%).
+
+The specialized code computes what the generic code computes, bit for bit: the approximate operations use the
+hardware's functions in a form LLVM does not fold on the host for constant arguments (`div.approx` and `rcp.approx`
+`llvm.agx.rcp`, `sin`/`cos`/`ex2`/`lg2.approx` `llvm.agx.sin` and the others, `sqrt.approx` without strict floating
+point `x * llvm.agx.rsqrt.special(x)`). The copy's module-scope variables are `.visible`, so that it lays out its
+global data like the module, and it runs on the module's global data buffer (`LoadedModule::new_sharing_globals`;
+a copy laid out otherwise is not used). Modules with a `malloc` heap or the clock are not specialized, nor are
+launches in checked mode or captured ones. Compilations go through the compilation cache and run on half the CPUs;
+an argument set already in the cache is used from its first launch. `ZLUDA_AGX_SPECIALIZE=0` turns this off;
+`ZLUDA_AGX_LOG=1` prints each specialization when it is ready. `agx_specialize PTX KERNEL --block x,y,z ARG...` prints
+the PTX that a launch with these argument bytes (hex) would compile.
+
+### Streams, graphs and host costs
+
+Destroyed streams keep their queue (up to 32) for the next `cuStreamCreate`: creating a queue (a DRM queue, its
+rings and timestamp buffer) costs ~1 ms, and applications that create and destroy a stream per operation (Geekbench 7:
+~7,800 times a run) spent ~10 s of a 156 s run in it.
+
+The kernel launches of a graph (`cuGraphLaunch`) are gathered into the control stream of one compute command, each
+dispatch followed by the barrier after a launch, up to 64 per command; any other operation of the graph submits the
+launches gathered first. One command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between
+commands on the GPU; gathered, 64 small launches take ~34 us of host time and ~5-7 us each on the GPU
+(`agx_cdm_batch`, which also checks that the dispatches of a command run in order and see each other's stores).
+Launches of checked kernels, captured launches and kernels that use the stack or textures are not gathered.
+`ZLUDA_AGX_GRAPH_BATCH=0` submits one command per launch; with `ZLUDA_AGX_PROFILE`, the launches of a command share
+its time equally.
+
+`ZLUDA_AGX_API_STATS=FILE` appends, about once a second, a JSON line with the Unix time in milliseconds (`t`) and per
+CUDA function the calls so far and the host time spent in them (`[calls, ns]`, cumulative).
+
+### Launch profiles and captures
+
+`ZLUDA_AGX_PROFILE=FILE` appends one JSON line per finished launch: the kernel, grid, block, dynamic shared memory,
+stream, command number, argument bytes (hex), the GPU time from the firmware timestamps (`ns`) and the Unix time in
+milliseconds when the launch was seen to finish (`t`). Launches are seen when their command is waited for.
+
+`ZLUDA_AGX_CAPTURE=DIR` saves launches as they are about to run, after waiting for the earlier work: the files of a
+fault dump (above), with the memory as the launch finds it, the register allocation (`regs.txt`, in 16-bit halves) and
+the command number (`command.txt`, the launch's line in a profile of the same run), in `DIR/<pid>-cap<n>-<kernel>`.
+`ZLUDA_AGX_CAPTURE_KERNELS` names the kernels (comma separated, `all` by default), `ZLUDA_AGX_CAPTURE_SKIP` how many
+launches of each pass first (the first ones may run at a low GPU clock) and `ZLUDA_AGX_CAPTURE_MAX` how many are then
+saved (1). With both variables set, the AGX Performance Simulator's `agx_dispatch` can be compared with the hardware on
+real launches with their real data.
+
+`ZLUDA_AGX_LLVM_ARGS` passes further options to LLVM in `zoc` and in the driver (part of the compilation cache key):
+backend experiments such as `-agx-threadgroup-unroll=4` or `-agx-fold-mode-phis=false`.
+
+`agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
+busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
+of a kernel, for example an edited and reassembled `.asm`, can be checked to compute the same.
 
 ## Checking against PTX-formalization
 
@@ -1321,6 +1391,34 @@ receive buffer on the stream, nothing when they are the same; `ncclAvg`
 divides by one, and `ncclRedOpCreatePreMulSum` operators scale the result (f32
 and f64). Sends and receives to rank 0 pair up in order. `ncclMemAlloc`,
 buffer registration, groups and the asynchronous-error query are supported.
+
+## Performance against Metal (estimate, not measured)
+
+There is no Metal baseline from the same machine yet: macOS does not run under Asahi, and Geekbench 7's Linux preview
+prints no score when its upload fails. What the Geekbench 7 GPU (CUDA) runs on an M2 Max (G14C, 38 cores, October
+2026) show:
+
+- **Compute-bound kernels: probably a large gap.** The two GEMM shapes that dominate Geekbench (M = 2304, K = 576,
+  N = 64 and 1024) reach about 1.6 and 2.5 TFLOPS of an fp32 peak of about 13.6 (12-18%). They are bound by
+  threadgroup-memory loads (about 2.1 cycles per load per core when saturated; the inner loop has 12 loads per 32
+  FMAs after the xyzw vectorization). Tuned Metal kernels likely reach a much larger share of peak.
+- **Memory-bound image kernels: probably a small gap.** About half of the GPU time; ablations showed the
+  separable convolutions (about 15%) bound by their image loads, which Metal shares (same caches and DRAM). A gap
+  there would come from a different tiling in the source, not from the compiler.
+- **Driver overhead per launch: probably a large gap.** A launch costs about 25 us of host time (mostly the submit
+  ioctl) and the GPU idles about 15-20 us between commands. Metal encodes many dispatches into one command buffer
+  for a few us each. Graph launches are now gathered into one command (see "Streams, graphs and host costs");
+  ordinary launches are not. Geekbench makes about 318,000 launches a run, most under 10 us of GPU work; only about
+  30 s of a 133 s run is GPU time (the rest includes Geekbench's own CPU work, which Metal would not remove).
+- **Not a like-for-like comparison:** Geekbench's CUDA and Metal workloads are separate implementations.
+
+Rough guess: compute-bound kernels several times slower than tuned Metal, memory-bound ones within tens of percent,
+launch-heavy workloads losing further to driver overhead. The largest remaining levers: gathering ordinary launches
+into fewer commands (with a policy that submits when the GPU goes idle), and better GEMM code generation.
+
+To measure the gap: run Geekbench 7 Metal on macOS on the same M2 Max and the CUDA run with network access (both
+scores uploaded); and time the same kernels (GEMM, a separable convolution, the particle kernel) as Metal compute
+shaders on macOS and through ZLUDA, which separates compiler quality from driver overhead.
 
 ## Building a release for Asahi
 

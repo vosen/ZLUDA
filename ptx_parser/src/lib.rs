@@ -9548,6 +9548,39 @@ mod tests {
     use logos::Span;
     use winnow::prelude::*;
 
+    // nvcc's libdevice helpers (__internal_accurate_pow) take no parameters and
+    // are called with an empty argument list split over lines
+    #[test]
+    fn call_with_empty_argument_list() {
+        let text = "
+            .version 9.4
+            .target sm_75
+            .address_size 64
+            .func (.param .b64 func_retval0) f
+            ()
+            ;
+            .visible .entry k()
+            {
+                .reg .f64 %fd<2>;
+                {
+                .param .b64 retval0;
+                call.uni (retval0),
+                f,
+                (
+                );
+                ld.param.f64 %fd1, [retval0+0];
+                }
+                ret;
+            }
+            .func (.param .b64 func_retval0) f()
+            {
+                st.param.f64 [func_retval0+0], 0d4024000000000000;
+                ret;
+            }";
+        let module = parse_module_checked(text).unwrap();
+        assert_eq!(module.directives.len(), 3);
+    }
+
     #[test]
     fn sink_is_not_an_identifier() {
         let tokens = Token::lexer("_ _reg __ %r1")

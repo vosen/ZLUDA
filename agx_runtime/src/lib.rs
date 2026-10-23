@@ -85,6 +85,22 @@ impl RangeAllocator {
     pub fn free_bytes(&self) -> u64 {
         self.free.values().sum()
     }
+
+    /// Takes the range `at..at + size` if all of it is free.
+    pub fn take(&mut self, at: u64, size: u64) -> bool {
+        let Some((&start, &len)) = self.free.range(..=at).next_back() else { return false };
+        if at + size > start + len {
+            return false;
+        }
+        self.free.remove(&start);
+        if at > start {
+            self.free.insert(start, at - start);
+        }
+        if at + size < start + len {
+            self.free.insert(at + size, start + len - at - size);
+        }
+        true
+    }
 }
 
 // The generic DRM ioctls are function-like macros in drm.h, so they are computed here: _IOC(dir, 'd', nr, size).
@@ -563,12 +579,19 @@ impl Vm {
         self.create(size, va, flags, Some(heap)).inspect_err(|_| heap.borrow_mut().free(va, size))
     }
 
-    /// A read/write data object at a fixed GPU address (page aligned, below the USC heap).
+    /// A read/write data object at a fixed GPU address (page aligned): below the USC heap, or a free range of the data
+    /// heap (where zluda_agx's allocations are, so that a launch it saved replays at its own addresses).
     pub fn alloc_at(&mut self, va: u64, size: u64) -> io::Result<Bo> {
-        if va % PAGE != 0 || va + round_up(size, PAGE) > self.usc_base {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fixed address {va:#x} not usable")));
+        let size = round_up(size.max(1), PAGE);
+        let flags = (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32;
+        if va % PAGE == 0 && va + size <= self.usc_base {
+            return self.create(size, va, flags, None);
         }
-        self.create(size, va, (DRM_ASAHI_BIND_READ | DRM_ASAHI_BIND_WRITE) as u32, None)
+        if va % PAGE == 0 && self.data.borrow_mut().take(va, size) {
+            let heap = self.data.clone();
+            return self.create(size, va, flags, Some(&heap)).inspect_err(|_| heap.borrow_mut().free(va, size));
+        }
+        Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fixed address {va:#x} not usable")))
     }
 
     /// An unbound object (e.g. firmware timestamps).
@@ -1091,6 +1114,23 @@ impl Queue {
         self.usc_ring.1.retire(done);
     }
 
+    /// Submits the dispatches whose control stream words (`LoadedModule::launch_params_words`) are `words` as one
+    /// command, after `wait_for` and the earlier commands of this queue. The stream ends with a terminate.
+    pub fn submit_words(
+        &mut self,
+        words: &[u8],
+        helper: Option<(u32, u64)>,
+        samplers: Option<(u64, u32)>,
+        wait_for: &[Fence],
+    ) -> io::Result<Fence> {
+        let mut stream = Vec::with_capacity(words.len() + 8);
+        stream.extend_from_slice(words);
+        stream.extend_from_slice(&(2u32 << 29).to_le_bytes());
+        stream.extend_from_slice(&0u32.to_le_bytes());
+        let cdm = self.stage(RingKind::Data, &stream, 64)?;
+        self.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
+    }
+
     /// Frees what `stage` reserved for a command that was not submitted.
     pub fn unstage(&mut self) {
         let point = self.submitted + 1;
@@ -1310,6 +1350,19 @@ mod tests {
         a.free(y, 0x4000);
         assert_eq!(a.free_bytes(), 0x10000);
         assert_eq!(a.alloc(0x10000, 0x4000), Some(0x10000));
+    }
+
+    #[test]
+    fn take_reserves_a_fixed_range() {
+        let mut a = RangeAllocator::new(0x10000, 0x10000);
+        assert!(a.take(0x14000, 0x4000));
+        assert!(!a.take(0x14000, 0x4000), "taken twice");
+        assert!(!a.take(0x1c000, 0x8000), "past the end");
+        assert_eq!(a.free_bytes(), 0xc000);
+        assert_eq!(a.alloc(0x4000, 0x4000), Some(0x10000));
+        assert_eq!(a.alloc(0x4000, 0x4000), Some(0x18000));
+        a.free(0x14000, 0x4000);
+        assert_eq!(a.free_bytes(), 0x8000);
     }
 
     #[test]
@@ -1643,12 +1696,31 @@ pub struct LoadedModule {
     /// USC offset of each kernel's copy in `code`.
     entries: std::collections::HashMap<String, u32>,
     globals: Option<Bo>,
+    /// The address of another module's global data buffer that this module's kernels use (`new_sharing_globals`).
+    shared_globals: Option<u64>,
     /// The error record of the module's checked kernels (zeroed; the first bad access fills it).
     record: Option<Bo>,
 }
 
 impl LoadedModule {
     pub fn new(vm: &mut Vm, module: module::Module) -> io::Result<LoadedModule> {
+        Self::load(vm, module, None)
+    }
+
+    /// The module with its global data in `other`'s buffer (a recompilation of `other`'s source, such as a
+    /// launch-time specialization, whose kernels must see the same device variables): the modules must lay their
+    /// global data out alike, every symbol at the same offset with the same size. The buffer stays `other`'s, which
+    /// must outlive this module; this module's own accessors of global data (`globals`, `write_global`, ...) see none.
+    pub fn new_sharing_globals(vm: &mut Vm, module: module::Module, other: &LoadedModule) -> io::Result<LoadedModule> {
+        let alike = module.globals.len() == other.module.globals.len()
+            && module.global_symbols.iter().all(|(name, at)| other.module.global_symbols.get(name) == Some(at));
+        if !alike {
+            return Err(invalid("the modules lay out their global data differently".to_string()));
+        }
+        Self::load(vm, module, other.globals_va())
+    }
+
+    fn load(vm: &mut Vm, module: module::Module, shared_globals: Option<u64>) -> io::Result<LoadedModule> {
         // Every kernel is copied to its own 64-byte aligned slot (the Shader word's code address has only been
         // measured 64-byte aligned, and the backend aligns kernels to 2 bytes). Kernels are self-contained:
         // branches are PC-relative and there are no calls between them. 64 bytes of slack follow each one.
@@ -1665,7 +1737,7 @@ impl LoadedModule {
             code.as_mut_slice()[at as usize..at as usize + size].copy_from_slice(&module.text[off..off + size]);
             entries.insert(name, base + at as u32);
         }
-        let globals = if module.globals.is_empty() {
+        let globals = if module.globals.is_empty() || shared_globals.is_some() {
             None
         } else {
             let mut g = vm.alloc_data(module.globals.len() as u64)?;
@@ -1680,7 +1752,7 @@ impl LoadedModule {
         } else {
             None
         };
-        Ok(LoadedModule { module, code, entries, globals, record })
+        Ok(LoadedModule { module, code, entries, globals, shared_globals, record })
     }
 
     /// Whether the module has kernels built in checked mode.
@@ -1712,9 +1784,15 @@ impl LoadedModule {
         self.globals.as_ref().map_or(&[], |g| &g.as_slice()[..self.module.globals.len()])
     }
 
+    /// The global data buffer for writing (cuMemcpyHtoD to an address from cuModuleGetGlobal).
+    pub fn globals_mut(&mut self) -> &mut [u8] {
+        let n = self.module.globals.len();
+        self.globals.as_mut().map_or(&mut [], |g| &mut g.as_mut_slice()[..n])
+    }
+
     /// GPU address of the global data buffer, if the module has one.
     pub fn globals_va(&self) -> Option<u64> {
-        self.globals.as_ref().map(|g| g.va)
+        self.globals.as_ref().map(|g| g.va).or(self.shared_globals)
     }
 
     /// Whether a device `assert` failed since the last call (CUDA_ERROR_ASSERT); clears the flag.
@@ -1834,7 +1912,7 @@ impl LoadedModule {
         let k = self.kernel(kernel, dynamic_shared)?;
         let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
         let halves = module::pack_uniforms(k, args, threadgroups, self.globals_va()).map_err(|e| invalid(e.to_string()))?;
-        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for, None, &mut (None, None))
     }
 
     /// `launch_async` with the bytes of each source-level argument, as cuLaunchKernel's `kernelParams` point to
@@ -1875,7 +1953,7 @@ impl LoadedModule {
             let va = queue.stage(RingKind::Data, &block, 16)?;
             halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, table, va)?.0;
         }
-        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for)
+        self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, wait_for, None, &mut (None, None))
     }
 
     fn uniforms(
@@ -1944,8 +2022,12 @@ impl LoadedModule {
         local: [u32; 3],
         dynamic_shared: u32,
         wait_for: &[Fence],
+        mut words_only: Option<&mut Vec<u8>>,
+        words_helper: &mut (Option<(u32, u64)>, Option<(u64, u32)>),
     ) -> io::Result<Fence> {
+        let batched = words_only.is_some();
         let r = (|| {
+            let words_only = words_only.as_deref_mut();
             // a shader that uses the stack gets its scratch from the helper program
             let stack_dwords = k.stack_bytes.div_ceil(4);
             let helper = if stack_dwords > 0 { Some(vm.scratch(stack_dwords)?) } else { None };
@@ -1980,13 +2062,61 @@ impl LoadedModule {
             queue.usc_seen.set(vm.usc_generation);
             let stream =
                 cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
+            if let Some(words) = words_only {
+                // the launch and its barrier, without the stream terminate, for a stream of several dispatches
+                words.extend_from_slice(&stream[..stream.len() - 8]);
+                *words_helper = (helper, samplers);
+                return Ok(Fence { syncobj: queue.timeline, point: queue.submitted + 1 });
+            }
             let cdm = queue.stage(RingKind::Data, &stream, 64)?;
             queue.submit_compute_with_helper(cdm, cdm + stream.len() as u64, helper, samplers, wait_for)
         })();
-        let fence = r.inspect_err(|_| queue.unstage())?;
+        // a batched dispatch's staging belongs to the command its stream will be part of: not rolled back here
+        let fence = match r {
+            Ok(f) => f,
+            Err(e) => {
+                if !batched {
+                    queue.unstage();
+                }
+                return Err(e);
+            }
+        };
         if !keep.is_empty() {
             queue.retire_after(fence, keep);
         }
         Ok(fence)
+    }
+
+    /// `launch_params_async` without the submit: stages what the dispatch reads in `queue`'s rings for its next
+    /// command and appends the dispatch's control stream words (launch and barrier) to `words`; `Queue::submit_words`
+    /// then submits the dispatches gathered as one command. Returns the fence that command will have, and the helper
+    /// program and sampler heap the dispatch needs (every dispatch of one command must need the same).
+    pub fn launch_params_words(
+        &self,
+        vm: &mut Vm,
+        queue: &mut Queue,
+        g14x: bool,
+        kernel: &str,
+        params: &[&[u8]],
+        threadgroups: [u32; 3],
+        local: [u32; 3],
+        dynamic_shared: u32,
+        bounds: &[(u64, u64)],
+        words: &mut Vec<u8>,
+    ) -> io::Result<(Fence, Option<(u32, u64)>, Option<(u64, u32)>)> {
+        let k = self.kernel(kernel, dynamic_shared)?;
+        if k.checked.is_some() {
+            return Err(invalid(format!("{kernel}: checked kernels are launched one per command")));
+        }
+        let (threadgroups, local) = k.hardware_launch(threadgroups, local).map_err(|e| invalid(e.to_string()))?;
+        let (mut halves, block) = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, (0, 0), 0)?;
+        if !block.is_empty() {
+            let va = queue.stage(RingKind::Data, &block, 16)?;
+            halves = self.uniforms(k, params, threadgroups, dynamic_shared, bounds, (0, 0), va)?.0;
+        }
+        let mut helper = (None, None);
+        let fence =
+            self.dispatch(vm, queue, g14x, k, &halves, Vec::new(), threadgroups, local, dynamic_shared, &[], Some(words), &mut helper)?;
+        Ok((fence, helper.0, helper.1))
     }
 }

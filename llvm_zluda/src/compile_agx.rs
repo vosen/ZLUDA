@@ -347,7 +347,12 @@ fn init_globals() -> Result<(), String> {
     static INIT_AGX: OnceLock<Result<(), Message>> = OnceLock::new();
     INIT_AGX
         .get_or_init(|| {
-            let options = [c"llvm_zluda"];
+            // ZLUDA_AGX_LLVM_ARGS: extra LLVM options, separated by whitespace (backend experiments, for example
+            // -agx-threadgroup-unroll=4)
+            let mut options = vec![std::ffi::CString::new("llvm_zluda").unwrap()];
+            if let Ok(extra) = std::env::var("ZLUDA_AGX_LLVM_ARGS") {
+                options.extend(extra.split_whitespace().filter_map(|a| std::ffi::CString::new(a).ok()));
+            }
             let ptrs: Vec<*const std::ffi::c_char> = options.iter().map(|s| s.as_ptr()).collect();
             let mut err_msg = std::ptr::null_mut();
             let success = unsafe {

@@ -10,7 +10,7 @@ use agx_runtime::{error, module, Fence, LoadedModule, Queue};
 use cuda_types::cuda::*;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_uint, c_void, CStr};
-use std::io;
+use std::io::{self, Write};
 use std::num::NonZeroU32;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -44,6 +44,12 @@ pub(crate) struct Driver {
     pub(crate) modules: HashMap<usize, LoadedModule>,
     functions: HashMap<usize, (usize, String)>,
     streams: HashMap<usize, Stream>,
+    /// Queues of destroyed streams, idle, for the next streams (creating a queue costs ~1 ms: applications create
+    /// and destroy a stream per operation).
+    free_queues: Vec<Queue>,
+    /// While a graph runs (cuGraphLaunch): its kernel launches gathered into one compute command (`Batch`).
+    batching: bool,
+    batch: Option<Batch>,
     events: HashMap<usize, Event>,
     /// cuCtxSetLimit values of this context.
     limits: HashMap<u32, usize>,
@@ -64,6 +70,12 @@ pub(crate) struct Driver {
     /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
     /// followed: the launches a reported bad access may come from.
     checked_launches: HashMap<(usize, String), (String, u32)>,
+    /// `ZLUDA_AGX_CAPTURE`: launches captured so far, per kernel name.
+    captured_launches: HashMap<String, u32>,
+    /// Launch-time specialization (specialize.rs): the PTX of the modules whose kernels may be specialized, and the
+    /// state of each (module, kernel, scalar arguments, block).
+    spec_sources: HashMap<usize, std::sync::Arc<str>>,
+    specs: HashMap<SpecKey, Spec>,
     /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
     /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
     heap: Option<agx_runtime::Bo>,
@@ -88,6 +100,93 @@ pub(crate) struct Driver {
     /// Last: fields drop in declaration order, and the modules' and streams' objects must be unbound before the
     /// context's VM is destroyed (B42).
     pub(crate) ctx: Context,
+}
+
+/// (module, kernel, the bytes of its scalar arguments with their sizes, block) of a specialization.
+type SpecKey = (usize, String, Vec<u8>, [u32; 3]);
+
+/// Launches of a kernel with the same scalar arguments and block run generic code until `SPECIALIZE_AFTER` of them,
+/// then while the specialized module compiles in the background, then the specialized code.
+const SPECIALIZE_AFTER: u32 = 3;
+
+/// At most this many (kernel, arguments, block) states are kept.
+const MAX_SPECS: usize = 4096;
+
+enum Spec {
+    Count(u32),
+    Pending(std::sync::Arc<std::sync::Mutex<Option<Result<(Vec<u8>, String), String>>>>),
+    Ready(LoadedModule),
+    Failed,
+}
+
+/// One of the background compilations that run at a time (half the CPUs: an application can have thousands of
+/// argument sets, ~0.1 s of compilation each), held while it runs.
+struct CompileSlot;
+
+static COMPILE_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) = (std::sync::Mutex::new(0), std::sync::Condvar::new());
+
+impl CompileSlot {
+    fn take() -> CompileSlot {
+        let limit = std::thread::available_parallelism().map_or(1, |n| (n.get() / 2).max(1));
+        let (running, freed) = &COMPILE_SLOTS;
+        let mut n = running.lock().unwrap_or_else(|e| e.into_inner());
+        while *n >= limit {
+            n = freed.wait(n).unwrap_or_else(|e| e.into_inner());
+        }
+        *n += 1;
+        CompileSlot
+    }
+}
+
+impl Drop for CompileSlot {
+    fn drop(&mut self) {
+        let (running, freed) = &COMPILE_SLOTS;
+        *running.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+        freed.notify_one();
+    }
+}
+
+/// The queue of stream `sh` (0, 1 and 2: the context's own).
+fn queue_of<'a>(ctx: &'a mut Context, streams: &'a mut HashMap<usize, Stream>, sh: usize) -> Result<&'a mut Queue, CUerror> {
+    if sh <= 2 {
+        Ok(&mut ctx.stream)
+    } else {
+        Ok(&mut streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?.queue)
+    }
+}
+
+/// Submits a batch's dispatches as one command of `queue`.
+fn submit_batch(queue: &mut Queue, b: Batch) -> Result<(), CUerror> {
+    if b.count > 0 {
+        queue.submit_words(&b.words, None, None, &b.waits).map_err(from_io)?;
+    }
+    Ok(())
+}
+
+/// Kernel launches of a graph gathered into the control stream of one compute command: each dispatch followed by
+/// the barrier after a launch (the dispatches run in order and see each other's stores, as consecutive commands of a
+/// queue do), submitted at the end of the graph, before any other operation and every `MAX_BATCH` launches. One
+/// command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between commands on the GPU;
+/// gathered, the launches of a graph cost a few us each.
+struct Batch {
+    stream: usize,
+    words: Vec<u8>,
+    waits: Vec<Fence>,
+    count: u32,
+}
+
+const MAX_BATCH: u32 = 64;
+
+/// ZLUDA_AGX_GRAPH_BATCH=0: one command per kernel launch of a graph.
+fn graph_batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").map_or(true, |v| v != "0"))
+}
+
+/// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
+fn specialize_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_SPECIALIZE").map_or(true, |v| v != "0"))
 }
 
 /// A launch: its kernel, geometry and argument bytes (task description), kept until its command has finished.
@@ -131,6 +230,42 @@ impl LaunchRecord {
     }
 }
 
+impl LaunchRecord {
+    /// One JSON line of the `ZLUDA_AGX_PROFILE` file: the launch and its GPU time from the firmware timestamps.
+    fn profile_line(&self, ns: u64) -> String {
+        let params: Vec<String> = self.params.iter().map(|p| format!("\"{}\"", p.iter().map(|b| format!("{b:02x}")).collect::<String>())).collect();
+        format!(
+            "{{\"kernel\":\"{}\",\"module\":{},\"grid\":[{},{},{}],\"block\":[{},{},{}],\"shared\":{},\"stream\":{},\"command\":{},\"ns\":{},\"t\":{},\"params\":[{}]}}",
+            self.kernel,
+            self.module,
+            self.grid[0],
+            self.grid[1],
+            self.grid[2],
+            self.block[0],
+            self.block[1],
+            self.block[2],
+            self.shared,
+            self.stream,
+            self.fence.point,
+            ns,
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis()),
+            params.join(",")
+        )
+    }
+}
+
+/// `ZLUDA_AGX_PROFILE=FILE`: append one JSON line per finished launch (kernel, geometry, argument bytes, GPU
+/// nanoseconds by the firmware timestamps and `t`, the Unix time in milliseconds when it was seen to finish). Launches are seen when their command is waited for; at most
+/// `MAX_LAUNCH_RECORDS` unwaited launches are kept, so a longer run of launches without a wait loses the oldest.
+fn profile_file() -> Option<&'static std::sync::Mutex<std::fs::File>> {
+    static FILE: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = std::env::var_os("ZLUDA_AGX_PROFILE")?;
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(std::sync::Mutex::new)
+    })
+    .as_ref()
+}
+
 fn drop_finished(launches: &mut std::collections::VecDeque<LaunchRecord>, syncobj: u32, point: u64) {
     launches.retain(|r| !(r.fence.syncobj == syncobj && r.fence.point <= point));
 }
@@ -168,6 +303,13 @@ impl Driver {
         }
     }
 
+    /// Submits the launches gathered so far (see `Batch`).
+    fn flush_batch(&mut self) -> CUresult {
+        let Some(b) = self.batch.take() else { return Ok(()) };
+        let Driver { ctx, streams, .. } = self;
+        submit_batch(queue_of(ctx, streams, b.stream)?, b)
+    }
+
     fn launch(&mut self, f: usize, grid: [u32; 3], block: [u32; 3], shared: u32, sh: usize, args: &[&[u8]]) -> CUresult {
         let (m, name) = self.functions.get(&f).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let threads = block.iter().map(|&b| b as u64).product::<u64>();
@@ -196,18 +338,67 @@ impl Driver {
             None => Vec::new(),
         };
         let allocations = if k.checked.as_ref().is_some_and(|c| c.table.is_some()) { self.live_allocations() } else { Vec::new() };
+        let unchecked = k.checked.is_none();
+        let capture = self.capture_before(m, &name, grid, block, shared, args)?;
         let g14x = self.ctx.device.g14x();
-        let Driver { ctx, default_waits, modules, streams, .. } = self;
-        let (queue, waits) = if sh <= 2 {
-            (&mut ctx.stream, default_waits)
-        } else {
-            let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
-            (&mut s.queue, &mut s.waits)
+        // a captured launch runs the generic code it saved
+        let spec = if unchecked && capture.is_none() { self.specialized(m, &name, args, block) } else { None };
+        let Driver { ctx, default_waits, modules, streams, specs, batching, batch, .. } = self;
+        let code = match spec.as_ref().map(|key| &specs[key]) {
+            Some(Spec::Ready(specialized)) => specialized,
+            _ => &modules[&m],
         };
-        let w = std::mem::take(waits);
-        let fence = modules[&m]
-            .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
-            .map_err(from_io)?;
+        let has_waits =
+            !(if sh <= 2 { &*default_waits } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.waits }).is_empty();
+        let k = &code.module.kernels[&name];
+        let batchable = *batching && unchecked && capture.is_none() && k.stack_bytes == 0 && k.texture_heap_half.is_none();
+        let fence = if batchable {
+            // a batch of another stream, or one that this launch's waits would delay, goes first
+            if batch.as_ref().is_some_and(|b| b.stream != sh || has_waits) {
+                let b = batch.take().unwrap();
+                submit_batch(queue_of(ctx, streams, b.stream)?, b)?;
+            }
+            let (queue, waits) = if sh <= 2 {
+                (&mut ctx.stream, &mut *default_waits)
+            } else {
+                let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
+                (&mut s.queue, &mut s.waits)
+            };
+            let b = batch.get_or_insert_with(|| Batch { stream: sh, words: Vec::new(), waits: std::mem::take(waits), count: 0 });
+            let r = code.launch_params_words(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &mut b.words);
+            match r {
+                Ok((fence, _, _)) => {
+                    b.count += 1;
+                    if b.count >= MAX_BATCH {
+                        submit_batch(queue, batch.take().unwrap())?;
+                    }
+                    fence
+                }
+                // the rings are full of the batch's data: submit it, then this launch on its own
+                Err(_) => {
+                    submit_batch(queue, batch.take().unwrap())?;
+                    code.launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &[])
+                        .map_err(from_io)?
+                }
+            }
+        } else {
+            if let Some(b) = batch.take() {
+                submit_batch(queue_of(ctx, streams, b.stream)?, b)?;
+            }
+            let (queue, waits) = if sh <= 2 {
+                (&mut ctx.stream, default_waits)
+            } else {
+                let s = streams.get_mut(&sh).ok_or(CUerror::INVALID_HANDLE)?;
+                (&mut s.queue, &mut s.waits)
+            };
+            let w = std::mem::take(waits);
+            code.launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
+                .map_err(from_io)?
+        };
+        if let Some(dir) = capture {
+            // the command, to find the launch's time in a ZLUDA_AGX_PROFILE file
+            let _ = std::fs::write(dir.join("command.txt"), format!("{}\n", fence.point));
+        }
         if self.launches.len() == MAX_LAUNCH_RECORDS {
             self.launches.pop_front();
         }
@@ -288,7 +479,141 @@ impl Driver {
     /// `agx_run`: the kernel's code, the launch's uniforms, and the current contents of the memory it can reach (the
     /// allocations its pointer arguments point into, the module's global data, parameter block and error record),
     /// with `replay.sh`. Memory is as the fault left it, not as the launch found it.
+    /// The specialization to launch for these arguments, once it is ready (see `Spec`); counts the launches and starts
+    /// its compilation in the background.
+    fn specialized(&mut self, m: usize, name: &str, args: &[&[u8]], block: [u32; 3]) -> Option<SpecKey> {
+        let src = self.spec_sources.get(&m)?.clone();
+        let mut scalars = Vec::new();
+        for a in args.iter().filter(|a| a.len() <= 4) {
+            scalars.push(a.len() as u8);
+            scalars.extend_from_slice(a);
+        }
+        let key: SpecKey = (m, name.to_string(), scalars, block);
+        // arguments that change at every launch (a step counter) would never be specialized: stop counting new ones
+        if self.specs.len() >= MAX_SPECS && !self.specs.contains_key(&key) {
+            return None;
+        }
+        let state = match self.specs.remove(&key) {
+            Some(state) => state,
+            // a specialization compiled before (in an earlier run: it is in the compilation cache) is used from
+            // the first launch, so that an application that times its launches to choose a block size (Geekbench)
+            // times the code it will run
+            None => match crate::specialize::specialize_ptx(&src, name, args, block)
+                .and_then(|(text, _)| cached_ptx(text.as_bytes(), &self.ctx.props.llvm_cpu))
+            {
+                Some(compiled) => Spec::Pending(std::sync::Arc::new(std::sync::Mutex::new(Some(Ok(compiled))))),
+                None => Spec::Count(0),
+            },
+        };
+        let (state, ready) = match state {
+            Spec::Count(n) if n + 1 < SPECIALIZE_AFTER => (Spec::Count(n + 1), false),
+            Spec::Count(_) => {
+                let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+                let (out, cpu, name) = (slot.clone(), self.ctx.props.llvm_cpu.clone(), name.to_string());
+                let owned: Vec<Vec<u8>> = args.iter().map(|a| a.to_vec()).collect();
+                std::thread::spawn(move || {
+                    let _slot = CompileSlot::take();
+                    let refs: Vec<&[u8]> = owned.iter().map(|a| &a[..]).collect();
+                    let r = match crate::specialize::specialize_ptx(&src, &name, &refs, block) {
+                        Some((text, _)) => compile_ptx(text.as_bytes(), &cpu),
+                        None => Err(format!("{name}: nothing to specialize")),
+                    };
+                    *out.lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
+                });
+                (Spec::Pending(slot), false)
+            }
+            Spec::Pending(slot) => {
+                let done = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+                match done {
+                    None => (Spec::Pending(slot), false),
+                    Some(Ok((object, asm))) => {
+                        let generic = &self.modules[&m];
+                        let loaded = module::Module::load(&object, &asm)
+                            .ok()
+                            .and_then(|module| LoadedModule::new_sharing_globals(&mut self.ctx.vm, module, generic).ok())
+                            .filter(|l| l.module.kernels.contains_key(name));
+                        if crate::log_enabled() {
+                            eprintln!("[zluda_agx] specialized {name} block {block:?}: {}", if loaded.is_some() { "ready" } else { "failed to load" });
+                        }
+                        match loaded {
+                            Some(l) => (Spec::Ready(l), true),
+                            None => (Spec::Failed, false),
+                        }
+                    }
+                    Some(Err(e)) => {
+                        if crate::log_enabled() {
+                            eprintln!("[zluda_agx] specialization of {name} failed: {e}");
+                        }
+                        (Spec::Failed, false)
+                    }
+                }
+            }
+            Spec::Ready(l) => (Spec::Ready(l), true),
+            Spec::Failed => (Spec::Failed, false),
+        };
+        self.specs.insert(key.clone(), state);
+        ready.then_some(key)
+    }
+
+    /// `ZLUDA_AGX_CAPTURE=DIR`: saves a launch as it is about to run (the same files as a fault dump, with memory
+    /// as the launch finds it) to `DIR/<pid>-cap<n>-<kernel>`, for replaying it in the AGX Performance Simulator,
+    /// after waiting for the earlier work. `ZLUDA_AGX_CAPTURE_KERNELS` lists the kernels (comma separated, or `all`,
+    /// the default), `ZLUDA_AGX_CAPTURE_SKIP` how many launches of each to let pass first (0 by default: the first
+    /// ones may be at a low GPU clock) and `ZLUDA_AGX_CAPTURE_MAX` how many to capture then (1 by default).
+    fn capture_before(
+        &mut self,
+        m: usize,
+        name: &str,
+        grid: [u32; 3],
+        block: [u32; 3],
+        shared: u32,
+        args: &[&[u8]],
+    ) -> Result<Option<std::path::PathBuf>, CUerror> {
+        let Some(dir) = std::env::var_os("ZLUDA_AGX_CAPTURE") else { return Ok(None) };
+        let wanted = std::env::var("ZLUDA_AGX_CAPTURE_KERNELS").unwrap_or_else(|_| "all".into());
+        if wanted != "all" && !wanted.split(',').any(|k| k == name) {
+            return Ok(None);
+        }
+        let var = |v: &str, default: u32| std::env::var(v).ok().and_then(|v| v.parse().ok()).unwrap_or(default);
+        let (max, skip) = (var("ZLUDA_AGX_CAPTURE_MAX", 1), var("ZLUDA_AGX_CAPTURE_SKIP", 0));
+        let n = self.captured_launches.entry(name.to_string()).or_insert(0);
+        *n += 1;
+        if *n <= skip || *n > skip + max {
+            return Ok(None);
+        }
+        let index = self.captured_launches.values().sum::<u32>();
+        self.sync_all()?;
+        let record = LaunchRecord {
+            fence: Fence { syncobj: 0, point: 0 },
+            stream: 0,
+            module: m,
+            kernel: name.to_string(),
+            grid,
+            block,
+            shared,
+            params: args.iter().map(|a| a.to_vec()).collect(),
+        };
+        let at = std::path::Path::new(&dir).join(format!("{}-cap{index}-{name}", std::process::id()));
+        // the register allocation in 16-bit halves (agx_dispatch --regs: the occupancy)
+        let halves = self.modules[&m].module.kernels[name].gpr_halves();
+        match self.dump_to(&record, "captured before the launch", &at).and_then(|()| std::fs::write(at.join("regs.txt"), format!("{halves}\n"))) {
+            Ok(()) => Ok(Some(at)),
+            Err(e) => {
+                if crate::log_enabled() {
+                    eprintln!("[zluda_agx] capture of {name} failed: {e}");
+                }
+                Ok(None)
+            }
+        }
+    }
+
     fn dump(&self, r: &LaunchRecord, error: &str, dir: &std::path::Path) -> io::Result<std::path::PathBuf> {
+        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
+        self.dump_to(r, error, &at)?;
+        Ok(at)
+    }
+
+    fn dump_to(&self, r: &LaunchRecord, error: &str, at: &std::path::Path) -> io::Result<()> {
         let m = &self.modules[&r.module];
         let k = &m.module.kernels[&r.kernel];
         let params: Vec<&[u8]> = r.params.iter().map(|p| &p[..]).collect();
@@ -323,9 +648,7 @@ impl Driver {
             }
             i += 1;
         }
-        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
-        write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;
-        Ok(at)
+        write_dump(at, &replay, &regions, &format!("{error}\n{}", r.describe()))
     }
 
     /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
@@ -338,16 +661,71 @@ impl Driver {
             self.streams.values().map(|s| &s.queue).find(|q| q.last().syncobj == syncobj)
         };
         if let Some(q) = queue {
-            let busy: u64 = self
-                .launches
-                .iter()
-                .filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point)
-                .filter_map(|r| q.timing(r.fence))
-                .map(|(start, end)| end.saturating_sub(start))
-                .sum();
+            let finished = self.launches.iter().filter(|r| r.fence.syncobj == syncobj && r.fence.point <= point);
+            if let Some(profile) = profile_file() {
+                // the launches of a batch (one command) share its time equally
+                let mut per_command: HashMap<u64, u128> = HashMap::new();
+                for r in finished.clone() {
+                    *per_command.entry(r.fence.point).or_insert(0) += 1;
+                }
+                let mut out = profile.lock().unwrap_or_else(|e| e.into_inner());
+                for r in finished.clone() {
+                    if let Some((start, end)) = q.timing(r.fence) {
+                        let ns = end.saturating_sub(start) as u128 * 1_000_000_000 / freq / per_command[&r.fence.point];
+                        let _ = writeln!(out, "{}", r.profile_line(ns as u64));
+                    }
+                }
+            }
+            // once per command, also for a batch
+            let mut commands: Vec<Fence> = finished.map(|r| r.fence).collect();
+            commands.dedup_by_key(|f| f.point);
+            let busy: u64 = commands.into_iter().filter_map(|f| q.timing(f)).map(|(start, end)| end.saturating_sub(start)).sum();
             GPU_BUSY_NS.fetch_add((busy as u128 * 1_000_000_000 / freq) as u64, std::sync::atomic::Ordering::Relaxed);
         }
         drop_finished(&mut self.launches, syncobj, point);
+    }
+
+    /// The bytes `va..va + len` of a module's global data buffer (addresses from cuModuleGetGlobal), which the
+    /// context's allocations do not include.
+    fn module_global(&mut self, va: u64, len: u64) -> Option<&mut [u8]> {
+        self.modules.values_mut().find_map(|m| {
+            let base = m.globals_va()?;
+            let g = m.globals_mut();
+            let off = va.checked_sub(base)?;
+            (off + len <= g.len() as u64).then(|| &mut g[off as usize..(off + len) as usize])
+        })
+    }
+
+    fn is_device(&mut self, va: u64) -> bool {
+        self.ctx.address_range(va).is_some() || self.module_global(va, 1).is_some()
+    }
+
+    /// cuMemcpyHtoD to device memory or a module's global variables.
+    fn copy_htod(&mut self, dst: u64, src: &[u8]) -> io::Result<()> {
+        self.ctx.stream.synchronize()?;
+        match self.module_global(dst, src.len() as u64) {
+            Some(g) => Ok(g.copy_from_slice(src)),
+            None => self.ctx.memcpy_htod(dst, src),
+        }
+    }
+
+    /// cuMemcpyDtoH from device memory or a module's global variables.
+    fn copy_dtoh(&mut self, dst: &mut [u8], src: u64) -> io::Result<()> {
+        self.ctx.stream.synchronize()?;
+        match self.module_global(src, dst.len() as u64) {
+            Some(g) => Ok(dst.copy_from_slice(g)),
+            None => self.ctx.memcpy_dtoh(dst, src),
+        }
+    }
+
+    /// cuMemcpyDtoD between device memory and modules' global variables (in any combination).
+    fn copy_dtod(&mut self, dst: u64, src: u64, n: u64) -> io::Result<()> {
+        if self.module_global(dst, n).is_none() && self.module_global(src, n).is_none() {
+            return self.ctx.memcpy_dtod(dst, src, n);
+        }
+        let mut tmp = vec![0; n as usize];
+        self.copy_dtoh(&mut tmp, src)?;
+        self.copy_htod(dst, &tmp)
     }
 
     fn run(&mut self, op: &Op, sh: usize) -> CUresult {
@@ -362,11 +740,11 @@ impl Driver {
             }
             Op::Copy { dst, src, n } => {
                 self.sync_all()?;
-                let (dd, sd) = (self.ctx.address_range(*dst).is_some(), self.ctx.address_range(*src).is_some());
+                let (dd, sd) = (self.is_device(*dst), self.is_device(*src));
                 match (dd, sd) {
-                    (true, true) => self.ctx.memcpy_dtod(*dst, *src, *n as u64),
-                    (true, false) => self.ctx.memcpy_htod(*dst, unsafe { std::slice::from_raw_parts(*src as *const u8, *n) }),
-                    (false, true) => self.ctx.memcpy_dtoh(unsafe { std::slice::from_raw_parts_mut(*dst as *mut u8, *n) }, *src),
+                    (true, true) => self.copy_dtod(*dst, *src, *n as u64),
+                    (true, false) => self.copy_htod(*dst, unsafe { std::slice::from_raw_parts(*src as *const u8, *n) }),
+                    (false, true) => self.copy_dtoh(unsafe { std::slice::from_raw_parts_mut(*dst as *mut u8, *n) }, *src),
                     (false, false) => {
                         unsafe { std::ptr::copy(*src as *const u8, *dst as *mut u8, *n) };
                         Ok(())
@@ -399,6 +777,9 @@ fn new_driver() -> Result<Driver, CUerror> {
         modules: HashMap::new(),
         functions: HashMap::new(),
         streams: HashMap::new(),
+        free_queues: Vec::new(),
+        batching: false,
+        batch: None,
         events: HashMap::new(),
         limits: HashMap::new(),
         capturing: HashMap::new(),
@@ -409,6 +790,9 @@ fn new_driver() -> Result<Driver, CUerror> {
         sticky: None,
         launches: Default::default(),
         checked_launches: Default::default(),
+        captured_launches: Default::default(),
+        spec_sources: Default::default(),
+        specs: Default::default(),
         heap: None,
         timer: None,
         vmm: HashMap::new(),
@@ -468,6 +852,9 @@ fn err(code: u32) -> CUerror {
 }
 
 pub(crate) fn from_io(e: io::Error) -> CUerror {
+    if crate::log_enabled() {
+        eprintln!("[zluda_agx] {e}");
+    }
     err(error::cuda_error(&e))
 }
 
@@ -662,6 +1049,15 @@ pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), St
 /// Compiles PTX modules into one AGX object: one module, or several linked together (`cuLink*`: functions declared
 /// `.extern` in one are defined `.visible` in another).
 pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8>, String), String> {
+    compile_or_cached(sources, cpu, false).map(|o| o.expect("compiled"))
+}
+
+/// The compilation cache's object for PTX, without compiling it on a miss (`None`).
+pub(crate) fn cached_ptx(ptx: &[u8], cpu: &str) -> Option<(Vec<u8>, String)> {
+    compile_or_cached(&[ptx], cpu, true).ok().flatten()
+}
+
+fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<Option<(Vec<u8>, String)>, String> {
     let zoc = zoc_path();
     let stamp = std::fs::metadata(&zoc)
         .and_then(|m| m.modified())
@@ -701,6 +1097,11 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
     if stack_size != DEFAULT_STACK_SIZE {
         options.push(&stack_option);
     }
+    // zoc passes ZLUDA_AGX_LLVM_ARGS to LLVM, so they change its output
+    let llvm_args = std::env::var("ZLUDA_AGX_LLVM_ARGS").map(|a| format!("llvm-args={a}")).unwrap_or_default();
+    if !llvm_args.is_empty() {
+        options.push(&llvm_args);
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -728,8 +1129,10 @@ pub(crate) fn compile_ptx_linked(sources: &[&[u8]], cpu: &str) -> Result<(Vec<u8
         Ok((object, asm))
     };
     match Cache::from_env() {
-        Some(c) => c.get_or_compile(&key, compile),
-        None => compile(),
+        Some(c) if cached_only => Ok(c.get(&key)),
+        None if cached_only => Ok(None),
+        Some(c) => c.get_or_compile(&key, compile).map(Some),
+        None => compile().map(Some),
     }
 }
 
@@ -1017,7 +1420,7 @@ pub(crate) unsafe fn cuMemcpyHtoD_v2(dst: CUdeviceptr, src: *const c_void, n: us
     let s = std::slice::from_raw_parts(src as *const u8, n);
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_htod(dst.0 as u64, s).map_err(from_io)
+        d.copy_htod(dst.0 as u64, s).map_err(from_io)
     })
 }
 
@@ -1028,14 +1431,14 @@ pub(crate) unsafe fn cuMemcpyDtoH_v2(dst: *mut c_void, src: CUdeviceptr, n: usiz
     let s = std::slice::from_raw_parts_mut(dst as *mut u8, n);
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_dtoh(s, src.0 as u64).map_err(from_io)
+        d.copy_dtoh(s, src.0 as u64).map_err(from_io)
     })
 }
 
 pub(crate) unsafe fn cuMemcpyDtoD_v2(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> CUresult {
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_dtod(dst.0 as u64, src.0 as u64, n as u64).map_err(from_io)
+        d.copy_dtod(dst.0 as u64, src.0 as u64, n as u64).map_err(from_io)
     })
 }
 
@@ -1106,6 +1509,20 @@ pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_voi
             loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
         }
         let h = d.handle();
+        // the PTX of a module without heap or clock for launch-time specialization (its kernels' copies use the
+        // module's global data)
+        let ptx = !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
+        if ptx && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
+            if let Ok(text) = std::str::from_utf8(image) {
+                d.spec_sources.insert(h, std::sync::Arc::from(text));
+            }
+        } else if crate::log_enabled() {
+            eprintln!(
+                "[zluda_agx] module {h:#x} not specialized: ptx {ptx} heap {} timer {}",
+                loaded.uses_heap(),
+                loaded.uses_timer()
+            );
+        }
         d.modules.insert(h, loaded);
         Ok(h)
     })?;
@@ -1263,6 +1680,8 @@ pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
         let h = hmod.0 as usize;
         d.modules.remove(&h).ok_or(CUerror::INVALID_HANDLE)?;
         d.functions.retain(|_, (m, _)| *m != h);
+        d.spec_sources.remove(&h);
+        d.specs.retain(|(m, ..), _| *m != h);
         Ok(())
     })
 }
@@ -1348,13 +1767,19 @@ pub(crate) unsafe fn cuLaunchKernel(
 
 pub(crate) unsafe fn cuStreamCreate(ph: *mut CUstream, _flags: c_uint) -> CUresult {
     let h = with(|d| {
-        let queue = Queue::new(&mut d.ctx.vm).map_err(from_io)?;
+        let queue = match d.free_queues.pop() {
+            Some(q) => q,
+            None => Queue::new(&mut d.ctx.vm).map_err(from_io)?,
+        };
         let h = d.handle();
         d.streams.insert(h, Stream { queue, waits: Vec::new() });
         Ok(h)
     })?;
     out(ph, CUstream(h as *mut _))
 }
+
+/// At most this many idle queues are kept for new streams.
+const MAX_FREE_QUEUES: usize = 32;
 
 pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
     with(|d| {
@@ -1363,6 +1788,11 @@ pub(crate) unsafe fn cuStreamDestroy_v2(s: CUstream) -> CUresult {
         match st.queue.synchronize() {
             Ok(()) => {
                 d.finished(last.syncobj, last.point);
+                // idle now: kept for the next stream (its timeline only moves on, so fences of this stream that
+                // events still hold stay signalled)
+                if d.free_queues.len() < MAX_FREE_QUEUES {
+                    d.free_queues.push(st.queue);
+                }
                 Ok(())
             }
             Err(e) => Err(d.failed(last.syncobj, e)),
@@ -1845,7 +2275,7 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, 
 
 // Copies are CPU copies of shared memory after the stream's earlier work, so the asynchronous forms are synchronous.
 pub(crate) unsafe fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> CUresult {
-    let (dd, sd) = with(|d| Ok((d.ctx.address_range(dst.0 as u64).is_some(), d.ctx.address_range(src.0 as u64).is_some())))?;
+    let (dd, sd) = with(|d| Ok((d.is_device(dst.0 as u64), d.is_device(src.0 as u64))))?;
     match (dd, sd) {
         (true, true) => cuMemcpyDtoD_v2(dst, src, n),
         (true, false) => cuMemcpyHtoD_v2(dst, src.0, n),
@@ -2632,6 +3062,19 @@ pub(crate) unsafe fn cuStreamBeginCapture_v2(s: CUstream, _mode: CUstreamCapture
     })
 }
 
+/// An empty graph (nodes are only added by stream capture, which makes its own graph).
+pub(crate) unsafe fn cuGraphCreate(graph: *mut CUgraph, flags: c_uint) -> CUresult {
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let h = with(|d| {
+        let h = d.handle();
+        d.graphs.insert(h, Vec::new());
+        Ok(h)
+    })?;
+    out(graph, h as CUgraph)
+}
+
 pub(crate) unsafe fn cuStreamEndCapture(s: CUstream, graph: *mut CUgraph) -> CUresult {
     let h = with(|d| {
         let ops = d.capturing.remove(&stream_key(s)).ok_or(CUerror::ILLEGAL_STATE)?;
@@ -2677,10 +3120,23 @@ pub(crate) unsafe fn cuGraphInstantiate_v2(
 pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
     with(|d| {
         let ops = d.execs.get(&(exec as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        // consecutive kernel launches go into one command (Batch); anything else submits them first
+        d.batching = graph_batching_enabled();
+        let mut r = Ok(());
         for op in &ops {
-            d.run(op, s.0 as usize)?;
+            if !matches!(op, Op::Launch { .. }) {
+                r = d.flush_batch();
+            }
+            if r.is_ok() {
+                r = d.run(op, s.0 as usize);
+            }
+            if r.is_err() {
+                break;
+            }
         }
-        Ok(())
+        d.batching = false;
+        let flushed = d.flush_batch();
+        r.and(flushed)
     })
 }
 
