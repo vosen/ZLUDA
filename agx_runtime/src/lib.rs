@@ -1712,6 +1712,12 @@ impl LoadedModule {
         self.globals.as_ref().map_or(&[], |g| &g.as_slice()[..self.module.globals.len()])
     }
 
+    /// The global data buffer for writing (cuMemcpyHtoD to an address from cuModuleGetGlobal).
+    pub fn globals_mut(&mut self) -> &mut [u8] {
+        let n = self.module.globals.len();
+        self.globals.as_mut().map_or(&mut [], |g| &mut g.as_mut_slice()[..n])
+    }
+
     /// GPU address of the global data buffer, if the module has one.
     pub fn globals_va(&self) -> Option<u64> {
         self.globals.as_ref().map(|g| g.va)

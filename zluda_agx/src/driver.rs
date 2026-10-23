@@ -390,6 +390,49 @@ impl Driver {
         drop_finished(&mut self.launches, syncobj, point);
     }
 
+    /// The bytes `va..va + len` of a module's global data buffer (addresses from cuModuleGetGlobal), which the
+    /// context's allocations do not include.
+    fn module_global(&mut self, va: u64, len: u64) -> Option<&mut [u8]> {
+        self.modules.values_mut().find_map(|m| {
+            let base = m.globals_va()?;
+            let g = m.globals_mut();
+            let off = va.checked_sub(base)?;
+            (off + len <= g.len() as u64).then(|| &mut g[off as usize..(off + len) as usize])
+        })
+    }
+
+    fn is_device(&mut self, va: u64) -> bool {
+        self.ctx.address_range(va).is_some() || self.module_global(va, 1).is_some()
+    }
+
+    /// cuMemcpyHtoD to device memory or a module's global variables.
+    fn copy_htod(&mut self, dst: u64, src: &[u8]) -> io::Result<()> {
+        self.ctx.stream.synchronize()?;
+        match self.module_global(dst, src.len() as u64) {
+            Some(g) => Ok(g.copy_from_slice(src)),
+            None => self.ctx.memcpy_htod(dst, src),
+        }
+    }
+
+    /// cuMemcpyDtoH from device memory or a module's global variables.
+    fn copy_dtoh(&mut self, dst: &mut [u8], src: u64) -> io::Result<()> {
+        self.ctx.stream.synchronize()?;
+        match self.module_global(src, dst.len() as u64) {
+            Some(g) => Ok(dst.copy_from_slice(g)),
+            None => self.ctx.memcpy_dtoh(dst, src),
+        }
+    }
+
+    /// cuMemcpyDtoD between device memory and modules' global variables (in any combination).
+    fn copy_dtod(&mut self, dst: u64, src: u64, n: u64) -> io::Result<()> {
+        if self.module_global(dst, n).is_none() && self.module_global(src, n).is_none() {
+            return self.ctx.memcpy_dtod(dst, src, n);
+        }
+        let mut tmp = vec![0; n as usize];
+        self.copy_dtoh(&mut tmp, src)?;
+        self.copy_htod(dst, &tmp)
+    }
+
     fn run(&mut self, op: &Op, sh: usize) -> CUresult {
         match op {
             Op::Launch { f, grid, block, shared, params } => {
@@ -402,11 +445,11 @@ impl Driver {
             }
             Op::Copy { dst, src, n } => {
                 self.sync_all()?;
-                let (dd, sd) = (self.ctx.address_range(*dst).is_some(), self.ctx.address_range(*src).is_some());
+                let (dd, sd) = (self.is_device(*dst), self.is_device(*src));
                 match (dd, sd) {
-                    (true, true) => self.ctx.memcpy_dtod(*dst, *src, *n as u64),
-                    (true, false) => self.ctx.memcpy_htod(*dst, unsafe { std::slice::from_raw_parts(*src as *const u8, *n) }),
-                    (false, true) => self.ctx.memcpy_dtoh(unsafe { std::slice::from_raw_parts_mut(*dst as *mut u8, *n) }, *src),
+                    (true, true) => self.copy_dtod(*dst, *src, *n as u64),
+                    (true, false) => self.copy_htod(*dst, unsafe { std::slice::from_raw_parts(*src as *const u8, *n) }),
+                    (false, true) => self.copy_dtoh(unsafe { std::slice::from_raw_parts_mut(*dst as *mut u8, *n) }, *src),
                     (false, false) => {
                         unsafe { std::ptr::copy(*src as *const u8, *dst as *mut u8, *n) };
                         Ok(())
@@ -1060,7 +1103,7 @@ pub(crate) unsafe fn cuMemcpyHtoD_v2(dst: CUdeviceptr, src: *const c_void, n: us
     let s = std::slice::from_raw_parts(src as *const u8, n);
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_htod(dst.0 as u64, s).map_err(from_io)
+        d.copy_htod(dst.0 as u64, s).map_err(from_io)
     })
 }
 
@@ -1071,14 +1114,14 @@ pub(crate) unsafe fn cuMemcpyDtoH_v2(dst: *mut c_void, src: CUdeviceptr, n: usiz
     let s = std::slice::from_raw_parts_mut(dst as *mut u8, n);
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_dtoh(s, src.0 as u64).map_err(from_io)
+        d.copy_dtoh(s, src.0 as u64).map_err(from_io)
     })
 }
 
 pub(crate) unsafe fn cuMemcpyDtoD_v2(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> CUresult {
     with(|d| {
         d.sync_all()?;
-        d.ctx.memcpy_dtod(dst.0 as u64, src.0 as u64, n as u64).map_err(from_io)
+        d.copy_dtod(dst.0 as u64, src.0 as u64, n as u64).map_err(from_io)
     })
 }
 
@@ -1888,7 +1931,7 @@ pub(crate) unsafe fn cuOccupancyMaxActiveBlocksPerMultiprocessor(n: *mut c_int, 
 
 // Copies are CPU copies of shared memory after the stream's earlier work, so the asynchronous forms are synchronous.
 pub(crate) unsafe fn cuMemcpy(dst: CUdeviceptr, src: CUdeviceptr, n: usize) -> CUresult {
-    let (dd, sd) = with(|d| Ok((d.ctx.address_range(dst.0 as u64).is_some(), d.ctx.address_range(src.0 as u64).is_some())))?;
+    let (dd, sd) = with(|d| Ok((d.is_device(dst.0 as u64), d.is_device(src.0 as u64))))?;
     match (dd, sd) {
         (true, true) => cuMemcpyDtoD_v2(dst, src, n),
         (true, false) => cuMemcpyHtoD_v2(dst, src.0, n),
