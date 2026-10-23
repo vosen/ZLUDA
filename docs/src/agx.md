@@ -1117,13 +1117,14 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   so a command whose timestamps are both still 0 is returned as
   `CUDA_ERROR_LAUNCH_FAILED`, with the launch that faulted printed; the error
   is sticky until `cuCtxDestroy` (see "Fault dumps").
-* Every launch's command stream invalidates the USC (shader) cache, as Mesa's
-  does: each launch stages its pipeline words in the USC ring, and with 45 or
-  more launches queued on a stream the GPU can run stale words cached while
-  earlier commands ran (simulator `tasks/zluda-issues.md`, Z2, which corrects
-  B8). The invalidate costs about 1.8 us per launch; `ZLUDA_AGX_USC_BARRIER=0`
-  emits it only on a queue's first command after new code was loaded, which
-  is safe only with short queues.
+* Pipeline words for successive launches are spaced 512 bytes apart in the
+  USC ring. On the M2 Max this passed 200,000 launches in 200-deep queues and
+  all 11 Geekbench GPU workloads without the stale-word faults seen at 64,
+  128, or 256 bytes (playground `results/2026-10-23-usc-pipeline-spacing`).
+  The command stream invalidates the USC cache after new code is loaded;
+  `ZLUDA_AGX_USC_BARRIER=1` also invalidates it on every launch, as Mesa does.
+  This costs about 1.8 us per short launch but can be used if another AGX
+  model shows stale pipeline words at 512-byte spacing.
 * `cuLaunchCooperativeKernel` and `cuLaunchKernelEx`'s cooperative attribute
   take grids up to the threadgroups resident together on the device (the
   co-residency limit `cuOccupancyMaxActiveBlocksPerMultiprocessor` reports,

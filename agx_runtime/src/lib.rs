@@ -888,17 +888,16 @@ pub enum RingKind {
     Usc,
 }
 
-/// Every command invalidates the USC cache, as Mesa's command stream does: each launch stages its pipeline words in
-/// the USC ring, and with 45 or more launches queued the GPU can run stale words it cached while earlier commands ran
-/// (AGX Performance Simulator tasks/zluda-issues.md, Z2). `ZLUDA_AGX_USC_BARRIER=0` invalidates only after new code
-/// was allocated, which saves about 1.8 us per launch but is only safe with short queues.
+/// Pipeline words for separate launches are spaced 512 bytes apart in the USC ring. On G14C, this prevented the
+/// stale-word faults seen with 64-256-byte spacing in deep queues. Invalidate after a module load; the optional
+/// `ZLUDA_AGX_USC_BARRIER=1` restores Mesa's per-command invalidate.
 fn always_usc_barrier() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| usc_barrier_from(std::env::var("ZLUDA_AGX_USC_BARRIER").ok().as_deref()))
 }
 
 fn usc_barrier_from(v: Option<&str>) -> bool {
-    v != Some("0")
+    v == Some("1")
 }
 
 /// How long a queue waits for a command: `$ZLUDA_AGX_WAIT_MS` milliseconds, or without limit. The hardware has no
@@ -1298,10 +1297,10 @@ mod tests {
     }
 
     #[test]
-    fn the_usc_barrier_is_on_unless_turned_off() {
-        assert!(usc_barrier_from(None));
+    fn the_usc_barrier_can_be_forced_on() {
+        assert!(!usc_barrier_from(None));
         assert!(usc_barrier_from(Some("1")));
-        assert!(usc_barrier_from(Some("")));
+        assert!(!usc_barrier_from(Some("")));
         assert!(!usc_barrier_from(Some("0")));
     }
 
@@ -2059,11 +2058,10 @@ impl LoadedModule {
                 shared_bytes: k.threadgroup_bytes + dynamic_shared,
                 spill_bucket: if stack_dwords > 0 { scratch::Layout::new(stack_dwords).bucket } else { 0 },
             };
-            // The Shader word's code address has only been measured 64-byte aligned; pipeline words likewise.
-            let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 64)?;
+            // Keep a later launch's pipeline words out of USC data the GPU may have cached for an earlier launch.
+            let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 512)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-            // The USC cache is invalidated on every command, or with ZLUDA_AGX_USC_BARRIER=0 only after new code
-            // was allocated (a module load).
+            // Invalidate when new code is loaded, or on every command when explicitly requested.
             let barrier = queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
             queue.usc_seen.set(vm.usc_generation);
             let stream =
