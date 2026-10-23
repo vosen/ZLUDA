@@ -2671,7 +2671,11 @@ impl<'a> MethodEmitContext<'a> {
     /// where PTX leaves them unspecified (and LLVM's instructions are
     /// undefined): division by zero gives all ones, the remainder of a
     /// division by zero is the dividend, and signed division of the minimum
-    /// value by -1 wraps. The divisor is replaced by 1 in those cases.
+    /// value by -1 wraps. The divisor is replaced by 1 for a zero divisor and,
+    /// in signed division, for -1, whose quotient is the negated dividend and
+    /// remainder zero: the divisor then depends on the divisor alone, so a
+    /// loop-invariant or constant one keeps its reciprocal out of the loop or
+    /// folded.
     fn emit_defined_int_div(
         &mut self,
         dst: SpirvWord,
@@ -2686,21 +2690,24 @@ impl<'a> MethodEmitContext<'a> {
             let one = LLVMConstInt(ty, 1, 0);
             let by_zero = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, zero, LLVM_UNNAMED.as_ptr());
             let mut unsafe_divisor = by_zero;
+            let mut minus_one = None;
             if signed {
-                let width = LLVMGetIntTypeWidth(ty);
-                let min = LLVMConstInt(ty, 1u64 << (width - 1), 0);
-                let is_min = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src1, min, LLVM_UNNAMED.as_ptr());
                 let is_minus_one = LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, src2, LLVMConstAllOnes(ty), LLVM_UNNAMED.as_ptr());
-                let overflow = LLVMBuildAnd(self.builder, is_min, is_minus_one, LLVM_UNNAMED.as_ptr());
-                unsafe_divisor = LLVMBuildOr(self.builder, by_zero, overflow, LLVM_UNNAMED.as_ptr());
+                unsafe_divisor = LLVMBuildOr(self.builder, by_zero, is_minus_one, LLVM_UNNAMED.as_ptr());
+                minus_one = Some(is_minus_one);
             }
             let divisor = LLVMBuildSelect(self.builder, unsafe_divisor, one, src2, LLVM_UNNAMED.as_ptr());
-            let result = match (signed, rem) {
+            let mut result = match (signed, rem) {
                 (false, false) => LLVMBuildUDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (true, false) => LLVMBuildSDiv(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (false, true) => LLVMBuildURem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
                 (true, true) => LLVMBuildSRem(self.builder, src1, divisor, LLVM_UNNAMED.as_ptr()),
             };
+            if let Some(is_minus_one) = minus_one {
+                // x / -1 = -x (wrapping: the minimum value stays), x % -1 = 0
+                let by_minus_one = if rem { zero } else { LLVMBuildSub(self.builder, zero, src1, LLVM_UNNAMED.as_ptr()) };
+                result = LLVMBuildSelect(self.builder, is_minus_one, by_minus_one, result, LLVM_UNNAMED.as_ptr());
+            }
             let by_zero_result = if rem { src1 } else { LLVMConstAllOnes(ty) };
             self.resolver.with_result(dst, |dst| {
                 LLVMBuildSelect(self.builder, by_zero, by_zero_result, result, dst)
