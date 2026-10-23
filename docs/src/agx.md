@@ -975,6 +975,11 @@ Launches of checked kernels, captured launches and kernels that use the stack or
 `ZLUDA_AGX_GRAPH_BATCH=0` submits one command per launch; with `ZLUDA_AGX_PROFILE`, the launches of a command share
 its time equally.
 
+Graph replay borrows its stored operation list rather than copying every node and its argument bytes on each replay.
+In a Geekbench 7 GPU run on the M2 Max, `cuGraphLaunch` accumulated 2.12 s over 8,854 calls (0.239 ms/call), versus
+3.61 s over 8,770 calls (0.412 ms/call) in the previous run. These full-run figures include other host load and
+different kernel choices, so they are a workload comparison rather than an isolated cost of the copy.
+
 `ZLUDA_AGX_API_STATS=FILE` appends, about once a second, a JSON line with the Unix time in milliseconds (`t`) and per
 CUDA function the calls so far and the host time spent in them (`[calls, ns]`, cumulative).
 
@@ -998,6 +1003,9 @@ backend experiments such as `-agx-threadgroup-unroll=4` or `-agx-fold-mode-phis=
 `agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
 busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
 of a kernel, for example an edited and reassembled `.asm`, can be checked to compute the same.
+`--graph-len N` captures N launches and times graph replays. The output includes `host_ms_per_launch` and a
+`timing_source` field: `gpu` means the start event's firmware timestamp cannot have wrapped in the queue's 1024-slot
+buffer; `gpu_or_host` means `cuEventElapsedTime` may have fallen back to the CPU clock after it wraps.
 
 ## Checking against PTX-formalization
 

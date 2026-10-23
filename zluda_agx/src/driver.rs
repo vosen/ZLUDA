@@ -3119,7 +3119,9 @@ pub(crate) unsafe fn cuGraphInstantiate_v2(
 
 pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
     with(|d| {
-        let ops = d.execs.get(&(exec as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
+        // Replay borrows the stored argument buffers. Removing the entry lets `run` mutate the
+        // rest of the driver without cloning every node and its parameters on each launch.
+        let ops = d.execs.remove(&(exec as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         // consecutive kernel launches go into one command (Batch); anything else submits them first
         d.batching = graph_batching_enabled();
         let mut r = Ok(());
@@ -3136,6 +3138,7 @@ pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
         }
         d.batching = false;
         let flushed = d.flush_batch();
+        d.execs.insert(exec as usize, ops);
         r.and(flushed)
     })
 }
