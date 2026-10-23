@@ -64,6 +64,8 @@ pub(crate) struct Driver {
     /// Per (module, kernel) built in checked mode, its first launch since the last synchronisation and how many
     /// followed: the launches a reported bad access may come from.
     checked_launches: HashMap<(usize, String), (String, u32)>,
+    /// `ZLUDA_AGX_CAPTURE`: launches captured so far, per kernel name.
+    captured_launches: HashMap<String, u32>,
     /// The device heap of `malloc` / `free`, made when the first module that uses it is loaded
     /// (CU_LIMIT_MALLOC_HEAP_SIZE bytes).
     heap: Option<agx_runtime::Bo>,
@@ -232,6 +234,7 @@ impl Driver {
             None => Vec::new(),
         };
         let allocations = if k.checked.as_ref().is_some_and(|c| c.table.is_some()) { self.live_allocations() } else { Vec::new() };
+        let capture = self.capture_before(m, &name, grid, block, shared, args)?;
         let g14x = self.ctx.device.g14x();
         let Driver { ctx, default_waits, modules, streams, .. } = self;
         let (queue, waits) = if sh <= 2 {
@@ -244,6 +247,10 @@ impl Driver {
         let fence = modules[&m]
             .launch_params_async(&mut ctx.vm, queue, g14x, &name, args, grid, block, shared, &bounds, &allocations, &w)
             .map_err(from_io)?;
+        if let Some(dir) = capture {
+            // the command, to find the launch's time in a ZLUDA_AGX_PROFILE file
+            let _ = std::fs::write(dir.join("command.txt"), format!("{}\n", fence.point));
+        }
         if self.launches.len() == MAX_LAUNCH_RECORDS {
             self.launches.pop_front();
         }
@@ -324,7 +331,65 @@ impl Driver {
     /// `agx_run`: the kernel's code, the launch's uniforms, and the current contents of the memory it can reach (the
     /// allocations its pointer arguments point into, the module's global data, parameter block and error record),
     /// with `replay.sh`. Memory is as the fault left it, not as the launch found it.
+    /// `ZLUDA_AGX_CAPTURE=DIR`: saves a launch as it is about to run (the same files as a fault dump, with memory
+    /// as the launch finds it) to `DIR/<pid>-cap<n>-<kernel>`, for replaying it in the AGX Performance Simulator,
+    /// after waiting for the earlier work. `ZLUDA_AGX_CAPTURE_KERNELS` lists the kernels (comma separated, or `all`,
+    /// the default), `ZLUDA_AGX_CAPTURE_SKIP` how many launches of each to let pass first (0 by default: the first
+    /// ones may be at a low GPU clock) and `ZLUDA_AGX_CAPTURE_MAX` how many to capture then (1 by default).
+    fn capture_before(
+        &mut self,
+        m: usize,
+        name: &str,
+        grid: [u32; 3],
+        block: [u32; 3],
+        shared: u32,
+        args: &[&[u8]],
+    ) -> Result<Option<std::path::PathBuf>, CUerror> {
+        let Some(dir) = std::env::var_os("ZLUDA_AGX_CAPTURE") else { return Ok(None) };
+        let wanted = std::env::var("ZLUDA_AGX_CAPTURE_KERNELS").unwrap_or_else(|_| "all".into());
+        if wanted != "all" && !wanted.split(',').any(|k| k == name) {
+            return Ok(None);
+        }
+        let var = |v: &str, default: u32| std::env::var(v).ok().and_then(|v| v.parse().ok()).unwrap_or(default);
+        let (max, skip) = (var("ZLUDA_AGX_CAPTURE_MAX", 1), var("ZLUDA_AGX_CAPTURE_SKIP", 0));
+        let n = self.captured_launches.entry(name.to_string()).or_insert(0);
+        *n += 1;
+        if *n <= skip || *n > skip + max {
+            return Ok(None);
+        }
+        let index = self.captured_launches.values().sum::<u32>();
+        self.sync_all()?;
+        let record = LaunchRecord {
+            fence: Fence { syncobj: 0, point: 0 },
+            stream: 0,
+            module: m,
+            kernel: name.to_string(),
+            grid,
+            block,
+            shared,
+            params: args.iter().map(|a| a.to_vec()).collect(),
+        };
+        let at = std::path::Path::new(&dir).join(format!("{}-cap{index}-{name}", std::process::id()));
+        // the register allocation in 16-bit halves (agx_dispatch --regs: the occupancy)
+        let halves = self.modules[&m].module.kernels[name].gpr_halves();
+        match self.dump_to(&record, "captured before the launch", &at).and_then(|()| std::fs::write(at.join("regs.txt"), format!("{halves}\n"))) {
+            Ok(()) => Ok(Some(at)),
+            Err(e) => {
+                if crate::log_enabled() {
+                    eprintln!("[zluda_agx] capture of {name} failed: {e}");
+                }
+                Ok(None)
+            }
+        }
+    }
+
     fn dump(&self, r: &LaunchRecord, error: &str, dir: &std::path::Path) -> io::Result<std::path::PathBuf> {
+        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
+        self.dump_to(r, error, &at)?;
+        Ok(at)
+    }
+
+    fn dump_to(&self, r: &LaunchRecord, error: &str, at: &std::path::Path) -> io::Result<()> {
         let m = &self.modules[&r.module];
         let k = &m.module.kernels[&r.kernel];
         let params: Vec<&[u8]> = r.params.iter().map(|p| &p[..]).collect();
@@ -359,9 +424,7 @@ impl Driver {
             }
             i += 1;
         }
-        let at = dir.join(format!("{}-{}", std::process::id(), r.fence.point));
-        write_dump(&at, &replay, &regions, &format!("{error}\n{}", r.describe()))?;
-        Ok(at)
+        write_dump(at, &replay, &regions, &format!("{error}\n{}", r.describe()))
     }
 
     /// Drops the launch records of commands that have finished on the queue of `syncobj`, up to `point`.
@@ -492,6 +555,7 @@ fn new_driver() -> Result<Driver, CUerror> {
         sticky: None,
         launches: Default::default(),
         checked_launches: Default::default(),
+        captured_launches: Default::default(),
         heap: None,
         timer: None,
         vmm: HashMap::new(),

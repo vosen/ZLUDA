@@ -929,6 +929,27 @@ When the module has a DWARF line table (checked mode, or `ZLUDA_AGX_LINEINFO=1`,
 instruction (`"source":"file:line:column"`). The objects also work with `llvm-objdump -d -l`, `llvm-dwarfdump` and
 `llvm-addr2line`.
 
+### Launch profiles and captures
+
+`ZLUDA_AGX_PROFILE=FILE` appends one JSON line per finished launch: the kernel, grid, block, dynamic shared memory,
+stream, command number, argument bytes (hex), the GPU time from the firmware timestamps (`ns`) and the Unix time in
+milliseconds when the launch was seen to finish (`t`). Launches are seen when their command is waited for.
+
+`ZLUDA_AGX_CAPTURE=DIR` saves launches as they are about to run, after waiting for the earlier work: the files of a
+fault dump (above), with the memory as the launch finds it, the register allocation (`regs.txt`, in 16-bit halves) and
+the command number (`command.txt`, the launch's line in a profile of the same run), in `DIR/<pid>-cap<n>-<kernel>`.
+`ZLUDA_AGX_CAPTURE_KERNELS` names the kernels (comma separated, `all` by default), `ZLUDA_AGX_CAPTURE_SKIP` how many
+launches of each pass first (the first ones may run at a low GPU clock) and `ZLUDA_AGX_CAPTURE_MAX` how many are then
+saved (1). With both variables set, the AGX Performance Simulator's `agx_dispatch` can be compared with the hardware on
+real launches with their real data.
+
+`ZLUDA_AGX_LLVM_ARGS` passes further options to LLVM in `zoc` and in the driver (part of the compilation cache key):
+backend experiments such as `-agx-threadgroup-unroll=4` or `-agx-fold-mode-phis=false`.
+
+`agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
+busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
+of a kernel, for example an edited and reassembled `.asm`, can be checked to compute the same.
+
 ## Checking against PTX-formalization
 
 `ptx/tools/agx_ptx_formalization_check.py` runs the test programs of
