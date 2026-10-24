@@ -1129,6 +1129,12 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   (default `$XDG_CACHE_HOME/zluda/agx` or `~/.cache/zluda/agx`; disabled by
   `ZLUDA_CACHE_DISABLE`). Entries are keyed by the PTX, the chip and the `zoc`
   binary, so a rebuilt compiler does not reuse old code.
+  Cache misses take a per-entry advisory file lock and recheck the entry,
+  so concurrent threads/processes compile the same input only once. Different
+  keys stay independent; warm hits do not lock. Lock files persist to keep
+  their inode stable. If the cache is unavailable, compilation still proceeds
+  without storing an entry. The digest is computed once per lookup, including
+  the miss/recheck/write path.
 * Launches: `cuLaunchKernel` packs `kernelParams` with the argument layout of
   the object's `.agx.kernels` section. Most parameters travel in uniform
   registers; the others go in a parameter block.
