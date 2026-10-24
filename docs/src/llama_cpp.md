@@ -46,6 +46,13 @@ On the M2 Max under Asahi Linux:
   `cuLibraryLoadData` with `CUDA_ERROR_NO_BINARY_FOR_GPU` (209). No usable
   PTX was selected from that image. Native CUDA GPU images cannot execute
   on AGX. This is a remaining blocker, not successful GPU initialization.
+  A subsequent run with loader diagnostics and the compilation cache disabled
+  reports `version=1, header_bytes=16, file_bytes=0` for the supplied
+  fatbin, with zero entries, zero parse errors and zero decompression errors.
+  No `zoc` invocation occurs: this initialization failure precedes PTX
+  compilation and GPU execution. It does not show that the application's
+  actual inference kernels fail to compile. The loader currently rejects
+  this empty image; handling empty library registration needs investigation.
 * `/scratch/llama-b11838/llama-bench` starts with CPU backends, but its
   `libggml-cuda.so` requires `libcudart.so.13`, which is absent locally.
   ZLUDA provides the driver and custom cuBLAS, not a CUDA runtime library.

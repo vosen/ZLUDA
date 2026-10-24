@@ -4,6 +4,7 @@ use std::{borrow::Cow, ptr};
 
 use cuda_types::dark_api::*;
 
+#[derive(Debug)]
 pub enum ParseError {
     NullPointer(&'static str),
     UnexpectedBinaryField {
@@ -33,6 +34,7 @@ impl ParseError {
     }
 }
 
+#[derive(Debug)]
 pub enum FatbinError {
     ParseFailure(ParseError),
     Lz4DecompressionFailure,

@@ -1170,6 +1170,9 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compile = || -> Result<(Vec<u8>, String), String> {
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>());
+        }
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
         let mut paths = Vec::new();
         for (i, ptx) in sources.iter().enumerate() {
@@ -1189,6 +1192,9 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
             .args(&paths)
             .output()
             .map_err(|e| format!("{}: {e}", zoc.display()))?;
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] zoc finished: {}", out.status);
+        }
         let object = std::fs::read(dir.path().join("module.o"))
             .map_err(|_| format!("zoc failed: {}", String::from_utf8_lossy(&out.stderr)))?;
         let asm = std::fs::read_to_string(dir.path().join("module.asm")).unwrap_or_default();
@@ -1230,13 +1236,38 @@ fn arch_specific_ptx(text: &[u8]) -> bool {
 unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     use dark_api::fatbin::{Fatbin, FatbinSubmodule};
     let mut best: Option<((bool, u32), Vec<u8>)> = None;
+    let (mut entries, mut ptx_entries, mut decompression_errors, mut parse_errors) = (0, 0, 0, 0);
     let mut take = |sub: FatbinSubmodule| {
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] fatbin module: version={}, header_bytes={}, file_bytes={}", sub.header.version, sub.header.header_size, sub.header.files_size);
+        }
         let mut files = sub.get_files();
-        while let Some(Ok(f)) = files.next() {
+        while let Some(file) = files.next() {
+            let f = match file {
+                Ok(f) => f,
+                Err(e) => {
+                    parse_errors += 1;
+                    if crate::log_enabled() {
+                        eprintln!("[zluda_agx] fatbin file parse failed: {e:?}");
+                    }
+                    break;
+                }
+            };
+            entries += 1;
             if f.header.kind != cuda_types::dark_api::FatbinFileHeader::HEADER_KIND_PTX {
                 continue;
             }
-            let Ok(text) = f.get_or_decompress_content(true) else { continue };
+            ptx_entries += 1;
+            let text = match f.get_or_decompress_content(true) {
+                Ok(text) => text,
+                Err(e) => {
+                    decompression_errors += 1;
+                    if crate::log_enabled() {
+                        eprintln!("[zluda_agx] PTX decompression failed: {e:?}");
+                    }
+                    continue;
+                }
+            };
             let key = (!arch_specific_ptx(&text), f.header.sm_version);
             if best.as_ref().is_some_and(|(b, _)| *b >= key) {
                 continue;
@@ -1254,6 +1285,9 @@ unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
         }
     } else {
         take(FatbinSubmodule::new(&*(image as *const cuda_types::dark_api::FatbinHeader)));
+    }
+    if crate::log_enabled() {
+        eprintln!("[zluda_agx] fatbin selection: entries={entries}, PTX={ptx_entries}, parse_errors={parse_errors}, decompression_errors={decompression_errors}, selected={}", best.is_some());
     }
     let (_, mut ptx) = best.ok_or_else(|| {
         if crate::log_enabled() {
