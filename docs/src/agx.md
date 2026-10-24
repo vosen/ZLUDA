@@ -988,8 +988,12 @@ Destroyed streams keep their queue (up to 32) for the next `cuStreamCreate`: cre
 rings and timestamp buffer) costs ~1 ms, and applications that create and destroy a stream per operation (Geekbench 7:
 ~7,800 times a run) spent ~10 s of a 156 s run in it.
 
-Graph launches use one compute command per kernel by default. Batching produced incorrect Qwen inference
-results in the llama.cpp integration checks; it remains experimental and requires `ZLUDA_AGX_GRAPH_BATCH=1`.
+Graph launches use one compute command per kernel by default. Batching remains opt-in with
+`ZLUDA_AGX_GRAPH_BATCH=1` while evaluating workload cost tradeoffs. Every batched dispatch now emits
+the CDM barrier even when shader code is cached: the old cached-code fast path could omit ordering
+between dependent kernels and corrupt Qwen output. The repaired path matches CPU output on the four
+llama integration prompts. In warm Qwen tests it improves prompt throughput but reduces generation
+throughput, so it is not enabled by default.
 With that option, kernel launches of a graph (`cuGraphLaunch`) are gathered into the control stream of one compute command, each
 dispatch followed by the barrier after a launch, up to 64 per command; any other operation of the graph submits the
 launches gathered first. One command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between

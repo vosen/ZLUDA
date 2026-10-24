@@ -55,10 +55,12 @@ must name the CUDA backend and CUDA0; a CPU-only result does not verify it.
   to obtain their device module/kernel still returns error 209. This follows
   the distinction between registration and device loading described in
   [CUDA library management](https://docs.nvidia.com/cuda/cuda-driver-api/cuda_driver_api/group__CUDA__LIBRARY.html).
-* Graph batching is disabled by default. It produced repeated `G` tokens
-  for the counting prompt; disabling specialization alone did not fix it.
-  With batching disabled, both enabled and disabled specialization produce
-  the correct response. `ZLUDA_AGX_GRAPH_BATCH=1` remains experimental.
+* Graph batching is disabled by default. Its cached-code path previously
+  omitted inter-dispatch barriers and produced repeated `G` tokens. That
+  ordering bug is fixed: `ZLUDA_AGX_GRAPH_BATCH=1` now matches CPU output on
+  all four prompts below. In two warm benchmark commands per mode (each
+  with three repetitions), batching improves `pp128` about 9% but reduces
+  `tg32` about 7%. It remains opt-in while that tradeoff is evaluated.
 * The separate `/scratch/llama-b11838/llama-bench` distribution's CUDA
   backend needs the absent `libcudart.so.13`. That is a separate build;
   it is not the shared-library requirement of the working bundled app.

@@ -83,6 +83,13 @@ fn main() {
             .unwrap_or_else(|e| die(&e.to_string()));
         helper = (h, s);
     }
+    // Cached shaders still need ordering between dependent dispatches. The
+    // original cached-code fast path omitted these barriers; simple repeated
+    // increments could pass by scheduling luck while mixed graphs corrupted data.
+    let barriers = words.chunks_exact(4)
+        .filter(|word| u32::from_le_bytes((*word).try_into().unwrap()) == (3 << 29 | 0xfffff))
+        .count();
+    assert_eq!(barriers, dispatches as usize, "every batched dispatch requires a CDM barrier");
     let f = queue.submit_words(&words, helper.0, helper.1, &[]).unwrap_or_else(|e| die(&e.to_string()));
     let host_batched = t.elapsed().as_secs_f64() * 1e6;
     queue.synchronize().unwrap_or_else(|e| die(&e.to_string()));
@@ -106,7 +113,7 @@ fn main() {
     }
 
     println!(
-        "{{\"threads\":{n},\"dispatches\":{dispatches},\"wrong_separate\":{wrong_separate},\"wrong_batched\":{wrong_batched},\
+        "{{\"threads\":{n},\"dispatches\":{dispatches},\"cdm_barriers\":{barriers},\"wrong_separate\":{wrong_separate},\"wrong_batched\":{wrong_batched},\
 \"wrong_chain\":{wrong_chain},\"host_us_separate\":{host_separate:.1},\"host_us_batched\":{host_batched:.1},\
 \"fw_us_separate\":{fw_separate:.1},\"fw_us_batched\":{fw_batched:.1}}}"
     );

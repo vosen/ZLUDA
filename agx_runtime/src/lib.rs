@@ -2061,8 +2061,10 @@ impl LoadedModule {
             // Keep a later launch's pipeline words out of USC data the GPU may have cached for an earlier launch.
             let pw = queue.stage(RingKind::Usc, &pipeline.usc_words(), 512)?;
             let global = std::array::from_fn(|i| threadgroups[i] * local[i]);
-            // Invalidate when new code is loaded, or on every command when explicitly requested.
-            let barrier = queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
+            // Separate queue commands are ordered by firmware. Dispatches
+            // within one command need the CDM barrier even when their code
+            // is cached, or dependent kernels can overlap and read stale data.
+            let barrier = batched || queue.usc_seen.get() != vm.usc_generation || always_usc_barrier();
             queue.usc_seen.set(vm.usc_generation);
             let stream =
                 cdm_dispatch_with((pw - vm.usc_base) as u32, pipeline.uniform_halves(), g14x, global, local, barrier);
