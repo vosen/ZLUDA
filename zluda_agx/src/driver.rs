@@ -1255,7 +1255,12 @@ unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     } else {
         take(FatbinSubmodule::new(&*(image as *const cuda_types::dark_api::FatbinHeader)));
     }
-    let (_, mut ptx) = best.ok_or(CUerror::NO_BINARY_FOR_GPU)?;
+    let (_, mut ptx) = best.ok_or_else(|| {
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] CUDA fat binary has no readable PTX; AGX requires PTX and cannot execute native CUDA GPU images");
+        }
+        CUerror::NO_BINARY_FOR_GPU
+    })?;
     ptx.push(0);
     Ok(ptx)
 }
@@ -1277,7 +1282,7 @@ pub(crate) unsafe fn cuInit(_flags: c_uint) -> CUresult {
 }
 
 pub(crate) unsafe fn cuDriverGetVersion(v: *mut c_int) -> CUresult {
-    out(v, 12040)
+    out(v, cuda_types::cuda::CUDA_VERSION as c_int)
 }
 
 pub(crate) unsafe fn cuDeviceGetCount(count: *mut c_int) -> CUresult {
@@ -2147,7 +2152,7 @@ pub(crate) unsafe fn cuModuleGetLoadingMode(mode: *mut CUmoduleLoadingMode) -> C
 }
 
 pub(crate) unsafe fn cuCtxGetApiVersion(_ctx: CUcontext, version: *mut c_uint) -> CUresult {
-    out(version, 12040)
+    out(version, cuda_types::cuda::CUDA_VERSION)
 }
 
 pub(crate) unsafe fn cuCtxGetFlags(flags: *mut c_uint) -> CUresult {
@@ -3579,6 +3584,20 @@ pub(crate) unsafe fn cuTensorMapReplaceAddress(tensor_map: *mut CUtensorMap, add
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reported_versions_match_runtime_compatibility_version() {
+        // Runtime initialization uses CUDA_VERSION in dark::integrity_check.
+        // Reporting another version prevents statically linked runtimes from starting.
+        unsafe {
+            let mut driver_version = 0;
+            cuDriverGetVersion(&mut driver_version).unwrap();
+            assert_eq!(driver_version, cuda_types::cuda::CUDA_VERSION as c_int);
+            let mut context_version = 0;
+            cuCtxGetApiVersion(CUcontext(std::ptr::null_mut()), &mut context_version).unwrap();
+            assert_eq!(context_version, cuda_types::cuda::CUDA_VERSION);
+        }
+    }
 
     fn record(syncobj: u32, point: u64) -> LaunchRecord {
         LaunchRecord {
