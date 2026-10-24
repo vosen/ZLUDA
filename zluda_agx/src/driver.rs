@@ -42,6 +42,8 @@ enum Op {
 pub(crate) struct Driver {
     default_waits: Vec<Fence>,
     pub(crate) modules: HashMap<usize, LoadedModule>,
+    /// LAZY library registrations, resolved into a device module at lookup.
+    libraries: HashMap<usize, Library>,
     functions: HashMap<usize, (usize, String)>,
     /// PTX modules whose remaining kernels are compiled when requested.
     lazy_sources: HashMap<usize, LazySource>,
@@ -110,6 +112,13 @@ struct LazySource {
     compiled: HashMap<String, usize>,
     pending: HashMap<String, CompileResultSlot>,
     cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[derive(Clone)]
+enum Library {
+    Ptx(std::sync::Arc<[u8]>),
+    Unavailable,
+    Loaded(usize),
 }
 
 type CompileResultSlot = std::sync::Arc<(
@@ -238,10 +247,11 @@ struct Batch {
 
 const MAX_BATCH: u32 = 64;
 
-/// ZLUDA_AGX_GRAPH_BATCH=0: one command per kernel launch of a graph.
+/// One command per kernel launch by default. Batching currently corrupts
+/// Qwen inference results; ZLUDA_AGX_GRAPH_BATCH=1 opts into that experimental path.
 fn graph_batching_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").map_or(true, |v| v != "0"))
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
 /// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
@@ -840,6 +850,7 @@ fn new_driver() -> Result<Driver, CUerror> {
         ctx,
         default_waits: Vec::new(),
         modules: HashMap::new(),
+        libraries: HashMap::new(),
         functions: HashMap::new(),
         lazy_sources: HashMap::new(),
         streams: HashMap::new(),
@@ -1169,7 +1180,10 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         options.push(&llvm_args);
     }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
+    let compiled = std::cell::Cell::new(false);
+    let started = Instant::now();
     let compile = || -> Result<(Vec<u8>, String), String> {
+        compiled.set(true);
         if crate::log_enabled() {
             eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>());
         }
@@ -1193,19 +1207,23 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
             .output()
             .map_err(|e| format!("{}: {e}", zoc.display()))?;
         if crate::log_enabled() {
-            eprintln!("[zluda_agx] zoc finished: {}", out.status);
+            eprintln!("[zluda_agx] zoc finished: {}, elapsed={:.3}s", out.status, started.elapsed().as_secs_f64());
         }
         let object = std::fs::read(dir.path().join("module.o"))
             .map_err(|_| format!("zoc failed: {}", String::from_utf8_lossy(&out.stderr)))?;
         let asm = std::fs::read_to_string(dir.path().join("module.asm")).unwrap_or_default();
         Ok((object, asm))
     };
-    match Cache::from_env() {
+    let result = match Cache::from_env() {
         Some(c) if cached_only => Ok(c.get(&key)),
         None if cached_only => Ok(None),
         Some(c) => c.get_or_compile(&key, compile).map(Some),
         None => compile().map(Some),
+    };
+    if !cached_only && !compiled.get() && crate::log_enabled() && result.is_ok() {
+        eprintln!("[zluda_agx] PTX cache hit: modules={}, bytes={}, elapsed={:.3}s", sources.len(), source.len(), started.elapsed().as_secs_f64());
     }
+    result
 }
 
 /// The module in an image: an AGX object, or PTX text (NUL-terminated).
@@ -1232,12 +1250,20 @@ fn arch_specific_ptx(text: &[u8]) -> bool {
 
 /// The PTX of a CUDA fat binary (a `__fatBinC_Wrapper_t` or a bare fatbin header): of the PTX files it holds, the
 /// one for the newest architecture, portable PTX before architecture-specific PTX (sm_90a, sm_100f) of any
-/// architecture. NVIDIA machine code (SASS) cannot run here.
+/// architecture. NVIDIA machine code (SASS) cannot run here. A valid empty
+/// library returns a single NUL, which the module loader handles without compilation.
 unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     use dark_api::fatbin::{Fatbin, FatbinSubmodule};
     let mut best: Option<((bool, u32), Vec<u8>)> = None;
+    let mut only_empty_modules = true;
+    let mut module_count = 0;
     let (mut entries, mut ptx_entries, mut decompression_errors, mut parse_errors) = (0, 0, 0, 0);
     let mut take = |sub: FatbinSubmodule| {
+        module_count += 1;
+        only_empty_modules &= sub.header.magic == 0xba55ed50
+            && sub.header.version == 1
+            && sub.header.header_size == 16
+            && sub.header.files_size == 0;
         if crate::log_enabled() {
             eprintln!("[zluda_agx] fatbin module: version={}, header_bytes={}, file_bytes={}", sub.header.version, sub.header.header_size, sub.header.files_size);
         }
@@ -1288,6 +1314,15 @@ unsafe fn ptx_in_fatbin(image: *const u8) -> Result<Vec<u8>, CUerror> {
     }
     if crate::log_enabled() {
         eprintln!("[zluda_agx] fatbin selection: entries={entries}, PTX={ptx_entries}, parse_errors={parse_errors}, decompression_errors={decompression_errors}, selected={}", best.is_some());
+    }
+    // Runtime initialization can register a valid library with no device code.
+    // A single NUL represents this empty image; do not mistake a nonempty
+    // native-only or unreadable image for an empty library.
+    if best.is_none() && module_count > 0 && only_empty_modules {
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] accepting empty CUDA library");
+        }
+        return Ok(vec![0]);
     }
     let (_, mut ptx) = best.ok_or_else(|| {
         if crate::log_enabled() {
@@ -1511,6 +1546,10 @@ pub(crate) unsafe fn cuMemAlloc_v2(dptr: *mut CUdeviceptr, bytesize: usize) -> C
 
 pub(crate) unsafe fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult {
     with(|d| {
+        // Runtime/library initialization uses a null free to establish a context.
+        if dptr.0.is_null() {
+            return Ok(());
+        }
         d.sync_all()?;
         d.ctx.mem_free(dptr.0 as u64).map_err(from_io)
     })
@@ -1566,108 +1605,114 @@ pub(crate) unsafe fn cuMemsetD32_v2(dst: CUdeviceptr, ui: c_uint, n: usize) -> C
 }
 
 pub(crate) unsafe fn cuModuleLoadData(module: *mut CUmodule, image: *const c_void) -> CUresult {
-    if image.is_null() {
+    if image.is_null() || module.is_null() {
         return Err(CUerror::INVALID_VALUE);
     }
-    let bytes = image as *const u8;
-    let h = with(|d| {
-        let cpu = d.ctx.props.llvm_cpu.clone();
-        // An ELF object's size is in its header; PTX is NUL-terminated.
-        let magic = std::ptr::read_unaligned(bytes as *const u32);
-        let unpacked;
-        let image: &[u8] = if magic == 0x466243b1 || magic == 0xba55ed50 {
-            unpacked = ptx_in_fatbin(bytes)?;
-            &unpacked[..unpacked.len() - 1]
-        } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
-            // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
-            // "+agx-strict" build, in checked mode its "+agx-checked" one if it has one
-            let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
-            let entry = format!("{cpu}{}", if agx_strict() { "+agx-strict" } else { "" });
-            // library kernels without a checked build run unchecked
-            let checked = agx_checked().then(|| module::fat_object_entry(fat, &format!("{entry}+agx-checked")).ok()).flatten();
-            checked.map_or_else(|| module::fat_object_entry(fat, &entry), Ok).map_err(|e| {
-                if crate::log_enabled() {
-                    eprintln!("[zluda_agx] {}", e.0);
-                }
-                CUerror::NO_BINARY_FOR_GPU
-            })?
-        } else if std::slice::from_raw_parts(bytes, 4) == b"\x7fELF" {
-            let h = std::slice::from_raw_parts(bytes, 64);
-            let shoff = u64::from_le_bytes(h[40..48].try_into().unwrap());
-            let (shentsize, shnum) = (u16::from_le_bytes([h[58], h[59]]) as u64, u16::from_le_bytes([h[60], h[61]]) as u64);
-            std::slice::from_raw_parts(bytes, (shoff + shentsize * shnum) as usize)
-        } else {
-            CStr::from_ptr(bytes as *const c_char).to_bytes()
-        };
-        // For large PTX modules, compile one entry now and defer the others
-        // until cuModuleGetFunction. Keep all globals visible in each image so
-        // that the later kernels can share this module's data buffer.
-        let lazy = if std::env::var("ZLUDA_AGX_LAZY_KERNELS").is_ok_and(|v| !v.is_empty() && v != "0")
-            && !agx_checked()
-            && !image.starts_with(b"\x7fELF")
-            && image.get(..8) != Some(&module::FAT_MAGIC[..])
-        {
-            std::str::from_utf8(image).ok().and_then(|text| {
-                let names = crate::specialize::entry_names(text);
-                (names.len() > 1).then(|| (std::sync::Arc::<str>::from(text), names))
-            })
-        } else {
-            None
-        };
-        let initial_ptx = lazy.as_ref().map(|(text, names)| crate::specialize::without_other_entries(text, &names[0]));
-        let m = load_image(initial_ptx.as_deref().map_or(image, str::as_bytes), &cpu)?;
-        let mut loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
-        if loaded.uses_heap() {
-            if d.heap.is_none() {
-                let size = d.heap_size();
-                let mut heap = d.ctx.vm.alloc_data(size as u64).map_err(from_io)?;
-                heap.as_mut_slice()[..8].copy_from_slice(&agx_runtime::heap_header(size));
-                d.heap = Some(heap);
-            }
-            loaded.set_heap(d.heap.as_ref().unwrap().va);
-        }
-        if loaded.uses_timer() && std::env::var("ZLUDA_AGX_TIMER").map_or(true, |v| v != "0") {
-            if d.timer.is_none() {
-                let khz = d.ctx.props.clock_khz;
-                d.timer = Some(Timer::new(&mut d.ctx.vm, khz).map_err(from_io)?);
-            }
-            loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
-        }
-        let h = d.handle();
-        // the PTX of a module without heap or clock for launch-time specialization (its kernels' copies use the
-        // module's global data)
-        let ptx = !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
-        if ptx && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
-            if let Ok(text) = std::str::from_utf8(image) {
-                d.spec_sources.insert(h, std::sync::Arc::from(text));
-            }
-        } else if crate::log_enabled() {
-            eprintln!(
-                "[zluda_agx] module {h:#x} not specialized: ptx {ptx} heap {} timer {}",
-                loaded.uses_heap(),
-                loaded.uses_timer()
-            );
-        }
-        d.modules.insert(h, loaded);
-        if let Some((ptx, names)) = lazy {
-            let workers = std::env::var("ZLUDA_AGX_PARALLEL_KERNELS").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(16);
-            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let pending = if workers > 0 {
-                precompile_kernels(ptx.clone(), &names[1..], cpu, workers, cancelled.clone())
-            } else {
-                HashMap::new()
-            };
-            d.lazy_sources.insert(h, LazySource {
-                ptx,
-                kernels: names.into_iter().collect(),
-                compiled: HashMap::new(),
-                pending,
-                cancelled,
-            });
-        }
-        Ok(h)
-    })?;
+    let h = with(|d| load_module_data(d, image.cast()))?;
     out(module, CUmodule(h as *mut _))
+}
+
+unsafe fn load_module_data(d: &mut Driver, bytes: *const u8) -> Result<usize, CUerror> {
+    let cpu = d.ctx.props.llvm_cpu.clone();
+    // An ELF object's size is in its header; PTX is NUL-terminated.
+    let magic = std::ptr::read_unaligned(bytes as *const u32);
+    let unpacked;
+    let image: &[u8] = if magic == 0x466243b1 || magic == 0xba55ed50 {
+        unpacked = ptx_in_fatbin(bytes)?;
+        &unpacked[..unpacked.len() - 1]
+    } else if std::slice::from_raw_parts(bytes, 8) == module::FAT_MAGIC {
+        // a fat AGX object (library kernels): the object for this device's chip, in strict mode its
+        // "+agx-strict" build, in checked mode its "+agx-checked" one if it has one
+        let fat = std::slice::from_raw_parts(bytes, module::fat_object_len(bytes));
+        let entry = format!("{cpu}{}", if agx_strict() { "+agx-strict" } else { "" });
+        // library kernels without a checked build run unchecked
+        let checked = agx_checked().then(|| module::fat_object_entry(fat, &format!("{entry}+agx-checked")).ok()).flatten();
+        checked.map_or_else(|| module::fat_object_entry(fat, &entry), Ok).map_err(|e| {
+            if crate::log_enabled() {
+                eprintln!("[zluda_agx] {}", e.0);
+            }
+            CUerror::NO_BINARY_FOR_GPU
+        })?
+    } else if std::slice::from_raw_parts(bytes, 4) == b"\x7fELF" {
+        let h = std::slice::from_raw_parts(bytes, 64);
+        let shoff = u64::from_le_bytes(h[40..48].try_into().unwrap());
+        let (shentsize, shnum) = (u16::from_le_bytes([h[58], h[59]]) as u64, u16::from_le_bytes([h[60], h[61]]) as u64);
+        std::slice::from_raw_parts(bytes, (shoff + shentsize * shnum) as usize)
+    } else {
+        CStr::from_ptr(bytes as *const c_char).to_bytes()
+    };
+    // For large PTX modules, compile one entry now and defer the others
+    // until cuModuleGetFunction. Keep all globals visible in each image so
+    // that the later kernels can share this module's data buffer.
+    let lazy = if std::env::var("ZLUDA_AGX_LAZY_KERNELS").is_ok_and(|v| !v.is_empty() && v != "0")
+        && !agx_checked()
+        && !image.starts_with(b"\x7fELF")
+        && image.get(..8) != Some(&module::FAT_MAGIC[..])
+    {
+        std::str::from_utf8(image).ok().and_then(|text| {
+            let names = crate::specialize::entry_names(text);
+            (names.len() > 1).then(|| (std::sync::Arc::<str>::from(text), names))
+        })
+    } else {
+        None
+    };
+    let initial_ptx = lazy.as_ref().map(|(text, names)| crate::specialize::without_other_entries(text, &names[0]));
+    let empty_library = (magic == 0x466243b1 || magic == 0xba55ed50) && image.is_empty();
+    let m = if empty_library {
+        module::Module::default()
+    } else {
+        load_image(initial_ptx.as_deref().map_or(image, str::as_bytes), &cpu)?
+    };
+    let mut loaded = LoadedModule::new(&mut d.ctx.vm, m).map_err(from_io)?;
+    if loaded.uses_heap() {
+        if d.heap.is_none() {
+            let size = d.heap_size();
+            let mut heap = d.ctx.vm.alloc_data(size as u64).map_err(from_io)?;
+            heap.as_mut_slice()[..8].copy_from_slice(&agx_runtime::heap_header(size));
+            d.heap = Some(heap);
+        }
+        loaded.set_heap(d.heap.as_ref().unwrap().va);
+    }
+    if loaded.uses_timer() && std::env::var("ZLUDA_AGX_TIMER").map_or(true, |v| v != "0") {
+        if d.timer.is_none() {
+            let khz = d.ctx.props.clock_khz;
+            d.timer = Some(Timer::new(&mut d.ctx.vm, khz).map_err(from_io)?);
+        }
+        loaded.set_timer(d.timer.as_ref().unwrap().bo.va);
+    }
+    let h = d.handle();
+    // the PTX of a module without heap or clock for launch-time specialization (its kernels' copies use the
+    // module's global data)
+    let ptx = !empty_library && !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
+    if ptx && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
+        if let Ok(text) = std::str::from_utf8(image) {
+            d.spec_sources.insert(h, std::sync::Arc::from(text));
+        }
+    } else if crate::log_enabled() {
+        eprintln!(
+            "[zluda_agx] module {h:#x} not specialized: ptx {ptx} heap {} timer {}",
+            loaded.uses_heap(),
+            loaded.uses_timer()
+        );
+    }
+    d.modules.insert(h, loaded);
+    if let Some((ptx, names)) = lazy {
+        let workers = std::env::var("ZLUDA_AGX_PARALLEL_KERNELS").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(16);
+        let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let pending = if workers > 0 {
+            precompile_kernels(ptx.clone(), &names[1..], cpu, workers, cancelled.clone())
+        } else {
+            HashMap::new()
+        };
+        d.lazy_sources.insert(h, LazySource {
+            ptx,
+            kernels: names.into_iter().collect(),
+            compiled: HashMap::new(),
+            pending,
+            cancelled,
+        });
+    }
+    Ok(h)
 }
 
 pub(crate) unsafe fn cuModuleLoadDataEx(
@@ -1723,7 +1768,9 @@ unsafe fn link_add(state: CUlinkState, ty: CUjitInputType, data: &[u8]) -> CUres
         CUjitInputType::CU_JIT_INPUT_FATBINARY => {
             let mut ptx = ptx_in_fatbin(data.as_ptr())?;
             ptx.pop();
-            link.ptx.push(ptx);
+            if !ptx.is_empty() {
+                link.ptx.push(ptx);
+            }
         }
         CUjitInputType::CU_JIT_INPUT_CUBIN | CUjitInputType::CU_JIT_INPUT_OBJECT if data.starts_with(b"\x7fELF") => {
             // AGX objects are final: one can only be "linked" alone
@@ -1764,7 +1811,9 @@ pub(crate) unsafe fn cuLinkAddData_v2(
         let link = (state as *mut Link).as_mut().ok_or(CUerror::INVALID_HANDLE)?;
         let mut ptx = ptx_in_fatbin(data as *const u8)?;
         ptx.pop();
-        link.ptx.push(ptx);
+        if !ptx.is_empty() {
+            link.ptx.push(ptx);
+        }
         return Ok(());
     }
     link_add(state, ty, std::slice::from_raw_parts(data as *const u8, size))
@@ -1836,7 +1885,13 @@ pub(crate) unsafe fn cuModuleUnload(hmod: CUmodule) -> CUresult {
 }
 
 pub(crate) unsafe fn cuModuleGetFunction(hfunc: *mut CUfunction, hmod: CUmodule, name: *const c_char) -> CUresult {
+    if hfunc.is_null() || name.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
     let name = CStr::from_ptr(name).to_string_lossy().into_owned();
+    if crate::log_enabled() {
+        eprintln!("[zluda_agx] kernel lookup: module={:#x}, name={name}", hmod.0 as usize);
+    }
     let h = with(|d| {
         let parent = hmod.0 as usize;
         let m = d.modules.get(&parent).ok_or(CUerror::INVALID_HANDLE)?;
@@ -2138,22 +2193,83 @@ pub(crate) unsafe fn cuLibraryLoadData(
     _lib_values: *mut *mut c_void,
     _num_lib: c_uint,
 ) -> CUresult {
+    load_library_data(library, code, std::env::var("CUDA_MODULE_LOADING").is_ok_and(|v| v == "LAZY"))
+}
+
+unsafe fn load_library_data(library: *mut CUlibrary, code: *const c_void, lazy: bool) -> CUresult {
+    if library.is_null() || code.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let magic = std::ptr::read_unaligned(code.cast::<u32>());
+    if lazy && (magic == 0x466243b1 || magic == 0xba55ed50) {
+        let pending = match ptx_in_fatbin(code.cast()) {
+            Ok(ptx) => Library::Ptx(ptx.into()),
+            Err(CUerror::NO_BINARY_FOR_GPU) => Library::Unavailable,
+            Err(e) => return Err(e),
+        };
+        let h = with(|d| {
+            let h = d.handle();
+            d.libraries.insert(h, pending);
+            Ok(h)
+        })?;
+        if crate::log_enabled() {
+            eprintln!("[zluda_agx] library {h:#x}: registered for LAZY device loading");
+        }
+        return out(library, CUlibrary(h as *mut _));
+    }
     let mut m = CUmodule(std::ptr::null_mut());
     cuModuleLoadData(&mut m, code)?;
     out(library, CUlibrary(m.0 as *mut _))
 }
 
 pub(crate) unsafe fn cuLibraryUnload(library: CUlibrary) -> CUresult {
+    match with(|d| Ok(d.libraries.remove(&(library.0 as usize))))? {
+        Some(Library::Loaded(h)) => return cuModuleUnload(CUmodule(h as *mut _)),
+        Some(_) => return Ok(()),
+        None => {},
+    }
     cuModuleUnload(CUmodule(library.0 as *mut _))
 }
 
 pub(crate) unsafe fn cuLibraryGetModule(pmod: *mut CUmodule, library: CUlibrary) -> CUresult {
-    out(pmod, CUmodule(library.0 as *mut _))
+    if pmod.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let module = with(|d| {
+        let h = library.0 as usize;
+        match d.libraries.get(&h).cloned() {
+            Some(Library::Unavailable) => return Err(CUerror::NO_BINARY_FOR_GPU),
+            Some(Library::Loaded(module)) => return Ok(module),
+            Some(Library::Ptx(ptx)) => {
+                let module = if ptx.as_ref() == [0] {
+                    let loaded = LoadedModule::new(&mut d.ctx.vm, module::Module::default()).map_err(from_io)?;
+                    let module = d.handle();
+                    d.modules.insert(module, loaded);
+                    module
+                } else {
+                    load_module_data(d, ptx.as_ptr())?
+                };
+                d.libraries.insert(h, Library::Loaded(module));
+                return Ok(module);
+            },
+            None => {},
+        }
+        if !d.modules.contains_key(&h) {
+            return Err(CUerror::INVALID_HANDLE);
+        }
+        Ok(h)
+    })?;
+    out(pmod, CUmodule(module as *mut _))
 }
 
 pub(crate) unsafe fn cuLibraryGetKernel(pkernel: *mut CUkernel, library: CUlibrary, name: *const c_char) -> CUresult {
+    if pkernel.is_null() || name.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let mut module = CUmodule(std::ptr::null_mut());
+    cuLibraryGetModule(&mut module, library)?;
     let mut f = CUfunction(std::ptr::null_mut());
-    cuModuleGetFunction(&mut f, CUmodule(library.0 as *mut _), name)?;
+    cuModuleGetFunction(&mut f, module, name)?;
     out(pkernel, f.0 as CUkernel)
 }
 
@@ -2182,7 +2298,11 @@ pub(crate) unsafe fn cuFuncSetCacheConfig(hfunc: CUfunction, _config: CUfunc_cac
 }
 
 pub(crate) unsafe fn cuModuleGetLoadingMode(mode: *mut CUmoduleLoadingMode) -> CUresult {
-    out(mode, CUmoduleLoadingMode_enum::CU_MODULE_EAGER_LOADING)
+    out(mode, if std::env::var("CUDA_MODULE_LOADING").is_ok_and(|v| v == "LAZY") {
+        CUmoduleLoadingMode_enum::CU_MODULE_LAZY_LOADING
+    } else {
+        CUmoduleLoadingMode_enum::CU_MODULE_EAGER_LOADING
+    })
 }
 
 pub(crate) unsafe fn cuCtxGetApiVersion(_ctx: CUcontext, version: *mut c_uint) -> CUresult {
@@ -3398,6 +3518,46 @@ pub(crate) unsafe fn cuGraphLaunch(exec: CUgraphExec, s: CUstream) -> CUresult {
     })
 }
 
+/// Captured graphs are linear operation lists. Preserve their topology and
+/// node types while replacing owned parameters for subsequent launches.
+pub(crate) unsafe fn cuGraphExecUpdate_v2(exec: CUgraphExec, graph: CUgraph, info: *mut CUgraphExecUpdateResultInfo) -> CUresult {
+    let info = info.as_mut().ok_or(CUerror::INVALID_VALUE)?;
+    info.errorNode = std::ptr::null_mut();
+    info.errorFromNode = std::ptr::null_mut();
+    info.result = CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR;
+    with(|d| {
+        let next = d.graphs.get(&(graph as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        let previous = d.execs.get(&(exec as usize)).ok_or(CUerror::INVALID_HANDLE)?;
+        let failure = if previous.len() != next.len() {
+            Some(CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_TOPOLOGY_CHANGED)
+        } else if previous.iter().zip(next).any(|(a, b)| std::mem::discriminant(a) != std::mem::discriminant(b)) {
+            Some(CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_NODE_TYPE_CHANGED)
+        } else {
+            None
+        };
+        if let Some(reason) = failure {
+            info.result = reason;
+            return Err(CUerror::GRAPH_EXEC_UPDATE_FAILURE);
+        }
+        d.execs.insert(exec as usize, next.clone());
+        info.result = CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_SUCCESS;
+        Ok(())
+    })
+}
+
+pub(crate) unsafe fn cuGraphExecUpdate(exec: CUgraphExec, graph: CUgraph, error_node: *mut CUgraphNode, result: *mut CUgraphExecUpdateResult) -> CUresult {
+    if result.is_null() {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let mut info: CUgraphExecUpdateResultInfo = std::mem::zeroed();
+    let status = cuGraphExecUpdate_v2(exec, graph, &mut info);
+    if !error_node.is_null() {
+        *error_node = info.errorNode;
+    }
+    *result = info.result;
+    status
+}
+
 pub(crate) unsafe fn cuGraphExecDestroy(exec: CUgraphExec) -> CUresult {
     with(|d| d.execs.remove(&(exec as usize)).map(|_| ()).ok_or(CUerror::INVALID_HANDLE))
 }
@@ -3907,6 +4067,205 @@ mod tests {
     }
 
     // A fat binary as nvcc lays it out: a wrapper, a fatbin header, then file headers with their payloads.
+    #[test]
+    fn empty_fatbin_library_lifecycle() {
+        let header = cuda_types::dark_api::FatbinHeader {
+            magic: 0xba55ed50, version: 1, header_size: 16, files_size: 0,
+        };
+        let image = &header as *const _ as *const c_void;
+        unsafe {
+            assert_eq!(ptx_in_fatbin(image.cast()).unwrap(), [0]);
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let mut library = CUlibrary(std::ptr::null_mut());
+            cuMemFree_v2(CUdeviceptr_v2(std::ptr::null_mut())).unwrap();
+            cuLibraryLoadData(&mut library, image, std::ptr::null_mut(), std::ptr::null_mut(), 0,
+                std::ptr::null_mut(), std::ptr::null_mut(), 0).unwrap();
+            let mut m = CUmodule(std::ptr::null_mut());
+            cuLibraryGetModule(&mut m, library).unwrap();
+            let mut f = CUfunction(std::ptr::null_mut());
+            assert_eq!(cuModuleGetFunction(&mut f, m, c"missing".as_ptr()), Err(CUerror::NOT_FOUND));
+            cuLibraryUnload(library).unwrap();
+            assert_eq!(cuModuleGetFunction(&mut f, m, c"missing".as_ptr()), Err(CUerror::INVALID_HANDLE));
+            // LAZY registration owns its input and materializes only once.
+            load_library_data(&mut library, image, true).unwrap();
+            let registered = library.0 as usize;
+            assert!(with(|d| Ok(matches!(d.libraries.get(&registered), Some(Library::Ptx(_))))).unwrap());
+            cuLibraryGetModule(&mut m, library).unwrap();
+            let mut again = CUmodule(std::ptr::null_mut());
+            cuLibraryGetModule(&mut again, library).unwrap();
+            assert_eq!(m, again);
+            cuLibraryUnload(library).unwrap();
+            assert_eq!(cuLibraryGetModule(&mut m, library), Err(CUerror::INVALID_HANDLE));
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+    }
+
+    #[test]
+    fn nonempty_native_fatbin_is_not_an_empty_library() {
+        let mut words = [0u64; 10];
+        let b = unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr().cast::<u8>(), 80) };
+        b[..4].copy_from_slice(&0xba55ed50u32.to_le_bytes());
+        b[4..6].copy_from_slice(&1u16.to_le_bytes());
+        b[6..8].copy_from_slice(&16u16.to_le_bytes());
+        b[8..16].copy_from_slice(&64u64.to_le_bytes());
+        b[16..18].copy_from_slice(&2u16.to_le_bytes());
+        b[18..20].copy_from_slice(&0x101u16.to_le_bytes());
+        b[20..24].copy_from_slice(&64u32.to_le_bytes());
+        assert_eq!(unsafe { ptx_in_fatbin(b.as_ptr()) }, Err(CUerror::NO_BINARY_FOR_GPU));
+        unsafe {
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let mut library = CUlibrary(std::ptr::null_mut());
+            assert_eq!(load_library_data(&mut library, b.as_ptr().cast(), false), Err(CUerror::NO_BINARY_FOR_GPU));
+            load_library_data(&mut library, b.as_ptr().cast(), true).unwrap();
+            let mut m = CUmodule(std::ptr::null_mut());
+            assert_eq!(cuLibraryGetModule(&mut m, library), Err(CUerror::NO_BINARY_FOR_GPU));
+            let mut kernel = std::ptr::null_mut();
+            assert_eq!(cuLibraryGetKernel(&mut kernel, library, c"missing".as_ptr()), Err(CUerror::NO_BINARY_FOR_GPU));
+            cuLibraryUnload(library).unwrap();
+            assert_eq!(cuLibraryGetModule(&mut m, library), Err(CUerror::INVALID_HANDLE));
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+        // A malformed file must not be accepted as an empty library either.
+        b[18..20].copy_from_slice(&0u16.to_le_bytes());
+        assert_eq!(unsafe { ptx_in_fatbin(b.as_ptr()) }, Err(CUerror::NO_BINARY_FOR_GPU));
+    }
+
+    #[test]
+    fn lazy_ptx_library_owns_input_and_executes() {
+        if std::env::var_os("ZLUDA_AGX_ZOC").is_none() {
+            eprintln!("skipped: set ZLUDA_AGX_ZOC for lazy library GPU execution");
+            return;
+        }
+        let ptx = b".version 8.0\n.target sm_80\n.address_size 64\n\
+            .visible .entry write_answer(.param .u64 output) {\n\
+            .reg .u64 ptr; ld.param.u64 ptr, [output];\n\
+            st.global.u32 [ptr], 42; ret; }\n\0";
+        let mut words = vec![0u64; (80 + ptx.len()).div_ceil(8)];
+        let bytes = unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr().cast::<u8>(), words.len() * 8) };
+        bytes[..4].copy_from_slice(&0xba55ed50u32.to_le_bytes());
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&16u16.to_le_bytes());
+        bytes[8..16].copy_from_slice(&((64 + ptx.len()) as u64).to_le_bytes());
+        bytes[16..18].copy_from_slice(&1u16.to_le_bytes());
+        bytes[18..20].copy_from_slice(&0x101u16.to_le_bytes());
+        bytes[20..24].copy_from_slice(&64u32.to_le_bytes());
+        bytes[24..28].copy_from_slice(&(ptx.len() as u32).to_le_bytes());
+        bytes[44..48].copy_from_slice(&80u32.to_le_bytes());
+        bytes[80..80 + ptx.len()].copy_from_slice(ptx);
+        unsafe {
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let mut library = CUlibrary(std::ptr::null_mut());
+            load_library_data(&mut library, bytes.as_ptr().cast(), true).unwrap();
+            assert!(with(|d| Ok(matches!(d.libraries.get(&(library.0 as usize)), Some(Library::Ptx(_))))).unwrap());
+            // The application may release the original fatbin after registration.
+            words.fill(0);
+            let mut kernel = std::ptr::null_mut();
+            cuLibraryGetKernel(&mut kernel, library, c"write_answer".as_ptr()).unwrap();
+            let mut function = CUfunction(std::ptr::null_mut());
+            cuKernelGetFunction(&mut function, kernel).unwrap();
+            let mut output = CUdeviceptr_v2(std::ptr::null_mut());
+            cuMemAlloc_v2(&mut output, 4).unwrap();
+            let mut args = [&mut output as *mut _ as *mut c_void];
+            cuLaunchKernel(function, 1, 1, 1, 1, 1, 1, 0, CUstream(std::ptr::null_mut()), args.as_mut_ptr(), std::ptr::null_mut()).unwrap();
+            let mut answer = 0u32;
+            cuMemcpyDtoH_v2((&mut answer as *mut u32).cast(), output, 4).unwrap();
+            assert_eq!(answer, 42);
+            cuMemFree_v2(output).unwrap();
+            cuLibraryUnload(library).unwrap();
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+    }
+
+    #[test]
+    fn vmm_adjacent_mappings_are_disjoint() {
+        unsafe {
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let page = VMM_GRANULARITY as usize;
+            let mut address = CUdeviceptr_v2(std::ptr::null_mut());
+            cuMemAddressReserve(&mut address, 3 * page, page, CUdeviceptr_v2(std::ptr::null_mut()), 0).unwrap();
+            let mut prop: CUmemAllocationProp = std::mem::zeroed();
+            prop.type_ = CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+            prop.location.type_ = CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+            let mut physical = 0;
+            cuMemCreate(&mut physical, 3 * page, &prop, 0).unwrap();
+            let at = |i| CUdeviceptr_v2((address.0 as usize + i * page) as *mut c_void);
+            cuMemMap(at(0), page, 0, physical, 0).unwrap();
+            cuMemMap(at(1), page, page, physical, 0).unwrap();
+            cuMemMap(at(2), page, 2 * page, physical, 0).unwrap();
+            assert!(cuMemMap(at(1), page, page, physical, 0).is_err());
+            assert!(cuMemMap(at(0), 3 * page, 0, physical, 0).is_err());
+            for i in 0..3 {
+                let value = 42u32 + i as u32;
+                cuMemcpyHtoD_v2(at(i), (&value as *const u32).cast(), 4).unwrap();
+            }
+            for i in 0..3 {
+                let mut value = 0u32;
+                cuMemcpyDtoH_v2((&mut value as *mut u32).cast(), at(i), 4).unwrap();
+                assert_eq!(value, 42 + i as u32);
+            }
+            cuMemUnmap(address, 3 * page).unwrap();
+            cuMemAddressFree(address, 3 * page).unwrap();
+            cuMemRelease(physical).unwrap();
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+    }
+
+    #[test]
+    fn graph_update_replaces_parameters_and_preserves_exec_on_failure() {
+        unsafe {
+            cuInit(0).unwrap();
+            let mut ctx = CUcontext(std::ptr::null_mut());
+            cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
+            let mut stream = CUstream(std::ptr::null_mut());
+            cuStreamCreate(&mut stream, 0).unwrap();
+            let mut memory = CUdeviceptr_v2(std::ptr::null_mut());
+            cuMemAlloc_v2(&mut memory, 4).unwrap();
+            let capture = |value, count| {
+                cuStreamBeginCapture_v2(stream, CUstreamCaptureMode::CU_STREAM_CAPTURE_MODE_GLOBAL).unwrap();
+                for _ in 0..count {
+                    cuMemsetD32Async(memory, value, 1, stream).unwrap();
+                }
+                let mut graph = std::ptr::null_mut();
+                cuStreamEndCapture(stream, &mut graph).unwrap();
+                graph
+            };
+            let initial = capture(7, 1);
+            let mut exec = std::ptr::null_mut();
+            cuGraphInstantiateWithFlags(&mut exec, initial, 0).unwrap();
+            cuGraphLaunch(exec, stream).unwrap();
+            cuStreamSynchronize(stream).unwrap();
+            let mut value = 0u32;
+            cuMemcpyDtoH_v2((&mut value as *mut u32).cast(), memory, 4).unwrap();
+            assert_eq!(value, 7);
+            let update = capture(9, 1);
+            let mut info: CUgraphExecUpdateResultInfo = std::mem::zeroed();
+            cuGraphExecUpdate_v2(exec, update, &mut info).unwrap();
+            assert_eq!(info.result, CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_SUCCESS);
+            cuGraphDestroy(update).unwrap();
+            let invalid = capture(12, 2);
+            assert_eq!(cuGraphExecUpdate_v2(exec, invalid, &mut info), Err(CUerror::GRAPH_EXEC_UPDATE_FAILURE));
+            assert_eq!(info.result, CUgraphExecUpdateResult::CU_GRAPH_EXEC_UPDATE_ERROR_TOPOLOGY_CHANGED);
+            cuGraphLaunch(exec, stream).unwrap();
+            cuStreamSynchronize(stream).unwrap();
+            cuMemcpyDtoH_v2((&mut value as *mut u32).cast(), memory, 4).unwrap();
+            assert_eq!(value, 9);
+            cuGraphDestroy(invalid).unwrap();
+            cuGraphDestroy(initial).unwrap();
+            cuGraphExecDestroy(exec).unwrap();
+            cuMemFree_v2(memory).unwrap();
+            cuStreamDestroy_v2(stream).unwrap();
+            cuCtxDestroy_v2(ctx).unwrap();
+        }
+    }
+
     #[test]
     fn picks_the_newest_ptx_of_a_fat_binary() {
         fn file(kind: u16, sm: u32, payload: &[u8]) -> Vec<u8> {

@@ -153,8 +153,11 @@ impl Context {
     /// cuMemMap: `size` bytes of the physical allocation `phys` from `offset`, at `va` (in a range from
     /// `vm.reserve`).
     pub fn mem_map(&mut self, va: u64, phys: &std::rc::Rc<Bo>, offset: u64, size: u64) -> io::Result<()> {
-        if find(&self.allocs, va, 0, |a| a.1).is_some() || find(&self.allocs, va + size.max(1) - 1, 0, |a| a.1).is_some()
-            || self.allocs.range(va..va + size).next().is_some()
+        let end = va.checked_add(size).filter(|_| size != 0).ok_or_else(|| invalid("empty or overflowing mapping"))?;
+        // Test actual bytes: a zero-length query at the previous allocation's
+        // end would incorrectly reject an adjacent mapping.
+        if find(&self.allocs, va, 1, |a| a.1).is_some() || find(&self.allocs, end - 1, 1, |a| a.1).is_some()
+            || self.allocs.range(va..end).next().is_some()
         {
             return Err(invalid(format!("{va:#x}+{size} overlaps a mapping")));
         }

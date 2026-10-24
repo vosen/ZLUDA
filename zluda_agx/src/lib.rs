@@ -166,6 +166,8 @@ cuda_macros::cuda_function_declarations!(
             cuGraphCreate,
             cuGraphDestroy,
             cuGraphExecDestroy,
+            cuGraphExecUpdate,
+            cuGraphExecUpdate_v2,
             cuGraphInstantiateWithFlags,
             cuGraphInstantiate_v2,
             cuGraphLaunch,

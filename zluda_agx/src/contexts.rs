@@ -60,7 +60,7 @@ impl<T> Contexts<T> {
     /// The context calls on this thread use: the top of its stack, else the primary context (the CUDA runtime makes
     /// the primary context current before its first call; driver API programs that never set a context get it too).
     pub(crate) fn current(&self) -> usize {
-        STACK.with(|s| s.borrow().last().copied()).filter(|h| self.contains(*h)).unwrap_or(self.primary)
+        top().filter(|h| self.contains(*h)).unwrap_or(self.primary)
     }
 }
 
@@ -71,7 +71,9 @@ thread_local! {
 
 /// The thread's current context as `cuCtxGetCurrent` reports it: none until one is made current.
 pub(crate) fn top() -> Option<usize> {
-    STACK.with(|s| s.borrow().last().copied())
+    // CUDA runtime atexit handlers can unload libraries after Rust has dropped
+    // this thread's context stack. The registry and primary context still live.
+    STACK.try_with(|s| s.borrow().last().copied()).ok().flatten()
 }
 
 pub(crate) fn push(h: usize) {
@@ -106,6 +108,26 @@ pub(crate) fn forget(h: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn context_lookup_after_thread_stack_destruction() {
+        static CHECKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        struct Probe;
+        impl Drop for Probe {
+            fn drop(&mut self) {
+                assert_eq!(top(), None);
+                assert_eq!(Contexts::new(1, ()).current(), 1);
+                CHECKED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        thread_local! { static LATE_DROP: Probe = const { Probe }; }
+        std::thread::spawn(|| {
+            // TLS destructors run in reverse initialization order.
+            LATE_DROP.with(|_| {});
+            push(7);
+        }).join().unwrap();
+        assert!(CHECKED.load(std::sync::atomic::Ordering::SeqCst));
+    }
 
     // Each test runs on its own thread, so the stacks do not interfere.
     #[test]

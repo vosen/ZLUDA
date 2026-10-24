@@ -988,7 +988,9 @@ Destroyed streams keep their queue (up to 32) for the next `cuStreamCreate`: cre
 rings and timestamp buffer) costs ~1 ms, and applications that create and destroy a stream per operation (Geekbench 7:
 ~7,800 times a run) spent ~10 s of a 156 s run in it.
 
-The kernel launches of a graph (`cuGraphLaunch`) are gathered into the control stream of one compute command, each
+Graph launches use one compute command per kernel by default. Batching produced incorrect Qwen inference
+results in the llama.cpp integration checks; it remains experimental and requires `ZLUDA_AGX_GRAPH_BATCH=1`.
+With that option, kernel launches of a graph (`cuGraphLaunch`) are gathered into the control stream of one compute command, each
 dispatch followed by the barrier after a launch, up to 64 per command; any other operation of the graph submits the
 launches gathered first. One command per launch costs ~20-30 us of host time (the submit ioctl) and ~15-20 us between
 commands on the GPU; gathered, 64 small launches take ~34 us of host time and ~5-7 us each on the GPU

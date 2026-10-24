@@ -140,7 +140,7 @@ impl KernelInfo {
 pub const MASKED_INIT_SYMBOL: &str = "__zluda_agx_masked_init";
 
 /// A compiled module: its code, the initial global data buffer, and its kernels.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Module {
     pub text: Vec<u8>,
     pub globals: Vec<u8>,
