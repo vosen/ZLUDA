@@ -1341,6 +1341,13 @@ impl CudaDarkApi for DarkApi32 {
     unsafe extern "system" fn hybrid_runtime_free(_token: usize) -> cuda_types::cuda::CUresult {
         Err(CUerror::NOT_SUPPORTED)
     }
+
+    unsafe extern "system" fn primary_ctx_retain_with_flags(
+        _dev: cuda_types::cuda::CUdevice,
+        _flags: u32,
+    ) -> cuda_types::cuda::CUresult {
+        Err(CUerror::NOT_SUPPORTED)
+    }
 }
 
 const DLL_PROCESS_DETACH: u32 = 0;

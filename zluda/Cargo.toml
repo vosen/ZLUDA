@@ -34,9 +34,12 @@ libloading = "0.8"
 zluda_windows = { path = "../zluda_windows" }
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Direct3D11",
     "Win32_System_LibraryLoader",
 ] }
-
+cl3 = "0.13"
+opencl3 = { version = "0.12" }
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"

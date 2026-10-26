@@ -22,6 +22,8 @@ pub(crate) struct ContextState {
     pub(crate) storage: FxHashMap<usize, StorageData>,
 }
 
+unsafe impl Send for ContextState {}
+
 pub(crate) struct StorageData {
     pub(crate) value: usize,
     pub(crate) reset_cb: Option<extern "system" fn(CUcontext, *mut c_void, *mut c_void)>,
@@ -330,6 +332,15 @@ pub(crate) unsafe fn get_api_version(
 ) -> CUresult {
     // That's what original CUDA driver does
     *version = 3020;
+    Ok(())
+}
+
+pub(crate) unsafe fn get_shared_memory_config(config: &mut CUsharedconfig) -> CUresult {
+    *config = CUsharedconfig::CU_SHARED_MEM_CONFIG_DEFAULT_BANK_SIZE;
+    Ok(())
+}
+
+pub(crate) unsafe fn set_shared_memory_config(_: CUsharedconfig) -> CUresult {
     Ok(())
 }
 

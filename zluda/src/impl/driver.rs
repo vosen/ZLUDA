@@ -63,6 +63,8 @@ pub(crate) struct AllocationInfo {
 pub(crate) struct Device {
     pub(crate) _comgr_isa: CString,
     primary_context: LiveCheck<context::Context>,
+    #[cfg(windows)]
+    pub(crate) opencl_context: Mutex<Option<super::graphics::OpenCLContext>>,
 }
 
 impl Device {
@@ -106,6 +108,8 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                             .map_err(|_| CUerror::UNKNOWN)?
                             .to_owned(),
                             primary_context: LiveCheck::new(context::Context::new(i)?),
+                            #[cfg(windows)]
+                            opencl_context: Mutex::new(None),
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?,
@@ -143,9 +147,24 @@ unsafe impl<const S: usize> Sync for UnknownBuffer<S> {}
 static UNKNOWN_BUFFER1: UnknownBuffer<1024> = UnknownBuffer::new();
 static UNKNOWN_BUFFER2: UnknownBuffer<14> = UnknownBuffer::new();
 
+#[repr(C)]
+struct AllocRecord {
+    x: usize,
+    y: usize,
+}
+
 struct DarkApi {}
 
 impl ::dark_api::cuda::CudaDarkApi for DarkApi {
+    unsafe extern "system" fn primary_ctx_retain_with_flags(
+        dev: cuda_types::cuda::CUdevice,
+        flags: u32,
+    ) -> cuda_types::cuda::CUresult {
+        let mut ctx = mem::zeroed();
+        device::primary_context_retain(&mut ctx, dev)?;
+        device::primary_context_set_flags_v2(dev, flags)
+    }
+
     unsafe extern "system" fn get_module_from_cubin(
         result: *mut cuda_types::cuda::CUmodule,
         fatbinc_wrapper: *const cuda_types::dark_api::FatbincWrapper,
@@ -307,26 +326,40 @@ impl ::dark_api::cuda::CudaDarkApi for DarkApi {
     }
 
     unsafe extern "system" fn ctx_create_v2_bypass(
-        _pctx: *mut cuda_types::cuda::CUcontext,
-        _flags: ::std::os::raw::c_uint,
-        _dev: cuda_types::cuda::CUdevice,
+        ctx: *mut cuda_types::cuda::CUcontext,
+        flags: ::std::os::raw::c_uint,
+        dev: cuda_types::cuda::CUdevice,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        let Some(ctx) = ctx.as_mut() else {
+            return Err(CUerror::INVALID_VALUE);
+        };
+        context::create_v2(ctx, flags, dev)
     }
 
     unsafe extern "system" fn heap_alloc(
-        _heap_alloc_record_ptr: *mut *const std::ffi::c_void,
-        _arg2: usize,
-        _arg3: usize,
+        heap_alloc_record_ptr: *mut *const std::ffi::c_void,
+        arg2: usize,
+        arg3: usize,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        let heap_alloc_record_ptr = heap_alloc_record_ptr as *mut *mut AllocRecord;
+        let alloc_record = Box::into_raw(Box::new(AllocRecord { x: arg2, y: arg3 }));
+        *heap_alloc_record_ptr = alloc_record;
+        Ok(())
     }
 
     unsafe extern "system" fn heap_free(
-        _heap_alloc_record_ptr: *const std::ffi::c_void,
-        _arg2: *mut usize,
+        heap_alloc_record_ptr: *const std::ffi::c_void,
+        arg2: *mut usize,
     ) -> cuda_types::cuda::CUresult {
-        Err(r#impl::unimplemented())
+        if !crate::initialized() {
+            return Err(CUerror::DEINITIALIZED);
+        }
+        let heap_alloc_record_ptr = heap_alloc_record_ptr as *mut AllocRecord;
+        let record = Box::from_raw(heap_alloc_record_ptr);
+        if !arg2.is_null() {
+            *arg2 = record.y;
+        }
+        Ok(())
     }
 
     unsafe extern "system" fn device_get_attribute_ext(
@@ -844,5 +877,23 @@ mod tests {
         let mut primary_ctx = std::mem::zeroed();
         api.cuDevicePrimaryCtxRetain(&mut primary_ctx, 0);
         assert_eq!(dark_ctx.0, primary_ctx.0);
+    }
+
+    #[test_cuda]
+    unsafe fn primary_ctx_set_flags(api: impl CudaApi) {
+        api.cuInit(0);
+        let mut table_ptr = std::ptr::null();
+        api.cuGetExportTable(&mut table_ptr, &dark_api::cuda::CudartInterface::GUID);
+        let cuda_rt_iface = dark_api::cuda::CudartInterface::new(table_ptr);
+        cuda_rt_iface.primary_ctx_retain_with_flags(0, 2).unwrap();
+        let mut flags = u32::MAX;
+        let mut active = i32::MAX;
+        api.cuDevicePrimaryCtxGetState(0, &mut flags, &mut active);
+        assert_eq!(flags, 2);
+        assert_eq!(active, 1);
+        api.cuDevicePrimaryCtxReset_v2(0);
+        api.cuDevicePrimaryCtxGetState(0, &mut flags, &mut active);
+        assert_eq!(flags, 0);
+        assert_eq!(active, 0);
     }
 }

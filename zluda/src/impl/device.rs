@@ -439,6 +439,13 @@ pub(crate) fn get_name(
     Ok(())
 }
 
+pub(crate) fn total_memory(bytes: &mut u32, dev: hipDevice_t) -> hipError_t {
+    let mut full_size = 0usize;
+    total_mem_v2(&mut full_size, dev)?;
+    *bytes = usize::min(full_size, u32::MAX as usize) as u32;
+    Ok(())
+}
+
 pub(crate) fn total_mem_v2(bytes: *mut usize, dev: hipDevice_t) -> hipError_t {
     unsafe { hipDeviceTotalMem(bytes, dev) }
 }

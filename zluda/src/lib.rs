@@ -64,6 +64,20 @@ macro_rules! implemented_in_function {
     };
 }
 
+#[cfg(windows)]
+macro_rules! implemented_windows {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        implemented!($($abi fn $fn_name( $($arg_id : $arg_type),* ) -> $ret_type;)*);
+    }
+}
+
+#[cfg(not(windows))]
+macro_rules! implemented_windows {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        unimplemented!($($abi fn $fn_name( $($arg_id : $arg_type),* ) -> $ret_type;)*);
+    }
+}
+
 cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented
@@ -79,6 +93,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxGetDevice_v2,
             cuCtxGetDevice,
             cuCtxGetLimit,
+            cuCtxGetSharedMemConfig,
             cuCtxGetStreamPriorityRange,
             cuCtxPopCurrent_v2,
             cuCtxPopCurrent,
@@ -88,6 +103,7 @@ cuda_macros::cuda_function_declarations!(
             cuCtxSetCurrent,
             cuCtxSetFlags,
             cuCtxSetLimit,
+            cuCtxSetSharedMemConfig,
             cuCtxSynchronize_v2,
             cuCtxSynchronize,
             cuDeviceCanAccessPeer,
@@ -109,6 +125,7 @@ cuda_macros::cuda_function_declarations!(
             cuDevicePrimaryCtxSetFlags_v2,
             cuDevicePrimaryCtxSetFlags,
             cuDeviceTotalMem_v2,
+            cuDeviceTotalMem,
             cuDriverGetVersion,
             cuEventCreate,
             cuEventDestroy_v2,
@@ -143,6 +160,7 @@ cuda_macros::cuda_function_declarations!(
             cuLibraryLoadData,
             cuLibraryUnload,
             cuMemAlloc_v2,
+            cuMemAllocHost_v2,
             cuMemAllocPitch_v2,
             cuMemcpy2D_v2,
             cuMemcpy2DUnaligned_v2,
@@ -215,7 +233,17 @@ cuda_macros::cuda_function_declarations!(
             cuTexRefSetFormat,
             cuThreadExchangeStreamCaptureMode,
         ],
-    implemented_in_function <= [cuLaunchKernel,]
+    implemented_in_function <= [cuLaunchKernel,],
+    implemented_windows
+        <= [
+            cuD3D11GetDevice,
+            cuGraphicsD3D11RegisterResource,
+            cuGraphicsMapResources,
+            cuGraphicsResourceSetMapFlags_v2,
+            cuGraphicsSubResourceGetMappedArray,
+            cuGraphicsUnmapResources,
+            cuGraphicsUnregisterResource,
+        ],
 );
 
 #[cfg(test)]

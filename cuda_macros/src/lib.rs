@@ -249,7 +249,7 @@ impl VisitMut for FixFnSignatures {
 }
 
 const MODULES: &[&str] = &[
-    "array", "context", "device", "driver", "event", "function", "graph", "kernel",
+    "array", "context", "d3d11", "device", "driver", "event", "function", "graph", "graphics", "kernel",
     "library", "link", "memory", "module", "pointer", "stream", "tex", "surf"
 ];
 
@@ -401,13 +401,25 @@ impl Parse for FnWithFields {
 }
 
 fn split(fn_: &str) -> Vec<String> {
+    fn needs_special_split(c: char, next: Option<char>) -> bool {
+        let Some(next_char) = next else { return false; };
+        (c.is_ascii_digit() && next_char == 'D') || (c == 'D' && next_char.is_ascii_digit())
+    }
+    // to parse segments like "2D", "D3D11" etc.
+    fn parse_special(first: char, iter: &mut iter::Peekable<impl Iterator<Item = char>>) -> String {
+        let mut segment = String::new();
+        segment.push(first.to_ascii_lowercase());
+        while let Some(c) = iter.next_if(|c| c.is_ascii_digit() || *c == 'D') {
+            segment.push(c.to_ascii_lowercase());
+        }
+        return segment;
+    }
     let mut result = Vec::new();
     let mut chars: iter::Peekable<_> = fn_.chars().peekable();
     while let Some(c) = chars.next() {
-        // Special handling of 2D/3D etc.
-        if c.is_ascii_digit() && chars.peek() == Some(&'D') {
-            chars.next();
-            result.push(format!("{c}d"));
+        let next = chars.peek().copied();
+        if needs_special_split(c, next) {
+            result.push(parse_special(c, &mut chars));
             continue;
         }
         if c.is_ascii_uppercase() {
