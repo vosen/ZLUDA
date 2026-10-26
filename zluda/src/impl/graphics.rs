@@ -37,27 +37,27 @@ pub(crate) struct OpenCLContext {
     ctx: opencl3::context::Context,
 }
 
-//                        ██                      
-//                      ██  ██                    
-//                    ██      ██                  
-//                  ██          ██                
-//                  ██          ██                
-//                ██              ██              
-//              ██      ██████      ██            
-//              ██      ██████      ██            
-//            ██        ██████        ██          
-//            ██        ██████        ██          
-//          ██          ██████          ██        
-//        ██            ██████            ██      
-//        ██            ██████            ██      
-//      ██              ██████              ██    
-//      ██                                  ██    
-//    ██                ██████                ██  
-//    ██                ██████                ██  
+//                        ██
+//                      ██  ██
+//                    ██      ██
+//                  ██          ██
+//                  ██          ██
+//                ██              ██
+//              ██      ██████      ██
+//              ██      ██████      ██
+//            ██        ██████        ██
+//            ██        ██████        ██
+//          ██          ██████          ██
+//        ██            ██████            ██
+//        ██            ██████            ██
+//      ██              ██████              ██
+//      ██                                  ██
+//    ██                ██████                ██
+//    ██                ██████                ██
 //  ██                  ██████                  ██
 //  ██                                          ██
-//    ██████████████████████████████████████████  
-//                                                
+//    ██████████████████████████████████████████
+//
 // Warning: This code is very dumb. HIP doesn't have native support for D3D11
 // interop. Instead we rely on the fact that AMD's HIP runtime and OpenCL
 // runtime share the codebase. That means we can create OpenCL memory objects

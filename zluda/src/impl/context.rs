@@ -19,7 +19,7 @@ pub(crate) struct ContextState {
     pub(crate) ref_count: u32,
     pub(crate) flags: u32,
     pub(crate) modules: FxHashSet<CUmodule>,
-    pub(crate) storage: FxHashMap<usize, StorageData>
+    pub(crate) storage: FxHashMap<usize, StorageData>,
 }
 
 unsafe impl Send for ContextState {}
