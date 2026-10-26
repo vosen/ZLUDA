@@ -1,24 +1,25 @@
 use crate::r#impl::context::{self, Context};
 use cl3::{
-    d3d11::{clCreateFromD3D11Texture2DKHR_fn, clCreateFromD3D11Texture3DKHR_fn},
-    ext::{cl_icd::clGetExtensionFunctionAddressForPlatform_t, CL_MEM_READ_WRITE},
+    ext::CL_MEM_READ_WRITE,
     gl::{cl_context, cl_int, cl_mem, cl_mem_flags, cl_uint},
 };
 use cuda_types::cuda::*;
 use hip_runtime_sys::{
     hipArray_t, hipError_t, hipGraphicsMapResources, hipGraphicsResource_t,
-    hipGraphicsSubResourceGetMappedArray, hipGraphicsUnmapResources, hipGraphicsUnregisterResource,
-    hipStream_t,
+    hipGraphicsSubResourceGetMappedArray, hipGraphicsUnmapResources, hipStream_t,
 };
 use std::{ffi::c_void, mem, ptr};
 use windows::{
     core::Interface,
-    Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Resource, ID3D11Texture2D, ID3D11Texture3D},
+    Win32::Graphics::{
+        Direct3D11::{ID3D11Device, ID3D11Resource, ID3D11Texture2D, ID3D11Texture3D},
+        Dxgi::IDXGIAdapter,
+    },
 };
 use zluda_common::FromCuda;
 
 pub(crate) struct OpenCLContext {
-    dll: libloading::os::windows::Library,
+    _dll: libloading::os::windows::Library,
     cl_create_from_d3d11_texture_2d_khr: unsafe extern "C" fn(
         context: cl_context,
         flags: cl_mem_flags,
@@ -33,78 +34,122 @@ pub(crate) struct OpenCLContext {
         subresource: cl_uint,
         errcode_ret: *mut cl_int,
     ) -> cl_mem,
-    platform: opencl3::platform::Platform,
     ctx: opencl3::context::Context,
 }
 
+//                        ██                      
+//                      ██  ██                    
+//                    ██      ██                  
+//                  ██          ██                
+//                  ██          ██                
+//                ██              ██              
+//              ██      ██████      ██            
+//              ██      ██████      ██            
+//            ██        ██████        ██          
+//            ██        ██████        ██          
+//          ██          ██████          ██        
+//        ██            ██████            ██      
+//        ██            ██████            ██      
+//      ██              ██████              ██    
+//      ██                                  ██    
+//    ██                ██████                ██  
+//    ██                ██████                ██  
+//  ██                  ██████                  ██
+//  ██                                          ██
+//    ██████████████████████████████████████████  
+//                                                
+// Warning: This code is very dumb. HIP doesn't have native support for D3D11
+// interop. Instead we rely on the fact that AMD's HIP runtime and OpenCL
+// runtime share the codebase. That means we can create OpenCL memory objects
+// from D3D11 resources, pass them as HIP ones and everything more or less works
 pub(crate) unsafe fn d3d11_register_resource(
     cuda_resource: &mut cuda_types::cuda::CUgraphicsResource,
     d3d_dresource: &ID3D11Resource,
     _flags: ::core::ffi::c_uint,
 ) -> CUresult {
-    let cu_ctx: CUcontext = context::get_current_context()?;
-    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
-    let mut state = ctx.state.lock().map_err(|_| CUerror::UNKNOWN)?;
     if let Ok(d3d_dresource) = d3d_dresource.cast::<ID3D11Texture3D>() {
         let device = d3d_dresource
             .GetDevice()
             .map_err(|_| CUerror::DEVICE_UNAVAILABLE)?;
-        let ctx = initialize_opencl(&mut state.opencl_context, &device)?;
         let mut errcode = 0;
-        let clmem = (ctx.cl_create_from_d3d11_texture_3d_khr)(
-            ctx.ctx.get(),
-            CL_MEM_READ_WRITE,
-            d3d_dresource.as_raw(),
-            0,
-            &mut errcode,
-        );
+        let clmem = with_opencl_context(&device, |opencl| {
+            (opencl.cl_create_from_d3d11_texture_3d_khr)(
+                opencl.ctx.get(),
+                CL_MEM_READ_WRITE,
+                d3d_dresource.as_raw(),
+                0,
+                &mut errcode,
+            )
+        })?;
+        if errcode != cl3::error_codes::CL_SUCCESS {
+            return CUresult::ERROR_UNKNOWN;
+        }
         *cuda_resource = clmem.cast();
-        return mem::transmute(errcode);
+        return Ok(());
     } else if let Ok(d3d_dresource) = d3d_dresource.cast::<ID3D11Texture2D>() {
         let device = d3d_dresource
             .GetDevice()
             .map_err(|_| CUerror::DEVICE_UNAVAILABLE)?;
-        let ctx = initialize_opencl(&mut state.opencl_context, &device)?;
         let mut errcode = 0;
-        let clmem = (ctx.cl_create_from_d3d11_texture_2d_khr)(
-            ctx.ctx.get(),
-            CL_MEM_READ_WRITE,
-            d3d_dresource.as_raw(),
-            0,
-            &mut errcode,
-        );
+        let clmem = with_opencl_context(&device, |opencl| {
+            (opencl.cl_create_from_d3d11_texture_2d_khr)(
+                opencl.ctx.get(),
+                CL_MEM_READ_WRITE,
+                d3d_dresource.as_raw(),
+                0,
+                &mut errcode,
+            )
+        })?;
+        if errcode != cl3::error_codes::CL_SUCCESS {
+            return CUresult::ERROR_UNKNOWN;
+        }
         *cuda_resource = clmem.cast();
-        return mem::transmute(errcode);
+        return Ok(());
     }
     CUresult::ERROR_INVALID_VALUE
 }
 
-fn initialize_opencl<'a>(
-    opencl_context: &'a mut Option<OpenCLContext>,
-    device: &ID3D11Device,
-) -> Result<&'a OpenCLContext, CUerror> {
-    match opencl_context {
-        Some(c) => Ok(&*c),
+fn with_opencl_context<T>(
+    d3d_device: &ID3D11Device,
+    fn_: impl FnOnce(&OpenCLContext) -> T,
+) -> Result<T, CUerror> {
+    let cu_ctx: CUcontext = context::get_current_context()?;
+    let ctx: &Context = FromCuda::<_, CUerror>::from_cuda(&cu_ctx)?;
+    let global = crate::r#impl::driver::global_state()?;
+    let device = global.devices.get(ctx.device as usize);
+    let device = device.ok_or(CUerror::INVALID_DEVICE)?;
+    let mut opencl_context = device.opencl_context.lock().map_err(|_| CUerror::UNKNOWN)?;
+    let opencl_context = match &*opencl_context {
+        Some(c) => c,
         None => {
-            let ctx = initialize_context(device).map_err(|_| CUerror::UNKNOWN)?;
+            let ctx = initialize_opencl_context(d3d_device).map_err(|_| CUerror::UNKNOWN)?;
             *opencl_context = Some(ctx);
-            Ok(opencl_context.as_ref().unwrap())
+            opencl_context.as_mut().unwrap()
         }
-    }
+    };
+    Ok(fn_(opencl_context))
 }
 
-fn initialize_context(device: &ID3D11Device) -> opencl3::Result<OpenCLContext> {
+fn initialize_opencl_context(device: &ID3D11Device) -> opencl3::Result<OpenCLContext> {
+    let adapter = device
+        .cast::<IDXGIAdapter>()
+        .map_err(|_| opencl3::error_codes::ClError(opencl3::error_codes::CL_INVALID_DEVICE))?;
+    let adapter_desc = unsafe { adapter.GetDesc() }
+        .map_err(|_| opencl3::error_codes::ClError(opencl3::error_codes::CL_INVALID_DEVICE))?;
+    let d3d_luid = adapter_desc.AdapterLuid;
     let platforms = opencl3::platform::get_platforms()?;
     for p in platforms {
         let devices = p.get_devices(cl3::device::CL_DEVICE_TYPE_GPU)?;
-        if devices.iter().any(|dev| {
+        let ocl_dev = devices.into_iter().find(|dev| {
             let dev = opencl3::device::Device::new(*dev);
-            dev.vendor_id() != Ok(0x1002)
-        }) {
+            let ocl_luid = dev.luid_khr();
+            ocl_luid == Ok(unsafe { mem::transmute::<_, [u8; 8]>(d3d_luid) })
+        });
+        let Some(ocl_dev) = ocl_dev else {
             continue;
-        }
+        };
         let opencl_context = opencl3::context::Context::from_devices(
-            &devices,
+            &[ocl_dev],
             &[
                 cl3::ext::CL_CONTEXT_PLATFORM,
                 p.id() as _,
@@ -147,14 +192,13 @@ fn initialize_context(device: &ID3D11Device) -> opencl3::Result<OpenCLContext> {
             ));
         }
         return Ok(OpenCLContext {
-            dll,
+            _dll: dll,
             cl_create_from_d3d11_texture_2d_khr: unsafe {
                 mem::transmute(cl_create_from_d3d11_texture_2d_khr)
             },
             cl_create_from_d3d11_texture_3d_khr: unsafe {
                 mem::transmute(cl_create_from_d3d11_texture_3d_khr)
             },
-            platform: p,
             ctx: opencl_context,
         });
     }
@@ -171,8 +215,7 @@ pub(crate) unsafe fn map_resources(
     hipGraphicsMapResources(count as i32, resources, stream)
 }
 
-pub(crate) unsafe fn unregister_resource(resource: hipGraphicsResource_t) -> hipError_t {
-    // hipGraphicsUnregisterResource(resource)
+pub(crate) unsafe fn unregister_resource(_resource: hipGraphicsResource_t) -> hipError_t {
     Ok(())
 }
 
