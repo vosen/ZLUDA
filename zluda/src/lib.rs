@@ -64,6 +64,20 @@ macro_rules! implemented_in_function {
     };
 }
 
+#[cfg(windows)]
+macro_rules! implemented_windows {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        implemented!($($abi fn $fn_name( $($arg_id : $arg_type),* ) -> $ret_type;)*);
+    }
+}
+
+#[cfg(not(windows))]
+macro_rules! implemented_windows {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        unimplemented!($($abi fn $fn_name( $($arg_id : $arg_type),* ) -> $ret_type;)*);
+    }
+}
+
 cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented
@@ -92,7 +106,6 @@ cuda_macros::cuda_function_declarations!(
             cuCtxSetSharedMemConfig,
             cuCtxSynchronize_v2,
             cuCtxSynchronize,
-            cuD3D11GetDevice,
             cuDeviceCanAccessPeer,
             cuDeviceComputeCapability,
             cuDeviceGet,
@@ -133,12 +146,6 @@ cuda_macros::cuda_function_declarations!(
             cuGraphExecDestroy,
             cuGraphExecUpdate_v2,
             cuGraphGetNodes,
-            cuGraphicsD3D11RegisterResource,
-            cuGraphicsMapResources,
-            cuGraphicsResourceSetMapFlags_v2,
-            cuGraphicsSubResourceGetMappedArray,
-            cuGraphicsUnmapResources,
-            cuGraphicsUnregisterResource,
             cuGraphInstantiateWithFlags,
             cuGraphLaunch,
             cuInit,
@@ -226,7 +233,17 @@ cuda_macros::cuda_function_declarations!(
             cuTexRefSetFormat,
             cuThreadExchangeStreamCaptureMode,
         ],
-    implemented_in_function <= [cuLaunchKernel,]
+    implemented_in_function <= [cuLaunchKernel,],
+    implemented_windows
+        <= [
+            cuD3D11GetDevice,
+            cuGraphicsD3D11RegisterResource,
+            cuGraphicsMapResources,
+            cuGraphicsResourceSetMapFlags_v2,
+            cuGraphicsSubResourceGetMappedArray,
+            cuGraphicsUnmapResources,
+            cuGraphicsUnregisterResource,
+        ],
 );
 
 #[cfg(test)]

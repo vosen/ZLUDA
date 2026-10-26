@@ -63,6 +63,7 @@ pub(crate) struct AllocationInfo {
 pub(crate) struct Device {
     pub(crate) _comgr_isa: CString,
     primary_context: LiveCheck<context::Context>,
+    #[cfg(windows)]
     pub(crate) opencl_context: Mutex<Option<super::graphics::OpenCLContext>>,
 }
 
@@ -107,6 +108,7 @@ pub(crate) fn global_state() -> Result<&'static GlobalState, CUerror> {
                             .map_err(|_| CUerror::UNKNOWN)?
                             .to_owned(),
                             primary_context: LiveCheck::new(context::Context::new(i)?),
+                            #[cfg(windows)]
                             opencl_context: Mutex::new(None),
                         })
                     })
