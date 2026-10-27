@@ -4081,6 +4081,16 @@ mod tests {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../ptx/src/test/spirv_run/");
         let (add, mul) = (std::fs::read(format!("{dir}add.ptx")).unwrap(), std::fs::read(format!("{dir}mul_lo.ptx")).unwrap());
         let args: Vec<String> = ["--target", "agx", "--arch", "agx-g14c", "--object-only"].iter().map(|a| a.to_string()).collect();
+        // the server is the process's: other tests compiling at the same time make it busy (None) for a moment
+        let served = |sources: &[&[u8]]| {
+            for _ in 0..1000 {
+                if let Some(r) = zoc_server::compile(&zoc, &args, sources) {
+                    return r;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            panic!("the zoc server stayed busy");
+        };
         let one_shot = |files: &[&str]| {
             let out = tempfile::tempdir().unwrap();
             let status = std::process::Command::new(&zoc)
@@ -4095,13 +4105,13 @@ mod tests {
         };
         // a module, a link of two, then the first again (nothing kept from the earlier requests)
         for (sources, files) in [(vec![&add[..]], vec!["add.ptx"]), (vec![&add[..], &mul[..]], vec!["add.ptx", "mul_lo.ptx"]), (vec![&add[..]], vec!["add.ptx"])] {
-            let (object, _) = zoc_server::compile(&zoc, &args, &sources).expect("server").expect("compiled");
+            let (object, _) = served(&sources).expect("compiled");
             assert_eq!(object, one_shot(&files), "{files:?}");
         }
         // a compile error comes back as an error, and the server stays usable
         let bad = b".version 7.0\n.target sm_80\n.address_size 64\n.visible .entry k() { bogus.instr; }\n";
-        assert!(zoc_server::compile(&zoc, &args, &[&bad[..]]).expect("server").is_err());
-        assert!(zoc_server::compile(&zoc, &args, &[&add[..]]).expect("server").is_ok());
+        assert!(served(&[&bad[..]]).is_err());
+        assert!(served(&[&add[..]]).is_ok());
     }
 
     // Needs zoc built with the agx feature: target/debug/zoc, or ZLUDA_AGX_ZOC.
@@ -4177,7 +4187,11 @@ mod tests {
                     .visible .entry first() { ret; }\n\
                     .visible .entry second() { ret; }\n\0";
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut module = CUmodule(std::ptr::null_mut());
@@ -4214,7 +4228,11 @@ mod tests {
         let image = &header as *const _ as *const c_void;
         unsafe {
             assert_eq!(ptx_in_fatbin(image.cast()).unwrap(), [0]);
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4254,7 +4272,11 @@ mod tests {
         b[20..24].copy_from_slice(&64u32.to_le_bytes());
         assert_eq!(unsafe { ptx_in_fatbin(b.as_ptr()) }, Err(CUerror::NO_BINARY_FOR_GPU));
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4296,7 +4318,11 @@ mod tests {
         bytes[44..48].copy_from_slice(&80u32.to_le_bytes());
         bytes[80..80 + ptx.len()].copy_from_slice(ptx);
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4324,7 +4350,11 @@ mod tests {
     #[test]
     fn vmm_adjacent_mappings_are_disjoint() {
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let page = VMM_GRANULARITY as usize;
@@ -4360,7 +4390,11 @@ mod tests {
     #[test]
     fn graph_update_replaces_parameters_and_preserves_exec_on_failure() {
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut stream = CUstream(std::ptr::null_mut());
