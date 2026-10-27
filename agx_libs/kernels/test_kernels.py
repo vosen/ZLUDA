@@ -337,21 +337,28 @@ def gelu(x):
     return 0.5 * x * (1 + math.tanh(0.7978845608 * (x + 0.044715 * x ** 3)))
 
 
-def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f"):
+def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f", batch=1):
+    """batch > 1: that many matrices (and biases) with gaps between them, in one launch."""
     ld = M + 3
-    D = rounded([rnd.uniform(-3, 3) for _ in range(ld * N)], t)
-    bias = rounded([rnd.uniform(-1, 1) for _ in range(M)], t)
+    stride, bstride = ld * N + 5, M + 2
+    D = rounded([rnd.uniform(-3, 3) for _ in range(stride * batch)], t)
+    bias = rounded([rnd.uniform(-1, 1) for _ in range(bstride * batch)], t)
     kernel = "agx_epilogue_f32" if t == "f" else "agx_epilogue_f16"
     (got,) = run(a, obj, kernel,
                  [("buf", pack(D, t), True), ("buf", pack(bias, t)), ("i64", M), ("i64", N), ("i64", ld),
-                  ("i64", has_bias), ("i64", act)],
-                 (-(-M // 16) * 16, -(-N // 8) * 8), (16, 8), tmp)
+                  ("i64", has_bias), ("i64", act), ("i64", stride if batch > 1 else 0),
+                  ("i64", bstride if batch > 1 else 0)],
+                 (-(-M // 16) * 16, -(-N // 8) * 8, batch), (16, 8), tmp)
     want = list(D)
-    for j in range(N):
-        for i in range(M):
-            x = D[j * ld + i] + (bias[i] if has_bias else 0.0)
-            want[j * ld + i] = max(x, 0.0) if act == 1 else gelu(x) if act == 2 else x
-    return close(unpack(got, t), want, [j * ld + i for j in range(N) for i in range(M)], 2e-5 if t == "f" else 2e-3)
+    idx = []
+    for e in range(batch):
+        for j in range(N):
+            for i in range(M):
+                p = e * stride + j * ld + i
+                x = D[p] + (bias[e * bstride + i] if has_bias else 0.0)
+                want[p] = max(x, 0.0) if act == 1 else gelu(x) if act == 2 else x
+                idx.append(p)
+    return close(unpack(got, t), want, idx, 2e-5 if t == "f" else 2e-3)
 
 
 class Conv:
@@ -2379,6 +2386,8 @@ def main():
                     for has_bias, act, label in ((1, 0, "bias"), (0, 1, "relu"), (1, 1, "bias+relu"), (1, 2, "bias+gelu"), (0, 2, "gelu")):
                         cases.append(("epilogue %s %s 37x11" % ("f32" if t == "f" else "f16", label),
                                       lambda t=t, hb=has_bias, ac=act: case_epilogue(a, obj, tmp, 37, 11, hb, ac, rnd, t)))
+                    cases.append(("epilogue %s batched 3 bias relu" % ("f32" if t == "f" else "f16"),
+                                  lambda t=t: case_epilogue(a, obj, tmp, 21, 9, 1, 1, rnd, t, batch=3)))
             elif "agx_sgemm_tile64" in records:
                 cases = [
                     ("tile64 128x64x40 a=1.5 b=0.5", lambda: case_tile(a, obj, tmp, 128, 64, 40, 1.5, 0.5, rnd)),

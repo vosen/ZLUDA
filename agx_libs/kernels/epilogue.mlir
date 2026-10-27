@@ -1,21 +1,28 @@
 // GEMM epilogues of zluda_blas_agx (cuBLASLt): D[i, j] = act(D[i, j] + bias[i])
 // for column-major D, act none (0), ReLU (1) or GELU (2), in f32 for f32 and
-// f16 D. One thread per element: launch an M x N grid (x along rows). For
+// f16 D. One thread per element: launch an M x N grid (x along rows), and a
+// grid depth of the batch count (D and the bias stride and bias_stride elements
+// apart). For
 // every AGX generation, like sgemm.mlir. GELU's tanh uses the hardware's exp
 // (fastmath<afn>).
 
 gpu.module @agx_blas_epilogue {
   gpu.func @agx_epilogue_f32(%d0: memref<1xf32, 1>, %bias0: memref<1xf32, 1>,
                             %M: index, %N: index, %ld: index,
-                            %has_bias: index, %act: index) kernel {
+                            %has_bias: index, %act: index, %stride: index,
+                            %bias_stride: index) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i2 = arith.constant 2 : index
     %big = arith.constant 4611686018427387904 : index
-    %D = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
-    %Bias = memref.reinterpret_cast %bias0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    // batch entry z (grid z): D and the bias stride and bias_stride elements on
+    %z = gpu.block_id z
+    %od = arith.muli %z, %stride : index
+    %ob = arith.muli %z, %bias_stride : index
+    %D = memref.reinterpret_cast %d0 to offset: [%od], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
+    %Bias = memref.reinterpret_cast %bias0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
     %i = gpu.global_id x
     %j = gpu.global_id y
     %in_m = arith.cmpi ult, %i, %M : index
@@ -24,10 +31,10 @@ gpu.module @agx_blas_epilogue {
     scf.if %in {
       %jl = arith.muli %j, %ld : index
       %p = arith.addi %jl, %i : index
-      %x0 = memref.load %D[%p] : memref<?xf32, strided<[1]>, 1>
+      %x0 = memref.load %D[%p] : memref<?xf32, strided<[1], offset: ?>, 1>
       %use_bias = arith.cmpi ne, %has_bias, %i0 : index
       %x1 = scf.if %use_bias -> f32 {
-        %b = memref.load %Bias[%i] : memref<?xf32, strided<[1]>, 1>
+        %b = memref.load %Bias[%i] : memref<?xf32, strided<[1], offset: ?>, 1>
         %s = arith.addf %x0, %b : f32
         scf.yield %s : f32
       } else {
@@ -59,21 +66,26 @@ gpu.module @agx_blas_epilogue {
       %gelu = arith.mulf %hx, %onep : f32
       %r0 = arith.select %is_relu, %relu, %x1 : f32
       %r = arith.select %is_gelu, %gelu, %r0 : f32
-      memref.store %r, %D[%p] : memref<?xf32, strided<[1]>, 1>
+      memref.store %r, %D[%p] : memref<?xf32, strided<[1], offset: ?>, 1>
     }
     gpu.return
   }
   gpu.func @agx_epilogue_f16(%d0: memref<1xf16, 1>, %bias0: memref<1xf16, 1>,
                             %M: index, %N: index, %ld: index,
-                            %has_bias: index, %act: index) kernel {
+                            %has_bias: index, %act: index, %stride: index,
+                            %bias_stride: index) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i2 = arith.constant 2 : index
     %big = arith.constant 4611686018427387904 : index
-    %D = memref.reinterpret_cast %d0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf16, 1> to memref<?xf16, strided<[1]>, 1>
-    %Bias = memref.reinterpret_cast %bias0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf16, 1> to memref<?xf16, strided<[1]>, 1>
+    // batch entry z (grid z): D and the bias stride and bias_stride elements on
+    %z = gpu.block_id z
+    %od = arith.muli %z, %stride : index
+    %ob = arith.muli %z, %bias_stride : index
+    %D = memref.reinterpret_cast %d0 to offset: [%od], sizes: [%big], strides: [1]
+        : memref<1xf16, 1> to memref<?xf16, strided<[1], offset: ?>, 1>
+    %Bias = memref.reinterpret_cast %bias0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf16, 1> to memref<?xf16, strided<[1], offset: ?>, 1>
     %i = gpu.global_id x
     %j = gpu.global_id y
     %in_m = arith.cmpi ult, %i, %M : index
@@ -82,11 +94,11 @@ gpu.module @agx_blas_epilogue {
     scf.if %in {
       %jl = arith.muli %j, %ld : index
       %p = arith.addi %jl, %i : index
-      %xs = memref.load %D[%p] : memref<?xf16, strided<[1]>, 1>
+      %xs = memref.load %D[%p] : memref<?xf16, strided<[1], offset: ?>, 1>
       %x0 = arith.extf %xs : f16 to f32
       %use_bias = arith.cmpi ne, %has_bias, %i0 : index
       %x1 = scf.if %use_bias -> f32 {
-        %bs = memref.load %Bias[%i] : memref<?xf16, strided<[1]>, 1>
+        %bs = memref.load %Bias[%i] : memref<?xf16, strided<[1], offset: ?>, 1>
         %b = arith.extf %bs : f16 to f32
         %s = arith.addf %x0, %b : f32
         scf.yield %s : f32
@@ -120,7 +132,7 @@ gpu.module @agx_blas_epilogue {
       %r0 = arith.select %is_relu, %relu, %x1 : f32
       %r = arith.select %is_gelu, %gelu, %r0 : f32
       %rs = arith.truncf %r : f32 to f16
-      memref.store %rs, %D[%p] : memref<?xf16, strided<[1]>, 1>
+      memref.store %rs, %D[%p] : memref<?xf16, strided<[1], offset: ?>, 1>
     }
     gpu.return
   }

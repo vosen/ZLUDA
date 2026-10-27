@@ -499,7 +499,7 @@ pub mod engine {
     }
 
     /// `D[i, j] = act(D[i, j] + bias[i])` for column-major m x n matrices (bias has m elements of D's type, or none),
-    /// for `batch` matrices `stride` elements apart.
+    /// for `batch` matrices `stride` elements apart, with biases `bias_stride` elements apart (0: one bias).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn epilogue(
         half: bool,
@@ -510,6 +510,7 @@ pub mod engine {
         stride: i64,
         batch: u64,
         bias: *const c_void,
+        bias_stride: i64,
         act: Activation,
         stream: CUstream,
     ) -> Result<(), Error> {
@@ -519,13 +520,15 @@ pub mod engine {
         let d = driver()?;
         let f = kernels(d)?.epilogue[half as usize];
         let size = if half { 2 } else { 4 };
-        for i in 0..batch as isize {
-            let mut p = d_ptr.byte_offset(i * stride as isize * size);
-            let mut bp = bias;
-            let mut dims = [m, n, ld, !bias.is_null() as u64, act as u64];
+        // the batch entry is grid z
+        for first in (0..batch).step_by(BATCH_PER_LAUNCH as usize) {
+            let entries = (batch - first).min(BATCH_PER_LAUNCH) as u32;
+            let mut p = d_ptr.byte_offset(first as isize * stride as isize * size);
+            let mut bp = if bias.is_null() { bias } else { bias.byte_offset(first as isize * bias_stride as isize * size) };
+            let mut dims = [m, n, ld, !bias.is_null() as u64, act as u64, stride as u64, bias_stride as u64];
             let mut params: Vec<*mut c_void> = vec![&mut p as *mut _ as *mut c_void, &mut bp as *mut _ as *mut c_void];
             params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
-            launch(d, f, [m.div_ceil(16) as u32, n.div_ceil(8) as u32], [16, 8], &mut params, stream)?;
+            launch3(d, f, [m.div_ceil(16) as u32, n.div_ceil(8) as u32, entries], [16, 8], &mut params, stream)?;
         }
         Ok(())
     }
