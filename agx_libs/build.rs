@@ -88,10 +88,12 @@ fn main() {
         }
         with_f64_copy(&text, &out_dir.join(format!("{name}.mlir")), wide);
     }
+    // The libraries compile side by side: each has a sequential front end that leaves processors idle.
+    let mut children = Vec::new();
     for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
         let out = out_dir.join(format!("{name}.agxfat"));
         let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
-        let status = Command::new("python3")
+        let child = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
             .arg(bin.join("mlir-opt"))
@@ -103,8 +105,11 @@ fn main() {
             .arg(&src)
             .arg("-o")
             .arg(&out)
-            .status()
+            .spawn()
             .unwrap_or_else(|e| panic!("{}: {e}", script.display()));
-        assert!(status.success(), "compiling kernels/{name}.mlir failed");
+        children.push((name, child));
+    }
+    for (name, mut child) in children {
+        assert!(child.wait().unwrap().success(), "compiling kernels/{name}.mlir failed");
     }
 }

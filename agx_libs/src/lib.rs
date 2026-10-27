@@ -460,7 +460,7 @@ pub mod engine {
                 b.byte_offset((first * g.stride_b as isize + ob) * ab),
                 c.byte_offset((first * g.stride_c as isize + oc) * cb),
             );
-            let (mut sa, mut sb, mut sc) = (g.stride_a, g.stride_b, g.stride_c);
+            let (mut sa, mut sb, sc) = (g.stride_a, g.stride_b, g.stride_c);
             let (f, dims, grid, block): (CUfunction, &[u64], [u32; 3], [u32; 2]) = match &part.plan {
                 Plan::Tile { swap, trans, aligned, dims, groups } => {
                     if *swap {
