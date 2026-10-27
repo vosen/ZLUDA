@@ -106,6 +106,14 @@ extern "C" {
         error_message: *mut *mut std::ffi::c_char,
     ) -> bool;
 
+    pub fn LLVMZludaLinkUsedDefinitions(
+        dest: LLVMModuleRef,
+        data: *const std::ffi::c_char,
+        size: usize,
+        name: *const std::ffi::c_char,
+        error: *mut *mut std::ffi::c_char,
+    ) -> bool;
+
     pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
 
     pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;

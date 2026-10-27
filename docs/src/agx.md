@@ -47,6 +47,9 @@ zoc --target agx --arch agx-g14g kernel.ptx
 `zoc` writes the translated LLVM IR (`.ll`), the IR linked with the helper
 functions and optimized (`.linked.ll`, `.opt.ll`), the assembly (`.asm`) and
 an ELF object (`.o`) with each kernel's machine code in `.text`.
+`zoc --object-only` writes the object alone, skipping the IR text and the
+second code generation of the assembly; `zluda_agx` compiles that way (the
+object's `.agx.kernels` records describe its kernels).
 
 The assembly lists the resources of each kernel: uniform registers,
 general purpose registers, threadgroup memory, stack and, when the module has
@@ -71,9 +74,13 @@ an error.
 * The `__zluda_ptx_impl_*` helper functions are implemented in LLVM IR in
   `ptx/lib/zluda_ptx_impl_agx.ll` on top of the `llvm.agx.*` intrinsics
   (clang has no AGX target, so the C++ implementation cannot be reused).
-* `llvm_zluda::compile_agx` links the helpers (internal to the module, so
-  unused ones are removed), optimizes and generates code; backend errors are
-  returned as compilation errors.
+* `llvm_zluda::compile_agx` links the helpers the module uses (and those they
+  use) from the library, which `ptx/build.rs` assembles to bitcode and which is
+  loaded lazily, so the rest is never parsed or optimized; the linked helpers
+  are internal to the module. It then optimizes and generates code; backend
+  errors are returned as compilation errors. A small kernel compiles in about
+  10 ms, the 195 kernels of `ptx/src/test/spirv_run` in 3 s (from 21 s with the
+  whole library linked and every output written).
 * Integer division and remainder give the results of NVIDIA GPUs where PTX
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by

@@ -64,6 +64,11 @@ pub struct Options {
     /// object (as nvcc -lineinfo), for tools that map a PC to a source line
     lineinfo: bool,
 
+    #[bpaf(long("object-only"))]
+    /// AGX: write the object alone (no LLVM IR, no assembly): the faster
+    /// compilation the runtime uses
+    object_only: bool,
+
     #[bpaf(long("stack-size"), argument("BYTES"), fallback(0))]
     /// AGX: stack per thread for alloca of a dynamic size (CUDA's
     /// CU_LIMIT_STACK_SIZE, 1024 by default); recursive functions get four
@@ -131,6 +136,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.lineinfo,
             opts.stack_size,
             opts.fast_mma,
+            opts.object_only,
         );
     }
 
@@ -154,6 +160,7 @@ fn main_core() -> Result<(), CompilerError> {
     let ptx = str::from_utf8(&ptx)?;
     let llvm = ptx_to_llvm(
         opts.ignore_errors,
+        true,
         ptx,
         ptx::Options {
             target,
@@ -220,13 +227,15 @@ fn compile_agx(
     lineinfo: bool,
     stack_size: u32,
     fast_mma: bool,
+    object_only: bool,
 ) -> Result<(), CompilerError> {
-    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
+    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked, object_only };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
     let ptx = fs::read(ptx_path)?;
     let ptx = str::from_utf8(&ptx)?;
     let llvm = ptx_to_llvm(
         ignore_errors,
+        !object_only,
         ptx,
         ptx::Options {
             target: ptx::Target::Agx,
@@ -237,13 +246,16 @@ fn compile_agx(
             fast_mma,
         },
     )?;
-    write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+    if !object_only {
+        write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+    }
     // the other modules, translated on their own and linked as LLVM IR
     let mut other_ir = Vec::new();
     for path in others {
         let ptx = fs::read(path)?;
         let other = ptx_to_llvm(
             ignore_errors,
+            true,
             str::from_utf8(&ptx)?,
             ptx::Options {
                 target: ptx::Target::Agx,
@@ -258,7 +270,11 @@ fn compile_agx(
     let other_ir: Vec<&[u8]> = other_ir.iter().map(|v| &v[..]).collect();
     let compiler_hook = |bytes: &Vec<u8>, extension: String| {
         let output_path = output_path.with_extension(extension);
-        write_to_file(bytes, &output_path).unwrap();
+        if object_only {
+            fs::write(&output_path, bytes).unwrap();
+        } else {
+            write_to_file(bytes, &output_path).unwrap();
+        }
     };
     let mut start = Instant::now();
     llvm_zluda::compile_agx_linked(
@@ -289,6 +305,9 @@ fn compile_agx(
     _agx_strict: bool,
     _checked: bool,
     _lineinfo: bool,
+    _stack_size: u32,
+    _fast_mma: bool,
+    _object_only: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,
@@ -296,8 +315,10 @@ fn compile_agx(
     })
 }
 
+/// `text`: also print the module as LLVM IR (`llvm_ir`, empty otherwise).
 fn ptx_to_llvm(
     ignore_errors: bool,
+    text: bool,
     ptx: &str,
     options: ptx::Options,
 ) -> Result<LLVMArtifacts, CompilerError> {
@@ -317,7 +338,7 @@ fn ptx_to_llvm(
             report_pass_time(pass, &mut start);
         },
     )?;
-    let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
+    let llvm_ir = if text { module.llvm_ir.print_module_to_string().to_bytes().to_vec() } else { Vec::new() };
     let linked_bitcode = module.linked_bitcode();
     let main = module.llvm_ir;
     let attributes = module.attributes_ir;

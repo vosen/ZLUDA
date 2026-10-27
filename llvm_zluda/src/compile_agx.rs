@@ -11,7 +11,7 @@ use crate::{
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
     LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces,
     LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
-    LLVMZludaUpgradeFunctionAttributes,
+    LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
@@ -60,6 +60,9 @@ pub struct AgxOptions {
     pub agx_strict: bool,
     /// Check every memory access (`AGX_CHECKED_FEATURE`).
     pub checked: bool,
+    /// Produce the object alone: no assembly (a second code generation) and no textual IR for the hook. The
+    /// object's `.agx.kernels` records describe its kernels.
+    pub object_only: bool,
 }
 
 impl AgxOptions {
@@ -207,7 +210,6 @@ pub fn compile_agx_linked(
     let diagnostics = Diagnostics::new(ctx);
 
     let linked = Module::new(ctx, c"llvm-link");
-    let ptx_impl = load_module(ctx, ptx_impl, c"zluda_ptx_impl_agx.ll")?;
     linked.link(main)?;
     for (i, ir) in others.iter().enumerate() {
         let name = std::ffi::CString::new(format!("linked_module_{}", i + 1)).unwrap();
@@ -217,12 +219,19 @@ pub fn compile_agx_linked(
         internalize_functions(&linked);
     }
     unsafe { LLVMZludaAgxKeepGlobals(linked.get()) };
-    linked.link(ptx_impl)?;
+    // only the helpers the module uses (and theirs), the library loaded lazily when it is bitcode
+    let mut err = std::ptr::null_mut();
+    let linked_ok = unsafe {
+        LLVMZludaLinkUsedDefinitions(linked.get(), ptx_impl.as_ptr().cast(), ptx_impl.len(), c"zluda_ptx_impl_agx".as_ptr(), &mut err)
+    };
+    if !linked_ok {
+        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+    }
     internalize_helpers(&linked);
     unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
     linked.verify()?;
 
-    if let Some(hook) = compiler_hook {
+    if let (Some(hook), false) = (compiler_hook, options.object_only) {
         let message = linked.print_module_to_string();
         hook(&message.to_bytes().to_vec(), String::from("linked.ll"));
     }
@@ -321,18 +330,22 @@ pub fn compile_agx_linked(
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }
 
-    if let Some(hook) = compiler_hook {
-        let message = linked.print_module_to_string();
-        hook(&message.to_bytes().to_vec(), String::from("opt.ll"));
-    }
-
-    let assembly = target_machine
-        .emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?
-        .to_vec();
-    diagnostics.check()?;
-    if let Some(hook) = compiler_hook {
-        hook(&assembly, String::from("asm"));
-    }
+    let assembly = if options.object_only {
+        Vec::new()
+    } else {
+        if let Some(hook) = compiler_hook {
+            let message = linked.print_module_to_string();
+            hook(&message.to_bytes().to_vec(), String::from("opt.ll"));
+        }
+        let assembly = target_machine
+            .emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?
+            .to_vec();
+        diagnostics.check()?;
+        if let Some(hook) = compiler_hook {
+            hook(&assembly, String::from("asm"));
+        }
+        assembly
+    };
     let object = target_machine
         .emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?
         .to_vec();

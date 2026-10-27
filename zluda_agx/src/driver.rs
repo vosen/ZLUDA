@@ -1194,8 +1194,9 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
             std::fs::write(&src, ptx).map_err(|e| e.to_string())?;
             paths.push(src);
         }
+        // the object alone: its .agx.kernels records describe the kernels, so no IR text or assembly
         let out = std::process::Command::new(&zoc)
-            .args(["--target", "agx", "--arch", cpu])
+            .args(["--target", "agx", "--arch", cpu, "--object-only"])
             .args(mesa.then_some("--agx-strict"))
             .args(checked.then_some("--agx-checked"))
             .args(lineinfo.then_some("--lineinfo"))

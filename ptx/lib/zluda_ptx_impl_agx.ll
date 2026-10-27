@@ -3,7 +3,8 @@
 ;
 ; The AMDGPU implementation (zluda_ptx_impl.cpp) is compiled with clang, which
 ; has no AGX target, so this one is written directly in LLVM IR on top of the
-; llvm.agx.* intrinsics. It is embedded as text and parsed at compile time.
+; llvm.agx.* intrinsics. ptx/build.rs assembles it to bitcode (with the llvm-as
+; of the LLVM llvm_zluda links) when it can, else it is embedded as text.
 ;
 ; Functions missing here are reported as undefined when linking a module
 ; that uses them.
