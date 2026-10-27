@@ -1263,8 +1263,9 @@ it), as NVIDIA's does.
   interleaved complex m x n matrix is a real 2m x n one with twice the leading dimension, so C and an untransposed B
   are used as they are; op(A), times alpha, is expanded into the real 2m x 2k matrix of 2 x 2 blocks
   `[re -im; im re]` in a scratch buffer the handle keeps (a transposed op(B) is copied untransposed next to it), and a
-  beta that is not real is applied to C first. Smaller products and the other complex level 3 routines run one
-  thread per element of C.
+  beta that is not real is applied to C first. `cublasChemm` and `Csymm` with C of at least 64 x 64 elements (and
+  C not B) do the same with A made full: on the left, alpha A expanded; on the right, alpha B expanded times A made
+  full (complex). Smaller products and the other complex level 3 routines run one thread per element of C.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).

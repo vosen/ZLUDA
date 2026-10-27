@@ -186,6 +186,46 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // The full na x na matrix of a Hermitian (herm 1) or symmetric A held in its
+  // upper or lower triangle, for hemm / symm on the real GEMM kernels: with
+  // expand, alpha A expanded as in agx_cgemm_expand_a (2na x 2na real,
+  // leading dimension 2na), else A itself (complex, leading dimension na).
+  // 2-D grid over A.
+  gpu.func @agx_chemm_full(%a0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %na: index, %lda: index,
+                           %upper_: i64, %herm_: i64, %expand_: i64, %ar: f32, %ai: f32) kernel {
+    %z = arith.constant 0 : i64
+    %f0 = arith.constant 0.0 : f32
+    %i1 = arith.constant 1 : index
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %herm = arith.cmpi ne, %herm_, %z : i64
+    %expand = arith.cmpi ne, %expand_, %z : i64
+    %p = gpu.global_id x
+    %l = gpu.global_id y
+    %in_p = arith.cmpi ult, %p, %na : index
+    %in_l = arith.cmpi ult, %l, %na : index
+    %in = arith.andi %in_p, %in_l : i1
+    scf.if %in {
+      %u:2 = func.call @agx_c_herm(%a0, %p, %l, %lda, %upper, %herm) : (memref<1xf32, 1>, index, index, index, i1, i1) -> (f32, f32)
+      scf.if %expand {
+        %x:2 = func.call @agx_c_fma(%ar, %ai, %u#0, %u#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+        %l2 = arith.addi %l, %l : index
+        %l21 = arith.addi %l2, %i1 : index
+        %c0 = arith.muli %l2, %na : index
+        %c1 = arith.muli %l21, %na : index
+        %o0 = arith.addi %c0, %p : index
+        %o1 = arith.addi %c1, %p : index
+        %nxi = arith.negf %x#1 : f32
+        func.call @agx_c_st(%out0, %o0, %x#0, %x#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+        func.call @agx_c_st(%out0, %o1, %nxi, %x#0) : (memref<1xf32, 1>, index, f32, f32) -> ()
+      } else {
+        %ln = arith.muli %l, %na : index
+        %o = arith.addi %ln, %p : index
+        func.call @agx_c_st(%out0, %o, %u#0, %u#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+      }
+    }
+    gpu.return
+  }
+
   // op(B) (k x n) copied untransposed with leading dimension k, for the real
   // GEMM of a cgemm whose B is transposed. 2-D grid over op(B).
   gpu.func @agx_cgemm_copy_b(%b0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %k: index, %n: index,

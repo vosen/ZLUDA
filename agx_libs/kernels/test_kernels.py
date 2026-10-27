@@ -2053,7 +2053,25 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                 else:
                     v = sum(cherm(A, i, l, lda, upper, herm) * B[l + j * ldb] for l in range(m))
                 want[i + j * ldc] = alpha * v + beta * C[i + j * ldc]
-        return cclose(cunpack(got), want, range(len(C)), tol)
+        bad = cclose(cunpack(got), want, range(len(C)), tol)
+        # on the real GEMM (zluda_blas_agx): left, alpha A expanded times B's real view; right, alpha B expanded
+        # times A made full (its real view); beta C added here
+        (full,) = run(a, obj, K("agx_chemm_full"), [("buf", cpack(A)), ("buf", pack([math.nan] * ((8 if not right else 2) * na * na), BT), True),
+                                                   ("i64", na), ("i64", lda), ("i64", upper), ("i64", herm), ("i64", int(not right))] + cs(alpha),
+                      (16, 8), (16, 4), tmp)
+        if right:
+            (xb,) = run(a, obj, K("agx_cgemm_expand_a"), [("buf", cpack(B)), ("buf", pack([math.nan] * (4 * m * n), BT), True), ("i64", m),
+                                                         ("i64", n), ("i64", ldb), ("i64", 0)] + cs(alpha), (16, 8), (16, 4), tmp)
+            ra, lra, rb, lrb, kk = unpack(xb, BT), 2 * m, unpack(full, BT), 2 * n, 2 * n
+        else:
+            ra, lra, rb, lrb, kk = unpack(full, BT), 2 * m, interleave(B), 2 * ldb, 2 * m
+        rc = [0.0] * (2 * ldc * n)
+        for j in range(n):
+            for i in range(2 * m):
+                rc[i + j * 2 * ldc] = sum(ra[i + l * lra] * rb[l + j * lrb] for l in range(kk))
+        bad += cclose([complex(rc[2 * i], rc[2 * i + 1]) + beta * C[i] for i in range(len(C))], want,
+                      [i + j * ldc for j in range(n) for i in range(m)], tol)
+        return bad
     if what == "rankk":
         n, k = 5, 3
         upper, op, herm, two = o["upper"], o["op"], o["herm"], o["two"]

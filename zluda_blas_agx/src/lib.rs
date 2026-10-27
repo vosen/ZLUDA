@@ -1939,8 +1939,16 @@ mod imp {
         } else {
             (b.0, 2 * b.1)
         };
+        real_product(h, m, n, 2 * k, xa, 2 * m, rb, ldrb, c, beta)
+    }
+
+    /// C (complex m x n) = the real product of `xa` (real 2m x k2, leading dimension `lda`) and `rb` (real k2 x n,
+    /// leading dimension `ldb`), read as complex, + beta C: one real GEMM on the tile kernels, after C is scaled by
+    /// a beta that is not real.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn real_product(h: &Handle, m: i64, n: i64, k2: i64, xa: *const c_void, lda: i64, rb: *const c_void, ldb: i64, c: (*mut c_void, i64), beta: (f32, f32)) -> cublasStatus_t {
         let real_beta = if beta.1 != 0.0 {
-            let (mut pc, mut ldc, (mut br, mut bi)) = (c.0, c.1, beta);
+            let (mut pc, mut ldc, mut m_, mut n_, (mut br, mut bi)) = (c.0, c.1, m, n, beta);
             cblas_launch(h, c"agx_cgemm_scale_c", &mut [arg(&mut pc), arg(&mut m_), arg(&mut n_), arg(&mut ldc), arg(&mut br), arg(&mut bi)], [m, n], [16, 4])?;
             1.0
         } else {
@@ -1952,14 +1960,14 @@ mod imp {
             tb: false,
             m: 2 * m as u64,
             n: n as u64,
-            k: 2 * k as u64,
+            k: k2 as u64,
             alpha: 1.0,
             beta: real_beta,
             a: xa,
-            lda: 2 * m as u64,
+            lda: lda as u64,
             stride_a: 0,
             b: rb,
-            ldb: ldrb as u64,
+            ldb: ldb as u64,
             stride_b: 0,
             c: c.0,
             ldc: 2 * c.1 as u64,
@@ -1967,6 +1975,30 @@ mod imp {
             batch: 1,
         };
         engine::gemm(&g, h.stream).map_err(status)
+    }
+
+    /// hemm / symm (f32) on the real GEMM kernels, as [`cgemm_real`]: left, alpha A expanded (agx_chemm_full) times
+    /// B's real view; right, alpha B expanded times A made full (its real view).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn chemm_real(h: &mut Handle, right: bool, upper: bool, herm: bool, m: i64, n: i64, a: (*const c_void, i64), b: (*const c_void, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let na = if right { n } else { m };
+        let (ar, ai) = alpha;
+        let full = |h: &Handle, out: *mut c_void, expand: bool| {
+            let (mut pa, mut po, mut na_, mut lda, mut up, mut he, mut ex, mut ar, mut ai) = (a.0, out, na, a.1, upper as i64, herm as i64, expand as i64, ar, ai);
+            cblas_launch(h, c"agx_chemm_full", &mut [arg(&mut pa), arg(&mut po), arg(&mut na_), arg(&mut lda), arg(&mut up), arg(&mut he), arg(&mut ex), arg(&mut ar), arg(&mut ai)], [na, na], [16, 4])
+        };
+        if !right {
+            let mem = scratch(h, (16 * m * m) as usize)?;
+            full(h, mem, true)?;
+            return real_product(h, m, n, 2 * m, mem, 2 * m, b.0, 2 * b.1, c, beta);
+        }
+        let b_bytes = ((16 * m * n) as usize).next_multiple_of(256);
+        let mem = scratch(h, b_bytes + (8 * n * n) as usize)?;
+        let af = (mem as *mut u8).add(b_bytes) as *mut c_void;
+        let (mut pb, mut xb, mut m_, mut n_, mut ldb, mut op, mut ar_, mut ai_) = (b.0, mem, m, n, b.1, 0i64, ar, ai);
+        cblas_launch(h, c"agx_cgemm_expand_a", &mut [arg(&mut pb), arg(&mut xb), arg(&mut m_), arg(&mut n_), arg(&mut ldb), arg(&mut op), arg(&mut ar_), arg(&mut ai_)], [m, n], [16, 4])?;
+        full(h, af, false)?;
+        real_product(h, m, n, 2 * n, mem, 2 * m, af, 2 * n, c, beta)
     }
 
     /// hemm (herm) and symm.
@@ -1984,6 +2016,10 @@ mod imp {
         let (mut br, mut bi) = cscalar::<R>(h, beta)?;
         if m == 0 || n == 0 {
             return Ok(());
+        }
+        if R::GEMM == Types::S && c as *const c_void != b && m * n >= CGEMM_REAL_MIN {
+            let f = |v: R| v.to_f64() as f32;
+            return chemm_real(h, right, upper, herm, m, n, (a, lda), (b, ldb), (c, ldc), (f(ar), f(ai)), (f(br), f(bi)));
         }
         // each element of C reads a row or column of B: in place, read a copy
         let mut copy = std::ptr::null_mut();
