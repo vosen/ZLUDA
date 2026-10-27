@@ -204,6 +204,50 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
                  {"f": 1e-4, "d": 1e-13}.get(c, 2e-3))
 
 
+def split_plan(M, N, K, lda, ldb, ldc):
+    """zluda_blas_agx's plan for column-major C = alpha A B + beta C (agx_libs/src/lib.rs, plan): the tile kernel on
+    the largest block of C with sides multiples of 64 along the largest multiple of 8 of K, the generic kernel on
+    the columns right of it, the rows below it, then the remaining steps of K added to all of C. Each part:
+    (tile, (m, n, k), element offsets of A, B and C, accumulate)."""
+    m64, n64, k8 = M // 64 * 64, N // 64 * 64, K // 8 * 8
+    if not (m64 and n64 and k8):
+        return [(False, (M, N, K), (0, 0, 0), False)]
+    parts = [(True, (m64, n64, k8), (0, 0, 0), False)]
+    if n64 < N:
+        parts.append((False, (M, N - n64, k8), (0, n64 * ldb, n64 * ldc), False))
+    if m64 < M:
+        parts.append((False, (M - m64, n64, k8), (m64, 0, m64), False))
+    if k8 < K:
+        parts.append((False, (M, N, K - k8), (k8 * lda, k8, 0), True))
+    return parts
+
+
+def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
+               c="f"):
+    # column-major, the leading dimensions even as the tile kernel needs
+    lda, ldb, ldc = M + 2 + M % 2, K + 2 + K % 2, M + 4 + M % 2
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * K)], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * N)], ab)
+    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)], c)
+    C = list(C0)
+    for is_tile, (m, n, k), (oa, ob, oc), acc in split_plan(M, N, K, lda, ldb, ldc):
+        be = 1.0 if acc else beta
+        if is_tile:
+            # row-major C^T = B^T A^T: A' = B (n x k, ld ldb), B' = A (k x m, ld lda)
+            args = [("buf", pack(B[ob:], ab)), ("buf", pack(A[oa:], ab)), ("buf", pack(C[oc:], c), True),
+                    ("i64", n), ("i64", m), ("i64", k), ("i64", ldb), ("i64", lda), ("i64", ldc),
+                    ("f32", alpha), ("f32", be)]
+            (got,) = run(a, obj, tile, args, ((n // 64) * (m // 64) * 128, 1), (128, 1), tmp)
+        else:
+            args = [("buf", pack(A[oa:], ab)), ("buf", pack(B[ob:], ab)), ("buf", pack(C[oc:], c), True),
+                    ("i64", m), ("i64", n), ("i64", k), ("i64", 1), ("i64", lda), ("i64", 1), ("i64", ldb),
+                    ("i64", 1), ("i64", ldc), ("f32", alpha), ("f32", be)]
+            (got,) = run(a, obj, gen, args, (-(-n // 16) * 16, -(-m // 8) * 8), (16, 8), tmp)
+        C[oc:] = unpack(got, c)
+    want = reference(M, N, K, A, (1, lda), B, (1, ldb), C0, (1, ldc), alpha, beta)
+    return close(C, want, [i + j * ldc for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
+
+
 def gelu(x):
     return 0.5 * x * (1 + math.tanh(0.7978845608 * (x + 0.044715 * x ** 3)))
 
@@ -2177,6 +2221,9 @@ def main():
                     ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
                     ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
                     ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
+                    ("split 70x130x21 b=0.5", lambda: case_split(a, obj, tmp, 70, 130, 21, 1.5, 0.5, rnd)),
+                    ("split 128x77x8 b=0 (C NaN)", lambda: case_split(a, obj, tmp, 128, 77, 8, 1.0, 0.0, rnd)),
+                    ("split 100x64x19", lambda: case_split(a, obj, tmp, 100, 64, 19, -1.0, 1.0, rnd)),
                 ]
                 dk = "agx_dgemm_generic"
                 cases += [
@@ -2201,6 +2248,8 @@ def main():
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 21, 13, 9, 1, 0, 1.0, 0.5, rnd, gk, "e", c)),
                         ("h generic C %s 6x30x17 NT b=0" % ct,
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 6, 30, 17, 0, 1, -1.0, 0.0, rnd, gk, "e", c)),
+                        ("h split C %s 70x130x21 b=0.5" % ct,
+                         lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c)),
                     ]
             for label, f in cases:
                 try:

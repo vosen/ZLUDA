@@ -72,16 +72,18 @@ pub enum Plan {
     Generic { dims: [u64; 9], grid: [u32; 2] },
 }
 
+/// One launch of a GEMM: its plan, the element offsets of its A, B and C from the GEMM's, and whether it adds to C
+/// (beta 1: the K remainder of a product the earlier parts started).
+#[derive(Debug, PartialEq)]
+pub struct Part {
+    pub plan: Plan,
+    pub offsets: [u64; 3],
+    pub accumulate: bool,
+}
+
 pub const GENERIC_BLOCK: [u32; 2] = [16, 8];
 
-/// The kernel for column-major `C (m x n, ldc) = alpha op(A) op(B) + beta C`. Seen row-major, column-major C is C^T
-/// = op(B)^T op(A)^T, so without transposes the row-major tile kernel computes it with A and B swapped (`swap`).
-pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64, aligned: bool) -> Plan {
-    if !ta && !tb && m % 64 == 0 && n % 64 == 0 && k % 8 == 0 && [lda, ldb, ldc].iter().all(|l| l % 2 == 0) && aligned
-    {
-        // row-major M' = n, N' = m: A' = B (n x k, ld ldb), B' = A (k x m, ld lda)
-        return Plan::Tile { swap: true, dims: [n, m, k, ldb, lda, ldc], groups: ((n / 64) * (m / 64)) as u32 };
-    }
+fn generic(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64) -> Plan {
     // element (i, k) of op(A): A[i + k lda], or A[k + i lda] transposed; (k, j) of op(B) likewise; C[i + j ldc]
     let sa = if ta { [lda, 1] } else { [1, lda] };
     let sb = if tb { [ldb, 1] } else { [1, ldb] };
@@ -89,6 +91,38 @@ pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc:
         dims: [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc],
         grid: [n.div_ceil(GENERIC_BLOCK[0] as u64) as u32, m.div_ceil(GENERIC_BLOCK[1] as u64) as u32],
     }
+}
+
+/// The launches for column-major `C (m x n, ldc) = alpha op(A) op(B) + beta C`. Seen row-major, column-major C is
+/// C^T = op(B)^T op(A)^T, so without transposes the row-major tile kernel computes it with A and B swapped (`swap`).
+/// The tile kernel takes the largest block of C whose sides are multiples of 64, along the largest multiple of 8 of
+/// K; the generic kernel the rest: the columns of C right of the block, the rows below it, and then the remaining
+/// steps of K added to all of C.
+pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64, aligned: bool) -> Vec<Part> {
+    let part = |plan, offsets, accumulate| Part { plan, offsets, accumulate };
+    let (m64, n64, k8) = (m / 64 * 64, n / 64 * 64, k / 8 * 8);
+    if ta || tb || m64 == 0 || n64 == 0 || k8 == 0 || ![lda, ldb, ldc].iter().all(|l| l % 2 == 0) || !aligned {
+        return vec![part(generic(ta, tb, m, n, k, lda, ldb, ldc), [0; 3], false)];
+    }
+    // row-major M' = n, N' = m: A' = B (n x k, ld ldb), B' = A (k x m, ld lda)
+    let mut parts = vec![part(
+        Plan::Tile { swap: true, dims: [n64, m64, k8, ldb, lda, ldc], groups: ((n64 / 64) * (m64 / 64)) as u32 },
+        [0; 3],
+        false,
+    )];
+    if n64 < n {
+        // columns n64.. of B and C, all of A
+        parts.push(part(generic(false, false, m, n - n64, k8, lda, ldb, ldc), [0, n64 * ldb, n64 * ldc], false));
+    }
+    if m64 < m {
+        // rows m64.. of A and C, columns ..n64 of B and C
+        parts.push(part(generic(false, false, m - m64, n64, k8, lda, ldb, ldc), [m64, 0, m64], false));
+    }
+    if k8 < k {
+        // columns k8.. of A and rows k8.. of B, added to C
+        parts.push(part(generic(false, false, m, n, k - k8, lda, ldb, ldc), [k8 * lda, k8, 0], true));
+    }
+    parts
 }
 
 /// IEEE binary16 to f32 (exact).
@@ -364,15 +398,16 @@ pub mod engine {
         let (types, (a, b, c)) = (g.types, (g.a, g.b, g.c));
         let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
             && [g.stride_a, g.stride_b, g.stride_c].iter().all(|s| s % 2 == 0);
-        let p = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned && types != Types::D);
-        for i in 0..g.batch as isize {
+        let parts = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned && types != Types::D);
+        for (i, part) in (0..g.batch as isize).flat_map(|i| parts.iter().map(move |p| (i, p))) {
             let (ab, cb) = (types.ab_bytes(), types.c_bytes());
+            let [oa, ob, oc] = part.offsets.map(|o| o as isize);
             let (mut pa, mut pb, mut pc) = (
-                a.byte_offset(i * g.stride_a as isize * ab),
-                b.byte_offset(i * g.stride_b as isize * ab),
-                c.byte_offset(i * g.stride_c as isize * cb),
+                a.byte_offset((i * g.stride_a as isize + oa) * ab),
+                b.byte_offset((i * g.stride_b as isize + ob) * ab),
+                c.byte_offset((i * g.stride_c as isize + oc) * cb),
             );
-            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &p {
+            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &part.plan {
                 Plan::Tile { swap, dims, groups } => {
                     if *swap {
                         std::mem::swap(&mut pa, &mut pb);
@@ -382,8 +417,9 @@ pub mod engine {
                 Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
             };
             let mut dims = dims.to_vec();
-            let (mut alpha, mut beta) = (g.alpha as f32, g.beta as f32);
-            let (mut alpha64, mut beta64) = (g.alpha, g.beta);
+            let beta = if part.accumulate { 1.0 } else { g.beta };
+            let (mut alpha, mut beta) = (g.alpha as f32, beta as f32);
+            let (mut alpha64, mut beta64) = (g.alpha, beta as f64);
             let mut params: Vec<*mut c_void> = vec![
                 &mut pa as *mut _ as *mut c_void,
                 &mut pb as *mut _ as *mut c_void,
@@ -448,7 +484,15 @@ pub mod engine {
 mod tests {
     use super::*;
 
-    /// What the planned kernel computes, on the CPU, with the kernels' documented semantics.
+    /// What the planned launches compute, on the CPU, with the kernels' documented semantics.
+    fn run_parts(parts: &[Part], a: &[f32], b: &[f32], c: &mut [f32], alpha: f32, beta: f32) {
+        for part in parts {
+            let [oa, ob, oc] = part.offsets.map(|o| o as usize);
+            let beta = if part.accumulate { 1.0 } else { beta };
+            run_plan(&part.plan, &a[oa..], &b[ob..], &mut c[oc..], alpha, beta);
+        }
+    }
+
     fn run_plan(p: &Plan, a: &[f32], b: &[f32], c: &mut [f32], alpha: f32, beta: f32) {
         match p {
             Plan::Tile { swap, dims: [mm, nn, kk, lda, ldb, ldc], .. } => {
@@ -504,15 +548,19 @@ mod tests {
             (true, false, 9, 4, 6),
             (false, true, 3, 11, 2),
             (true, true, 8, 8, 8),
+            (false, false, 70, 130, 21),
+            (false, false, 64, 77, 8),
+            (false, false, 100, 64, 19),
         ] {
             let (lda, ldb, ldc) = ((if ta { k } else { m }) + 2, (if tb { n } else { k }) + 4, m + 6);
             let a: Vec<f32> = (0..lda * if ta { m } else { k }).map(|_| rnd()).collect();
             let b: Vec<f32> = (0..ldb * if tb { k } else { n }).map(|_| rnd()).collect();
             let c0: Vec<f32> = (0..ldc * n).map(|_| rnd()).collect();
-            let p = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, true);
-            assert_eq!(matches!(p, Plan::Tile { .. }), (ta, tb, m, n, k) == (false, false, 64, 128, 16));
+            let parts = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, true);
+            let tiled = !ta && !tb && m >= 64 && n >= 64 && k >= 8 && [lda, ldb, ldc].iter().all(|l| l % 2 == 0);
+            assert_eq!(matches!(parts[0].plan, Plan::Tile { .. }), tiled, "{ta} {tb} {m}x{n}x{k}");
             let (mut got, mut want) = (c0.clone(), c0.clone());
-            run_plan(&p, &a, &b, &mut got, 1.5, 0.25);
+            run_parts(&parts, &a, &b, &mut got, 1.5, 0.25);
             reference(ta, tb, m, n, k, &a, lda, &b, ldb, &mut want, ldc, 1.5, 0.25);
             for (g, w) in got.iter().zip(&want) {
                 assert!((g - w).abs() <= 1e-5 * (1.0 + w.abs()), "{ta} {tb} {m}x{n}x{k}: {g} != {w}");
