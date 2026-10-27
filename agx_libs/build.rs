@@ -81,6 +81,11 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    // Wide constants in uniforms (.agx.kernels extension 6, which agx_runtime sets at launch): fewer registers,
+    // more resident SIMD-groups. ZLUDA_AGX_UNIFORM_CONSTANTS=0 builds without.
+    println!("cargo:rerun-if-env-changed=ZLUDA_AGX_UNIFORM_CONSTANTS");
+    let llc_args: Vec<&str> =
+        if env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") { vec![] } else { vec!["--llc-arg=-agx-uniform-constants"] };
     for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false), ("solver", false)] {
         let mut text = read(&format!("kernels/{name}.mlir"));
         if name == "sparse" {
@@ -101,6 +106,7 @@ fn main() {
             .arg(bin.join("mlir-translate"))
             .arg("--llc")
             .arg(bin.join("llc"))
+            .args(&llc_args)
             .arg("--via-air")
             .arg(&src)
             .arg("-o")

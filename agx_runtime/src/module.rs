@@ -55,6 +55,9 @@ pub struct KernelInfo {
     /// llvm.agx.texture.sample): the address of the 24-byte hardware texture descriptors whose offsets the samples
     /// name.
     pub texture_heap_half: Option<u32>,
+    /// 32-bit constants the launch preloads into the uniforms, (half, value) (`.agx.kernels` extension 6, a kernel
+    /// built with llc's -agx-uniform-constants, which reads its wide constants from uniforms instead of mov_imm).
+    pub constants: Vec<(u32, u32)>,
 }
 
 /// Where a checked kernel takes its hidden arguments (LLVM's AGXUsage.rst, "Checked mode").
@@ -266,6 +269,7 @@ impl<'a> Elf<'a> {
             let (mut cluster, mut checked, mut e, end) = ([1, 1, 1], None, f + 7 + 3 * nargs, at + size / 4);
             let mut threadgroup_bytes_half = None;
             let mut texture_heap_half = None;
+            let mut constants = Vec::new();
             while e < end {
                 match word(e)? {
                     1 if e + 4 <= end => {
@@ -305,6 +309,14 @@ impl<'a> Elf<'a> {
                         texture_heap_half = Some(word(e + 1)?);
                         e += 2;
                     }
+                    6 if e + 2 <= end => {
+                        let n = word(e + 1)? as usize;
+                        if e + 2 + 2 * n > end {
+                            return err(format!("{name}: truncated uniform constants"));
+                        }
+                        constants = (0..n).map(|i| Ok((word(e + 2 + 2 * i)?, word(e + 3 + 2 * i)?))).collect::<Result<_, Error>>()?;
+                        e += 2 + 2 * n;
+                    }
                     _ => break,
                 }
             }
@@ -325,6 +337,7 @@ impl<'a> Elf<'a> {
                     checked,
                     threadgroup_bytes_half,
                     texture_heap_half,
+                    constants,
                 },
             );
             at += size / 4;
@@ -441,6 +454,7 @@ impl Module {
                     checked: None,
                     threadgroup_bytes_half: None,
                     texture_heap_half: None,
+                    constants: Vec::new(),
                 },
             );
         }
@@ -564,6 +578,9 @@ pub fn pack_params(
         (Some(at), Some(va)) => put(&mut u, 2 * at, &va.to_le_bytes())?,
         (Some(_), None) => return err(format!("{}: the module has globals but no global data buffer was given", k.name)),
         _ => {}
+    }
+    for &(half, value) in &k.constants {
+        put(&mut u, half, &value.to_le_bytes())?;
     }
     Ok((u, block))
 }
@@ -854,6 +871,17 @@ mod tests {
     }
 
     #[test]
+    fn preloads_the_uniform_constants() {
+        // tests/data/uconst.ll, built with -agx-uniform-constants: two 32-bit constants after threadgroups_per_grid
+        let k = Module::load_object(include_bytes!("../tests/data/uconst.o")).unwrap().kernels["uconst"].clone();
+        assert_eq!(k.constants, vec![(14, 0x1234_5678), (16, 0x0123_4567)]);
+        let (out, inp) = (0x1_0000_1000u64.to_le_bytes(), 0x1_0000_2000u64.to_le_bytes());
+        let (u, _) = pack_params(&k, &[&out, &inp], [4, 1, 1], None, 0).unwrap();
+        assert_eq!(u.len(), 18);
+        assert_eq!(&u[14..], &[0x5678, 0x1234, 0x4567, 0x0123]);
+    }
+
+    #[test]
     fn threadgroup_size_follows_the_register_count() {
         let k = |gprs| KernelInfo { gprs, ..Module::load_object(include_bytes!("../tests/data/byref.o")).unwrap().kernels["byref"].clone() };
         assert_eq!(k(4).max_threads_per_threadgroup(), 1024);
@@ -982,6 +1010,7 @@ mod tests {
                 checked: None,
                 threadgroup_bytes_half: None,
                 texture_heap_half: None,
+                constants: Vec::new(),
             }
         );
         assert_eq!(m.text.len(), 98);
@@ -1006,6 +1035,7 @@ mod tests {
             checked: None,
             threadgroup_bytes_half: None,
             texture_heap_half: None,
+            constants: Vec::new(),
         };
         let u = pack_uniforms(
             &k,

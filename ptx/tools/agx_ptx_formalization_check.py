@@ -375,8 +375,9 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             halves, tg_half, glob, _gprs, tg_bytes, _stack, nargs = struct.unpack_from('<7I', d, q)
             args = [struct.unpack_from('<3I', d, q + 28 + 12 * i) for i in range(nargs)]
             # tagged extensions up to the record's end: 1 = cluster dimensions, 4 = the hidden threadgroup memory
-            # size argument (2 and 3 are checked mode's, which the harness does not run)
-            cluster, tgb_half, tex_half, e = (1, 1, 1), None, None, q + 28 + 12 * nargs
+            # size argument, 5 = the texture heap, 6 = 32-bit constants to preload (2 and 3 are checked mode's, which
+            # the harness does not run)
+            cluster, tgb_half, tex_half, consts, e = (1, 1, 1), None, None, [], q + 28 + 12 * nargs
             while e + 4 <= pos + size:
                 tag, = struct.unpack_from('<I', d, e)
                 if tag == 1 and e + 16 <= pos + size:
@@ -388,12 +389,16 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
                 elif tag == 5 and e + 8 <= pos + size:
                     tex_half, = struct.unpack_from('<I', d, e + 4)
                     e += 8
+                elif tag == 6 and e + 8 <= pos + size:
+                    n, = struct.unpack_from('<I', d, e + 4)
+                    consts = [struct.unpack_from('<2I', d, e + 8 + 8 * i) for i in range(n)]
+                    e += 8 + 8 * n
                 else:
                     break
-            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half)
+            records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts)
             pos += size
     kernels = {}
-    for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half) in records.items():
+    for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
@@ -411,6 +416,8 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             'tgb_half': None if tgb_half in (None, 0xffffffff) else tgb_half,
             # the texture heap address (extension 5, a module that samples with the texture unit)
             'tex_half': tex_half,
+            # (half, value): 32-bit constants the launch preloads (extension 6, llc -agx-uniform-constants)
+            'consts': consts,
         }
     gsyms = {n: v[0] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
     gsizes = {n: v[1] for n, v in syms.items() if v[2] == 'OBJECT' and v[3] == gsec}
@@ -692,6 +699,8 @@ def run_test(path, args):
                     put(k['tgb_half'], k['shared'] + dyn, 4)
                 if k['tex_half'] is not None:
                     put(k['tex_half'], TEX_HEAP, 8)
+                for h, v in k['consts']:
+                    put(h, v, 4)
                 # agx_run takes 32-bit uniforms
                 uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
                                    for h in halves})

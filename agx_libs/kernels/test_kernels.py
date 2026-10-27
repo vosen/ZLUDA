@@ -35,7 +35,9 @@ def fat_entries(data):
 
 
 def kernel_records(obj, a, tmp):
-    """name -> (threadgroups_per_grid uniform, [(kind, bytes, first half) per argument]) from .agx.kernels."""
+    """name -> (threadgroups_per_grid uniform, [(kind, bytes, first half) per argument], global data half, stack
+    bytes, [(half, value) of the 32-bit constants to preload (extension 6, llc -agx-uniform-constants)]) from
+    .agx.kernels."""
     p = os.path.join(tmp, "o.o")
     open(p, "wb").write(obj)
     sec = os.path.join(tmp, "k.bin")
@@ -53,7 +55,20 @@ def kernel_records(obj, a, tmp):
         _halves, tg_half, glob, _gprs, _tg, stack, nargs = struct.unpack_from("<7I", d, q)
         q += 28
         args = [struct.unpack_from("<3I", d, q + 12 * i) for i in range(nargs)]
-        out[name] = (tg_half // 2, args, glob, stack)
+        e, consts = q + 12 * nargs, []
+        while e + 4 <= pos + size:
+            (tag,) = struct.unpack_from("<I", d, e)
+            if tag == 2:
+                e += 20 + 16 * struct.unpack_from("<I", d, e + 8)[0]
+            elif tag in (1, 3, 4, 5):
+                e += {1: 16, 3: 12, 4: 8, 5: 8}[tag]
+            elif tag == 6:
+                (n,) = struct.unpack_from("<I", d, e + 4)
+                consts = [struct.unpack_from("<2I", d, e + 8 + 8 * i) for i in range(n)]
+                e += 8 + 8 * n
+            else:
+                break
+        out[name] = (tg_half // 2, args, glob, stack, consts)
         pos += size
     return out
 
@@ -80,7 +95,7 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). heap: the device heap of malloc / free, its size or
     its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
     zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
-    tg_uniform, slots, glob, stack = kernel_records(obj, a, tmp)[name]
+    tg_uniform, slots, glob, stack, consts = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
     grid3 = tuple(grid) + (1,) * (3 - len(grid))  # a third dimension for batched launches
@@ -135,6 +150,8 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
         g = (grid[d] if d < 2 else 1)
         w = (wg[d] if d < 2 else 1)
         uniforms[tg_uniform + d] = -(-g // w)
+    for half, v in consts:
+        uniforms[half // 2] = v
     for u, v in sorted(uniforms.items()):
         cmd += ["--uniform", "%d=%d" % (u, v)]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

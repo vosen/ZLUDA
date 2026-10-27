@@ -1225,6 +1225,10 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     if !llvm_args.is_empty() {
         options.push(&llvm_args);
     }
+    // and ZLUDA_AGX_UNIFORM_CONSTANTS=0 turns -agx-uniform-constants off
+    if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") {
+        options.push("no-uniform-constants");
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compiled = std::cell::Cell::new(false);
     let started = Instant::now();

@@ -363,6 +363,11 @@ fn init_globals() -> Result<(), String> {
             // ZLUDA_AGX_LLVM_ARGS: extra LLVM options, separated by whitespace (backend experiments, for example
             // -agx-threadgroup-unroll=4)
             let mut options = vec![std::ffi::CString::new("llvm_zluda").unwrap()];
+            // Wide constants of kernels in uniforms (.agx.kernels extension 6, which agx_runtime sets at launch):
+            // fewer registers, more resident SIMD-groups. ZLUDA_AGX_UNIFORM_CONSTANTS=0 turns it off.
+            if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").map_or(true, |v| v != "0") {
+                options.push(std::ffi::CString::new("-agx-uniform-constants").unwrap());
+            }
             if let Ok(extra) = std::env::var("ZLUDA_AGX_LLVM_ARGS") {
                 options.extend(extra.split_whitespace().filter_map(|a| std::ffi::CString::new(a).ok()));
             }

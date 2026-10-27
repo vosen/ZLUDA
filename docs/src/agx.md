@@ -1051,6 +1051,11 @@ real launches with their real data.
 `ZLUDA_AGX_LLVM_ARGS` passes further options to LLVM in `zoc` and in the driver (part of the compilation cache key):
 backend experiments such as `-agx-threadgroup-unroll=4` or `-agx-fold-mode-phis=false`.
 
+Kernels read their 32-bit constants too wide for an immediate from uniform registers, which the launch preloads
+(`-agx-uniform-constants`, `.agx.kernels` extension 6: (half, value) pairs, which `pack_params` writes after the
+arguments): fewer general purpose registers and more resident SIMD-groups. `ZLUDA_AGX_UNIFORM_CONSTANTS=0` compiles
+with `mov_imm` instead, in the driver and `zoc` and, at build time, for the agx_libs kernels.
+
 `agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
 busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
 of a kernel, for example an edited and reassembled `.asm`, can be checked to compute the same.
