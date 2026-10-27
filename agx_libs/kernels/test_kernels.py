@@ -1877,6 +1877,18 @@ def case_level3(a, obj, tmp, what, opts, rnd):
             for i in range(m):
                 want[i + j * ldc] = alpha * at(A, i, j, lda, ta) + beta * at(B, i, j, ldb, tb)
         return close(unpack(got, BT), want, range(len(C)), TOL(1e-6))
+    if what == "sum_slices":
+        slices, ldc = opts["slices"], m + 3
+        b = beta if opts.get("beta", True) else 0.0
+        P = rounded([rnd.uniform(-1, 1) for _ in range(slices * m * n)], BT)
+        C = mat(0, n, ldc, rnd)
+        (got,) = run(a, obj, K("agx_ssum_slices"), [("buf", pack(P, BT)), ("buf", pack(C, BT), True), ("i64", m), ("i64", n),
+                                                 ("i64", ldc), ("i64", slices), (S(), b)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = sum(P[s * m * n + i + j * m] for s in range(slices)) + b * C[i + j * ldc]
+        return close(unpack(got, BT), want, range(len(C)), TOL(1e-6))
     if what == "dgmm":
         right, incx = opts["right"], opts["incx"]
         lda, ldc = m + 1, m + 2
@@ -2428,6 +2440,9 @@ def main():
                 for ta in (0, 1):
                     for tb in (0, 1):
                         cases.append(("sgeam ta %d tb %d" % (ta, tb), lambda ta=ta, tb=tb: case_level3(a, obj, tmp, "geam", {"ta": ta, "tb": tb}, rnd)))
+                for sl in (1, 3, 16):
+                    for bt in (True, False):
+                        cases.append(("ssum_slices %d beta %d" % (sl, bt), lambda sl=sl, bt=bt: case_level3(a, obj, tmp, "sum_slices", {"slices": sl, "beta": bt}, rnd)))
                 for right in (0, 1):
                     cases.append(("sdgmm right %d inc -2" % right, lambda r=right: case_level3(a, obj, tmp, "dgmm", {"right": r, "incx": -2}, rnd)))
                 for upper in (0, 1):

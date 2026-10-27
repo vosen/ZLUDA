@@ -612,6 +612,49 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // C = P[0] + ... + P[slices - 1] + beta C for m x n matrices P[s] (leading dimension m, m n elements apart):
+  // the partial products of a split-K GEMM. C is not read when beta is 0. 2-D grid.
+  gpu.func @agx_ssum_slices(%p0: memref<1xf32, 1>, %c0: memref<1xf32, 1>, %m: index, %n: index, %ldc: index,
+                            %slices: index, %beta: f32) kernel {
+    %big = arith.constant 4611686018427387904 : index
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %p = memref.reinterpret_cast %p0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %c = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_m = arith.cmpi ult, %i, %m : index
+    %in_n = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_m, %in_n : i1
+    scf.if %in {
+      %jm = arith.muli %j, %m : index
+      %e = arith.addi %jm, %i : index
+      %mn = arith.muli %m, %n : index
+      %sum = scf.for %s = %i0 to %slices step %i1 iter_args(%acc = %f0) -> (f32) {
+        %off = arith.muli %s, %mn : index
+        %q = arith.addi %off, %e : index
+        %v = memref.load %p[%q] : memref<?xf32, strided<[1]>, 1>
+        %a = arith.addf %acc, %v : f32
+        scf.yield %a : f32
+      }
+      %jl = arith.muli %j, %ldc : index
+      %pc = arith.addi %jl, %i : index
+      %bz = arith.cmpf oeq, %beta, %f0 : f32
+      %r = scf.if %bz -> f32 {
+        scf.yield %sum : f32
+      } else {
+        %old = memref.load %c[%pc] : memref<?xf32, strided<[1]>, 1>
+        %t = math.fma %old, %beta, %sum : f32
+        scf.yield %t : f32
+      }
+      memref.store %r, %c[%pc] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
   // C = diag(x) A (left) or A diag(x), m x n. 2-D grid.
   gpu.func @agx_sdgmm(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
                       %m: index, %n: index, %lda: index, %incx: i64, %ldc: index,

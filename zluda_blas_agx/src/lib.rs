@@ -542,7 +542,7 @@ mod imp {
         if slices > 1 {
             // Split K: a product with few 64 x 64 output tiles and a long K keeps a few cores busy for all of K. Its
             // `slices` partial products (alpha op(A) op(B) over one slice of K each) run as one batched launch into
-            // the scratch buffer, then are added to beta C. ZLUDA_AGX_GEMM_SPLITK=0 turns it off.
+            // the scratch buffer, then agx_ssum_slices adds them to beta C. ZLUDA_AGX_GEMM_SPLITK=0 turns it off.
             let (m, n, k) = (m as u64, n as u64, k as u64);
             let kc = k / slices / 8 * 8;
             let part = base.byte_add(pre_bytes);
@@ -565,19 +565,15 @@ mod imp {
                 g.b = b.cast::<f32>().add(step_b(done) as usize).cast();
                 engine::gemm(&g, h.stream).map_err(status)?;
             }
-            for s in 0..slices {
-                let (mut p, mut cc) = (part.cast::<f32>().add((s * m * n) as usize) as *const c_void, c);
-                let (mut rows, mut cols, mut ldp, mut ldcc) = (m as i64, n as i64, m as i64, ldc as i64);
-                let (mut one, mut b2, mut no) = (1.0f32, if s == 0 { beta as f32 } else { 1.0f32 }, 0i64);
-                blas_launch(
-                    h,
-                    c"agx_sgeam",
-                    &mut [arg(&mut p), arg(&mut cc.clone()), arg(&mut cc), arg(&mut rows), arg(&mut cols), arg(&mut ldp),
-                          arg(&mut ldcc.clone()), arg(&mut ldcc), arg(&mut no), arg(&mut no.clone()), arg(&mut one), arg(&mut b2)],
-                    [m as i64, n as i64],
-                    [16, 4],
-                )?;
-            }
+            let (mut p, mut cc) = (part as *const c_void, c);
+            let (mut rows, mut cols, mut ldcc, mut sl, mut b) = (m as i64, n as i64, ldc as i64, slices as i64, beta as f32);
+            blas_launch(
+                h,
+                c"agx_ssum_slices",
+                &mut [arg(&mut p), arg(&mut cc), arg(&mut rows), arg(&mut cols), arg(&mut ldcc), arg(&mut sl), arg(&mut b)],
+                [m as i64, n as i64],
+                [16, 4],
+            )?;
             return Ok(());
         }
         let g = engine::Gemm {
