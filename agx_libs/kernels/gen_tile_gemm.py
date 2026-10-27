@@ -32,10 +32,17 @@ def kernel(name, ab, c, ta, tb):
     w("      attributes {known_block_size = array<i32: 128, 1, 1>} {")
     for v in [0, 1, 2, 8, 16, 24, 32, 64, 128]:
         w(f"    %i{v} = arith.constant {v} : index")
+    # The plan launches the kernel with 8-byte aligned matrices and even leading dimensions: said here, the two
+    # elements of a matrix row a lane loads are one aligned 32-bit access even for 16-bit types.
+    w("    %even = arith.constant -2 : index")
+    for n in ["a", "b", "c"]:
+        w(f"    %{n}0a = memref.assume_alignment %{n}0, 8 : memref<1x{ab if n != 'c' else c}, 1>")
+    for ld in ["lda", "ldb", "ldc"]:
+        w(f"    %{ld}_e = arith.andi %{ld}, %even : index")
     # a transposed operand is stored as its transpose, row-major
-    for n, t, sz, ld in [("A", ab, "%K, %M" if ta else "%M, %K", "%lda"),
-                         ("B", ab, "%N, %K" if tb else "%K, %N", "%ldb"), ("C", c, "%M, %N", "%ldc")]:
-        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0 to offset: [0], sizes: [{sz}], strides: [{ld}, 1]")
+    for n, t, sz, ld in [("A", ab, "%K, %M" if ta else "%M, %K", "%lda_e"),
+                         ("B", ab, "%N, %K" if tb else "%K, %N", "%ldb_e"), ("C", c, "%M, %N", "%ldc_e")]:
+        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0a to offset: [0], sizes: [{sz}], strides: [{ld}, 1]")
         w(f"        : memref<1x{t}, 1> to {mem(t)}")
     w("""
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.

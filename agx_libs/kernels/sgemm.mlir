@@ -29,11 +29,18 @@ gpu.module @agx_blas {
     %i32 = arith.constant 32 : index
     %i64 = arith.constant 64 : index
     %i128 = arith.constant 128 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%M, %K], strides: [%lda, 1]
+    %even = arith.constant -2 : index
+    %a0a = memref.assume_alignment %a0, 8 : memref<1xf32, 1>
+    %b0a = memref.assume_alignment %b0, 8 : memref<1xf32, 1>
+    %c0a = memref.assume_alignment %c0, 8 : memref<1xf32, 1>
+    %lda_e = arith.andi %lda, %even : index
+    %ldb_e = arith.andi %ldb, %even : index
+    %ldc_e = arith.andi %ldc, %even : index
+    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%M, %K], strides: [%lda_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%K, %N], strides: [%ldb, 1]
+    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%K, %N], strides: [%ldb_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%M, %N], strides: [%ldc, 1]
+    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
@@ -335,11 +342,18 @@ gpu.module @agx_blas {
     %i32 = arith.constant 32 : index
     %i64 = arith.constant 64 : index
     %i128 = arith.constant 128 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%K, %M], strides: [%lda, 1]
+    %even = arith.constant -2 : index
+    %a0a = memref.assume_alignment %a0, 8 : memref<1xf32, 1>
+    %b0a = memref.assume_alignment %b0, 8 : memref<1xf32, 1>
+    %c0a = memref.assume_alignment %c0, 8 : memref<1xf32, 1>
+    %lda_e = arith.andi %lda, %even : index
+    %ldb_e = arith.andi %ldb, %even : index
+    %ldc_e = arith.andi %ldc, %even : index
+    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%K, %M], strides: [%lda_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%K, %N], strides: [%ldb, 1]
+    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%K, %N], strides: [%ldb_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%M, %N], strides: [%ldc, 1]
+    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
@@ -530,11 +544,18 @@ gpu.module @agx_blas {
     %i32 = arith.constant 32 : index
     %i64 = arith.constant 64 : index
     %i128 = arith.constant 128 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%M, %K], strides: [%lda, 1]
+    %even = arith.constant -2 : index
+    %a0a = memref.assume_alignment %a0, 8 : memref<1xf32, 1>
+    %b0a = memref.assume_alignment %b0, 8 : memref<1xf32, 1>
+    %c0a = memref.assume_alignment %c0, 8 : memref<1xf32, 1>
+    %lda_e = arith.andi %lda, %even : index
+    %ldb_e = arith.andi %ldb, %even : index
+    %ldc_e = arith.andi %ldc, %even : index
+    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%M, %K], strides: [%lda_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%N, %K], strides: [%ldb, 1]
+    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%N, %K], strides: [%ldb_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%M, %N], strides: [%ldc, 1]
+    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
@@ -725,11 +746,18 @@ gpu.module @agx_blas {
     %i32 = arith.constant 32 : index
     %i64 = arith.constant 64 : index
     %i128 = arith.constant 128 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%K, %M], strides: [%lda, 1]
+    %even = arith.constant -2 : index
+    %a0a = memref.assume_alignment %a0, 8 : memref<1xf32, 1>
+    %b0a = memref.assume_alignment %b0, 8 : memref<1xf32, 1>
+    %c0a = memref.assume_alignment %c0, 8 : memref<1xf32, 1>
+    %lda_e = arith.andi %lda, %even : index
+    %ldb_e = arith.andi %ldb, %even : index
+    %ldc_e = arith.andi %ldc, %even : index
+    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%K, %M], strides: [%lda_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%N, %K], strides: [%ldb, 1]
+    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%N, %K], strides: [%ldb_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%M, %N], strides: [%ldc, 1]
+    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
         : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
