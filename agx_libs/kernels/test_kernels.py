@@ -793,14 +793,40 @@ def case_sparse_ops(a, obj, tmp, what, I, base, rnd):
             if (j > i) if upper else (j < i):
                 return dense.get((i, j), 0.0)
             return 0.0
-        X = unpack(got, BT)
+        # the level-scheduled solve (zluda_sparse_agx's spsv_schedule): op(A)'s rows with the triangle's and the
+        # diagonal's entries, the rows by level; agx_spsv_level once per level, in place in C
+        op_rows = [[] for _ in range(m)]
+        for r in range(m):
+            for k in range(rowptr[r], rowptr[r + 1]):
+                c = col[k]
+                if (c >= r) if upper else (c <= r):
+                    (op_rows[c] if trans else op_rows[r]).append((r if trans else c, k))
+        level = [0] * m
+        for i in (range(m - 1, -1, -1) if upper ^ trans else range(m)):
+            level[i] = max([level[j] + 1 for j, _ in op_rows[i] if j != i], default=0)
+        order = sorted(range(m), key=lambda i: (level[i], i))
+        tptr, tcol, tmap = [0], [], []
+        for row in op_rows:
+            tcol += [j for j, _ in row]
+            tmap += [k for _, k in row]
+            tptr.append(len(tcol))
+        cl = pack([0.0] * (ldc * n), BT)
+        first = 0
+        for lvl in range(max(level) + 1):
+            count = level.count(lvl)
+            (cl,) = run(a, obj, K("agx_spsv_level"), [("buf", pack(tptr, "q")), ("buf", pack(tcol or [0], "q")), ("buf", pack(tmap or [0], "q")),
+                                                     ("buf", pack(order, "q")), ("buf", pack(val, BT)), ("buf", pack(Bm, BT)), ("buf", cl, True),
+                                                     ("i64", first), ("i64", count), ("i64", n), ("i64", 1), ("i64", ldb), ("i64", 1), ("i64", ldc),
+                                                     ("i64", unit), (S(), alpha)], (32, 4), (32, 1), tmp)
+            first += count
         # check op(T) X = alpha B
         errs = []
-        for j in range(n):
-            for i in range(m):
-                lhs = sum((tri(k, i) if trans else tri(i, k)) * X[k + j * ldc] for k in range(m))
-                if abs(lhs - alpha * Bm[i + j * ldb]) > TOL(1e-4) * 10:
-                    errs.append("residual at %d,%d: %g vs %g" % (i, j, lhs, alpha * Bm[i + j * ldb]))
+        for name, X in (("spsm", unpack(got, BT)), ("levels", unpack(cl, BT))):
+            for j in range(n):
+                for i in range(m):
+                    lhs = sum((tri(k, i) if trans else tri(i, k)) * X[k + j * ldc] for k in range(m))
+                    if abs(lhs - alpha * Bm[i + j * ldb]) > TOL(1e-4) * 10:
+                        errs.append("%s residual at %d,%d: %g vs %g" % (name, i, j, lhs, alpha * Bm[i + j * ldb]))
         return errs[:5]
     raise ValueError(what)
 

@@ -2,6 +2,74 @@
 // 32- or 64-bit indices, for every AGX generation like sgemm.mlir.
 
 gpu.module @agx_sparse {
+  // One level of a level-scheduled triangular solve (cusparseSpSV / SpSM
+  // after their analysis): the rows order[first .. first + count) of op(A),
+  // which depend only on rows of earlier levels, for each of the n columns of
+  // C (2-D grid: row, column). Row i of op(A) is tptr[i] .. tptr[i + 1] of
+  // tcol (its columns, zero-based, only the triangle's and the diagonal's) and
+  // tmap (where their values are in val), so A^T needs no other kernel and
+  // new values of A are used:
+  //   C[i] = (alpha B[i] - sum of op(A)[i, j] C[j], j != i) / op(A)[i, i]
+  // with 1 for the diagonal when unit is not 0 or the row has none. C may be B.
+  gpu.func @agx_spsv_level(%tptr0: memref<1xi64, 1>, %tcol0: memref<1xi64, 1>, %tmap0: memref<1xi64, 1>,
+                           %order0: memref<1xi64, 1>, %val0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
+                           %c0: memref<1xf32, 1>, %first_: i64, %count_: i64, %n_: i64, %brs_: i64, %bcs_: i64,
+                           %crs_: i64, %ccs_: i64, %unit_: i64, %alpha: f32) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f1 = arith.constant 1.0 : f32
+    %z = arith.constant 0 : i64
+    %first = arith.index_cast %first_ : i64 to index
+    %count = arith.index_cast %count_ : i64 to index
+    %n = arith.index_cast %n_ : i64 to index
+    %brs = arith.index_cast %brs_ : i64 to index
+    %bcs = arith.index_cast %bcs_ : i64 to index
+    %crs = arith.index_cast %crs_ : i64 to index
+    %ccs = arith.index_cast %ccs_ : i64 to index
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %t = gpu.global_id x
+    %j = gpu.global_id y
+    %in_t = arith.cmpi ult, %t, %count : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %live = arith.andi %in_t, %in_j : i1
+    scf.if %live {
+      %ft = arith.addi %first, %t : index
+      %i = func.call @agx_sp_ix_i64(%order0, %ft, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %lo = func.call @agx_sp_ix_i64(%tptr0, %i, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %i_1 = arith.addi %i, %i1 : index
+      %hi = func.call @agx_sp_ix_i64(%tptr0, %i_1, %i0) : (memref<1xi64, 1>, index, index) -> index
+      %bj = arith.muli %j, %bcs : index
+      %cj = arith.muli %j, %ccs : index
+      %bi = arith.muli %i, %brs : index
+      %bo = arith.addi %bi, %bj : index
+      %bv = func.call @agx_sp_ld(%b0, %bo) : (memref<1xf32, 1>, index) -> f32
+      %s0 = arith.mulf %bv, %alpha : f32
+      %acc:2 = scf.for %k = %lo to %hi step %i1 iter_args(%s = %s0, %d = %f1) -> (f32, f32) {
+        %cc = func.call @agx_sp_ix_i64(%tcol0, %k, %i0) : (memref<1xi64, 1>, index, index) -> index
+        %vk = func.call @agx_sp_ix_i64(%tmap0, %k, %i0) : (memref<1xi64, 1>, index, index) -> index
+        %v = func.call @agx_sp_ld(%val0, %vk) : (memref<1xf32, 1>, index) -> f32
+        %is_diag = arith.cmpi eq, %cc, %i : index
+        %r:2 = scf.if %is_diag -> (f32, f32) {
+          scf.yield %s, %v : f32, f32
+        } else {
+          %xc = arith.muli %cc, %crs : index
+          %xo = arith.addi %xc, %cj : index
+          %x = func.call @agx_sp_ld(%c0, %xo) : (memref<1xf32, 1>, index) -> f32
+          %vx = arith.mulf %v, %x : f32
+          %sn = arith.subf %s, %vx : f32
+          scf.yield %sn, %d : f32, f32
+        }
+        scf.yield %r#0, %r#1 : f32, f32
+      }
+      %d = arith.select %unit, %f1, %acc#1 : f32
+      %x = arith.divf %acc#0, %d : f32
+      %ci = arith.muli %i, %crs : index
+      %co = arith.addi %ci, %cj : index
+      func.call @agx_sp_st(%c0, %co, %x) : (memref<1xf32, 1>, index, f32) -> ()
+    }
+    gpu.return
+  }
+
   // y[i * stride] *= beta for i < n (0 when beta is 0, whatever y held).
   gpu.func @agx_sparse_scale(%y0: memref<1xf32, 1>, %n_: i64, %stride_: i64,
                              %beta: f32) kernel {

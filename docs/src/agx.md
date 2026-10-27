@@ -1405,8 +1405,14 @@ of their transpose:
 - `cusparseSDDMM` on CSR output, `opA` and `opB` either way, one thread per row.
 - `cusparseSpSV` and `cusparseSpSM` on CSR matrices with the fill mode and
   diagonal type of `cusparseSpMatSetAttribute`, `opA` non-transposed or
-  transposed (and `opB` either way for SpSM): one thread per right-hand side
-  substitutes row after row, so a single SpSV runs on one thread.
+  transposed (and `opB` either way for SpSM). The analysis reads the matrix
+  structure back (after the stream's earlier work) and groups the rows of
+  op(A) into levels, each row after the rows it reads; when there are few
+  levels for the entries (at most one per 64 entries and rows, as a launch
+  costs about as much as that many dependent accesses in one thread), the
+  solve launches one kernel per level over its rows and the right-hand sides,
+  reading the values of A at solve time. Otherwise, or for a matrix other than
+  the analyzed one, one thread per right-hand side substitutes row after row.
 
 Only SpVV, Csr2cscEx2 and SpGEMM need external buffers. Handles, streams, host and
 device pointer modes and the legacy matrix descriptor are supported. Other
