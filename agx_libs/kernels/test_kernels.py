@@ -243,17 +243,11 @@ def split_plan(M, N, K, lda, ldb, ldc, ta=False, tb=False):
     return parts
 
 
-def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
-               c="f", ta=False, tb=False):
-    # column-major op(A) and op(B), the leading dimensions even as the tile kernel needs
-    ra, rb = (K if ta else M), (N if tb else K)
-    lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, tile, gen, ab, c, ta, tb):
+    """Column-major C = alpha op(A) op(B) + beta C as zluda_blas_agx runs it (split_plan's parts); returns C."""
     sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
     sb = (ldb, 1) if tb else (1, ldb)
-    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))], ab)
-    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * (K if tb else N))], ab)
-    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)], c)
-    C = list(C0)
+    C = list(C)
     for is_tile, (m, n, k), (oa, ob, oc), acc in split_plan(M, N, K, lda, ldb, ldc, ta, tb):
         be = 1.0 if acc else beta
         if is_tile:
@@ -270,8 +264,41 @@ def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", 
             kernel = gen.replace("_generic", "_dot") if use_dot(m, n, k, ta, tb) else gen
             (got,) = run(a, obj, kernel, args, *gemm_launch(kernel, m, n), tmp)
         C[oc:] = unpack(got, c)
+    return C
+
+
+def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
+               c="f", ta=False, tb=False):
+    # column-major op(A) and op(B), the leading dimensions even as the tile kernel needs
+    ra, rb = (K if ta else M), (N if tb else K)
+    lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+    sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
+    sb = (ldb, 1) if tb else (1, ldb)
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * (K if tb else N))], ab)
+    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)], c)
+    C = run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C0, ldc, alpha, beta, tile, gen, ab, c, ta, tb)
     want = reference(M, N, K, A, sa, B, sb, C0, (1, ldc), alpha, beta)
     return close(C, want, [i + j * ldc for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
+
+
+def case_conv_pointwise(a, obj, tmp, n, ch, h, w, k, alpha, beta, rnd, tile="agx_sgemm_tile64",
+                        gen="agx_sgemm_generic", t="f"):
+    """A 1x1 NCHW convolution as zluda_dnn_agx runs it (pointwise_gemm): per image, y^T (HW x K, ld HW) =
+    x^T (HW x C, ld HW) w^T (C x K, ld C), against the direct sum."""
+    hw = h * w
+    X = rounded([rnd.uniform(-1, 1) for _ in range(n * ch * hw)], t)
+    W = rounded([rnd.uniform(-1, 1) for _ in range(k * ch)], t)
+    Y0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(n * k * hw)], t)
+    got, want = [], []
+    for b in range(n):
+        xb, yb = X[b * ch * hw:(b + 1) * ch * hw], Y0[b * k * hw:(b + 1) * k * hw]
+        got += run_gemm_plan(a, obj, tmp, hw, k, ch, xb, hw, W, ch, yb, hw, alpha, beta, tile, gen, t, t, False, False)
+        for kk in range(k):
+            for p in range(hw):
+                v = alpha * sum(W[kk * ch + cc] * xb[cc * hw + p] for cc in range(ch))
+                want.append(v + (beta * yb[kk * hw + p] if beta != 0 else 0.0))
+    return close(got, want, range(len(want)), 1e-4 if t == "f" else 2e-3)
 
 
 def gelu(x):
@@ -2269,6 +2296,10 @@ def main():
                     ("split TN 77x130x21", lambda: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, ta=True)),
                     ("split NT 130x70x13 b=0", lambda: case_split(a, obj, tmp, 130, 70, 13, 1.5, 0.0, rnd, tb=True)),
                     ("split TT 64x100x8", lambda: case_split(a, obj, tmp, 64, 100, 8, -1.0, 1.0, rnd, ta=True, tb=True)),
+                    ("conv 1x1 as GEMM 2x40x8x9 to 72", lambda: case_conv_pointwise(a, obj, tmp, 2, 40, 8, 9, 72,
+                                                                                    1.0, 0.5, rnd)),
+                    ("conv 1x1 as GEMM 1x3x5x5 to 4 b=0", lambda: case_conv_pointwise(a, obj, tmp, 1, 3, 5, 5, 4,
+                                                                                      -0.5, 0.0, rnd)),
                     # strips on the dot kernel: one column of C beside the tile (TN), five rows below it (NN)
                     ("split TN 128x65x64 (dot strip)",
                      lambda: case_split(a, obj, tmp, 128, 65, 64, 1.0, 0.5, rnd, ta=True)),
@@ -2310,6 +2341,10 @@ def main():
                          lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
                                                               ta=True)),
                     ]
+                    if ct == "f16":  # f16 convolutions keep f16 data
+                        cases.append(("h conv 1x1 as GEMM 2x24x8x8 to 64",
+                                      lambda tk=tk, gk=gk: case_conv_pointwise(a, obj, tmp, 2, 24, 8, 8, 64, 1.0, 0.5,
+                                                                               rnd, tk, gk, "e")))
             for label, f in cases:
                 try:
                     bad = f()

@@ -985,8 +985,53 @@ mod imp {
         y: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, wd, cd, yd)?;
+        if let Some(g) = pointwise_gemm(&s, half, x, w, y, alpha, beta) {
+            let h = obj::<Handle>(h)?;
+            return engine::gemm(&g, h.stream).map_err(status);
+        }
         let elements = s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64;
         run(h, "fwd", s, half, elements, x, w, y, alpha, beta)
+    }
+
+    /// A 1x1 convolution (stride 1, no padding, one group) of NCHW images whose planes are dense: per image n,
+    /// y[n] (K x HW) = w (K x C) x[n] (C x HW), which agx_libs' GEMM runs on its tile kernel. Seen column-major, that
+    /// is y[n]^T (HW x K, ld HW) = x[n]^T (HW x C, ld HW) w^T (C x K, ld C), batched over n.
+    unsafe fn pointwise_gemm(
+        s: &[i32; 25],
+        half: bool,
+        x: *const c_void,
+        w: *const c_void,
+        y: *mut c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> Option<engine::Gemm> {
+        let [n, ch, hh, wd, k, r, sw, p, q, pad0, pad1, st0, st1, _, _, g, _, xs0, xs1, xs2, xs3, ys0, ys1, ys2, ys3] = *s;
+        let hw = hh * wd;
+        if r != 1 || sw != 1 || pad0 != 0 || pad1 != 0 || st0 != 1 || st1 != 1 || g != 1 || (p, q) != (hh, wd)
+            || (xs1, xs2, xs3) != (hw, wd, 1) || (ys1, ys2, ys3) != (hw, wd, 1) || alpha.is_null() || beta.is_null()
+        {
+            return None;
+        }
+        Some(engine::Gemm {
+            types: if half { agx_libs::Types::H } else { agx_libs::Types::S },
+            ta: false,
+            tb: false,
+            m: hw as u64,
+            n: k as u64,
+            k: ch as u64,
+            alpha: *(alpha as *const f32) as f64,
+            beta: *(beta as *const f32) as f64,
+            a: x,
+            lda: hw as u64,
+            stride_a: xs0 as i64,
+            b: w,
+            ldb: ch as u64,
+            stride_b: 0,
+            c: y,
+            ldc: hw as u64,
+            stride_c: ys0 as i64,
+            batch: n as u64,
+        })
     }
 
     pub(crate) unsafe fn cudnnConvolutionBackwardData(

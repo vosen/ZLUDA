@@ -1281,7 +1281,10 @@ f32, with `alpha` / `beta`. The algorithm queries (`Get*_v7`, `Find*`,
 `Find*Ex`) report one deterministic algorithm per direction that needs no
 workspace. The kernels compute one output element per thread; they are
 tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
-`test_kernels.py`).
+`test_kernels.py`). A forward 1x1 convolution (stride 1, no padding, one
+group) of images with dense NCHW planes is a GEMM per image instead,
+y[n] (K x HW) = w (K x C) x[n] (C x HW), and runs batched on the GEMM path
+(the matrix-unit tile kernel for its 64-aligned block).
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
 tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16
