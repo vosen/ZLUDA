@@ -1442,7 +1442,11 @@ in the application's PTX and needs no library.
 their `_bufferSize` queries. The factorizations run one
 column at a time — a single-thread pivot or reflector step, then a parallel
 update of the rest of the matrix — and the solves run one thread per
-right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
+right-hand side. The f32 getrf with more than 64 columns to factor works by
+panels of 64 columns: the columns of a panel as above with the update kept to
+the panel, then the BLAS triangular solve for the panel's rows of U and one
+GEMM on the tile kernels for the rest of the matrix (the same pivots, the
+products summed in another order). `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get

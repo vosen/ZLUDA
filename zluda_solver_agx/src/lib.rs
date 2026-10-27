@@ -69,11 +69,16 @@ fn kernel(double: bool, names: [&'static CStr; 2]) -> &'static CStr {
 
 /// Launches a kernel over `grid` threads (rounded up to whole groups of `block`).
 unsafe fn run(h: &Handle, name: &'static CStr, params: &mut [*mut c_void], grid: [i64; 2], block: [u32; 2]) -> R {
+    run_in(h, agx_libs::SOLVER, name, params, grid, block)
+}
+
+/// A kernel of another agx_libs object (the BLAS triangular solve of the blocked factorizations).
+unsafe fn run_in(h: &Handle, image: &'static [u8], name: &'static CStr, params: &mut [*mut c_void], grid: [i64; 2], block: [u32; 2]) -> R {
     if grid[0] <= 0 || grid[1] <= 0 {
         return Ok(());
     }
     let groups = |n: i64, b: u32| u32::try_from((n as u64).div_ceil(b as u64)).map_err(|_| cusolverStatus_t::NOT_SUPPORTED);
-    let f = engine::function(agx_libs::SOLVER, name).map_err(status)?;
+    let f = engine::function(image, name).map_err(status)?;
     engine::launch_kernel(f, [groups(grid[0], block[0])?, groups(grid[1], block[1])?], block, params, h.stream).map_err(status)
 }
 
@@ -114,7 +119,13 @@ unsafe fn out(p: *mut c_int, v: usize) -> R {
     Ok(())
 }
 
-/// getrf: P A = L U, one column at a time (pivot, swap, scale, update).
+/// The columns of a panel of the blocked f32 getrf.
+const LU_BLOCK: i64 = 64;
+
+/// getrf: P A = L U, one column at a time (pivot, swap, scale, update). In f32 with more than LU_BLOCK columns to
+/// factor, by panels of LU_BLOCK columns (right-looking): the columns of a panel as before, with the updates kept to
+/// the panel (row swaps still span A), then U12 = L11^-1 A12 (the BLAS triangular solve) and A22 -= A21 U12 (a GEMM
+/// on the tile kernels). The pivots are the same; the products are summed in another order.
 unsafe fn getrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, lda: c_int, ipiv: *mut c_int, info: *mut c_int) -> R {
     dims(m, n, lda)?;
     if ipiv.is_null() {
@@ -128,8 +139,16 @@ unsafe fn getrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, ld
     }
     let (mut pa, mut pi, mut pinfo) = (a, ipiv as *mut c_void, info as *mut c_void);
     let (mut m_, mut n_, mut lda_) = (m as i64, n as i64, lda as i64);
-    for k in 0..m.min(n) as i64 {
+    let mn = m.min(n) as i64;
+    let block = if double || mn <= LU_BLOCK { mn } else { LU_BLOCK };
+    let at = |r: i64, c: i64| (a as *mut f32).add((r + c * lda as i64) as usize) as *mut c_void;
+    for k in 0..mn {
         let mut k_ = k;
+        // the end of k's panel: the update stays in it
+        let (j0, mut j1) = (k / block * block, (k / block * block + block).min(mn));
+        if block == mn {
+            j1 = n_;
+        }
         run(
             h,
             kernel(double, [c"agx_lu_pivot", c"agx_lu_pivot_f64"]),
@@ -154,10 +173,63 @@ unsafe fn getrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, ld
         run(
             h,
             kernel(double, [c"agx_lu_update", c"agx_lu_update_f64"]),
-            &mut [arg(&mut pa), arg(&mut m_), arg(&mut n_), arg(&mut lda_), arg(&mut k_)],
-            [m_ - k - 1, n_ - k - 1],
+            &mut [arg(&mut pa), arg(&mut m_), arg(&mut j1), arg(&mut lda_), arg(&mut k_)],
+            [m_ - k - 1, j1 - k - 1],
             [16, 4],
         )?;
+        if k + 1 != j1 || j1 >= n_ {
+            continue;
+        }
+        // the panel j0..j1 is factored: U12 = L11^-1 A12 (unit lower), then A22 -= A21 U12
+        let (jb, rest) = (j1 - j0, n_ - j1);
+        let (mut l11, mut a12) = (at(j0, j0), at(j0, j1));
+        let (mut sm, mut sn, mut lda_l, mut ldb_l) = (jb, rest, lda_, lda_);
+        // left side, stored lower, not transposed, unit diagonal (so the per-thread system is lower), alpha 1
+        let (mut right, mut upper, mut trans, mut unit, mut lower, mut alpha) = (0i64, 0i64, 0i64, 1i64, 1i64, 1.0f32);
+        run_in(
+            h,
+            agx_libs::BLAS,
+            c"agx_strsm",
+            &mut [
+                arg(&mut l11),
+                arg(&mut a12),
+                arg(&mut sm),
+                arg(&mut sn),
+                arg(&mut lda_l),
+                arg(&mut ldb_l),
+                arg(&mut right),
+                arg(&mut upper),
+                arg(&mut trans),
+                arg(&mut unit),
+                arg(&mut lower),
+                arg(&mut alpha),
+            ],
+            [rest, 1],
+            [64, 1],
+        )?;
+        if m_ > j1 {
+            let g = engine::Gemm {
+                types: agx_libs::Types::S,
+                ta: false,
+                tb: false,
+                m: (m_ - j1) as u64,
+                n: rest as u64,
+                k: jb as u64,
+                alpha: -1.0,
+                beta: 1.0,
+                a: at(j1, j0),
+                lda: lda_ as u64,
+                stride_a: 0,
+                b: a12,
+                ldb: lda_ as u64,
+                stride_b: 0,
+                c: at(j1, j1),
+                ldc: lda_ as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            engine::gemm(&g, h.stream).map_err(status)?;
+        }
     }
     Ok(())
 }
