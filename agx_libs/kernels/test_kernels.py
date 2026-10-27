@@ -2084,12 +2084,13 @@ def case_cblas(a, obj, tmp, what, o, rnd):
             B, ldb = A, lda
         (got,) = run(a, obj, K("agx_crankk"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", n), ("i64", k),
                                                ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", upper), ("i64", op), ("i64", herm),
-                                               ("i64", two)] + cs(a1) + cs(a2) + cs(b), (16, 8), (16, 4), tmp)
+                                               ("i64", two)] + cs(a1) + cs(a2) + cs(b) + [("i64", o["nb"])], (16, 8), (16, 4), tmp)
         cj = (lambda z: z.conjugate()) if herm else (lambda z: z)
         want = list(C)
+        nb = o["nb"]
         for j in range(n):
             for i in range(n):
-                if (i <= j) if upper else (i >= j):
+                if ((i <= j) if upper else (i >= j)) and (nb == 0 or i // nb == j // nb):
                     v = a1 * sum(cop(A, i, l, lda, op) * cj(cop(B, j, l, ldb, op)) for l in range(k))
                     if two:
                         v += a2 * sum(cop(B, i, l, ldb, op) * cj(cop(A, j, l, lda, op)) for l in range(k))
@@ -2277,8 +2278,9 @@ def cblas_cases(a, obj, tmp, rnd):
     for upper in (0, 1):
         for name, op, herm, two in (("herk N", 0, 1, 0), ("herk C", 2, 1, 0), ("syrk N", 0, 0, 0), ("syrk T", 1, 0, 0),
                                     ("her2k N", 0, 1, 1), ("her2k C", 2, 1, 1), ("syr2k N", 0, 0, 1), ("syr2k T", 1, 0, 1)):
-            cases.append(("c%s upper %d" % (name, upper),
-                          lambda o={"upper": upper, "op": op, "herm": herm, "two": two}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
+            for nb in (0, 2):  # nb 2: the diagonal blocks only
+                cases.append(("c%s upper %d nb %d" % (name, upper, nb),
+                              lambda o={"upper": upper, "op": op, "herm": herm, "two": two, "nb": nb}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
     for op in (0, 1, 2):
         cases.append(("cgemv op %d inc -2,3" % op, lambda o={"op": op, "incx": -2, "incy": 3}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
         cases.append(("cgemv op %d m=70 (several elements a lane)" % op,

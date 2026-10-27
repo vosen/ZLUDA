@@ -1265,7 +1265,10 @@ it), as NVIDIA's does.
   `[re -im; im re]` in a scratch buffer the handle keeps (a transposed op(B) is copied untransposed next to it), and a
   beta that is not real is applied to C first. `cublasChemm` and `Csymm` with C of at least 64 x 64 elements (and
   C not B) do the same with A made full: on the left, alpha A expanded; on the right, alpha B expanded times A made
-  full (complex). Smaller products and the other complex level 3 routines run one thread per element of C.
+  full (complex). `cublasCherk`, `Csyrk`, `Cher2k` and `Csyr2k` above 64 rows split C's triangle as the real
+  syrk does: each corner outside the 64 x 64 diagonal blocks is one such complex GEMM (two for the 2k forms) and one
+  launch does the diagonal blocks. Smaller products and the other complex level 3 routines run one thread per element
+  of C.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).

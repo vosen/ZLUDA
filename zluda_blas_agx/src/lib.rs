@@ -2079,11 +2079,30 @@ mod imp {
             (true, true) => (ar, R::negate(ai)),
             (true, false) => (ar, ai),
         };
+        // f32 above a block: the corners of the triangle outside the diagonal blocks are complex GEMMs on the real
+        // tile kernels (two for the 2k forms), and agx_crankk does only the diagonal blocks
+        let mut nb = 0i64;
+        if R::GEMM == Types::S && n > SYRK_BLOCK && k > 0 {
+            nb = SYRK_BLOCK;
+            let f = |v: R| v.to_f64() as f32;
+            let (alpha1, alpha2, beta) = ((f(ar), f(ai)), (f(a2r), f(a2i)), (f(br), f(bi)));
+            // rows r.. of op(M) (M's rows, or its columns when transposed): the left factor with op, and as the right
+            // factor, transposed (conjugated for the Hermitian forms), which for a transposed op is M's columns as they are
+            let at = |p: *const c_void, ld: i64, r: i64| p.byte_add(8 * if op == 0 { r } else { r * ld } as usize);
+            let op_right = if op == 0 { if herm { 2 } else { 1 } } else { 0 };
+            for [first, second, m, w] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
+                let cc = (c.byte_add(8 * (first + second * ldc) as usize), ldc);
+                cgemm_real(h, m, w, k, (at(a, lda, first), lda, op), (at(b, ldb, second), ldb, op_right), cc, alpha1, beta)?;
+                if two {
+                    cgemm_real(h, m, w, k, (at(b, ldb, first), ldb, op), (at(a, lda, second), lda, op_right), cc, alpha2, (1.0, 0.0))?;
+                }
+            }
+        }
         let (mut upper, mut herm, mut two) = (upper as i64, herm as i64, two as i64);
         cblas_launch(
             h,
             R::kernel(c"agx_crankk", c"agx_crankk_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut op), arg(&mut herm), arg(&mut two), arg(&mut ar), arg(&mut ai), arg(&mut a2r), arg(&mut a2i), arg(&mut br), arg(&mut bi)],
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut op), arg(&mut herm), arg(&mut two), arg(&mut ar), arg(&mut ai), arg(&mut a2r), arg(&mut a2i), arg(&mut br), arg(&mut bi), arg(&mut nb)],
             [n, n],
             [16, 4],
         )

@@ -314,7 +314,7 @@ gpu.module @agx_blas {
   gpu.func @agx_crankk(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
                        %n: index, %k: index, %lda: index, %ldb: index, %ldc: index,
                        %upper_: i64, %op: i64, %herm_: i64, %two_: i64,
-                       %ar: f32, %ai: f32, %a2r: f32, %a2i: f32, %br: f32, %bi: f32) kernel {
+                       %ar: f32, %ai: f32, %a2r: f32, %a2i: f32, %br: f32, %bi: f32, %nb: index) kernel {
     %z = arith.constant 0 : i64
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -330,7 +330,15 @@ gpu.module @agx_blas {
     %ge = arith.cmpi uge, %i, %j : index
     %tri = arith.select %upper, %le, %ge : i1
     %in0 = arith.andi %in_i, %in_j : i1
-    %in = arith.andi %in0, %tri : i1
+    %in1 = arith.andi %in0, %tri : i1
+    // with nb > 0, only the diagonal nb x nb blocks (the rest on GEMMs)
+    %nb1 = arith.maxui %nb, %i1 : index
+    %blk_i = arith.divui %i, %nb1 : index
+    %blk_j = arith.divui %j, %nb1 : index
+    %same = arith.cmpi eq, %blk_i, %blk_j : index
+    %all = arith.cmpi eq, %nb, %i0 : index
+    %block = arith.ori %all, %same : i1
+    %in = arith.andi %in1, %block : i1
     scf.if %in {
       %s:4 = scf.for %l = %i0 to %k step %i1 iter_args(%sr = %f0, %si = %f0, %tr = %f0, %ti = %f0) -> (f32, f32, f32, f32) {
         %x:2 = func.call @agx_c_get(%a0, %i, %l, %lda, %op) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
