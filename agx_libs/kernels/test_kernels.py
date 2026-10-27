@@ -1588,8 +1588,8 @@ def case_pointwise(a, obj, tmp, op, rnd):
     return close(unpack(got), want, c.positions(), 1e-6)
 
 
-def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
-    dims, alpha, beta = (2, 5, 3, 2), 1.0, 0.25
+def case_softmax(a, obj, tmp, instance, algo, bwd, rnd, dims=(2, 5, 3, 2)):
+    alpha, beta = 1.0, 0.25
     N, C, H, W = dims
     x, y = T4(dims, rnd, 1, lo=-4, hi=4), T4(dims, rnd, 0, nhwc=True)
     groups = ([[(n, c, h, w) for c in range(C) for h in range(H) for w in range(W)] for n in range(N)] if instance else
@@ -1599,7 +1599,7 @@ def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
     if not bwd:
         (got,) = run(a, obj, "agx_dnn_softmax_fwd", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("i64", rows),
                                                      ("i64", K)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(y) + tail,
-                     (32, 1), (32, 1), tmp)
+                     (32 * rows, 1), (32, 1), tmp)  # a SIMD-group per row
         want = list(y.data)
         for g in groups:
             vs = [x.data[x.off(*i)] for i in g]
@@ -1618,7 +1618,7 @@ def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
     yv.data = rounded(yv.data, "f")
     (got,) = run(a, obj, "agx_dnn_softmax_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(dx.data), True),
                                                  ("i64", rows), ("i64", K)] + dnn_shape(x) + dnn_strides(yv)
-                 + dnn_strides(dy) + dnn_strides(dx) + tail, (32, 1), (32, 1), tmp)
+                 + dnn_strides(dy) + dnn_strides(dx) + tail, (32 * rows, 1), (32, 1), tmp)  # a SIMD-group per row
     want = list(dx.data)
     for g in groups:
         ys = [yv.data[yv.off(*i)] for i in g]
@@ -2256,6 +2256,10 @@ def main():
                         for bwd in (0, 1):
                             cases.append(("dnn softmax %s algo %d %s" % ("instance" if inst else "channel", algo, "bwd" if bwd else "fwd"),
                                           lambda i=inst, al=algo, b=bwd: case_softmax(a, obj, tmp, i, al, b, rnd)))
+                for algo in (1, 2):  # rows longer than a SIMD-group
+                    for bwd in (0, 1):
+                        cases.append(("dnn softmax instance algo %d %s 2x4x5x3" % (algo, "bwd" if bwd else "fwd"),
+                                      lambda al=algo, b=bwd: case_softmax(a, obj, tmp, 1, al, b, rnd, (2, 4, 5, 3))))
                 for mode in (0, 1, 2):
                     for bwd in (0, 1):
                         for R, S, pad, st in ((3, 3, (1, 1), (2, 2)), (2, 3, (0, 1), (1, 2))):

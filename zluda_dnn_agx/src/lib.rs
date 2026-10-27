@@ -1634,7 +1634,7 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows)
+        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows * 32)
     }
 
     pub(crate) unsafe fn cudnnSoftmaxBackward(
@@ -1667,7 +1667,7 @@ mod imp {
         let mut p = vec![arg(&mut y), arg(&mut dy), arg(&mut dx), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows)
+        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows * 32)
     }
 
     pub(crate) unsafe fn cudnnCreatePoolingDescriptor(d: *mut cudnnPoolingDescriptor_t) -> cudnnStatus_t {

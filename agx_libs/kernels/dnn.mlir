@@ -335,7 +335,7 @@ gpu.module @agx_dnn {
   }
 
   // Softmax forward over rows rows of K elements; algo fast 0 (no maximum
-  // subtracted), accurate 1, log 2. One thread per row.
+  // subtracted), accurate 1, log 2. One SIMD-group per row.
   gpu.func @agx_dnn_softmax_fwd(%x0: memref<1xf32, 1>, %y0: memref<1xf32, 1>,
       %rows: index, %K: index, %C: index, %H: index, %W: index,
       %xs0: index, %xs1: index, %xs2: index, %xs3: index,
@@ -355,7 +355,12 @@ gpu.module @agx_dnn {
     %log2e = arith.constant 1.44269504 : f32
     %ln2 = arith.constant 0.693147182 : f32
     %HW = arith.muli %H, %W : index
-    %o = gpu.global_id x
+    // a SIMD-group per row: lane l takes the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %o = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %o, %rows : index
     scf.if %live {
       %fast = arith.cmpi eq, %algo, %k0 : index
@@ -363,7 +368,7 @@ gpu.module @agx_dnn {
       %m = scf.if %fast -> f32 {
         scf.yield %f0 : f32
       } else {
-        %mx = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %ninf) -> f32 {
+        %mxl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %ninf) -> f32 {
           %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
           %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
               : (index, index, index, index, index, index, index, index) -> index
@@ -371,9 +376,11 @@ gpu.module @agx_dnn {
           %a = arith.maximumf %acc, %v : f32
           scf.yield %a : f32
         }
+        // a NaN element makes the sum below NaN however the maximum treats it
+        %mx = gpu.subgroup_reduce maxnumf %mxl : (f32) -> f32
         scf.yield %mx : f32
       }
-      %s = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %f0) -> f32 {
+      %sl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %f0) -> f32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -384,9 +391,10 @@ gpu.module @agx_dnn {
         %a = arith.addf %acc, %e : f32
         scf.yield %a : f32
       }
+      %s = gpu.subgroup_reduce add %sl : (f32) -> f32
       %l2 = math.log2 %s fastmath<afn> : f32
       %lns = arith.mulf %l2, %ln2 : f32
-      scf.for %k = %k0 to %K step %k1 {
+      scf.for %k = %lane to %K step %k32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -406,6 +414,7 @@ gpu.module @agx_dnn {
   }
 
   // Softmax backward: dx = y (dy - sum dy y), or dy - e^y sum dy for log.
+  // One SIMD-group per row.
   gpu.func @agx_dnn_softmax_bwd(%y0: memref<1xf32, 1>, %dy0: memref<1xf32, 1>,
       %dx0: memref<1xf32, 1>, %rows: index, %K: index, %C: index, %H: index, %W: index,
       %ys0: index, %ys1: index, %ys2: index, %ys3: index,
@@ -427,11 +436,16 @@ gpu.module @agx_dnn {
     %f0 = arith.constant 0.0 : f32
     %log2e = arith.constant 1.44269504 : f32
     %HW = arith.muli %H, %W : index
-    %o = gpu.global_id x
+    // a SIMD-group per row: lane l takes the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %o = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %o, %rows : index
     scf.if %live {
       %log = arith.cmpi eq, %algo, %k2 : index
-      %s = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %f0) -> f32 {
+      %sl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %f0) -> f32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %yo = func.call @agx_dnn_off(%li, %C, %H, %W, %ys0, %ys1, %ys2, %ys3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -444,7 +458,8 @@ gpu.module @agx_dnn {
         %a = arith.addf %acc, %t : f32
         scf.yield %a : f32
       }
-      scf.for %k = %k0 to %K step %k1 {
+      %s = gpu.subgroup_reduce add %sl : (f32) -> f32
+      scf.for %k = %lane to %K step %k32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %yo = func.call @agx_dnn_off(%li, %C, %H, %W, %ys0, %ys1, %ys2, %ys3)
             : (index, index, index, index, index, index, index, index) -> index
