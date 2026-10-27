@@ -1012,6 +1012,16 @@ Launches of checked kernels, captured launches and kernels that use the stack or
 `ZLUDA_AGX_GRAPH_BATCH=0` submits one command per launch; with `ZLUDA_AGX_PROFILE`, the launches of a command share
 its time equally.
 
+`ZLUDA_AGX_LAUNCH_BATCH=1` (off by default, not yet measured on hardware) gathers ordinary launches (`cuLaunchKernel`,
+`cuLaunchKernelEx`, `cuLaunchCooperativeKernel`) the same way, but only while the GPU is busy: a launch whose stream's
+queue has finished its work (one syncobj query) is submitted at once, and later launches of the same stream join a
+batch until it is submitted. Every other API call submits the gathered launches before it does anything (as do
+context destruction and device reset), so they keep their order with copies, events, queries, host functions,
+synchronization and other streams. The cost of the policy: launches gathered while the program then only computes
+on the CPU wait for its next API call, and a program that polls host memory a kernel writes, with no API call
+meanwhile, would never see them run. Whether it pays (graph batching traded generation throughput for prompt
+throughput in Qwen) has to be measured on the M2 Max.
+
 Graph replay borrows its stored operation list rather than copying every node and its argument bytes on each replay.
 In a Geekbench 7 GPU run on the M2 Max, `cuGraphLaunch` accumulated 2.12 s over 8,854 calls (0.239 ms/call), versus
 3.61 s over 8,770 calls (0.412 ms/call) in the previous run. These full-run figures include other host load and

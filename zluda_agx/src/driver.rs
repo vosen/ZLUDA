@@ -254,6 +254,24 @@ fn graph_batching_enabled() -> bool {
     *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
+/// `ZLUDA_AGX_LAUNCH_BATCH=1`: ordinary kernel launches (outside graphs) are gathered into one command while the GPU
+/// is busy with the stream's earlier work, as graph launches are (`Batch`). A launch to an idle GPU is submitted at
+/// once; every API call other than a launch submits the gathered launches first, so they keep their order with
+/// copies, events, synchronizations and other streams. Off by default until measured on hardware: launches held while
+/// the program only computes on the CPU wait for its next API call (a program polling host memory a kernel writes,
+/// with no API call, would wait for ever).
+fn launch_batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_LAUNCH_BATCH").is_ok_and(|v| !v.is_empty() && v != "0"))
+}
+
+/// Whether a launch goes into the batch: always while a graph runs (`graph`); for ordinary launches with
+/// `ZLUDA_AGX_LAUNCH_BATCH` (`ordinary`), when the batch already holds launches of the same stream or the stream's
+/// queue is still busy (so the GPU is not left idle waiting for the batch).
+fn gathers(graph: bool, ordinary: bool, batch_of_stream: bool, queue_busy: bool) -> bool {
+    graph || (ordinary && (batch_of_stream || queue_busy))
+}
+
 /// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
 fn specialize_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -422,7 +440,18 @@ impl Driver {
         let has_waits =
             !(if sh <= 2 { &*default_waits } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.waits }).is_empty();
         let k = &code.module.kernels[&name];
-        let batchable = *batching && unchecked && capture.is_none() && k.stack_bytes == 0 && k.texture_heap_half.is_none();
+        let ordinary = !*batching && launch_batching_enabled();
+        let batch_of_stream = batch.as_ref().is_some_and(|b| b.stream == sh);
+        // an ordinary launch is gathered only while its queue has work (one query, ~1 us, against a submit's ~25 us)
+        let queue_busy = ordinary && !batch_of_stream && {
+            let q = if sh <= 2 { &ctx.stream } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.queue };
+            !q.is_done(q.last()).unwrap_or(true)
+        };
+        let batchable = gathers(*batching, ordinary, batch_of_stream, queue_busy)
+            && unchecked
+            && capture.is_none()
+            && k.stack_bytes == 0
+            && k.texture_heap_half.is_none();
         let fence = if batchable {
             // a batch of another stream, or one that this launch's waits would delay, goes first
             if batch.as_ref().is_some_and(|b| b.stream != sh || has_waits) {
@@ -942,11 +971,26 @@ pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Resu
     })
 }
 
-/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context.
+/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context, after submitting the
+/// launches gathered by `ZLUDA_AGX_LAUNCH_BATCH` (so every other operation is ordered after them).
 pub(crate) fn with_sticky<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
     with_contexts(|c| {
         let h = c.current();
-        f(c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?)
+        let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+        d.flush_batch()?;
+        f(d)
+    })
+}
+
+/// `with` for kernel launches: the launches already gathered stay gathered (`launch_batching_enabled`).
+pub(crate) fn with_launch<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    with_contexts(|c| {
+        let h = c.current();
+        let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+        match d.sticky {
+            Some(e) => Err(e),
+            None => f(d),
+        }
     })
 }
 
@@ -1013,6 +1057,8 @@ impl Driver {
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
+        // gathered launches first (a context destroyed or reset outside `with`)
+        self.flush_batch()?;
         let last = self.ctx.stream.last();
         if let Err(e) = self.ctx.stream.synchronize() {
             return Err(self.failed(last.syncobj, e));
@@ -2101,7 +2147,7 @@ pub(crate) unsafe fn cuLaunchKernel(
     if !extra.is_null() {
         return Err(CUerror::NOT_SUPPORTED);
     }
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let slots = d.modules[&m].module.kernels[&name].args.clone();
         let args: Vec<&[u8]> = slots
@@ -2619,7 +2665,7 @@ pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfuncti
     let c = config.as_ref().ok_or(CUerror::INVALID_VALUE)?;
     let attrs = launch_attrs(c)?;
     let (grid, block) = ([c.gridDimX, c.gridDimY, c.gridDimZ], [c.blockDimX, c.blockDimY, c.blockDimZ]);
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         check_launch_attrs(&d.modules[m].module.kernels[name], attrs, grid, block, c.sharedMemBytes, d.ctx.props.cores)
     })?;
@@ -2639,7 +2685,7 @@ pub(crate) unsafe fn cuLaunchCooperativeKernel(
     params: *mut *mut c_void,
 ) -> CUresult {
     let attrs = LaunchAttrs { cooperative: true, ..Default::default() };
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         check_launch_attrs(&d.modules[m].module.kernels[name], attrs, [gx, gy, gz], [bx, by, bz], shared, d.ctx.props.cores)
     })?;
@@ -4068,6 +4114,17 @@ mod tests {
         assert_eq!(co_resident_threadgroups(13), 12);
         assert_eq!(co_resident_threadgroups(1), 1);
         assert_eq!(co_resident_threadgroups(0), 0);
+    }
+
+    #[test]
+    fn launches_are_gathered_only_while_the_gpu_is_busy() {
+        // graphs always gather; without ZLUDA_AGX_LAUNCH_BATCH ordinary launches never do
+        assert!(gathers(true, false, false, false));
+        assert!(!gathers(false, false, true, true));
+        // with it: onto the stream's batch, or a new one while the stream's queue is busy; an idle GPU gets the launch now
+        assert!(gathers(false, true, true, false));
+        assert!(gathers(false, true, false, true));
+        assert!(!gathers(false, true, false, false));
     }
 
     // Needs zoc built with the agx feature (target/debug/zoc).
