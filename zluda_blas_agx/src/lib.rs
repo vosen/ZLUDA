@@ -1904,6 +1904,9 @@ mod imp {
         if (k > 0 && (a.is_null() || b.is_null())) || c.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
+        if R::GEMM == Types::S && m * n >= CGEMM_REAL_MIN && k >= 8 {
+            return cgemm_real(h, m, n, k, (a, lda, opa), (b, ldb, opb), (c, ldc), (ar.to_f64() as f32, ai.to_f64() as f32), (br.to_f64() as f32, bi.to_f64() as f32));
+        }
         cblas_launch(
             h,
             R::kernel(c"agx_cgemm", c"agx_cgemm_f64"),
@@ -1911,6 +1914,59 @@ mod imp {
             [m, n],
             [16, 4],
         )
+    }
+
+    /// The smallest C (elements) for which the complex f32 GEMM runs on the real tile kernels.
+    const CGEMM_REAL_MIN: i64 = 64 * 64;
+
+    /// cgemm (f32) as one real GEMM on the tile kernels: C (m x n, ld ldc) read as a real 2m x n matrix with leading
+    /// dimension 2 ldc, op(B) the same way (copied untransposed first when it is transposed), and op(A) expanded
+    /// with alpha into the real 2m x 2k matrix of 2 x 2 blocks [xr -xi; xi xr] (agx_cgemm_expand_a), in the handle's
+    /// scratch memory. A beta that is not real is applied to C first (agx_cgemm_scale_c).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgemm_real(h: &mut Handle, m: i64, n: i64, k: i64, a: (*const c_void, i64, i64), b: (*const c_void, i64, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let (a_bytes, b_bytes) = ((16 * m * k) as usize, if b.2 != 0 { (8 * k * n) as usize } else { 0 });
+        let a_bytes = a_bytes.next_multiple_of(256);
+        let mem = scratch(h, a_bytes + b_bytes)?;
+        let (mut pa, mut lda, mut opa, mut xa) = (a.0, a.1, a.2, mem);
+        let (mut m_, mut n_, mut k_) = (m, n, k);
+        let (mut ar, mut ai) = alpha;
+        cblas_launch(h, c"agx_cgemm_expand_a", &mut [arg(&mut pa), arg(&mut xa), arg(&mut m_), arg(&mut k_), arg(&mut lda), arg(&mut opa), arg(&mut ar), arg(&mut ai)], [m, k], [16, 4])?;
+        let (rb, ldrb) = if b.2 != 0 {
+            let (mut pb, mut ldb, mut opb, mut xb) = (b.0, b.1, b.2, (mem as *mut u8).add(a_bytes) as *mut c_void);
+            cblas_launch(h, c"agx_cgemm_copy_b", &mut [arg(&mut pb), arg(&mut xb), arg(&mut k_), arg(&mut n_), arg(&mut ldb), arg(&mut opb)], [k, n], [16, 4])?;
+            (xb as *const c_void, 2 * k)
+        } else {
+            (b.0, 2 * b.1)
+        };
+        let real_beta = if beta.1 != 0.0 {
+            let (mut pc, mut ldc, (mut br, mut bi)) = (c.0, c.1, beta);
+            cblas_launch(h, c"agx_cgemm_scale_c", &mut [arg(&mut pc), arg(&mut m_), arg(&mut n_), arg(&mut ldc), arg(&mut br), arg(&mut bi)], [m, n], [16, 4])?;
+            1.0
+        } else {
+            beta.0 as f64
+        };
+        let g = engine::Gemm {
+            types: Types::S,
+            ta: false,
+            tb: false,
+            m: 2 * m as u64,
+            n: n as u64,
+            k: 2 * k as u64,
+            alpha: 1.0,
+            beta: real_beta,
+            a: xa,
+            lda: 2 * m as u64,
+            stride_a: 0,
+            b: rb,
+            ldb: ldrb as u64,
+            stride_b: 0,
+            c: c.0,
+            ldc: 2 * c.1 as u64,
+            stride_c: 0,
+            batch: 1,
+        };
+        engine::gemm(&g, h.stream).map_err(status)
     }
 
     /// hemm (herm) and symm.

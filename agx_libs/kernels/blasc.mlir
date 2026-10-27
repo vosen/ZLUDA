@@ -153,6 +153,75 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // cgemm on the real GEMM kernels. A complex m x n matrix with leading
+  // dimension ld is a real 2m x n one with leading dimension 2 ld (real and
+  // imaginary parts in turn), so C and an untransposed B need no copy. With
+  // op(A) expanded to the real 2m x 2k matrix of 2 x 2 blocks [xr -xi; xi xr]
+  // (x = alpha op(A)(p, l)), the real product of the expansion and B is
+  // alpha op(A) op(B). The expansion has leading dimension 2m. One thread per
+  // element of op(A) (2-D grid).
+  gpu.func @agx_cgemm_expand_a(%a0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %m: index, %k: index,
+                               %lda: index, %opa: i64, %ar: f32, %ai: f32) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %i1 = arith.constant 1 : index
+    %p = gpu.global_id x
+    %l = gpu.global_id y
+    %in_p = arith.cmpi ult, %p, %m : index
+    %in_l = arith.cmpi ult, %l, %k : index
+    %in = arith.andi %in_p, %in_l : i1
+    scf.if %in {
+      %u:2 = func.call @agx_c_get(%a0, %p, %l, %lda, %opa) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+      %x:2 = func.call @agx_c_fma(%ar, %ai, %u#0, %u#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+      // complex position p + column m: columns 2l and 2l + 1 of the expansion
+      %l2 = arith.addi %l, %l : index
+      %l21 = arith.addi %l2, %i1 : index
+      %c0 = arith.muli %l2, %m : index
+      %c1 = arith.muli %l21, %m : index
+      %o0 = arith.addi %c0, %p : index
+      %o1 = arith.addi %c1, %p : index
+      %nxi = arith.negf %x#1 : f32
+      func.call @agx_c_st(%out0, %o0, %x#0, %x#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+      func.call @agx_c_st(%out0, %o1, %nxi, %x#0) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // op(B) (k x n) copied untransposed with leading dimension k, for the real
+  // GEMM of a cgemm whose B is transposed. 2-D grid over op(B).
+  gpu.func @agx_cgemm_copy_b(%b0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %k: index, %n: index,
+                             %ldb: index, %opb: i64) kernel {
+    %l = gpu.global_id x
+    %j = gpu.global_id y
+    %in_l = arith.cmpi ult, %l, %k : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_l, %in_j : i1
+    scf.if %in {
+      %v:2 = func.call @agx_c_get(%b0, %l, %j, %ldb, %opb) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+      %jk = arith.muli %j, %k : index
+      %o = arith.addi %jk, %l : index
+      func.call @agx_c_st(%out0, %o, %v#0, %v#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // C = beta C (m x n), before a cgemm with a beta that is not real. 2-D grid.
+  gpu.func @agx_cgemm_scale_c(%c0: memref<1xf32, 1>, %m: index, %n: index, %ldc: index, %br: f32, %bi: f32) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %m : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_i, %in_j : i1
+    scf.if %in {
+      %jl = arith.muli %j, %ldc : index
+      %p = arith.addi %jl, %i : index
+      %v:2 = func.call @agx_c_ld(%c0, %p) : (memref<1xf32, 1>, index) -> (f32, f32)
+      %r:2 = func.call @agx_c_fma(%br, %bi, %v#0, %v#1, %f0, %f0) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+      func.call @agx_c_st(%c0, %p, %r#0, %r#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
   // hemm (herm) / symm: C = alpha A B + beta C (left: A m x m) or alpha B A +
   // beta C (right: A n x n), A Hermitian or symmetric in its upper or lower
   // triangle. One thread per element of C.

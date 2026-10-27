@@ -2017,7 +2017,25 @@ def case_cblas(a, obj, tmp, what, o, rnd):
         for j in range(n):
             for i in range(m):
                 want[i + j * ldc] = alpha * sum(cop(A, i, l, lda, opa) * cop(B, l, j, ldb, opb) for l in range(k)) + beta * C[i + j * ldc]
-        return cclose(cunpack(got), want, range(len(C)), tol)
+        bad = cclose(cunpack(got), want, range(len(C)), tol)
+        # on the real GEMM (zluda_blas_agx): the expansion of alpha op(A) (2m x 2k, leading dimension 2m), op(B) as
+        # it is or copied (real 2k x n), C scaled by beta first as beta is not real; the real GEMM here
+        (xa,) = run(a, obj, K("agx_cgemm_expand_a"), [("buf", cpack(A)), ("buf", pack([math.nan] * (4 * m * k), BT), True), ("i64", m),
+                                                     ("i64", k), ("i64", lda), ("i64", opa)] + cs(alpha), (16, 8), (16, 4), tmp)
+        if opb:
+            (xb,) = run(a, obj, K("agx_cgemm_copy_b"), [("buf", cpack(B)), ("buf", pack([math.nan] * (2 * k * n), BT), True), ("i64", k),
+                                                       ("i64", n), ("i64", ldb), ("i64", opb)], (16, 8), (16, 4), tmp)
+            rb, ldrb = unpack(xb, BT), 2 * k
+        else:
+            rb, ldrb = interleave(B), 2 * ldb
+        (sc,) = run(a, obj, K("agx_cgemm_scale_c"), [("buf", cpack(C), True), ("i64", m), ("i64", n), ("i64", ldc)] + cs(beta),
+                    (16, 8), (16, 4), tmp)
+        ra, rc = unpack(xa, BT), list(unpack(sc, BT))
+        for j in range(n):
+            for i in range(2 * m):
+                rc[i + j * 2 * ldc] += sum(ra[i + l * 2 * m] * rb[l + j * ldrb] for l in range(2 * k))
+        bad += cclose([complex(rc[2 * i], rc[2 * i + 1]) for i in range(len(C))], want, range(len(C)), tol)
+        return bad
     if what == "hemm":
         m, n = 5, 4
         right, upper, herm = o["right"], o["upper"], o["herm"]

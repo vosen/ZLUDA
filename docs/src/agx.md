@@ -1259,6 +1259,12 @@ it), as NVIDIA's does.
   of 64 rows of op(A), each solved that way and then taken out of the rest of B with a GEMM on the tile kernels, the
   first of which also applies alpha), and `cublasSgemmBatched` (the pointer arrays are read back once the stream is
   idle, then one GEMM per entry).
+* `cublasCgemm` with C of at least 64 x 64 elements and k of 8 or more runs as one real GEMM on the tile kernels: an
+  interleaved complex m x n matrix is a real 2m x n one with twice the leading dimension, so C and an untransposed B
+  are used as they are; op(A), times alpha, is expanded into the real 2m x 2k matrix of 2 x 2 blocks
+  `[re -im; im re]` in a scratch buffer the handle keeps (a transposed op(B) is copied untransposed next to it), and a
+  beta that is not real is applied to C first. Smaller products and the other complex level 3 routines run one
+  thread per element of C.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).
