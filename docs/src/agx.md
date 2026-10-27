@@ -1284,7 +1284,13 @@ tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
 `test_kernels.py`). A forward 1x1 convolution (stride 1, no padding, one
 group) of images with dense NCHW planes is a GEMM per image instead,
 y[n] (K x HW) = w (K x C) x[n] (C x HW), and runs batched on the GEMM path
-(the matrix-unit tile kernel for its 64-aligned block).
+(the matrix-unit tile kernel for its 64-aligned block). Other forward
+convolutions with one group and dense output planes, with K, C R S and
+P Q at least 16, write each image's im2col matrix (C R S x P Q,
+`agx_conv2d_im2col_*`) to a temporary buffer and run y[n] = w col on the GEMM
+path (in the cost model about 11 times cheaper per output than the direct
+kernel for a 3x3, 64-channel layer); the call then waits for its stream
+before it frees the buffer.
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
 tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16

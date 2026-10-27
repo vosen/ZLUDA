@@ -989,8 +989,72 @@ mod imp {
             let h = obj::<Handle>(h)?;
             return engine::gemm(&g, h.stream).map_err(status);
         }
+        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, w, y, alpha, beta) {
+            return r;
+        }
         let elements = s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64;
         run(h, "fwd", s, half, elements, x, w, y, alpha, beta)
+    }
+
+    /// A forward convolution with one group and dense output planes, large enough for the matrix unit: each image
+    /// becomes its im2col matrix col (C R S x P Q, `agx_conv2d_im2col_*`, in a temporary buffer), then y[n] (K x PQ)
+    /// = w (K x C R S) col, which agx_libs' GEMM runs (column-major y[n]^T = col^T w^T). None when it does not apply.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn im2col_gemm(
+        h: &Handle,
+        s: &[i32; 25],
+        half: bool,
+        mut x: *const c_void,
+        w: *const c_void,
+        y: *mut c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> Option<cudnnStatus_t> {
+        let [n, ch, _, _, k, r, sw, p, q, .., g, _, _, _, _, _, _, ys1, ys2, ys3] = *s;
+        let (pq, crs) = (p as i64 * q as i64, ch as i64 * r as i64 * sw as i64);
+        if g != 1 || (ys1 as i64, ys2, ys3) != (pq, q, 1) || k < 16 || crs < 16 || pq < 16 || alpha.is_null()
+            || beta.is_null()
+        {
+            return None;
+        }
+        let elements = crs * pq;
+        let groups = u32::try_from((elements as u64).div_ceil(256)).ok()?;
+        let size = if half { 2 } else { 4 };
+        Some((|| {
+            let col = temp(h, elements * size)?;
+            let name = if half { c"agx_conv2d_im2col_f16" } else { c"agx_conv2d_im2col_f32" };
+            let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+            let (alpha, beta) = (*(alpha as *const f32) as f64, *(beta as *const f32) as f64);
+            for image in 0..n {
+                let mut colp = col.0;
+                let mut shape: [i32; 22] = std::array::from_fn(|i| if i < 21 { s[i] } else { image });
+                let mut params: Vec<*mut c_void> = vec![&mut x as *mut _ as *mut c_void, &mut colp as *mut _ as *mut c_void];
+                params.extend(shape.iter_mut().map(|v| v as *mut i32 as *mut c_void));
+                engine::launch_kernel(f, [groups, 1], [256, 1], &mut params, h.stream).map_err(status)?;
+                let g = engine::Gemm {
+                    types: if half { agx_libs::Types::H } else { agx_libs::Types::S },
+                    ta: false,
+                    tb: false,
+                    m: pq as u64,
+                    n: k as u64,
+                    k: crs as u64,
+                    alpha,
+                    beta,
+                    a: col.0,
+                    lda: pq as u64,
+                    stride_a: 0,
+                    b: w,
+                    ldb: crs as u64,
+                    stride_b: 0,
+                    c: y.byte_offset(image as isize * s[21] as isize * size as isize),
+                    ldc: pq as u64,
+                    stride_c: 0,
+                    batch: 1,
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
+            Ok(())
+        })())
     }
 
     /// A 1x1 convolution (stride 1, no padding, one group) of NCHW images whose planes are dense: per image n,

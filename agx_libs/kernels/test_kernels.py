@@ -398,6 +398,28 @@ def case_conv(a, obj, tmp, which, conv, alpha, beta, rnd, t="f"):
     return close(unpack(got, t), want, idx, 1e-4 if t == "f" else 3e-3)
 
 
+def case_conv_im2col(a, obj, tmp, conv, rnd, t="f"):
+    """The im2col matrix of each image (agx_conv2d_im2col_*), multiplied by the filter here as zluda_dnn_agx's GEMM
+    does (y[n] = w col), against the direct forward convolution (one group)."""
+    c = conv
+    X = rounded([rnd.uniform(-1, 1) for _ in range(c.xlen)], t)
+    Wt = rounded([rnd.uniform(-1, 1) for _ in range(c.wlen)], t)
+    crs, pq = c.C * c.R * c.S, c.P * c.Q
+    got = [0.0] * c.ylen
+    for n in range(c.N):
+        args = [("buf", pack(X, t)), ("buf", pack([math.nan] * (crs * pq), t), True)] + c.args()[:21] + [("i32", n)]
+        (col,) = run(a, obj, "agx_conv2d_im2col_%s" % ("f32" if t == "f" else "f16"), args,
+                     (-(-crs * pq // 256) * 256, 1), (256, 1), tmp)
+        col = unpack(col, t)
+        for k in range(c.K):
+            for i in range(pq):
+                got[c.yi(n, k, i // c.Q, i % c.Q)] = sum(Wt[k * crs + j] * col[j * pq + i] for j in range(crs))
+    want = [0.0] * c.ylen
+    for n, k, p, q, ch, r, s_, h, w, wi in c.taps():
+        want[c.yi(n, k, p, q)] += X[c.xi(n, ch, h, w)] * Wt[wi]
+    return close(got, want, range(c.ylen), 1e-5)
+
+
 def twiddles(n):
     out = []
     for t in range(n):
@@ -2267,6 +2289,11 @@ def main():
                             for alpha, beta in ((1.0, 0.0), (1.5, 0.5)):
                                 cases.append(("conv %s %s %s a=%g b=%g" % (which, "f32" if t == "f" else "f16", label, alpha, beta),
                                               lambda t=t, w=which, cv=cv, al=alpha, be=beta: case_conv(a, obj, tmp, w, cv, al, be, rnd, t)))
+                    for label, cv in convs[1:2] + [
+                            ("3x2 pad 1,0 stride 2,1 dil 1,2", Conv(2, 4, 7, 6, 6, 3, 2, (1, 0), (2, 1), (1, 2), 1, 0, x_w_pad=3)),
+                            ("5x5 pad 2 stride 2 conv mode", Conv(1, 2, 9, 8, 3, 5, 5, (2, 2), (2, 2), (1, 1), 1, 1))]:
+                        cases.append(("conv im2col %s %s" % ("f32" if t == "f" else "f16", label),
+                                      lambda t=t, cv=cv: case_conv_im2col(a, obj, tmp, cv, rnd, t)))
             elif "agx_epilogue_f32" in records:
                 cases = []
                 for t in ("f", "e"):

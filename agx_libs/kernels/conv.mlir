@@ -828,4 +828,176 @@ gpu.module @agx_dnn_conv {
     }
     gpu.return
   }
+
+  // col[(c R S + r S + s) P Q + p Q + q] = x[n, c, p sh - ph + r' dh, q sw - pw + s' dw] (0 outside the image) for
+  // image n, the stored filter tap (r, s) and its image tap (r', s') (flipped in convolution mode): the im2col matrix
+  // of a forward convolution with one group, which then is y[n] (K x PQ) = w (K x C R S) col (C R S x PQ), a GEMM.
+  // One thread per element of col.
+  gpu.func @agx_conv2d_im2col_f32(%x0: memref<1xf32, 1>, %col0: memref<1xf32, 1>,
+      %N_: i32, %C_: i32, %H_: i32, %W_: i32, %K_: i32, %R_: i32, %S_: i32, %P_: i32, %Q_: i32,
+      %ph_: i32, %pw_: i32, %sh_: i32, %sw_: i32, %dh_: i32, %dw_: i32, %G_: i32, %flip_: i32,
+      %xsn_: i32, %xsc_: i32, %xsh_: i32, %xsw_: i32, %n_: i32) kernel {
+    %C = arith.index_cast %C_ : i32 to index
+    %H = arith.index_cast %H_ : i32 to index
+    %W = arith.index_cast %W_ : i32 to index
+    %R = arith.index_cast %R_ : i32 to index
+    %S = arith.index_cast %S_ : i32 to index
+    %P = arith.index_cast %P_ : i32 to index
+    %Q = arith.index_cast %Q_ : i32 to index
+    %ph = arith.index_cast %ph_ : i32 to index
+    %pw = arith.index_cast %pw_ : i32 to index
+    %sh = arith.index_cast %sh_ : i32 to index
+    %sw = arith.index_cast %sw_ : i32 to index
+    %dh = arith.index_cast %dh_ : i32 to index
+    %dw = arith.index_cast %dw_ : i32 to index
+    %flip = arith.index_cast %flip_ : i32 to index
+    %xsn = arith.index_cast %xsn_ : i32 to index
+    %xsc = arith.index_cast %xsc_ : i32 to index
+    %xsh = arith.index_cast %xsh_ : i32 to index
+    %xsw = arith.index_cast %xsw_ : i32 to index
+    %n = arith.index_cast %n_ : i32 to index
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %z = arith.constant 0.0 : f32
+    %big = arith.constant 4611686018427387904 : index
+    %Xm = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %Cm = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %id = gpu.global_id x
+    %q = arith.remui %id, %Q : index
+    %t1 = arith.divui %id, %Q : index
+    %p = arith.remui %t1, %P : index
+    %t2 = arith.divui %t1, %P : index
+    %s = arith.remui %t2, %S : index
+    %t3 = arith.divui %t2, %S : index
+    %r = arith.remui %t3, %R : index
+    %c = arith.divui %t3, %R : index
+    %live = arith.cmpi ult, %c, %C : index
+    scf.if %live {
+      %no_flip = arith.cmpi eq, %flip, %i0 : index
+      %Rm1 = arith.subi %R, %i1 : index
+      %Sm1 = arith.subi %S, %i1 : index
+      %rf = arith.subi %Rm1, %r : index
+      %sf = arith.subi %Sm1, %s : index
+      %ri = arith.select %no_flip, %r, %rf : index
+      %si = arith.select %no_flip, %s, %sf : index
+      %psh = arith.muli %p, %sh : index
+      %rdh = arith.muli %ri, %dh : index
+      %h1 = arith.addi %psh, %rdh : index
+      %h = arith.subi %h1, %ph : index
+      %qsw = arith.muli %q, %sw : index
+      %sdw = arith.muli %si, %dw : index
+      %w1 = arith.addi %qsw, %sdw : index
+      %w = arith.subi %w1, %pw : index
+      %h_ok0 = arith.cmpi sge, %h, %i0 : index
+      %h_ok1 = arith.cmpi slt, %h, %H : index
+      %w_ok0 = arith.cmpi sge, %w, %i0 : index
+      %w_ok1 = arith.cmpi slt, %w, %W : index
+      %ok0 = arith.andi %h_ok0, %h_ok1 : i1
+      %ok1 = arith.andi %w_ok0, %w_ok1 : i1
+      %ok = arith.andi %ok0, %ok1 : i1
+      %v = scf.if %ok -> f32 {
+        %xn = arith.muli %n, %xsn : index
+        %xc = arith.muli %c, %xsc : index
+        %xh = arith.muli %h, %xsh : index
+        %xw = arith.muli %w, %xsw : index
+        %xi0 = arith.addi %xn, %xc : index
+        %xi1 = arith.addi %xi0, %xh : index
+        %xi = arith.addi %xi1, %xw : index
+        %xv = memref.load %Xm[%xi] : memref<?xf32, strided<[1]>, 1>
+        scf.yield %xv : f32
+      } else {
+        scf.yield %z : f32
+      }
+      memref.store %v, %Cm[%id] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // col[(c R S + r S + s) P Q + p Q + q] = x[n, c, p sh - ph + r' dh, q sw - pw + s' dw] (0 outside the image) for
+  // image n, the stored filter tap (r, s) and its image tap (r', s') (flipped in convolution mode): the im2col matrix
+  // of a forward convolution with one group, which then is y[n] (K x PQ) = w (K x C R S) col (C R S x PQ), a GEMM.
+  // One thread per element of col.
+  gpu.func @agx_conv2d_im2col_f16(%x0: memref<1xf16, 1>, %col0: memref<1xf16, 1>,
+      %N_: i32, %C_: i32, %H_: i32, %W_: i32, %K_: i32, %R_: i32, %S_: i32, %P_: i32, %Q_: i32,
+      %ph_: i32, %pw_: i32, %sh_: i32, %sw_: i32, %dh_: i32, %dw_: i32, %G_: i32, %flip_: i32,
+      %xsn_: i32, %xsc_: i32, %xsh_: i32, %xsw_: i32, %n_: i32) kernel {
+    %C = arith.index_cast %C_ : i32 to index
+    %H = arith.index_cast %H_ : i32 to index
+    %W = arith.index_cast %W_ : i32 to index
+    %R = arith.index_cast %R_ : i32 to index
+    %S = arith.index_cast %S_ : i32 to index
+    %P = arith.index_cast %P_ : i32 to index
+    %Q = arith.index_cast %Q_ : i32 to index
+    %ph = arith.index_cast %ph_ : i32 to index
+    %pw = arith.index_cast %pw_ : i32 to index
+    %sh = arith.index_cast %sh_ : i32 to index
+    %sw = arith.index_cast %sw_ : i32 to index
+    %dh = arith.index_cast %dh_ : i32 to index
+    %dw = arith.index_cast %dw_ : i32 to index
+    %flip = arith.index_cast %flip_ : i32 to index
+    %xsn = arith.index_cast %xsn_ : i32 to index
+    %xsc = arith.index_cast %xsc_ : i32 to index
+    %xsh = arith.index_cast %xsh_ : i32 to index
+    %xsw = arith.index_cast %xsw_ : i32 to index
+    %n = arith.index_cast %n_ : i32 to index
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %z = arith.constant 0.0 : f16
+    %big = arith.constant 4611686018427387904 : index
+    %Xm = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf16, 1> to memref<?xf16, strided<[1]>, 1>
+    %Cm = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf16, 1> to memref<?xf16, strided<[1]>, 1>
+    %id = gpu.global_id x
+    %q = arith.remui %id, %Q : index
+    %t1 = arith.divui %id, %Q : index
+    %p = arith.remui %t1, %P : index
+    %t2 = arith.divui %t1, %P : index
+    %s = arith.remui %t2, %S : index
+    %t3 = arith.divui %t2, %S : index
+    %r = arith.remui %t3, %R : index
+    %c = arith.divui %t3, %R : index
+    %live = arith.cmpi ult, %c, %C : index
+    scf.if %live {
+      %no_flip = arith.cmpi eq, %flip, %i0 : index
+      %Rm1 = arith.subi %R, %i1 : index
+      %Sm1 = arith.subi %S, %i1 : index
+      %rf = arith.subi %Rm1, %r : index
+      %sf = arith.subi %Sm1, %s : index
+      %ri = arith.select %no_flip, %r, %rf : index
+      %si = arith.select %no_flip, %s, %sf : index
+      %psh = arith.muli %p, %sh : index
+      %rdh = arith.muli %ri, %dh : index
+      %h1 = arith.addi %psh, %rdh : index
+      %h = arith.subi %h1, %ph : index
+      %qsw = arith.muli %q, %sw : index
+      %sdw = arith.muli %si, %dw : index
+      %w1 = arith.addi %qsw, %sdw : index
+      %w = arith.subi %w1, %pw : index
+      %h_ok0 = arith.cmpi sge, %h, %i0 : index
+      %h_ok1 = arith.cmpi slt, %h, %H : index
+      %w_ok0 = arith.cmpi sge, %w, %i0 : index
+      %w_ok1 = arith.cmpi slt, %w, %W : index
+      %ok0 = arith.andi %h_ok0, %h_ok1 : i1
+      %ok1 = arith.andi %w_ok0, %w_ok1 : i1
+      %ok = arith.andi %ok0, %ok1 : i1
+      %v = scf.if %ok -> f16 {
+        %xn = arith.muli %n, %xsn : index
+        %xc = arith.muli %c, %xsc : index
+        %xh = arith.muli %h, %xsh : index
+        %xw = arith.muli %w, %xsw : index
+        %xi0 = arith.addi %xn, %xc : index
+        %xi1 = arith.addi %xi0, %xh : index
+        %xi = arith.addi %xi1, %xw : index
+        %xv = memref.load %Xm[%xi] : memref<?xf16, strided<[1]>, 1>
+        scf.yield %xv : f16
+      } else {
+        scf.yield %z : f16
+      }
+      memref.store %v, %Cm[%id] : memref<?xf16, strided<[1]>, 1>
+    }
+    gpu.return
+  }
 }
