@@ -1295,9 +1295,14 @@ def case_sgemv(a, obj, tmp, m, n, trans, incx, incy, beta, rnd):
     A = rounded([rnd.uniform(-1, 1) for _ in range(lda * n)], BT)
     x = rounded([rnd.uniform(-1, 1) for _ in range(1 + (xlen - 1) * abs(incx))], BT)
     y = rounded([rnd.uniform(-1, 1) for _ in range(1 + (ylen - 1) * abs(incy))], BT)
-    (got,) = run(a, obj, K("agx_sgemv"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True), ("i64", m), ("i64", n),
-                                       ("i64", lda), ("i64", incx), ("i64", incy), ("i64", trans), (S(), alpha),
-                                       (S(), beta)], (-(-ylen // 32) * 32, 1), (32, 1), tmp)
+    if trans:  # a SIMD-group per element of y, as zluda_blas_agx launches it
+        (got,) = run(a, obj, K("agx_sgemv_t"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True),
+                                             ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                             (S(), alpha), (S(), beta)], (-(-ylen * 32 // 128) * 128, 1), (128, 1), tmp)
+    else:
+        (got,) = run(a, obj, K("agx_sgemv"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True),
+                                           ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                           ("i64", trans), (S(), alpha), (S(), beta)], (-(-ylen // 32) * 32, 1), (32, 1), tmp)
     want = list(y)
     for i in range(ylen):
         s = sum((A[k + i * lda] if trans else A[i + k * lda]) * x[blas_pos(k, xlen, incx)] for k in range(xlen))
@@ -2135,6 +2140,8 @@ def main():
                                       lambda t=trans, b=beta: case_sgemv(a, obj, tmp, 13, 9, t, -2, 3, b, rnd)))
                     cases.append(("sgemv 40x5 trans %d inc 1,1" % trans,
                                   lambda t=trans: case_sgemv(a, obj, tmp, 40, 5, t, 1, 1, 1.0, rnd)))
+                    cases.append(("sgemv 100x7 trans %d beta 0.5 inc -1,1" % trans,
+                                  lambda t=trans: case_sgemv(a, obj, tmp, 100, 7, t, -1, 1, 0.5, rnd)))
                 for ta in (0, 1):
                     for tb in (0, 1):
                         cases.append(("sgeam ta %d tb %d" % (ta, tb), lambda ta=ta, tb=tb: case_level3(a, obj, tmp, "geam", {"ta": ta, "tb": tb}, rnd)))

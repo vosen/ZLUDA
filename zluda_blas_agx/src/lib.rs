@@ -977,8 +977,29 @@ mod imp {
         if a.is_null() || x.is_null() || y.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
-        let mut trans = t as i64;
-        let ylen = if t { n } else { m };
+        if t {
+            // a SIMD-group per element of y, reading its column of A together
+            return blas_launch(
+                h,
+                T::kernel(c"agx_sgemv_t", c"agx_sgemv_t_f64"),
+                &mut [
+                    arg(&mut a),
+                    arg(&mut x),
+                    arg(&mut y),
+                    arg(&mut m),
+                    arg(&mut n),
+                    arg(&mut lda),
+                    arg(&mut incx),
+                    arg(&mut incy),
+                    arg(&mut alpha),
+                    arg(&mut beta),
+                ],
+                [n * 32, 1],
+                [128, 1],
+            );
+        }
+        let mut trans = 0i64;
+        let ylen = m;
         blas_launch(
             h,
             T::kernel(c"agx_sgemv", c"agx_sgemv_f64"),

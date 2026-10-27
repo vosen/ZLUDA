@@ -319,6 +319,118 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // y = alpha A^T x + beta y for an m x n column-major A (sgemv with trans):
+  // one SIMD-group per element of y, whose lanes read the column A[:, i]
+  // together (consecutive addresses) and sum by a SIMD-group reduction.
+  // The grid has 32 n threads.
+  gpu.func @agx_sgemv_t(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>,
+                        %y0: memref<1xf32, 1>, %m_: i64, %n_: i64, %lda_: i64,
+                        %incx_: i64, %incy_: i64, %alpha: f32, %beta: f32) kernel {
+    %i0 = arith.constant 0 : index
+    %simd = arith.constant 32 : index
+    %f0 = arith.constant 0.0 : f32
+    %big = arith.constant 4611686018427387904 : index
+    %m = arith.index_cast %m_ : i64 to index
+    %n = arith.index_cast %n_ : i64 to index
+    %lda = arith.index_cast %lda_ : i64 to index
+    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %x = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %y = memref.reinterpret_cast %y0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %g = gpu.global_id x
+    %i = arith.divui %g, %simd : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
+    %live = arith.cmpi ult, %i, %n : index
+    scf.if %live {
+      %row = arith.muli %i, %lda : index
+      // x[k] at x0 + k incx (x0 the last element's offset when incx < 0)
+      %z = arith.constant 0 : i64
+      %neg = arith.cmpi slt, %incx_, %z : i64
+      %inc = arith.index_cast %incx_ : i64 to index
+      %ninc = arith.subi %i0, %inc : index
+      %i1 = arith.constant 1 : index
+      %c127 = arith.constant 127 : index
+      %last = arith.subi %m, %i1 : index
+      %lastoff = arith.muli %last, %ninc : index
+      %xbase = arith.select %neg, %lastoff, %i0 : index
+      // four elements a lane at a time (four loads in flight), while k + 96 < m
+      %step4 = arith.constant 128 : index
+      %c96 = arith.constant 96 : index
+      %m96 = arith.maxui %m, %c96 : index
+      %ub4 = arith.subi %m96, %c96 : index
+      %s4:4 = scf.for %k = %lane to %ub4 step %step4
+          iter_args(%c0 = %f0, %c1 = %f0, %c2 = %f0, %c3 = %f0) -> (f32, f32, f32, f32) {
+        %k1 = arith.addi %k, %simd : index
+        %k2 = arith.addi %k1, %simd : index
+        %k3 = arith.addi %k2, %simd : index
+        %p_d0 = arith.addi %row, %k : index
+        %va_d0 = memref.load %A[%p_d0] : memref<?xf32, strided<[1]>, 1>
+        %kx_d0 = arith.muli %k, %inc : index
+        %ix_d0 = arith.addi %xbase, %kx_d0 : index
+        %vx_d0 = memref.load %x[%ix_d0] : memref<?xf32, strided<[1]>, 1>
+        %d0 = math.fma %va_d0, %vx_d0, %c0 : f32
+        %p_d1 = arith.addi %row, %k1 : index
+        %va_d1 = memref.load %A[%p_d1] : memref<?xf32, strided<[1]>, 1>
+        %kx_d1 = arith.muli %k1, %inc : index
+        %ix_d1 = arith.addi %xbase, %kx_d1 : index
+        %vx_d1 = memref.load %x[%ix_d1] : memref<?xf32, strided<[1]>, 1>
+        %d1 = math.fma %va_d1, %vx_d1, %c1 : f32
+        %p_d2 = arith.addi %row, %k2 : index
+        %va_d2 = memref.load %A[%p_d2] : memref<?xf32, strided<[1]>, 1>
+        %kx_d2 = arith.muli %k2, %inc : index
+        %ix_d2 = arith.addi %xbase, %kx_d2 : index
+        %vx_d2 = memref.load %x[%ix_d2] : memref<?xf32, strided<[1]>, 1>
+        %d2 = math.fma %va_d2, %vx_d2, %c2 : f32
+        %p_d3 = arith.addi %row, %k3 : index
+        %va_d3 = memref.load %A[%p_d3] : memref<?xf32, strided<[1]>, 1>
+        %kx_d3 = arith.muli %k3, %inc : index
+        %ix_d3 = arith.addi %xbase, %kx_d3 : index
+        %vx_d3 = memref.load %x[%ix_d3] : memref<?xf32, strided<[1]>, 1>
+        %d3 = math.fma %va_d3, %vx_d3, %c3 : f32
+        scf.yield %d0, %d1, %d2, %d3 : f32, f32, f32, f32
+      }
+      // the rest, one element a lane at a time, from the first k the loop above did not reach
+      %after = arith.cmpi ugt, %ub4, %lane : index
+      %span = arith.subi %ub4, %lane : index
+      %span1 = arith.addi %span, %c127 : index
+      %trips = arith.divui %span1, %step4 : index
+      %done = arith.muli %trips, %step4 : index
+      %krest0 = arith.addi %lane, %done : index
+      %krest = arith.select %after, %krest0, %lane : index
+      %s01 = arith.addf %s4#0, %s4#1 : f32
+      %s23 = arith.addf %s4#2, %s4#3 : f32
+      %s0 = arith.addf %s01, %s23 : f32
+      %s = scf.for %k = %krest to %m step %simd iter_args(%acc = %s0) -> f32 {
+        %p_acc2 = arith.addi %row, %k : index
+        %va_acc2 = memref.load %A[%p_acc2] : memref<?xf32, strided<[1]>, 1>
+        %kx_acc2 = arith.muli %k, %inc : index
+        %ix_acc2 = arith.addi %xbase, %kx_acc2 : index
+        %vx_acc2 = memref.load %x[%ix_acc2] : memref<?xf32, strided<[1]>, 1>
+        %acc2 = math.fma %va_acc2, %vx_acc2, %acc : f32
+        scf.yield %acc2 : f32
+      }
+      %t = gpu.subgroup_reduce add %s : (f32) -> f32
+      %first = arith.cmpi eq, %lane, %i0 : index
+      scf.if %first {
+        %iy = func.call @agx_blas_pos(%i, %n, %incy_) : (index, index, i64) -> index
+        %as = arith.mulf %t, %alpha : f32
+        %zero = arith.cmpf oeq, %beta, %f0 : f32
+        %v = scf.if %zero -> f32 {
+          scf.yield %as : f32
+        } else {
+          %old = memref.load %y[%iy] : memref<?xf32, strided<[1]>, 1>
+          %r = math.fma %old, %beta, %as : f32
+          scf.yield %r : f32
+        }
+        memref.store %v, %y[%iy] : memref<?xf32, strided<[1]>, 1>
+      }
+    }
+    gpu.return
+  }
+
   // A += alpha x y^T for an m x n column-major A. 2-D grid, x along rows.
   gpu.func @agx_sger(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>,
                      %y0: memref<1xf32, 1>, %m_: i64, %n_: i64, %lda_: i64,
