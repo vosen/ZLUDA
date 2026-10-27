@@ -453,6 +453,14 @@ mod imp {
         }
     }
 
+    /// The smallest n for which sgemm with op(A) = A^T transposes A first (see gemm).
+    const PRETRANSPOSE_MIN_N: c_int = 256;
+
+    fn pretranspose_enabled() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GEMM_PRETRANSPOSE").map_or(true, |v| v != "0"))
+    }
+
     #[allow(clippy::too_many_arguments)]
     unsafe fn gemm(
         types: Types,
@@ -491,6 +499,26 @@ mod imp {
         } else {
             (scalar(h, alpha, half_scalars)? as f64, scalar(h, beta, half_scalars)? as f64)
         };
+        let (mut a, mut lda, mut ta) = (a, lda, ta);
+        if types == Types::S && ta && batch == 1 && n >= PRETRANSPOSE_MIN_N && m >= 64 && k >= 64 && pretranspose_enabled() {
+            // op(A) = A^T: the tile kernel for it (A's fragments loaded transposed) spills on G14 and costs about a
+            // third more per product than the untransposed one; A^T is m x k, a pass over m k elements
+            // (agx_cost: ~1.5 SIMD-group cycles per element against ~0.02 per m n k saved). ZLUDA_AGX_GEMM_PRETRANSPOSE=0
+            // turns it off.
+            let t = scratch(h, m as usize * k as usize * 4)?;
+            let (mut src, mut dst) = (a, t);
+            let (mut rows, mut cols, mut ld_src, mut ld_dst) = (m as i64, k as i64, lda as i64, m as i64);
+            let (mut one, mut zero, mut tr, mut no) = (1.0f32, 0.0f32, 1i64, 0i64);
+            blas_launch(
+                h,
+                c"agx_sgeam",
+                &mut [arg(&mut src), arg(&mut src.clone()), arg(&mut dst), arg(&mut rows), arg(&mut cols), arg(&mut ld_src),
+                      arg(&mut ld_src.clone()), arg(&mut ld_dst), arg(&mut tr), arg(&mut no), arg(&mut one), arg(&mut zero)],
+                [m as i64, k as i64],
+                [16, 4],
+            )?;
+            (a, lda, ta) = (t as *const c_void, m, false);
+        }
         let g = engine::Gemm {
             types,
             ta,
