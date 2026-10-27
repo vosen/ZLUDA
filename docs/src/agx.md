@@ -1446,7 +1446,11 @@ right-hand side. The f32 getrf with more than 64 columns to factor works by
 panels of 64 columns: the columns of a panel as above with the update kept to
 the panel, then the BLAS triangular solve for the panel's rows of U and one
 GEMM on the tile kernels for the rest of the matrix (the same pivots, the
-products summed in another order). `devInfo` reports the first zero pivot (getrf) or the first
+products summed in another order). The f32 potrf above 64 rows does the same
+by panels, the rest of the triangle updated with each panel by a syrk on the
+tile GEMM (the other triangle is not written); after a non-positive minor the
+later kernels do nothing, but that panel's update still reaches the trailing
+matrix. `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get

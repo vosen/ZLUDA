@@ -354,7 +354,8 @@ gpu.module @agx_solver {
 
   // L(r, c) -= L(r, k) L(c, k) for k < c <= r < n: launch an (n - k - 1)
   // square grid.
-  gpu.func @agx_chol_update(%a0: memref<1xf32, 1>, %n_: i64, %k_: i64, %rs_: i64, %cs_: i64, %info0: memref<1xi32, 1>) kernel {
+  gpu.func @agx_chol_update(%a0: memref<1xf32, 1>, %n_: i64, %k_: i64, %rs_: i64, %cs_: i64, %info0: memref<1xi32, 1>,
+                            %ncol_: i64) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %z = arith.constant 0 : i32
@@ -369,7 +370,11 @@ gpu.module @agx_solver {
     %c = arith.addi %k1, %tj : index
     %in_r = arith.cmpi ult, %r, %n : index
     %tri = arith.cmpi ule, %c, %r : index
-    %in = arith.andi %in_r, %tri : i1
+    // columns below ncol only (a panel of the blocked factorization)
+    %ncol = arith.index_cast %ncol_ : i64 to index
+    %in_c = arith.cmpi ult, %c, %ncol : index
+    %in0 = arith.andi %in_r, %tri : i1
+    %in = arith.andi %in0, %in_c : i1
     %old = func.call @agx_sv_ldi(%info0, %i0) : (memref<1xi32, 1>, index) -> i32
     %ok = arith.cmpi eq, %old, %z : i32
     %live = arith.andi %in, %ok : i1

@@ -1051,7 +1051,8 @@ def case_solver(a, obj, tmp, what, rnd):
                               (1, 1), (1, 1), tmp)
             (buf,) = run(a, obj, K("agx_chol_scale"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
                          grid1(n), (32, 1), tmp)
-            (buf,) = run(a, obj, K("agx_chol_update"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
+            (buf,) = run(a, obj, K("agx_chol_update"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info),
+                                                        ("i64", n)],
                          (16, 16), (16, 4), tmp)
         if unpack(info, "i")[0] != 0:
             return ["info %d" % unpack(info, "i")[0]]

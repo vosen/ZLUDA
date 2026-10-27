@@ -1312,19 +1312,6 @@ mod imp {
     /// The diagonal blocks of a blocked syrk: a multiple of the tile kernels' 64 rows.
     const SYRK_BLOCK: i64 = 64;
 
-    /// The part of syrk's triangle of an n x n C outside the diagonal SYRK_BLOCK blocks, as rectangles (first row,
-    /// first column, rows, columns) of C: halving at a block boundary, the corner between the halves is one
-    /// rectangle and the halves recurse.
-    fn syrk_corners(upper: bool, lo: i64, size: i64, out: &mut Vec<[i64; 4]>) {
-        if size <= SYRK_BLOCK {
-            return;
-        }
-        let half = (size / 2 + SYRK_BLOCK - 1) / SYRK_BLOCK * SYRK_BLOCK;
-        out.push(if upper { [lo, lo + half, half, size - half] } else { [lo + half, lo, size - half, half] });
-        syrk_corners(upper, lo, half, out);
-        syrk_corners(upper, lo + half, size - half, out);
-    }
-
     /// The GEMMs of syrk's triangle outside the diagonal blocks, for each corner: C(rows, columns) = alpha
     /// op(A)(rows) op(A)(columns)^T + beta C, or for syr2k (`b` is B and ldb) alpha op(A)(rows) op(B)(columns)^T +
     /// beta C, then alpha op(B)(rows) op(A)(columns)^T added.
@@ -1332,9 +1319,7 @@ mod imp {
     unsafe fn syrk_off_diagonal(h: &Handle, upper: bool, t: bool, n: i64, k: i64, alpha: f64, beta: f64, a: *const c_void, lda: i64, b: Option<(*const c_void, i64)>, c: *mut c_void, ldc: i64, bytes: usize) -> cublasStatus_t {
         // rows r.. of op(M): M's rows, or its columns when transposed
         let rows = |m: *const c_void, ld: i64, r: i64| (m as *const u8).add(r as usize * if t { ld as usize } else { 1 } * bytes) as *const c_void;
-        let mut corners = Vec::new();
-        syrk_corners(upper, 0, n, &mut corners);
-        for [first, second, m, n] in corners {
+        for [first, second, m, n] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
             // syrk: op(A) op(A)^T; syr2k: op(A) op(B)^T, then op(B) op(A)^T added
             let (right, ldr) = b.unwrap_or((a, lda));
             let mut products = vec![(a, lda, right, ldr, beta)];
@@ -1662,9 +1647,7 @@ mod imp {
         for upper in [false, true] {
             for n in [65, 100, 128, 129, 200, 256, 300, 513] {
                 let mut count = vec![0u8; (n * n) as usize];
-                let mut corners = Vec::new();
-                syrk_corners(upper, 0, n, &mut corners);
-                for [r, c, m, w] in corners {
+                for [r, c, m, w] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
                     for j in c..c + w {
                         for i in r..r + m {
                             count[(i + j * n) as usize] += 1;

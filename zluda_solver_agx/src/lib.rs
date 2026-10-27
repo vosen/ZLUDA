@@ -268,7 +268,10 @@ unsafe fn getrs(
     )
 }
 
-/// potrf: A = L L^T or U^T U, one column at a time (diagonal, scale, update).
+/// potrf: A = L L^T or U^T U, one column at a time (diagonal, scale, update). In f32 above LU_BLOCK rows, by panels of
+/// LU_BLOCK columns: the columns of a panel as before with the update kept to the panel, then the rest of the
+/// triangle updated with the panel by a syrk on the tile GEMM. After a non-positive minor the later kernels do
+/// nothing, but the syrk of that panel still runs on the trailing matrix.
 unsafe fn potrf(h: &Handle, double: bool, uplo: cublasFillMode_t, n: c_int, a: *mut c_void, lda: c_int, info: *mut c_int) -> R {
     let up = upper(uplo)?;
     dims(n, n, lda)?;
@@ -280,8 +283,13 @@ unsafe fn potrf(h: &Handle, double: bool, uplo: cublasFillMode_t, n: c_int, a: *
     }
     let (mut pa, mut pinfo) = (a, info as *mut c_void);
     let (mut n_, mut rs, mut cs) = (n as i64, if up { lda as i64 } else { 1 }, if up { 1 } else { lda as i64 });
+    let lda_ = lda as i64;
+    let block = if double || n_ <= LU_BLOCK { n_ } else { LU_BLOCK };
+    let at = |r: i64, c: i64| (a as *mut f32).add((r + c * lda_) as usize) as *mut c_void;
     for k in 0..n as i64 {
         let mut k_ = k;
+        // the end of k's panel: the update stays in it
+        let (j0, mut j1) = (k / block * block, (k / block * block + block).min(n_));
         run(
             h,
             kernel(double, [c"agx_chol_diag", c"agx_chol_diag_f64"]),
@@ -299,8 +307,64 @@ unsafe fn potrf(h: &Handle, double: bool, uplo: cublasFillMode_t, n: c_int, a: *
         run(
             h,
             kernel(double, [c"agx_chol_update", c"agx_chol_update_f64"]),
-            &mut [arg(&mut pa), arg(&mut n_), arg(&mut k_), arg(&mut rs), arg(&mut cs), arg(&mut pinfo)],
-            [n_ - k - 1, n_ - k - 1],
+            &mut [arg(&mut pa), arg(&mut n_), arg(&mut k_), arg(&mut rs), arg(&mut cs), arg(&mut pinfo), arg(&mut j1)],
+            [n_ - k - 1, j1 - k - 1],
+            [16, 4],
+        )?;
+        if k + 1 != j1 || j1 >= n_ {
+            continue;
+        }
+        // the panel j0..j1 is factored: A22 -= L21 L21^T on the stored triangle (U12^T U12 for upper), a syrk of the
+        // panel's rows below it, as in zluda_blas_agx: a GEMM on the tile kernels for each corner of the triangle
+        // outside the diagonal blocks, and agx_ssyrk on those
+        let (jb, rest) = (j1 - j0, n_ - j1);
+        let panel = if up { at(j0, j1) } else { at(j1, j0) };
+        let a22 = at(j1, j1);
+        // rows r.. of op(panel): L21's rows, or U12's columns
+        let rows = |r: i64| (panel as *mut f32).add(if up { r * lda_ } else { r } as usize) as *const c_void;
+        for [first, second, m, w] in agx_libs::syrk_corners(up, rest, LU_BLOCK) {
+            let g = engine::Gemm {
+                types: agx_libs::Types::S,
+                ta: up,
+                tb: !up,
+                m: m as u64,
+                n: w as u64,
+                k: jb as u64,
+                alpha: -1.0,
+                beta: 1.0,
+                a: rows(first),
+                lda: lda_ as u64,
+                stride_a: 0,
+                b: rows(second),
+                ldb: lda_ as u64,
+                stride_b: 0,
+                c: (a22 as *mut f32).add((first + second * lda_) as usize) as *mut c_void,
+                ldc: lda_ as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            engine::gemm(&g, h.stream).map_err(status)?;
+        }
+        let (mut p, mut c, mut nn, mut kk, mut l1, mut l2) = (panel, a22, rest, jb, lda_, lda_);
+        let (mut upper_, mut trans, mut alpha, mut beta, mut nb) = (up as i64, up as i64, -1.0f32, 1.0f32, LU_BLOCK);
+        run_in(
+            h,
+            agx_libs::BLAS,
+            c"agx_ssyrk",
+            &mut [
+                arg(&mut p),
+                arg(&mut c),
+                arg(&mut nn),
+                arg(&mut kk),
+                arg(&mut l1),
+                arg(&mut l2),
+                arg(&mut upper_),
+                arg(&mut trans),
+                arg(&mut alpha),
+                arg(&mut beta),
+                arg(&mut nb),
+            ],
+            [rest, rest],
             [16, 4],
         )?;
     }

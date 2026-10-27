@@ -153,6 +153,25 @@ pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc:
 }
 
 /// IEEE binary16 to f32 (exact).
+/// The part of a triangle (upper or lower) of an n x n matrix outside its diagonal `block` x `block` blocks, as
+/// rectangles [first row, first column, rows, columns]: halving at a block boundary, the corner between the halves is
+/// one rectangle and the halves recurse. Blocked syrk-like updates (zluda_blas_agx's syrk / syr2k, zluda_solver_agx's
+/// potrf) run a GEMM on each and a kernel restricted to the diagonal blocks.
+pub fn syrk_corners(upper: bool, n: i64, block: i64) -> Vec<[i64; 4]> {
+    fn split(upper: bool, lo: i64, size: i64, block: i64, out: &mut Vec<[i64; 4]>) {
+        if size <= block {
+            return;
+        }
+        let half = (size / 2 + block - 1) / block * block;
+        out.push(if upper { [lo, lo + half, half, size - half] } else { [lo + half, lo, size - half, half] });
+        split(upper, lo, half, block, out);
+        split(upper, lo + half, size - half, block, out);
+    }
+    let mut out = Vec::new();
+    split(upper, 0, n, block, &mut out);
+    out
+}
+
 pub fn f16_to_f32(h: u16) -> f32 {
     let (sign, exp, frac) = ((h as u32 & 0x8000) << 16, (h >> 10) & 0x1f, h as u32 & 0x3ff);
     let bits = match exp {
