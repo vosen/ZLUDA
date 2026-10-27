@@ -751,6 +751,16 @@ mod imp {
             return gemm(t, half, h, transa, transb, m, n, k, alpha, std::ptr::null(), lda, 0, std::ptr::null(), ldb, 0, beta, std::ptr::null_mut(), ldc, 0, batch);
         }
         let [pa, pb, pc] = pointer_arrays(h_ref, [a.cast(), b.cast(), c.cast()], batch as usize)?;
+        // element sizes of A and B, and of C
+        let (ab, cb) = match t {
+            Types::S => (4, 4),
+            Types::H => (2, 2),
+            Types::HtoS => (2, 4),
+            Types::D => (8, 8),
+        };
+        if let (Some(sa), Some(sb), Some(sc @ 1..)) = (even_stride(&pa, ab), even_stride(&pb, ab), even_stride(&pc, cb)) {
+            return gemm(t, half, h, transa, transb, m, n, k, alpha, pa[0] as *const c_void, lda, sa, pb[0] as *const c_void, ldb, sb, beta, pc[0] as *mut c_void, ldc, sc, batch);
+        }
         for i in 0..batch as usize {
             gemm(t, half, h, transa, transb, m, n, k, alpha, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta, pc[i] as *mut c_void, ldc, 0, 1)?;
         }
@@ -1378,6 +1388,24 @@ mod imp {
 
     /// GEMM over arrays of device pointers to the matrices (read back after the stream is idle).
     #[allow(clippy::too_many_arguments)]
+    /// The distance in elements of `bytes` between consecutive pointers, when it is the same for all of them.
+    fn even_stride(p: &[usize], bytes: usize) -> Option<c_longlong> {
+        let d = p.get(1).map_or(0, |&q| q.wrapping_sub(p[0]) as isize);
+        let uniform = p.windows(2).all(|w| w[1].wrapping_sub(w[0]) as isize == d);
+        (uniform && d % bytes as isize == 0).then(|| (d / bytes as isize) as c_longlong)
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn finds_even_strides() {
+        assert_eq!(even_stride(&[0x1000, 0x1100, 0x1200], 4), Some(64));
+        assert_eq!(even_stride(&[0x1200, 0x1100, 0x1000], 4), Some(-64));
+        assert_eq!(even_stride(&[0x1000, 0x1000], 4), Some(0));
+        assert_eq!(even_stride(&[0x1000], 4), Some(0));
+        assert_eq!(even_stride(&[0x1000, 0x1100, 0x1300], 4), None);
+        assert_eq!(even_stride(&[0x1000, 0x1006], 4), None);
+    }
+
     unsafe fn gemm_batched<T: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const T, a: *const *const T, lda: i64, b: *const *const T, ldb: i64, beta: *const T, c: *const *mut T, ldc: i64, batch: i64) -> cublasStatus_t {
         let hh = handle(h)?;
         if batch < 0 {
@@ -1399,6 +1427,10 @@ mod imp {
         };
         engine::synchronize(hh.stream).map_err(status)?;
         let (pa, pb, pc) = (fetch(a as *const c_void)?, fetch(b as *const c_void)?, fetch(c as *const c_void)?);
+        // Matrices equally far apart in each array (pointers taken from a strided tensor) are one strided batch.
+        if let (Some(sa), Some(sb), Some(sc @ 1..)) = (even_stride(&pa, T::BYTES), even_stride(&pb, T::BYTES), even_stride(&pc, T::BYTES)) {
+            return gemm(T::GEMM, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[0] as *const c_void, lda, sa, pb[0] as *const c_void, ldb, sb, beta as *const c_void, pc[0] as *mut c_void, ldc, sc, int(batch)?);
+        }
         for i in 0..batch as usize {
             gemm(T::GEMM, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta as *const c_void, pc[i] as *mut c_void, ldc, 0, 1)?;
         }
