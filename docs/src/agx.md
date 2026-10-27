@@ -1273,7 +1273,7 @@ it), as NVIDIA's does.
   keeps, symmetric or with zeros outside the triangle, and one GEMM on the tile kernels does the product) and `Strsm`
   (one thread per column of B, or per row for the right side, solving by substitution; with A above 64 rows, by blocks
   of 64 rows of op(A), each solved that way and then taken out of the rest of B with a GEMM on the tile kernels, the
-  first of which also applies alpha), and `cublasSgemmBatched` (the pointer arrays are read back once the stream is
+  first of which also applies alpha; `Dtrsm` the same way on the generic f64 GEMM), and `cublasSgemmBatched` (the pointer arrays are read back once the stream is
   idle, then one GEMM per entry).
 * `cublasCgemm` with C of at least 64 x 64 elements and k of 8 or more runs as one real GEMM on the tile kernels: an
   interleaved complex m x n matrix is a real 2m x n one with twice the leading dimension, so C and an untransposed B
@@ -1484,8 +1484,8 @@ products summed in another order). The f32 potrf above 64 rows does the same
 by panels, the rest of the triangle updated with each panel by a syrk on the
 tile GEMM (the other triangle is not written); after a non-positive minor the
 later kernels do nothing, but that panel's update still reaches the trailing
-matrix. The f32 getrs and potrs above 64 rows solve on the blocked trsm (shared
-with cuBLAS in `agx_libs::engine::trsm`), with the row interchanges applied to B
+matrix. getrs and potrs above 64 rows (f32 and f64) solve on the blocked trsm (shared
+with cuBLAS in `agx_libs::engine::trsm`; f64 updates on the generic f64 GEMM), with the row interchanges applied to B
 by their own kernel, instead of one thread per right-hand side. The f32 geqrf
 with more than 32 rows and columns works by panels of 32 columns when given the
 workspace its `_bufferSize` now asks for (32 (m + 64 + 2n) elements): the panel

@@ -532,11 +532,14 @@ pub mod engine {
         pub unit: bool,
         pub m: i64,
         pub n: i64,
-        pub alpha: f32,
+        /// f32 values exactly, but for `double`
+        pub alpha: f64,
         pub a: *const c_void,
         pub lda: i64,
         pub b: *mut c_void,
         pub ldb: i64,
+        /// f64 matrices (agx_strsm_f64 and the f64 GEMM) instead of f32
+        pub double: bool,
     }
 
     /// The rows of op(A) [`trsm`] solves at once.
@@ -549,12 +552,15 @@ pub mod engine {
         if t.m == 0 || t.n == 0 {
             return Ok(());
         }
-        let f = function(BLAS, c"agx_strsm")?;
+        let f = function(BLAS, if t.double { c"agx_strsm_f64" } else { c"agx_strsm" })?;
+        // element bytes
+        let e = if t.double { 8 } else { 4 };
         // the per-thread system is lower triangular when an even number of the stored lower triangle, the
         // transpose and the right side flip it
         let lower = (!t.upper ^ t.trans ^ t.right) as i64;
-        let solve = |a: *const c_void, b: *mut c_void, m: i64, n: i64, alpha: f32| {
-            let (mut a, mut b, mut m, mut n, mut alpha) = (a, b, m, n, alpha);
+        let solve = |a: *const c_void, b: *mut c_void, m: i64, n: i64, alpha: f64| {
+            // the kernel's alpha is of the value type
+            let (mut a, mut b, mut m, mut n, mut alpha32, mut alpha64) = (a, b, m, n, alpha as f32, alpha);
             let (mut lda, mut ldb, mut lower) = (t.lda, t.ldb, lower);
             let (mut right, mut upper, mut trans, mut unit) = (t.right as i64, t.upper as i64, t.trans as i64, t.unit as i64);
             let threads = if t.right { m } else { n } as u64;
@@ -562,7 +568,8 @@ pub mod engine {
                               &mut n as *mut _ as *mut c_void, &mut lda as *mut _ as *mut c_void, &mut ldb as *mut _ as *mut c_void,
                               &mut right as *mut _ as *mut c_void, &mut upper as *mut _ as *mut c_void,
                               &mut trans as *mut _ as *mut c_void, &mut unit as *mut _ as *mut c_void,
-                              &mut lower as *mut _ as *mut c_void, &mut alpha as *mut _ as *mut c_void];
+                              &mut lower as *mut _ as *mut c_void,
+                              if t.double { &mut alpha64 as *mut _ as *mut c_void } else { &mut alpha32 as *mut _ as *mut c_void }];
             let groups = u32::try_from(threads.div_ceil(64)).map_err(|_| Error::Failed)?;
             launch_kernel(f, [groups, 1], [64, 1], &mut params, stream)
         };
@@ -572,11 +579,11 @@ pub mod engine {
         }
         let op_lower = !t.upper ^ t.trans;
         // op(A) from row r and column c, and whether the GEMM transposes it
-        let op_a = |r: i64, c: i64| (t.a.byte_add(4 * if t.trans { c + r * t.lda } else { r + c * t.lda } as usize), t.trans);
-        let at_b = |r: i64, c: i64| t.b.byte_add(4 * (r + c * t.ldb) as usize);
+        let op_a = |r: i64, c: i64| (t.a.byte_add(e * if t.trans { c + r * t.lda } else { r + c * t.lda } as usize), t.trans);
+        let at_b = |r: i64, c: i64| t.b.byte_add(e * (r + c * t.ldb) as usize);
         for (i, [k0, k1, u0, u1]) in trsm_steps(na, if t.right { !op_lower } else { op_lower }).into_iter().enumerate() {
             let (bs, first) = (k1 - k0, i == 0);
-            let diagonal = t.a.byte_add(4 * (k0 * (t.lda + 1)) as usize);
+            let diagonal = t.a.byte_add(e * (k0 * (t.lda + 1)) as usize);
             if t.right {
                 solve(diagonal, at_b(0, k0), t.m, bs, if first { t.alpha } else { 1.0 })?;
             } else {
@@ -593,14 +600,14 @@ pub mod engine {
             };
             gemm(
                 &Gemm {
-                    types: Types::S,
+                    types: if t.double { Types::D } else { Types::S },
                     ta,
                     tb,
                     m: m as u64,
                     n: n as u64,
                     k: bs as u64,
                     alpha: -1.0,
-                    beta: if first { t.alpha as f64 } else { 1.0 },
+                    beta: if first { t.alpha } else { 1.0 },
                     a: pa,
                     lda: lda as u64,
                     stride_a: 0,

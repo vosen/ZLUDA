@@ -1501,25 +1501,21 @@ mod imp {
         if m == 0 || n == 0 {
             return Ok(());
         }
-        // the per-thread system is lower triangular when an even number of the stored lower triangle, the
-        // transpose and the right side flip it
-        let lower = (!upper ^ t ^ right) as i64;
-        let solve = |h: &Handle, mut a: *const T, mut b: *mut T, mut m: i64, mut n: i64, mut alpha: T| {
-            let (mut right, mut upper, mut t, mut unit, mut lower, mut lda, mut ldb) = (right as i64, upper as i64, t as i64, unit as i64, lower, lda, ldb);
-            let threads = if right == 1 { m } else { n };
-            blas_launch(
-                h,
-                T::kernel(c"agx_strsm", c"agx_strsm_f64"),
-                &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut t), arg(&mut unit), arg(&mut lower), arg(&mut alpha)],
-                [threads, 1],
-                [64, 1],
-            )
+        // blocked above 64 rows, with GEMM updates (agx_libs; f64 on the generic f64 GEMM)
+        let g = engine::Trsm {
+            right,
+            upper,
+            trans: t,
+            unit,
+            m,
+            n,
+            alpha: alpha.to_f64(),
+            a: a as *const c_void,
+            lda,
+            b: b as *mut c_void,
+            ldb,
+            double: T::GEMM == Types::D,
         };
-        if T::GEMM != Types::S {
-            return solve(h, a, b, m, n, alpha);
-        }
-        // f32: blocked above 64 rows, with GEMM updates (agx_libs)
-        let g = engine::Trsm { right, upper, trans: t, unit, m, n, alpha: alpha.to_f64() as f32, a: a as *const c_void, lda, b: b as *mut c_void, ldb };
         engine::trsm(&g, h.stream).map_err(status)
     }
 
