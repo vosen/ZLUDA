@@ -1218,6 +1218,9 @@ it), as NVIDIA's does.
   of op(A) (column of op(B)) together along k and sum by a SIMD-group
   reduction. Matrix-vector products such as decoding's `n = 1` GEMMs take
   about 21 times fewer SIMD-group cycles per element of C there (k = 4096).
+  Strided batched GEMMs launch each of these parts once for the whole batch
+  (the kernels take the batch entry from the grid and the element strides
+  of A, B and C), not once per matrix.
   In the simulator's cost model the tile kernel is
   about 47 times cheaper per element and step of k (the transposed variants
   15% and 53% dearer than the plain one, their loads not being pairs), so a

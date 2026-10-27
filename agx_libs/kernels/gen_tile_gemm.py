@@ -23,12 +23,13 @@ VARIANTS = [("", False, False), ("_ta", True, False), ("_tb", False, True), ("_t
 def kernel(name, ab, c, ta, tb):
     M = lambda t: f"vector<64x{t}>"
     acc, mab = M("f32"), M(ab)
-    mem = lambda t: f"memref<?x?x{t}, strided<[?, 1]>, 1>"
+    mem = lambda t: f"memref<?x?x{t}, strided<[?, 1], offset: ?>, 1>"
     o = []
     w = o.append
     w(f"  gpu.func @{name}(%a0: memref<1x{ab}, 1>, %b0: memref<1x{ab}, 1>,")
     w(f"      %c0: memref<1x{c}, 1>, %M: index, %N: index, %K: index, %lda: index,")
-    w(f"      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel")
+    w(f"      %ldb: index, %ldc: index, %bsa: index, %bsb: index, %bsc: index, %alpha: f32,")
+    w(f"      %beta: f32) kernel")
     w("      attributes {known_block_size = array<i32: 128, 1, 1>} {")
     for v in [0, 1, 2, 8, 16, 24, 32, 64, 128]:
         w(f"    %i{v} = arith.constant {v} : index")
@@ -39,10 +40,15 @@ def kernel(name, ab, c, ta, tb):
         w(f"    %{n}0a = memref.assume_alignment %{n}0, 8 : memref<1x{ab if n != 'c' else c}, 1>")
     for ld in ["lda", "ldb", "ldc"]:
         w(f"    %{ld}_e = arith.andi %{ld}, %even : index")
+    # the matrices of batch entry z (grid y) are bsa, bsb and bsc elements on (even as well)
+    w("    %z = gpu.block_id y")
+    for n in ["a", "b", "c"]:
+        w(f"    %bs{n}_e = arith.andi %bs{n}, %even : index")
+        w(f"    %o{n} = arith.muli %z, %bs{n}_e : index")
     # a transposed operand is stored as its transpose, row-major
     for n, t, sz, ld in [("A", ab, "%K, %M" if ta else "%M, %K", "%lda_e"),
                          ("B", ab, "%N, %K" if tb else "%K, %N", "%ldb_e"), ("C", c, "%M, %N", "%ldc_e")]:
-        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0a to offset: [0], sizes: [{sz}], strides: [{ld}, 1]")
+        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0a to offset: [%o{n.lower()}], sizes: [{sz}], strides: [{ld}, 1]")
         w(f"        : memref<1x{t}, 1> to {mem(t)}")
     w("""
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.

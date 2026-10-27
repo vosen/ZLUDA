@@ -83,7 +83,8 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     tg_uniform, slots, glob, stack = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
-    cmd = [a.agx_run, code, "--grid", "%d,%d,1" % grid, "--wg", "%d,%d,1" % wg]
+    grid3 = tuple(grid) + (1,) * (3 - len(grid))  # a third dimension for batched launches
+    cmd = [a.agx_run, code, "--grid", "%d,%d,%d" % grid3, "--wg", "%d,%d,1" % wg]
     # on the GPU, a kernel that uses the stack needs its scratch (the simulator gives every thread one)
     if stack and os.path.basename(a.agx_run).startswith("agx_run_hw"):
         cmd += ["--stack", str(stack)]
@@ -180,7 +181,8 @@ def case_tile(a, obj, tmp, M, N, K, alpha, beta, rnd, kernel="agx_sgemm_tile64",
     C = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(M * ldc)], c)
     (got,) = run(a, obj, kernel,
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
-                  ("i64", K), ("i64", lda), ("i64", ldb), ("i64", ldc), ("f32", alpha), ("f32", beta)],
+                  ("i64", K), ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", 0), ("i64", 0), ("i64", 0),
+                  ("f32", alpha), ("f32", beta)],
                  ((M // 64) * (N // 64) * 128, 1), (128, 1), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, (ldc, 1), alpha, beta)
     return close(unpack(got, c), want, [i * ldc + j for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
@@ -200,7 +202,8 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
     (got,) = run(a, obj, kernel,
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
                   ("i64", K), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]),
-                  ("i64", sc[1]), ("f64" if c == "d" else "f32", alpha), ("f64" if c == "d" else "f32", beta)],
+                  ("i64", sc[1]), ("i64", 0), ("i64", 0), ("i64", 0), ("f64" if c == "d" else "f32", alpha),
+                  ("f64" if c == "d" else "f32", beta)],
                  *gemm_launch(kernel, M, N), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta)
     return close(unpack(got, c), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)],
@@ -243,8 +246,10 @@ def split_plan(M, N, K, lda, ldb, ldc, ta=False, tb=False):
     return parts
 
 
-def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, tile, gen, ab, c, ta, tb):
-    """Column-major C = alpha op(A) op(B) + beta C as zluda_blas_agx runs it (split_plan's parts); returns C."""
+def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, tile, gen, ab, c, ta, tb,
+                  batch=1, strides=(0, 0, 0)):
+    """Column-major C = alpha op(A) op(B) + beta C as zluda_blas_agx runs it (split_plan's parts, each launched once
+    for `batch` matrices strides (A, B, C) elements apart); returns C."""
     sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
     sb = (ldb, 1) if tb else (1, ldb)
     C = list(C)
@@ -255,16 +260,43 @@ def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, til
             kernel = tile + {(0, 0): "", (1, 0): "_ta", (0, 1): "_tb", (1, 1): "_tatb"}[(int(tb), int(ta))]
             args = [("buf", pack(B[ob:], ab)), ("buf", pack(A[oa:], ab)), ("buf", pack(C[oc:], c), True),
                     ("i64", n), ("i64", m), ("i64", k), ("i64", ldb), ("i64", lda), ("i64", ldc),
-                    ("f32", alpha), ("f32", be)]
-            (got,) = run(a, obj, kernel, args, ((n // 64) * (m // 64) * 128, 1), (128, 1), tmp)
+                    ("i64", strides[1]), ("i64", strides[0]), ("i64", strides[2]), ("f32", alpha), ("f32", be)]
+            (got,) = run(a, obj, kernel, args, ((n // 64) * (m // 64) * 128, batch), (128, 1), tmp)
         else:
             args = [("buf", pack(A[oa:], ab)), ("buf", pack(B[ob:], ab)), ("buf", pack(C[oc:], c), True),
                     ("i64", m), ("i64", n), ("i64", k), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]),
-                    ("i64", sb[1]), ("i64", 1), ("i64", ldc), ("f32", alpha), ("f32", be)]
+                    ("i64", sb[1]), ("i64", 1), ("i64", ldc), ("i64", strides[0]), ("i64", strides[1]),
+                    ("i64", strides[2]), ("f32", alpha), ("f32", be)]
             kernel = gen.replace("_generic", "_dot") if use_dot(m, n, k, ta, tb) else gen
-            (got,) = run(a, obj, kernel, args, *gemm_launch(kernel, m, n), tmp)
+            (gx, gy), wg = gemm_launch(kernel, m, n)
+            grid = (gx, batch) if "_dot" in kernel else (gx, gy, batch)
+            (got,) = run(a, obj, kernel, args, grid, wg, tmp)
         C[oc:] = unpack(got, c)
     return C
+
+
+def case_batched(a, obj, tmp, M, N, K, batch, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic",
+                 ab="f", c="f", ta=False, tb=False):
+    """A strided batched GEMM, each part of its plan launched once for the whole batch."""
+    ra, rb = (K if ta else M), (N if tb else K)
+    lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+    na, nb, nc = lda * (M if ta else K), ldb * (K if tb else N), ldc * N
+    strides = (na + 6, nb + 4, nc + 2)  # even, with gaps between the matrices
+    A = rounded([rnd.uniform(-1, 1) for _ in range(strides[0] * batch)], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(strides[1] * batch)], ab)
+    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(strides[2] * batch)], c)
+    C = run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C0, ldc, alpha, beta, tile, gen, ab, c, ta, tb, batch,
+                      strides)
+    sa = (lda, 1) if ta else (1, lda)
+    sb = (ldb, 1) if tb else (1, ldb)
+    got, want = [], []
+    for e in range(batch):
+        w = reference(M, N, K, A[e * strides[0]:], sa, B[e * strides[1]:], sb, C0[e * strides[2]:], (1, ldc), alpha,
+                      beta)
+        idx = [i + j * ldc for i in range(M) for j in range(N)]
+        got += [C[e * strides[2] + i] for i in idx]
+        want += [w[i] for i in idx]
+    return close(got, want, range(len(got)), 1e-4 if c == "f" else 2e-3)
 
 
 def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
@@ -2370,6 +2402,11 @@ def main():
                     ("split TN 77x130x21", lambda: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, ta=True)),
                     ("split NT 130x70x13 b=0", lambda: case_split(a, obj, tmp, 130, 70, 13, 1.5, 0.0, rnd, tb=True)),
                     ("split TT 64x100x8", lambda: case_split(a, obj, tmp, 64, 100, 8, -1.0, 1.0, rnd, ta=True, tb=True)),
+                    ("batched 3 x 70x65x40 TN", lambda: case_batched(a, obj, tmp, 70, 65, 40, 3, 1.0, 0.5, rnd,
+                                                                     ta=True)),
+                    ("batched 2 x 64x128x16 NT b=0", lambda: case_batched(a, obj, tmp, 64, 128, 16, 2, -1.0, 0.0, rnd,
+                                                                          tb=True)),
+                    ("batched 4 x 5x1x50 NN (dot)", lambda: case_batched(a, obj, tmp, 5, 1, 50, 4, 1.0, 0.0, rnd)),
                     ("conv 1x1 as GEMM 2x40x8x9 to 72", lambda: case_conv_pointwise(a, obj, tmp, 2, 40, 8, 9, 72,
                                                                                     1.0, 0.5, rnd)),
                     ("conv 1x1 as GEMM 1x3x5x5 to 4 b=0", lambda: case_conv_pointwise(a, obj, tmp, 1, 3, 5, 5, 4,
@@ -2415,6 +2452,9 @@ def main():
                          lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
                                                               ta=True)),
                     ]
+                    cases.append(("h batched C %s 3 x 70x65x24 TN" % ct,
+                                  lambda tk=tk, gk=gk, c=c: case_batched(a, obj, tmp, 70, 65, 24, 3, 1.0, 0.5, rnd, tk, gk,
+                                                                         "e", c, ta=True)))
                     if ct == "f16":  # f16 convolutions keep f16 data
                         cases.append(("h conv 1x1 as GEMM 2x24x8x8 to 64",
                                       lambda tk=tk, gk=gk: case_conv_pointwise(a, obj, tmp, 2, 24, 8, 8, 64, 1.0, 0.5,

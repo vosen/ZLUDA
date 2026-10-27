@@ -18,7 +18,8 @@ gpu.module @agx_blas {
   // 128 threads.
   gpu.func @agx_sgemm_tile64(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      %ldb: index, %ldc: index, %bsa: index, %bsb: index, %bsc: index, %alpha: f32,
+      %beta: f32) kernel
       attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -36,12 +37,19 @@ gpu.module @agx_blas {
     %lda_e = arith.andi %lda, %even : index
     %ldb_e = arith.andi %ldb, %even : index
     %ldc_e = arith.andi %ldc, %even : index
-    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%M, %K], strides: [%lda_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%K, %N], strides: [%ldb_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
+    %z = gpu.block_id y
+    %bsa_e = arith.andi %bsa, %even : index
+    %oa = arith.muli %z, %bsa_e : index
+    %bsb_e = arith.andi %bsb, %even : index
+    %ob = arith.muli %z, %bsb_e : index
+    %bsc_e = arith.andi %bsc, %even : index
+    %oc = arith.muli %z, %bsc_e : index
+    %A = memref.reinterpret_cast %a0a to offset: [%oa], sizes: [%M, %K], strides: [%lda_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0a to offset: [%ob], sizes: [%K, %N], strides: [%ldb_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0a to offset: [%oc], sizes: [%M, %N], strides: [%ldc_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
     %tiles_m = arith.divui %M, %i64 : index
@@ -82,14 +90,14 @@ gpu.module @agx_blas {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb0 = air.simdgroup_matrix_load %B[%k, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb1 = air.simdgroup_matrix_load %B[%k, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb2 = air.simdgroup_matrix_load %B[%k, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb3 = air.simdgroup_matrix_load %B[%k, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb0 = air.simdgroup_matrix_load %B[%k, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb1 = air.simdgroup_matrix_load %B[%k, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb2 = air.simdgroup_matrix_load %B[%k, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb3 = air.simdgroup_matrix_load %B[%k, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf32>
@@ -117,102 +125,102 @@ gpu.module @agx_blas {
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
     scf.if %no_c {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     } else {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -224,7 +232,8 @@ gpu.module @agx_blas {
   // C is not read when beta is 0.
   gpu.func @agx_sgemm_generic(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
-      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f32, %beta: f32) kernel {
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %sa: index, %sb: index, %sc: index,
+      %alpha: f32, %beta: f32) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i3 = arith.constant 3 : index
@@ -234,12 +243,16 @@ gpu.module @agx_blas {
     %i127 = arith.constant 127 : index
     %i128 = arith.constant 128 : index
     %big = arith.constant 4611686018427387904 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %z = gpu.block_id z
+    %oa = arith.muli %z, %sa : index
+    %ob = arith.muli %z, %sb : index
+    %oc = arith.muli %z, %sc : index
+    %A = memref.reinterpret_cast %a0 to offset: [%oa], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [%oc], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
     %f0 = arith.constant 0.0 : f32
     %j = gpu.global_id x
     %i = gpu.global_id y
@@ -261,29 +274,29 @@ gpu.module @agx_blas {
         %kb_d0 = arith.muli %k, %sbr : index
         %pa_d0 = arith.addi %ia, %ka_d0 : index
         %pb_d0 = arith.addi %kb_d0, %jb : index
-        %x_d0 = memref.load %A[%pa_d0] : memref<?xf32, strided<[1]>, 1>
-        %y_d0 = memref.load %B[%pb_d0] : memref<?xf32, strided<[1]>, 1>
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d0 = math.fma %x_d0, %y_d0, %c0_ : f32
         %ka_d1 = arith.muli %k1, %sac : index
         %kb_d1 = arith.muli %k1, %sbr : index
         %pa_d1 = arith.addi %ia, %ka_d1 : index
         %pb_d1 = arith.addi %kb_d1, %jb : index
-        %x_d1 = memref.load %A[%pa_d1] : memref<?xf32, strided<[1]>, 1>
-        %y_d1 = memref.load %B[%pb_d1] : memref<?xf32, strided<[1]>, 1>
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d1 = math.fma %x_d1, %y_d1, %c1_ : f32
         %ka_d2 = arith.muli %k2, %sac : index
         %kb_d2 = arith.muli %k2, %sbr : index
         %pa_d2 = arith.addi %ia, %ka_d2 : index
         %pb_d2 = arith.addi %kb_d2, %jb : index
-        %x_d2 = memref.load %A[%pa_d2] : memref<?xf32, strided<[1]>, 1>
-        %y_d2 = memref.load %B[%pb_d2] : memref<?xf32, strided<[1]>, 1>
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d2 = math.fma %x_d2, %y_d2, %c2_ : f32
         %ka_d3 = arith.muli %k3, %sac : index
         %kb_d3 = arith.muli %k3, %sbr : index
         %pa_d3 = arith.addi %ia, %ka_d3 : index
         %pb_d3 = arith.addi %kb_d3, %jb : index
-        %x_d3 = memref.load %A[%pa_d3] : memref<?xf32, strided<[1]>, 1>
-        %y_d3 = memref.load %B[%pb_d3] : memref<?xf32, strided<[1]>, 1>
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d3 = math.fma %x_d3, %y_d3, %c3_ : f32
         scf.yield %d0, %d1, %d2, %d3 : f32, f32, f32, f32
       }
@@ -303,8 +316,8 @@ gpu.module @agx_blas {
         %kb_a1 = arith.muli %k, %sbr : index
         %pa_a1 = arith.addi %ia, %ka_a1 : index
         %pb_a1 = arith.addi %kb_a1, %jb : index
-        %x_a1 = memref.load %A[%pa_a1] : memref<?xf32, strided<[1]>, 1>
-        %y_a1 = memref.load %B[%pb_a1] : memref<?xf32, strided<[1]>, 1>
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf32, strided<[1], offset: ?>, 1>
         %a1 = math.fma %x_a1, %y_a1, %a : f32
         scf.yield %a1 : f32
       }
@@ -316,11 +329,11 @@ gpu.module @agx_blas {
       %out = scf.if %no_c -> f32 {
         scf.yield %scaled : f32
       } else {
-        %old = memref.load %C[%pc] : memref<?xf32, strided<[1]>, 1>
+        %old = memref.load %C[%pc] : memref<?xf32, strided<[1], offset: ?>, 1>
         %r = math.fma %old, %beta, %scaled : f32
         scf.yield %r : f32
       }
-      memref.store %out, %C[%pc] : memref<?xf32, strided<[1]>, 1>
+      memref.store %out, %C[%pc] : memref<?xf32, strided<[1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -333,7 +346,8 @@ gpu.module @agx_blas {
   // C is not read when beta is 0.
   gpu.func @agx_dgemm_generic(%a0: memref<1xf64, 1>, %b0: memref<1xf64, 1>,
       %c0: memref<1xf64, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
-      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f64, %beta: f64) kernel {
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %sa: index, %sb: index, %sc: index,
+      %alpha: f64, %beta: f64) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i3 = arith.constant 3 : index
@@ -343,12 +357,16 @@ gpu.module @agx_blas {
     %i127 = arith.constant 127 : index
     %i128 = arith.constant 128 : index
     %big = arith.constant 4611686018427387904 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %z = gpu.block_id z
+    %oa = arith.muli %z, %sa : index
+    %ob = arith.muli %z, %sb : index
+    %oc = arith.muli %z, %sc : index
+    %A = memref.reinterpret_cast %a0 to offset: [%oa], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [%oc], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
     %f0 = arith.constant 0.0 : f64
     %j = gpu.global_id x
     %i = gpu.global_id y
@@ -370,29 +388,29 @@ gpu.module @agx_blas {
         %kb_d0 = arith.muli %k, %sbr : index
         %pa_d0 = arith.addi %ia, %ka_d0 : index
         %pb_d0 = arith.addi %kb_d0, %jb : index
-        %x_d0 = memref.load %A[%pa_d0] : memref<?xf64, strided<[1]>, 1>
-        %y_d0 = memref.load %B[%pb_d0] : memref<?xf64, strided<[1]>, 1>
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d0 = math.fma %x_d0, %y_d0, %c0_ : f64
         %ka_d1 = arith.muli %k1, %sac : index
         %kb_d1 = arith.muli %k1, %sbr : index
         %pa_d1 = arith.addi %ia, %ka_d1 : index
         %pb_d1 = arith.addi %kb_d1, %jb : index
-        %x_d1 = memref.load %A[%pa_d1] : memref<?xf64, strided<[1]>, 1>
-        %y_d1 = memref.load %B[%pb_d1] : memref<?xf64, strided<[1]>, 1>
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d1 = math.fma %x_d1, %y_d1, %c1_ : f64
         %ka_d2 = arith.muli %k2, %sac : index
         %kb_d2 = arith.muli %k2, %sbr : index
         %pa_d2 = arith.addi %ia, %ka_d2 : index
         %pb_d2 = arith.addi %kb_d2, %jb : index
-        %x_d2 = memref.load %A[%pa_d2] : memref<?xf64, strided<[1]>, 1>
-        %y_d2 = memref.load %B[%pb_d2] : memref<?xf64, strided<[1]>, 1>
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d2 = math.fma %x_d2, %y_d2, %c2_ : f64
         %ka_d3 = arith.muli %k3, %sac : index
         %kb_d3 = arith.muli %k3, %sbr : index
         %pa_d3 = arith.addi %ia, %ka_d3 : index
         %pb_d3 = arith.addi %kb_d3, %jb : index
-        %x_d3 = memref.load %A[%pa_d3] : memref<?xf64, strided<[1]>, 1>
-        %y_d3 = memref.load %B[%pb_d3] : memref<?xf64, strided<[1]>, 1>
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d3 = math.fma %x_d3, %y_d3, %c3_ : f64
         scf.yield %d0, %d1, %d2, %d3 : f64, f64, f64, f64
       }
@@ -412,8 +430,8 @@ gpu.module @agx_blas {
         %kb_a1 = arith.muli %k, %sbr : index
         %pa_a1 = arith.addi %ia, %ka_a1 : index
         %pb_a1 = arith.addi %kb_a1, %jb : index
-        %x_a1 = memref.load %A[%pa_a1] : memref<?xf64, strided<[1]>, 1>
-        %y_a1 = memref.load %B[%pb_a1] : memref<?xf64, strided<[1]>, 1>
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf64, strided<[1], offset: ?>, 1>
         %a1 = math.fma %x_a1, %y_a1, %a : f64
         scf.yield %a1 : f64
       }
@@ -425,11 +443,11 @@ gpu.module @agx_blas {
       %out = scf.if %no_c -> f64 {
         scf.yield %scaled : f64
       } else {
-        %old = memref.load %C[%pc] : memref<?xf64, strided<[1]>, 1>
+        %old = memref.load %C[%pc] : memref<?xf64, strided<[1], offset: ?>, 1>
         %r = math.fma %old, %beta, %scaled : f64
         scf.yield %r : f64
       }
-      memref.store %out, %C[%pc] : memref<?xf64, strided<[1]>, 1>
+      memref.store %out, %C[%pc] : memref<?xf64, strided<[1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -437,7 +455,8 @@ gpu.module @agx_blas {
   // agx_sgemm_tile64 with A[r, k] at a[k * lda + r] (transposed).
   gpu.func @agx_sgemm_tile64_ta(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      %ldb: index, %ldc: index, %bsa: index, %bsb: index, %bsc: index, %alpha: f32,
+      %beta: f32) kernel
       attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -455,12 +474,19 @@ gpu.module @agx_blas {
     %lda_e = arith.andi %lda, %even : index
     %ldb_e = arith.andi %ldb, %even : index
     %ldc_e = arith.andi %ldc, %even : index
-    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%K, %M], strides: [%lda_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%K, %N], strides: [%ldb_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
+    %z = gpu.block_id y
+    %bsa_e = arith.andi %bsa, %even : index
+    %oa = arith.muli %z, %bsa_e : index
+    %bsb_e = arith.andi %bsb, %even : index
+    %ob = arith.muli %z, %bsb_e : index
+    %bsc_e = arith.andi %bsc, %even : index
+    %oc = arith.muli %z, %bsc_e : index
+    %A = memref.reinterpret_cast %a0a to offset: [%oa], sizes: [%K, %M], strides: [%lda_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0a to offset: [%ob], sizes: [%K, %N], strides: [%ldb_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0a to offset: [%oc], sizes: [%M, %N], strides: [%ldc_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
     %tiles_m = arith.divui %M, %i64 : index
@@ -501,14 +527,14 @@ gpu.module @agx_blas {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%k, %row] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma1 = air.simdgroup_matrix_load %A[%k, %row1] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma2 = air.simdgroup_matrix_load %A[%k, %row2] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma3 = air.simdgroup_matrix_load %A[%k, %row3] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb0 = air.simdgroup_matrix_load %B[%k, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb1 = air.simdgroup_matrix_load %B[%k, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb2 = air.simdgroup_matrix_load %B[%k, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb3 = air.simdgroup_matrix_load %B[%k, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+        %ma0 = air.simdgroup_matrix_load %A[%k, %row] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%k, %row1] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%k, %row2] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%k, %row3] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb0 = air.simdgroup_matrix_load %B[%k, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb1 = air.simdgroup_matrix_load %B[%k, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb2 = air.simdgroup_matrix_load %B[%k, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb3 = air.simdgroup_matrix_load %B[%k, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf32>
@@ -536,102 +562,102 @@ gpu.module @agx_blas {
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
     scf.if %no_c {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     } else {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -639,7 +665,8 @@ gpu.module @agx_blas {
   // agx_sgemm_tile64 with B[k, c] at b[c * ldb + k] (transposed).
   gpu.func @agx_sgemm_tile64_tb(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      %ldb: index, %ldc: index, %bsa: index, %bsb: index, %bsc: index, %alpha: f32,
+      %beta: f32) kernel
       attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -657,12 +684,19 @@ gpu.module @agx_blas {
     %lda_e = arith.andi %lda, %even : index
     %ldb_e = arith.andi %ldb, %even : index
     %ldc_e = arith.andi %ldc, %even : index
-    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%M, %K], strides: [%lda_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%N, %K], strides: [%ldb_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
+    %z = gpu.block_id y
+    %bsa_e = arith.andi %bsa, %even : index
+    %oa = arith.muli %z, %bsa_e : index
+    %bsb_e = arith.andi %bsb, %even : index
+    %ob = arith.muli %z, %bsb_e : index
+    %bsc_e = arith.andi %bsc, %even : index
+    %oc = arith.muli %z, %bsc_e : index
+    %A = memref.reinterpret_cast %a0a to offset: [%oa], sizes: [%M, %K], strides: [%lda_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0a to offset: [%ob], sizes: [%N, %K], strides: [%ldb_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0a to offset: [%oc], sizes: [%M, %N], strides: [%ldc_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
     %tiles_m = arith.divui %M, %i64 : index
@@ -703,14 +737,14 @@ gpu.module @agx_blas {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf32>
@@ -738,102 +772,102 @@ gpu.module @agx_blas {
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
     scf.if %no_c {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     } else {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -841,7 +875,8 @@ gpu.module @agx_blas {
   // agx_sgemm_tile64 with A[r, k] at a[k * lda + r] and B[k, c] at b[c * ldb + k] (transposed).
   gpu.func @agx_sgemm_tile64_tatb(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      %ldb: index, %ldc: index, %bsa: index, %bsb: index, %bsc: index, %alpha: f32,
+      %beta: f32) kernel
       attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -859,12 +894,19 @@ gpu.module @agx_blas {
     %lda_e = arith.andi %lda, %even : index
     %ldb_e = arith.andi %ldb, %even : index
     %ldc_e = arith.andi %ldc, %even : index
-    %A = memref.reinterpret_cast %a0a to offset: [0], sizes: [%K, %M], strides: [%lda_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %B = memref.reinterpret_cast %b0a to offset: [0], sizes: [%N, %K], strides: [%ldb_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
-    %C = memref.reinterpret_cast %c0a to offset: [0], sizes: [%M, %N], strides: [%ldc_e, 1]
-        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1]>, 1>
+    %z = gpu.block_id y
+    %bsa_e = arith.andi %bsa, %even : index
+    %oa = arith.muli %z, %bsa_e : index
+    %bsb_e = arith.andi %bsb, %even : index
+    %ob = arith.muli %z, %bsb_e : index
+    %bsc_e = arith.andi %bsc, %even : index
+    %oc = arith.muli %z, %bsc_e : index
+    %A = memref.reinterpret_cast %a0a to offset: [%oa], sizes: [%K, %M], strides: [%lda_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0a to offset: [%ob], sizes: [%N, %K], strides: [%ldb_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0a to offset: [%oc], sizes: [%M, %N], strides: [%ldc_e, 1]
+        : memref<1xf32, 1> to memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
 
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
     %tiles_m = arith.divui %M, %i64 : index
@@ -905,14 +947,14 @@ gpu.module @agx_blas {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%k, %row] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma1 = air.simdgroup_matrix_load %A[%k, %row1] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma2 = air.simdgroup_matrix_load %A[%k, %row2] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %ma3 = air.simdgroup_matrix_load %A[%k, %row3] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
-        %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+        %ma0 = air.simdgroup_matrix_load %A[%k, %row] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%k, %row1] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%k, %row2] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%k, %row3] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
+        %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf32>
@@ -940,102 +982,102 @@ gpu.module @agx_blas {
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
     scf.if %no_c {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     } else {
       %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
       %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
+      %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1], offset: ?>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1], offset: ?>, 1>
     }
     gpu.return
   }
@@ -1044,7 +1086,8 @@ gpu.module @agx_blas {
   // (gen_small_gemm.py): for C with a side of at most 8, A or B contiguous along K.
   gpu.func @agx_sgemm_dot(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
-      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f32, %beta: f32) kernel {
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %sa: index, %sb: index, %sc: index,
+      %alpha: f32, %beta: f32) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i3 = arith.constant 3 : index
@@ -1054,12 +1097,16 @@ gpu.module @agx_blas {
     %i127 = arith.constant 127 : index
     %i128 = arith.constant 128 : index
     %big = arith.constant 4611686018427387904 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %z = gpu.block_id y
+    %oa = arith.muli %z, %sa : index
+    %ob = arith.muli %z, %sb : index
+    %oc = arith.muli %z, %sc : index
+    %A = memref.reinterpret_cast %a0 to offset: [%oa], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [%oc], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1], offset: ?>, 1>
     %f0 = arith.constant 0.0 : f32
     %g = gpu.global_id x
     %s = arith.divui %g, %i32 : index
@@ -1084,29 +1131,29 @@ gpu.module @agx_blas {
         %kb_d0 = arith.muli %k, %sbr : index
         %pa_d0 = arith.addi %ia, %ka_d0 : index
         %pb_d0 = arith.addi %kb_d0, %jb : index
-        %x_d0 = memref.load %A[%pa_d0] : memref<?xf32, strided<[1]>, 1>
-        %y_d0 = memref.load %B[%pb_d0] : memref<?xf32, strided<[1]>, 1>
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d0 = math.fma %x_d0, %y_d0, %c0_ : f32
         %ka_d1 = arith.muli %k1, %sac : index
         %kb_d1 = arith.muli %k1, %sbr : index
         %pa_d1 = arith.addi %ia, %ka_d1 : index
         %pb_d1 = arith.addi %kb_d1, %jb : index
-        %x_d1 = memref.load %A[%pa_d1] : memref<?xf32, strided<[1]>, 1>
-        %y_d1 = memref.load %B[%pb_d1] : memref<?xf32, strided<[1]>, 1>
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d1 = math.fma %x_d1, %y_d1, %c1_ : f32
         %ka_d2 = arith.muli %k2, %sac : index
         %kb_d2 = arith.muli %k2, %sbr : index
         %pa_d2 = arith.addi %ia, %ka_d2 : index
         %pb_d2 = arith.addi %kb_d2, %jb : index
-        %x_d2 = memref.load %A[%pa_d2] : memref<?xf32, strided<[1]>, 1>
-        %y_d2 = memref.load %B[%pb_d2] : memref<?xf32, strided<[1]>, 1>
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d2 = math.fma %x_d2, %y_d2, %c2_ : f32
         %ka_d3 = arith.muli %k3, %sac : index
         %kb_d3 = arith.muli %k3, %sbr : index
         %pa_d3 = arith.addi %ia, %ka_d3 : index
         %pb_d3 = arith.addi %kb_d3, %jb : index
-        %x_d3 = memref.load %A[%pa_d3] : memref<?xf32, strided<[1]>, 1>
-        %y_d3 = memref.load %B[%pb_d3] : memref<?xf32, strided<[1]>, 1>
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf32, strided<[1], offset: ?>, 1>
         %d3 = math.fma %x_d3, %y_d3, %c3_ : f32
         scf.yield %d0, %d1, %d2, %d3 : f32, f32, f32, f32
       }
@@ -1126,8 +1173,8 @@ gpu.module @agx_blas {
         %kb_a1 = arith.muli %k, %sbr : index
         %pa_a1 = arith.addi %ia, %ka_a1 : index
         %pb_a1 = arith.addi %kb_a1, %jb : index
-        %x_a1 = memref.load %A[%pa_a1] : memref<?xf32, strided<[1]>, 1>
-        %y_a1 = memref.load %B[%pb_a1] : memref<?xf32, strided<[1]>, 1>
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf32, strided<[1], offset: ?>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf32, strided<[1], offset: ?>, 1>
         %a1 = math.fma %x_a1, %y_a1, %a : f32
         scf.yield %a1 : f32
       }
@@ -1142,11 +1189,11 @@ gpu.module @agx_blas {
         %out = scf.if %no_c -> f32 {
           scf.yield %scaled : f32
         } else {
-          %old = memref.load %C[%pc] : memref<?xf32, strided<[1]>, 1>
+          %old = memref.load %C[%pc] : memref<?xf32, strided<[1], offset: ?>, 1>
           %r = math.fma %old, %beta, %scaled : f32
           scf.yield %r : f32
         }
-        memref.store %out, %C[%pc] : memref<?xf32, strided<[1]>, 1>
+        memref.store %out, %C[%pc] : memref<?xf32, strided<[1], offset: ?>, 1>
       }
     }
     gpu.return
@@ -1156,7 +1203,8 @@ gpu.module @agx_blas {
   // (gen_small_gemm.py): for C with a side of at most 8, A or B contiguous along K.
   gpu.func @agx_dgemm_dot(%a0: memref<1xf64, 1>, %b0: memref<1xf64, 1>,
       %c0: memref<1xf64, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
-      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f64, %beta: f64) kernel {
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %sa: index, %sb: index, %sc: index,
+      %alpha: f64, %beta: f64) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i3 = arith.constant 3 : index
@@ -1166,12 +1214,16 @@ gpu.module @agx_blas {
     %i127 = arith.constant 127 : index
     %i128 = arith.constant 128 : index
     %big = arith.constant 4611686018427387904 : index
-    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
-    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
-    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
-        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %z = gpu.block_id y
+    %oa = arith.muli %z, %sa : index
+    %ob = arith.muli %z, %sb : index
+    %oc = arith.muli %z, %sc : index
+    %A = memref.reinterpret_cast %a0 to offset: [%oa], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [%ob], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [%oc], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1], offset: ?>, 1>
     %f0 = arith.constant 0.0 : f64
     %g = gpu.global_id x
     %s = arith.divui %g, %i32 : index
@@ -1196,29 +1248,29 @@ gpu.module @agx_blas {
         %kb_d0 = arith.muli %k, %sbr : index
         %pa_d0 = arith.addi %ia, %ka_d0 : index
         %pb_d0 = arith.addi %kb_d0, %jb : index
-        %x_d0 = memref.load %A[%pa_d0] : memref<?xf64, strided<[1]>, 1>
-        %y_d0 = memref.load %B[%pb_d0] : memref<?xf64, strided<[1]>, 1>
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d0 = math.fma %x_d0, %y_d0, %c0_ : f64
         %ka_d1 = arith.muli %k1, %sac : index
         %kb_d1 = arith.muli %k1, %sbr : index
         %pa_d1 = arith.addi %ia, %ka_d1 : index
         %pb_d1 = arith.addi %kb_d1, %jb : index
-        %x_d1 = memref.load %A[%pa_d1] : memref<?xf64, strided<[1]>, 1>
-        %y_d1 = memref.load %B[%pb_d1] : memref<?xf64, strided<[1]>, 1>
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d1 = math.fma %x_d1, %y_d1, %c1_ : f64
         %ka_d2 = arith.muli %k2, %sac : index
         %kb_d2 = arith.muli %k2, %sbr : index
         %pa_d2 = arith.addi %ia, %ka_d2 : index
         %pb_d2 = arith.addi %kb_d2, %jb : index
-        %x_d2 = memref.load %A[%pa_d2] : memref<?xf64, strided<[1]>, 1>
-        %y_d2 = memref.load %B[%pb_d2] : memref<?xf64, strided<[1]>, 1>
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d2 = math.fma %x_d2, %y_d2, %c2_ : f64
         %ka_d3 = arith.muli %k3, %sac : index
         %kb_d3 = arith.muli %k3, %sbr : index
         %pa_d3 = arith.addi %ia, %ka_d3 : index
         %pb_d3 = arith.addi %kb_d3, %jb : index
-        %x_d3 = memref.load %A[%pa_d3] : memref<?xf64, strided<[1]>, 1>
-        %y_d3 = memref.load %B[%pb_d3] : memref<?xf64, strided<[1]>, 1>
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf64, strided<[1], offset: ?>, 1>
         %d3 = math.fma %x_d3, %y_d3, %c3_ : f64
         scf.yield %d0, %d1, %d2, %d3 : f64, f64, f64, f64
       }
@@ -1238,8 +1290,8 @@ gpu.module @agx_blas {
         %kb_a1 = arith.muli %k, %sbr : index
         %pa_a1 = arith.addi %ia, %ka_a1 : index
         %pb_a1 = arith.addi %kb_a1, %jb : index
-        %x_a1 = memref.load %A[%pa_a1] : memref<?xf64, strided<[1]>, 1>
-        %y_a1 = memref.load %B[%pb_a1] : memref<?xf64, strided<[1]>, 1>
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf64, strided<[1], offset: ?>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf64, strided<[1], offset: ?>, 1>
         %a1 = math.fma %x_a1, %y_a1, %a : f64
         scf.yield %a1 : f64
       }
@@ -1254,11 +1306,11 @@ gpu.module @agx_blas {
         %out = scf.if %no_c -> f64 {
           scf.yield %scaled : f64
         } else {
-          %old = memref.load %C[%pc] : memref<?xf64, strided<[1]>, 1>
+          %old = memref.load %C[%pc] : memref<?xf64, strided<[1], offset: ?>, 1>
           %r = math.fma %old, %beta, %scaled : f64
           scf.yield %r : f64
         }
-        memref.store %out, %C[%pc] : memref<?xf64, strided<[1]>, 1>
+        memref.store %out, %C[%pc] : memref<?xf64, strided<[1], offset: ?>, 1>
       }
     }
     gpu.return

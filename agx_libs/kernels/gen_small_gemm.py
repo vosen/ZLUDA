@@ -25,17 +25,22 @@ KERNELS = {  # file: [(name, A and B type, C type, accumulator and scalar type)]
 
 def kernel(name, ab, c, acc):
     dot = "_dot" in name
-    mem = lambda t: f"memref<?x{t}, strided<[1]>, 1>"
+    mem = lambda t: f"memref<?x{t}, strided<[1], offset: ?>, 1>"
     o = []
     w = o.append
     w(f"  gpu.func @{name}(%a0: memref<1x{ab}, 1>, %b0: memref<1x{ab}, 1>,")
     w(f"      %c0: memref<1x{c}, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,")
-    w(f"      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: {acc}, %beta: {acc}) kernel {{")
+    w(f"      %sbr: index, %sbc: index, %scr: index, %scc: index, %sa: index, %sb: index, %sc: index,")
+    w(f"      %alpha: {acc}, %beta: {acc}) kernel {{")
     for v in [0, 1, 3, 4, 32, 96, 127, 128]:
         w(f"    %i{v} = arith.constant {v} : index")
     w("    %big = arith.constant 4611686018427387904 : index")
+    # the matrices of batch entry z (grid y for dot, z for generic) are sa, sb and sc elements on
+    w(f"    %z = gpu.block_id {'y' if dot else 'z'}")
+    for n in ["a", "b", "c"]:
+        w(f"    %o{n} = arith.muli %z, %s{n} : index")
     for n, t in [("A", ab), ("B", ab), ("C", c)]:
-        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0 to offset: [0], sizes: [%big], strides: [1]")
+        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0 to offset: [%o{n.lower()}], sizes: [%big], strides: [1]")
         w(f"        : memref<1x{t}, 1> to {mem(t)}")
     w(f"    %f0 = arith.constant 0.0 : {acc}")
     if dot:

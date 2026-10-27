@@ -422,9 +422,16 @@ pub mod engine {
     }
 
     unsafe fn launch(d: &Driver, f: CUfunction, grid: [u32; 2], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
-        (d.launch)(f, grid[0], grid[1], 1, block[0], block[1], 1, 0, stream, params.as_mut_ptr(), std::ptr::null_mut())
+        launch3(d, f, [grid[0], grid[1], 1], block, params, stream)
+    }
+
+    unsafe fn launch3(d: &Driver, f: CUfunction, grid: [u32; 3], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
+        (d.launch)(f, grid[0], grid[1], grid[2], block[0], block[1], 1, 0, stream, params.as_mut_ptr(), std::ptr::null_mut())
             .map_err(|_| Error::Failed)
     }
+
+    /// Batch entries per launch: the kernels take the batch index from grid y (z for the generic kernel).
+    const BATCH_PER_LAUNCH: u64 = 65535;
 
     pub unsafe fn gemm(g: &Gemm, stream: CUstream) -> Result<(), Error> {
         if g.m == 0 || g.n == 0 || g.batch == 0 {
@@ -436,25 +443,31 @@ pub mod engine {
         let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
             && [g.stride_a, g.stride_b, g.stride_c].iter().all(|s| s % 2 == 0);
         let parts = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned && types != Types::D);
-        for (i, part) in (0..g.batch as isize).flat_map(|i| parts.iter().map(move |p| (i, p))) {
+        // Each part runs once for up to BATCH_PER_LAUNCH batch entries, which the kernels find stride_* elements on.
+        let first_entries = (0..g.batch).step_by(BATCH_PER_LAUNCH as usize);
+        for (first, part) in first_entries.flat_map(|i| parts.iter().map(move |p| (i as isize, p))) {
+            let entries = (g.batch - first as u64).min(BATCH_PER_LAUNCH) as u32;
             let (ab, cb) = (types.ab_bytes(), types.c_bytes());
             let [oa, ob, oc] = part.offsets.map(|o| o as isize);
             let (mut pa, mut pb, mut pc) = (
-                a.byte_offset((i * g.stride_a as isize + oa) * ab),
-                b.byte_offset((i * g.stride_b as isize + ob) * ab),
-                c.byte_offset((i * g.stride_c as isize + oc) * cb),
+                a.byte_offset((first * g.stride_a as isize + oa) * ab),
+                b.byte_offset((first * g.stride_b as isize + ob) * ab),
+                c.byte_offset((first * g.stride_c as isize + oc) * cb),
             );
-            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &part.plan {
+            let (mut sa, mut sb, mut sc) = (g.stride_a, g.stride_b, g.stride_c);
+            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 3], [u32; 2]) = match &part.plan {
                 Plan::Tile { swap, trans, dims, groups } => {
                     if *swap {
                         std::mem::swap(&mut pa, &mut pb);
+                        std::mem::swap(&mut sa, &mut sb);
                     }
-                    (kernels.tile[types.index()][trans[0] as usize][trans[1] as usize], &dims[..], [*groups, 1], [128, 1])
+                    (kernels.tile[types.index()][trans[0] as usize][trans[1] as usize], &dims[..], [*groups, entries, 1], [128, 1])
                 }
-                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
-                Plan::Dot { dims, groups } => (kernels.dot[types.index()], &dims[..], [*groups, 1], [128, 1]),
+                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], [grid[0], grid[1], entries], GENERIC_BLOCK),
+                Plan::Dot { dims, groups } => (kernels.dot[types.index()], &dims[..], [*groups, entries, 1], [128, 1]),
             };
             let mut dims = dims.to_vec();
+            dims.extend([sa, sb, sc].map(|s| s as u64));
             let beta = if part.accumulate { 1.0 } else { g.beta };
             let (mut alpha, mut beta) = (g.alpha as f32, beta as f32);
             let (mut alpha64, mut beta64) = (g.alpha, beta as f64);
@@ -471,7 +484,7 @@ pub mod engine {
                 params.push(&mut alpha as *mut f32 as *mut c_void);
                 params.push(&mut beta as *mut f32 as *mut c_void);
             }
-            launch(d, f, grid, block, &mut params, stream)?;
+            launch3(d, f, grid, block, &mut params, stream)?;
         }
         Ok(())
     }
