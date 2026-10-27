@@ -1671,6 +1671,16 @@ mod imp {
         if a.is_null() || x.is_null() || y.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
+        if op != 0 && hmode == 0 {
+            // a SIMD-group per element of y, reading its column of A together
+            return cblas_launch(
+                h,
+                R::kernel(c"agx_cgemv_t", c"agx_cgemv_t_f64"),
+                &mut [arg(&mut a), arg(&mut x), arg(&mut y), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut incx), arg(&mut incy), arg(&mut op), arg(&mut ar), arg(&mut ai), arg(&mut br), arg(&mut bi)],
+                [n * 32, 1],
+                [64, 1],
+            );
+        }
         let ylen = if hmode != 0 || op != 0 { n } else { m };
         cblas_launch(
             h,

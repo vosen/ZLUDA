@@ -300,6 +300,42 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // y = alpha op(A) x + beta y for op(A) transposed (op 1) or conjugate
+  // transposed (op 2) of the m x n A: agx_cgemv's general case (hmode 0) with
+  // a SIMD-group per element of y, whose lanes read its column of A together,
+  // combined by SIMD-group reductions. The grid has 32 n threads.
+  gpu.func @agx_cgemv_t(%a0: memref<1xf32, 1>, %x0: memref<1xf32, 1>, %y0: memref<1xf32, 1>,
+                        %m: index, %n: index, %lda: index, %incx: i64, %incy: i64,
+                        %op: i64, %ar: f32, %ai: f32, %br: f32, %bi: f32) kernel {
+    %i0 = arith.constant 0 : index
+    %simd = arith.constant 32 : index
+    %f0 = arith.constant 0.0 : f32
+    %false = arith.constant false
+    %g = gpu.global_id x
+    %i = arith.divui %g, %simd : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
+    %live = arith.cmpi ult, %i, %n : index
+    scf.if %live {
+      %s:2 = scf.for %l = %lane to %m step %simd iter_args(%sr = %f0, %si = %f0) -> (f32, f32) {
+        %u:2 = func.call @agx_c_get(%a0, %i, %l, %lda, %op) : (memref<1xf32, 1>, index, index, index, i64) -> (f32, f32)
+        %ix = func.call @agx_cblas_pos(%l, %m, %incx) : (index, index, i64) -> index
+        %v:2 = func.call @agx_c_ld(%x0, %ix) : (memref<1xf32, 1>, index) -> (f32, f32)
+        %r:2 = func.call @agx_c_fma(%u#0, %u#1, %v#0, %v#1, %sr, %si) : (f32, f32, f32, f32, f32, f32) -> (f32, f32)
+        scf.yield %r#0, %r#1 : f32, f32
+      }
+      %tr = gpu.subgroup_reduce add %s#0 : (f32) -> f32
+      %ti = gpu.subgroup_reduce add %s#1 : (f32) -> f32
+      %first = arith.cmpi eq, %lane, %i0 : index
+      scf.if %first {
+        %iy = func.call @agx_cblas_pos(%i, %n, %incy) : (index, index, i64) -> index
+        func.call @agx_c_blend(%y0, %iy, %tr, %ti, %ar, %ai, %br, %bi, %false)
+            : (memref<1xf32, 1>, index, f32, f32, f32, f32, f32, f32, i1) -> ()
+      }
+    }
+    gpu.return
+  }
+
   // A(i, j) += a1 x_i c(y_j) + a2 y_i c(x_j) over the m x n A (tri 0) or its
   // upper (1) or lower (2) triangle, c conjugating when conj: geru / gerc
   // (a2 0), her (y = x, a2 0) and her2 (a2 = conj(a1)); with herm the diagonal

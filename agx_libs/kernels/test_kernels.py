@@ -2015,16 +2015,21 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                     want[i + j * ldc] = complex(r.real, 0) if herm and i == j else r
         return cclose(cunpack(got), want, range(len(C)), tol)
     if what == "gemv":
-        m, n, op, hmode, incx, incy = 6, 4, o["op"], o.get("hmode", 0), o["incx"], o["incy"]
+        m, n, op, hmode, incx, incy = o.get("m", 6), 4, o["op"], o.get("hmode", 0), o["incx"], o["incy"]
         if hmode:
             m = n
         lda = m + 2
         ylen, xlen = (n, n) if hmode else ((n, m) if op else (m, n))
         A = crand(lda * n, rnd)
         x, y = crand(1 + (xlen - 1) * abs(incx), rnd), crand(1 + (ylen - 1) * abs(incy), rnd)
-        (got,) = run(a, obj, K("agx_cgemv"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True), ("i64", m), ("i64", n),
-                                              ("i64", lda), ("i64", incx), ("i64", incy), ("i64", op), ("i64", hmode)]
-                     + cs(alpha) + cs(beta), (32, 1), (32, 1), tmp)
+        if op and not hmode:  # a SIMD-group per element of y, as zluda_blas_agx launches it
+            (got,) = run(a, obj, K("agx_cgemv_t"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True),
+                                                    ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                                    ("i64", op)] + cs(alpha) + cs(beta), (32 * ylen, 1), (32, 1), tmp)
+        else:
+            (got,) = run(a, obj, K("agx_cgemv"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True), ("i64", m),
+                                                  ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy), ("i64", op),
+                                                  ("i64", hmode)] + cs(alpha) + cs(beta), grid1(ylen), (32, 1), tmp)
         want = list(y)
         for i in range(ylen):
             elem = (lambda l: cherm(A, i, l, lda, hmode == 1, True)) if hmode else (lambda l: cop(A, i, l, lda, op))
@@ -2191,6 +2196,8 @@ def cblas_cases(a, obj, tmp, rnd):
                           lambda o={"upper": upper, "op": op, "herm": herm, "two": two}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
     for op in (0, 1, 2):
         cases.append(("cgemv op %d inc -2,3" % op, lambda o={"op": op, "incx": -2, "incy": 3}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
+        cases.append(("cgemv op %d m=70 (several elements a lane)" % op,
+                      lambda o={"op": op, "incx": 1, "incy": 1, "m": 70}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
     for hmode in (1, 2):
         cases.append(("chemv %s inc 1,-1" % ("upper" if hmode == 1 else "lower"),
                       lambda o={"op": 0, "hmode": hmode, "incx": 1, "incy": -1}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
