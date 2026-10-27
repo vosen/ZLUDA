@@ -1267,8 +1267,10 @@ it), as NVIDIA's does.
   C not B) do the same with A made full: on the left, alpha A expanded; on the right, alpha B expanded times A made
   full (complex). `cublasCherk`, `Csyrk`, `Cher2k` and `Csyr2k` above 64 rows split C's triangle as the real
   syrk does: each corner outside the 64 x 64 diagonal blocks is one such complex GEMM (two for the 2k forms) and one
-  launch does the diagonal blocks. Smaller products and the other complex level 3 routines run one thread per element
-  of C.
+  launch does the diagonal blocks. `cublasCtrmm` (C not B, C of at least 64 x 64 elements) makes the triangle full
+  and does one such GEMM with op on it, and `cublasCtrsm` above 64 rows of A is blocked like the real trsm (64-row
+  blocks solved one thread per column or row, the rest of B updated by complex GEMMs on the real kernels). Smaller
+  products and f64 run one thread per element of C.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).

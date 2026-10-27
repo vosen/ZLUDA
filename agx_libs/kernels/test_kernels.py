@@ -2191,7 +2191,14 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                     else:
                         v = sum(tri(i, l) * B[l + j * ldb] for l in range(m))
                     want[i + j * ldc] = alpha * v
-            return cclose(cunpack(got), want, range(len(C)), tol)
+            bad = cclose(cunpack(got), want, range(len(C)), tol)
+            # the triangle made full (zluda_blas_agx's trmm on the GEMM): op of it is tri
+            (full,) = run(a, obj, K("agx_ctri_full"), [("buf", cpack(A)), ("buf", pack([math.nan] * (2 * na * na), BT), True), ("i64", na),
+                                                      ("i64", lda), ("i64", upper), ("i64", unit)], (16, 8), (16, 4), tmp)
+            F = cunpack(full)
+            bad += cclose([cop(F, r, c, na, op) for c in range(na) for r in range(na)], [tri(r, c) for c in range(na) for r in range(na)],
+                          range(na * na), 0)
+            return bad
         for d in range(na):
             A[d + d * lda] = complex(2.0 + 0.25 * d, 0.5)
         lower = int((not upper) ^ bool(op) ^ bool(right))

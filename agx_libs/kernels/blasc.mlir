@@ -226,6 +226,47 @@ gpu.module @agx_blas {
     gpu.return
   }
 
+  // The full na x na complex matrix (leading dimension na) of a triangular A
+  // held in its upper or lower triangle: zeros outside it, ones on the
+  // diagonal with unit; for trmm on the real GEMM kernels. 2-D grid over A.
+  gpu.func @agx_ctri_full(%a0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %na: index, %lda: index,
+                          %upper_: i64, %unit_: i64) kernel {
+    %z = arith.constant 0 : i64
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %p = gpu.global_id x
+    %l = gpu.global_id y
+    %in_p = arith.cmpi ult, %p, %na : index
+    %in_l = arith.cmpi ult, %l, %na : index
+    %in = arith.andi %in_p, %in_l : i1
+    scf.if %in {
+      %le = arith.cmpi ule, %p, %l : index
+      %ge = arith.cmpi uge, %p, %l : index
+      %inside = arith.select %upper, %le, %ge : i1
+      %diag = arith.cmpi eq, %p, %l : index
+      %one = arith.andi %diag, %unit : i1
+      %ln = arith.muli %l, %na : index
+      %o = arith.addi %ln, %p : index
+      %ll = arith.muli %l, %lda : index
+      %pa = arith.addi %ll, %p : index
+      %v:2 = scf.if %one -> (f32, f32) {
+        scf.yield %f1, %f0 : f32, f32
+      } else {
+        %w:2 = scf.if %inside -> (f32, f32) {
+          %x:2 = func.call @agx_c_ld(%a0, %pa) : (memref<1xf32, 1>, index) -> (f32, f32)
+          scf.yield %x#0, %x#1 : f32, f32
+        } else {
+          scf.yield %f0, %f0 : f32, f32
+        }
+        scf.yield %w#0, %w#1 : f32, f32
+      }
+      func.call @agx_c_st(%out0, %o, %v#0, %v#1) : (memref<1xf32, 1>, index, f32, f32) -> ()
+    }
+    gpu.return
+  }
+
   // op(B) (k x n) copied untransposed with leading dimension k, for the real
   // GEMM of a cgemm whose B is transposed. 2-D grid over op(B).
   gpu.func @agx_cgemm_copy_b(%b0: memref<1xf32, 1>, %out0: memref<1xf32, 1>, %k: index, %n: index,

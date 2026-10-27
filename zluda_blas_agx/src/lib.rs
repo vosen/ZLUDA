@@ -864,6 +864,7 @@ mod imp {
         unsafe fn scalar(h: &Handle, p: *const c_void) -> Result<Self, cublasError_t>;
         fn to_f64(self) -> f64;
         fn scalar_zero() -> Self;
+        fn one() -> Self;
         fn negate(self) -> Self;
         /// The f32 kernel, or its f64 copy.
         fn kernel(f32_name: &'static CStr, f64_name: &'static CStr) -> &'static CStr;
@@ -879,6 +880,9 @@ mod imp {
         }
         fn scalar_zero() -> f32 {
             0.0
+        }
+        fn one() -> f32 {
+            1.0
         }
         fn negate(self) -> f32 {
             -self
@@ -898,6 +902,9 @@ mod imp {
         }
         fn scalar_zero() -> f64 {
             0.0
+        }
+        fn one() -> f64 {
+            1.0
         }
         fn negate(self) -> f64 {
             -self
@@ -1925,9 +1932,19 @@ mod imp {
     /// scratch memory. A beta that is not real is applied to C first (agx_cgemm_scale_c).
     #[allow(clippy::too_many_arguments)]
     unsafe fn cgemm_real(h: &mut Handle, m: i64, n: i64, k: i64, a: (*const c_void, i64, i64), b: (*const c_void, i64, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
-        let (a_bytes, b_bytes) = ((16 * m * k) as usize, if b.2 != 0 { (8 * k * n) as usize } else { 0 });
-        let a_bytes = a_bytes.next_multiple_of(256);
-        let mem = scratch(h, a_bytes + b_bytes)?;
+        let mem = scratch(h, cgemm_real_bytes(m, n, k, b.2))?;
+        cgemm_real_in(h, mem, m, n, k, a, b, c, alpha, beta)
+    }
+
+    /// The scratch memory [`cgemm_real_in`] uses (`opb` op(B)'s operation).
+    fn cgemm_real_bytes(m: i64, n: i64, k: i64, opb: i64) -> usize {
+        ((16 * m * k) as usize).next_multiple_of(256) + if opb != 0 { (8 * k * n) as usize } else { 0 }
+    }
+
+    /// [`cgemm_real`] in `mem` (at least [`cgemm_real_bytes`]).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgemm_real_in(h: &Handle, mem: *mut c_void, m: i64, n: i64, k: i64, a: (*const c_void, i64, i64), b: (*const c_void, i64, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let a_bytes = ((16 * m * k) as usize).next_multiple_of(256);
         let (mut pa, mut lda, mut opa, mut xa) = (a.0, a.1, a.2, mem);
         let (mut m_, mut n_, mut k_) = (m, n, k);
         let (mut ar, mut ai) = alpha;
@@ -2499,6 +2516,18 @@ mod imp {
         if m == 0 || n == 0 {
             return Ok(());
         }
+        if R::GEMM == Types::S && c as *const c_void != b && m * n >= CGEMM_REAL_MIN {
+            // the triangle made full (agx_ctri_full), then one complex GEMM on the real tile kernels with op on it
+            let na = if right { n } else { m };
+            let full_bytes = ((8 * na * na) as usize).next_multiple_of(256);
+            let mem = scratch(h, full_bytes + cgemm_real_bytes(m, n, na, if right { op } else { 0 }))?;
+            let (mut pa, mut full, mut na_, mut lda_, mut up, mut un) = (a, mem, na, lda, upper as i64, unit as i64);
+            cblas_launch(h, c"agx_ctri_full", &mut [arg(&mut pa), arg(&mut full), arg(&mut na_), arg(&mut lda_), arg(&mut up), arg(&mut un)], [na, na], [16, 4])?;
+            let rest = (mem as *mut u8).add(full_bytes) as *mut c_void;
+            let alpha = (ar.to_f64() as f32, ai.to_f64() as f32);
+            let (left_op, right_op) = if right { ((b, ldb, 0), (full as *const c_void, na, op)) } else { ((full as *const c_void, na, op), (b, ldb, 0)) };
+            return cgemm_real_in(h, rest, m, n, na, left_op, right_op, (c, ldc), alpha, (0.0, 0.0));
+        }
         let mut copy = std::ptr::null_mut();
         if c as *const c_void == b {
             let bytes = 2 * R::BYTES * ((n - 1) * ldb + m) as usize;
@@ -2522,28 +2551,64 @@ mod imp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    unsafe fn ctrsm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const c_void, mut a: *const c_void, mut lda: i64, mut b: *mut c_void, mut ldb: i64) -> cublasStatus_t {
+    unsafe fn ctrsm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const c_void, a: *const c_void, lda: i64, b: *mut c_void, ldb: i64) -> cublasStatus_t {
         let h = handle(h)?;
-        let (right, upper, mut op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
+        let (right, upper, op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
         if m < 0 || n < 0 {
             return Err(cublasError_t::INVALID_VALUE);
         }
         ld_ok(lda, if right { n } else { m })?;
         ld_ok(ldb, m)?;
-        let (mut ar, mut ai) = cscalar::<R>(h, alpha)?;
+        let (ar, ai) = cscalar::<R>(h, alpha)?;
         if m == 0 || n == 0 {
             return Ok(());
         }
-        let mut lower = (!upper ^ (op != 0) ^ right) as i64;
-        let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
-        let threads = if right == 1 { m } else { n };
-        cblas_launch(
-            h,
-            R::kernel(c"agx_ctrsm", c"agx_ctrsm_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut lower), arg(&mut ar), arg(&mut ai)],
-            [threads, 1],
-            [64, 1],
-        )
+        let lower = (!upper ^ (op != 0) ^ right) as i64;
+        let solve = |h: &Handle, mut a: *const c_void, mut b: *mut c_void, mut m: i64, mut n: i64, (mut ar, mut ai): (R, R)| {
+            let (mut lda, mut ldb, mut lower, mut op) = (lda, ldb, lower, op);
+            let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
+            let threads = if right == 1 { m } else { n };
+            cblas_launch(
+                h,
+                R::kernel(c"agx_ctrsm", c"agx_ctrsm_f64"),
+                &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut lower), arg(&mut ar), arg(&mut ai)],
+                [threads, 1],
+                [64, 1],
+            )
+        };
+        let na = if right { n } else { m };
+        if R::GEMM != Types::S || na <= engine::TRSM_BLOCK {
+            return solve(h, a, b, m, n, (ar, ai));
+        }
+        // f32 above a block, as the real trsm: blocks of op(A) solved by agx_ctrsm, each taken out of the rest of B
+        // with a complex GEMM on the real tile kernels; the first applies alpha to the rest through its beta
+        let op_lower = !upper ^ (op != 0);
+        let alpha = (ar.to_f64() as f32, ai.to_f64() as f32);
+        // op(A) from row r and column c, for the GEMM with op
+        let op_a = |r: i64, c: i64| a.byte_add(8 * if op != 0 { c + r * lda } else { r + c * lda } as usize);
+        let at_b = |r: i64, c: i64| b.byte_add(8 * (r + c * ldb) as usize);
+        let one = (R::one(), R::scalar_zero());
+        for (i, [k0, k1, u0, u1]) in engine::trsm_steps(na, if right { !op_lower } else { op_lower }).into_iter().enumerate() {
+            let (bs, first) = (k1 - k0, i == 0);
+            let diagonal = a.byte_add(8 * (k0 * (lda + 1)) as usize);
+            if right {
+                solve(h, diagonal, at_b(0, k0), m, bs, if first { (ar, ai) } else { one })?;
+            } else {
+                solve(h, diagonal, at_b(k0, 0), bs, n, if first { (ar, ai) } else { one })?;
+            }
+            if u1 == u0 {
+                continue;
+            }
+            let beta = if first { alpha } else { (1.0, 0.0) };
+            if right {
+                // B(:, u) = -X(:, k) op(A)(k, u) + beta B(:, u)
+                cgemm_real(h, m, u1 - u0, bs, (at_b(0, k0), ldb, 0), (op_a(k0, u0), lda, op), (at_b(0, u0), ldb), (-1.0, 0.0), beta)?;
+            } else {
+                // B(u, :) = -op(A)(u, k) X(k, :) + beta B(u, :)
+                cgemm_real(h, u1 - u0, n, bs, (op_a(u0, k0), lda, op), (at_b(k0, 0), ldb, 0), (at_b(u0, 0), ldb), (-1.0, 0.0), beta)?;
+            }
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
