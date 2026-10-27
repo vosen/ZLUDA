@@ -103,186 +103,157 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      %h_00 = arith.truncf %s_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      %h_01 = arith.truncf %s_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      %h_02 = arith.truncf %s_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      %h_03 = arith.truncf %s_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      %h_10 = arith.truncf %s_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      %h_11 = arith.truncf %s_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      %h_12 = arith.truncf %s_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      %h_13 = arith.truncf %s_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      %h_20 = arith.truncf %s_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      %h_21 = arith.truncf %s_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      %h_22 = arith.truncf %s_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      %h_23 = arith.truncf %s_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      %h_30 = arith.truncf %s_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      %h_31 = arith.truncf %s_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      %h_32 = arith.truncf %s_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      %h_33 = arith.truncf %s_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %oh_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_00 = arith.extf %oh_00 : vector<64xf16> to vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    %oh16_00 = arith.truncf %out_00 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      %h_00 = arith.truncf %r_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %oh_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_01 = arith.extf %oh_01 : vector<64xf16> to vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    %oh16_01 = arith.truncf %out_01 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      %h_01 = arith.truncf %r_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %oh_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_02 = arith.extf %oh_02 : vector<64xf16> to vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    %oh16_02 = arith.truncf %out_02 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      %h_02 = arith.truncf %r_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %oh_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_03 = arith.extf %oh_03 : vector<64xf16> to vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    %oh16_03 = arith.truncf %out_03 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      %h_03 = arith.truncf %r_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %oh_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_10 = arith.extf %oh_10 : vector<64xf16> to vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    %oh16_10 = arith.truncf %out_10 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      %h_10 = arith.truncf %r_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %oh_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_11 = arith.extf %oh_11 : vector<64xf16> to vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    %oh16_11 = arith.truncf %out_11 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      %h_11 = arith.truncf %r_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %oh_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_12 = arith.extf %oh_12 : vector<64xf16> to vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    %oh16_12 = arith.truncf %out_12 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      %h_12 = arith.truncf %r_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %oh_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_13 = arith.extf %oh_13 : vector<64xf16> to vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    %oh16_13 = arith.truncf %out_13 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      %h_13 = arith.truncf %r_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %oh_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_20 = arith.extf %oh_20 : vector<64xf16> to vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    %oh16_20 = arith.truncf %out_20 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      %h_20 = arith.truncf %r_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %oh_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_21 = arith.extf %oh_21 : vector<64xf16> to vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    %oh16_21 = arith.truncf %out_21 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      %h_21 = arith.truncf %r_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %oh_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_22 = arith.extf %oh_22 : vector<64xf16> to vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    %oh16_22 = arith.truncf %out_22 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      %h_22 = arith.truncf %r_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %oh_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_23 = arith.extf %oh_23 : vector<64xf16> to vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    %oh16_23 = arith.truncf %out_23 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      %h_23 = arith.truncf %r_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %oh_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_30 = arith.extf %oh_30 : vector<64xf16> to vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    %oh16_30 = arith.truncf %out_30 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      %h_30 = arith.truncf %r_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %oh_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_31 = arith.extf %oh_31 : vector<64xf16> to vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    %oh16_31 = arith.truncf %out_31 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      %h_31 = arith.truncf %r_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %oh_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_32 = arith.extf %oh_32 : vector<64xf16> to vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    %oh16_32 = arith.truncf %out_32 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      %h_32 = arith.truncf %r_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %oh_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_33 = arith.extf %oh_33 : vector<64xf16> to vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      %h_33 = arith.truncf %r_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     }
-    %oh16_33 = arith.truncf %out_33 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -386,154 +357,109 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     }
-    air.simdgroup_matrix_store %out_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -741,186 +667,157 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      %h_00 = arith.truncf %s_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      %h_01 = arith.truncf %s_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      %h_02 = arith.truncf %s_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      %h_03 = arith.truncf %s_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      %h_10 = arith.truncf %s_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      %h_11 = arith.truncf %s_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      %h_12 = arith.truncf %s_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      %h_13 = arith.truncf %s_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      %h_20 = arith.truncf %s_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      %h_21 = arith.truncf %s_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      %h_22 = arith.truncf %s_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      %h_23 = arith.truncf %s_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      %h_30 = arith.truncf %s_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      %h_31 = arith.truncf %s_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      %h_32 = arith.truncf %s_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      %h_33 = arith.truncf %s_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %oh_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_00 = arith.extf %oh_00 : vector<64xf16> to vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    %oh16_00 = arith.truncf %out_00 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      %h_00 = arith.truncf %r_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %oh_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_01 = arith.extf %oh_01 : vector<64xf16> to vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    %oh16_01 = arith.truncf %out_01 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      %h_01 = arith.truncf %r_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %oh_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_02 = arith.extf %oh_02 : vector<64xf16> to vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    %oh16_02 = arith.truncf %out_02 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      %h_02 = arith.truncf %r_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %oh_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_03 = arith.extf %oh_03 : vector<64xf16> to vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    %oh16_03 = arith.truncf %out_03 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      %h_03 = arith.truncf %r_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %oh_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_10 = arith.extf %oh_10 : vector<64xf16> to vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    %oh16_10 = arith.truncf %out_10 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      %h_10 = arith.truncf %r_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %oh_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_11 = arith.extf %oh_11 : vector<64xf16> to vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    %oh16_11 = arith.truncf %out_11 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      %h_11 = arith.truncf %r_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %oh_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_12 = arith.extf %oh_12 : vector<64xf16> to vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    %oh16_12 = arith.truncf %out_12 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      %h_12 = arith.truncf %r_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %oh_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_13 = arith.extf %oh_13 : vector<64xf16> to vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    %oh16_13 = arith.truncf %out_13 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      %h_13 = arith.truncf %r_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %oh_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_20 = arith.extf %oh_20 : vector<64xf16> to vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    %oh16_20 = arith.truncf %out_20 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      %h_20 = arith.truncf %r_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %oh_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_21 = arith.extf %oh_21 : vector<64xf16> to vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    %oh16_21 = arith.truncf %out_21 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      %h_21 = arith.truncf %r_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %oh_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_22 = arith.extf %oh_22 : vector<64xf16> to vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    %oh16_22 = arith.truncf %out_22 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      %h_22 = arith.truncf %r_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %oh_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_23 = arith.extf %oh_23 : vector<64xf16> to vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    %oh16_23 = arith.truncf %out_23 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      %h_23 = arith.truncf %r_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %oh_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_30 = arith.extf %oh_30 : vector<64xf16> to vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    %oh16_30 = arith.truncf %out_30 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      %h_30 = arith.truncf %r_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %oh_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_31 = arith.extf %oh_31 : vector<64xf16> to vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    %oh16_31 = arith.truncf %out_31 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      %h_31 = arith.truncf %r_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %oh_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_32 = arith.extf %oh_32 : vector<64xf16> to vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    %oh16_32 = arith.truncf %out_32 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      %h_32 = arith.truncf %r_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %oh_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_33 = arith.extf %oh_33 : vector<64xf16> to vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      %h_33 = arith.truncf %r_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     }
-    %oh16_33 = arith.truncf %out_33 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -1013,186 +910,157 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      %h_00 = arith.truncf %s_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      %h_01 = arith.truncf %s_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      %h_02 = arith.truncf %s_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      %h_03 = arith.truncf %s_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      %h_10 = arith.truncf %s_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      %h_11 = arith.truncf %s_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      %h_12 = arith.truncf %s_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      %h_13 = arith.truncf %s_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      %h_20 = arith.truncf %s_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      %h_21 = arith.truncf %s_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      %h_22 = arith.truncf %s_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      %h_23 = arith.truncf %s_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      %h_30 = arith.truncf %s_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      %h_31 = arith.truncf %s_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      %h_32 = arith.truncf %s_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      %h_33 = arith.truncf %s_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %oh_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_00 = arith.extf %oh_00 : vector<64xf16> to vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    %oh16_00 = arith.truncf %out_00 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      %h_00 = arith.truncf %r_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %oh_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_01 = arith.extf %oh_01 : vector<64xf16> to vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    %oh16_01 = arith.truncf %out_01 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      %h_01 = arith.truncf %r_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %oh_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_02 = arith.extf %oh_02 : vector<64xf16> to vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    %oh16_02 = arith.truncf %out_02 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      %h_02 = arith.truncf %r_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %oh_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_03 = arith.extf %oh_03 : vector<64xf16> to vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    %oh16_03 = arith.truncf %out_03 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      %h_03 = arith.truncf %r_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %oh_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_10 = arith.extf %oh_10 : vector<64xf16> to vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    %oh16_10 = arith.truncf %out_10 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      %h_10 = arith.truncf %r_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %oh_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_11 = arith.extf %oh_11 : vector<64xf16> to vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    %oh16_11 = arith.truncf %out_11 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      %h_11 = arith.truncf %r_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %oh_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_12 = arith.extf %oh_12 : vector<64xf16> to vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    %oh16_12 = arith.truncf %out_12 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      %h_12 = arith.truncf %r_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %oh_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_13 = arith.extf %oh_13 : vector<64xf16> to vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    %oh16_13 = arith.truncf %out_13 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      %h_13 = arith.truncf %r_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %oh_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_20 = arith.extf %oh_20 : vector<64xf16> to vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    %oh16_20 = arith.truncf %out_20 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      %h_20 = arith.truncf %r_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %oh_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_21 = arith.extf %oh_21 : vector<64xf16> to vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    %oh16_21 = arith.truncf %out_21 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      %h_21 = arith.truncf %r_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %oh_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_22 = arith.extf %oh_22 : vector<64xf16> to vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    %oh16_22 = arith.truncf %out_22 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      %h_22 = arith.truncf %r_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %oh_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_23 = arith.extf %oh_23 : vector<64xf16> to vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    %oh16_23 = arith.truncf %out_23 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      %h_23 = arith.truncf %r_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %oh_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_30 = arith.extf %oh_30 : vector<64xf16> to vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    %oh16_30 = arith.truncf %out_30 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      %h_30 = arith.truncf %r_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %oh_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_31 = arith.extf %oh_31 : vector<64xf16> to vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    %oh16_31 = arith.truncf %out_31 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      %h_31 = arith.truncf %r_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %oh_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_32 = arith.extf %oh_32 : vector<64xf16> to vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    %oh16_32 = arith.truncf %out_32 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      %h_32 = arith.truncf %r_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %oh_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_33 = arith.extf %oh_33 : vector<64xf16> to vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      %h_33 = arith.truncf %r_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     }
-    %oh16_33 = arith.truncf %out_33 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -1285,186 +1153,157 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      %h_00 = arith.truncf %s_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      %h_01 = arith.truncf %s_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      %h_02 = arith.truncf %s_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      %h_03 = arith.truncf %s_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      %h_10 = arith.truncf %s_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      %h_11 = arith.truncf %s_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      %h_12 = arith.truncf %s_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      %h_13 = arith.truncf %s_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      %h_20 = arith.truncf %s_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      %h_21 = arith.truncf %s_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      %h_22 = arith.truncf %s_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      %h_23 = arith.truncf %s_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      %h_30 = arith.truncf %s_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      %h_31 = arith.truncf %s_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      %h_32 = arith.truncf %s_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      %h_33 = arith.truncf %s_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %oh_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_00 = arith.extf %oh_00 : vector<64xf16> to vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    %oh16_00 = arith.truncf %out_00 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      %h_00 = arith.truncf %r_00 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_00, %C[%row, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %oh_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_01 = arith.extf %oh_01 : vector<64xf16> to vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    %oh16_01 = arith.truncf %out_01 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      %h_01 = arith.truncf %r_01 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_01, %C[%row, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %oh_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_02 = arith.extf %oh_02 : vector<64xf16> to vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    %oh16_02 = arith.truncf %out_02 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      %h_02 = arith.truncf %r_02 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_02, %C[%row, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %oh_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_03 = arith.extf %oh_03 : vector<64xf16> to vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    %oh16_03 = arith.truncf %out_03 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      %h_03 = arith.truncf %r_03 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_03, %C[%row, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %oh_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_10 = arith.extf %oh_10 : vector<64xf16> to vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    %oh16_10 = arith.truncf %out_10 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      %h_10 = arith.truncf %r_10 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_10, %C[%row1, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %oh_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_11 = arith.extf %oh_11 : vector<64xf16> to vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    %oh16_11 = arith.truncf %out_11 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      %h_11 = arith.truncf %r_11 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_11, %C[%row1, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %oh_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_12 = arith.extf %oh_12 : vector<64xf16> to vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    %oh16_12 = arith.truncf %out_12 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      %h_12 = arith.truncf %r_12 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_12, %C[%row1, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %oh_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_13 = arith.extf %oh_13 : vector<64xf16> to vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    %oh16_13 = arith.truncf %out_13 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      %h_13 = arith.truncf %r_13 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_13, %C[%row1, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %oh_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_20 = arith.extf %oh_20 : vector<64xf16> to vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    %oh16_20 = arith.truncf %out_20 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      %h_20 = arith.truncf %r_20 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_20, %C[%row2, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %oh_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_21 = arith.extf %oh_21 : vector<64xf16> to vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    %oh16_21 = arith.truncf %out_21 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      %h_21 = arith.truncf %r_21 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_21, %C[%row2, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %oh_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_22 = arith.extf %oh_22 : vector<64xf16> to vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    %oh16_22 = arith.truncf %out_22 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      %h_22 = arith.truncf %r_22 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_22, %C[%row2, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %oh_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_23 = arith.extf %oh_23 : vector<64xf16> to vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    %oh16_23 = arith.truncf %out_23 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      %h_23 = arith.truncf %r_23 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_23, %C[%row2, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %oh_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_30 = arith.extf %oh_30 : vector<64xf16> to vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    %oh16_30 = arith.truncf %out_30 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      %h_30 = arith.truncf %r_30 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_30, %C[%row3, %col] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %oh_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_31 = arith.extf %oh_31 : vector<64xf16> to vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    %oh16_31 = arith.truncf %out_31 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      %h_31 = arith.truncf %r_31 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_31, %C[%row3, %col1] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %oh_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_32 = arith.extf %oh_32 : vector<64xf16> to vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    %oh16_32 = arith.truncf %out_32 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      %h_32 = arith.truncf %r_32 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_32, %C[%row3, %col2] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %oh_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf16, strided<[?, 1]>, 1> -> vector<64xf16>
       %old_33 = arith.extf %oh_33 : vector<64xf16> to vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      %h_33 = arith.truncf %r_33 : vector<64xf32> to vector<64xf16>
+      air.simdgroup_matrix_store %h_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     }
-    %oh16_33 = arith.truncf %out_33 : vector<64xf32> to vector<64xf16>
-    air.simdgroup_matrix_store %oh16_33, %C[%row3, %col3] : vector<64xf16> -> memref<?x?xf16, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -1557,154 +1396,109 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     }
-    air.simdgroup_matrix_store %out_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -1797,154 +1591,109 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     }
-    air.simdgroup_matrix_store %out_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     gpu.return
   }
 
@@ -2037,154 +1786,109 @@ gpu.module @agx_blas_f16 {
       scf.yield %in#0, %in#1, %in#2, %in#3, %in#4, %in#5, %in#6, %in#7, %in#8, %in#9, %in#10, %in#11, %in#12, %in#13, %in#14, %in#15 : vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>
     }
 
-    // C = alpha * acc + beta * C, C not read when beta is 0.
+    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).
     %no_c = arith.cmpf oeq, %beta, %fz : f32
     %malpha = air.simdgroup_matrix_fill %alpha : vector<64xf32>
     %mbeta = air.simdgroup_matrix_fill %beta : vector<64xf32>
-    %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
-    %out_00 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_00 : vector<64xf32>
+    scf.if %no_c {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
+      air.simdgroup_matrix_store %s_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     } else {
+      %s_00 = arith.mulf %acc#0, %malpha : vector<64xf32>
       %old_00 = air.simdgroup_matrix_load %C[%row, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_00 = math.fma %old_00, %mbeta, %s_00 : vector<64xf32>
-      scf.yield %r_00 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
-    %out_01 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_01 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_00, %C[%row, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_01 = arith.mulf %acc#1, %malpha : vector<64xf32>
       %old_01 = air.simdgroup_matrix_load %C[%row, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_01 = math.fma %old_01, %mbeta, %s_01 : vector<64xf32>
-      scf.yield %r_01 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
-    %out_02 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_02 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_01, %C[%row, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_02 = arith.mulf %acc#2, %malpha : vector<64xf32>
       %old_02 = air.simdgroup_matrix_load %C[%row, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_02 = math.fma %old_02, %mbeta, %s_02 : vector<64xf32>
-      scf.yield %r_02 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
-    %out_03 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_03 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_02, %C[%row, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_03 = arith.mulf %acc#3, %malpha : vector<64xf32>
       %old_03 = air.simdgroup_matrix_load %C[%row, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_03 = math.fma %old_03, %mbeta, %s_03 : vector<64xf32>
-      scf.yield %r_03 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
-    %out_10 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_10 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_03, %C[%row, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_10 = arith.mulf %acc#4, %malpha : vector<64xf32>
       %old_10 = air.simdgroup_matrix_load %C[%row1, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_10 = math.fma %old_10, %mbeta, %s_10 : vector<64xf32>
-      scf.yield %r_10 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
-    %out_11 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_11 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_10, %C[%row1, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_11 = arith.mulf %acc#5, %malpha : vector<64xf32>
       %old_11 = air.simdgroup_matrix_load %C[%row1, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_11 = math.fma %old_11, %mbeta, %s_11 : vector<64xf32>
-      scf.yield %r_11 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
-    %out_12 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_12 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_11, %C[%row1, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_12 = arith.mulf %acc#6, %malpha : vector<64xf32>
       %old_12 = air.simdgroup_matrix_load %C[%row1, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_12 = math.fma %old_12, %mbeta, %s_12 : vector<64xf32>
-      scf.yield %r_12 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
-    %out_13 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_13 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_12, %C[%row1, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_13 = arith.mulf %acc#7, %malpha : vector<64xf32>
       %old_13 = air.simdgroup_matrix_load %C[%row1, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_13 = math.fma %old_13, %mbeta, %s_13 : vector<64xf32>
-      scf.yield %r_13 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
-    %out_20 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_20 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_13, %C[%row1, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_20 = arith.mulf %acc#8, %malpha : vector<64xf32>
       %old_20 = air.simdgroup_matrix_load %C[%row2, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_20 = math.fma %old_20, %mbeta, %s_20 : vector<64xf32>
-      scf.yield %r_20 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
-    %out_21 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_21 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_20, %C[%row2, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_21 = arith.mulf %acc#9, %malpha : vector<64xf32>
       %old_21 = air.simdgroup_matrix_load %C[%row2, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_21 = math.fma %old_21, %mbeta, %s_21 : vector<64xf32>
-      scf.yield %r_21 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
-    %out_22 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_22 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_21, %C[%row2, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_22 = arith.mulf %acc#10, %malpha : vector<64xf32>
       %old_22 = air.simdgroup_matrix_load %C[%row2, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_22 = math.fma %old_22, %mbeta, %s_22 : vector<64xf32>
-      scf.yield %r_22 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
-    %out_23 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_23 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_22, %C[%row2, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_23 = arith.mulf %acc#11, %malpha : vector<64xf32>
       %old_23 = air.simdgroup_matrix_load %C[%row2, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_23 = math.fma %old_23, %mbeta, %s_23 : vector<64xf32>
-      scf.yield %r_23 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
-    %out_30 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_30 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_23, %C[%row2, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_30 = arith.mulf %acc#12, %malpha : vector<64xf32>
       %old_30 = air.simdgroup_matrix_load %C[%row3, %col] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_30 = math.fma %old_30, %mbeta, %s_30 : vector<64xf32>
-      scf.yield %r_30 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
-    %out_31 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_31 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_30, %C[%row3, %col] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_31 = arith.mulf %acc#13, %malpha : vector<64xf32>
       %old_31 = air.simdgroup_matrix_load %C[%row3, %col1] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_31 = math.fma %old_31, %mbeta, %s_31 : vector<64xf32>
-      scf.yield %r_31 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
-    %out_32 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_32 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_31, %C[%row3, %col1] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_32 = arith.mulf %acc#14, %malpha : vector<64xf32>
       %old_32 = air.simdgroup_matrix_load %C[%row3, %col2] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_32 = math.fma %old_32, %mbeta, %s_32 : vector<64xf32>
-      scf.yield %r_32 : vector<64xf32>
-    }
-    air.simdgroup_matrix_store %out_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
-    %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
-    %out_33 = scf.if %no_c -> vector<64xf32> {
-      scf.yield %s_33 : vector<64xf32>
-    } else {
+      air.simdgroup_matrix_store %r_32, %C[%row3, %col2] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
+      %s_33 = arith.mulf %acc#15, %malpha : vector<64xf32>
       %old_33 = air.simdgroup_matrix_load %C[%row3, %col3] : memref<?x?xf32, strided<[?, 1]>, 1> -> vector<64xf32>
       %r_33 = math.fma %old_33, %mbeta, %s_33 : vector<64xf32>
-      scf.yield %r_33 : vector<64xf32>
+      air.simdgroup_matrix_store %r_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     }
-    air.simdgroup_matrix_store %out_33, %C[%row3, %col3] : vector<64xf32> -> memref<?x?xf32, strided<[?, 1]>, 1>
     gpu.return
   }
 }

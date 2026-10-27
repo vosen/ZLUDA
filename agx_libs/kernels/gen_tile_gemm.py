@@ -93,31 +93,38 @@ def kernel(name, ab, c, ta, tb):
     w("      scf.yield " + ", ".join(f"%in#{k}" for k in range(16)) + f" : {ts}")
     w("    }")
     w("")
-    w("    // C = alpha * acc + beta * C, C not read when beta is 0.")
+    w("    // C = alpha * acc + beta * C, C not read when beta is 0 (one branch for the tile).")
     w("    %no_c = arith.cmpf oeq, %beta, %fz : f32")
     w(f"    %malpha = air.simdgroup_matrix_fill %alpha : {acc}")
     w(f"    %mbeta = air.simdgroup_matrix_fill %beta : {acc}")
     mc = M(c)
+
+    def store(v, i, j, s, ind):
+        if c == "f32":
+            w(f"{ind}air.simdgroup_matrix_store {v}, %C[{rows[i]}, {cols[j]}] : {acc} -> {mem(c)}")
+        else:
+            w(f"{ind}%h{s} = arith.truncf {v} : {acc} to {mc}")
+            w(f"{ind}air.simdgroup_matrix_store %h{s}, %C[{rows[i]}, {cols[j]}] : {mc} -> {mem(c)}")
+
+    w("    scf.if %no_c {")
     for i in range(4):
         for j in range(4):
-            k, s = 4 * i + j, f"_{i}{j}"
-            w(f"    %s{s} = arith.mulf %acc#{k}, %malpha : {acc}")
-            w(f"    %out{s} = scf.if %no_c -> {acc} {{")
-            w(f"      scf.yield %s{s} : {acc}")
-            w("    } else {")
+            s = f"_{i}{j}"
+            w(f"      %s{s} = arith.mulf %acc#{4 * i + j}, %malpha : {acc}")
+            store(f"%s{s}", i, j, s, "      ")
+    w("    } else {")
+    for i in range(4):
+        for j in range(4):
+            s = f"_{i}{j}"
+            w(f"      %s{s} = arith.mulf %acc#{4 * i + j}, %malpha : {acc}")
             if c == "f32":
                 w(f"      %old{s} = air.simdgroup_matrix_load %C[{rows[i]}, {cols[j]}] : {mem(c)} -> {mc}")
             else:
                 w(f"      %oh{s} = air.simdgroup_matrix_load %C[{rows[i]}, {cols[j]}] : {mem(c)} -> {mc}")
                 w(f"      %old{s} = arith.extf %oh{s} : {mc} to {acc}")
             w(f"      %r{s} = math.fma %old{s}, %mbeta, %s{s} : {acc}")
-            w(f"      scf.yield %r{s} : {acc}")
-            w("    }")
-            if c == "f32":
-                w(f"    air.simdgroup_matrix_store %out{s}, %C[{rows[i]}, {cols[j]}] : {acc} -> {mem(c)}")
-            else:
-                w(f"    %oh16{s} = arith.truncf %out{s} : {acc} to {mc}")
-                w(f"    air.simdgroup_matrix_store %oh16{s}, %C[{rows[i]}, {cols[j]}] : {mc} -> {mem(c)}")
+            store(f"%r{s}", i, j, s, "      ")
+    w("    }")
     w("    gpu.return")
     w("  }")
     return o
