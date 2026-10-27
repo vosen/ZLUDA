@@ -17,7 +17,8 @@ gpu.module @agx_blas_f16 {
   // 128 threads.
   gpu.func @agx_hgemm_tile64_cf16(%a0: memref<1xf16, 1>, %b0: memref<1xf16, 1>,
       %c0: memref<1xf16, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel {
+      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i2 = arith.constant 2 : index
@@ -299,7 +300,8 @@ gpu.module @agx_blas_f16 {
   // 128 threads.
   gpu.func @agx_hgemm_tile64_cf32(%a0: memref<1xf16, 1>, %b0: memref<1xf16, 1>,
       %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %lda: index,
-      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel {
+      %ldb: index, %ldc: index, %alpha: f32, %beta: f32) kernel
+      attributes {known_block_size = array<i32: 128, 1, 1>} {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %i2 = arith.constant 2 : index
