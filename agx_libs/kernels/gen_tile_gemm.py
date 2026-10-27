@@ -96,9 +96,13 @@ def kernel(name, ab, c, ta, tb, aligned=True):
     w("      %in:16 = scf.for %k = %kk to %kk_end step %i8")
     w("          iter_args(" + ", ".join(f"%a{i}{j} = %o{i}{j}" for i in range(4) for j in range(4))
       + f") -> ({ts}) {{")
-    for i in range(4):
-        idx = f"%k, {rows[i]}] transpose" if ta else f"{rows[i]}, %k]"
-        w(f"        %ma{i} = air.simdgroup_matrix_load %A[{idx} : {mem(ab)} -> {mab}")
+    # With B transposed (and A not) in 16-bit, each A fragment is instead loaded just before its four products
+    # (agx_cost: hgemm _tb -9..-13% on G14G; G13G moves both ways, sgemm _tb loses).
+    a_late = tb and not ta and ab == "f16"
+    if not a_late:
+        for i in range(4):
+            idx = f"%k, {rows[i]}] transpose" if ta else f"{rows[i]}, %k]"
+            w(f"        %ma{i} = air.simdgroup_matrix_load %A[{idx} : {mem(ab)} -> {mab}")
     tys = acc if ab == "f32" else f"{mab}, {acc}"
     # With A transposed (and B not), each B fragment is loaded just before its four products: fewer fragments live at
     # once (agx_cost at K = 256: -8% on G14G, -19% on G13G for agx_sgemm_tile64_ta); the other variants lose or
@@ -112,6 +116,9 @@ def kernel(name, ab, c, ta, tb, aligned=True):
                 w(f"        %n{i}{j} = air.simdgroup_matrix_multiply_accumulate %ma{i}, %mb{j}, %a{i}{j} : {tys}")
     if not interleave:
         for i in range(4):
+            if a_late:
+                idx = f"%k, {rows[i]}] transpose" if ta else f"{rows[i]}, %k]"
+                w(f"        %ma{i} = air.simdgroup_matrix_load %A[{idx} : {mem(ab)} -> {mab}")
             for j in range(4):
                 w(f"        %n{i}{j} = air.simdgroup_matrix_multiply_accumulate %ma{i}, %mb{j}, %a{i}{j} : {tys}")
     w("        scf.yield " + ", ".join(f"%n{i}{j}" for i in range(4) for j in range(4)) + f" : {ts}")

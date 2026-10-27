@@ -1073,26 +1073,26 @@ gpu.module @agx_blas_f16 {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf16>, vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf16>, vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf16>, vector<64xf32>
         %n03 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb3, %a03 : vector<64xf16>, vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n10 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb0, %a10 : vector<64xf16>, vector<64xf32>
         %n11 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb1, %a11 : vector<64xf16>, vector<64xf32>
         %n12 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb2, %a12 : vector<64xf16>, vector<64xf32>
         %n13 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb3, %a13 : vector<64xf16>, vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n20 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb0, %a20 : vector<64xf16>, vector<64xf32>
         %n21 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb1, %a21 : vector<64xf16>, vector<64xf32>
         %n22 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb2, %a22 : vector<64xf16>, vector<64xf32>
         %n23 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb3, %a23 : vector<64xf16>, vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n30 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb0, %a30 : vector<64xf16>, vector<64xf32>
         %n31 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb1, %a31 : vector<64xf16>, vector<64xf32>
         %n32 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb2, %a32 : vector<64xf16>, vector<64xf32>
@@ -1799,26 +1799,26 @@ gpu.module @agx_blas_f16 {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf16>, vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf16>, vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf16>, vector<64xf32>
         %n03 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb3, %a03 : vector<64xf16>, vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n10 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb0, %a10 : vector<64xf16>, vector<64xf32>
         %n11 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb1, %a11 : vector<64xf16>, vector<64xf32>
         %n12 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb2, %a12 : vector<64xf16>, vector<64xf32>
         %n13 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb3, %a13 : vector<64xf16>, vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n20 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb0, %a20 : vector<64xf16>, vector<64xf32>
         %n21 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb1, %a21 : vector<64xf16>, vector<64xf32>
         %n22 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb2, %a22 : vector<64xf16>, vector<64xf32>
         %n23 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb3, %a23 : vector<64xf16>, vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n30 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb0, %a30 : vector<64xf16>, vector<64xf32>
         %n31 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb1, %a31 : vector<64xf16>, vector<64xf32>
         %n32 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb2, %a32 : vector<64xf16>, vector<64xf32>
@@ -2961,26 +2961,26 @@ gpu.module @agx_blas_f16 {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf16>, vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf16>, vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf16>, vector<64xf32>
         %n03 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb3, %a03 : vector<64xf16>, vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n10 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb0, %a10 : vector<64xf16>, vector<64xf32>
         %n11 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb1, %a11 : vector<64xf16>, vector<64xf32>
         %n12 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb2, %a12 : vector<64xf16>, vector<64xf32>
         %n13 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb3, %a13 : vector<64xf16>, vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n20 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb0, %a20 : vector<64xf16>, vector<64xf32>
         %n21 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb1, %a21 : vector<64xf16>, vector<64xf32>
         %n22 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb2, %a22 : vector<64xf16>, vector<64xf32>
         %n23 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb3, %a23 : vector<64xf16>, vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n30 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb0, %a30 : vector<64xf16>, vector<64xf32>
         %n31 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb1, %a31 : vector<64xf16>, vector<64xf32>
         %n32 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb2, %a32 : vector<64xf16>, vector<64xf32>
@@ -3857,26 +3857,26 @@ gpu.module @agx_blas_f16 {
       %kk_end = arith.minui %kk_end0, %K : index
       %in:16 = scf.for %k = %kk to %kk_end step %i8
           iter_args(%a00 = %o00, %a01 = %o01, %a02 = %o02, %a03 = %o03, %a10 = %o10, %a11 = %o11, %a12 = %o12, %a13 = %o13, %a20 = %o20, %a21 = %o21, %a22 = %o22, %a23 = %o23, %a30 = %o30, %a31 = %o31, %a32 = %o32, %a33 = %o33) -> (vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>, vector<64xf32>) {
-        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
-        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb0 = air.simdgroup_matrix_load %B[%col, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb1 = air.simdgroup_matrix_load %B[%col1, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb2 = air.simdgroup_matrix_load %B[%col2, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %mb3 = air.simdgroup_matrix_load %B[%col3, %k] transpose : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
+        %ma0 = air.simdgroup_matrix_load %A[%row, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n00 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb0, %a00 : vector<64xf16>, vector<64xf32>
         %n01 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb1, %a01 : vector<64xf16>, vector<64xf32>
         %n02 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb2, %a02 : vector<64xf16>, vector<64xf32>
         %n03 = air.simdgroup_matrix_multiply_accumulate %ma0, %mb3, %a03 : vector<64xf16>, vector<64xf32>
+        %ma1 = air.simdgroup_matrix_load %A[%row1, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n10 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb0, %a10 : vector<64xf16>, vector<64xf32>
         %n11 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb1, %a11 : vector<64xf16>, vector<64xf32>
         %n12 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb2, %a12 : vector<64xf16>, vector<64xf32>
         %n13 = air.simdgroup_matrix_multiply_accumulate %ma1, %mb3, %a13 : vector<64xf16>, vector<64xf32>
+        %ma2 = air.simdgroup_matrix_load %A[%row2, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n20 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb0, %a20 : vector<64xf16>, vector<64xf32>
         %n21 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb1, %a21 : vector<64xf16>, vector<64xf32>
         %n22 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb2, %a22 : vector<64xf16>, vector<64xf32>
         %n23 = air.simdgroup_matrix_multiply_accumulate %ma2, %mb3, %a23 : vector<64xf16>, vector<64xf32>
+        %ma3 = air.simdgroup_matrix_load %A[%row3, %k] : memref<?x?xf16, strided<[?, 1], offset: ?>, 1> -> vector<64xf16>
         %n30 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb0, %a30 : vector<64xf16>, vector<64xf32>
         %n31 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb1, %a31 : vector<64xf16>, vector<64xf32>
         %n32 = air.simdgroup_matrix_multiply_accumulate %ma3, %mb2, %a32 : vector<64xf16>, vector<64xf32>
