@@ -985,15 +985,50 @@ mod imp {
         y: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, wd, cd, yd)?;
-        if let Some(g) = pointwise_gemm(&s, half, x, w, y, alpha, beta) {
-            let h = obj::<Handle>(h)?;
-            return engine::gemm(&g, h.stream).map_err(status);
-        }
-        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, w as *mut c_void, y, alpha, beta, false) {
-            return r;
-        }
-        let elements = s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64;
-        run(h, "fwd", s, half, elements, x, w, y, alpha, beta)
+        convolve(h, "fwd", s, half, x, w, y, alpha, beta)
+    }
+
+    /// Runs a convolution in direction `dir` ("fwd", "bwd_data", "bwd_filter"; x, w, y are dx or dw and dy as the
+    /// direction has them): on agx_libs' GEMM path where it applies (`pointwise_gemm`, `im2col_gemm`,
+    /// `col2im_gemm`), on the direct kernels otherwise.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn convolve(
+        h: cudnnHandle_t,
+        dir: &str,
+        s: [i32; 25],
+        half: bool,
+        x: *const c_void,
+        w: *const c_void,
+        y: *const c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> cudnnStatus_t {
+        let hd = obj::<Handle>(h)?;
+        let (xm, wm, ym) = (x as *mut c_void, w as *mut c_void, y as *mut c_void);
+        let elements = match dir {
+            "fwd" => {
+                if let Some(g) = pointwise_gemm(&s, half, x, w, ym, alpha, beta) {
+                    return engine::gemm(&g, hd.stream).map_err(status);
+                }
+                if let Some(r) = im2col_gemm(hd, &s, half, x, wm, ym, alpha, beta, false) {
+                    return r;
+                }
+                s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64
+            }
+            "bwd_data" => {
+                if let Some(r) = col2im_gemm(hd, &s, half, xm, w, y, alpha, beta) {
+                    return r;
+                }
+                s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64
+            }
+            _ => {
+                if let Some(r) = im2col_gemm(hd, &s, half, x, wm, ym, alpha, beta, true) {
+                    return r;
+                }
+                s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64
+            }
+        };
+        run(h, dir, s, half, elements, x, w, y, alpha, beta)
     }
 
     /// A convolution with one group and dense planes of y (dy), large enough for the matrix unit: each image becomes
@@ -1204,11 +1239,7 @@ mod imp {
         dx: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(dxd, wd, cd, dyd)?;
-        if let Some(r) = col2im_gemm(obj::<Handle>(h)?, &s, half, dx, w, dy, alpha, beta) {
-            return r;
-        }
-        let elements = s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64;
-        run(h, "bwd_data", s, half, elements, dx, w, dy, alpha, beta)
+        convolve(h, "bwd_data", s, half, dx, w, dy, alpha, beta)
     }
 
     pub(crate) unsafe fn cudnnConvolutionBackwardFilter(
@@ -1227,11 +1258,7 @@ mod imp {
         dw: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, dwd, cd, dyd)?;
-        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, dw, dy as *mut c_void, alpha, beta, true) {
-            return r;
-        }
-        let elements = s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64;
-        run(h, "bwd_filter", s, half, elements, x, dw, dy, alpha, beta)
+        convolve(h, "bwd_filter", s, half, x, dw, dy, alpha, beta)
     }
 
     // ---- the backend (graph) API

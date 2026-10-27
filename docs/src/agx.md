@@ -1295,7 +1295,8 @@ for one group and dense dy planes: dw = sum over n of dy[n] col^T, the
 images after the first added with beta 1. `cudnnConvolutionBackwardData`
 (one group, dense dy planes) forms col = w^T dy[n] in f32 on the GEMM path
 and gathers dx[n] from it (`agx_conv2d_col2im_*`, each element of dx written
-once, rounded once for f16).
+once, rounded once for f16). Convolutions of backend-API operation graphs
+take the same paths.
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
 tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16
