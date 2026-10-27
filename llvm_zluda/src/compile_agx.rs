@@ -330,6 +330,17 @@ pub fn compile_agx_linked(
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }
 
+    // Experimental: through upstream AIR (ZLUDA_AGX_VIA_AIR=1). The optimized AGX IR is written as AIR
+    // (agx-raise-to-air: what AIR does not have as hints with AIR emulations, double precision in software,
+    // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
+    // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
+    if via_air() {
+        let bitcode = to_air(&linked, &target_machine, &pb_options)?;
+        if let Some(hook) = compiler_hook {
+            hook(&bitcode, String::from("air"));
+        }
+    }
+
     let assembly = if options.object_only {
         Vec::new()
     } else {
@@ -354,6 +365,55 @@ pub fn compile_agx_linked(
         hook(&object, String::from("o"));
     }
     Ok(AgxCompilation { object, assembly })
+}
+
+/// ZLUDA_AGX_VIA_AIR=1: compile through upstream AIR (experimental).
+fn via_air() -> bool {
+    std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1")
+}
+
+/// The module in upstream AIR, in place, and its bitcode (the .air file).
+#[cfg(zluda_air)]
+fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+    let run = |pipeline: &CStr, tm: &TargetMachine| -> Result<(), String> {
+        let error = unsafe { LLVMRunPasses(module.get(), pipeline.as_ptr(), tm.get(), options.get()) };
+        if error.is_null() {
+            return Ok(());
+        }
+        let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
+        Err(Message::new(unsafe { CStr::from_ptr(err_msg) }).to_str().to_string())
+    };
+    run(c"agx-raise-to-air", agx)?;
+    let mut target = unsafe { std::mem::zeroed() };
+    let mut err = std::ptr::null_mut();
+    if unsafe { LLVMGetTargetFromTriple(c"air".as_ptr(), &mut target, &mut err) } != 0 {
+        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+    }
+    let air = TargetMachine::new(
+        target,
+        c"air",
+        c"",
+        c"",
+        LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
+        LLVMRelocMode::LLVMRelocDefault,
+        LLVMCodeModel::LLVMCodeModelDefault,
+    );
+    run(c"air-portable", &air)?;
+    let buffer = unsafe { llvm_sys::bit_writer::LLVMWriteBitcodeToMemoryBuffer(module.get()) };
+    let bytes = unsafe {
+        std::slice::from_raw_parts(
+            llvm_sys::core::LLVMGetBufferStart(buffer) as *const u8,
+            llvm_sys::core::LLVMGetBufferSize(buffer),
+        )
+        .to_vec()
+    };
+    unsafe { llvm_sys::core::LLVMDisposeMemoryBuffer(buffer) };
+    Ok(bytes)
+}
+
+#[cfg(not(zluda_air))]
+fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+    Err("ZLUDA_AGX_VIA_AIR: this LLVM build has no AIR target".to_string())
 }
 
 fn init_globals() -> Result<(), String> {
@@ -383,6 +443,12 @@ fn init_globals() -> Result<(), String> {
             unsafe { LLVMInitializeAGXTarget() };
             unsafe { LLVMInitializeAGXTargetMC() };
             unsafe { LLVMInitializeAGXAsmPrinter() };
+            #[cfg(zluda_air)]
+            unsafe {
+                crate::ffi::LLVMInitializeAIRTargetInfo();
+                crate::ffi::LLVMInitializeAIRTarget();
+                crate::ffi::LLVMInitializeAIRTargetMC();
+            }
             Ok(())
         })
         .as_ref()

@@ -135,3 +135,11 @@ extern "C" {
     pub fn LLVMInitializeAGXTargetMC();
     pub fn LLVMInitializeAGXAsmPrinter();
 }
+
+// The AIR target (not upstream either), for the experimental PTX -> AIR -> AGX path.
+#[cfg(all(feature = "agx", zluda_air))]
+extern "C" {
+    pub fn LLVMInitializeAIRTargetInfo();
+    pub fn LLVMInitializeAIRTarget();
+    pub fn LLVMInitializeAIRTargetMC();
+}
