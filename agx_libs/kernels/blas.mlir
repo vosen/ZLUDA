@@ -295,13 +295,63 @@ gpu.module @agx_blas {
     %live = arith.cmpi ult, %i, %ylen : index
     scf.if %live {
       %row = arith.muli %i, %rs : index
-      %s = scf.for %k = %i0 to %xlen step %i1 iter_args(%acc = %f0) -> f32 {
-        %kc = arith.muli %k, %cs : index
-        %p = arith.addi %row, %kc : index
-        %va = memref.load %A[%p] : memref<?xf32, strided<[1]>, 1>
-        %ix = func.call @agx_blas_pos(%k, %xlen, %incx_) : (index, index, i64) -> index
-        %vx = memref.load %x[%ix] : memref<?xf32, strided<[1]>, 1>
-        %acc2 = math.fma %va, %vx, %acc : f32
+      // x[k] at xbase + k incx (xbase the last element's offset when incx < 0)
+      %neg = arith.cmpi slt, %incx_, %z : i64
+      %inc = arith.index_cast %incx_ : i64 to index
+      %ninc = arith.subi %i0, %inc : index
+      %xlast = arith.subi %xlen, %i1 : index
+      %lastoff = arith.muli %xlast, %ninc : index
+      %xbase = arith.select %neg, %lastoff, %i0 : index
+      // four steps at a time (four loads of A in flight), then one
+      %i4 = arith.constant 4 : index
+      %xlen4 = arith.divui %xlen, %i4 : index
+      %ub4 = arith.muli %xlen4, %i4 : index
+      %s4:4 = scf.for %k = %i0 to %ub4 step %i4
+          iter_args(%c0 = %f0, %c1 = %f0, %c2 = %f0, %c3 = %f0) -> (f32, f32, f32, f32) {
+        %k1 = arith.addi %k, %i1 : index
+        %k2 = arith.addi %k1, %i1 : index
+        %k3 = arith.addi %k2, %i1 : index
+        %kc_d0 = arith.muli %k, %cs : index
+        %p_d0 = arith.addi %row, %kc_d0 : index
+        %va_d0 = memref.load %A[%p_d0] : memref<?xf32, strided<[1]>, 1>
+        %kx_d0 = arith.muli %k, %inc : index
+        %ix_d0 = arith.addi %xbase, %kx_d0 : index
+        %vx_d0 = memref.load %x[%ix_d0] : memref<?xf32, strided<[1]>, 1>
+        %d0 = math.fma %va_d0, %vx_d0, %c0 : f32
+        %kc_d1 = arith.muli %k1, %cs : index
+        %p_d1 = arith.addi %row, %kc_d1 : index
+        %va_d1 = memref.load %A[%p_d1] : memref<?xf32, strided<[1]>, 1>
+        %kx_d1 = arith.muli %k1, %inc : index
+        %ix_d1 = arith.addi %xbase, %kx_d1 : index
+        %vx_d1 = memref.load %x[%ix_d1] : memref<?xf32, strided<[1]>, 1>
+        %d1 = math.fma %va_d1, %vx_d1, %c1 : f32
+        %kc_d2 = arith.muli %k2, %cs : index
+        %p_d2 = arith.addi %row, %kc_d2 : index
+        %va_d2 = memref.load %A[%p_d2] : memref<?xf32, strided<[1]>, 1>
+        %kx_d2 = arith.muli %k2, %inc : index
+        %ix_d2 = arith.addi %xbase, %kx_d2 : index
+        %vx_d2 = memref.load %x[%ix_d2] : memref<?xf32, strided<[1]>, 1>
+        %d2 = math.fma %va_d2, %vx_d2, %c2 : f32
+        %kc_d3 = arith.muli %k3, %cs : index
+        %p_d3 = arith.addi %row, %kc_d3 : index
+        %va_d3 = memref.load %A[%p_d3] : memref<?xf32, strided<[1]>, 1>
+        %kx_d3 = arith.muli %k3, %inc : index
+        %ix_d3 = arith.addi %xbase, %kx_d3 : index
+        %vx_d3 = memref.load %x[%ix_d3] : memref<?xf32, strided<[1]>, 1>
+        %d3 = math.fma %va_d3, %vx_d3, %c3 : f32
+        scf.yield %d0, %d1, %d2, %d3 : f32, f32, f32, f32
+      }
+      %s01 = arith.addf %s4#0, %s4#1 : f32
+      %s23 = arith.addf %s4#2, %s4#3 : f32
+      %s0 = arith.addf %s01, %s23 : f32
+      %s = scf.for %k = %ub4 to %xlen step %i1 iter_args(%acc = %s0) -> f32 {
+        %kc_acc2 = arith.muli %k, %cs : index
+        %p_acc2 = arith.addi %row, %kc_acc2 : index
+        %va_acc2 = memref.load %A[%p_acc2] : memref<?xf32, strided<[1]>, 1>
+        %kx_acc2 = arith.muli %k, %inc : index
+        %ix_acc2 = arith.addi %xbase, %kx_acc2 : index
+        %vx_acc2 = memref.load %x[%ix_acc2] : memref<?xf32, strided<[1]>, 1>
+        %acc2 = math.fma %va_acc2, %vx_acc2, %acc : f32
         scf.yield %acc2 : f32
       }
       %iy = func.call @agx_blas_pos(%i, %ylen, %incy_) : (index, index, i64) -> index
