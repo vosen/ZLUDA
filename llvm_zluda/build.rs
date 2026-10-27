@@ -50,13 +50,18 @@ fn main() {
         llvm_config(&llvm_build_path.join("bin/llvm-config")).unwrap();
     println!("cargo:rustc-link-arg={ldflags}");
     println!("cargo:rustc-link-search=native={libdir}");
-    for lib in system_libs.split_ascii_whitespace() {
-        println!("cargo:rustc-link-arg={lib}");
-    }
     if amdgpu_enabled() {
         link_lld_components();
     }
     link_llvm_components(lib_names);
+    // After the LLVM libraries that use them: a -l passed as a link argument
+    // comes before them and --as-needed drops it (zlib's compress2 undefined).
+    for lib in system_libs.split_ascii_whitespace() {
+        match lib.strip_prefix("-l") {
+            Some(name) => println!("cargo:rustc-link-lib={name}"),
+            None => println!("cargo:rustc-link-arg={lib}"),
+        }
+    }
     compile_cxx_lib(cxxflags, &llvm_build_path);
 }
 
