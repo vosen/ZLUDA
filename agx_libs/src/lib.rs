@@ -66,8 +66,9 @@ impl Types {
 /// How one GEMM runs: which kernel, its launch shape and its arguments after the three matrix pointers.
 #[derive(Debug, PartialEq)]
 pub enum Plan {
-    /// `agx_sgemm_tile64` on row-major matrices: (a, b, c) pointers then M, N, K, lda, ldb, ldc.
-    Tile { swap: bool, dims: [u64; 6], groups: u32 },
+    /// `agx_sgemm_tile64` on row-major matrices: (a, b, c) pointers then M, N, K, lda, ldb, ldc, the variant reading
+    /// A transposed (`_ta`, A[r, k] at a[k lda + r]) and B transposed (`_tb`, B[k, c] at b[c ldb + k]) as `trans`.
+    Tile { swap: bool, trans: [bool; 2], dims: [u64; 6], groups: u32 },
     /// `agx_sgemm_generic`: (a, b, c) then M, N, K and the (row, column) element strides of op(A), op(B) and C.
     Generic { dims: [u64; 9], grid: [u32; 2] },
 }
@@ -94,33 +95,42 @@ fn generic(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: 
 }
 
 /// The launches for column-major `C (m x n, ldc) = alpha op(A) op(B) + beta C`. Seen row-major, column-major C is
-/// C^T = op(B)^T op(A)^T, so without transposes the row-major tile kernel computes it with A and B swapped (`swap`).
-/// The tile kernel takes the largest block of C whose sides are multiples of 64, along the largest multiple of 8 of
-/// K; the generic kernel the rest: the columns of C right of the block, the rows below it, and then the remaining
-/// steps of K added to all of C.
+/// C^T = op(B)^T op(A)^T, which the row-major tile kernel computes with A and B swapped (`swap`): A' = op(B)^T is B
+/// read row-major (ld ldb), or transposed when op(B) is B^T, and B' = op(A)^T likewise A. The tile kernel takes the
+/// largest block of C whose sides are multiples of 64, along the largest multiple of 8 of K; the generic kernel the
+/// rest: the columns of C right of the block, the rows below it, and then the remaining steps of K added to all of C.
 pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64, aligned: bool) -> Vec<Part> {
     let part = |plan, offsets, accumulate| Part { plan, offsets, accumulate };
     let (m64, n64, k8) = (m / 64 * 64, n / 64 * 64, k / 8 * 8);
-    if ta || tb || m64 == 0 || n64 == 0 || k8 == 0 || ![lda, ldb, ldc].iter().all(|l| l % 2 == 0) || !aligned {
+    if m64 == 0 || n64 == 0 || k8 == 0 || ![lda, ldb, ldc].iter().all(|l| l % 2 == 0) || !aligned {
         return vec![part(generic(ta, tb, m, n, k, lda, ldb, ldc), [0; 3], false)];
     }
-    // row-major M' = n, N' = m: A' = B (n x k, ld ldb), B' = A (k x m, ld lda)
+    // row-major M' = n, N' = m
     let mut parts = vec![part(
-        Plan::Tile { swap: true, dims: [n64, m64, k8, ldb, lda, ldc], groups: ((n64 / 64) * (m64 / 64)) as u32 },
+        Plan::Tile {
+            swap: true,
+            trans: [tb, ta],
+            dims: [n64, m64, k8, ldb, lda, ldc],
+            groups: ((n64 / 64) * (m64 / 64)) as u32,
+        },
         [0; 3],
         false,
     )];
+    // element offsets of column j of op(B), row i of op(A), and step l of K in each
+    let col_b = |j: u64| if tb { j } else { j * ldb };
+    let row_a = |i: u64| if ta { i * lda } else { i };
+    let (step_a, step_b) = (|l: u64| if ta { l } else { l * lda }, |l: u64| if tb { l * ldb } else { l });
     if n64 < n {
-        // columns n64.. of B and C, all of A
-        parts.push(part(generic(false, false, m, n - n64, k8, lda, ldb, ldc), [0, n64 * ldb, n64 * ldc], false));
+        // columns n64.. of op(B) and C, all of op(A)
+        parts.push(part(generic(ta, tb, m, n - n64, k8, lda, ldb, ldc), [0, col_b(n64), n64 * ldc], false));
     }
     if m64 < m {
-        // rows m64.. of A and C, columns ..n64 of B and C
-        parts.push(part(generic(false, false, m - m64, n64, k8, lda, ldb, ldc), [m64, 0, m64], false));
+        // rows m64.. of op(A) and C, columns ..n64 of op(B) and C
+        parts.push(part(generic(ta, tb, m - m64, n64, k8, lda, ldb, ldc), [row_a(m64), 0, m64], false));
     }
     if k8 < k {
-        // columns k8.. of A and rows k8.. of B, added to C
-        parts.push(part(generic(false, false, m, n, k - k8, lda, ldb, ldc), [k8 * lda, k8, 0], true));
+        // steps k8.. of K, added to C
+        parts.push(part(generic(ta, tb, m, n, k - k8, lda, ldb, ldc), [step_a(k8), step_b(k8), 0], true));
     }
     parts
 }
@@ -242,8 +252,8 @@ pub mod engine {
     #[derive(Clone, Copy)]
     struct Kernels {
         ctx: usize,
-        /// By `Types::index`.
-        tile: [CUfunction; 3],
+        /// By `Types::index`, then whether the kernel reads A and B transposed.
+        tile: [[[CUfunction; 2]; 2]; 3],
         generic: [CUfunction; 4],
         /// f32 and f16 D.
         epilogue: [CUfunction; 2],
@@ -272,9 +282,17 @@ pub mod engine {
             let mut f = CUfunction(std::ptr::null_mut());
             (d.function)(&mut f, m, name.as_ptr() as *const c_char).map(|_| f).map_err(|_| Error::Failed)
         };
+        let variants = |m: CUmodule, base: &str| -> Result<[[CUfunction; 2]; 2], Error> {
+            let f = |suffix: &str| get(m, format!("{base}{suffix}\0").as_bytes());
+            Ok([[f("")?, f("_tb")?], [f("_ta")?, f("_tatb")?]])
+        };
         let k = Kernels {
             ctx: key,
-            tile: [get(sm, b"agx_sgemm_tile64\0")?, get(hm, b"agx_hgemm_tile64_cf16\0")?, get(hm, b"agx_hgemm_tile64_cf32\0")?],
+            tile: [
+                variants(sm, "agx_sgemm_tile64")?,
+                variants(hm, "agx_hgemm_tile64_cf16")?,
+                variants(hm, "agx_hgemm_tile64_cf32")?,
+            ],
             generic: [
                 get(sm, b"agx_sgemm_generic\0")?,
                 get(hm, b"agx_hgemm_generic_cf16\0")?,
@@ -408,11 +426,11 @@ pub mod engine {
                 c.byte_offset((i * g.stride_c as isize + oc) * cb),
             );
             let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &part.plan {
-                Plan::Tile { swap, dims, groups } => {
+                Plan::Tile { swap, trans, dims, groups } => {
                     if *swap {
                         std::mem::swap(&mut pa, &mut pb);
                     }
-                    (kernels.tile[types.index()], &dims[..], [*groups, 1], [128, 1])
+                    (kernels.tile[types.index()][trans[0] as usize][trans[1] as usize], &dims[..], [*groups, 1], [128, 1])
                 }
                 Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
             };
@@ -495,11 +513,14 @@ mod tests {
 
     fn run_plan(p: &Plan, a: &[f32], b: &[f32], c: &mut [f32], alpha: f32, beta: f32) {
         match p {
-            Plan::Tile { swap, dims: [mm, nn, kk, lda, ldb, ldc], .. } => {
+            Plan::Tile { swap, trans, dims: [mm, nn, kk, lda, ldb, ldc], .. } => {
                 let (a, b) = if *swap { (b, a) } else { (a, b) };
+                let (lda, ldb) = (*lda as usize, *ldb as usize);
+                let at = |i: usize, k: usize| if trans[0] { a[k * lda + i] } else { a[i * lda + k] };
+                let bt = |k: usize, j: usize| if trans[1] { b[j * ldb + k] } else { b[k * ldb + j] };
                 for i in 0..*mm as usize {
                     for j in 0..*nn as usize {
-                        let s: f32 = (0..*kk as usize).map(|k| a[i * *lda as usize + k] * b[k * *ldb as usize + j]).sum();
+                        let s: f32 = (0..*kk as usize).map(|k| at(i, k) * bt(k, j)).sum();
                         let p = i * *ldc as usize + j;
                         c[p] = alpha * s + if beta == 0.0 { 0.0 } else { beta * c[p] };
                     }
@@ -551,13 +572,17 @@ mod tests {
             (false, false, 70, 130, 21),
             (false, false, 64, 77, 8),
             (false, false, 100, 64, 19),
+            (true, false, 70, 130, 21),
+            (false, true, 130, 70, 13),
+            (true, true, 64, 64, 8),
+            (true, false, 128, 64, 30),
         ] {
             let (lda, ldb, ldc) = ((if ta { k } else { m }) + 2, (if tb { n } else { k }) + 4, m + 6);
             let a: Vec<f32> = (0..lda * if ta { m } else { k }).map(|_| rnd()).collect();
             let b: Vec<f32> = (0..ldb * if tb { k } else { n }).map(|_| rnd()).collect();
             let c0: Vec<f32> = (0..ldc * n).map(|_| rnd()).collect();
             let parts = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, true);
-            let tiled = !ta && !tb && m >= 64 && n >= 64 && k >= 8 && [lda, ldb, ldc].iter().all(|l| l % 2 == 0);
+            let tiled = m >= 64 && n >= 64 && k >= 8 && [lda, ldb, ldc].iter().all(|l| l % 2 == 0);
             assert_eq!(matches!(parts[0].plan, Plan::Tile { .. }), tiled, "{ta} {tb} {m}x{n}x{k}");
             let (mut got, mut want) = (c0.clone(), c0.clone());
             run_parts(&parts, &a, &b, &mut got, 1.5, 0.25);
@@ -571,8 +596,10 @@ mod tests {
     #[test]
     fn the_fat_objects_have_the_kernels_for_the_m2_max() {
         for (fat, names) in [
-            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_generic", "agx_dgemm_generic"][..]),
-            (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
+            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_tile64_ta", "agx_sgemm_tile64_tb", "agx_sgemm_tile64_tatb",
+                      "agx_sgemm_generic", "agx_dgemm_generic"][..]),
+            (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_tile64_cf16_tatb",
+                      "agx_hgemm_tile64_cf32_tb", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
         ] {
             assert_eq!(&fat[..8], b"ZAGXFAT1");
             let s = String::from_utf8_lossy(fat);
