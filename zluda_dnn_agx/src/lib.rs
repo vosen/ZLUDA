@@ -1085,6 +1085,68 @@ mod imp {
         })())
     }
 
+    /// The data gradient of a convolution with one group and dense dy planes, large enough for the matrix unit: per
+    /// image, col (C R S x P Q, f32) = w^T (C R S x K) dy[n] (K x PQ) on agx_libs' GEMM (column-major col^T =
+    /// dy[n]^T w, B transposed), then `agx_conv2d_col2im_*` gathers dx[n] from col. None when it does not apply.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn col2im_gemm(
+        h: &Handle,
+        s: &[i32; 25],
+        half: bool,
+        mut dx: *mut c_void,
+        w: *const c_void,
+        dy: *const c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> Option<cudnnStatus_t> {
+        let [n, ch, hh, wd, k, r, sw, p, q, .., g, _, _, _, _, _, ys0, ys1, ys2, ys3] = *s;
+        let (pq, crs) = (p as i64 * q as i64, ch as i64 * r as i64 * sw as i64);
+        if g != 1 || (ys1 as i64, ys2, ys3) != (pq, q, 1) || k < 16 || crs < 16 || pq < 16 || alpha.is_null()
+            || beta.is_null()
+        {
+            return None;
+        }
+        let groups = u32::try_from((ch as u64 * hh as u64 * wd as u64).div_ceil(256)).ok()?;
+        let size = if half { 2 } else { 4 };
+        Some((|| {
+            let col = temp(h, crs * pq * 4)?;
+            let name = if half { c"agx_conv2d_col2im_f16" } else { c"agx_conv2d_col2im_f32" };
+            let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+            let (mut alpha, mut beta) = (*(alpha as *const f32), *(beta as *const f32));
+            for image in 0..n {
+                let g = engine::Gemm {
+                    types: if half { agx_libs::Types::HtoS } else { agx_libs::Types::S },
+                    ta: false,
+                    tb: true,
+                    m: pq as u64,
+                    n: crs as u64,
+                    k: k as u64,
+                    alpha: 1.0,
+                    beta: 0.0,
+                    a: dy.byte_offset(image as isize * ys0 as isize * size),
+                    lda: pq as u64,
+                    stride_a: 0,
+                    b: w,
+                    ldb: crs as u64,
+                    stride_b: 0,
+                    c: col.0,
+                    ldc: pq as u64,
+                    stride_c: 0,
+                    batch: 1,
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+                let mut colp = col.0;
+                let mut shape: [i32; 22] = std::array::from_fn(|i| if i < 21 { s[i] } else { image });
+                let mut params: Vec<*mut c_void> = vec![&mut colp as *mut _ as *mut c_void, &mut dx as *mut _ as *mut c_void];
+                params.extend(shape.iter_mut().map(|v| v as *mut i32 as *mut c_void));
+                params.push(&mut alpha as *mut f32 as *mut c_void);
+                params.push(&mut beta as *mut f32 as *mut c_void);
+                engine::launch_kernel(f, [groups, 1], [256, 1], &mut params, h.stream).map_err(status)?;
+            }
+            Ok(())
+        })())
+    }
+
     /// A 1x1 convolution (stride 1, no padding, one group) of NCHW images whose planes are dense: per image n,
     /// y[n] (K x HW) = w (K x C) x[n] (C x HW), which agx_libs' GEMM runs on its tile kernel. Seen column-major, that
     /// is y[n]^T (HW x K, ld HW) = x[n]^T (HW x C, ld HW) w^T (C x K, ld C), batched over n.
@@ -1142,6 +1204,9 @@ mod imp {
         dx: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(dxd, wd, cd, dyd)?;
+        if let Some(r) = col2im_gemm(obj::<Handle>(h)?, &s, half, dx, w, dy, alpha, beta) {
+            return r;
+        }
         let elements = s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64;
         run(h, "bwd_data", s, half, elements, dx, w, dy, alpha, beta)
     }

@@ -428,6 +428,38 @@ def case_conv_im2col(a, obj, tmp, conv, rnd, t="f", filter_grad=False):
     return close(got, want, range(len(got)), 1e-5)
 
 
+def case_conv_col2im(a, obj, tmp, conv, alpha, beta, rnd, t="f"):
+    """The data gradient as zluda_dnn_agx runs it for one group: col = w^T dy[n] (f32, formed here as its GEMM
+    does), then agx_conv2d_col2im_* gathers dx[n] = alpha col2im(col) + beta dx[n]; against the direct sums."""
+    c = conv
+    Wt = rounded([rnd.uniform(-1, 1) for _ in range(c.wlen)], t)
+    Dy = rounded([rnd.uniform(-1, 1) for _ in range(c.ylen)], t)
+    Dx = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(c.xlen)], t)
+    crs, pq = c.C * c.R * c.S, c.P * c.Q
+    for n in range(c.N):
+        col = [sum(Wt[k * crs + j] * Dy[c.yi(n, k, i // c.Q, i % c.Q)] for k in range(c.K))
+               for j in range(crs) for i in range(pq)]
+        args = ([("buf", pack(col, "f")), ("buf", pack(Dx, t), True)] + c.args()[:21] +
+                [("i32", n), ("f32", alpha), ("f32", beta)])
+        (dx,) = run(a, obj, "agx_conv2d_col2im_%s" % ("f32" if t == "f" else "f16"), args,
+                    (-(-c.C * c.H * c.W // 256) * 256, 1), (256, 1), tmp)
+        Dx_n = unpack(dx, t)
+        if n == 0:
+            got = list(Dx_n)
+        else:
+            lo, hi = n * c.xs[0], (n + 1) * c.xs[0]
+            got[lo:hi] = Dx_n[lo:hi]
+    acc = {}
+    for n, k, p, q, ch, r, s_, h, w, wi in c.taps():
+        key = c.xi(n, ch, h, w)
+        acc[key] = acc.get(key, 0.0) + Dy[c.yi(n, k, p, q)] * Wt[wi]
+    idx = [c.xi(n, ch, h, w) for n in range(c.N) for ch in range(c.C) for h in range(c.H) for w in range(c.W)]
+    want = list(Dx)
+    for i in idx:
+        want[i] = alpha * acc.get(i, 0.0) + (beta * Dx[i] if beta != 0 else 0.0)
+    return close(got, want, idx, 1e-5 if t == "f" else 3e-3)
+
+
 def twiddles(n):
     out = []
     for t in range(n):
@@ -2304,6 +2336,11 @@ def main():
                             cases.append(("conv im2col %s %s %s" % ("dw" if fg else "fwd", "f32" if t == "f" else "f16",
                                                                     label),
                                           lambda t=t, cv=cv, fg=fg: case_conv_im2col(a, obj, tmp, cv, rnd, t, fg)))
+                        for alpha, beta in ((1.0, 0.0), (1.5, 0.5)):
+                            cases.append(("conv col2im dx %s %s a=%g b=%g" % ("f32" if t == "f" else "f16", label, alpha,
+                                                                              beta),
+                                          lambda t=t, cv=cv, al=alpha, be=beta: case_conv_col2im(a, obj, tmp, cv, al, be,
+                                                                                                  rnd, t)))
             elif "agx_epilogue_f32" in records:
                 cases = []
                 for t in ("f", "e"):

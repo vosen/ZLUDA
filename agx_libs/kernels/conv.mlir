@@ -1000,4 +1000,242 @@ gpu.module @agx_dnn_conv {
     }
     gpu.return
   }
+
+  // dx[n, c, h, w] = alpha * (sum of col[((c R + r) S + s) P Q + p Q + q] over the stored filter taps (r, s) whose
+  // image tap (r', s') (flipped in convolution mode) has h = p sh - ph + r' dh and w = q sw - pw + s' dw for an output
+  // (p, q)) + beta * dx, for image n: the data gradient from col = w^T dy[n] (the transpose of im2col), gathered so
+  // that each element of dx is written once. One thread per element of dx[n].
+  gpu.func @agx_conv2d_col2im_f32(%col0: memref<1xf32, 1>, %x0: memref<1xf32, 1>,
+      %N_: i32, %C_: i32, %H_: i32, %W_: i32, %K_: i32, %R_: i32, %S_: i32, %P_: i32, %Q_: i32,
+      %ph_: i32, %pw_: i32, %sh_: i32, %sw_: i32, %dh_: i32, %dw_: i32, %G_: i32, %flip_: i32,
+      %xsn_: i32, %xsc_: i32, %xsh_: i32, %xsw_: i32, %n_: i32, %alpha: f32, %beta: f32) kernel {
+    %C = arith.index_cast %C_ : i32 to index
+    %H = arith.index_cast %H_ : i32 to index
+    %W = arith.index_cast %W_ : i32 to index
+    %R = arith.index_cast %R_ : i32 to index
+    %S = arith.index_cast %S_ : i32 to index
+    %P = arith.index_cast %P_ : i32 to index
+    %Q = arith.index_cast %Q_ : i32 to index
+    %ph = arith.index_cast %ph_ : i32 to index
+    %pw = arith.index_cast %pw_ : i32 to index
+    %sh = arith.index_cast %sh_ : i32 to index
+    %sw = arith.index_cast %sw_ : i32 to index
+    %dh = arith.index_cast %dh_ : i32 to index
+    %dw = arith.index_cast %dw_ : i32 to index
+    %flip = arith.index_cast %flip_ : i32 to index
+    %xsn = arith.index_cast %xsn_ : i32 to index
+    %xsc = arith.index_cast %xsc_ : i32 to index
+    %xsh = arith.index_cast %xsh_ : i32 to index
+    %xsw = arith.index_cast %xsw_ : i32 to index
+    %n = arith.index_cast %n_ : i32 to index
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %big = arith.constant 4611686018427387904 : index
+    %Cm = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %Xm = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %id = gpu.global_id x
+    %w = arith.remui %id, %W : index
+    %t1 = arith.divui %id, %W : index
+    %h = arith.remui %t1, %H : index
+    %c = arith.divui %t1, %H : index
+    %live = arith.cmpi ult, %c, %C : index
+    scf.if %live {
+      %no_flip = arith.cmpi eq, %flip, %i0 : index
+      %Rm1 = arith.subi %R, %i1 : index
+      %Sm1 = arith.subi %S, %i1 : index
+      %PQ = arith.muli %P, %Q : index
+      %hp = arith.addi %h, %ph : index
+      %wp = arith.addi %w, %pw : index
+      %sum = scf.for %r = %i0 to %R step %i1 iter_args(%a0 = %f0) -> f32 {
+        %rf = arith.subi %Rm1, %r : index
+        %ri = arith.select %no_flip, %r, %rf : index
+        %rdh = arith.muli %ri, %dh : index
+        // p sh = h + ph - r' dh, with 0 <= p < P
+        %th = arith.subi %hp, %rdh : index
+        %th_ok0 = arith.cmpi sge, %th, %i0 : index
+        %p = arith.divsi %th, %sh : index
+        %pr = arith.remsi %th, %sh : index
+        %th_ok1 = arith.cmpi eq, %pr, %i0 : index
+        %th_ok2 = arith.cmpi slt, %p, %P : index
+        %th_ok01 = arith.andi %th_ok0, %th_ok1 : i1
+        %h_ok = arith.andi %th_ok01, %th_ok2 : i1
+        %a1 = scf.if %h_ok -> f32 {
+          %a2 = scf.for %s = %i0 to %S step %i1 iter_args(%a3 = %a0) -> f32 {
+            %sf = arith.subi %Sm1, %s : index
+            %si = arith.select %no_flip, %s, %sf : index
+            %sdw = arith.muli %si, %dw : index
+            %tw = arith.subi %wp, %sdw : index
+            %tw_ok0 = arith.cmpi sge, %tw, %i0 : index
+            %q = arith.divsi %tw, %sw : index
+            %qr = arith.remsi %tw, %sw : index
+            %tw_ok1 = arith.cmpi eq, %qr, %i0 : index
+            %tw_ok2 = arith.cmpi slt, %q, %Q : index
+            %tw_ok01 = arith.andi %tw_ok0, %tw_ok1 : i1
+            %w_ok = arith.andi %tw_ok01, %tw_ok2 : i1
+            %a4 = scf.if %w_ok -> f32 {
+              %cr = arith.muli %c, %R : index
+              %crr = arith.addi %cr, %r : index
+              %crs0 = arith.muli %crr, %S : index
+              %crs = arith.addi %crs0, %s : index
+              %row = arith.muli %crs, %PQ : index
+              %pq0 = arith.muli %p, %Q : index
+              %pq = arith.addi %pq0, %q : index
+              %ci = arith.addi %row, %pq : index
+              %v = memref.load %Cm[%ci] : memref<?xf32, strided<[1]>, 1>
+              %a5 = arith.addf %a3, %v : f32
+              scf.yield %a5 : f32
+            } else {
+              scf.yield %a3 : f32
+            }
+            scf.yield %a4 : f32
+          }
+          scf.yield %a2 : f32
+        } else {
+          scf.yield %a0 : f32
+        }
+        scf.yield %a1 : f32
+      }
+      %xn = arith.muli %n, %xsn : index
+      %xc = arith.muli %c, %xsc : index
+      %xh = arith.muli %h, %xsh : index
+      %xw = arith.muli %w, %xsw : index
+      %xi0 = arith.addi %xn, %xc : index
+      %xi1 = arith.addi %xi0, %xh : index
+      %xi = arith.addi %xi1, %xw : index
+      %scaled = arith.mulf %sum, %alpha : f32
+      %no_old = arith.cmpf oeq, %beta, %f0 : f32
+      %res = scf.if %no_old -> f32 {
+        scf.yield %scaled : f32
+      } else {
+        %old = memref.load %Xm[%xi] : memref<?xf32, strided<[1]>, 1>
+        %r2 = math.fma %old, %beta, %scaled : f32
+        scf.yield %r2 : f32
+      }
+      memref.store %res, %Xm[%xi] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
+  // dx[n, c, h, w] = alpha * (sum of col[((c R + r) S + s) P Q + p Q + q] over the stored filter taps (r, s) whose
+  // image tap (r', s') (flipped in convolution mode) has h = p sh - ph + r' dh and w = q sw - pw + s' dw for an output
+  // (p, q)) + beta * dx, for image n: the data gradient from col = w^T dy[n] (the transpose of im2col), gathered so
+  // that each element of dx is written once. One thread per element of dx[n]; col is f32 (the GEMM's f32 result).
+  gpu.func @agx_conv2d_col2im_f16(%col0: memref<1xf32, 1>, %x0: memref<1xf16, 1>,
+      %N_: i32, %C_: i32, %H_: i32, %W_: i32, %K_: i32, %R_: i32, %S_: i32, %P_: i32, %Q_: i32,
+      %ph_: i32, %pw_: i32, %sh_: i32, %sw_: i32, %dh_: i32, %dw_: i32, %G_: i32, %flip_: i32,
+      %xsn_: i32, %xsc_: i32, %xsh_: i32, %xsw_: i32, %n_: i32, %alpha: f32, %beta: f32) kernel {
+    %C = arith.index_cast %C_ : i32 to index
+    %H = arith.index_cast %H_ : i32 to index
+    %W = arith.index_cast %W_ : i32 to index
+    %R = arith.index_cast %R_ : i32 to index
+    %S = arith.index_cast %S_ : i32 to index
+    %P = arith.index_cast %P_ : i32 to index
+    %Q = arith.index_cast %Q_ : i32 to index
+    %ph = arith.index_cast %ph_ : i32 to index
+    %pw = arith.index_cast %pw_ : i32 to index
+    %sh = arith.index_cast %sh_ : i32 to index
+    %sw = arith.index_cast %sw_ : i32 to index
+    %dh = arith.index_cast %dh_ : i32 to index
+    %dw = arith.index_cast %dw_ : i32 to index
+    %flip = arith.index_cast %flip_ : i32 to index
+    %xsn = arith.index_cast %xsn_ : i32 to index
+    %xsc = arith.index_cast %xsc_ : i32 to index
+    %xsh = arith.index_cast %xsh_ : i32 to index
+    %xsw = arith.index_cast %xsw_ : i32 to index
+    %n = arith.index_cast %n_ : i32 to index
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %big = arith.constant 4611686018427387904 : index
+    %Cm = memref.reinterpret_cast %col0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %Xm = memref.reinterpret_cast %x0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf16, 1> to memref<?xf16, strided<[1]>, 1>
+    %id = gpu.global_id x
+    %w = arith.remui %id, %W : index
+    %t1 = arith.divui %id, %W : index
+    %h = arith.remui %t1, %H : index
+    %c = arith.divui %t1, %H : index
+    %live = arith.cmpi ult, %c, %C : index
+    scf.if %live {
+      %no_flip = arith.cmpi eq, %flip, %i0 : index
+      %Rm1 = arith.subi %R, %i1 : index
+      %Sm1 = arith.subi %S, %i1 : index
+      %PQ = arith.muli %P, %Q : index
+      %hp = arith.addi %h, %ph : index
+      %wp = arith.addi %w, %pw : index
+      %sum = scf.for %r = %i0 to %R step %i1 iter_args(%a0 = %f0) -> f32 {
+        %rf = arith.subi %Rm1, %r : index
+        %ri = arith.select %no_flip, %r, %rf : index
+        %rdh = arith.muli %ri, %dh : index
+        // p sh = h + ph - r' dh, with 0 <= p < P
+        %th = arith.subi %hp, %rdh : index
+        %th_ok0 = arith.cmpi sge, %th, %i0 : index
+        %p = arith.divsi %th, %sh : index
+        %pr = arith.remsi %th, %sh : index
+        %th_ok1 = arith.cmpi eq, %pr, %i0 : index
+        %th_ok2 = arith.cmpi slt, %p, %P : index
+        %th_ok01 = arith.andi %th_ok0, %th_ok1 : i1
+        %h_ok = arith.andi %th_ok01, %th_ok2 : i1
+        %a1 = scf.if %h_ok -> f32 {
+          %a2 = scf.for %s = %i0 to %S step %i1 iter_args(%a3 = %a0) -> f32 {
+            %sf = arith.subi %Sm1, %s : index
+            %si = arith.select %no_flip, %s, %sf : index
+            %sdw = arith.muli %si, %dw : index
+            %tw = arith.subi %wp, %sdw : index
+            %tw_ok0 = arith.cmpi sge, %tw, %i0 : index
+            %q = arith.divsi %tw, %sw : index
+            %qr = arith.remsi %tw, %sw : index
+            %tw_ok1 = arith.cmpi eq, %qr, %i0 : index
+            %tw_ok2 = arith.cmpi slt, %q, %Q : index
+            %tw_ok01 = arith.andi %tw_ok0, %tw_ok1 : i1
+            %w_ok = arith.andi %tw_ok01, %tw_ok2 : i1
+            %a4 = scf.if %w_ok -> f32 {
+              %cr = arith.muli %c, %R : index
+              %crr = arith.addi %cr, %r : index
+              %crs0 = arith.muli %crr, %S : index
+              %crs = arith.addi %crs0, %s : index
+              %row = arith.muli %crs, %PQ : index
+              %pq0 = arith.muli %p, %Q : index
+              %pq = arith.addi %pq0, %q : index
+              %ci = arith.addi %row, %pq : index
+              %v = memref.load %Cm[%ci] : memref<?xf32, strided<[1]>, 1>
+              %a5 = arith.addf %a3, %v : f32
+              scf.yield %a5 : f32
+            } else {
+              scf.yield %a3 : f32
+            }
+            scf.yield %a4 : f32
+          }
+          scf.yield %a2 : f32
+        } else {
+          scf.yield %a0 : f32
+        }
+        scf.yield %a1 : f32
+      }
+      %xn = arith.muli %n, %xsn : index
+      %xc = arith.muli %c, %xsc : index
+      %xh = arith.muli %h, %xsh : index
+      %xw = arith.muli %w, %xsw : index
+      %xi0 = arith.addi %xn, %xc : index
+      %xi1 = arith.addi %xi0, %xh : index
+      %xi = arith.addi %xi1, %xw : index
+      %scaled = arith.mulf %sum, %alpha : f32
+      %no_old = arith.cmpf oeq, %beta, %f0 : f32
+      %res = scf.if %no_old -> f32 {
+        scf.yield %scaled : f32
+      } else {
+        %old = memref.load %Xm[%xi] : memref<?xf16, strided<[1]>, 1>
+        %oldf = arith.extf %old : f16 to f32
+        %r2 = math.fma %oldf, %beta, %scaled : f32
+        scf.yield %r2 : f32
+      }
+      %res_h = arith.truncf %res : f32 to f16
+      memref.store %res_h, %Xm[%xi] : memref<?xf16, strided<[1]>, 1>
+    }
+    gpu.return
+  }
 }
