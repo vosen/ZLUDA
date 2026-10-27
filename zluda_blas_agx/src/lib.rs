@@ -456,6 +456,20 @@ mod imp {
     /// The smallest n for which sgemm with op(A) = A^T transposes A first (see gemm).
     const PRETRANSPOSE_MIN_N: c_int = 256;
 
+    /// Slices of K for a single f32 product (1: no split): with at most 16 output tiles of 64 x 64 and K >= 1024,
+    /// enough slices for ~64 workgroups, each at least 256 of K, at most 16.
+    fn split_k(m: u64, n: u64, k: u64) -> u64 {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ON.get_or_init(|| std::env::var("ZLUDA_AGX_GEMM_SPLITK").map_or(true, |v| v != "0")) {
+            return 1;
+        }
+        let tiles = (m / 64) * (n / 64);
+        if tiles == 0 || tiles > 16 || k < 1024 {
+            return 1;
+        }
+        (64 / tiles).min(k / 256).min(16).max(1)
+    }
+
     fn pretranspose_enabled() -> bool {
         static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GEMM_PRETRANSPOSE").map_or(true, |v| v != "0"))
@@ -500,12 +514,18 @@ mod imp {
             (scalar(h, alpha, half_scalars)? as f64, scalar(h, beta, half_scalars)? as f64)
         };
         let (mut a, mut lda, mut ta) = (a, lda, ta);
-        if types == Types::S && ta && batch == 1 && n >= PRETRANSPOSE_MIN_N && m >= 64 && k >= 64 && pretranspose_enabled() {
+        let pre = types == Types::S && ta && batch == 1 && n >= PRETRANSPOSE_MIN_N && m >= 64 && k >= 64
+            && pretranspose_enabled();
+        let slices = if types == Types::S && batch == 1 { split_k(m as u64, n as u64, k as u64) } else { 1 };
+        let pre_bytes = if pre { m as usize * k as usize * 4 } else { 0 };
+        let part_bytes = if slices > 1 { slices as usize * m as usize * n as usize * 4 } else { 0 };
+        let base = if pre_bytes + part_bytes > 0 { scratch(h, pre_bytes + part_bytes)? } else { std::ptr::null_mut() };
+        if pre {
             // op(A) = A^T: the tile kernel for it (A's fragments loaded transposed) spills on G14 and costs about a
             // third more per product than the untransposed one; A^T is m x k, a pass over m k elements
             // (agx_cost: ~1.5 SIMD-group cycles per element against ~0.02 per m n k saved). ZLUDA_AGX_GEMM_PRETRANSPOSE=0
             // turns it off.
-            let t = scratch(h, m as usize * k as usize * 4)?;
+            let t = base;
             let (mut src, mut dst) = (a, t);
             let (mut rows, mut cols, mut ld_src, mut ld_dst) = (m as i64, k as i64, lda as i64, m as i64);
             let (mut one, mut zero, mut tr, mut no) = (1.0f32, 0.0f32, 1i64, 0i64);
@@ -518,6 +538,47 @@ mod imp {
                 [16, 4],
             )?;
             (a, lda, ta) = (t as *const c_void, m, false);
+        }
+        if slices > 1 {
+            // Split K: a product with few 64 x 64 output tiles and a long K keeps a few cores busy for all of K. Its
+            // `slices` partial products (alpha op(A) op(B) over one slice of K each) run as one batched launch into
+            // the scratch buffer, then are added to beta C. ZLUDA_AGX_GEMM_SPLITK=0 turns it off.
+            let (m, n, k) = (m as u64, n as u64, k as u64);
+            let kc = k / slices / 8 * 8;
+            let part = base.byte_add(pre_bytes);
+            let step_a = |l: u64| if ta { l } else { l * lda as u64 };
+            let step_b = |l: u64| if tb { l * ldb as u64 } else { l };
+            let mut g = engine::Gemm {
+                types, ta, tb, m, n, k: kc, alpha, beta: 0.0,
+                a, lda: lda as u64, stride_a: step_a(kc) as i64,
+                b, ldb: ldb as u64, stride_b: step_b(kc) as i64,
+                c: part, ldc: m, stride_c: (m * n) as i64, batch: slices,
+            };
+            engine::gemm(&g, h.stream).map_err(status)?;
+            let done = kc * slices;
+            if done < k {
+                // the rest of K, added to the first partial product
+                g.k = k - done;
+                g.beta = 1.0;
+                g.batch = 1;
+                g.a = a.cast::<f32>().add(step_a(done) as usize).cast();
+                g.b = b.cast::<f32>().add(step_b(done) as usize).cast();
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
+            for s in 0..slices {
+                let (mut p, mut cc) = (part.cast::<f32>().add((s * m * n) as usize) as *const c_void, c);
+                let (mut rows, mut cols, mut ldp, mut ldcc) = (m as i64, n as i64, m as i64, ldc as i64);
+                let (mut one, mut b2, mut no) = (1.0f32, if s == 0 { beta as f32 } else { 1.0f32 }, 0i64);
+                blas_launch(
+                    h,
+                    c"agx_sgeam",
+                    &mut [arg(&mut p), arg(&mut cc.clone()), arg(&mut cc), arg(&mut rows), arg(&mut cols), arg(&mut ldp),
+                          arg(&mut ldcc.clone()), arg(&mut ldcc), arg(&mut no), arg(&mut no.clone()), arg(&mut one), arg(&mut b2)],
+                    [m as i64, n as i64],
+                    [16, 4],
+                )?;
+            }
+            return Ok(());
         }
         let g = engine::Gemm {
             types,
