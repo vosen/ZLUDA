@@ -99,13 +99,21 @@ def kernel(name, ab, c, ta, tb, aligned=True):
     for i in range(4):
         idx = f"%k, {rows[i]}] transpose" if ta else f"{rows[i]}, %k]"
         w(f"        %ma{i} = air.simdgroup_matrix_load %A[{idx} : {mem(ab)} -> {mab}")
+    tys = acc if ab == "f32" else f"{mab}, {acc}"
+    # With A transposed (and B not), each B fragment is loaded just before its four products: fewer fragments live at
+    # once (agx_cost at K = 256: -8% on G14G, -19% on G13G for agx_sgemm_tile64_ta); the other variants lose or
+    # move both ways with it, so they load all of B first.
+    interleave = ta and not tb
     for j in range(4):
         idx = f"{cols[j]}, %k] transpose" if tb else f"%k, {cols[j]}]"
         w(f"        %mb{j} = air.simdgroup_matrix_load %B[{idx} : {mem(ab)} -> {mab}")
-    tys = acc if ab == "f32" else f"{mab}, {acc}"
-    for i in range(4):
-        for j in range(4):
-            w(f"        %n{i}{j} = air.simdgroup_matrix_multiply_accumulate %ma{i}, %mb{j}, %a{i}{j} : {tys}")
+        if interleave:
+            for i in range(4):
+                w(f"        %n{i}{j} = air.simdgroup_matrix_multiply_accumulate %ma{i}, %mb{j}, %a{i}{j} : {tys}")
+    if not interleave:
+        for i in range(4):
+            for j in range(4):
+                w(f"        %n{i}{j} = air.simdgroup_matrix_multiply_accumulate %ma{i}, %mb{j}, %a{i}{j} : {tys}")
     w("        scf.yield " + ", ".join(f"%n{i}{j}" for i in range(4) for j in range(4)) + f" : {ts}")
     w("      }")
     w("      scf.yield " + ", ".join(f"%in#{k}" for k in range(16)) + f" : {ts}")
