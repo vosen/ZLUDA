@@ -524,6 +524,88 @@ gpu.module @agx_solver {
     return
   }
 
+  // Blocked geqrf (compact WY, Q = I - V T V^T for the reflectors j0 .. j0 +
+  // jb - 1): V, the (m - j0) x jb matrix of their vectors (leading dimension
+  // m - j0) with the implicit 1 on the diagonal and zeros above it. 2-D grid.
+  gpu.func @agx_qr_v(%a0: memref<1xf32, 1>, %v0: memref<1xf32, 1>, %m_: i64, %j0_: i64, %jb_: i64, %lda_: i64) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %m = arith.index_cast %m_ : i64 to index
+    %j0 = arith.index_cast %j0_ : i64 to index
+    %jb = arith.index_cast %jb_ : i64 to index
+    %lda = arith.index_cast %lda_ : i64 to index
+    %mv = arith.subi %m, %j0 : index
+    %i = gpu.global_id x
+    %c = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %mv : index
+    %in_c = arith.cmpi ult, %c, %jb : index
+    %in = arith.andi %in_i, %in_c : i1
+    scf.if %in {
+      %below = arith.cmpi ugt, %i, %c : index
+      %diag = arith.cmpi eq, %i, %c : index
+      %v = scf.if %below -> f32 {
+        %r = arith.addi %j0, %i : index
+        %cc = arith.addi %j0, %c : index
+        %col = arith.muli %cc, %lda : index
+        %o = arith.addi %col, %r : index
+        %x = func.call @agx_sv_ld(%a0, %o) : (memref<1xf32, 1>, index) -> f32
+        scf.yield %x : f32
+      } else {
+        %d = arith.select %diag, %f1, %f0 : f32
+        scf.yield %d : f32
+      }
+      %cm = arith.muli %c, %mv : index
+      %ov = arith.addi %cm, %i : index
+      func.call @agx_sv_st(%v0, %ov, %v) : (memref<1xf32, 1>, index, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // T (jb x jb, leading dimension jb, zeros below the diagonal) of the
+  // compact WY form from S = V^T V and tau[j0 ..]: T(i, i) = tau_i,
+  // T(0 .. i, i) = -tau_i T(0 .. i, 0 .. i) S(0 .. i, i). One thread (jb^3 / 6
+  // multiply-adds).
+  gpu.func @agx_qr_t(%s0: memref<1xf32, 1>, %tau0: memref<1xf32, 1>, %t0: memref<1xf32, 1>, %j0_: i64, %jb_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %j0 = arith.index_cast %j0_ : i64 to index
+    %jb = arith.index_cast %jb_ : i64 to index
+    %t = gpu.global_id x
+    %first = arith.cmpi eq, %t, %i0 : index
+    scf.if %first {
+      scf.for %i = %i0 to %jb step %i1 {
+        %ti_at = arith.addi %j0, %i : index
+        %ti = func.call @agx_sv_ld(%tau0, %ti_at) : (memref<1xf32, 1>, index) -> f32
+        %nti = arith.negf %ti : f32
+        %ci = arith.muli %i, %jb : index
+        %oii = arith.addi %ci, %i : index
+        func.call @agx_sv_st(%t0, %oii, %ti) : (memref<1xf32, 1>, index, f32) -> ()
+        // rows above the diagonal (T(r, q) for q >= r only), then zeros below
+        scf.for %r = %i0 to %i step %i1 {
+          %w = scf.for %q = %r to %i step %i1 iter_args(%acc = %f0) -> f32 {
+            %cq = arith.muli %q, %jb : index
+            %orq = arith.addi %cq, %r : index
+            %tq = func.call @agx_sv_ld(%t0, %orq) : (memref<1xf32, 1>, index) -> f32
+            %oqi = arith.addi %ci, %q : index
+            %sq = func.call @agx_sv_ld(%s0, %oqi) : (memref<1xf32, 1>, index) -> f32
+            %a1 = math.fma %tq, %sq, %acc : f32
+            scf.yield %a1 : f32
+          }
+          %v = arith.mulf %nti, %w : f32
+          %ori = arith.addi %ci, %r : index
+          func.call @agx_sv_st(%t0, %ori, %v) : (memref<1xf32, 1>, index, f32) -> ()
+        }
+        %i_1 = arith.addi %i, %i1 : index
+        scf.for %r = %i_1 to %jb step %i1 {
+          %ori = arith.addi %ci, %r : index
+          func.call @agx_sv_st(%t0, %ori, %f0) : (memref<1xf32, 1>, index, f32) -> ()
+        }
+      }
+    }
+    gpu.return
+  }
+
   // Applies the reflector of column k to the columns k + 1 + j < n (one
   // thread per column).
   gpu.func @agx_qr_apply(%a0: memref<1xf32, 1>, %m_: i64, %n_: i64, %k_: i64, %lda_: i64, %tau0: memref<1xf32, 1>) kernel {

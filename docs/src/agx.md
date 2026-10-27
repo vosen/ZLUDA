@@ -1470,7 +1470,12 @@ tile GEMM (the other triangle is not written); after a non-positive minor the
 later kernels do nothing, but that panel's update still reaches the trailing
 matrix. The f32 getrs and potrs above 64 rows solve on the blocked trsm (shared
 with cuBLAS in `agx_libs::engine::trsm`), with the row interchanges applied to B
-by their own kernel, instead of one thread per right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
+by their own kernel, instead of one thread per right-hand side. The f32 geqrf
+with more than 32 rows and columns works by panels of 32 columns when given the
+workspace its `_bufferSize` now asks for (32 (m + 64 + 2n) elements): the panel
+column by column as above, then the panel's block reflector (compact WY:
+`Q = I - V T V^T`, T built from `V^T V`) applied to the rest of A with GEMMs on
+the tile kernels. A smaller workspace runs the unblocked factorization. `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get

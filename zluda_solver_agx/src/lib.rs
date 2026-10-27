@@ -417,17 +417,42 @@ unsafe fn potrs(
     )
 }
 
-/// geqrf: A = Q R with Householder reflectors, one column at a time.
-unsafe fn geqrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, lda: c_int, tau: *mut c_void, info: *mut c_int) -> R {
+/// The columns of a panel of the blocked f32 geqrf.
+const QR_BLOCK: i64 = 32;
+
+/// The f32 elements of workspace the blocked geqrf uses (0: it is not blocked): V (m x QR_BLOCK), S and T
+/// (QR_BLOCK x QR_BLOCK) and two QR_BLOCK x n products.
+fn geqrf_work(double: bool, m: c_int, n: c_int) -> i64 {
+    let (m, n) = (m as i64, n as i64);
+    if double || m.min(n) <= QR_BLOCK || n <= QR_BLOCK {
+        return 0;
+    }
+    QR_BLOCK * (m + 2 * QR_BLOCK + 2 * n)
+}
+
+/// geqrf: A = Q R with Householder reflectors, one column at a time. In f32 with a workspace of geqrf_work elements,
+/// by panels of QR_BLOCK columns: the columns of a panel as before with the reflections kept to the panel, then the
+/// panel's Q^T = I - V T^T V^T applied to the rest of A with GEMMs on the tile kernels (V by agx_qr_v, S = V^T V,
+/// T by agx_qr_t, W = V^T A2, W2 = T^T W, A2 -= V W2). The reflectors are the same; the products are summed in
+/// another order.
+#[allow(clippy::too_many_arguments)]
+unsafe fn geqrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, lda: c_int, tau: *mut c_void, work: *mut c_void, lwork: c_int, info: *mut c_int) -> R {
     dims(m, n, lda)?;
     if tau.is_null() && m.min(n) > 0 {
         return Err(cusolverStatus_t::INVALID_VALUE);
     }
     set_info(h, info, 0)?;
     let (mut pa, mut pt) = (a, tau);
-    let (mut m_, mut n_, mut lda_) = (m as i64, n as i64, lda as i64);
-    for k in 0..m.min(n) as i64 {
+    let (mut m_, n_, mut lda_) = (m as i64, n as i64, lda as i64);
+    let need = geqrf_work(double, m, n);
+    let block = if need > 0 && !work.is_null() && lwork as i64 >= need { QR_BLOCK } else { i64::MAX };
+    let mn = m.min(n) as i64;
+    let f = |p: *mut c_void, i: i64| (p as *mut f32).add(i as usize) as *mut c_void;
+    for k in 0..mn {
         let mut k_ = k;
+        // the end of k's panel: the reflections stay in it
+        let j0 = if block == i64::MAX { 0 } else { k / block * block };
+        let mut j1 = if block == i64::MAX { n_ } else { (j0 + block).min(mn) };
         run(
             h,
             kernel(double, [c"agx_qr_house", c"agx_qr_house_f64"]),
@@ -438,10 +463,48 @@ unsafe fn geqrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, ld
         run(
             h,
             kernel(double, [c"agx_qr_apply", c"agx_qr_apply_f64"]),
-            &mut [arg(&mut pa), arg(&mut m_), arg(&mut n_), arg(&mut k_), arg(&mut lda_), arg(&mut pt)],
-            [n_ - k - 1, 1],
+            &mut [arg(&mut pa), arg(&mut m_), arg(&mut j1), arg(&mut k_), arg(&mut lda_), arg(&mut pt)],
+            [j1 - k - 1, 1],
             [64, 1],
         )?;
+        if k + 1 != j1 || j1 >= n_ {
+            continue;
+        }
+        let (jb, mv, n2) = (j1 - j0, m_ - j0, n_ - j1);
+        let (v, sm, t) = (work, f(work, QR_BLOCK * m_), f(work, QR_BLOCK * (m_ + QR_BLOCK)));
+        let (w, w2) = (f(work, QR_BLOCK * (m_ + 2 * QR_BLOCK)), f(work, QR_BLOCK * (m_ + 2 * QR_BLOCK + n_)));
+        let (mut pv, mut j0_, mut jb_) = (v, j0, jb);
+        run(h, c"agx_qr_v", &mut [arg(&mut pa), arg(&mut pv), arg(&mut m_), arg(&mut j0_), arg(&mut jb_), arg(&mut lda_)], [mv, jb], [16, 4])?;
+        let gemm = |ta: bool, m: i64, n: i64, k: i64, alpha: f64, a: *const c_void, lda: i64, b: *const c_void, ldb: i64, beta: f64, c: *mut c_void, ldc: i64| {
+            let g = engine::Gemm {
+                types: agx_libs::Types::S,
+                ta,
+                tb: false,
+                m: m as u64,
+                n: n as u64,
+                k: k as u64,
+                alpha,
+                beta,
+                a,
+                lda: lda as u64,
+                stride_a: 0,
+                b,
+                ldb: ldb as u64,
+                stride_b: 0,
+                c,
+                ldc: ldc as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            engine::gemm(&g, h.stream).map_err(status)
+        };
+        gemm(true, jb, jb, mv, 1.0, v, mv, v, mv, 0.0, sm, jb)?;
+        let (mut ps, mut ptt) = (sm, t);
+        run(h, c"agx_qr_t", &mut [arg(&mut ps), arg(&mut pt), arg(&mut ptt), arg(&mut j0_), arg(&mut jb_)], [1, 1], [1, 1])?;
+        let a2 = f(a, j0 + j1 * lda_);
+        gemm(true, jb, n2, mv, 1.0, v, mv, a2, lda_, 0.0, w, jb)?;
+        gemm(true, jb, n2, jb, 1.0, t, jb, w, jb, 0.0, w2, jb)?;
+        gemm(false, mv, n2, jb, -1.0, v, mv, w2, jb, 1.0, a2, lda_)?;
     }
     Ok(())
 }
@@ -634,7 +697,7 @@ macro_rules! precision {
 
         #[cfg_attr(not(test), no_mangle)]
         pub unsafe extern "system" fn $geqrf_bs(h: cusolverDnHandle_t, m: c_int, n: c_int, _a: *mut $ty, lda: c_int, lwork: *mut c_int) -> cusolverStatus_t {
-            done(handle(h).and_then(|_| dims(m, n, lda)).and_then(|_| out(lwork, 1)))
+            done(handle(h).and_then(|_| dims(m, n, lda)).and_then(|_| out(lwork, geqrf_work($double, m, n) as usize)))
         }
 
         #[cfg_attr(not(test), no_mangle)]
@@ -645,11 +708,11 @@ macro_rules! precision {
             a: *mut $ty,
             lda: c_int,
             tau: *mut $ty,
-            _work: *mut $ty,
-            _lwork: c_int,
+            work: *mut $ty,
+            lwork: c_int,
             info: *mut c_int,
         ) -> cusolverStatus_t {
-            done(handle(h).and_then(|h| geqrf(h, $double, m, n, a.cast(), lda, tau.cast(), info)))
+            done(handle(h).and_then(|h| geqrf(h, $double, m, n, a.cast(), lda, tau.cast(), work.cast(), lwork, info)))
         }
 
         #[cfg_attr(not(test), no_mangle)]

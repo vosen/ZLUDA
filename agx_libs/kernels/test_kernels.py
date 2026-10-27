@@ -1007,6 +1007,30 @@ def case_rand(a, obj, tmp, what, rnd):
     return close(got, want[:n], range(n), 2e-5)
 
 
+def case_qr_wy(a, obj, tmp, rnd):
+    """agx_qr_v and agx_qr_t of the blocked geqrf: V from a column panel, T from S = V^T V and tau."""
+    t = BT
+    m, lda, j0, jb = 11, 13, 2, 4
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (j0 + jb))], t)
+    mv = m - j0
+    (v,) = run(a, obj, K("agx_qr_v"), [("buf", pack(A, t)), ("buf", pack([math.nan] * (mv * jb), t), True), ("i64", m), ("i64", j0),
+                                      ("i64", jb), ("i64", lda)], (16, 8), (16, 4), tmp)
+    want = [1.0 if i == c else (A[(j0 + i) + (j0 + c) * lda] if i > c else 0.0) for c in range(jb) for i in range(mv)]
+    bad = ["V %d" % p for p, (g, w) in enumerate(zip(unpack(v, t), want)) if g != w]
+    S = rounded([rnd.uniform(-1, 1) for _ in range(jb * jb)], t)
+    tau = rounded([rnd.uniform(0.5, 1.5) for _ in range(j0 + jb)], t)
+    (tb,) = run(a, obj, K("agx_qr_t"), [("buf", pack(S, t)), ("buf", pack(tau, t)), ("buf", pack([math.nan] * (jb * jb), t), True),
+                                       ("i64", j0), ("i64", jb)], (1, 1), (1, 1), tmp)
+    T = [0.0] * (jb * jb)
+    for i in range(jb):
+        T[i + i * jb] = tau[j0 + i]
+        for r in range(i):
+            T[r + i * jb] = -tau[j0 + i] * sum(T[r + q * jb] * S[q + i * jb] for q in range(r, i))
+    got = unpack(tb, t)
+    bad += ["T %d" % p for p in range(jb * jb) if abs(got[p] - T[p]) > TOL(1e-5) * (1 + abs(T[p]))]
+    return bad
+
+
 def case_solver(a, obj, tmp, what, rnd):
     """The column steps of getrf / potrf / geqrf, then getrs / potrs / ormqr / orgqr, against Python references."""
     t = BT
@@ -2435,6 +2459,7 @@ def main():
             elif "agx_lu_pivot" in records:
                 cases = [("solver %s" % w, lambda w=w: case_solver(a, obj, tmp, w, rnd))
                          for w in ("lu", "lu_t", "chol_l", "chol_u", "chol_fail", "qr")]
+                cases.append(("solver qr_wy", lambda: case_qr_wy(a, obj, tmp, rnd)))
                 cases += [("solver %s" % w, lambda w=w: case_eigsvd(a, obj, tmp, w, rnd)) for w in ("svd", "eig_l", "eig_u")]
                 if "agx_lu_pivot_f64" in records:
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
