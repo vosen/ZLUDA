@@ -1698,8 +1698,7 @@ def case_pool(a, obj, tmp, mode, bwd, R, S, pad, st, rnd):
     return close(unpack(got), want, dx.positions(), 1e-5)
 
 
-def case_bn(a, obj, tmp, spatial, what, rnd):
-    dims = (3, 4, 2, 3)
+def case_bn(a, obj, tmp, spatial, what, rnd, dims=(3, 4, 2, 3)):
     N, C, H, W = dims
     params = C if spatial else C * H * W
     M = N * H * W if spatial else N
@@ -1719,7 +1718,7 @@ def case_bn(a, obj, tmp, spatial, what, rnd):
                              [("buf", pack(x.data)), ("buf", pack(rmean), True), ("buf", pack(rvar), True),
                               ("buf", bytes(4 * params), True), ("buf", bytes(4 * params), True), ("i64", params), ("i64", M)]
                              + dnn_shape(x) + dnn_strides(x) + [("i64", spatial), ("i64", 1), ("f32", factor), ("f32", eps)],
-                             (32, 1), (32, 1), tmp)
+                             (32 * params, 1), (32, 1), tmp)  # a SIMD-group per parameter
         wrm = [(1 - factor) * o + factor * m for o, m in zip(rmean, mean)]
         wrv = [(1 - factor) * o + factor * v * M / (M - 1) for o, v in zip(rvar, var)]
         r = range(params)
@@ -1753,7 +1752,7 @@ def case_bn(a, obj, tmp, spatial, what, rnd):
                        [("buf", pack(x.data)), ("buf", pack(dy.data)), ("buf", pack(mv)), ("buf", pack(iv)),
                         ("buf", pack(ds0), True), ("buf", pack(db0), True), ("buf", bytes(8 * params), True),
                         ("i64", params), ("i64", M)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(dy)
-                       + [("i64", spatial), ("f32", alpha), ("f32", beta)], (32, 1), (32, 1), tmp)
+                       + [("i64", spatial), ("f32", alpha), ("f32", beta)], (32 * params, 1), (32, 1), tmp)
     sdy = [sum(dy.data[dy.off(*i)] for i in groups[p]) for p in range(params)]
     sdyx = [sum(dy.data[dy.off(*i)] * (x.data[x.off(*i)] - mv[p]) * iv[p] for i in groups[p]) for p in range(params)]
     r = range(params)
@@ -2266,6 +2265,9 @@ def main():
                     for what in ("stats", "infer", "apply_inv", "bwd"):
                         cases.append(("dnn batchnorm %s %s" % ("spatial" if sp else "per-activation", what),
                                       lambda sp=sp, w=what: case_bn(a, obj, tmp, sp, w, rnd)))
+                for what in ("stats", "bwd"):  # several elements a lane
+                    cases.append(("dnn batchnorm spatial %s 2x3x6x7" % what,
+                                  lambda w=what: case_bn(a, obj, tmp, 1, w, rnd, (2, 3, 6, 7))))
             elif "agx_blas_vec" in records:
                 cases = []
                 for op, label in ((0, "axpy"), (1, "scal"), (2, "copy"), (3, "swap")):

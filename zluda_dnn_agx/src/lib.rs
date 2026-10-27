@@ -1891,7 +1891,7 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut rmean), arg(&mut rvar), arg(&mut smean), arg(&mut sinv), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut factor), arg(&mut eps)]);
-        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params)
+        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params * 32)
     }
 
     pub(crate) unsafe fn cudnnBatchNormalizationForwardInference(
@@ -2015,7 +2015,7 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut dy), arg(&mut smean), arg(&mut sinv), arg(&mut dscale), arg(&mut dbias), arg(&mut sums), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut ap), arg(&mut bp)]);
-        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params)?;
+        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params * 32)?;
         let mut total = xv.total();
         let mut a = Args::shape(&xv).strides(&xv).strides(&dyv).strides(&dxv);
         a.push(spatial);
