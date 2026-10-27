@@ -532,13 +532,16 @@ def case_fft(a, obj, tmp, n, batch, stride, dist, inverse, radix2, rnd, t="f"):
     tw = pack(twiddles(n), t)
     buf = pack(interleave(data), t)
     if radix2:
+        # zluda_fft_agx's passes: radix 2 when log2(n) is odd, then radix 4 (radix2 == "r2": radix 2 only)
+        stages = n.bit_length() - 1
+        radices = [2] * stages if radix2 == "r2" else [2] * (stages % 2) + [4] * (stages // 2)
         ns = 1
-        while ns < n:
-            (buf,) = run(a, obj, "agx_fft_radix2" + sfx,
+        for r in radices:
+            (buf,) = run(a, obj, "agx_fft_radix%d" % r + sfx,
                          [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", ns),
                           ("i32", batch), ("i32", stride), ("i32", dist), ("i32", inverse)],
-                         (n // 2, batch), (min(n // 2, 64), 1), tmp)
-            ns *= 2
+                         (n // r, batch), (min(n // r, 64), 1), tmp)
+            ns *= r
     else:
         (buf,) = run(a, obj, "agx_dft" + sfx,
                      [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", batch),
@@ -2361,6 +2364,9 @@ def main():
                             ("fft%s radix2 n=16 x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 16, 3, 1, 16, inv, True, rnd, t)),
                             ("fft%s radix2 n=64 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 64, 2, 1, 64, inv, True, rnd, t)),
                             ("fft%s radix2 n=8 columns of 8x4 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 8, 4, 4, 1, inv, True, rnd, t)),
+                            ("fft%s radix2 only n=32 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 32, 2, 1, 32, inv, "r2", rnd, t)),
+                            ("fft%s n=256 x1 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 256, 1, 1, 256, inv, True, rnd, t)),
+                            ("fft%s n=32 columns of 32x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 32, 3, 3, 1, inv, True, rnd, t)),
                             ("dft%s n=12 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 12, 2, 1, 12, inv, False, rnd, t)),
                             ("dft%s n=7 columns of 7x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 7, 3, 3, 1, inv, False, rnd, t)),
                         ]
