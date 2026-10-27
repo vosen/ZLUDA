@@ -2,7 +2,7 @@ use cmake::Config;
 use core::panic;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, io};
 
@@ -52,6 +52,12 @@ fn main() {
     println!("cargo:rustc-link-search=native={libdir}");
     if amdgpu_enabled() {
         link_lld_components();
+    }
+    // Relink when a prebuilt LLVM library changes (a rebuilt backend), not only when this crate does.
+    if env::var_os("ZLUDA_LLVM_BUILD_DIR").is_some() {
+        for lib in lib_names.split_whitespace() {
+            println!("cargo:rerun-if-changed={}", Path::new(&libdir).join(lib).display());
+        }
     }
     link_llvm_components(lib_names);
     // After the LLVM libraries that use them: a -l passed as a link argument
