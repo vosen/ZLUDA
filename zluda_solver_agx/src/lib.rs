@@ -524,7 +524,13 @@ unsafe fn apply_q(
     tau: *const c_void,
     c: *mut c_void,
     ldc: c_int,
+    work: *mut c_void,
+    lwork: i64,
 ) -> R {
+    let need = apply_q_work(double, left, m, n, k);
+    if need > 0 && !work.is_null() && lwork >= need {
+        return apply_q_blocked(h, left, t, m as i64, n as i64, k as i64, r, ldr as i64, tau, c, ldc as i64, work);
+    }
     let (mut pr, mut pt, mut pc) = (r as *mut c_void, tau as *mut c_void, c);
     let (mut ldr_, mut m_, mut n_, mut k_, mut ldc_, mut left_, mut t_) = (ldr as i64, m as i64, n as i64, k as i64, ldc as i64, left as i64, t as i64);
     run(
@@ -545,6 +551,74 @@ unsafe fn apply_q(
         [if left { n_ } else { m_ }, 1],
         [32, 1],
     )
+}
+
+/// The f32 elements of workspace the blocked [`apply_q`] uses (0: it is not blocked): V (q x QR_BLOCK, q the order
+/// of Q), S and T, and two products of QR_BLOCK and the other dimension of C.
+fn apply_q_work(double: bool, left: bool, m: c_int, n: c_int, k: c_int) -> i64 {
+    let (q, other) = if left { (m as i64, n as i64) } else { (n as i64, m as i64) };
+    if double || k < 4 || q < 64 {
+        return 0;
+    }
+    QR_BLOCK * (q + 2 * QR_BLOCK + 2 * other)
+}
+
+/// op(Q) C or C op(Q) by blocks of QR_BLOCK reflectors, each Q_b = I - V T V^T (agx_qr_v, S = V^T V, agx_qr_t) applied
+/// with GEMMs on the tile kernels: on the left C -= V op(T) (V^T C), on the right C -= (C V) op(T) V^T, on the rows or
+/// columns from the block's first reflector. Q C and C Q^T take the blocks from the last, Q^T C and C Q from the first.
+#[allow(clippy::too_many_arguments)]
+unsafe fn apply_q_blocked(h: &Handle, left: bool, t: bool, m: i64, n: i64, k: i64, r: *const c_void, ldr: i64, tau: *const c_void, c: *mut c_void, ldc: i64, work: *mut c_void) -> R {
+    let (q, other) = if left { (m, n) } else { (n, m) };
+    let f = |p: *mut c_void, i: i64| (p as *mut f32).add(i as usize) as *mut c_void;
+    let (v, sm, tm) = (work, f(work, QR_BLOCK * q), f(work, QR_BLOCK * (q + QR_BLOCK)));
+    let (w, w2) = (f(work, QR_BLOCK * (q + 2 * QR_BLOCK)), f(work, QR_BLOCK * (q + 2 * QR_BLOCK + other)));
+    let gemm = |ta: bool, tb: bool, m: i64, n: i64, k: i64, alpha: f64, a: *const c_void, lda: i64, b: *const c_void, ldb: i64, beta: f64, c: *mut c_void, ldc: i64| {
+        let g = engine::Gemm {
+            types: agx_libs::Types::S,
+            ta,
+            tb,
+            m: m as u64,
+            n: n as u64,
+            k: k as u64,
+            alpha,
+            beta,
+            a,
+            lda: lda as u64,
+            stride_a: 0,
+            b,
+            ldb: ldb as u64,
+            stride_b: 0,
+            c,
+            ldc: ldc as u64,
+            stride_c: 0,
+            batch: 1,
+        };
+        engine::gemm(&g, h.stream).map_err(status)
+    };
+    let mut blocks: Vec<i64> = (0..k).step_by(QR_BLOCK as usize).collect();
+    if left != t {
+        blocks.reverse();
+    }
+    for j0 in blocks {
+        let (jb, mv) = ((k - j0).min(QR_BLOCK), q - j0);
+        let (mut pr, mut pv, mut q_, mut j0_, mut jb_, mut ldr_) = (r as *mut c_void, v, q, j0, jb, ldr);
+        run(h, c"agx_qr_v", &mut [arg(&mut pr), arg(&mut pv), arg(&mut q_), arg(&mut j0_), arg(&mut jb_), arg(&mut ldr_)], [mv, jb], [16, 4])?;
+        gemm(true, false, jb, jb, mv, 1.0, v, mv, v, mv, 0.0, sm, jb)?;
+        let (mut ps, mut pt, mut ptm) = (sm, tau as *mut c_void, tm);
+        run(h, c"agx_qr_t", &mut [arg(&mut ps), arg(&mut pt), arg(&mut ptm), arg(&mut j0_), arg(&mut jb_)], [1, 1], [1, 1])?;
+        if left {
+            let cs = f(c, j0);
+            gemm(true, false, jb, n, mv, 1.0, v, mv, cs, ldc, 0.0, w, jb)?;
+            gemm(t, false, jb, n, jb, 1.0, tm, jb, w, jb, 0.0, w2, jb)?;
+            gemm(false, false, mv, n, jb, -1.0, v, mv, w2, jb, 1.0, cs, ldc)?;
+        } else {
+            let cs = f(c, j0 * ldc);
+            gemm(false, false, m, jb, mv, 1.0, cs, ldc, v, mv, 0.0, w, m)?;
+            gemm(false, t, m, jb, jb, 1.0, w, m, tm, jb, 0.0, w2, m)?;
+            gemm(false, true, m, mv, jb, -1.0, w2, m, v, mv, 1.0, cs, ldc)?;
+        }
+    }
+    Ok(())
 }
 
 fn side(s: cublasSideMode_t) -> Result<bool, cusolverStatus_t> {
@@ -579,16 +653,18 @@ unsafe fn ormqr(
     tau: *const c_void,
     c: *mut c_void,
     ldc: c_int,
+    work: *mut c_void,
+    lwork: c_int,
     info: *mut c_int,
 ) -> R {
     let (left, t) = (side(s)?, trans(op)?);
     ormqr_check(left, m, n, k, lda, ldc)?;
     set_info(h, info, 0)?;
-    apply_q(h, double, left, t, m, n, k, a, lda, tau, c, ldc)
+    apply_q(h, double, left, t, m, n, k, a, lda, tau, c, ldc, work, lwork as i64)
 }
 
 /// orgqr: the first n columns of Q = H(0) ... H(k - 1), with the reflectors copied to the workspace (m k values)
-/// and A set to the identity first.
+/// and A set to the identity first; the rest of the workspace, when the query's size, for the blocked application.
 #[allow(clippy::too_many_arguments)]
 unsafe fn orgqr(
     h: &Handle,
@@ -613,7 +689,9 @@ unsafe fn orgqr(
     let (mut lda_, mut ldw, mut m_, mut n_, mut k_, mut no, mut yes) = (lda as i64, m as i64, m as i64, n as i64, k as i64, 0i64, 1i64);
     run(h, copy, &mut [arg(&mut src), arg(&mut lda_), arg(&mut dst), arg(&mut ldw), arg(&mut m_), arg(&mut k_), arg(&mut no)], [m_, k_], [16, 4])?;
     run(h, copy, &mut [arg(&mut src), arg(&mut lda_), arg(&mut src), arg(&mut lda_), arg(&mut m_), arg(&mut n_), arg(&mut yes)], [m_, n_], [16, 4])?;
-    apply_q(h, double, true, false, m, n, k, work, m, tau, a, lda)
+    // the rest of the workspace for the blocked application
+    let rest = (work as *mut u8).add(if double { 8 } else { 4 } * (m * k) as usize) as *mut c_void;
+    apply_q(h, double, true, false, m, n, k, work, m, tau, a, lda, rest, lwork as i64 - (m * k) as i64)
 }
 
 macro_rules! precision {
@@ -730,7 +808,12 @@ macro_rules! precision {
             ldc: c_int,
             lwork: *mut c_int,
         ) -> cusolverStatus_t {
-            done(handle(h).and_then(|_| ormqr_check(side(s)?, m, n, k, lda, ldc)).and_then(|_| trans(op)).and_then(|_| out(lwork, 1)))
+            done(
+                handle(h)
+                    .and_then(|_| ormqr_check(side(s)?, m, n, k, lda, ldc))
+                    .and_then(|_| trans(op))
+                    .and_then(|_| out(lwork, apply_q_work($double, side(s)?, m, n, k) as usize)),
+            )
         }
 
         #[cfg_attr(not(test), no_mangle)]
@@ -746,11 +829,11 @@ macro_rules! precision {
             tau: *const $ty,
             c: *mut $ty,
             ldc: c_int,
-            _work: *mut $ty,
-            _lwork: c_int,
+            work: *mut $ty,
+            lwork: c_int,
             info: *mut c_int,
         ) -> cusolverStatus_t {
-            done(handle(h).and_then(|h| ormqr(h, $double, s, op, m, n, k, a.cast(), lda, tau.cast(), c.cast(), ldc, info)))
+            done(handle(h).and_then(|h| ormqr(h, $double, s, op, m, n, k, a.cast(), lda, tau.cast(), c.cast(), ldc, work.cast(), lwork, info)))
         }
 
         #[cfg_attr(not(test), no_mangle)]
@@ -764,7 +847,7 @@ macro_rules! precision {
             _tau: *const $ty,
             lwork: *mut c_int,
         ) -> cusolverStatus_t {
-            done(handle(h).and_then(|_| dims(m, n, lda)).and_then(|_| out(lwork, (m as usize) * (k.max(0) as usize))))
+            done(handle(h).and_then(|_| dims(m, n, lda)).and_then(|_| out(lwork, (m as usize) * (k.max(0) as usize) + apply_q_work($double, true, m, n, k) as usize)))
         }
 
         #[cfg_attr(not(test), no_mangle)]

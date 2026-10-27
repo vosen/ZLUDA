@@ -1475,7 +1475,11 @@ with more than 32 rows and columns works by panels of 32 columns when given the
 workspace its `_bufferSize` now asks for (32 (m + 64 + 2n) elements): the panel
 column by column as above, then the panel's block reflector (compact WY:
 `Q = I - V T V^T`, T built from `V^T V`) applied to the rest of A with GEMMs on
-the tile kernels. A smaller workspace runs the unblocked factorization. `devInfo` reports the first zero pivot (getrf) or the first
+the tile kernels. A smaller workspace runs the unblocked factorization. The f32
+ormqr and orgqr with Q of order 64 or more and at least 4 reflectors apply Q the
+same way, by blocks of 32 reflectors (in the order Q, Q^T and the side need),
+in the workspace their `_bufferSize` now asks for (orgqr: its reflector copy
+plus that); before, one thread per column or row of C applied every reflector. `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get
