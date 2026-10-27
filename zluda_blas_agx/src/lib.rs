@@ -1259,7 +1259,7 @@ mod imp {
         // does the diagonal blocks.
         let mut nb = if T::GEMM == Types::S && n > SYRK_BLOCK && k > 0 { SYRK_BLOCK } else { 0 };
         if nb > 0 {
-            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, c as *mut c_void, ldc, T::BYTES)?;
+            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, None, c as *mut c_void, ldc, T::BYTES)?;
         }
         let (mut upper, mut t) = (upper as i64, t as i64);
         blas_launch(
@@ -1287,36 +1287,45 @@ mod imp {
         syrk_corners(upper, lo + half, size - half, out);
     }
 
-    /// The GEMMs of syrk's triangle outside the diagonal blocks: C(rows, columns) = alpha op(A)(rows) op(A)(columns)^T
-    /// + beta C for each corner.
+    /// The GEMMs of syrk's triangle outside the diagonal blocks, for each corner: C(rows, columns) = alpha
+    /// op(A)(rows) op(A)(columns)^T + beta C, or for syr2k (`b` is B and ldb) alpha op(A)(rows) op(B)(columns)^T +
+    /// beta C, then alpha op(B)(rows) op(A)(columns)^T added.
     #[allow(clippy::too_many_arguments)]
-    unsafe fn syrk_off_diagonal(h: &Handle, upper: bool, t: bool, n: i64, k: i64, alpha: f64, beta: f64, a: *const c_void, lda: i64, c: *mut c_void, ldc: i64, bytes: usize) -> cublasStatus_t {
-        // rows r.. of op(A): A's rows, or its columns when transposed
-        let rows = |r: i64| (a as *const u8).add(r as usize * if t { lda as usize } else { 1 } * bytes) as *const c_void;
+    unsafe fn syrk_off_diagonal(h: &Handle, upper: bool, t: bool, n: i64, k: i64, alpha: f64, beta: f64, a: *const c_void, lda: i64, b: Option<(*const c_void, i64)>, c: *mut c_void, ldc: i64, bytes: usize) -> cublasStatus_t {
+        // rows r.. of op(M): M's rows, or its columns when transposed
+        let rows = |m: *const c_void, ld: i64, r: i64| (m as *const u8).add(r as usize * if t { ld as usize } else { 1 } * bytes) as *const c_void;
         let mut corners = Vec::new();
         syrk_corners(upper, 0, n, &mut corners);
         for [first, second, m, n] in corners {
-            let g = engine::Gemm {
-                types: Types::S,
-                ta: t,
-                tb: !t,
-                m: m as u64,
-                n: n as u64,
-                k: k as u64,
-                alpha,
-                beta,
-                a: rows(first),
-                lda: lda as u64,
-                stride_a: 0,
-                b: rows(second),
-                ldb: lda as u64,
-                stride_b: 0,
-                c: (c as *mut u8).add((first + second * ldc) as usize * bytes) as *mut c_void,
-                ldc: ldc as u64,
-                stride_c: 0,
-                batch: 1,
-            };
-            engine::gemm(&g, h.stream).map_err(status)?;
+            // syrk: op(A) op(A)^T; syr2k: op(A) op(B)^T, then op(B) op(A)^T added
+            let (right, ldr) = b.unwrap_or((a, lda));
+            let mut products = vec![(a, lda, right, ldr, beta)];
+            if b.is_some() {
+                products.push((right, ldr, a, lda, 1.0));
+            }
+            for (l, ldl, r, ldr, beta) in products {
+                let g = engine::Gemm {
+                    types: Types::S,
+                    ta: t,
+                    tb: !t,
+                    m: m as u64,
+                    n: n as u64,
+                    k: k as u64,
+                    alpha,
+                    beta,
+                    a: rows(l, ldl, first),
+                    lda: ldl as u64,
+                    stride_a: 0,
+                    b: rows(r, ldr, second),
+                    ldb: ldr as u64,
+                    stride_b: 0,
+                    c: (c as *mut u8).add((first + second * ldc) as usize * bytes) as *mut c_void,
+                    ldc: ldc as u64,
+                    stride_c: 0,
+                    batch: 1,
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
         }
         Ok(())
     }
@@ -1336,11 +1345,16 @@ mod imp {
         if n == 0 || ((alpha.to_f64() == 0.0 || k == 0) && beta.to_f64() == 1.0) {
             return Ok(());
         }
+        // as syrk: GEMMs off the diagonal blocks for f32 above a block
+        let mut nb = if T::GEMM == Types::S && n > SYRK_BLOCK && k > 0 { SYRK_BLOCK } else { 0 };
+        if nb > 0 {
+            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, Some((b as *const c_void, ldb)), c as *mut c_void, ldc, T::BYTES)?;
+        }
         let (mut upper, mut t) = (upper as i64, t as i64);
         blas_launch(
             h,
             T::kernel(c"agx_ssyr2k", c"agx_ssyr2k_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta), arg(&mut nb)],
             [n, n],
             [16, 4],
         )
