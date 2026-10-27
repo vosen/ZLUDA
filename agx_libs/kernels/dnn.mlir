@@ -4,6 +4,9 @@
 // N x C x H x W with arbitrary element strides (0 broadcasts); a thread's
 // linear index runs over N C H W in that order. Outputs follow cuDNN's
 // blending, y = alpha r + beta y, and y is not read when beta is 0.
+// Activations, softmax and erf use the hardware's exp and log
+// (fastmath<afn>, a few units in the last place, as cuDNN's fast forms);
+// the pointwise math modes (exp, log, pow, sin, cos, tan) are precise.
 
 gpu.module @agx_dnn {
   func.func private @agx_dnn_coord(%i: index, %C: index, %H: index, %W: index)
@@ -63,7 +66,7 @@ gpu.module @agx_dnn {
     %f1 = arith.constant 1.0 : f32
     %nlog2e = arith.constant -1.44269504 : f32
     %a = arith.mulf %x, %nlog2e : f32
-    %e = math.exp2 %a : f32
+    %e = math.exp2 %a fastmath<afn> : f32
     %d = arith.addf %e, %f1 : f32
     %r = arith.divf %f1, %d : f32
     return %r : f32
@@ -80,7 +83,7 @@ gpu.module @agx_dnn {
     %ax = math.absf %x : f32
     %near = arith.cmpf olt, %ax, %small : f32
     %a = arith.mulf %x, %log2e : f32
-    %e = math.exp2 %a : f32
+    %e = math.exp2 %a fastmath<afn> : f32
     %far = arith.subf %e, %f1 : f32
     // x + x^2/2 + x^3/6 + x^4/24
     %p0 = math.fma %x, %c4, %c3 : f32
@@ -377,11 +380,11 @@ gpu.module @agx_dnn {
         %v = memref.load %x[%xo] : memref<?xf32, strided<[1]>, 1>
         %d = arith.subf %v, %m : f32
         %dl = arith.mulf %d, %log2e : f32
-        %e = math.exp2 %dl : f32
+        %e = math.exp2 %dl fastmath<afn> : f32
         %a = arith.addf %acc, %e : f32
         scf.yield %a : f32
       }
-      %l2 = math.log2 %s : f32
+      %l2 = math.log2 %s fastmath<afn> : f32
       %lns = arith.mulf %l2, %ln2 : f32
       scf.for %k = %k0 to %K step %k1 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
@@ -392,7 +395,7 @@ gpu.module @agx_dnn {
         %v = memref.load %x[%xo] : memref<?xf32, strided<[1]>, 1>
         %d = arith.subf %v, %m : f32
         %dl = arith.mulf %d, %log2e : f32
-        %e = math.exp2 %dl : f32
+        %e = math.exp2 %dl fastmath<afn> : f32
         %p = arith.divf %e, %s : f32
         %lp = arith.subf %d, %lns : f32
         %r = arith.select %log, %lp, %p : f32
@@ -454,7 +457,7 @@ gpu.module @agx_dnn {
         %d = arith.subf %vdy, %s : f32
         %plain = arith.mulf %vy, %d : f32
         %yl = arith.mulf %vy, %log2e : f32
-        %e = math.exp2 %yl : f32
+        %e = math.exp2 %yl fastmath<afn> : f32
         %es = arith.mulf %e, %s : f32
         %lg = arith.subf %vdy, %es : f32
         %r = arith.select %log, %lg, %plain : f32
@@ -1139,7 +1142,7 @@ gpu.module @agx_dnn {
     %q4 = arith.mulf %q3, %t : f32
     %x2 = arith.mulf %ax, %ax : f32
     %e0 = arith.mulf %x2, %nlog2e : f32
-    %e = math.exp2 %e0 : f32
+    %e = math.exp2 %e0 fastmath<afn> : f32
     %qe = arith.mulf %q4, %e : f32
     %r = arith.subf %f1, %qe : f32
     %neg = arith.cmpf olt, %x, %f0 : f32
@@ -1302,9 +1305,9 @@ gpu.module @agx_dnn {
     case 105 {
       // log(1 + e^(beta x)) / beta, x beyond 20 / beta linear
       %bx = arith.mulf %x, %p0 : f32
-      %e = math.exp %bx : f32
+      %e = math.exp %bx fastmath<afn> : f32
       %e1 = arith.addf %e, %f1 : f32
-      %l = math.log %e1 : f32
+      %l = math.log %e1 fastmath<afn> : f32
       %sp = arith.divf %l, %p0 : f32
       %lim = arith.constant 20.0 : f32
       %big = arith.cmpf ogt, %bx, %lim : f32
@@ -1352,7 +1355,7 @@ gpu.module @agx_dnn {
     }
     case 203 {
       %pos = arith.cmpf ogt, %x, %f0 : f32
-      %e = math.exp %x : f32
+      %e = math.exp %x fastmath<afn> : f32
       %ae = arith.mulf %p0, %e : f32
       %g = arith.select %pos, %f1, %ae : f32
       %v = arith.mulf %g, %b : f32
@@ -1367,7 +1370,7 @@ gpu.module @agx_dnn {
       %x2 = arith.mulf %x, %x : f32
       %nh = arith.constant -0.5 : f32
       %ex = arith.mulf %x2, %nh : f32
-      %pe = math.exp %ex : f32
+      %pe = math.exp %ex fastmath<afn> : f32
       %pdf = arith.mulf %pe, %rsqrt2pi : f32
       %g = math.fma %x, %pdf, %cdf : f32
       %v = arith.mulf %g, %b : f32

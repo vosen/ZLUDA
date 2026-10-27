@@ -1,7 +1,8 @@
 // GEMM epilogues of zluda_blas_agx (cuBLASLt): D[i, j] = act(D[i, j] + bias[i])
 // for column-major D, act none (0), ReLU (1) or GELU (2), in f32 for f32 and
 // f16 D. One thread per element: launch an M x N grid (x along rows). For
-// every AGX generation, like sgemm.mlir.
+// every AGX generation, like sgemm.mlir. GELU's tanh uses the hardware's exp
+// (fastmath<afn>).
 
 gpu.module @agx_blas_epilogue {
   gpu.func @agx_epilogue_f32(%d0: memref<1xf32, 1>, %bias0: memref<1xf32, 1>,
@@ -49,7 +50,7 @@ gpu.module @agx_blas_epilogue {
       %inner0 = math.fma %x3, %c044, %x1 : f32
       %y = arith.mulf %inner0, %csqrt : f32
       %e_arg = arith.mulf %y, %c2log2e : f32
-      %e = math.exp2 %e_arg : f32
+      %e = math.exp2 %e_arg fastmath<afn> : f32
       %e1 = arith.addf %e, %f1 : f32
       %q = arith.divf %f2, %e1 : f32
       %tanh = arith.subf %f1, %q : f32
@@ -109,7 +110,7 @@ gpu.module @agx_blas_epilogue {
       %inner0 = math.fma %x3, %c044, %x1 : f32
       %y = arith.mulf %inner0, %csqrt : f32
       %e_arg = arith.mulf %y, %c2log2e : f32
-      %e = math.exp2 %e_arg : f32
+      %e = math.exp2 %e_arg fastmath<afn> : f32
       %e1 = arith.addf %e, %f1 : f32
       %q = arith.divf %f2, %e1 : f32
       %tanh = arith.subf %f1, %q : f32
