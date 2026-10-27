@@ -201,10 +201,25 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
                   ("i64", K), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]),
                   ("i64", sc[1]), ("f64" if c == "d" else "f32", alpha), ("f64" if c == "d" else "f32", beta)],
-                 (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8), tmp)
+                 *gemm_launch(kernel, M, N), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta)
     return close(unpack(got, c), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)],
                  {"f": 1e-4, "d": 1e-13}.get(c, 2e-3))
+
+
+DOT_SIDE = 8
+
+
+def use_dot(m, n, k, ta, tb):
+    """agx_libs' choice of the dot kernel over the generic one (generic in agx_libs/src/lib.rs)."""
+    return k >= 32 and ((n <= DOT_SIDE and ta) or (m <= DOT_SIDE and not tb))
+
+
+def gemm_launch(kernel, M, N):
+    """Grid and threadgroup of the generic kernel (a thread per element of C) or the dot kernel (a SIMD-group)."""
+    if "_dot" in kernel:
+        return (-(-M * N * 32 // 128) * 128, 1), (128, 1)
+    return (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8)
 
 
 def split_plan(M, N, K, lda, ldb, ldc, ta=False, tb=False):
@@ -252,7 +267,8 @@ def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", 
             args = [("buf", pack(A[oa:], ab)), ("buf", pack(B[ob:], ab)), ("buf", pack(C[oc:], c), True),
                     ("i64", m), ("i64", n), ("i64", k), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]),
                     ("i64", sb[1]), ("i64", 1), ("i64", ldc), ("f32", alpha), ("f32", be)]
-            (got,) = run(a, obj, gen, args, (-(-n // 16) * 16, -(-m // 8) * 8), (16, 8), tmp)
+            kernel = gen.replace("_generic", "_dot") if use_dot(m, n, k, ta, tb) else gen
+            (got,) = run(a, obj, kernel, args, *gemm_launch(kernel, m, n), tmp)
         C[oc:] = unpack(got, c)
     want = reference(M, N, K, A, sa, B, sb, C0, (1, ldc), alpha, beta)
     return close(C, want, [i + j * ldc for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
@@ -2238,6 +2254,12 @@ def main():
                     ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
                     ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
                     ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
+                    ("dot 300x1x200 TN", lambda: case_generic(a, obj, tmp, 300, 1, 200, 1, 0, 1.0, 0.0, rnd,
+                                                              "agx_sgemm_dot")),
+                    ("dot 3x70x150 NN b=0.5", lambda: case_generic(a, obj, tmp, 3, 70, 150, 0, 0, -1.5, 0.5, rnd,
+                                                                   "agx_sgemm_dot")),
+                    ("dot 50x8x33 TT b=1", lambda: case_generic(a, obj, tmp, 50, 8, 33, 1, 1, 0.5, 1.0, rnd,
+                                                                "agx_sgemm_dot")),
                     ("split 70x130x21 b=0.5", lambda: case_split(a, obj, tmp, 70, 130, 21, 1.5, 0.5, rnd)),
                     ("split 128x77x8 b=0 (C NaN)", lambda: case_split(a, obj, tmp, 128, 77, 8, 1.0, 0.0, rnd)),
                     ("split 100x64x19", lambda: case_split(a, obj, tmp, 100, 64, 19, -1.0, 1.0, rnd)),
@@ -2247,6 +2269,10 @@ def main():
                     ("split TN 77x130x21", lambda: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, ta=True)),
                     ("split NT 130x70x13 b=0", lambda: case_split(a, obj, tmp, 130, 70, 13, 1.5, 0.0, rnd, tb=True)),
                     ("split TT 64x100x8", lambda: case_split(a, obj, tmp, 64, 100, 8, -1.0, 1.0, rnd, ta=True, tb=True)),
+                    # strips on the dot kernel: one column of C beside the tile (TN), five rows below it (NN)
+                    ("split TN 128x65x64 (dot strip)",
+                     lambda: case_split(a, obj, tmp, 128, 65, 64, 1.0, 0.5, rnd, ta=True)),
+                    ("split NN 69x128x40 (dot strip)", lambda: case_split(a, obj, tmp, 69, 128, 40, -1.0, 0.0, rnd)),
                 ]
                 dk = "agx_dgemm_generic"
                 cases += [
@@ -2256,6 +2282,8 @@ def main():
                     ("d generic 7x6x11 NT b=0 (C NaN)",
                      lambda: case_generic(a, obj, tmp, 7, 6, 11, 0, 1, 0.5, 0.0, rnd, dk, "d", "d")),
                     ("d generic 4x10x3 TT", lambda: case_generic(a, obj, tmp, 4, 10, 3, 1, 1, 1.0, -1.0, rnd, dk, "d", "d")),
+                    ("d dot 40x2x100 TN b=0.25",
+                     lambda: case_generic(a, obj, tmp, 40, 2, 100, 1, 0, 1.0, 0.25, rnd, "agx_dgemm_dot", "d", "d")),
                 ]
             else:
                 cases = []
@@ -2271,6 +2299,9 @@ def main():
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 21, 13, 9, 1, 0, 1.0, 0.5, rnd, gk, "e", c)),
                         ("h generic C %s 6x30x17 NT b=0" % ct,
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 6, 30, 17, 0, 1, -1.0, 0.0, rnd, gk, "e", c)),
+                        ("h dot C %s 64x1x96 TN b=0.5" % ct,
+                         lambda gk=gk, c=c: case_generic(a, obj, tmp, 64, 1, 96, 1, 0, 1.0, 0.5, rnd,
+                                                         gk.replace("_generic", "_dot"), "e", c)),
                         ("h split C %s 70x130x21 b=0.5" % ct,
                          lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c)),
                         ("h tile64 ta C %s 64x64x16" % ct,

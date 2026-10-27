@@ -71,6 +71,8 @@ pub enum Plan {
     Tile { swap: bool, trans: [bool; 2], dims: [u64; 6], groups: u32 },
     /// `agx_sgemm_generic`: (a, b, c) then M, N, K and the (row, column) element strides of op(A), op(B) and C.
     Generic { dims: [u64; 9], grid: [u32; 2] },
+    /// `agx_sgemm_dot`: the arguments of `Generic`, a SIMD-group per element of C (`groups` threadgroups of 128).
+    Dot { dims: [u64; 9], groups: u32 },
 }
 
 /// One launch of a GEMM: its plan, the element offsets of its A, B and C from the GEMM's, and whether it adds to C
@@ -84,12 +86,22 @@ pub struct Part {
 
 pub const GENERIC_BLOCK: [u32; 2] = [16, 8];
 
+/// Up to this many columns (or rows) of C, with op(A) (or op(B)) contiguous along K, a product runs on the dot kernel.
+pub const DOT_SIDE: u64 = 8;
+
 fn generic(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64) -> Plan {
     // element (i, k) of op(A): A[i + k lda], or A[k + i lda] transposed; (k, j) of op(B) likewise; C[i + j ldc]
     let sa = if ta { [lda, 1] } else { [1, lda] };
     let sb = if tb { [ldb, 1] } else { [1, ldb] };
+    let dims = [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc];
+    // A GEMV-shaped product: a thread per element of C would leave most lanes idle (or read K apart from each
+    // other); the dot kernel's lanes read the long operand along K together.
+    let threads = m.saturating_mul(n).saturating_mul(32);
+    if k >= 32 && ((n <= DOT_SIDE && ta) || (m <= DOT_SIDE && !tb)) && threads.div_ceil(128) <= u32::MAX as u64 {
+        return Plan::Dot { dims, groups: threads.div_ceil(128) as u32 };
+    }
     Plan::Generic {
-        dims: [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc],
+        dims,
         grid: [n.div_ceil(GENERIC_BLOCK[0] as u64) as u32, m.div_ceil(GENERIC_BLOCK[1] as u64) as u32],
     }
 }
@@ -255,6 +267,7 @@ pub mod engine {
         /// By `Types::index`, then whether the kernel reads A and B transposed.
         tile: [[[CUfunction; 2]; 2]; 3],
         generic: [CUfunction; 4],
+        dot: [CUfunction; 4],
         /// f32 and f16 D.
         epilogue: [CUfunction; 2],
     }
@@ -298,6 +311,12 @@ pub mod engine {
                 get(hm, b"agx_hgemm_generic_cf16\0")?,
                 get(hm, b"agx_hgemm_generic_cf32\0")?,
                 get(sm, b"agx_dgemm_generic\0")?,
+            ],
+            dot: [
+                get(sm, b"agx_sgemm_dot\0")?,
+                get(hm, b"agx_hgemm_dot_cf16\0")?,
+                get(hm, b"agx_hgemm_dot_cf32\0")?,
+                get(sm, b"agx_dgemm_dot\0")?,
             ],
             epilogue: [get(em, b"agx_epilogue_f32\0")?, get(em, b"agx_epilogue_f16\0")?],
         };
@@ -433,6 +452,7 @@ pub mod engine {
                     (kernels.tile[types.index()][trans[0] as usize][trans[1] as usize], &dims[..], [*groups, 1], [128, 1])
                 }
                 Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
+                Plan::Dot { dims, groups } => (kernels.dot[types.index()], &dims[..], [*groups, 1], [128, 1]),
             };
             let mut dims = dims.to_vec();
             let beta = if part.accumulate { 1.0 } else { g.beta };
@@ -526,7 +546,8 @@ mod tests {
                     }
                 }
             }
-            Plan::Generic { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. } => {
+            Plan::Generic { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. }
+            | Plan::Dot { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. } => {
                 for i in 0..*m as usize {
                     for j in 0..*n as usize {
                         let s: f32 = (0..*k as usize)
@@ -597,9 +618,10 @@ mod tests {
     fn the_fat_objects_have_the_kernels_for_the_m2_max() {
         for (fat, names) in [
             (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_tile64_ta", "agx_sgemm_tile64_tb", "agx_sgemm_tile64_tatb",
-                      "agx_sgemm_generic", "agx_dgemm_generic"][..]),
+                      "agx_sgemm_generic", "agx_dgemm_generic", "agx_sgemm_dot", "agx_dgemm_dot"][..]),
             (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_tile64_cf16_tatb",
-                      "agx_hgemm_tile64_cf32_tb", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
+                      "agx_hgemm_tile64_cf32_tb", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32",
+                      "agx_hgemm_dot_cf16", "agx_hgemm_dot_cf32"][..]),
         ] {
             assert_eq!(&fat[..8], b"ZAGXFAT1");
             let s = String::from_utf8_lossy(fat);

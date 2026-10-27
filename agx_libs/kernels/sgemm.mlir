@@ -905,4 +905,224 @@ gpu.module @agx_blas {
     }
     gpu.return
   }
+
+  // As agx_sgemm_generic, with a SIMD-group per element of C whose lanes split K
+  // (gen_dot_gemm.py): for C with a side of at most 8, A or B contiguous along K.
+  gpu.func @agx_sgemm_dot(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>,
+      %c0: memref<1xf32, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f32, %beta: f32) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %i32 = arith.constant 32 : index
+    %i96 = arith.constant 96 : index
+    %i127 = arith.constant 127 : index
+    %i128 = arith.constant 128 : index
+    %big = arith.constant 4611686018427387904 : index
+    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %f0 = arith.constant 0.0 : f32
+    %g = gpu.global_id x
+    %s = arith.divui %g, %i32 : index
+    %lane = gpu.lane_id
+    %MN = arith.muli %M, %N : index
+    // the same for the whole SIMD-group, which reduces together
+    %live = arith.cmpi ult, %s, %MN : index
+    scf.if %live {
+      %i = arith.divui %s, %N : index
+      %j = arith.remui %s, %N : index
+      %ia = arith.muli %i, %sar : index
+      %jb = arith.muli %j, %sbc : index
+      // four elements a lane at a time (four loads of each operand in flight), while k + 96 < K
+      %K96 = arith.maxui %K, %i96 : index
+      %ub4 = arith.subi %K96, %i96 : index
+      %s4:4 = scf.for %k = %lane to %ub4 step %i128
+          iter_args(%c0_ = %f0, %c1_ = %f0, %c2_ = %f0, %c3_ = %f0) -> (f32, f32, f32, f32) {
+        %k1 = arith.addi %k, %i32 : index
+        %k2 = arith.addi %k1, %i32 : index
+        %k3 = arith.addi %k2, %i32 : index
+        %ka_d0 = arith.muli %k, %sac : index
+        %kb_d0 = arith.muli %k, %sbr : index
+        %pa_d0 = arith.addi %ia, %ka_d0 : index
+        %pb_d0 = arith.addi %kb_d0, %jb : index
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf32, strided<[1]>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf32, strided<[1]>, 1>
+        %d0 = math.fma %x_d0, %y_d0, %c0_ : f32
+        %ka_d1 = arith.muli %k1, %sac : index
+        %kb_d1 = arith.muli %k1, %sbr : index
+        %pa_d1 = arith.addi %ia, %ka_d1 : index
+        %pb_d1 = arith.addi %kb_d1, %jb : index
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf32, strided<[1]>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf32, strided<[1]>, 1>
+        %d1 = math.fma %x_d1, %y_d1, %c1_ : f32
+        %ka_d2 = arith.muli %k2, %sac : index
+        %kb_d2 = arith.muli %k2, %sbr : index
+        %pa_d2 = arith.addi %ia, %ka_d2 : index
+        %pb_d2 = arith.addi %kb_d2, %jb : index
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf32, strided<[1]>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf32, strided<[1]>, 1>
+        %d2 = math.fma %x_d2, %y_d2, %c2_ : f32
+        %ka_d3 = arith.muli %k3, %sac : index
+        %kb_d3 = arith.muli %k3, %sbr : index
+        %pa_d3 = arith.addi %ia, %ka_d3 : index
+        %pb_d3 = arith.addi %kb_d3, %jb : index
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf32, strided<[1]>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf32, strided<[1]>, 1>
+        %d3 = math.fma %x_d3, %y_d3, %c3_ : f32
+        scf.yield %d0, %d1, %d2, %d3 : f32, f32, f32, f32
+      }
+      // the rest, one element a lane at a time, from the first k the loop above did not reach
+      %after = arith.cmpi ugt, %ub4, %lane : index
+      %span = arith.subi %ub4, %lane : index
+      %span1 = arith.addi %span, %i127 : index
+      %trips = arith.divui %span1, %i128 : index
+      %done = arith.muli %trips, %i128 : index
+      %krest0 = arith.addi %lane, %done : index
+      %krest = arith.select %after, %krest0, %lane : index
+      %s01 = arith.addf %s4#0, %s4#1 : f32
+      %s23 = arith.addf %s4#2, %s4#3 : f32
+      %sum0 = arith.addf %s01, %s23 : f32
+      %part = scf.for %k = %krest to %K step %i32 iter_args(%a = %sum0) -> f32 {
+        %ka_a1 = arith.muli %k, %sac : index
+        %kb_a1 = arith.muli %k, %sbr : index
+        %pa_a1 = arith.addi %ia, %ka_a1 : index
+        %pb_a1 = arith.addi %kb_a1, %jb : index
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf32, strided<[1]>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf32, strided<[1]>, 1>
+        %a1 = math.fma %x_a1, %y_a1, %a : f32
+        scf.yield %a1 : f32
+      }
+      %sum = gpu.subgroup_reduce add %part : (f32) -> f32
+      %first = arith.cmpi eq, %lane, %i0 : index
+      scf.if %first {
+        %ic = arith.muli %i, %scr : index
+        %jc = arith.muli %j, %scc : index
+        %pc = arith.addi %ic, %jc : index
+        %scaled = arith.mulf %sum, %alpha : f32
+        %no_c = arith.cmpf oeq, %beta, %f0 : f32
+        %out = scf.if %no_c -> f32 {
+          scf.yield %scaled : f32
+        } else {
+          %old = memref.load %C[%pc] : memref<?xf32, strided<[1]>, 1>
+          %r = math.fma %old, %beta, %scaled : f32
+          scf.yield %r : f32
+        }
+        memref.store %out, %C[%pc] : memref<?xf32, strided<[1]>, 1>
+      }
+    }
+    gpu.return
+  }
+
+  // As agx_dgemm_generic, with a SIMD-group per element of C whose lanes split K
+  // (gen_dot_gemm.py): for C with a side of at most 8, A or B contiguous along K.
+  gpu.func @agx_dgemm_dot(%a0: memref<1xf64, 1>, %b0: memref<1xf64, 1>,
+      %c0: memref<1xf64, 1>, %M: index, %N: index, %K: index, %sar: index, %sac: index,
+      %sbr: index, %sbc: index, %scr: index, %scc: index, %alpha: f64, %beta: f64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %i32 = arith.constant 32 : index
+    %i96 = arith.constant 96 : index
+    %i127 = arith.constant 127 : index
+    %i128 = arith.constant 128 : index
+    %big = arith.constant 4611686018427387904 : index
+    %A = memref.reinterpret_cast %a0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %B = memref.reinterpret_cast %b0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %C = memref.reinterpret_cast %c0 to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf64, 1> to memref<?xf64, strided<[1]>, 1>
+    %f0 = arith.constant 0.0 : f64
+    %g = gpu.global_id x
+    %s = arith.divui %g, %i32 : index
+    %lane = gpu.lane_id
+    %MN = arith.muli %M, %N : index
+    // the same for the whole SIMD-group, which reduces together
+    %live = arith.cmpi ult, %s, %MN : index
+    scf.if %live {
+      %i = arith.divui %s, %N : index
+      %j = arith.remui %s, %N : index
+      %ia = arith.muli %i, %sar : index
+      %jb = arith.muli %j, %sbc : index
+      // four elements a lane at a time (four loads of each operand in flight), while k + 96 < K
+      %K96 = arith.maxui %K, %i96 : index
+      %ub4 = arith.subi %K96, %i96 : index
+      %s4:4 = scf.for %k = %lane to %ub4 step %i128
+          iter_args(%c0_ = %f0, %c1_ = %f0, %c2_ = %f0, %c3_ = %f0) -> (f64, f64, f64, f64) {
+        %k1 = arith.addi %k, %i32 : index
+        %k2 = arith.addi %k1, %i32 : index
+        %k3 = arith.addi %k2, %i32 : index
+        %ka_d0 = arith.muli %k, %sac : index
+        %kb_d0 = arith.muli %k, %sbr : index
+        %pa_d0 = arith.addi %ia, %ka_d0 : index
+        %pb_d0 = arith.addi %kb_d0, %jb : index
+        %x_d0 = memref.load %A[%pa_d0] : memref<?xf64, strided<[1]>, 1>
+        %y_d0 = memref.load %B[%pb_d0] : memref<?xf64, strided<[1]>, 1>
+        %d0 = math.fma %x_d0, %y_d0, %c0_ : f64
+        %ka_d1 = arith.muli %k1, %sac : index
+        %kb_d1 = arith.muli %k1, %sbr : index
+        %pa_d1 = arith.addi %ia, %ka_d1 : index
+        %pb_d1 = arith.addi %kb_d1, %jb : index
+        %x_d1 = memref.load %A[%pa_d1] : memref<?xf64, strided<[1]>, 1>
+        %y_d1 = memref.load %B[%pb_d1] : memref<?xf64, strided<[1]>, 1>
+        %d1 = math.fma %x_d1, %y_d1, %c1_ : f64
+        %ka_d2 = arith.muli %k2, %sac : index
+        %kb_d2 = arith.muli %k2, %sbr : index
+        %pa_d2 = arith.addi %ia, %ka_d2 : index
+        %pb_d2 = arith.addi %kb_d2, %jb : index
+        %x_d2 = memref.load %A[%pa_d2] : memref<?xf64, strided<[1]>, 1>
+        %y_d2 = memref.load %B[%pb_d2] : memref<?xf64, strided<[1]>, 1>
+        %d2 = math.fma %x_d2, %y_d2, %c2_ : f64
+        %ka_d3 = arith.muli %k3, %sac : index
+        %kb_d3 = arith.muli %k3, %sbr : index
+        %pa_d3 = arith.addi %ia, %ka_d3 : index
+        %pb_d3 = arith.addi %kb_d3, %jb : index
+        %x_d3 = memref.load %A[%pa_d3] : memref<?xf64, strided<[1]>, 1>
+        %y_d3 = memref.load %B[%pb_d3] : memref<?xf64, strided<[1]>, 1>
+        %d3 = math.fma %x_d3, %y_d3, %c3_ : f64
+        scf.yield %d0, %d1, %d2, %d3 : f64, f64, f64, f64
+      }
+      // the rest, one element a lane at a time, from the first k the loop above did not reach
+      %after = arith.cmpi ugt, %ub4, %lane : index
+      %span = arith.subi %ub4, %lane : index
+      %span1 = arith.addi %span, %i127 : index
+      %trips = arith.divui %span1, %i128 : index
+      %done = arith.muli %trips, %i128 : index
+      %krest0 = arith.addi %lane, %done : index
+      %krest = arith.select %after, %krest0, %lane : index
+      %s01 = arith.addf %s4#0, %s4#1 : f64
+      %s23 = arith.addf %s4#2, %s4#3 : f64
+      %sum0 = arith.addf %s01, %s23 : f64
+      %part = scf.for %k = %krest to %K step %i32 iter_args(%a = %sum0) -> f64 {
+        %ka_a1 = arith.muli %k, %sac : index
+        %kb_a1 = arith.muli %k, %sbr : index
+        %pa_a1 = arith.addi %ia, %ka_a1 : index
+        %pb_a1 = arith.addi %kb_a1, %jb : index
+        %x_a1 = memref.load %A[%pa_a1] : memref<?xf64, strided<[1]>, 1>
+        %y_a1 = memref.load %B[%pb_a1] : memref<?xf64, strided<[1]>, 1>
+        %a1 = math.fma %x_a1, %y_a1, %a : f64
+        scf.yield %a1 : f64
+      }
+      %sum = gpu.subgroup_reduce add %part : (f64) -> f64
+      %first = arith.cmpi eq, %lane, %i0 : index
+      scf.if %first {
+        %ic = arith.muli %i, %scr : index
+        %jc = arith.muli %j, %scc : index
+        %pc = arith.addi %ic, %jc : index
+        %scaled = arith.mulf %sum, %alpha : f64
+        %no_c = arith.cmpf oeq, %beta, %f0 : f64
+        %out = scf.if %no_c -> f64 {
+          scf.yield %scaled : f64
+        } else {
+          %old = memref.load %C[%pc] : memref<?xf64, strided<[1]>, 1>
+          %r = math.fma %old, %beta, %scaled : f64
+          scf.yield %r : f64
+        }
+        memref.store %out, %C[%pc] : memref<?xf64, strided<[1]>, 1>
+      }
+    }
+    gpu.return
+  }
 }
