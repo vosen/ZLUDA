@@ -523,6 +523,112 @@ pub mod engine {
         Gelu,
     }
 
+    /// Column-major f32 `op(A) X = alpha B` (left) or `X op(A) = alpha B` (right), X overwriting B (m x n), for a
+    /// triangular A (`upper`, `unit` diagonal), as cuBLAS's trsm. The arguments must be valid.
+    pub struct Trsm {
+        pub right: bool,
+        pub upper: bool,
+        pub trans: bool,
+        pub unit: bool,
+        pub m: i64,
+        pub n: i64,
+        pub alpha: f32,
+        pub a: *const c_void,
+        pub lda: i64,
+        pub b: *mut c_void,
+        pub ldb: i64,
+    }
+
+    /// The rows of op(A) [`trsm`] solves at once.
+    pub const TRSM_BLOCK: i64 = 64;
+
+    /// trsm on BLAS's agx_strsm (one thread per column of B, or per row on the right side). Above TRSM_BLOCK rows of
+    /// A, by blocks of TRSM_BLOCK rows of op(A), each solved that way and then taken out of the rest of B with a GEMM
+    /// on the tile kernels; the first GEMM also applies alpha to the rest.
+    pub unsafe fn trsm(t: &Trsm, stream: CUstream) -> Result<(), Error> {
+        if t.m == 0 || t.n == 0 {
+            return Ok(());
+        }
+        let f = function(BLAS, c"agx_strsm")?;
+        // the per-thread system is lower triangular when an even number of the stored lower triangle, the
+        // transpose and the right side flip it
+        let lower = (!t.upper ^ t.trans ^ t.right) as i64;
+        let solve = |a: *const c_void, b: *mut c_void, m: i64, n: i64, alpha: f32| {
+            let (mut a, mut b, mut m, mut n, mut alpha) = (a, b, m, n, alpha);
+            let (mut lda, mut ldb, mut lower) = (t.lda, t.ldb, lower);
+            let (mut right, mut upper, mut trans, mut unit) = (t.right as i64, t.upper as i64, t.trans as i64, t.unit as i64);
+            let threads = if t.right { m } else { n } as u64;
+            let mut params = [&mut a as *mut _ as *mut c_void, &mut b as *mut _ as *mut c_void, &mut m as *mut _ as *mut c_void,
+                              &mut n as *mut _ as *mut c_void, &mut lda as *mut _ as *mut c_void, &mut ldb as *mut _ as *mut c_void,
+                              &mut right as *mut _ as *mut c_void, &mut upper as *mut _ as *mut c_void,
+                              &mut trans as *mut _ as *mut c_void, &mut unit as *mut _ as *mut c_void,
+                              &mut lower as *mut _ as *mut c_void, &mut alpha as *mut _ as *mut c_void];
+            let groups = u32::try_from(threads.div_ceil(64)).map_err(|_| Error::Failed)?;
+            launch_kernel(f, [groups, 1], [64, 1], &mut params, stream)
+        };
+        let na = if t.right { t.n } else { t.m };
+        if na <= TRSM_BLOCK {
+            return solve(t.a, t.b, t.m, t.n, t.alpha);
+        }
+        let op_lower = !t.upper ^ t.trans;
+        // op(A) from row r and column c, and whether the GEMM transposes it
+        let op_a = |r: i64, c: i64| (t.a.byte_add(4 * if t.trans { c + r * t.lda } else { r + c * t.lda } as usize), t.trans);
+        let at_b = |r: i64, c: i64| t.b.byte_add(4 * (r + c * t.ldb) as usize);
+        for (i, [k0, k1, u0, u1]) in trsm_steps(na, if t.right { !op_lower } else { op_lower }).into_iter().enumerate() {
+            let (bs, first) = (k1 - k0, i == 0);
+            let diagonal = t.a.byte_add(4 * (k0 * (t.lda + 1)) as usize);
+            if t.right {
+                solve(diagonal, at_b(0, k0), t.m, bs, if first { t.alpha } else { 1.0 })?;
+            } else {
+                solve(diagonal, at_b(k0, 0), bs, t.n, if first { t.alpha } else { 1.0 })?;
+            }
+            if u1 == u0 {
+                continue;
+            }
+            // left: B(u, :) -= op(A)(u, k) X(k, :); right: B(:, u) -= X(:, k) op(A)(k, u)
+            let ((pa, ta), (pb, tb), (m, n), pc, (lda, ldb)) = if t.right {
+                ((at_b(0, k0) as *const c_void, false), op_a(k0, u0), (t.m, u1 - u0), at_b(0, u0), (t.ldb, t.lda))
+            } else {
+                (op_a(u0, k0), (at_b(k0, 0) as *const c_void, false), (u1 - u0, t.n), at_b(u0, 0), (t.lda, t.ldb))
+            };
+            gemm(
+                &Gemm {
+                    types: Types::S,
+                    ta,
+                    tb,
+                    m: m as u64,
+                    n: n as u64,
+                    k: bs as u64,
+                    alpha: -1.0,
+                    beta: if first { t.alpha as f64 } else { 1.0 },
+                    a: pa,
+                    lda: lda as u64,
+                    stride_a: 0,
+                    b: pb,
+                    ldb: ldb as u64,
+                    stride_b: 0,
+                    c: pc,
+                    ldc: t.ldb as u64,
+                    stride_c: 0,
+                    batch: 1,
+                },
+                stream,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The steps of a blocked trsm over the n rows of op(A): [first, end) of the block solved, then [first, end) of
+    /// the rows that GEMM updates with it (all the blocks not yet solved). Forward from the first block (op(A)
+    /// lower on the left, upper on the right) or backward from the last.
+    pub fn trsm_steps(n: i64, forward: bool) -> Vec<[i64; 4]> {
+        let mut blocks: Vec<(i64, i64)> = (0..n).step_by(TRSM_BLOCK as usize).map(|k| (k, (k + TRSM_BLOCK).min(n))).collect();
+        if !forward {
+            blocks.reverse();
+        }
+        blocks.into_iter().map(|(k0, k1)| if forward { [k0, k1, k1, n] } else { [k0, k1, 0, k0] }).collect()
+    }
+
     /// `D[i, j] = act(D[i, j] + bias[i])` for column-major m x n matrices (bias has m elements of D's type, or none),
     /// for `batch` matrices `stride` elements apart, with biases `bias_stride` elements apart (0: one bias).
     #[allow(clippy::too_many_arguments)]
@@ -614,6 +720,28 @@ mod tests {
                     })
                     .sum();
                 c[i + j * ldc] = alpha * s + if beta == 0.0 { 0.0 } else { beta * c[i + j * ldc] };
+            }
+        }
+    }
+
+    #[test]
+    fn trsm_steps_solve_each_block_once_and_update_the_rest() {
+        for n in [65, 128, 129, 300] {
+            for forward in [false, true] {
+                let steps = engine::trsm_steps(n, forward);
+                let mut solved = vec![false; n as usize];
+                for [k0, k1, u0, u1] in steps {
+                    assert!(k1 - k0 <= engine::TRSM_BLOCK && k0 % engine::TRSM_BLOCK == 0);
+                    for r in k0..k1 {
+                        assert!(!solved[r as usize]);
+                        solved[r as usize] = true;
+                    }
+                    // the update covers exactly the rows not solved yet
+                    for r in 0..n {
+                        assert_eq!((u0..u1).contains(&r), !solved[r as usize], "n {n} forward {forward} row {r}");
+                    }
+                }
+                assert!(solved.iter().all(|&s| s));
             }
         }
     }

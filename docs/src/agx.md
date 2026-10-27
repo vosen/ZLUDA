@@ -1450,7 +1450,9 @@ products summed in another order). The f32 potrf above 64 rows does the same
 by panels, the rest of the triangle updated with each panel by a syrk on the
 tile GEMM (the other triangle is not written); after a non-positive minor the
 later kernels do nothing, but that panel's update still reaches the trailing
-matrix. `devInfo` reports the first zero pivot (getrf) or the first
+matrix. The f32 getrs and potrs above 64 rows solve on the blocked trsm (shared
+with cuBLAS in `agx_libs::engine::trsm`), with the row interchanges applied to B
+by their own kernel, instead of one thread per right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get

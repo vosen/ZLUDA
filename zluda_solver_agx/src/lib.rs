@@ -119,6 +119,20 @@ unsafe fn out(p: *mut c_int, v: usize) -> R {
     Ok(())
 }
 
+/// The f32 triangular solves `op(T) X = B` (T n x n, X overwriting the n x nrhs B), on the blocked BLAS trsm, in
+/// order: (upper, trans, unit) for each.
+unsafe fn solves(h: &Handle, n: i64, nrhs: i64, a: *const c_void, lda: i64, b: *mut c_void, ldb: i64, steps: &[(bool, bool, bool)]) -> R {
+    for &(upper, trans, unit) in steps {
+        let t = engine::Trsm { right: false, upper, trans, unit, m: n, n: nrhs, alpha: 1.0, a, lda, b, ldb };
+        engine::trsm(&t, h.stream).map_err(status)?;
+    }
+    Ok(())
+}
+
+/// Above this many rows of A, the f32 getrs and potrs solve on the blocked BLAS trsm instead of one thread per
+/// right-hand side.
+const SOLVE_BLOCKED_MIN: i64 = 64;
+
 /// The columns of a panel of the blocked f32 getrf.
 const LU_BLOCK: i64 = 64;
 
@@ -182,31 +196,9 @@ unsafe fn getrf(h: &Handle, double: bool, m: c_int, n: c_int, a: *mut c_void, ld
         }
         // the panel j0..j1 is factored: U12 = L11^-1 A12 (unit lower), then A22 -= A21 U12
         let (jb, rest) = (j1 - j0, n_ - j1);
-        let (mut l11, mut a12) = (at(j0, j0), at(j0, j1));
-        let (mut sm, mut sn, mut lda_l, mut ldb_l) = (jb, rest, lda_, lda_);
-        // left side, stored lower, not transposed, unit diagonal (so the per-thread system is lower), alpha 1
-        let (mut right, mut upper, mut trans, mut unit, mut lower, mut alpha) = (0i64, 0i64, 0i64, 1i64, 1i64, 1.0f32);
-        run_in(
-            h,
-            agx_libs::BLAS,
-            c"agx_strsm",
-            &mut [
-                arg(&mut l11),
-                arg(&mut a12),
-                arg(&mut sm),
-                arg(&mut sn),
-                arg(&mut lda_l),
-                arg(&mut ldb_l),
-                arg(&mut right),
-                arg(&mut upper),
-                arg(&mut trans),
-                arg(&mut unit),
-                arg(&mut lower),
-                arg(&mut alpha),
-            ],
-            [rest, 1],
-            [64, 1],
-        )?;
+        let a12 = at(j0, j1);
+        let u12 = engine::Trsm { right: false, upper: false, trans: false, unit: true, m: jb, n: rest, alpha: 1.0, a: at(j0, j0), lda: lda_, b: a12, ldb: lda_ };
+        engine::trsm(&u12, h.stream).map_err(status)?;
         if m_ > j1 {
             let g = engine::Gemm {
                 types: agx_libs::Types::S,
@@ -256,8 +248,27 @@ unsafe fn getrs(
     set_info(h, info, 0)?;
     let (mut pa, mut pi, mut pb) = (a as *mut c_void, ipiv as *mut c_void, b);
     let (mut n_, mut lda_, mut nrhs_, mut ldb_, mut t_) = (n as i64, lda as i64, nrhs as i64, ldb as i64, t as i64);
-    if n == 0 {
+    if n == 0 || nrhs == 0 {
         return Ok(());
+    }
+    if !double && n_ > SOLVE_BLOCKED_MIN {
+        // P A = L U: X = U^-1 L^-1 P B, or for A^T X = B, X = P^T L^-T U^-T B
+        let pivots = |reverse: i64| {
+            let (mut pi, mut pb, mut n_, mut nrhs_, mut ldb_, mut reverse) = (pi, pb, n_, nrhs_, ldb_, reverse);
+            run(
+                h,
+                c"agx_getrs_pivots",
+                &mut [arg(&mut pi), arg(&mut pb), arg(&mut n_), arg(&mut nrhs_), arg(&mut ldb_), arg(&mut reverse)],
+                [nrhs_, 1],
+                [32, 1],
+            )
+        };
+        if t {
+            solves(h, n_, nrhs_, a, lda_, b, ldb_, &[(true, true, false), (false, true, true)])?;
+            return pivots(1);
+        }
+        pivots(0)?;
+        return solves(h, n_, nrhs_, a, lda_, b, ldb_, &[(false, false, true), (true, false, false)]);
     }
     run(
         h,
@@ -387,8 +398,13 @@ unsafe fn potrs(
     dims(n, n, lda)?;
     dims(n, nrhs, ldb)?;
     set_info(h, info, 0)?;
-    if n == 0 {
+    if n == 0 || nrhs == 0 {
         return Ok(());
+    }
+    if !double && n as i64 > SOLVE_BLOCKED_MIN {
+        // A = L L^T: X = L^-T L^-1 B; A = U^T U: X = U^-1 U^-T B
+        let steps = if up { [(true, true, false), (true, false, false)] } else { [(false, false, false), (false, true, false)] };
+        return solves(h, n as i64, nrhs as i64, a, lda as i64, b, ldb as i64, &steps);
     }
     let (mut pa, mut pb) = (a as *mut c_void, b);
     let (mut n_, mut lda_, mut nrhs_, mut ldb_, mut up_) = (n as i64, lda as i64, nrhs as i64, ldb as i64, up as i64);

@@ -1029,6 +1029,18 @@ def case_solver(a, obj, tmp, what, rnd):
         if bad:
             return bad[:4]
         trans = what == "lu_t"
+        # the interchanges alone (the blocked getrs): in order, then in reverse back to B
+        (pb,) = run(a, obj, K("agx_getrs_pivots"), [("buf", ipiv), ("buf", bbuf, True), ("i64", n), ("i64", nrhs), ("i64", ldb),
+                                                  ("i64", 0)], (32, 1), (32, 1), tmp)
+        PB = from_col(unpack(bbuf, t), n, nrhs, ldb)
+        for k, p in enumerate(unpack(ipiv, "i")):
+            PB[k], PB[p - 1] = PB[p - 1], PB[k]
+        if from_col(unpack(pb, t), n, nrhs, ldb) != PB:
+            return ["agx_getrs_pivots"]
+        (back,) = run(a, obj, K("agx_getrs_pivots"), [("buf", ipiv), ("buf", pb, True), ("i64", n), ("i64", nrhs), ("i64", ldb),
+                                                    ("i64", 1)], (32, 1), (32, 1), tmp)
+        if back != bbuf:
+            return ["agx_getrs_pivots reverse"]
         (x,) = run(a, obj, K("agx_getrs"), [("buf", buf), ("i64", n), ("i64", lda), ("buf", ipiv), ("buf", bbuf, True),
                                            ("i64", nrhs), ("i64", ldb), ("i64", int(trans))], (32, 1), (32, 1), tmp)
         X = from_col(unpack(x, t), n, nrhs, ldb)

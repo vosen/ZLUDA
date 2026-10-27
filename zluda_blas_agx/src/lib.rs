@@ -864,7 +864,6 @@ mod imp {
         unsafe fn scalar(h: &Handle, p: *const c_void) -> Result<Self, cublasError_t>;
         fn to_f64(self) -> f64;
         fn scalar_zero() -> Self;
-        fn one() -> Self;
         fn negate(self) -> Self;
         /// The f32 kernel, or its f64 copy.
         fn kernel(f32_name: &'static CStr, f64_name: &'static CStr) -> &'static CStr;
@@ -880,9 +879,6 @@ mod imp {
         }
         fn scalar_zero() -> f32 {
             0.0
-        }
-        fn one() -> f32 {
-            1.0
         }
         fn negate(self) -> f32 {
             -self
@@ -902,9 +898,6 @@ mod imp {
         }
         fn scalar_zero() -> f64 {
             0.0
-        }
-        fn one() -> f64 {
-            1.0
         }
         fn negate(self) -> f64 {
             -self
@@ -1515,73 +1508,12 @@ mod imp {
                 [64, 1],
             )
         };
-        let na = if right { n } else { m };
-        if T::GEMM != Types::S || na <= TRSM_BLOCK {
+        if T::GEMM != Types::S {
             return solve(h, a, b, m, n, alpha);
         }
-        // f32 with A above a block: by blocks of TRSM_BLOCK rows of op(A), each solved on its own, then taken out of
-        // the rest of B with a GEMM on the tile kernels. The first GEMM also applies alpha to the rest.
-        let op_lower = !upper ^ t;
-        let bytes = T::BYTES;
-        // op(A) from row r and column c, and whether the GEMM transposes it
-        let op_a = |r: i64, c: i64| ((a as *const u8).add(if t { c + r * lda } else { r + c * lda } as usize * bytes) as *const c_void, t);
-        let at_b = |r: i64, c: i64| (b as *mut u8).add((r + c * ldb) as usize * bytes) as *mut c_void;
-        for (i, [k0, k1, u0, u1]) in trsm_steps(na, if right { !op_lower } else { op_lower }).into_iter().enumerate() {
-            let (bs, first) = (k1 - k0, i == 0);
-            let step_alpha = if first { alpha } else { T::one() };
-            let diagonal = (a as *const u8).add((k0 * (lda + 1)) as usize * bytes) as *const T;
-            if right {
-                solve(h, diagonal, at_b(0, k0) as *mut T, m, bs, step_alpha)?;
-            } else {
-                solve(h, diagonal, at_b(k0, 0) as *mut T, bs, n, step_alpha)?;
-            }
-            if u1 == u0 {
-                continue;
-            }
-            // left: B(u, :) -= op(A)(u, k) X(k, :); right: B(:, u) -= X(:, k) op(A)(k, u)
-            let ((pa, ta), (pb, tb), (mm, nn), pc) = if right {
-                ((at_b(0, k0) as *const c_void, false), op_a(k0, u0), (m, u1 - u0), at_b(0, u0))
-            } else {
-                (op_a(u0, k0), (at_b(k0, 0) as *const c_void, false), (u1 - u0, n), at_b(u0, 0))
-            };
-            let (la, lb) = if right { (ldb, lda) } else { (lda, ldb) };
-            let g = engine::Gemm {
-                types: Types::S,
-                ta,
-                tb,
-                m: mm as u64,
-                n: nn as u64,
-                k: bs as u64,
-                alpha: -1.0,
-                beta: if first { alpha.to_f64() } else { 1.0 },
-                a: pa,
-                lda: la as u64,
-                stride_a: 0,
-                b: pb,
-                ldb: lb as u64,
-                stride_b: 0,
-                c: pc,
-                ldc: ldb as u64,
-                stride_c: 0,
-                batch: 1,
-            };
-            engine::gemm(&g, h.stream).map_err(status)?;
-        }
-        Ok(())
-    }
-
-    /// The rows of op(A) a blocked trsm solves at once.
-    const TRSM_BLOCK: i64 = 64;
-
-    /// The steps of a blocked trsm over the n rows of op(A): [first, end) of the block solved, then [first, end) of
-    /// the rows that GEMM updates with it (all the blocks not yet solved). Forward from the first block (op(A)
-    /// lower on the left, upper on the right) or backward from the last.
-    fn trsm_steps(n: i64, forward: bool) -> Vec<[i64; 4]> {
-        let mut blocks: Vec<(i64, i64)> = (0..n).step_by(TRSM_BLOCK as usize).map(|k| (k, (k + TRSM_BLOCK).min(n))).collect();
-        if !forward {
-            blocks.reverse();
-        }
-        blocks.into_iter().map(|(k0, k1)| if forward { [k0, k1, k1, n] } else { [k0, k1, 0, k0] }).collect()
+        // f32: blocked above 64 rows, with GEMM updates (agx_libs)
+        let g = engine::Trsm { right, upper, trans: t, unit, m, n, alpha: alpha.to_f64() as f32, a: a as *const c_void, lda, b: b as *mut c_void, ldb };
+        engine::trsm(&g, h.stream).map_err(status)
     }
 
     /// Read arrays of device pointers after earlier operations on the handle's stream finish.
@@ -1616,29 +1548,6 @@ mod imp {
         assert_eq!(even_stride(&[0x1000], 4), Some(0));
         assert_eq!(even_stride(&[0x1000, 0x1100, 0x1300], 4), None);
         assert_eq!(even_stride(&[0x1000, 0x1006], 4), None);
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn trsm_steps_solve_each_block_once_and_update_the_rest() {
-        for n in [65, 128, 129, 300] {
-            for forward in [false, true] {
-                let steps = trsm_steps(n, forward);
-                let mut solved = vec![false; n as usize];
-                for [k0, k1, u0, u1] in steps {
-                    assert!(k1 - k0 <= TRSM_BLOCK && k0 % TRSM_BLOCK == 0);
-                    for r in k0..k1 {
-                        assert!(!solved[r as usize]);
-                        solved[r as usize] = true;
-                    }
-                    // the update covers exactly the rows not solved yet
-                    for r in 0..n {
-                        assert_eq!((u0..u1).contains(&r), !solved[r as usize], "n {n} forward {forward} row {r}");
-                    }
-                }
-                assert!(solved.iter().all(|&s| s));
-            }
-        }
     }
 
     #[cfg(test)]

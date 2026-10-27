@@ -252,6 +252,25 @@ gpu.module @agx_solver {
     return
   }
 
+  // The row interchanges of getrf (ipiv) on the columns of B, in order, or in
+  // reverse order (reverse 1); one thread per column. For the blocked getrs,
+  // whose triangular solves run on BLAS trsm.
+  gpu.func @agx_getrs_pivots(%ipiv0: memref<1xi32, 1>, %b0: memref<1xf32, 1>, %n_: i64, %nrhs_: i64,
+                             %ldb_: i64, %reverse_: i64) kernel {
+    %z = arith.constant 0 : i64
+    %n = arith.index_cast %n_ : i64 to index
+    %nrhs = arith.index_cast %nrhs_ : i64 to index
+    %ldb = arith.index_cast %ldb_ : i64 to index
+    %reverse = arith.cmpi ne, %reverse_, %z : i64
+    %c = gpu.global_id x
+    %live = arith.cmpi ult, %c, %nrhs : index
+    scf.if %live {
+      %boff = arith.muli %c, %ldb : index
+      func.call @agx_sv_pivots(%ipiv0, %b0, %boff, %n, %reverse) : (memref<1xi32, 1>, memref<1xf32, 1>, index, index, i1) -> ()
+    }
+    gpu.return
+  }
+
   // getrs: op(A) X = B with A = P L U from agx_lu_*, one thread per column
   // of B (n x nrhs, leading dimension ldb).
   gpu.func @agx_getrs(%a0: memref<1xf32, 1>, %n_: i64, %lda_: i64, %ipiv0: memref<1xi32, 1>,
