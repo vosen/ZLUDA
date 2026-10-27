@@ -1290,7 +1290,9 @@ P Q at least 16, write each image's im2col matrix (C R S x P Q,
 `agx_conv2d_im2col_*`) to a temporary buffer and run y[n] = w col on the GEMM
 path (in the cost model about 11 times cheaper per output than the direct
 kernel for a 3x3, 64-channel layer); the call then waits for its stream
-before it frees the buffer.
+before it frees the buffer. `cudnnConvolutionBackwardFilter` does the same
+for one group and dense dy planes: dw = sum over n of dy[n] col^T, the
+images after the first added with beta 1.
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
 tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16

@@ -989,26 +989,29 @@ mod imp {
             let h = obj::<Handle>(h)?;
             return engine::gemm(&g, h.stream).map_err(status);
         }
-        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, w, y, alpha, beta) {
+        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, w as *mut c_void, y, alpha, beta, false) {
             return r;
         }
         let elements = s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64;
         run(h, "fwd", s, half, elements, x, w, y, alpha, beta)
     }
 
-    /// A forward convolution with one group and dense output planes, large enough for the matrix unit: each image
-    /// becomes its im2col matrix col (C R S x P Q, `agx_conv2d_im2col_*`, in a temporary buffer), then y[n] (K x PQ)
-    /// = w (K x C R S) col, which agx_libs' GEMM runs (column-major y[n]^T = col^T w^T). None when it does not apply.
+    /// A convolution with one group and dense planes of y (dy), large enough for the matrix unit: each image becomes
+    /// its im2col matrix col (C R S x P Q, `agx_conv2d_im2col_*`, in a temporary buffer), then agx_libs' GEMM runs
+    /// the forward y[n] (K x PQ) = w (K x C R S) col (column-major y[n]^T = col^T w^T), or, for the filter gradient
+    /// (`filter`, w is dw and y is dy), dw (K x C R S) = sum over n of dy[n] (K x PQ) col^T (column-major
+    /// dw^T = col dy[n]^T, beta 1 after the first image). None when it does not apply.
     #[allow(clippy::too_many_arguments)]
     unsafe fn im2col_gemm(
         h: &Handle,
         s: &[i32; 25],
         half: bool,
         mut x: *const c_void,
-        w: *const c_void,
+        w: *mut c_void,
         y: *mut c_void,
         alpha: *const c_void,
         beta: *const c_void,
+        filter: bool,
     ) -> Option<cudnnStatus_t> {
         let [n, ch, _, _, k, r, sw, p, q, .., g, _, _, _, _, _, _, ys1, ys2, ys3] = *s;
         let (pq, crs) = (p as i64 * q as i64, ch as i64 * r as i64 * sw as i64);
@@ -1031,25 +1034,50 @@ mod imp {
                 let mut params: Vec<*mut c_void> = vec![&mut x as *mut _ as *mut c_void, &mut colp as *mut _ as *mut c_void];
                 params.extend(shape.iter_mut().map(|v| v as *mut i32 as *mut c_void));
                 engine::launch_kernel(f, [groups, 1], [256, 1], &mut params, h.stream).map_err(status)?;
-                let g = engine::Gemm {
-                    types: if half { agx_libs::Types::H } else { agx_libs::Types::S },
-                    ta: false,
-                    tb: false,
-                    m: pq as u64,
-                    n: k as u64,
-                    k: crs as u64,
-                    alpha,
-                    beta,
-                    a: col.0,
-                    lda: pq as u64,
-                    stride_a: 0,
-                    b: w,
-                    ldb: crs as u64,
-                    stride_b: 0,
-                    c: y.byte_offset(image as isize * s[21] as isize * size as isize),
-                    ldc: pq as u64,
-                    stride_c: 0,
-                    batch: 1,
+                let y_n = y.byte_offset(image as isize * s[21] as isize * size as isize);
+                let types = if half { agx_libs::Types::H } else { agx_libs::Types::S };
+                let g = if filter {
+                    engine::Gemm {
+                        types,
+                        ta: true,
+                        tb: false,
+                        m: crs as u64,
+                        n: k as u64,
+                        k: pq as u64,
+                        alpha,
+                        beta: if image == 0 { beta } else { 1.0 },
+                        a: col.0,
+                        lda: pq as u64,
+                        stride_a: 0,
+                        b: y_n,
+                        ldb: pq as u64,
+                        stride_b: 0,
+                        c: w,
+                        ldc: crs as u64,
+                        stride_c: 0,
+                        batch: 1,
+                    }
+                } else {
+                    engine::Gemm {
+                        types,
+                        ta: false,
+                        tb: false,
+                        m: pq as u64,
+                        n: k as u64,
+                        k: crs as u64,
+                        alpha,
+                        beta,
+                        a: col.0,
+                        lda: pq as u64,
+                        stride_a: 0,
+                        b: w,
+                        ldb: crs as u64,
+                        stride_b: 0,
+                        c: y_n,
+                        ldc: pq as u64,
+                        stride_c: 0,
+                        batch: 1,
+                    }
                 };
                 engine::gemm(&g, h.stream).map_err(status)?;
             }
@@ -1134,6 +1162,9 @@ mod imp {
         dw: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, dwd, cd, dyd)?;
+        if let Some(r) = im2col_gemm(obj::<Handle>(h)?, &s, half, x, dw, dy as *mut c_void, alpha, beta, true) {
+            return r;
+        }
         let elements = s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64;
         run(h, "bwd_filter", s, half, elements, x, dw, dy, alpha, beta)
     }
