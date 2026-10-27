@@ -1,6 +1,8 @@
 //! Compiles the MLIR kernels in kernels/ for every AGX chip into fat AGX objects, with the LLVM fork's
 //! mlir/utils/agx-kernels/agx-build-fatbin.py and the mlir-opt, mlir-translate and llc of the LLVM build in
 //! ZLUDA_LLVM_BUILD_DIR. The LLVM sources are found through ZLUDA_LLVM_SOURCE_DIR or the build's CMakeCache.txt.
+//! The kernels go through AIR (`--via-air`: arith-emulate-f64 and convert-gpu-to-air in MLIR, AIR's portable passes,
+//! then the AGX backend's agx-lower-air), so they use only what AIR has.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -97,6 +99,7 @@ fn main() {
             .arg(bin.join("mlir-translate"))
             .arg("--llc")
             .arg(bin.join("llc"))
+            .arg("--via-air")
             .arg(&src)
             .arg("-o")
             .arg(&out)

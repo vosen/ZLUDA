@@ -856,8 +856,8 @@ Mesa form. What the backend does differently:
 - device and threadgroup loads, stores and atomics are always encoded in their long form, as Mesa packs them.
 
 The mode is part of the compilation cache key. The library kernels (`agx_libs`) carry a `CHIP+agx-strict` build of every
-M1 and M2 entry, compiled with `#agxir.target<..., features = "+agx-strict">` so that the MLIR `agx` operations take
-their portable forms, and `zluda_agx` loads those entries in this mode. The AGX Performance Simulator's
+M1 and M2 entry, compiled by the AGX backend with `-mattr=+agx-strict`, and `zluda_agx` loads those entries in this
+mode. The AGX Performance Simulator's
 `--agx-strict GPU` (or `AGX_STRICT=GPU`) runs code with the same check, so a test fails on any instruction Mesa would
 not emit; `agx_ptx_formalization_check.py --agx-strict` and `test_kernels.py` (for `+agx-strict` entries) use it.
 
@@ -1185,8 +1185,10 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 
 `libcublas` for zluda_agx, on the `agx_libs` engine (shared with cuBLASLt).
 Its kernels are MLIR (`agx_libs/kernels/*.mlir`:
-standard dialects and `agx` operations, no chip names), compiled at build time
-for every G13/G14 chip by the LLVM fork's
+standard dialects and the `air` dialect's SIMD-group matrices, no chip names),
+compiled at build time through AIR (`--via-air`: MLIR's `arith-emulate-f64`
+and `convert-gpu-to-air`, AIR's portable passes, then the AGX backend, which
+lowers AIR with `agx-lower-air`) for every G13/G14 chip by the LLVM fork's
 `mlir/utils/agx-kernels/agx-build-fatbin.py` into one fat AGX object
 (`ZAGXFAT1`). `cuModuleLoadData` picks the entry for the device's chip
 (`CUDA_ERROR_NO_BINARY_FOR_GPU` if there is none). The library calls the
@@ -1203,7 +1205,8 @@ it), as NVIDIA's does.
   of 8, even leading dimensions and 8-byte aligned matrices, the column-major
   product runs on the row-major tile kernel `agx_sgemm_tile64` (A and B
   swapped): 64 x 64 tiles per threadgroup of 2 x 2 SIMD-groups built on
-  `agx.mma_tile` (`agx_libs/kernels/sgemm.mlir`; the f16 forms are in
+  8x8 `air.simdgroup_matrix_multiply_accumulate`
+  (`agx_libs/kernels/sgemm.mlir`; the f16 forms are in
   `hgemm.mlir`). Everything else runs on a generic kernel, one
   thread per element with arbitrary strides.
 * `cublasDgemm`, `cublasDgemmStridedBatched`, and `cublasGemmEx` /
