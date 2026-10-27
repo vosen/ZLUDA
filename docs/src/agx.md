@@ -1253,8 +1253,11 @@ it), as NVIDIA's does.
 * Level 3 beyond GEMM in single precision, with their `_64` forms:
   `cublasSgeam`, `Sdgmm`, `Ssyrk` and `Ssyr2k` (above 64 rows, the blocks off
   the diagonal are GEMMs on the tile kernels, two for syr2k, found by halving C
-  at 64-row boundaries, and one launch does the 64 x 64 diagonal blocks), `Ssymm`, `Strmm` (in place when C is B,
-  through a copy) and `Strsm` (one thread per column of B, or per row for the
+  at 64-row boundaries, and one launch does the 64 x 64 diagonal blocks),
+  `Ssymm` and `Strmm` (in place when C is B, through a copy; with A of 64 rows
+  or more and C of at least 64 x 64 elements, A is made full in a scratch
+  buffer the handle keeps, symmetric or with zeros outside the triangle, and
+  one GEMM on the tile kernels does the product) and `Strsm` (one thread per column of B, or per row for the
   right side, solving by substitution), and `cublasSgemmBatched` (the pointer
   arrays are read back once the stream is idle, then one GEMM per entry).
 * All kernels are tested on the simulator for agx-g13g and agx-g14c

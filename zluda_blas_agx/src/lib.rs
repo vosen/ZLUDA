@@ -295,6 +295,30 @@ mod imp {
         math_mode: cublasMath_t,
         /// The partial sums of reductions and their result (`level1::WORKSPACE` bytes), allocated on first use.
         ws: *mut c_void,
+        /// Temporary matrices of level 3 routines (see `scratch`), `scratch_len` bytes, last used on `scratch_stream`.
+        scratch: *mut c_void,
+        scratch_len: usize,
+        scratch_stream: CUstream,
+    }
+
+    /// `bytes` of device memory for temporaries of work queued on the handle's stream. The buffer is kept and reused:
+    /// work queued earlier on the same stream is done with it before later work starts, and when the stream has
+    /// changed, or the buffer must grow, the stream that last used it is waited for first.
+    unsafe fn scratch(h: &mut Handle, bytes: usize) -> Result<*mut c_void, cublasError_t> {
+        if !h.scratch.is_null() && (h.scratch_stream.0 != h.stream.0 || h.scratch_len < bytes) {
+            engine::synchronize(h.scratch_stream).map_err(status)?;
+        }
+        if h.scratch_len < bytes {
+            if !h.scratch.is_null() {
+                engine::free(h.scratch).map_err(status)?;
+                h.scratch = std::ptr::null_mut();
+                h.scratch_len = 0;
+            }
+            h.scratch = engine::alloc(bytes).map_err(status)?;
+            h.scratch_len = bytes;
+        }
+        h.scratch_stream = h.stream;
+        Ok(h.scratch)
     }
 
     unsafe fn handle<'a>(h: cublasHandle_t) -> Result<&'a mut Handle, cublasError_t> {
@@ -311,6 +335,9 @@ mod imp {
             pointer_mode: cublasPointerMode_t::CUBLAS_POINTER_MODE_HOST,
             math_mode: cublasMath_t::CUBLAS_DEFAULT_MATH,
             ws: std::ptr::null_mut(),
+            scratch: std::ptr::null_mut(),
+            scratch_len: 0,
+            scratch_stream: CUstream(std::ptr::null_mut()),
         });
         *out = cublasHandle_t(Box::into_raw(h) as *mut cublasContext);
         Ok(())
@@ -322,6 +349,10 @@ mod imp {
         }
         let h = Box::from_raw(h.0 as *mut Handle);
         engine::free(h.ws).map_err(status)?;
+        if !h.scratch.is_null() {
+            engine::synchronize(h.scratch_stream).map_err(status)?;
+            engine::free(h.scratch).map_err(status)?;
+        }
         Ok(())
     }
 
@@ -1360,6 +1391,9 @@ mod imp {
         )
     }
 
+    /// The smallest A for which symm and trmm (f32) run on the GEMM kernels, and the smallest C as a square.
+    const SYMM_GEMM_MIN: i64 = 64;
+
     /// symm (`sym`, with beta) and the out-of-place trmm (beta 0).
     #[allow(clippy::too_many_arguments)]
     unsafe fn symm_trmm<T: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, sym: bool, mut m: i64, mut n: i64, alpha: *const T, mut a: *const T, mut lda: i64, mut b: *const T, mut ldb: i64, beta: *const T, mut c: *mut T, mut ldc: i64) -> cublasStatus_t {
@@ -1375,6 +1409,53 @@ mod imp {
         let mut beta = if sym { T::scalar(h, beta as *const c_void)? } else { T::scalar_zero() };
         if m == 0 || n == 0 {
             return Ok(());
+        }
+        // f32 with A of 64 rows or more: A made full (symmetric, or the triangle with zeros) in scratch memory, then
+        // a GEMM on the tile kernels
+        let na = if right { n } else { m };
+        if T::GEMM == Types::S && na >= SYMM_GEMM_MIN && m * n >= SYMM_GEMM_MIN * SYMM_GEMM_MIN {
+            let full_bytes = (T::BYTES * (na * na) as usize).next_multiple_of(256);
+            let b_bytes = if c as *const T == b { T::BYTES * ((n - 1) * ldb + m) as usize } else { 0 };
+            let full = scratch(h, full_bytes + b_bytes)?;
+            if b_bytes > 0 {
+                // in place: the GEMM reads a copy of B
+                let copy = (full as *mut u8).add(full_bytes) as *mut c_void;
+                engine::copy(copy, b as *const c_void, b_bytes, h.stream).map_err(status)?;
+                b = copy as *const T;
+            }
+            let (mut fp, mut nn) = (full, na);
+            let (mut up, mut un, mut sy) = (upper as i64, (unit && !sym) as i64, sym as i64);
+            blas_launch(
+                h,
+                c"agx_sfull",
+                &mut [arg(&mut a), arg(&mut fp), arg(&mut nn), arg(&mut lda), arg(&mut up), arg(&mut un), arg(&mut sy)],
+                [na, na],
+                [16, 4],
+            )?;
+            let t = t && !sym;
+            // left: op(full) B; right: B op(full)
+            let (pa, la, ta, pb, lb, tb) = if right { (b as *const c_void, ldb, false, full as *const c_void, na, t) } else { (full as *const c_void, na, t, b as *const c_void, ldb, false) };
+            let g = engine::Gemm {
+                types: Types::S,
+                ta,
+                tb,
+                m: m as u64,
+                n: n as u64,
+                k: na as u64,
+                alpha: alpha.to_f64(),
+                beta: beta.to_f64(),
+                a: pa,
+                lda: la as u64,
+                stride_a: 0,
+                b: pb,
+                ldb: lb as u64,
+                stride_b: 0,
+                c: c as *mut c_void,
+                ldc: ldc as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            return engine::gemm(&g, h.stream).map_err(status);
         }
         // each element of C reads a row or column of B: in place, read a copy
         let mut copy = std::ptr::null_mut();

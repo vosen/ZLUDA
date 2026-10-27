@@ -737,6 +737,32 @@ gpu.module @agx_blas {
   // C = alpha A B + beta C (left) or alpha B A + beta C (right) for a
   // symmetric A held in one triangle (sym 1), or C = alpha op(A) B / alpha B
   // op(A) for a triangular A (sym 0, trmm; beta 0), C m x n. 2-D grid.
+  // The full n x n matrix (leading dimension n) of A held in one triangle:
+  // symmetric (sym 1), or triangular with zeros outside the triangle and, with
+  // unit, ones on the diagonal; for symm and trmm on the GEMM kernels. 2-D grid.
+  gpu.func @agx_sfull(%a0: memref<1xf32, 1>, %f0_: memref<1xf32, 1>, %n: index, %lda: index,
+                      %upper_: i64, %unit_: i64, %sym_: i64) kernel {
+    %z = arith.constant 0 : i64
+    %big = arith.constant 4611686018427387904 : index
+    %upper = arith.cmpi ne, %upper_, %z : i64
+    %unit = arith.cmpi ne, %unit_, %z : i64
+    %sym = arith.cmpi ne, %sym_, %z : i64
+    %full = memref.reinterpret_cast %f0_ to offset: [0], sizes: [%big], strides: [1]
+        : memref<1xf32, 1> to memref<?xf32, strided<[1]>, 1>
+    %i = gpu.global_id x
+    %j = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %n : index
+    %in_j = arith.cmpi ult, %j, %n : index
+    %in = arith.andi %in_i, %in_j : i1
+    scf.if %in {
+      %v = func.call @agx_blas_tri(%a0, %i, %j, %lda, %upper, %sym, %unit) : (memref<1xf32, 1>, index, index, index, i1, i1, i1) -> f32
+      %jn = arith.muli %j, %n : index
+      %p = arith.addi %jn, %i : index
+      memref.store %v, %full[%p] : memref<?xf32, strided<[1]>, 1>
+    }
+    gpu.return
+  }
+
   gpu.func @agx_ssymm_trmm(%a0: memref<1xf32, 1>, %b0: memref<1xf32, 1>, %c0: memref<1xf32, 1>,
                            %m: index, %n: index, %lda: index, %ldb: index, %ldc: index,
                            %right_: i64, %upper_: i64, %trans_: i64, %unit_: i64, %sym_: i64,

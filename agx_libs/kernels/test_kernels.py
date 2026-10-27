@@ -1864,6 +1864,13 @@ def case_level3(a, obj, tmp, what, opts, rnd):
     na = n if right else m
     lda, ldb = na + 1, m + 2
     A, B = mat(0, na, lda, rnd), mat(0, n, ldb, rnd)
+    if what == "full":
+        sym, unit = opts["sym"], opts["unit"]
+        F = [math.nan] * (na * na)
+        (got,) = run(a, obj, K("agx_sfull"), [("buf", pack(A, BT)), ("buf", pack(F, BT), True), ("i64", na), ("i64", lda),
+                                           ("i64", upper), ("i64", unit), ("i64", sym)], (16, 8), (16, 4), tmp)
+        want = [tri(A, i, j, lda, upper, sym, unit) for j in range(na) for i in range(na)]
+        return close(unpack(got, BT), want, range(na * na), TOL(0))
     if what in ("symm", "trmm"):
         sym = what == "symm"
         trans, unit = (0, 0) if sym else (opts["trans"], opts["unit"])
@@ -2326,6 +2333,9 @@ def main():
                     for right in (0, 1):
                         cases.append(("ssymm right %d upper %d" % (right, upper),
                                       lambda u=upper, r=right: case_level3(a, obj, tmp, "symm", {"upper": u, "right": r}, rnd)))
+                        for sym, unit in ((1, 0), (0, 0), (0, 1)):
+                            o = {"upper": upper, "right": right, "sym": sym, "unit": unit}
+                            cases.append(("sfull %s" % o, lambda o=o: case_level3(a, obj, tmp, "full", o, rnd)))
                         for trans in (0, 1):
                             for unit in (0, 1):
                                 o = {"upper": upper, "right": right, "trans": trans, "unit": unit}
