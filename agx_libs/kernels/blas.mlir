@@ -647,10 +647,11 @@ gpu.module @agx_blas {
   }
 
   // C = alpha op(A) op(A)^T + beta C on the upper (or lower) triangle of the
-  // n x n C, op(A) n x k. 2-D grid over C.
+  // n x n C, op(A) n x k. 2-D grid over C. With nb > 0, only the diagonal
+  // nb x nb blocks (i / nb = j / nb): the rest is left to GEMMs.
   gpu.func @agx_ssyrk(%a0: memref<1xf32, 1>, %c0: memref<1xf32, 1>, %n: index, %k: index,
                       %lda: index, %ldc: index, %upper_: i64, %trans_: i64,
-                      %alpha: f32, %beta: f32) kernel {
+                      %alpha: f32, %beta: f32, %nb: index) kernel {
     %z = arith.constant 0 : i64
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
@@ -665,7 +666,14 @@ gpu.module @agx_blas {
     %ge = arith.cmpi uge, %i, %j : index
     %tri = arith.select %upper, %le, %ge : i1
     %in0 = arith.andi %in_i, %in_j : i1
-    %in = arith.andi %in0, %tri : i1
+    %in1 = arith.andi %in0, %tri : i1
+    %nb1 = arith.maxui %nb, %i1 : index
+    %bi = arith.divui %i, %nb1 : index
+    %bj = arith.divui %j, %nb1 : index
+    %same = arith.cmpi eq, %bi, %bj : index
+    %all = arith.cmpi eq, %nb, %i0 : index
+    %block = arith.ori %all, %same : i1
+    %in = arith.andi %in1, %block : i1
     scf.if %in {
       %s = scf.for %l = %i0 to %k step %i1 iter_args(%acc = %f0) -> f32 {
         %u = func.call @agx_blas_at(%a0, %i, %l, %lda, %trans) : (memref<1xf32, 1>, index, index, index, i1) -> f32

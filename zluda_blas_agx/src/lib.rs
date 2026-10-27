@@ -1255,14 +1255,70 @@ mod imp {
         if n == 0 || ((alpha.to_f64() == 0.0 || k == 0) && beta.to_f64() == 1.0) {
             return Ok(());
         }
+        // f32 matrices larger than a block: the blocks off the diagonal are GEMMs on the tile kernels, and one launch
+        // does the diagonal blocks.
+        let mut nb = if T::GEMM == Types::S && n > SYRK_BLOCK && k > 0 { SYRK_BLOCK } else { 0 };
+        if nb > 0 {
+            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, c as *mut c_void, ldc, T::BYTES)?;
+        }
         let (mut upper, mut t) = (upper as i64, t as i64);
         blas_launch(
             h,
             T::kernel(c"agx_ssyrk", c"agx_ssyrk_f64"),
-            &mut [arg(&mut a), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            &mut [arg(&mut a), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta), arg(&mut nb)],
             [n, n],
             [16, 4],
         )
+    }
+
+    /// The diagonal blocks of a blocked syrk: a multiple of the tile kernels' 64 rows.
+    const SYRK_BLOCK: i64 = 64;
+
+    /// The part of syrk's triangle of an n x n C outside the diagonal SYRK_BLOCK blocks, as rectangles (first row,
+    /// first column, rows, columns) of C: halving at a block boundary, the corner between the halves is one
+    /// rectangle and the halves recurse.
+    fn syrk_corners(upper: bool, lo: i64, size: i64, out: &mut Vec<[i64; 4]>) {
+        if size <= SYRK_BLOCK {
+            return;
+        }
+        let half = (size / 2 + SYRK_BLOCK - 1) / SYRK_BLOCK * SYRK_BLOCK;
+        out.push(if upper { [lo, lo + half, half, size - half] } else { [lo + half, lo, size - half, half] });
+        syrk_corners(upper, lo, half, out);
+        syrk_corners(upper, lo + half, size - half, out);
+    }
+
+    /// The GEMMs of syrk's triangle outside the diagonal blocks: C(rows, columns) = alpha op(A)(rows) op(A)(columns)^T
+    /// + beta C for each corner.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn syrk_off_diagonal(h: &Handle, upper: bool, t: bool, n: i64, k: i64, alpha: f64, beta: f64, a: *const c_void, lda: i64, c: *mut c_void, ldc: i64, bytes: usize) -> cublasStatus_t {
+        // rows r.. of op(A): A's rows, or its columns when transposed
+        let rows = |r: i64| (a as *const u8).add(r as usize * if t { lda as usize } else { 1 } * bytes) as *const c_void;
+        let mut corners = Vec::new();
+        syrk_corners(upper, 0, n, &mut corners);
+        for [first, second, m, n] in corners {
+            let g = engine::Gemm {
+                types: Types::S,
+                ta: t,
+                tb: !t,
+                m: m as u64,
+                n: n as u64,
+                k: k as u64,
+                alpha,
+                beta,
+                a: rows(first),
+                lda: lda as u64,
+                stride_a: 0,
+                b: rows(second),
+                ldb: lda as u64,
+                stride_b: 0,
+                c: (c as *mut u8).add((first + second * ldc) as usize * bytes) as *mut c_void,
+                ldc: ldc as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            engine::gemm(&g, h.stream).map_err(status)?;
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1404,6 +1460,33 @@ mod imp {
         assert_eq!(even_stride(&[0x1000], 4), Some(0));
         assert_eq!(even_stride(&[0x1000, 0x1100, 0x1300], 4), None);
         assert_eq!(even_stride(&[0x1000, 0x1006], 4), None);
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn syrk_corners_and_diagonal_blocks_cover_the_triangle_once() {
+        for upper in [false, true] {
+            for n in [65, 100, 128, 129, 200, 256, 300, 513] {
+                let mut count = vec![0u8; (n * n) as usize];
+                let mut corners = Vec::new();
+                syrk_corners(upper, 0, n, &mut corners);
+                for [r, c, m, w] in corners {
+                    for j in c..c + w {
+                        for i in r..r + m {
+                            count[(i + j * n) as usize] += 1;
+                        }
+                    }
+                }
+                for j in 0..n {
+                    for i in 0..n {
+                        // the diagonal launch (agx_ssyrk with nb = SYRK_BLOCK)
+                        let tri = if upper { i <= j } else { i >= j };
+                        let diagonal = tri && i / SYRK_BLOCK == j / SYRK_BLOCK;
+                        assert_eq!(count[(i + j * n) as usize] + diagonal as u8, tri as u8, "upper {upper} n {n} ({i}, {j})");
+                    }
+                }
+            }
+        }
     }
 
     unsafe fn gemm_batched<T: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const T, a: *const *const T, lda: i64, b: *const *const T, ldb: i64, beta: *const T, c: *const *mut T, ldc: i64, batch: i64) -> cublasStatus_t {

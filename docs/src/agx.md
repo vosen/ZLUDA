@@ -1251,7 +1251,9 @@ it), as NVIDIA's does.
   when the squares would. In host pointer mode a reduction waits for the
   handle's stream.
 * Level 3 beyond GEMM in single precision, with their `_64` forms:
-  `cublasSgeam`, `Sdgmm`, `Ssyrk`, `Ssymm`, `Strmm` (in place when C is B,
+  `cublasSgeam`, `Sdgmm`, `Ssyrk` (above 64 rows, the blocks off the diagonal
+  are GEMMs on the tile kernels, found by halving C at 64-row boundaries, and
+  one launch does the 64 x 64 diagonal blocks), `Ssymm`, `Strmm` (in place when C is B,
   through a copy) and `Strsm` (one thread per column of B, or per row for the
   right side, solving by substitution), and `cublasSgemmBatched` (the pointer
   arrays are read back once the stream is idle, then one GEMM per entry).

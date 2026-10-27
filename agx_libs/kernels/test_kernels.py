@@ -1832,12 +1832,13 @@ def case_level3(a, obj, tmp, what, opts, rnd):
         lda, ldc = (k if trans else n) + 1, n + 2
         A, C = mat(0, n if trans else k, lda, rnd), mat(0, n, ldc, rnd)
         (got,) = run(a, obj, K("agx_ssyrk"), [("buf", pack(A, BT)), ("buf", pack(C, BT), True), ("i64", n), ("i64", k), ("i64", lda),
-                                           ("i64", ldc), ("i64", upper), ("i64", trans), (S(), alpha), (S(), beta)],
-                     (16, 8), (16, 4), tmp)
+                                           ("i64", ldc), ("i64", upper), ("i64", trans), (S(), alpha), (S(), beta),
+                                           ("i64", opts["nb"])], (16, 8), (16, 4), tmp)
         want = list(C)
+        nb = opts["nb"]
         for j in range(n):
             for i in range(n):
-                if (i <= j) if upper else (i >= j):
+                if ((i <= j) if upper else (i >= j)) and (nb == 0 or i // nb == j // nb):
                     s = sum(at(A, i, l, lda, trans) * at(A, j, l, lda, trans) for l in range(k))
                     want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
         return close(unpack(got, BT), want, range(len(C)), TOL(1e-5))
@@ -2314,8 +2315,9 @@ def main():
                     cases.append(("sdgmm right %d inc -2" % right, lambda r=right: case_level3(a, obj, tmp, "dgmm", {"right": r, "incx": -2}, rnd)))
                 for upper in (0, 1):
                     for trans in (0, 1):
-                        cases.append(("ssyrk upper %d trans %d" % (upper, trans),
-                                      lambda u=upper, t=trans: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t}, rnd)))
+                        for nb in (0, 2):  # nb 2: the diagonal blocks only
+                            cases.append(("ssyrk upper %d trans %d nb %d" % (upper, trans, nb),
+                                          lambda u=upper, t=trans, nb=nb: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t, "nb": nb}, rnd)))
                         cases.append(("ssyr2k upper %d trans %d" % (upper, trans),
                                       lambda u=upper, t=trans: case_level3(a, obj, tmp, "syr2k", {"upper": u, "trans": t}, rnd)))
                     for right in (0, 1):
