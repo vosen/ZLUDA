@@ -1187,6 +1187,18 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         if crate::log_enabled() {
             eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>());
         }
+        let mut args: Vec<String> = ["--target", "agx", "--arch", cpu, "--object-only"].iter().map(|a| a.to_string()).collect();
+        args.extend(mesa.then(|| "--agx-strict".to_string()));
+        args.extend(checked.then(|| "--agx-checked".to_string()));
+        args.extend(lineinfo.then(|| "--lineinfo".to_string()));
+        args.extend(fast_mma.then(|| "--fast-mma".to_string()));
+        args.extend((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")));
+        if let Some(result) = zoc_server::compile(&zoc, &args, sources) {
+            if crate::log_enabled() {
+                eprintln!("[zluda_agx] zoc server finished: ok={}, elapsed={:.3}s", result.is_ok(), started.elapsed().as_secs_f64());
+            }
+            return result;
+        }
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
         let mut paths = Vec::new();
         for (i, ptx) in sources.iter().enumerate() {
@@ -1196,12 +1208,7 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         }
         // the object alone: its .agx.kernels records describe the kernels, so no IR text or assembly
         let out = std::process::Command::new(&zoc)
-            .args(["--target", "agx", "--arch", cpu, "--object-only"])
-            .args(mesa.then_some("--agx-strict"))
-            .args(checked.then_some("--agx-checked"))
-            .args(lineinfo.then_some("--lineinfo"))
-            .args(fast_mma.then_some("--fast-mma"))
-            .args((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")))
+            .args(&args)
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -1225,6 +1232,103 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         eprintln!("[zluda_agx] PTX cache hit: modules={}, bytes={}, elapsed={:.3}s", sources.len(), source.len(), started.elapsed().as_secs_f64());
     }
     result
+}
+
+/// A `zoc --serve` process kept for the process's compilations: LLVM starts once instead of for every module (about
+/// 7 ms each). One compilation at a time goes through it; a compilation that finds it busy, and any after it fails to
+/// start or dies (its request then too), runs a zoc of its own as before. `ZLUDA_AGX_ZOC_SERVER=0` turns it off.
+mod zoc_server {
+    use std::io::{Read, Write};
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+    use std::sync::Mutex;
+
+    struct Server {
+        zoc: PathBuf,
+        child: Child,
+        input: ChildStdin,
+        output: ChildStdout,
+    }
+
+    impl Drop for Server {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    /// The server, or None before it starts; `Err` once it could not be used (no more attempts).
+    static SERVER: Mutex<Result<Option<Server>, ()>> = Mutex::new(Ok(None));
+
+    /// The object and the assembly from the server, or None when the caller should run zoc itself.
+    pub(super) fn compile(zoc: &Path, args: &[String], sources: &[&[u8]]) -> Option<Result<(Vec<u8>, String), String>> {
+        if std::env::var("ZLUDA_AGX_ZOC_SERVER").as_deref() == Ok("0") {
+            return None;
+        }
+        let mut guard = SERVER.try_lock().ok()?;
+        let slot = guard.as_mut().ok()?;
+        if slot.as_ref().is_some_and(|s| s.zoc != zoc) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            match start(zoc) {
+                Some(s) => *slot = Some(s),
+                None => {
+                    *guard = Err(());
+                    return None;
+                }
+            }
+        }
+        match request(slot.as_mut().unwrap(), args, sources) {
+            Ok(result) => Some(result),
+            Err(_) => {
+                // a dead or confused server: no more requests to it
+                *guard = Err(());
+                None
+            }
+        }
+    }
+
+    fn start(zoc: &Path) -> Option<Server> {
+        let mut child = Command::new(zoc).arg("--serve").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+        let (input, output) = (child.stdin.take()?, child.stdout.take()?);
+        Some(Server { zoc: zoc.to_path_buf(), child, input, output })
+    }
+
+    /// One request (the protocol of `zoc --serve`).
+    fn request(s: &mut Server, args: &[String], sources: &[&[u8]]) -> std::io::Result<Result<(Vec<u8>, String), String>> {
+        let mut m = Vec::new();
+        m.extend((args.len() as u32).to_le_bytes());
+        for a in args {
+            m.extend((a.len() as u32).to_le_bytes());
+            m.extend(a.as_bytes());
+        }
+        m.extend((sources.len() as u32).to_le_bytes());
+        for src in sources {
+            m.extend((src.len() as u64).to_le_bytes());
+            m.extend(*src);
+        }
+        s.input.write_all(&m)?;
+        s.input.flush()?;
+        let mut status = [0u8];
+        s.output.read_exact(&mut status)?;
+        let mut part = || -> std::io::Result<Vec<u8>> {
+            let mut n = [0u8; 8];
+            s.output.read_exact(&mut n)?;
+            let mut v = vec![0u8; u64::from_le_bytes(n) as usize];
+            s.output.read_exact(&mut v)?;
+            Ok(v)
+        };
+        Ok(match status[0] {
+            0 => {
+                let object = part()?;
+                let asm = part()?;
+                Ok((object, String::from_utf8_lossy(&asm).into_owned()))
+            }
+            1 => Err(format!("zoc failed: {}", String::from_utf8_lossy(&part()?))),
+            _ => return Err(std::io::Error::other("bad zoc --serve response")),
+        })
+    }
 }
 
 /// The module in an image: an AGX object, or PTX text (NUL-terminated).
@@ -3964,6 +4068,40 @@ mod tests {
         assert_eq!(co_resident_threadgroups(13), 12);
         assert_eq!(co_resident_threadgroups(1), 1);
         assert_eq!(co_resident_threadgroups(0), 0);
+    }
+
+    // Needs zoc built with the agx feature (target/debug/zoc).
+    #[test]
+    fn zoc_server_compiles_as_zoc_does() {
+        let zoc = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug/zoc");
+        if !zoc.exists() {
+            eprintln!("skipped: no zoc");
+            return;
+        }
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../ptx/src/test/spirv_run/");
+        let (add, mul) = (std::fs::read(format!("{dir}add.ptx")).unwrap(), std::fs::read(format!("{dir}mul_lo.ptx")).unwrap());
+        let args: Vec<String> = ["--target", "agx", "--arch", "agx-g14c", "--object-only"].iter().map(|a| a.to_string()).collect();
+        let one_shot = |files: &[&str]| {
+            let out = tempfile::tempdir().unwrap();
+            let status = std::process::Command::new(&zoc)
+                .args(&args)
+                .arg("--output-dir")
+                .arg(out.path())
+                .args(files.iter().map(|f| format!("{dir}{f}")))
+                .status()
+                .unwrap();
+            assert!(status.success());
+            std::fs::read(out.path().join(files[0].replace(".ptx", ".o"))).unwrap()
+        };
+        // a module, a link of two, then the first again (nothing kept from the earlier requests)
+        for (sources, files) in [(vec![&add[..]], vec!["add.ptx"]), (vec![&add[..], &mul[..]], vec!["add.ptx", "mul_lo.ptx"]), (vec![&add[..]], vec!["add.ptx"])] {
+            let (object, _) = zoc_server::compile(&zoc, &args, &sources).expect("server").expect("compiled");
+            assert_eq!(object, one_shot(&files), "{files:?}");
+        }
+        // a compile error comes back as an error, and the server stays usable
+        let bad = b".version 7.0\n.target sm_80\n.address_size 64\n.visible .entry k() { bogus.instr; }\n";
+        assert!(zoc_server::compile(&zoc, &args, &[&bad[..]]).expect("server").is_err());
+        assert!(zoc_server::compile(&zoc, &args, &[&add[..]]).expect("server").is_ok());
     }
 
     // Needs zoc built with the agx feature: target/debug/zoc, or ZLUDA_AGX_ZOC.

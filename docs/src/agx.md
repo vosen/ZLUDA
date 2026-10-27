@@ -49,7 +49,9 @@ functions and optimized (`.linked.ll`, `.opt.ll`), the assembly (`.asm`) and
 an ELF object (`.o`) with each kernel's machine code in `.text`.
 `zoc --object-only` writes the object alone, skipping the IR text and the
 second code generation of the assembly; `zluda_agx` compiles that way (the
-object's `.agx.kernels` records describe its kernels).
+object's `.agx.kernels` records describe its kernels). `zoc --serve` compiles
+requests from stdin in one process (the protocol is in `compiler/src/main.rs`),
+with the same output as one `zoc` per module.
 
 The assembly lists the resources of each kernel: uniform registers,
 general purpose registers, threadgroup memory, stack and, when the module has
@@ -1139,7 +1141,11 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   executable or on `PATH`) and the result is cached in `ZLUDA_CACHE_DIR`
   (default `$XDG_CACHE_HOME/zluda/agx` or `~/.cache/zluda/agx`; disabled by
   `ZLUDA_CACHE_DISABLE`). Entries are keyed by the PTX, the chip and the `zoc`
-  binary, so a rebuilt compiler does not reuse old code.
+  binary, so a rebuilt compiler does not reuse old code. Cache misses go to one
+  `zoc --serve` process the driver keeps (LLVM starts once, about 7 ms saved per
+  module after the first: the 195 `spirv_run` modules compile in 1.5 s instead of
+  3.0 s); a compilation that finds it busy, and every one after it fails or dies,
+  runs a `zoc` of its own as before (`ZLUDA_AGX_ZOC_SERVER=0` always does).
   Cache misses take a per-entry advisory file lock and recheck the entry,
   so concurrent threads/processes compile the same input only once. Different
   keys stay independent; warm hits do not lock. Lock files persist to keep
