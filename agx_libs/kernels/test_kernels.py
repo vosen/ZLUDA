@@ -257,7 +257,10 @@ def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, til
         be = 1.0 if acc else beta
         if is_tile:
             # row-major C^T = op(B)^T op(A)^T: A' = B, read transposed when op(B) is, B' = A likewise
-            kernel = tile + {(0, 0): "", (1, 0): "_ta", (0, 1): "_tb", (1, 1): "_tatb"}[(int(tb), int(ta))]
+            # the _u kernel unless the leading dimensions and strides are even (the buffers here are aligned)
+            aligned = all(v % 2 == 0 for v in (lda, ldb, ldc) + tuple(strides))
+            kernel = tile + ("" if aligned else "_u") + {(0, 0): "", (1, 0): "_ta", (0, 1): "_tb",
+                                                          (1, 1): "_tatb"}[(int(tb), int(ta))]
             args = [("buf", pack(B[ob:], ab)), ("buf", pack(A[oa:], ab)), ("buf", pack(C[oc:], c), True),
                     ("i64", n), ("i64", m), ("i64", k), ("i64", ldb), ("i64", lda), ("i64", ldc),
                     ("i64", strides[1]), ("i64", strides[0]), ("i64", strides[2]), ("f32", alpha), ("f32", be)]
@@ -300,10 +303,12 @@ def case_batched(a, obj, tmp, M, N, K, batch, alpha, beta, rnd, tile="agx_sgemm_
 
 
 def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
-               c="f", ta=False, tb=False):
-    # column-major op(A) and op(B), the leading dimensions even as the tile kernel needs
+               c="f", ta=False, tb=False, odd=False):
+    # column-major op(A) and op(B), the leading dimensions even (the aligned tile kernel), or odd (the _u one)
     ra, rb = (K if ta else M), (N if tb else K)
     lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+    if odd:
+        lda, ldb, ldc = lda + 1, ldb + 1, ldc + 1
     sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
     sb = (ldb, 1) if tb else (1, ldb)
     A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))], ab)
@@ -2427,6 +2432,10 @@ def main():
                     ("conv 1x1 as GEMM 1x3x5x5 to 4 b=0", lambda: case_conv_pointwise(a, obj, tmp, 1, 3, 5, 5, 4,
                                                                                       -0.5, 0.0, rnd)),
                     # strips on the dot kernel: one column of C beside the tile (TN), five rows below it (NN)
+                    ("split 70x130x21 odd ld (unaligned tile)",
+                     lambda: case_split(a, obj, tmp, 70, 130, 21, 1.5, 0.5, rnd, odd=True)),
+                    ("split TT 77x64x13 odd ld (unaligned tile)",
+                     lambda: case_split(a, obj, tmp, 77, 64, 13, 1.0, 0.0, rnd, ta=True, tb=True, odd=True)),
                     ("split TN 128x65x64 (dot strip)",
                      lambda: case_split(a, obj, tmp, 128, 65, 64, 1.0, 0.5, rnd, ta=True)),
                     ("split NN 69x128x40 (dot strip)", lambda: case_split(a, obj, tmp, 69, 128, 40, -1.0, 0.0, rnd)),
@@ -2463,6 +2472,9 @@ def main():
                          lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c)),
                         ("h tile64 ta C %s 64x64x16" % ct,
                          lambda tk=tk, c=c: case_tile(a, obj, tmp, 64, 64, 16, 1.0, 0.5, rnd, tk, "e", c, ta=True)),
+                        ("h split C %s 70x130x21 odd ld (unaligned tile)" % ct,
+                         lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
+                                                              odd=True)),
                         ("h split TN C %s 77x130x21" % ct,
                          lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
                                                               ta=True)),

@@ -18,9 +18,11 @@ KERNELS = {  # file: [(name, A and B type, C type)]
     "hgemm.mlir": [("agx_hgemm_tile64_cf16", "f16", "f16"), ("agx_hgemm_tile64_cf32", "f16", "f32")],
 }
 VARIANTS = [("", False, False), ("_ta", True, False), ("_tb", False, True), ("_tatb", True, True)]
+# `_u` kernels make no alignment assumption (odd leading dimensions or strides, matrices not 8-byte aligned)
+ALIGNMENTS = [("", True), ("_u", False)]
 
 
-def kernel(name, ab, c, ta, tb):
+def kernel(name, ab, c, ta, tb, aligned=True):
     M = lambda t: f"vector<64x{t}>"
     acc, mab = M("f32"), M(ab)
     mem = lambda t: f"memref<?x?x{t}, strided<[?, 1], offset: ?>, 1>"
@@ -33,22 +35,25 @@ def kernel(name, ab, c, ta, tb):
     w("      attributes {known_block_size = array<i32: 128, 1, 1>} {")
     for v in [0, 1, 2, 8, 16, 24, 32, 64, 128]:
         w(f"    %i{v} = arith.constant {v} : index")
-    # The plan launches the kernel with 8-byte aligned matrices and even leading dimensions: said here, the two
-    # elements of a matrix row a lane loads are one aligned 32-bit access even for 16-bit types.
-    w("    %even = arith.constant -2 : index")
-    for n in ["a", "b", "c"]:
-        w(f"    %{n}0a = memref.assume_alignment %{n}0, 8 : memref<1x{ab if n != 'c' else c}, 1>")
-    for ld in ["lda", "ldb", "ldc"]:
-        w(f"    %{ld}_e = arith.andi %{ld}, %even : index")
-    # the matrices of batch entry z (grid y) are bsa, bsb and bsc elements on (even as well)
+    # The plan launches the aligned kernel with 8-byte aligned matrices and even leading dimensions and batch
+    # strides: said here, the two elements of a matrix row a lane loads are one aligned 32-bit access even for
+    # 16-bit types. The `_u` kernel takes them as they are.
+    e = "_e" if aligned else ""  # the values the kernel uses: masked even, or as passed
+    mat = (lambda n: f"%{n}0a") if aligned else (lambda n: f"%{n}0")
+    if aligned:
+        w("    %even = arith.constant -2 : index")
+        for n in ["a", "b", "c"]:
+            w(f"    %{n}0a = memref.assume_alignment %{n}0, 8 : memref<1x{ab if n != 'c' else c}, 1>")
+        for v in ["lda", "ldb", "ldc", "bsa", "bsb", "bsc"]:
+            w(f"    %{v}_e = arith.andi %{v}, %even : index")
+    # the matrices of batch entry z (grid y) are bsa, bsb and bsc elements on
     w("    %z = gpu.block_id y")
     for n in ["a", "b", "c"]:
-        w(f"    %bs{n}_e = arith.andi %bs{n}, %even : index")
-        w(f"    %o{n} = arith.muli %z, %bs{n}_e : index")
+        w(f"    %o{n} = arith.muli %z, %bs{n}{e} : index")
     # a transposed operand is stored as its transpose, row-major
-    for n, t, sz, ld in [("A", ab, "%K, %M" if ta else "%M, %K", "%lda_e"),
-                         ("B", ab, "%N, %K" if tb else "%K, %N", "%ldb_e"), ("C", c, "%M, %N", "%ldc_e")]:
-        w(f"    %{n} = memref.reinterpret_cast %{n.lower()}0a to offset: [%o{n.lower()}], sizes: [{sz}], strides: [{ld}, 1]")
+    for n, t, sz, ld in [("A", ab, "%K, %M" if ta else "%M, %K", "%lda" + e),
+                         ("B", ab, "%N, %K" if tb else "%K, %N", "%ldb" + e), ("C", c, "%M, %N", "%ldc" + e)]:
+        w(f"    %{n} = memref.reinterpret_cast {mat(n.lower())} to offset: [%o{n.lower()}], sizes: [{sz}], strides: [{ld}, 1]")
         w(f"        : memref<1x{t}, 1> to {mem(t)}")
     w("""
     // Grouped tile order: groups of 8 tile rows, column-major inside a group.
@@ -148,15 +153,16 @@ def main():
         base = path.rsplit("/", 1)[-1]
         L = open(path).read().split("\n")
         for name, ab, c in KERNELS[base]:
-            for suffix, ta, tb in VARIANTS:
-                fn = name + suffix
-                body = kernel(fn, ab, c, ta, tb)
+            for (asuffix, aligned), (suffix, ta, tb) in [(al, v) for al in ALIGNMENTS for v in VARIANTS]:
+                fn = name + asuffix + suffix
+                body = kernel(fn, ab, c, ta, tb, aligned)
                 start = next((i for i, l in enumerate(L) if re.match(r"  gpu\.func @%s\(" % fn, l)), None)
                 if start is None:
                     end = max(i for i, l in enumerate(L) if l == "}")  # the module's end
-                    which = {(True, False): "A[r, k] at a[k * lda + r]", (False, True): "B[k, c] at b[c * ldb + k]",
+                    which = {(False, False): "A and B as they are",
+                             (True, False): "A[r, k] at a[k * lda + r]", (False, True): "B[k, c] at b[c * ldb + k]",
                              (True, True): "A[r, k] at a[k * lda + r] and B[k, c] at b[c * ldb + k]"}[(ta, tb)]
-                    doc = ["", f"  // {name} with {which} (transposed)."]
+                    doc = ["", f"  // {name} with {which} (transposed)" + ("." if aligned else ", without alignment.")]
                     L[end:end] = doc + body
                 else:
                     end = next(i for i in range(start, len(L)) if L[i] == "  }")
