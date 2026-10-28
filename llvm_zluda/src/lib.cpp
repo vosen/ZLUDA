@@ -14,6 +14,7 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/ReplaceConstant.h>
+#include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -1226,6 +1227,298 @@ void LLVMZludaAgxKeepGlobals(LLVMModuleRef M)
     }
     if (!keep.empty())
         appendToUsed(*Mod, keep);
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air written for Metal: Metal compiles no writable
+// program-scope variables (MSL has none; a module with a device global
+// crashes its compiler on an M2 Max), so a PTX module's .global variables
+// become one device buffer. The functions other than kernels that use them
+// are first inlined into the kernels (LLVMZludaAirInlineGlobalUsers and the
+// always-inline pass); LLVMZludaAirGlobalsToBuffer then lays the variables
+// out in the buffer, gives each kernel using them a last parameter, a
+// pointer to it ("zluda-globals"), and describes the buffer in JSON for the
+// host, which allocates it and writes its initial contents:
+//   {"size": N, "image": "<hex>", "relocs": [[offset, target], ...],
+//    "symbols": {"name": offset, ...}, "kernels": ["name", ...]}
+// An 8-byte reloc at offset holds the buffer's address plus target (an
+// initializer's address of a variable). The AGX compilation is unaffected:
+// these run on a copy of the module.
+
+static bool zludaIsBufferGlobal(const GlobalVariable &GV)
+{
+    return GV.getAddressSpace() == 1 && !GV.getName().starts_with("llvm.");
+}
+
+// The functions whose instructions use V, through constant expressions.
+static void zludaUsingFunctions(Value *V, SmallPtrSetImpl<Function *> &Out)
+{
+    for (User *U : V->users())
+    {
+        if (auto *I = dyn_cast<Instruction>(U))
+            Out.insert(I->getFunction());
+        else if (isa<ConstantExpr>(U) || isa<ConstantAggregate>(U))
+            zludaUsingFunctions(U, Out);
+    }
+}
+
+// Marks the functions other than kernels that use a buffer global
+// alwaysinline; returns how many it marked.
+int LLVMZludaAirInlineGlobalUsers(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    SmallPtrSet<Function *, 8> users;
+    for (GlobalVariable &GV : Mod->globals())
+        if (zludaIsBufferGlobal(GV))
+            zludaUsingFunctions(&GV, users);
+    int marked = 0;
+    for (Function *F : users)
+    {
+        if (F->hasFnAttribute("air-kernel") || F->hasFnAttribute(Attribute::AlwaysInline) || F->use_empty())
+            continue;
+        F->removeFnAttr(Attribute::NoInline);
+        F->addFnAttr(Attribute::AlwaysInline);
+        marked++;
+    }
+    return marked;
+}
+
+static std::string zludaHex(const std::vector<uint8_t> &bytes)
+{
+    static const char digits[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(bytes.size() * 2);
+    for (uint8_t b : bytes)
+    {
+        out += digits[b >> 4];
+        out += digits[b & 15];
+    }
+    return out;
+}
+
+namespace
+{
+    struct ZludaGlobalsImage
+    {
+        const DataLayout &DL;
+        DenseMap<const GlobalValue *, uint64_t> offsets;
+        std::vector<uint8_t> image;
+        std::vector<std::pair<uint64_t, uint64_t>> relocs;
+
+        void putInt(const APInt &v, uint64_t at, uint64_t size)
+        {
+            for (uint64_t i = 0; i < size && i * 8 < v.getBitWidth(); i++)
+                image[at + i] = (uint8_t)v.extractBitsAsZExtValue(
+                    std::min<unsigned>(8, v.getBitWidth() - i * 8), i * 8);
+        }
+
+        // Whether C is a variable's address plus a constant: a GEP or cast
+        // of it (IsConstantOffsetFromGlobal), or integer arithmetic on its
+        // ptrtoint (PTX's generic(v)+4).
+        bool addressOf(Constant *C, GlobalValue *&GV, int64_t &off)
+        {
+            APInt o;
+            if (IsConstantOffsetFromGlobal(C, GV, o, DL))
+            {
+                off = o.getSExtValue();
+                return true;
+            }
+            auto *CE = dyn_cast<ConstantExpr>(C);
+            if (!CE)
+                return false;
+            if (CE->getOpcode() == Instruction::PtrToInt || CE->getOpcode() == Instruction::IntToPtr ||
+                CE->isCast())
+                return addressOf(CE->getOperand(0), GV, off);
+            if (CE->getOpcode() == Instruction::Add || CE->getOpcode() == Instruction::Sub)
+            {
+                auto *K = dyn_cast<ConstantInt>(CE->getOperand(1));
+                Constant *Base = CE->getOperand(0);
+                if (!K && CE->getOpcode() == Instruction::Add)
+                {
+                    K = dyn_cast<ConstantInt>(CE->getOperand(0));
+                    Base = CE->getOperand(1);
+                }
+                if (!K || !addressOf(Base, GV, off))
+                    return false;
+                off += CE->getOpcode() == Instruction::Add ? K->getSExtValue() : -K->getSExtValue();
+                return true;
+            }
+            return false;
+        }
+
+        // Writes C at offset at; returns an error message or "".
+        std::string put(Constant *C, uint64_t at)
+        {
+            Type *T = C->getType();
+            if (isa<UndefValue>(C) || isa<ConstantAggregateZero>(C) || isa<ConstantPointerNull>(C))
+                return "";
+            if (auto *CI = dyn_cast<ConstantInt>(C))
+            {
+                putInt(CI->getValue(), at, DL.getTypeStoreSize(T));
+                return "";
+            }
+            if (auto *CF = dyn_cast<ConstantFP>(C))
+            {
+                putInt(CF->getValueAPF().bitcastToAPInt(), at, DL.getTypeStoreSize(T));
+                return "";
+            }
+            if (auto *ST = dyn_cast<StructType>(T))
+            {
+                const StructLayout *SL = DL.getStructLayout(ST);
+                for (unsigned i = 0; i < ST->getNumElements(); i++)
+                    if (std::string e = put(C->getAggregateElement(i), at + SL->getElementOffset(i)); !e.empty())
+                        return e;
+                return "";
+            }
+            if (T->isArrayTy() || T->isVectorTy())
+            {
+                Type *E = T->isArrayTy() ? T->getArrayElementType() : cast<VectorType>(T)->getElementType();
+                uint64_t n = T->isArrayTy() ? T->getArrayNumElements() : cast<FixedVectorType>(T)->getNumElements();
+                uint64_t stride = T->isArrayTy() ? DL.getTypeAllocSize(E) : DL.getTypeStoreSize(E);
+                for (uint64_t i = 0; i < n; i++)
+                    if (std::string e = put(C->getAggregateElement(i), at + i * stride); !e.empty())
+                        return e;
+                return "";
+            }
+            // The address of a variable (possibly offset, cast to an integer).
+            GlobalValue *GV = nullptr;
+            int64_t off = 0;
+            if (addressOf(C, GV, off))
+            {
+                auto it = offsets.find(GV);
+                if (it == offsets.end())
+                    return "an initializer holds the address of " + GV->getName().str() +
+                           ", which is not in the globals buffer";
+                if (DL.getTypeStoreSize(T) != 8)
+                    return "an initializer holds a variable's address in fewer than 8 bytes";
+                relocs.push_back({at, it->second + off});
+                return "";
+            }
+            return "an initializer the globals buffer cannot hold";
+        }
+    };
+}
+
+// Returns 1 with *json set if the module had buffer globals, 0 if not, -1
+// with *error.
+int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
+{
+    Module *Mod = unwrap(M);
+    const DataLayout &DL = Mod->getDataLayout();
+    LLVMContext &Ctx = Mod->getContext();
+    SmallVector<GlobalVariable *, 8> globals;
+    for (GlobalVariable &GV : Mod->globals())
+        if (zludaIsBufferGlobal(GV))
+            globals.push_back(&GV);
+    if (globals.empty())
+        return 0;
+    auto fail = [&](const std::string &e) {
+        *error = LLVMCreateMessage(e.c_str());
+        return -1;
+    };
+
+    ZludaGlobalsImage img{DL};
+    uint64_t size = 0;
+    for (GlobalVariable *GV : globals)
+    {
+        Align a = DL.getValueOrABITypeAlignment(GV->getAlign(), GV->getValueType());
+        size = alignTo(size, a);
+        img.offsets[GV] = size;
+        size += DL.getTypeAllocSize(GV->getValueType());
+    }
+    img.image.assign(std::max<uint64_t>(size, 1), 0);
+    for (GlobalVariable *GV : globals)
+        if (GV->hasInitializer())
+            if (std::string e = img.put(GV->getInitializer(), img.offsets[GV]); !e.empty())
+                return fail(GV->getName().str() + ": " + e);
+
+    SmallPtrSet<Function *, 8> users;
+    for (GlobalVariable *GV : globals)
+        zludaUsingFunctions(GV, users);
+    // Functions inlined into every caller are dead.
+    SmallVector<Function *, 4> dead;
+    for (Function *F : users)
+        if (!F->hasFnAttribute("air-kernel") && F->use_empty())
+            dead.push_back(F);
+    for (Function *F : dead)
+    {
+        users.erase(F);
+        F->eraseFromParent();
+    }
+    for (Function *K : users)
+        if (!K->hasFnAttribute("air-kernel"))
+            return fail(K->getName().str() + " uses a .global variable and could not be inlined into a kernel");
+    std::string kernels;
+    SmallVector<Constant *, 8> consts(globals.begin(), globals.end());
+    for (Function *K : users)
+    {
+        // K with a last parameter, the buffer's address.
+        FunctionType *FT = K->getFunctionType();
+        SmallVector<Type *, 8> params(FT->params());
+        params.push_back(PointerType::get(Ctx, 1));
+        Function *NK = Function::Create(FunctionType::get(FT->getReturnType(), params, false), K->getLinkage(),
+                                        K->getAddressSpace(), "", Mod);
+        NK->copyAttributesFrom(K);
+        NK->splice(NK->begin(), K);
+        for (auto [Old, New] : zip(K->args(), NK->args()))
+        {
+            New.takeName(&Old);
+            Old.replaceAllUsesWith(&New);
+        }
+        Argument *Base = NK->getArg(NK->arg_size() - 1);
+        Base->setName("zluda_globals");
+        NK->addParamAttr(Base->getArgNo(), Attribute::get(Ctx, "zluda-globals"));
+        NK->addParamAttr(Base->getArgNo(), Attribute::NoAlias);
+        NK->takeName(K);
+        K->replaceAllUsesWith(NK);
+        K->eraseFromParent();
+        // Each use of a variable in NK becomes the buffer plus its offset.
+        convertUsersOfConstantsToInstructions(consts, NK);
+        IRBuilder<> B(&*NK->getEntryBlock().getFirstInsertionPt());
+        for (GlobalVariable *GV : globals)
+        {
+            Value *Addr = nullptr;
+            for (Use &U : make_early_inc_range(GV->uses()))
+            {
+                auto *I = dyn_cast<Instruction>(U.getUser());
+                if (!I || I->getFunction() != NK)
+                    continue;
+                if (!Addr)
+                    Addr = B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName());
+                U.set(Addr);
+            }
+        }
+        if (!kernels.empty())
+            kernels += ", ";
+        kernels += "\"" + NK->getName().str() + "\"";
+    }
+
+    std::string out = "{\"size\": " + std::to_string(size) + ", \"image\": \"" + zludaHex(img.image) +
+                      "\", \"relocs\": [";
+    for (size_t i = 0; i < img.relocs.size(); i++)
+        out += std::string(i ? ", [" : "[") + std::to_string(img.relocs[i].first) + ", " +
+               std::to_string(img.relocs[i].second) + "]";
+    out += "], \"symbols\": {";
+    for (size_t i = 0; i < globals.size(); i++)
+        out += std::string(i ? ", \"" : "\"") + globals[i]->getName().str() + "\": " +
+               std::to_string(img.offsets[globals[i]]);
+    out += "}, \"kernels\": [" + kernels + "]}";
+
+    // (their initializers, now in the image, may refer to each other)
+    for (GlobalVariable *GV : globals)
+        GV->setInitializer(nullptr);
+    for (GlobalVariable *GV : globals)
+    {
+        GV->removeDeadConstantUsers();
+        if (!GV->use_empty())
+            return fail(GV->getName().str() + " is used outside the kernels (in another variable's initializer?)");
+        GV->eraseFromParent();
+    }
+    *json = LLVMCreateMessage(out.c_str());
+    return 1;
 }
 
 LLVM_C_EXTERN_C_END

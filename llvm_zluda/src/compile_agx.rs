@@ -13,6 +13,8 @@ use crate::{
     LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
+#[cfg(zluda_air)]
+use crate::{LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers};
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
     LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
@@ -334,10 +336,24 @@ pub fn compile_agx_linked(
     // (agx-raise-to-air: what AIR does not have as hints with AIR emulations, double precision in software,
     // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
     // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
+    //
+    // Metal compiles no writable program-scope variables, so in the .air a
+    // module's .global variables are one buffer, a last kernel parameter, which
+    // NAME.air.globals describes for the host (LLVMZludaAirGlobalsToBuffer). AGX
+    // compiles the AIR of the module without that change, so its code and
+    // kernel arguments do not change: the .air is then made from a copy.
     if via_air() {
-        let bitcode = to_air(&linked, &target_machine, &pb_options)?;
+        let metal = has_device_globals(&linked).then(|| linked.clone());
+        let (mut bitcode, _) = to_air(&linked, &target_machine, &pb_options, false)?;
+        let mut globals = None;
+        if let Some(metal) = metal {
+            (bitcode, globals) = to_air(&metal, &target_machine, &pb_options, true)?;
+        }
         if let Some(hook) = compiler_hook {
             hook(&bitcode, String::from("air"));
+            if let Some(json) = globals {
+                hook(&json.into_bytes(), String::from("air.globals"));
+            }
         }
     }
 
@@ -372,9 +388,33 @@ fn via_air() -> bool {
     std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1")
 }
 
+/// Whether the module has .global variables (address space 1, the same in
+/// AGX and AIR).
+fn has_device_globals(module: &Module) -> bool {
+    let mut global = unsafe { llvm_sys::core::LLVMGetFirstGlobal(module.get()) };
+    while !global.is_null() {
+        let mut len = 0;
+        let name = unsafe { LLVMGetValueName2(global, &mut len) };
+        let name = unsafe { std::slice::from_raw_parts(name as *const u8, len) };
+        let space = unsafe { llvm_sys::core::LLVMGetPointerAddressSpace(llvm_sys::core::LLVMTypeOf(global)) };
+        if space == 1 && !name.starts_with(b"llvm.") {
+            return true;
+        }
+        global = unsafe { llvm_sys::core::LLVMGetNextGlobal(global) };
+    }
+    false
+}
+
 /// The module in upstream AIR, in place, and its bitcode (the .air file).
+/// With buffer_globals, the .global variables become one buffer
+/// (LLVMZludaAirGlobalsToBuffer), described by the returned JSON.
 #[cfg(zluda_air)]
-fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+fn to_air(
+    module: &Module,
+    agx: &TargetMachine,
+    options: &PassBuilderOptions,
+    buffer_globals: bool,
+) -> Result<(Vec<u8>, Option<String>), String> {
     let run = |pipeline: &CStr, tm: &TargetMachine| -> Result<(), String> {
         let error = unsafe { LLVMRunPasses(module.get(), pipeline.as_ptr(), tm.get(), options.get()) };
         if error.is_null() {
@@ -384,6 +424,24 @@ fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) ->
         Err(Message::new(unsafe { CStr::from_ptr(err_msg) }).to_str().to_string())
     };
     run(c"agx-raise-to-air", agx)?;
+    let mut globals = None;
+    if buffer_globals {
+        // The functions using the variables, inlined into the kernels (AIR
+        // inlines every call anyway), until no other function uses them.
+        for _ in 0..16 {
+            if unsafe { LLVMZludaAirInlineGlobalUsers(module.get()) } == 0 {
+                break;
+            }
+            run(c"always-inline", agx)?;
+        }
+        let mut json = std::ptr::null_mut();
+        let mut err = std::ptr::null_mut();
+        match unsafe { LLVMZludaAirGlobalsToBuffer(module.get(), &mut json, &mut err) } {
+            -1 => return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string()),
+            1 => globals = Some(Message::new(unsafe { CStr::from_ptr(json) }).to_str().to_string()),
+            _ => {}
+        }
+    }
     let mut target = unsafe { std::mem::zeroed() };
     let mut err = std::ptr::null_mut();
     if unsafe { LLVMGetTargetFromTriple(c"air".as_ptr(), &mut target, &mut err) } != 0 {
@@ -408,11 +466,11 @@ fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) ->
         .to_vec()
     };
     unsafe { llvm_sys::core::LLVMDisposeMemoryBuffer(buffer) };
-    Ok(bytes)
+    Ok((bytes, globals))
 }
 
 #[cfg(not(zluda_air))]
-fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions, _: bool) -> Result<(Vec<u8>, Option<String>), String> {
     Err("ZLUDA_AGX_VIA_AIR: this LLVM build has no AIR target".to_string())
 }
 

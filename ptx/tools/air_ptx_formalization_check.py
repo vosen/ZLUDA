@@ -13,9 +13,13 @@ Kernel parameters are constant buffers, one per parameter, bound at their AIR lo
 run as one service job (in order, on the same buffers), so module-scope .global variables keep their values between
 them; a job boundary (any host-side directive between launches) starts them again from their initializers.
 
-Not supported here (reported UNSUPPORTED): textures, surfaces, samplers, tensor maps, multimem, fabric, clusters,
-.address_size 32 modules, and .expect / .patch of module-scope .global variables (the service cannot read or write
-them).
+Module-scope .global variables are one buffer in the .air (zoc writes NAME.air.globals: its size, initial image,
+relocations and symbols); it is placed in the heap like a harness buffer, its relocations written as address patches,
+and bound at each kernel's zluda_globals argument, so .expect / .patch of globals work and globals keep their values
+between launches.
+
+Not supported here (reported UNSUPPORTED): textures, surfaces, samplers, tensor maps, multimem, fabric, clusters and
+.address_size 32 modules.
 
     python3 ptx/tools/air_ptx_formalization_check.py --zoc target/debug/zoc --llc $LLVM/bin/llc \\
         --llvm-dis $LLVM/bin/llvm-dis PTX-formalization/tests/*.ptx
@@ -40,17 +44,25 @@ UNSUPPORTED_DIRECTIVES = ('.tensormap', '.texture', '.sampler', '.surface', '.mu
 TRANSIENT = ('XPC_ERROR_CONNECTION_INTERRUPTED', 'did not reply')
 
 
+# Every tool sending requests to the AIR service takes this lock around each one, so that requests never overlap (a
+# request the Mac never finishes freezes its display; two at once make that worse and hide which one it was).
+DEVICE_LOCK = os.environ.get('AIR_DEVICE_LOCK', '/scratch/air-device.lock')
+
+
 def submit(job, queue, tries=4):
+    import fcntl
     sys.path.insert(0, os.environ.get('AIR_CLIENT', '/air/client'))
     from client import submit as service_submit
     reply = {}
-    for _ in range(tries):
-        try:
-            reply = service_submit(job, queue, timeout=180)
-        except TimeoutError as e:
-            reply = {'ok': False, 'error': str(e)}
-        if reply.get('ok') or not any(t in reply.get('error', '') for t in TRANSIENT):
-            break
+    with open(DEVICE_LOCK, 'a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for _ in range(tries):
+            try:
+                reply = service_submit(job, queue, timeout=180)
+            except TimeoutError as e:
+                reply = {'ok': False, 'error': str(e)}
+            if reply.get('ok') or not any(t in reply.get('error', '') for t in TRANSIENT):
+                break
     return reply
 
 
@@ -95,7 +107,10 @@ def air_kernels(text):
             n = nodes[a]
             loc = re.search(r'!"air\.location_index", i32 (\d+)', n)
             size = re.search(r'!"air\.arg_type_size", i32 (\d+)', n)
-            if '"air.buffer"' in n and '!"air.address_space", i32 3' in n:
+            if '"air.buffer"' in n and '!"air.arg_name", !"zluda_globals"' in n:
+                # the module's .global variables (NAME.air.globals)
+                args.append(('globals', int(loc.group(1))))
+            elif '"air.buffer"' in n and '!"air.address_space", i32 3' in n:
                 # dynamic shared memory: a threadgroup buffer whose length the dispatch sets
                 args.append(('threadgroup', int(loc.group(1)) if loc else 0))
             elif '"air.buffer"' in n:
@@ -203,10 +218,25 @@ def run_test(path, args):
         agx, _, gsyms, _, _ = h.kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
         air_bytes = b64(open(metal, 'rb').read())
         params = h.kernel_params(module)
-        module_globals = set(re.findall(r'\.global\s+(?:\.align\s+\d+\s+)?\.\w+\s+([\w$.]+)', module))
 
         heap = Heap()
         syms, bufs = {}, {}
+        globals_off = None
+        globals_desc = os.path.join(tmp, 'm.air.globals')
+        if os.path.exists(globals_desc):
+            g = json.load(open(globals_desc))
+            globals_off = 0
+            heap.top = max(g['size'], 1)
+            heap.ensure(heap.top)
+            heap.buf[:len(bytes.fromhex(g['image']))] = bytes.fromhex(g['image'])
+            for off, target in g['relocs']:
+                heap.patches[off] = target
+            for name, off in g['symbols'].items():
+                syms[name] = BASE + off
+            ordered = sorted(g['symbols'].items(), key=lambda kv: kv[1])
+            for i, (name, off) in enumerate(ordered):
+                end = ordered[i + 1][1] if i + 1 < len(ordered) else g['size']
+                bufs[name] = [BASE + off, 'b8', end - off]
         failures, passed, skipped, unsupported = [], 0, 0, []
         skipped_launches, tainted_bufs = [], set()
         pending = []  # launches of the next job: (kernel, grid, block, dyn, [param bytes], [param patches])
@@ -235,6 +265,9 @@ def run_test(path, args):
                         patches.append({'buffer': len(buffers), 'offset': off, 'target_buffer': 0,
                                         'target_offset': t})
                     buffers.append({'size': len(data), 'data': b64(data)})
+                for a in kernels[name]:
+                    if a[0] == 'globals':
+                        bindings.append({'index': a[1], 'buffer': 0, 'offset': globals_off})
                 cmd = {'kernel': name, 'bindings': bindings,
                        'grid': [grid[j] * block[j] for j in range(3)], 'group': list(block)}
                 tg = [a for a in kernels[name] if a[0] == 'threadgroup']
@@ -293,8 +326,6 @@ def run_test(path, args):
                 t = h.ty_of(m.group(3))
                 vals = h.split_vals(m.group(6))
                 name = m.group(2)
-                if name in module_globals and name not in bufs:
-                    raise Unsupported('.patch of a module-scope .global')
                 if m.group(1) == 'patch':
                     base = syms[name] + int(m.group(5) or 0) * SIZES[t]
                 else:
