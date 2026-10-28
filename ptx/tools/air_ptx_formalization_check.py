@@ -95,7 +95,10 @@ def air_kernels(text):
             n = nodes[a]
             loc = re.search(r'!"air\.location_index", i32 (\d+)', n)
             size = re.search(r'!"air\.arg_type_size", i32 (\d+)', n)
-            if '"air.buffer"' in n:
+            if '"air.buffer"' in n and '!"air.address_space", i32 3' in n:
+                # dynamic shared memory: a threadgroup buffer whose length the dispatch sets
+                args.append(('threadgroup', int(loc.group(1)) if loc else 0))
+            elif '"air.buffer"' in n:
                 args.append(('buffer', int(loc.group(1)), int(size.group(1)) if size else 8))
             elif '"air.threadgroup"' in n:
                 args.append(('threadgroup', int(loc.group(1)) if loc else 0))
