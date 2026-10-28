@@ -14,7 +14,9 @@ use crate::{
     LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
 #[cfg(zluda_air)]
-use crate::{LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers, LLVMZludaAirSharedLayout};
+use crate::{
+    LLVMZludaAirFunctionPointers, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers, LLVMZludaAirSharedLayout,
+};
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
     LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
@@ -340,8 +342,10 @@ pub fn compile_agx_linked(
     // The .air for Metal is made from a copy, changed where Metal differs from
     // AGX: a module's .global variables are one buffer, a last kernel
     // parameter, which NAME.air.globals describes for the host
-    // (LLVMZludaAirGlobalsToBuffer), and the shared memory registers follow
-    // Metal's numbering of threadgroup addresses (LLVMZludaAirSharedLayout).
+    // (LLVMZludaAirGlobalsToBuffer), the shared memory registers follow
+    // Metal's numbering of threadgroup addresses (LLVMZludaAirSharedLayout),
+    // and function pointers are IDs, indirect calls choices among direct ones
+    // (LLVMZludaAirFunctionPointers).
     // AGX compiles the AIR of the module without those changes, so its code and
     // kernel arguments do not change.
     if via_air() {
@@ -412,6 +416,12 @@ fn to_air(
     let mut globals = None;
     if buffer_globals {
         unsafe { LLVMZludaAirSharedLayout(module.get()) };
+        // function pointers as IDs and choices among direct calls (before the
+        // globals buffer, whose image then holds the IDs)
+        let mut err = std::ptr::null_mut();
+        if unsafe { LLVMZludaAirFunctionPointers(module.get(), &mut err) } < 0 {
+            return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+        }
         // The functions using the variables, inlined into the kernels (AIR
         // inlines every call anyway), until no other function uses them.
         for _ in 0..16 {

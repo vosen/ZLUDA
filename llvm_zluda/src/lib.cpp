@@ -18,6 +18,7 @@
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
@@ -1446,6 +1447,22 @@ namespace
                         return e;
                 return "";
             }
+            // A number seen through pointer casts (a function's ID, LLVMZludaAirFunctionPointers:
+            // inttoptr ID, and ptrtoint of that).
+            {
+                Constant *V = C;
+                while (auto *CE = dyn_cast<ConstantExpr>(V))
+                {
+                    if (CE->getOpcode() != Instruction::IntToPtr && CE->getOpcode() != Instruction::PtrToInt)
+                        break;
+                    V = CE->getOperand(0);
+                }
+                if (auto *K = dyn_cast<ConstantInt>(V); K && V != C)
+                {
+                    putInt(K->getValue().zextOrTrunc(8 * DL.getTypeStoreSize(T)), at, DL.getTypeStoreSize(T));
+                    return "";
+                }
+            }
             // The address of a variable (possibly offset, cast to an integer).
             GlobalValue *GV = nullptr;
             int64_t off = 0;
@@ -1460,7 +1477,10 @@ namespace
                 relocs.push_back({at, it->second + off});
                 return "";
             }
-            return "an initializer the globals buffer cannot hold";
+            std::string text;
+            raw_string_ostream os(text);
+            os << *C;
+            return "an initializer the globals buffer cannot hold: " + os.str();
         }
     };
 }
@@ -1495,7 +1515,8 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
     img.image.assign(std::max<uint64_t>(size, 1), 0);
     for (GlobalVariable *GV : globals)
         if (GV->hasInitializer())
-            if (std::string e = img.put(GV->getInitializer(), img.offsets[GV]); !e.empty())
+            // (folded: a function's ID reads ptrtoint (inttoptr ID), which needs the data layout to fold)
+            if (std::string e = img.put(ConstantFoldConstant(GV->getInitializer(), DL), img.offsets[GV]); !e.empty())
                 return fail(GV->getName().str() + ": " + e);
 
     // The mask() initializers (ZLUDA's AGX table): bytes of a variable's
@@ -1762,6 +1783,128 @@ int LLVMZludaAirSharedLayout(LLVMModuleRef M)
     }
     (void)Ctx;
     return changed ? 1 : 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air for Metal: function pointers without Metal's
+// function pointers. AIR has no call stack and the AIR target inlines every
+// call, so an indirect call becomes a choice among the functions it can call:
+// those of its type whose address the module takes, which are all a CUDA
+// function pointer can hold (ZLUDA compiles the whole linked program as one
+// module). A function's address is a small integer ID (1, 2, ...; 0 stays
+// null), wherever it appears: in instructions and in variable initializers
+// (which the globals buffer then holds as numbers). An indirect call compares
+// the callee's ID with each candidate's and calls it directly; with none of
+// them matching (an invalid pointer, undefined in CUDA) it calls the last.
+// Returns -1 with *error if a call has no candidate, else 1 if the module
+// changed.
+int LLVMZludaAirFunctionPointers(LLVMModuleRef M, char **error)
+{
+    Module *Mod = unwrap(M);
+    LLVMContext &Ctx = Mod->getContext();
+    Type *I64 = Type::getInt64Ty(Ctx);
+    auto isCallee = [](const Use &U) {
+        auto *CB = dyn_cast<CallBase>(U.getUser());
+        return CB && CB->isCallee(&U);
+    };
+    SmallVector<Function *, 8> taken;
+    for (Function &F : *Mod)
+        if (!F.isDeclaration() && !F.isIntrinsic() &&
+            any_of(F.uses(), [&](const Use &U) { return !isCallee(U) && !isa<BlockAddress>(U.getUser()); }))
+            taken.push_back(&F);
+    SmallVector<CallBase *, 8> indirect;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *CB = dyn_cast<CallBase>(&I); CB && CB->isIndirectCall() && !CB->isInlineAsm())
+                indirect.push_back(CB);
+    if (taken.empty() && indirect.empty())
+        return 0;
+
+    // Addresses as IDs.
+    DenseMap<Function *, uint64_t> ids;
+    for (size_t i = 0; i < taken.size(); i++)
+    {
+        Function *F = taken[i];
+        uint64_t id = i + 1;
+        ids[F] = id;
+        Constant *IdPtr = ConstantExpr::getIntToPtr(ConstantInt::get(I64, id), F->getType());
+        SmallVector<Use *, 8> uses;
+        for (Use &U : F->uses())
+            if (!isCallee(U) && !isa<BlockAddress>(U.getUser()) && !isa<GlobalValue>(U.getUser()))
+                uses.push_back(&U);
+        for (Use *U : uses)
+        {
+            if (auto *C = dyn_cast<Constant>(U->getUser()))
+                C->handleOperandChange(F, IdPtr);
+            else
+                U->set(IdPtr);
+        }
+    }
+    // llvm.used and the like may still list a function; they are not addresses the program sees.
+
+    // Indirect calls as a choice among direct ones.
+    for (CallBase *CB : indirect)
+    {
+        auto *CI = dyn_cast<CallInst>(CB);
+        if (!CI)
+        {
+            *error = LLVMCreateMessage("an indirect invoke has no Metal form");
+            return -1;
+        }
+        FunctionType *FT = CI->getFunctionType();
+        SmallVector<Function *, 8> cands;
+        for (Function *F : taken)
+            if (F->getFunctionType() == FT)
+                cands.push_back(F);
+        if (cands.empty())
+        {
+            std::string s;
+            raw_string_ostream os(s);
+            os << "an indirect call of type " << *FT << " in " << CI->getFunction()->getName()
+               << " has no function it can call";
+            *error = LLVMCreateMessage(os.str().c_str());
+            return -1;
+        }
+        BasicBlock *Head = CI->getParent();
+        BasicBlock *Tail = SplitBlock(Head, CI);
+        Head->getTerminator()->eraseFromParent();
+        IRBuilder<> B(Head);
+        Value *Id = B.CreatePtrToInt(CI->getCalledOperand(), I64);
+        Function *Fn = Head->getParent();
+        PHINode *Phi = nullptr;
+        if (!CI->getType()->isVoidTy())
+        {
+            Phi = PHINode::Create(CI->getType(), cands.size(), "", Tail->begin());
+            CI->replaceAllUsesWith(Phi);
+        }
+        SmallVector<Value *, 8> args(CI->args());
+        BasicBlock *Test = Head;
+        for (size_t i = 0; i < cands.size(); i++)
+        {
+            BasicBlock *Arm = BasicBlock::Create(Ctx, "indirect." + cands[i]->getName(), Fn, Tail);
+            IRBuilder<> AB(Arm);
+            CallInst *Direct = AB.CreateCall(FT, cands[i], args);
+            Direct->setCallingConv(cands[i]->getCallingConv());
+            Direct->setAttributes(CI->getAttributes());
+            AB.CreateBr(Tail);
+            if (Phi)
+                Phi->addIncoming(Direct, Arm);
+            IRBuilder<> TB(Test);
+            if (i + 1 == cands.size())
+                TB.CreateBr(Arm);
+            else
+            {
+                BasicBlock *Next = BasicBlock::Create(Ctx, "indirect.next", Fn, Tail);
+                TB.CreateCondBr(TB.CreateICmpEQ(Id, TB.getInt64(ids[cands[i]])), Arm, Next);
+                Test = Next;
+            }
+        }
+        CI->eraseFromParent();
+    }
+    return 1;
 }
 
 LLVM_C_EXTERN_C_END
