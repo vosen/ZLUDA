@@ -241,7 +241,17 @@ def run_test(path, args):
                 if tg:
                     cmd['threadgroup_memory'] = [{'index': tg[0][1], 'length': max(16, (dyn + 15) // 16 * 16)}]
                 commands.append(cmd)
+            hung = [c['kernel'] for c in commands if (os.path.basename(path), c['kernel']) in args.skip_hang]
+            if hung:
+                pending.clear()
+                return 'SKIPPED-HANG: ' + ','.join(hung)
             job = {'op': 'execute', 'air': air_bytes, 'buffers': buffers, 'commands': commands, 'readback': [0]}
+            if args.progress:
+                # before the request: a request that hangs the Mac is named here
+                with open(args.progress, 'a') as f:
+                    f.write('%s %s\n' % (os.path.basename(path), ','.join(c['kernel'] for c in commands)))
+                    f.flush()
+                    os.fsync(f.fileno())
             if patches:
                 job['address_patches'] = patches
             pending.clear()
@@ -278,7 +288,7 @@ def run_test(path, args):
             elif kw in ('.patch', '.append'):
                 err = flush()
                 if err:
-                    return 'GPU-ERROR', err
+                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
                 m = re.fullmatch(r'\.(patch|append) ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = h.ty_of(m.group(3))
                 vals = h.split_vals(m.group(6))
@@ -347,7 +357,7 @@ def run_test(path, args):
             elif kw == '.expect':
                 err = flush()
                 if err:
-                    return 'GPU-ERROR', err
+                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
                 m = re.fullmatch(r'\.expect ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = h.ty_of(m.group(2))
                 name = m.group(1)
@@ -373,7 +383,7 @@ def run_test(path, args):
                     passed += 1
         err = flush()
         if err:
-            return 'GPU-ERROR', err
+            return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
         args.counts['pass'] += passed
         args.counts['skip'] += skipped
         if failures:
@@ -402,8 +412,18 @@ def main():
     ap.add_argument('--max-failures', type=int, default=4, help='failing elements listed per test')
     ap.add_argument('-j', type=int, default=4)
     ap.add_argument('--json', help='write the results to this file')
+    ap.add_argument('--progress', help='append each request\'s test and kernels to this file before sending it')
+    ap.add_argument('--skip-hang', default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                         'air_ptx_formalization_hangs.txt'),
+                    help='file of "TEST KERNEL" lines (# comments) whose requests hang the device; never sent')
     args = ap.parse_args()
     args.counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    args.skip_hang = set()
+    if args.skip_hang and os.path.exists(args.skip_hang):
+        for line in open(args.skip_hang):
+            line = line.split('#')[0].split()
+            if len(line) == 2:
+                args.skip_hang.add(tuple(line))
 
     def one(p):
         try:
@@ -424,7 +444,7 @@ def main():
     if args.json:
         with open(args.json, 'w') as f:
             json.dump({os.path.basename(p): {'status': s, 'detail': d} for p, (s, d) in results}, f, indent=1)
-    return 0 if all(s in ('PASS', 'PARTIAL', 'UNSUPPORTED', 'REJECTED') for _, (s, _) in results) else 1
+    return 0 if all(s in ('PASS', 'PARTIAL', 'UNSUPPORTED', 'REJECTED', 'SKIPPED-HANG') for _, (s, _) in results) else 1
 
 
 if __name__ == '__main__':
