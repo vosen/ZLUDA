@@ -49,7 +49,8 @@ TRANSIENT = ('XPC_ERROR_CONNECTION_INTERRUPTED', 'did not reply')
 DEVICE_LOCK = os.environ.get('AIR_DEVICE_LOCK', '/scratch/air-device.lock')
 
 
-def submit(job, queue, tries=4):
+def submit(job, queue, tries=4, transient=TRANSIENT):
+    """Send one request to the service holding the device lock, retrying the failures listed in transient."""
     import fcntl
     sys.path.insert(0, os.environ.get('AIR_CLIENT', '/air/client'))
     from client import submit as service_submit
@@ -61,7 +62,7 @@ def submit(job, queue, tries=4):
                 reply = service_submit(job, queue, timeout=180)
             except TimeoutError as e:
                 reply = {'ok': False, 'error': str(e)}
-            if reply.get('ok') or not any(t in reply.get('error', '') for t in TRANSIENT):
+            if reply.get('ok') or not any(t in reply.get('error', '') for t in transient):
                 break
     return reply
 
@@ -161,6 +162,155 @@ class Heap:
         return int.from_bytes(self.buf[o:o + n], 'little')
 
 
+def load_hang_list(path):
+    """The (test, kernel) pairs of a hang list file ("TEST KERNEL" lines, # comments)."""
+    out = set()
+    if path and os.path.exists(path):
+        for line in open(path):
+            line = line.split('#')[0].split()
+            if len(line) == 2:
+                out.add(tuple(line))
+    return out
+
+
+def compile_module(args, module, tmp):
+    """zoc with ZLUDA_AGX_VIA_AIR=1 (NAME.air, and the AGX code compiled from it), then Metal's AIR (llc).
+    Returns (status, detail) of a failure, or (None, info): info has 'air' (Metal AIR bytes), 'kernels'
+    (air_kernels), 'roles' (hidden_roles), 'agx' (kernel_info's kernels of m.o), 'tainted', 'rejected'."""
+    env = dict(os.environ, ZLUDA_AGX_VIA_AIR='1')
+    status, detail = h.compile_ptx(args, module, tmp, env=env, product='m.air')
+    if status:
+        return status, detail
+    _, rejected, tainted = detail
+    air = os.path.join(tmp, 'm.air')
+    # Metal's AIR, from the portable AIR zoc wrote.
+    metal = os.path.join(tmp, 'm.metal.air')
+    r = subprocess.run([args.llc, '-mtriple=air', '-filetype=obj', '-air-output=air', air, '-o', metal],
+                       capture_output=True, text=True, timeout=args.timeout)
+    if r.returncode != 0:
+        return 'LLC-ERROR', (r.stderr.strip().splitlines() or ['?'])[-1][:300]
+    dis = lambda p: subprocess.run([args.llvm_dis, p, '-o', '-'], capture_output=True, text=True,
+                                   timeout=args.timeout).stdout
+    portable, metal_text = dis(air), dis(metal)
+    # static threadgroup bytes and the cluster shape, from the AGX compilation of the same AIR
+    with open(os.path.join(tmp, 'm.asm')) as f:
+        asm = f.read()
+    agx, _, gsyms, _, _ = h.kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
+    return None, {'air': open(metal, 'rb').read(), 'kernels': air_kernels(metal_text),
+                  'roles': hidden_roles(portable), 'agx': agx, 'tainted': tainted, 'rejected': rejected}
+
+
+def load_globals(tmp, heap, syms, bufs):
+    """Place the module's .global variables (NAME.air.globals) at the start of the heap; their symbols go to syms
+    and bufs. Returns the heap offset of the globals buffer, or None for a module without one."""
+    globals_desc = os.path.join(tmp, 'm.air.globals')
+    if not os.path.exists(globals_desc):
+        return None
+    g = json.load(open(globals_desc))
+    heap.top = max(g['size'], 1)
+    heap.ensure(heap.top)
+    heap.buf[:len(bytes.fromhex(g['image']))] = bytes.fromhex(g['image'])
+    for off, target in g['relocs']:
+        heap.patches[off] = target
+    for name, off in g['symbols'].items():
+        syms[name] = BASE + off
+    ordered = sorted(g['symbols'].items(), key=lambda kv: kv[1])
+    for i, (name, off) in enumerate(ordered):
+        end = ordered[i + 1][1] if i + 1 < len(ordered) else g['size']
+        bufs[name] = [BASE + off, 'b8', end - off]
+    return 0
+
+
+def launch_buffers(info, name, ps, ops, dyn, value, syms):
+    """The parameter buffers of a launch of kernel `name`: (location index, bytes, [(offset, heap target)])."""
+    kernels, roles, agx = info['kernels'], info['roles'], info['agx']
+    if len(ops) != len(ps):
+        raise Unsupported('launch argument count')
+    buf_args = [a for a in kernels[name] if a[0] == 'buffer']
+    kroles = roles.get(name, [])
+    pbufs = []
+    k = 0
+    for i, a in enumerate(buf_args):
+        role = kroles[i] if i < len(kroles) else None
+        if role == 'threadgroup-bytes':
+            data = (agx[name]['shared'] + dyn).to_bytes(4, 'little')
+            pbufs.append((a[1], data + b'\0' * 12, []))
+            continue
+        if role is not None:
+            raise Unsupported('hidden argument ' + role)
+        if k >= len(ps):
+            raise Unsupported('more AIR buffers than PTX parameters')
+        (t, n, _), o = ps[k], ops[k]
+        k += 1
+        size = SIZES[t] * n
+        target = None
+        if n != 1:
+            bits = (syms[o] if o in syms else int(o, 0)) & ((1 << (8 * size)) - 1)
+            target = syms.get(o) if size == 8 else None
+        else:
+            bits, target = value(o, t)
+        data = bytearray(bits.to_bytes(size, 'little'))
+        data += b'\0' * ((-len(data)) % 16 or (16 if not data else 0))
+        pbufs.append((a[1], data, [(0, target - BASE)] if target is not None else []))
+    if k != len(ps):
+        raise Unsupported('fewer AIR buffers than PTX parameters')
+    return pbufs
+
+
+def make_job(info, heap, pending, globals_off):
+    """The service job running the pending launches ((kernel, grid, block, dyn, launch_buffers)) in order on the
+    heap (buffer 0, read back)."""
+    kernels = info['kernels']
+    heap.ensure(max(heap.top, 16))
+    buffers = [{'size': len(heap.buf), 'data': b64(heap.buf)}]
+    patches = [{'buffer': 0, 'offset': o, 'target_buffer': 0, 'target_offset': t}
+               for o, t in sorted(heap.patches.items())]
+    commands = []
+    for name, grid, block, dyn, pbufs in pending:
+        bindings = []
+        for loc, data, ppatches in pbufs:
+            bindings.append({'index': loc, 'buffer': len(buffers)})
+            for off, t in ppatches:
+                patches.append({'buffer': len(buffers), 'offset': off, 'target_buffer': 0,
+                                'target_offset': t})
+            buffers.append({'size': len(data), 'data': b64(data)})
+        for a in kernels[name]:
+            if a[0] == 'globals':
+                bindings.append({'index': a[1], 'buffer': 0, 'offset': globals_off})
+        cmd = {'kernel': name, 'bindings': bindings,
+               'grid': [grid[j] * block[j] for j in range(3)], 'group': list(block)}
+        tg = [a for a in kernels[name] if a[0] == 'threadgroup']
+        if tg:
+            cmd['threadgroup_memory'] = [{'index': tg[0][1], 'length': max(16, (dyn + 15) // 16 * 16)}]
+        commands.append(cmd)
+    job = {'op': 'execute', 'air': b64(info['air']), 'buffers': buffers, 'commands': commands, 'readback': [0]}
+    if patches:
+        job['address_patches'] = patches
+    return job
+
+
+def hung_kernels(path, job, skip_hang):
+    """The kernels of job on the hang list (the job must not be sent)."""
+    return [c['kernel'] for c in job['commands'] if (os.path.basename(path), c['kernel']) in skip_hang]
+
+
+def log_progress(progress, path, job):
+    """Before a request: name it in the progress file, so that a request that hangs the Mac is known."""
+    if progress:
+        with open(progress, 'a') as f:
+            f.write('%s %s\n' % (os.path.basename(path), ','.join(c['kernel'] for c in job['commands'])))
+            f.flush()
+            os.fsync(f.fileno())
+
+
+def read_heap(reply, heap):
+    """The heap read back by a job, with the patched addresses back at their symbolic values."""
+    got = bytearray(base64.b64decode(next(b for b in reply['result']['buffers'] if b['buffer'] == 0)['data']))
+    for o, t in heap.patches.items():
+        got[o:o + 8] = (BASE + t).to_bytes(8, 'little')
+    heap.buf[:] = got[:len(heap.buf)]
+
+
 def run_test(path, args):
     with open(path) as f:
         module, dirs = h.split_program(f.read())
@@ -171,75 +321,18 @@ def run_test(path, args):
     if re.search(r'^\s*\.address_size\s+32\b', module, re.M):
         return 'UNSUPPORTED', '.address_size 32'
     with tempfile.TemporaryDirectory() as tmp:
-        src = os.path.join(tmp, 'm.ptx')
-        with open(src, 'w') as f:
-            f.write(module)
-        env = dict(os.environ, ZLUDA_AGX_VIA_AIR='1')
-
-        def zoc(*extra):
-            return subprocess.run([args.zoc, *extra, '--target', 'agx', '--arch', args.arch, '--output-dir', tmp, src],
-                                  capture_output=True, text=True, timeout=args.timeout, env=env)
-        try:
-            r = zoc()
-            out = r.stderr + r.stdout
-            rejected = sorted(set(re.findall(r'PtxError::\w+: ([^\n]*)', out)))
-            if rejected or 'PtxError::' in out:
-                r = zoc('--ignore-errors')
-                out = out + r.stderr + r.stdout
-        except subprocess.TimeoutExpired:
-            return 'COMPILE-ERROR', 'zoc timed out'
-        air = os.path.join(tmp, 'm.air')
-        if r.returncode != 0 or not os.path.exists(air):
-            panic = re.search(r"panicked at [^\n]*\n([^\n]*)", out)
-            if rejected:
-                return 'REJECTED', ' | '.join(rejected)[:300]
-            if panic:
-                return 'CRASH', panic.group(0).replace('\n', ' ')[:300]
-            msg = [l for l in out.splitlines() if l.strip() and not l.startswith(('Pass "', 'Wrote to'))]
-            return 'COMPILE-ERROR', ' | '.join(msg[:3])[:300]
-        if 'PtxError::Parser' in out or 'UnrecognizedDirective' in out:
-            tainted = None
-        else:
-            tainted = h.tainted_functions(module, [x for x in rejected if x.strip()])
-        # Metal's AIR, from the portable AIR zoc wrote.
-        metal = os.path.join(tmp, 'm.metal.air')
-        r = subprocess.run([args.llc, '-mtriple=air', '-filetype=obj', '-air-output=air', air, '-o', metal],
-                           capture_output=True, text=True, timeout=args.timeout)
-        if r.returncode != 0:
-            return 'LLC-ERROR', (r.stderr.strip().splitlines() or ['?'])[-1][:300]
-        dis = lambda p: subprocess.run([args.llvm_dis, p, '-o', '-'], capture_output=True, text=True,
-                                       timeout=args.timeout).stdout
-        portable, metal_text = dis(air), dis(metal)
-        kernels = air_kernels(metal_text)
-        roles = hidden_roles(portable)
-        # static threadgroup bytes and the cluster shape, from the AGX compilation of the same AIR
-        with open(os.path.join(tmp, 'm.asm')) as f:
-            asm = f.read()
-        agx, _, gsyms, _, _ = h.kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
-        air_bytes = b64(open(metal, 'rb').read())
+        status, info = compile_module(args, module, tmp)
+        if status:
+            return status, info
+        kernels, agx, tainted = info['kernels'], info['agx'], info['tainted']
         params = h.kernel_params(module)
 
         heap = Heap()
         syms, bufs = {}, {}
-        globals_off = None
-        globals_desc = os.path.join(tmp, 'm.air.globals')
-        if os.path.exists(globals_desc):
-            g = json.load(open(globals_desc))
-            globals_off = 0
-            heap.top = max(g['size'], 1)
-            heap.ensure(heap.top)
-            heap.buf[:len(bytes.fromhex(g['image']))] = bytes.fromhex(g['image'])
-            for off, target in g['relocs']:
-                heap.patches[off] = target
-            for name, off in g['symbols'].items():
-                syms[name] = BASE + off
-            ordered = sorted(g['symbols'].items(), key=lambda kv: kv[1])
-            for i, (name, off) in enumerate(ordered):
-                end = ordered[i + 1][1] if i + 1 < len(ordered) else g['size']
-                bufs[name] = [BASE + off, 'b8', end - off]
+        globals_off = load_globals(tmp, heap, syms, bufs)
         failures, passed, skipped, unsupported = [], 0, 0, []
         skipped_launches, tainted_bufs = [], set()
-        pending = []  # launches of the next job: (kernel, grid, block, dyn, [param bytes], [param patches])
+        pending = []  # launches of the next job: (kernel, grid, block, dyn, launch_buffers)
         jobs = 0
 
         def value(o, t):
@@ -252,51 +345,17 @@ def run_test(path, args):
             nonlocal jobs
             if not pending:
                 return None
-            heap.ensure(max(heap.top, 16))
-            buffers = [{'size': len(heap.buf), 'data': b64(heap.buf)}]
-            patches = [{'buffer': 0, 'offset': o, 'target_buffer': 0, 'target_offset': t}
-                       for o, t in sorted(heap.patches.items())]
-            commands = []
-            for name, grid, block, dyn, pbufs in pending:
-                bindings = []
-                for loc, data, ppatches in pbufs:
-                    bindings.append({'index': loc, 'buffer': len(buffers)})
-                    for off, t in ppatches:
-                        patches.append({'buffer': len(buffers), 'offset': off, 'target_buffer': 0,
-                                        'target_offset': t})
-                    buffers.append({'size': len(data), 'data': b64(data)})
-                for a in kernels[name]:
-                    if a[0] == 'globals':
-                        bindings.append({'index': a[1], 'buffer': 0, 'offset': globals_off})
-                cmd = {'kernel': name, 'bindings': bindings,
-                       'grid': [grid[j] * block[j] for j in range(3)], 'group': list(block)}
-                tg = [a for a in kernels[name] if a[0] == 'threadgroup']
-                if tg:
-                    cmd['threadgroup_memory'] = [{'index': tg[0][1], 'length': max(16, (dyn + 15) // 16 * 16)}]
-                commands.append(cmd)
-            hung = [c['kernel'] for c in commands if (os.path.basename(path), c['kernel']) in args.skip_hang]
-            if hung:
-                pending.clear()
-                return 'SKIPPED-HANG: ' + ','.join(hung)
-            job = {'op': 'execute', 'air': air_bytes, 'buffers': buffers, 'commands': commands, 'readback': [0]}
-            if args.progress:
-                # before the request: a request that hangs the Mac is named here
-                with open(args.progress, 'a') as f:
-                    f.write('%s %s\n' % (os.path.basename(path), ','.join(c['kernel'] for c in commands)))
-                    f.flush()
-                    os.fsync(f.fileno())
-            if patches:
-                job['address_patches'] = patches
+            job = make_job(info, heap, pending, globals_off)
             pending.clear()
+            hung = hung_kernels(path, job, args.skip_hang)
+            if hung:
+                return 'SKIPPED-HANG: ' + ','.join(hung)
+            log_progress(args.progress, path, job)
             reply = submit(job, args.queue)
             jobs += 1
             if not reply.get('ok'):
                 return reply.get('error', 'service error')[:300]
-            got = bytearray(base64.b64decode(reply['result']['buffers'][0]['data']))
-            # patched addresses back to their symbolic values
-            for o, t in heap.patches.items():
-                got[o:o + 8] = (BASE + t).to_bytes(8, 'little')
-            heap.buf[:] = got[:len(heap.buf)]
+            read_heap(reply, heap)
             return None
 
         for d in dirs:
@@ -354,36 +413,7 @@ def run_test(path, args):
                 grid, block = h.parse_dim(m.group(2)), h.parse_dim(m.group(3))
                 dyn = int(m.group(5)) if m.group(5) else 0
                 ps = params.get(name, [])
-                if len(ops) != len(ps):
-                    raise Unsupported('launch argument count')
-                buf_args = [a for a in kernels[name] if a[0] == 'buffer']
-                kroles = roles.get(name, [])
-                pbufs = []
-                k = 0
-                for i, a in enumerate(buf_args):
-                    role = kroles[i] if i < len(kroles) else None
-                    if role == 'threadgroup-bytes':
-                        data = (agx[name]['shared'] + dyn).to_bytes(4, 'little')
-                        pbufs.append((a[1], data + b'\0' * 12, []))
-                        continue
-                    if role is not None:
-                        raise Unsupported('hidden argument ' + role)
-                    if k >= len(ps):
-                        raise Unsupported('more AIR buffers than PTX parameters')
-                    (t, n, _), o = ps[k], ops[k]
-                    k += 1
-                    size = SIZES[t] * n
-                    target = None
-                    if n != 1:
-                        bits = (syms[o] if o in syms else int(o, 0)) & ((1 << (8 * size)) - 1)
-                        target = syms.get(o) if size == 8 else None
-                    else:
-                        bits, target = value(o, t)
-                    data = bytearray(bits.to_bytes(size, 'little'))
-                    data += b'\0' * ((-len(data)) % 16 or (16 if not data else 0))
-                    pbufs.append((a[1], data, [(0, target - BASE)] if target is not None else []))
-                if k != len(ps):
-                    raise Unsupported('fewer AIR buffers than PTX parameters')
+                pbufs = launch_buffers(info, name, ps, ops, dyn, value, syms)
                 pending.append((name, grid, block, dyn, pbufs))
             elif kw == '.expect':
                 err = flush()
@@ -429,6 +459,8 @@ def run_test(path, args):
         return 'PASS', '%d job(s), %d check(s)' % (jobs, passed)
 
 
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('tests', nargs='+', help='PTX-formalization test programs (tests/*.ptx)')
@@ -449,12 +481,7 @@ def main():
                     help='file of "TEST KERNEL" lines (# comments) whose requests hang the device; never sent')
     args = ap.parse_args()
     args.counts = {'pass': 0, 'fail': 0, 'skip': 0}
-    skip_file, args.skip_hang = args.skip_hang, set()
-    if skip_file and os.path.exists(skip_file):
-        for line in open(skip_file):
-            line = line.split('#')[0].split()
-            if len(line) == 2:
-                args.skip_hang.add(tuple(line))
+    args.skip_hang = load_hang_list(args.skip_hang)
 
     def one(p):
         try:
