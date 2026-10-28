@@ -1056,6 +1056,13 @@ Kernels read their 32-bit constants too wide for an immediate from uniform regis
 arguments): fewer general purpose registers and more resident SIMD-groups. `ZLUDA_AGX_UNIFORM_CONSTANTS=0` compiles
 with `mov_imm` instead, in the driver and `zoc` and, at build time, for the agx_libs kernels.
 
+`ZLUDA_AGX_VIA_AIR=1` (experimental) compiles through upstream AIR instead of straight to AGX: the optimized AGX IR is
+written as AIR (`agx-raise-to-air`, what AIR does not have as hints with AIR emulations, double precision in software),
+the AIR target's portable passes make it upstream AIR, and the AGX backend compiles that, restoring the hinted AGX
+operations. `zoc` also writes `NAME.air`. On the PTX-formalization tests the results are the direct path's, and in the
+agx-bench model the code is as fast; `ZLUDA_AGX_LLVM_ARGS=-agx-air-native-hints=false` runs the AIR emulations instead,
+as a consumer without AGX's operations would. See `llvm/docs/AIR/AIRHints.rst` in the LLVM fork.
+
 `agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
 busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
 of a kernel, for example an edited and reassembled `.asm`, can be checked to compute the same.
