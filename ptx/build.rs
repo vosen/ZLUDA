@@ -36,7 +36,7 @@ fn agx_impl_bitcode() {
     }
 }
 
-/// The helpers of the Air target (zluda_ptx_impl_air.bc in OUT_DIR): the Apple GPU helpers of
+/// The helpers of the Air target (zluda_ptx_impl_air.bc in OUT_DIR): the AIR helpers of
 /// zluda_ptx_impl_agx.ll with each AGX intrinsic (llvm.agx.*) renamed to the primitive (__zluda_air.*) that
 /// zluda_ptx_impl_air.ll defines in AIR, linked with those definitions. It needs the LLVM that llvm_zluda links
 /// (ZLUDA_LLVM_BUILD_DIR: llvm-as and llvm-link); without it the file is empty and the Air target reports that.

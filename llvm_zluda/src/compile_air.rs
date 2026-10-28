@@ -1,4 +1,4 @@
-//! Compilation of ZLUDA's LLVM modules for Apple GPUs through upstream AIR (ptx::Target::Air).
+//! Compilation of ZLUDA's LLVM modules to AIR (ptx::Target::Air).
 //!
 //! The PTX front end emits the module directly in AIR's terms ("air-kernel" kernels, AIR's system values and
 //! SIMD-group functions through the primitives of ptx/lib/zluda_ptx_impl_air.ll), so nothing AGX-specific is in it:

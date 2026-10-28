@@ -41,7 +41,7 @@ static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
 // lib/zluda_ptx_impl_agx.ll (textual LLVM IR, see the comment at its top) as bitcode when build.rs could assemble
 // it, else as it is.
 static ZLUDA_PTX_IMPL_AGX: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/zluda_ptx_impl_agx.bc"));
-// The Air target's helpers: the Apple GPU helpers on lib/zluda_ptx_impl_air.ll's AIR primitives (see build.rs);
+// The Air target's helpers: the AIR helpers on lib/zluda_ptx_impl_air.ll's primitives (see build.rs);
 // empty when build.rs had no LLVM to build them with.
 static ZLUDA_PTX_IMPL_AIR: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/zluda_ptx_impl_air.bc"));
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
@@ -75,17 +75,17 @@ pub enum Target {
     /// agx_kernel calling convention and the helper functions are linked
     /// from lib/zluda_ptx_impl_agx.bc.
     Agx,
-    /// Apple GPUs through upstream AIR (Metal's IR): portable AIR, which the
-    /// AIR target's Metal pipeline packages for Metal and the AGX backend
-    /// compiles (agx-lower-air). PTX semantics are those of the Agx target
-    /// (the same GPUs); the IR is AIR's: air-kernel kernels, AIR's system
-    /// values and SIMD-group functions, no AGX intrinsics.
+    /// Upstream AIR: portable AIR, which the AIR target's Metal pipeline
+    /// packages for Metal and the AGX backend compiles (agx-lower-air). PTX
+    /// semantics are those of the Agx target; the IR is AIR's: air-kernel
+    /// kernels, AIR's system values and SIMD-group functions, no AGX
+    /// intrinsics.
     Air,
 }
 
 impl Target {
-    /// An Apple GPU target (Agx or Air): the PTX semantics they share.
-    pub fn is_apple(self) -> bool {
+    /// An AIR target (Agx or Air): the PTX semantics they share.
+    pub fn is_air(self) -> bool {
         matches!(self, Target::Agx | Target::Air)
     }
 }
@@ -163,7 +163,7 @@ pub fn to_llvm_module_with_options<'input>(
     mut on_pass_end: impl FnMut(&str),
 ) -> Result<Module, TranslateError> {
     let Options { target, strict_fp, debug_locations, stack_size, fast_mma } = options;
-    let strict_fp = strict_fp && target.is_apple();
+    let strict_fp = strict_fp && target.is_air();
     let mut ast = ast;
     if !debug_locations {
         for d in ast.directives.iter_mut() {
@@ -203,10 +203,10 @@ pub fn to_llvm_module_with_options<'input>(
     on_pass_end("replace_instructions_with_functions_fp_required");
     let directives = normalize_basic_blocks::run(&mut flat_resolver, directives)?;
     on_pass_end("normalize_basic_blocks");
-    let directives = remove_unreachable_basic_blocks::run(directives, target.is_apple())?;
+    let directives = remove_unreachable_basic_blocks::run(directives, target.is_air())?;
     on_pass_end("remove_unreachable_basic_blocks");
     instruction_mode_to_global_mode::set_f32_always_ftz(sm_version < 20);
-    agx_matrix::set_fast_mma(fast_mma && target.is_apple());
+    agx_matrix::set_fast_mma(fast_mma && target.is_air());
     let directives = instruction_mode_to_global_mode::run(&mut flat_resolver, directives)?;
     on_pass_end("instruction_mode_to_global_mode");
     let mut directives = insert_explicit_load_store::run(&mut flat_resolver, directives)?;
@@ -327,7 +327,7 @@ fn get_fp_mode(
             // AMDGPU applies a kernel's initial rounding mode to every
             // instruction through the hardware mode register. On AGX only
             // constrained instructions read the emulated mode register.
-            if target.is_apple() {
+            if target.is_air() {
                 if let Some(attrs) = &method.kernel_attributes {
                     if attrs.rounding_mode_f32 != ast::RoundingMode::NearestEven
                         || attrs.rounding_mode_f16f64 != ast::RoundingMode::NearestEven
@@ -499,8 +499,8 @@ impl PtxSpecialRegister {
     /// reads the cluster registers with functions.
     fn canonical(self, target: Target) -> Self {
         match self {
-            Self::Clusterid if !target.is_apple() => Self::Ctaid,
-            Self::Nclusterid if !target.is_apple() => Self::Nctaid,
+            Self::Clusterid if !target.is_air() => Self::Ctaid,
+            Self::Nclusterid if !target.is_air() => Self::Nctaid,
             other => other,
         }
     }
@@ -508,7 +508,7 @@ impl PtxSpecialRegister {
     /// The value of registers that are constant (outside of a cluster
     /// launch on AMD GPUs), for the vector member if any.
     fn constant(self, member: Option<u8>, target: Target) -> Option<u64> {
-        if target.is_apple() && self.is_cluster() {
+        if target.is_air() && self.is_cluster() {
             return None;
         }
         match self {

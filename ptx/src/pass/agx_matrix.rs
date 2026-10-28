@@ -429,9 +429,12 @@ impl Helper {
 
 /// Defines the helper functions of the matrix instructions declared in
 /// `module` (see `helper_name`) by linking their generated IR into it.
+/// `air`: for the Air target, the GPU operations as the AIR primitives of lib/zluda_ptx_impl_air.ll
+/// (__zluda_air.*) instead of AGX intrinsics.
 pub(super) fn define_helpers(
     context: &llvm_zluda::utils::Context,
     module: &llvm_zluda::utils::Module,
+    air: bool,
 ) -> Result<(), TranslateError> {
     let mut text = String::new();
     let mut declarations = BTreeSet::new();
@@ -465,6 +468,9 @@ pub(super) fn define_helpers(
     for declaration in declarations {
         text.push_str(&declaration);
         text.push('\n');
+    }
+    if air {
+        text = text.replace("@llvm.agx.", "@__zluda_air.");
     }
     let helpers = llvm_zluda::utils::Module::try_from_ir(context, text.as_bytes(), c"agx_matrix")
         .map_err(|e| TranslateError::Unsupported(format!("AGX matrix helpers: {e}")))?;

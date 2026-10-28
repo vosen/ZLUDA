@@ -1,6 +1,6 @@
 ; ZLUDA's primitives for the Air target (ptx::Target::Air), in upstream AIR.
 ;
-; The Apple GPU helpers (zluda_ptx_impl_agx.ll) and the front end use a few
+; The AIR helpers (zluda_ptx_impl_agx.ll) and the front end use a few
 ; operations of the GPU: system values, SIMD-group functions, barriers and the
 ; hardware's approximations. For the Agx target they are AGX intrinsics
 ; (llvm.agx.*); for the Air target ptx/build.rs renames them to the

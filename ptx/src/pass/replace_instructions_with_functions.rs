@@ -123,7 +123,7 @@ fn run_statements<'input>(
                             },
                         ..
                     },
-                ) if target.is_apple() => smallvec![Statement::Instruction(cvt)],
+                ) if target.is_air() => smallvec![Statement::Instruction(cvt)],
                 Statement::Instruction(ast::Instruction::Shfl {
                     data,
                     arguments:
@@ -374,7 +374,7 @@ fn run_instruction<'input>(
 ) -> Result<ptx_parser::Instruction<SpirvWord>, TranslateError> {
     // On AGX the warp-level matrix instructions are emulated by helper
     // functions generated for each variant (see agx_matrix).
-    if target.is_apple() {
+    if target.is_air() {
         if let Some(name) = agx_matrix::helper_name(&instruction) {
             return to_call(resolver, fn_declarations, name.into(), instruction);
         }
@@ -389,7 +389,7 @@ fn run_instruction<'input>(
                     ..
                 },
             ..
-        } if target.is_apple() => to_call(resolver, fn_declarations, "rcp_approx_ftz_f64".into(), i)?,
+        } if target.is_air() => to_call(resolver, fn_declarations, "rcp_approx_ftz_f64".into(), i)?,
         i @ ptx_parser::Instruction::Rsqrt {
             data:
                 ast::TypeFtz {
@@ -397,7 +397,7 @@ fn run_instruction<'input>(
                     flush_to_zero: Some(true),
                 },
             ..
-        } if target.is_apple() => to_call(resolver, fn_declarations, "rsqrt_approx_ftz_f64".into(), i)?,
+        } if target.is_air() => to_call(resolver, fn_declarations, "rsqrt_approx_ftz_f64".into(), i)?,
         i @ ast::Instruction::Div {
             data:
                 ast::DivDetails::Float(ast::DivFloatDetails {
@@ -441,7 +441,7 @@ fn run_instruction<'input>(
             );
             // tex.1d / tex.2d with float coordinates may use AGX's texture unit (zluda_ptx_impl_agx_tex.c), which
             // is not bit exact for linear filtering
-            let unit = target.is_apple()
+            let unit = target.is_air()
                 && !strict_fp
                 && matches!(type_, ast::TexType::Texobj)
                 && ctype == ast::ScalarType::F32
@@ -721,7 +721,7 @@ fn run_instruction<'input>(
         // Clusters of several CTAs: the helpers call placeholders that llvm_zluda's
         // LLVMZludaAgxLowerClusters resolves for each kernel
         i @ ptx_parser::Instruction::Mapa { data, .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("mapa on AMD GPUs".to_string()));
             }
             let space = if data.shared { "shared" } else { "generic" };
@@ -729,7 +729,7 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Getctarank { data, .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("getctarank on AMD GPUs".to_string()));
             }
             let space = if data.shared { "shared" } else { "generic" };
@@ -737,7 +737,7 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::BarrierCluster { data, .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("barrier.cluster on AMD GPUs".to_string()));
             }
             let name = match (data.arrive, data.relaxed) {
@@ -748,7 +748,7 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Szext { data, .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("szext on AMD GPUs".to_string()));
             }
             let mode = if data.clamp { "clamp" } else { "wrap" };
@@ -756,7 +756,7 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Fns { .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("fns on AMD GPUs".to_string()));
             }
             to_call(resolver, fn_declarations, "fns_b32".into(), i)?
@@ -765,7 +765,7 @@ fn run_instruction<'input>(
             to_call(resolver, fn_declarations, "prmt_b32".into(), i)?
         }
         i @ ptx_parser::Instruction::Prmt { data: Some(mode), .. } => {
-            if !target.is_apple() {
+            if !target.is_air() {
                 return Err(TranslateError::Todo("prmt modes on AMD GPUs".to_string()));
             }
             let mode = match mode {
