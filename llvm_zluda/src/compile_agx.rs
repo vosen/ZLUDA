@@ -97,7 +97,7 @@ pub struct AgxCompilation {
 /// Collects the errors the backend reports through the context's diagnostic
 /// handler (unsupported operations, missing encodings ...), which would
 /// otherwise only be printed.
-struct Diagnostics<'a> {
+pub(crate) struct Diagnostics<'a> {
     ctx: &'a Context,
     errors: Box<Vec<String>>,
 }
@@ -116,7 +116,7 @@ extern "C" fn collect_diagnostic(info: LLVMDiagnosticInfoRef, errors: *mut c_voi
 }
 
 impl<'a> Diagnostics<'a> {
-    fn new(ctx: &'a Context) -> Self {
+    pub(crate) fn new(ctx: &'a Context) -> Self {
         let mut errors = Box::new(Vec::new());
         unsafe {
             LLVMContextSetDiagnosticHandler(
@@ -128,7 +128,7 @@ impl<'a> Diagnostics<'a> {
         Self { ctx, errors }
     }
 
-    fn check(&self) -> Result<(), String> {
+    pub(crate) fn check(&self) -> Result<(), String> {
         if self.errors.is_empty() {
             Ok(())
         } else {
@@ -143,7 +143,7 @@ impl Drop for Diagnostics<'_> {
     }
 }
 
-fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> {
+pub(crate) fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> {
     let module = Module::try_from_ir(ctx, ir, name)?;
     module.verify()?;
     Ok(module)
@@ -153,7 +153,7 @@ fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> 
 /// them internal, so that the unused ones are removed instead of being
 /// compiled as entry points (for example when every kernel of the module was
 /// dropped by `--ignore-errors`).
-fn internalize_helpers(module: &Module) {
+pub(crate) fn internalize_helpers(module: &Module) {
     unsafe {
         let mut function = LLVMGetFirstFunction(module.get());
         while !function.is_null() {
@@ -171,7 +171,7 @@ fn internalize_helpers(module: &Module) {
 
 /// A linked image is complete: its functions (hidden, as the PTX translation emits every non-kernel function)
 /// become internal, so that they are inlined into the kernels and the unused ones disappear.
-fn internalize_functions(module: &Module) {
+pub(crate) fn internalize_functions(module: &Module) {
     unsafe {
         let mut function = LLVMGetFirstFunction(module.get());
         while !function.is_null() {
@@ -473,7 +473,7 @@ fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions, _: bool) -> Res
     Err("ZLUDA_AGX_VIA_AIR: this LLVM build has no AIR target".to_string())
 }
 
-fn init_globals() -> Result<(), String> {
+pub(crate) fn init_globals() -> Result<(), String> {
     static INIT_AGX: OnceLock<Result<(), Message>> = OnceLock::new();
     INIT_AGX
         .get_or_init(|| {

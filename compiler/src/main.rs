@@ -119,16 +119,27 @@ fn main_core() -> Result<(), CompilerError> {
 
     let target = match opts.target.as_deref() {
         Some("agx") => ptx::Target::Agx,
+        Some("air") => ptx::Target::Air,
         Some("amdgpu") => ptx::Target::Amdgpu,
         Some(other) => {
             return Err(CompilerError::GenericError {
                 cause: None,
-                message: format!("unknown target '{other}' (expected amdgpu or agx)"),
+                message: format!("unknown target '{other}' (expected amdgpu, agx or air)"),
             })
         }
         None if opts.arch.as_deref().is_some_and(|a| a.starts_with("agx")) => ptx::Target::Agx,
         None => ptx::Target::Amdgpu,
     };
+    if target == ptx::Target::Air {
+        let mut texts = vec![String::from_utf8(fs::read(&ptx_path)?).map_err(|e| e.utf8_error())?];
+        for path in &others {
+            texts.push(String::from_utf8(fs::read(path)?).map_err(|e| e.utf8_error())?);
+        }
+        let sink = |bytes: &Vec<u8>, extension: String| {
+            write_to_file(bytes, &output_path.with_extension(extension)).unwrap();
+        };
+        return compile_air(&texts, &sink, opts.arch, opts.ignore_errors, opts.stack_size);
+    }
     if target == ptx::Target::Agx {
         let mut texts = vec![String::from_utf8(fs::read(&ptx_path)?).map_err(|e| e.utf8_error())?];
         for path in &others {
@@ -299,6 +310,50 @@ fn compile_agx(
     })?;
     report_pass_time("compile_agx", &mut start);
     Ok(())
+}
+
+/// `--target air`: PTX to portable AIR (NAME.portable.air), the AIR for Metal (NAME.air, with NAME.air.globals)
+/// and, with an AGX --arch, the AGX object compiled from the portable AIR (NAME.o, NAME.asm).
+#[cfg(feature = "agx")]
+fn compile_air(
+    texts: &[String],
+    sink: &dyn Fn(&Vec<u8>, String),
+    arch: Option<String>,
+    ignore_errors: bool,
+    stack_size: u32,
+) -> Result<(), CompilerError> {
+    let options = ptx::Options { target: ptx::Target::Air, stack_size, ..ptx::Options::default() };
+    let llvm = ptx_to_llvm(ignore_errors, true, &texts[0], options)?;
+    sink(&llvm.llvm_ir, "ll".to_string());
+    let mut other_ir = Vec::new();
+    for ptx in &texts[1..] {
+        other_ir.push(ptx_to_llvm(ignore_errors, true, ptx, options)?.llvm_ir);
+    }
+    let other_ir: Vec<&[u8]> = other_ir.iter().map(|v| &v[..]).collect();
+    let compiler_hook = |bytes: &Vec<u8>, extension: String| sink(bytes, extension);
+    let mut start = Instant::now();
+    llvm_zluda::compile_air::compile_air(
+        &llvm.context,
+        llvm.main,
+        &other_ir,
+        llvm.linked_bitcode,
+        arch.as_deref().filter(|a| a.starts_with("agx")),
+        Some(&compiler_hook),
+    )
+    .map_err(|message| CompilerError::GenericError { cause: None, message })?;
+    report_pass_time("compile_air", &mut start);
+    Ok(())
+}
+
+#[cfg(not(feature = "agx"))]
+fn compile_air(
+    _texts: &[String],
+    _sink: &dyn Fn(&Vec<u8>, String),
+    _arch: Option<String>,
+    _ignore_errors: bool,
+    _stack_size: u32,
+) -> Result<(), CompilerError> {
+    Err(CompilerError::GenericError { cause: None, message: "zoc was built without the agx feature".to_string() })
 }
 
 #[cfg(not(feature = "agx"))]

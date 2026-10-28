@@ -599,7 +599,7 @@ def simulate(args, tmp, name, k, ps, ops, grid, block, dyn, syms, mem, globals_m
     return None
 
 
-def compile_ptx(args, module, tmp, extra=(), env=None, product='m.o'):
+def compile_ptx(args, module, tmp, extra=(), env=None, product='m.o', target='agx'):
     """Compile module (PTX text) with zoc --target agx into tmp, dropping the statements the front end rejects.
     Returns (status, detail) of a failure, or (None, (zoc output, rejected statements, tainted functions or None
     when nothing can be attributed))."""
@@ -613,7 +613,7 @@ def compile_ptx(args, module, tmp, extra=(), env=None, product='m.o'):
             flags.append('--strict-fp')
         if getattr(args, 'agx_strict', False):
             flags.append('--agx-strict')
-        return subprocess.run([args.zoc, *flags, '--target', 'agx', '--arch', args.arch, '--output-dir', tmp, src],
+        return subprocess.run([args.zoc, *flags, '--target', target, '--arch', args.arch, '--output-dir', tmp, src],
                               capture_output=True, text=True, timeout=args.timeout, env=env)
     try:
         # The statements the front end rejects (printed only without --ignore-errors); then compile the rest.

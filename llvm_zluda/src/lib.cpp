@@ -1908,3 +1908,182 @@ int LLVMZludaAirFunctionPointers(LLVMModuleRef M, char **error)
 }
 
 LLVM_C_EXTERN_C_END
+
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
+
+LLVM_C_EXTERN_C_BEGIN
+
+namespace
+{
+    // ZLUDA's address spaces (ptx/src/pass/llvm/mod.rs: generic 0, global 1,
+    // shared 3, constant 4, private 5) as AIR's (thread 0, device 1, constant
+    // 2, threadgroup 3, and the generic-pointer hint 4 of llvm/IR/AIR.h, which
+    // the AIR target's Metal pipeline emulates and the AGX backend compiles).
+    struct ZludaAirTypes : public ValueMapTypeRemapper
+    {
+        DenseMap<Type *, Type *> cache;
+
+        static unsigned space(unsigned as)
+        {
+            switch (as)
+            {
+            case 0:
+                return 4;
+            case 4:
+                return 2;
+            case 5:
+                return 0;
+            default:
+                return as;
+            }
+        }
+
+        Type *remapType(Type *T) override
+        {
+            auto it = cache.find(T);
+            if (it != cache.end())
+                return it->second;
+            Type *R = T;
+            if (auto *PT = dyn_cast<PointerType>(T))
+                R = PointerType::get(T->getContext(), space(PT->getAddressSpace()));
+            else if (auto *VT = dyn_cast<VectorType>(T))
+                R = VectorType::get(remapType(VT->getElementType()), VT->getElementCount());
+            else if (auto *AT = dyn_cast<ArrayType>(T))
+                R = ArrayType::get(remapType(AT->getElementType()), AT->getNumElements());
+            else if (auto *FT = dyn_cast<FunctionType>(T))
+            {
+                SmallVector<Type *, 8> params;
+                for (Type *P : FT->params())
+                    params.push_back(remapType(P));
+                R = FunctionType::get(remapType(FT->getReturnType()), params, FT->isVarArg());
+            }
+            else if (auto *ST = dyn_cast<StructType>(T); ST && !ST->isOpaque())
+            {
+                SmallVector<Type *, 8> elts;
+                for (Type *E : ST->elements())
+                    elts.push_back(remapType(E));
+                if (!std::equal(elts.begin(), elts.end(), ST->element_begin()))
+                    R = ST->isLiteral() ? StructType::get(T->getContext(), elts, ST->isPacked())
+                                        : StructType::create(T->getContext(), elts, ST->getName().str() + ".air",
+                                                             ST->isPacked());
+            }
+            cache[T] = R;
+            return R;
+        }
+    };
+}
+
+// ZLUDA_AGX target Air: the linked module (front end and helpers) in AIR's
+// address spaces, by cloning every global and function whose type changes.
+// Returns -1 with *error, else 0.
+int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
+{
+    Module *Mod = unwrap(M);
+    ZludaAirTypes types;
+    ValueToValueMapTy vmap;
+    SmallVector<GlobalVariable *, 16> oldGlobals;
+    for (GlobalVariable &GV : Mod->globals())
+        oldGlobals.push_back(&GV);
+    SmallVector<Function *, 32> oldFunctions;
+    for (Function &F : *Mod)
+        oldFunctions.push_back(&F);
+    SmallVector<std::pair<GlobalVariable *, GlobalVariable *>, 16> globals;
+    SmallVector<std::pair<Function *, Function *>, 32> functions;
+    for (GlobalVariable *GV : oldGlobals)
+    {
+        Type *T = types.remapType(GV->getValueType());
+        unsigned as = ZludaAirTypes::space(GV->getAddressSpace());
+        if (T == GV->getValueType() && as == GV->getAddressSpace())
+            continue;
+        auto *N = new GlobalVariable(*Mod, T, GV->isConstant(), GV->getLinkage(), nullptr, GV->getName() + ".air",
+                                     nullptr, GV->getThreadLocalMode(), as, GV->isExternallyInitialized());
+        N->copyAttributesFrom(GV);
+        vmap[GV] = N;
+        globals.push_back({GV, N});
+    }
+    for (Function *F : oldFunctions)
+    {
+        auto *FT = cast<FunctionType>(types.remapType(F->getFunctionType()));
+        if (FT == F->getFunctionType())
+            continue;
+        if (F->isIntrinsic())
+        {
+            SmallVector<Type *, 4> overloads;
+            if (!Intrinsic::isSignatureValid(F->getIntrinsicID(), FT, overloads))
+            {
+                *error = LLVMCreateMessage(("no form of " + F->getName().str() + " in AIR's address spaces").c_str());
+                return -1;
+            }
+            vmap[F] = Intrinsic::getOrInsertDeclaration(Mod, F->getIntrinsicID(), overloads);
+            continue;
+        }
+        Function *N = Function::Create(FT, F->getLinkage(), F->getAddressSpace(), F->getName() + ".air", Mod);
+        N->copyAttributesFrom(F);
+        vmap[F] = N;
+        functions.push_back({F, N});
+    }
+    std::function<Constant *(Constant *)> mapInit = [&](Constant *C) -> Constant * {
+        if (isa<ConstantAggregate>(C))
+        {
+            SmallVector<Constant *, 8> ops;
+            for (Use &U : C->operands())
+                ops.push_back(mapInit(cast<Constant>(U)));
+            Type *T = types.remapType(C->getType());
+            if (auto *AT = dyn_cast<ArrayType>(T))
+                return ConstantArray::get(AT, ops);
+            if (auto *ST = dyn_cast<StructType>(T))
+                return ConstantStruct::get(ST, ops);
+            return ConstantVector::get(ops);
+        }
+        return MapValue(C, vmap, RF_None, &types);
+    };
+    for (auto [Old, New] : globals)
+        if (Old->hasInitializer())
+            New->setInitializer(mapInit(Old->getInitializer()));
+    for (GlobalVariable *GV : oldGlobals)
+        if (!vmap.count(GV) && GV->hasInitializer())
+            GV->setInitializer(mapInit(GV->getInitializer()));
+    for (auto [Old, New] : functions)
+    {
+        if (Old->isDeclaration())
+            continue;
+        auto arg = New->arg_begin();
+        for (Argument &A : Old->args())
+        {
+            arg->setName(A.getName());
+            vmap[&A] = &*arg++;
+        }
+        SmallVector<ReturnInst *, 4> returns;
+        CloneFunctionInto(New, Old, vmap, CloneFunctionChangeType::LocalChangesOnly, returns, "", nullptr, &types);
+    }
+    for (auto [Old, New] : functions)
+        Old->dropAllReferences();
+    for (auto [Old, New] : globals)
+        Old->setInitializer(nullptr);
+    for (auto [Old, New] : functions)
+    {
+        std::string name = Old->getName().str();
+        Old->replaceAllUsesWith(PoisonValue::get(Old->getType()));
+        Old->eraseFromParent();
+        New->setName(name);
+    }
+    for (auto [Old, New] : globals)
+    {
+        std::string name = Old->getName().str();
+        Old->replaceAllUsesWith(PoisonValue::get(Old->getType()));
+        Old->eraseFromParent();
+        New->setName(name);
+    }
+    // casts that became no-ops (generic to generic...)
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+            if (auto *C = dyn_cast<AddrSpaceCastInst>(&I); C && C->getSrcTy() == C->getDestTy())
+            {
+                C->replaceAllUsesWith(C->getOperand(0));
+                C->eraseFromParent();
+            }
+    return 0;
+}
+
+LLVM_C_EXTERN_C_END

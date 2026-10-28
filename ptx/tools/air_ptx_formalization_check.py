@@ -2,7 +2,7 @@
 """Check ZLUDA's PTX -> AIR path on a real Apple GPU against the PTX-formalization test programs.
 
 Like agx_ptx_formalization_check.py, but instead of running AGX code on the simulator, each module is compiled to
-upstream AIR (`ZLUDA_AGX_VIA_AIR=1 zoc --target agx`, which writes NAME.air), packaged for Metal by the AIR target
+upstream AIR (`zoc --target air`, PTX straight to AIR, which writes NAME.air), packaged for Metal by the AIR target
 (`llc -mtriple=air -filetype=obj -air-output=air`) and run on the GPU behind the AIR service (/air, a JSON file
 queue; see /air/client/client.py). The .expect directives are checked bit-exactly, like `krun` does.
 
@@ -52,6 +52,8 @@ DEVICE_LOCK = os.environ.get('AIR_DEVICE_LOCK', '/scratch/air-device.lock')
 # Per-request limits the service enforces (capabilities: gpu_timeout_ms, compile_timeout_ms). A kernel that runs past
 # GPU_TIMEOUT_MS is reported (and the service refuses GPU work until it ends) instead of freezing the Mac's display.
 GPU_TIMEOUT_MS = 2000
+# The lock table of emulated atomics (llvm/lib/Target/AIR/AIRLowerAtomicRMW.h: kAtomicLockCount words).
+LOCK_TABLE_BYTES = 4096
 COMPILE_TIMEOUT_MS = 5000
 # Error texts of a request the service gave up on: a hang to record, never to retry.
 TIMED_OUT = ('gpu_timeout_ms=', 'compile_timeout_ms=', 'Refusing GPU work', 'timed out after')
@@ -136,6 +138,9 @@ def air_kernels(text):
             if '"air.buffer"' in n and '!"air.arg_name", !"zluda_globals"' in n:
                 # the module's .global variables (NAME.air.globals)
                 args.append(('globals', int(loc.group(1))))
+            elif '"air.buffer"' in n and '!"air.arg_name", !"air_atomic_locks"' in n:
+                # the lock table of the 64- and 128-bit atomics Metal's AIR emulates: zeroed words
+                args.append(('locks', int(loc.group(1))))
             elif '"air.buffer"' in n and '!"air.address_space", i32 3' in n:
                 # dynamic shared memory: a threadgroup buffer whose length the dispatch sets
                 args.append(('threadgroup', int(loc.group(1)) if loc else 0))
@@ -199,11 +204,15 @@ def load_hang_list(path):
 
 
 def compile_module(args, module, tmp):
-    """zoc with ZLUDA_AGX_VIA_AIR=1 (NAME.air, and the AGX code compiled from it), then Metal's AIR (llc).
+    """zoc --target air (PTX straight to AIR: NAME.air for Metal, and the AGX code of the portable AIR), or with
+    --via-agx the older route (ZLUDA_AGX_VIA_AIR=1 zoc --target agx); then Metal's AIR (llc).
     Returns (status, detail) of a failure, or (None, info): info has 'air' (Metal AIR bytes), 'kernels'
     (air_kernels), 'roles' (hidden_roles), 'agx' (kernel_info's kernels of m.o), 'tainted', 'rejected'."""
-    env = dict(os.environ, ZLUDA_AGX_VIA_AIR='1')
-    status, detail = h.compile_ptx(args, module, tmp, env=env, product='m.air')
+    if getattr(args, 'via_agx', False):
+        status, detail = h.compile_ptx(args, module, tmp, env=dict(os.environ, ZLUDA_AGX_VIA_AIR='1'),
+                                       product='m.air')
+    else:
+        status, detail = h.compile_ptx(args, module, tmp, product='m.air', target='air')
     if status:
         return status, detail
     _, rejected, tainted = detail
@@ -293,6 +302,7 @@ def make_job(info, heap, pending, globals_off):
     patches = [{'buffer': 0, 'offset': o, 'target_buffer': 0, 'target_offset': t}
                for o, t in sorted(heap.patches.items())]
     commands = []
+    locks = None
     init = getattr(heap, 'init_kernel', None)
     if init:
         loc = [a[1] for a in kernels[init] if a[0] == 'globals'][0]
@@ -309,6 +319,12 @@ def make_job(info, heap, pending, globals_off):
         for a in kernels[name]:
             if a[0] == 'globals':
                 bindings.append({'index': a[1], 'buffer': 0, 'offset': globals_off})
+            elif a[0] == 'locks':
+                # one zeroed table for the job (every lock is released by the kernel that takes it)
+                if locks is None:
+                    locks = len(buffers)
+                    buffers.append({'size': LOCK_TABLE_BYTES, 'data': b64(bytes(LOCK_TABLE_BYTES))})
+                bindings.append({'index': a[1], 'buffer': locks})
         cmd = {'kernel': name, 'bindings': bindings,
                'grid': [grid[j] * block[j] for j in range(3)], 'group': list(block)}
         tg = [a for a in kernels[name] if a[0] == 'threadgroup']
@@ -502,6 +518,8 @@ def main():
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
     ap.add_argument('--arch', default='agx-g14g')
+    ap.add_argument('--via-agx', action='store_true',
+                    help='the older route: AIR raised from ZLUDA\'s AGX IR (ZLUDA_AGX_VIA_AIR=1 zoc --target agx)')
     ap.add_argument('--queue', default=os.environ.get('AIR_QUEUE', '/air'))
     ap.add_argument('--timeout', type=int, default=120)
     ap.add_argument('--max-failures', type=int, default=4, help='failing elements listed per test')
