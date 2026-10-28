@@ -68,6 +68,8 @@ pub struct KernelInfo {
 /// min(l, 1) (1 or 4) and max(l, 1) - 1 (2 or 5), with which q = (t + ((x - t) >> s1)) >> s2, t = mulhi(x, m), is
 /// x / d for every 32-bit x (Granlund and Montgomery, PLDI 1994). All three are 0 for d = 0.
 pub fn launch_value(d: u32, kind: u32) -> u32 {
+    // kinds 6 to 8: of max(d, 1), a guarded unsigned divisor
+    let (d, kind) = if kind >= 6 { (d.max(1), kind - 6) } else { (d, kind) };
     let d = if kind >= 3 { (d as i32).unsigned_abs() } else { d } as u64;
     if d == 0 {
         return 0;
@@ -939,6 +941,9 @@ mod tests {
             assert_eq!(div(1_000_000, (d as i32).wrapping_neg() as u32, true), 1_000_000 / (d as i32).unsigned_abs());
         }
         assert_eq!((launch_value(0, 0), launch_value(0, 1), launch_value(0, 2)), (0, 0, 0));
+        // max(d, 1): d = 0 divides by 1
+        assert_eq!((launch_value(0, 6), launch_value(0, 7), launch_value(0, 8)), (1, 0, 0));
+        assert_eq!(launch_value(7, 6), launch_value(7, 0));
     }
 
     #[test]
