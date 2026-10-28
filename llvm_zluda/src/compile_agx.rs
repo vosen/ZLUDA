@@ -428,6 +428,11 @@ fn init_globals() -> Result<(), String> {
             if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").map_or(true, |v| v != "0") {
                 options.push(std::ffi::CString::new("-agx-uniform-constants").unwrap());
             }
+            // Division by a 32-bit kernel argument with a multiplier and shifts agx_runtime computes at launch
+            // (.agx.kernels extension 7). ZLUDA_AGX_LAUNCH_DIVISORS=0 turns it off.
+            if std::env::var("ZLUDA_AGX_LAUNCH_DIVISORS").map_or(true, |v| v != "0") {
+                options.push(std::ffi::CString::new("-agx-launch-divisors").unwrap());
+            }
             if let Ok(extra) = std::env::var("ZLUDA_AGX_LLVM_ARGS") {
                 options.extend(extra.split_whitespace().filter_map(|a| std::ffi::CString::new(a).ok()));
             }

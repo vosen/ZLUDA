@@ -36,8 +36,9 @@ def fat_entries(data):
 
 def kernel_records(obj, a, tmp):
     """name -> (threadgroups_per_grid uniform, [(kind, bytes, first half) per argument], global data half, stack
-    bytes, [(half, value) of the 32-bit constants to preload (extension 6, llc -agx-uniform-constants)]) from
-    .agx.kernels."""
+    bytes, [(half, value) of the 32-bit constants to preload (extension 6, llc -agx-uniform-constants)],
+    [(half, source half, kind) of the values the launch computes from argument words (extension 7,
+    llc -agx-launch-divisors)]) from .agx.kernels."""
     p = os.path.join(tmp, "o.o")
     open(p, "wb").write(obj)
     sec = os.path.join(tmp, "k.bin")
@@ -55,7 +56,7 @@ def kernel_records(obj, a, tmp):
         _halves, tg_half, glob, _gprs, _tg, stack, nargs = struct.unpack_from("<7I", d, q)
         q += 28
         args = [struct.unpack_from("<3I", d, q + 12 * i) for i in range(nargs)]
-        e, consts = q + 12 * nargs, []
+        e, consts, derived = q + 12 * nargs, [], []
         while e + 4 <= pos + size:
             (tag,) = struct.unpack_from("<I", d, e)
             if tag == 2:
@@ -66,11 +67,28 @@ def kernel_records(obj, a, tmp):
                 (n,) = struct.unpack_from("<I", d, e + 4)
                 consts = [struct.unpack_from("<2I", d, e + 8 + 8 * i) for i in range(n)]
                 e += 8 + 8 * n
+            elif tag == 7:
+                (n,) = struct.unpack_from("<I", d, e + 4)
+                derived = [struct.unpack_from("<3I", d, e + 8 + 12 * i) for i in range(n)]
+                e += 8 + 12 * n
             else:
                 break
-        out[name] = (tg_half // 2, args, glob, stack, consts)
+        out[name] = (tg_half // 2, args, glob, stack, consts, derived)
         pos += size
     return out
+
+
+def launch_value(d, kind):
+    """Value `kind` of .agx.kernels extension 7 for the 32-bit argument word d, a divisor (|d| of a signed one for
+    kinds 3 to 5), as agx_runtime's launch_value computes it: with l = ceil(log2(d)), the multiplier
+    2^32 (2^l - d) / d + 1 and the shifts min(l, 1) and max(l, 1) - 1; all 0 for d = 0."""
+    d &= 0xFFFFFFFF
+    if kind >= 3 and d >> 31:
+        d = (1 << 32) - d
+    if d == 0:
+        return 0
+    l = (d - 1).bit_length()
+    return [((1 << 32) * ((1 << l) - d)) // d + 1, min(l, 1), max(l, 1) - 1][kind % 3] & 0xFFFFFFFF
 
 
 def kernel_code(obj, name, a, tmp):
@@ -96,7 +114,7 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
     zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
     name += a.kernel_suffix
-    tg_uniform, slots, glob, stack, consts = kernel_records(obj, a, tmp)[name]
+    tg_uniform, slots, glob, stack, consts, derived = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
     grid3 = tuple(grid) + (1,) * (3 - len(grid))  # a third dimension for batched launches
@@ -153,6 +171,8 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
         uniforms[tg_uniform + d] = -(-g // w)
     for half, v in consts:
         uniforms[half // 2] = v
+    for half, src, kind in derived:
+        uniforms[half // 2] = launch_value(uniforms.get(src // 2, 0), kind)
     for u, v in sorted(uniforms.items()):
         cmd += ["--uniform", "%d=%d" % (u, v)]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

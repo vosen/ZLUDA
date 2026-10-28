@@ -84,8 +84,14 @@ fn main() {
     // Wide constants in uniforms (.agx.kernels extension 6, which agx_runtime sets at launch): fewer registers,
     // more resident SIMD-groups. ZLUDA_AGX_UNIFORM_CONSTANTS=0 builds without.
     println!("cargo:rerun-if-env-changed=ZLUDA_AGX_UNIFORM_CONSTANTS");
-    let llc_args: Vec<&str> =
+    let mut llc_args: Vec<&str> =
         if env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") { vec![] } else { vec!["--llc-arg=-agx-uniform-constants"] };
+    // Division by a 32-bit kernel argument with a multiplier and shifts agx_runtime computes at launch
+    // (.agx.kernels extension 7). ZLUDA_AGX_LAUNCH_DIVISORS=0 builds without.
+    println!("cargo:rerun-if-env-changed=ZLUDA_AGX_LAUNCH_DIVISORS");
+    if !env::var("ZLUDA_AGX_LAUNCH_DIVISORS").is_ok_and(|v| v == "0") {
+        llc_args.push("--llc-arg=-agx-launch-divisors");
+    }
     for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false), ("solver", false)] {
         let mut text = read(&format!("kernels/{name}.mlir"));
         if name == "sparse" {
