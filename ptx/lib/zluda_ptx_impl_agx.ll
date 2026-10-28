@@ -406,12 +406,18 @@ define i32 @__zluda_ptx_impl_sreg_total_smem_size() #3 {
   %v = and i32 %up, -128
   ret i32 %v
 }
+; The reserved region's offsets are the shared memory size plus a bias, which is 0 here (shared memory starts at 0,
+; so sizes and offsets coincide) and which the .air for Metal sets to place the region after Metal's own threadgroup
+; addresses (LLVMZludaAirSharedLayout). Externally initialized, so that the optimizer keeps the load for it to find.
+@__zluda_agx_reserved_smem_bias = addrspace(4) externally_initialized global i32 0, align 4
 define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_begin() #3 {
-  %v = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  %t = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  %b = load i32, ptr addrspace(4) @__zluda_agx_reserved_smem_bias, align 4
+  %v = add i32 %t, %b
   ret i32 %v
 }
 define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_end() #3 {
-  %b = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  %b = call i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_begin()
   %v = add i32 %b, 1024
   ret i32 %v
 }
@@ -419,8 +425,10 @@ define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_end() #3 {
 define i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_cap() #3 {
   ret i32 1024
 }
+; a size: the shared memory and the reserved region (the reserved region's end where shared memory starts at 0)
 define i32 @__zluda_ptx_impl_sreg_aggr_smem_size() #3 {
-  %v = call i32 @__zluda_ptx_impl_sreg_reserved_smem_offset_end()
+  %t = call i32 @__zluda_ptx_impl_sreg_total_smem_size()
+  %v = add i32 %t, 1024
   ret i32 %v
 }
 

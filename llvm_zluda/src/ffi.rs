@@ -126,6 +126,7 @@ extern "C" {
     pub fn LLVMZludaAgxSpillClusterShared(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
 
     pub fn LLVMZludaAirInlineGlobalUsers(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirSharedLayout(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirGlobalsToBuffer(
         module: LLVMModuleRef,
         json: *mut *mut std::ffi::c_char,

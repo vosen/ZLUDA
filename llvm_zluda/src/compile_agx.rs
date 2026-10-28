@@ -14,7 +14,7 @@ use crate::{
     LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
 #[cfg(zluda_air)]
-use crate::{LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers};
+use crate::{LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers, LLVMZludaAirSharedLayout};
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
     LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
@@ -337,13 +337,15 @@ pub fn compile_agx_linked(
     // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
     // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
     //
-    // Metal compiles no writable program-scope variables, so in the .air a
-    // module's .global variables are one buffer, a last kernel parameter, which
-    // NAME.air.globals describes for the host (LLVMZludaAirGlobalsToBuffer). AGX
-    // compiles the AIR of the module without that change, so its code and
-    // kernel arguments do not change: the .air is then made from a copy.
+    // The .air for Metal is made from a copy, changed where Metal differs from
+    // AGX: a module's .global variables are one buffer, a last kernel
+    // parameter, which NAME.air.globals describes for the host
+    // (LLVMZludaAirGlobalsToBuffer), and the shared memory registers follow
+    // Metal's numbering of threadgroup addresses (LLVMZludaAirSharedLayout).
+    // AGX compiles the AIR of the module without those changes, so its code and
+    // kernel arguments do not change.
     if via_air() {
-        let metal = has_device_globals(&linked).then(|| linked.clone());
+        let metal = Some(linked.clone());
         let (mut bitcode, _) = to_air(&linked, &target_machine, &pb_options, false)?;
         let mut globals = None;
         if let Some(metal) = metal {
@@ -388,23 +390,6 @@ fn via_air() -> bool {
     std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1")
 }
 
-/// Whether the module has .global variables (address space 1, the same in
-/// AGX and AIR).
-fn has_device_globals(module: &Module) -> bool {
-    let mut global = unsafe { llvm_sys::core::LLVMGetFirstGlobal(module.get()) };
-    while !global.is_null() {
-        let mut len = 0;
-        let name = unsafe { LLVMGetValueName2(global, &mut len) };
-        let name = unsafe { std::slice::from_raw_parts(name as *const u8, len) };
-        let space = unsafe { llvm_sys::core::LLVMGetPointerAddressSpace(llvm_sys::core::LLVMTypeOf(global)) };
-        if space == 1 && !name.starts_with(b"llvm.") {
-            return true;
-        }
-        global = unsafe { llvm_sys::core::LLVMGetNextGlobal(global) };
-    }
-    false
-}
-
 /// The module in upstream AIR, in place, and its bitcode (the .air file).
 /// With buffer_globals, the .global variables become one buffer
 /// (LLVMZludaAirGlobalsToBuffer), described by the returned JSON.
@@ -426,6 +411,7 @@ fn to_air(
     run(c"agx-raise-to-air", agx)?;
     let mut globals = None;
     if buffer_globals {
+        unsafe { LLVMZludaAirSharedLayout(module.get()) };
         // The functions using the variables, inlined into the kernels (AIR
         // inlines every call anyway), until no other function uses them.
         for _ in 0..16 {

@@ -1674,3 +1674,94 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
 }
 
 LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air for Metal: the shared memory registers in
+// Metal's numbering of threadgroup addresses. AGX numbers shared memory from
+// 0 (static variables in module order, then the dynamic shared memory), so
+// zluda_ptx_impl_agx.ll computes sizes and offsets alike. Metal numbers its
+// threadgroup allocations its own way (on an M2 Max static ones from 0x10000,
+// reordered, and dynamic threadgroup memory from 0x80000000 after the static
+// bytes), so in the .air:
+// - ptrtoint(__zluda_agx_smem_end), the end of the static variables, is their
+//   size in AGX's layout (%dynamic_smem_size is the launch's bytes minus it);
+// - the bias added to the reserved region's offsets places it after the
+//   highest threadgroup address the kernel uses (its static variables and its
+//   dynamic shared memory), rounded to 128 bytes: every relation PTX states
+//   between shared addresses and %reserved_smem_offset_* holds. Sizes
+//   (%total_smem_size, %dynamic_smem_size, %aggr_smem_size) are unchanged.
+// Returns 1 if the module changed.
+int LLVMZludaAirSharedLayout(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    const DataLayout &DL = Mod->getDataLayout();
+    LLVMContext &Ctx = Mod->getContext();
+    GlobalVariable *End = Mod->getGlobalVariable("__zluda_agx_smem_end", true);
+    GlobalVariable *Bias = Mod->getGlobalVariable("__zluda_agx_reserved_smem_bias", true);
+    GlobalVariable *Bytes = Mod->getGlobalVariable("__zluda_agx_smem_bytes", true);
+    if (!End && !Bias)
+        return 0;
+    // The static variables in AGX's layout, and the dynamic shared memory.
+    uint64_t statics = 0;
+    SmallVector<std::pair<GlobalVariable *, uint64_t>, 8> sized;
+    SmallVector<GlobalVariable *, 2> dynamic;
+    for (GlobalVariable &GV : Mod->globals())
+    {
+        if (GV.getAddressSpace() != 3 || &GV == End)
+            continue;
+        uint64_t size = DL.getTypeAllocSize(GV.getValueType());
+        if (size)
+        {
+            statics = alignTo(statics, DL.getValueOrABITypeAlignment(GV.getAlign(), GV.getValueType())) + size;
+            sized.push_back({&GV, size});
+        }
+        else
+            dynamic.push_back(&GV);
+    }
+    bool changed = false;
+    if (End)
+    {
+        convertUsersOfConstantsToInstructions({End});
+        for (User *U : make_early_inc_range(End->users()))
+            if (auto *P = dyn_cast<PtrToIntInst>(U))
+            {
+                P->replaceAllUsesWith(ConstantInt::get(P->getType(), statics));
+                P->eraseFromParent();
+                changed = true;
+            }
+        End->removeDeadConstantUsers();
+        if (End->use_empty())
+            End->eraseFromParent();
+    }
+    if (Bias)
+    {
+        for (User *U : make_early_inc_range(Bias->users()))
+        {
+            auto *L = dyn_cast<LoadInst>(U);
+            if (!L)
+                continue;
+            IRBuilder<> B(L);
+            Type *I64 = B.getInt64Ty();
+            Value *Total = Bytes ? B.CreateZExt(B.CreateLoad(B.getInt32Ty(), Bytes), I64)
+                                 : static_cast<Value *>(B.getInt64(statics));
+            Value *Top = B.getInt64(0);
+            auto Max = [&](Value *E) { Top = B.CreateBinaryIntrinsic(Intrinsic::umax, Top, E); };
+            for (auto [GV, size] : sized)
+                Max(B.CreateAdd(B.CreatePtrToInt(GV, I64), B.getInt64(size)));
+            for (GlobalVariable *GV : dynamic)
+                Max(B.CreateAdd(B.CreatePtrToInt(GV, I64), B.CreateSub(Total, B.getInt64(statics))));
+            auto Round = [&](Value *V) { return B.CreateAnd(B.CreateAdd(V, B.getInt64(127)), B.getInt64(~127ull)); };
+            Value *R = B.CreateTrunc(B.CreateSub(Round(Top), Round(Total)), L->getType());
+            L->replaceAllUsesWith(R);
+            L->eraseFromParent();
+            changed = true;
+        }
+        if (Bias->use_empty())
+            Bias->eraseFromParent();
+    }
+    (void)Ctx;
+    return changed ? 1 : 0;
+}
+
+LLVM_C_EXTERN_C_END
