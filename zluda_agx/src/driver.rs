@@ -1229,6 +1229,10 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") {
         options.push("no-uniform-constants");
     }
+    // and ZLUDA_AGX_VIA_AIR=1 compiles through upstream AIR (experimental)
+    if std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1") {
+        options.push("via-air");
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compiled = std::cell::Cell::new(false);
     let started = Instant::now();
