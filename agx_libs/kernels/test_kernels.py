@@ -1629,9 +1629,10 @@ def blend(r, old, alpha, beta):
     return alpha * r + (beta * old if beta != 0 else 0.0)
 
 
-def case_act(a, obj, tmp, mode, bwd, beta, rnd):
+def case_act(a, obj, tmp, mode, bwd, beta, rnd, packed=False):
     dims, coef, alpha = (2, 3, 4, 5), 1.5, 1.25
-    x, y = T4(dims, rnd, 1), T4(dims, rnd, 0, nhwc=True)
+    # packed: every tensor dense NCHW, the kernels' fast path
+    x, y = T4(dims, rnd, 0 if packed else 1), T4(dims, rnd, 0, nhwc=not packed)
     # values near 0 too, for the series of tanh and elu
     for k in range(0, x.len, 7):
         x.data[k] = rounded([x.data[k] * 1e-3], "f")[0]
@@ -1644,11 +1645,11 @@ def case_act(a, obj, tmp, mode, bwd, beta, rnd):
         for i in x.idx():
             want[y.off(*i)] = blend(act_ref(x.data[x.off(*i)], mode, coef), y.data[y.off(*i)], alpha, beta)
         return close(unpack(got), want, y.positions(), 2e-6)
-    yv = T4(dims, rnd, 2)
+    yv = T4(dims, rnd, 0 if packed else 2)
     for i in x.idx():
         yv.data[yv.off(*i)] = act_ref(x.data[x.off(*i)], mode, coef)
     yv.data = rounded(yv.data, "f")
-    dy, dx = T4(dims, rnd, 0), T4(dims, rnd, 3)
+    dy, dx = T4(dims, rnd, 0), T4(dims, rnd, 0 if packed else 3)
     (got,) = run(a, obj, "agx_dnn_act_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(x.data)),
                                              ("buf", pack(dx.data), True), ("i64", total)] + dnn_shape(x)
                  + dnn_strides(yv) + dnn_strides(dy) + dnn_strides(x) + dnn_strides(dx)
@@ -1660,9 +1661,9 @@ def case_act(a, obj, tmp, mode, bwd, beta, rnd):
     return close(unpack(got), want, dx.positions(), 2e-5)
 
 
-def case_pointwise(a, obj, tmp, op, rnd):
+def case_pointwise(a, obj, tmp, op, rnd, packed=False):
     dims = (2, 3, 4, 5)
-    c = T4(dims, rnd, 1)
+    c = T4(dims, rnd, 0 if packed else 1)
     bias = T4((1, 3, 1, 1), rnd, 0)
     astr = (0, bias.strides[1], 0, 0)
     alpha, beta = 0.75, 0.5
@@ -2410,6 +2411,9 @@ def main():
                         for beta in (0.0, 0.5):
                             cases.append(("dnn act mode %d %s beta %g" % (mode, "bwd" if bwd else "fwd", beta),
                                           lambda m=mode, b=bwd, be=beta: case_act(a, obj, tmp, m, b, be, rnd)))
+                    for bwd in (0, 1):
+                        cases.append(("dnn act mode %d %s packed" % (mode, "bwd" if bwd else "fwd"),
+                                      lambda m=mode, b=bwd: case_act(a, obj, tmp, m, b, 0.5, rnd, True)))
                 for kind in (0, 1):
                     cases.append(("dnn convert %s" % ("f16", "bf16")[kind], lambda k=kind: case_dnn_convert(a, obj, tmp, k, rnd)))
                 for start in range(0, len(PW_MODES), 8):
@@ -2419,6 +2423,7 @@ def main():
                     cases.append(("dnn graph reduction op %d" % op, lambda o=op: case_reduce_graph(a, obj, tmp, o, rnd)))
                 for op, label in ((0, "add bias"), (1, "set"), (2, "scale")):
                     cases.append(("dnn %s" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd)))
+                    cases.append(("dnn %s packed" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd, True)))
                 for inst in (0, 1):
                     for algo in (0, 1, 2):
                         for bwd in (0, 1):

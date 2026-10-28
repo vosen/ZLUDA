@@ -32,12 +32,29 @@ gpu.module @agx_dnn {
     return %o : index
   }
 
+  // A packed NCHW tensor (strides C H W, H W, W, 1, the common case) is at offset i itself: a test of the
+  // strides, the same for every thread, instead of the three divisions of the coordinates.
   func.func private @agx_dnn_off(%i: index, %C: index, %H: index, %W: index,
       %s0: index, %s1: index, %s2: index, %s3: index) -> index {
-    %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
-        : (index, index, index, index) -> (index, index, index, index)
-    %o = func.call @agx_dnn_dot4(%n, %c, %h, %w, %s0, %s1, %s2, %s3)
-        : (index, index, index, index, index, index, index, index) -> index
+    %one = arith.constant 1 : index
+    %HW = arith.muli %H, %W : index
+    %CHW = arith.muli %C, %HW : index
+    %p3 = arith.cmpi eq, %s3, %one : index
+    %p2 = arith.cmpi eq, %s2, %W : index
+    %p1 = arith.cmpi eq, %s1, %HW : index
+    %p0 = arith.cmpi eq, %s0, %CHW : index
+    %p32 = arith.andi %p3, %p2 : i1
+    %p10 = arith.andi %p1, %p0 : i1
+    %packed = arith.andi %p32, %p10 : i1
+    %o = scf.if %packed -> index {
+      scf.yield %i : index
+    } else {
+      %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
+          : (index, index, index, index) -> (index, index, index, index)
+      %d = func.call @agx_dnn_dot4(%n, %c, %h, %w, %s0, %s1, %s2, %s3)
+          : (index, index, index, index, index, index, index, index) -> index
+      scf.yield %d : index
+    }
     return %o : index
   }
 
