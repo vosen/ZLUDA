@@ -21,6 +21,7 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
+#include <array>
 #include <optional>
 #include <string>
 #include <llvm/IR/CallingConv.h>
@@ -1248,9 +1249,69 @@ LLVM_C_EXTERN_C_BEGIN
 // initializer's address of a variable). The AGX compilation is unaffected:
 // these run on a copy of the module.
 
-static bool zludaIsBufferGlobal(const GlobalVariable &GV)
+// Whether V's address is used other than to load through it (as an integer,
+// in a variable's initializer, stored, passed ...).
+static bool zludaAddressEscapes(Value *V)
 {
-    return GV.getAddressSpace() == 1 && !GV.getName().starts_with("llvm.");
+    for (User *U : V->users())
+    {
+        if (auto *L = dyn_cast<LoadInst>(U); L && L->getPointerOperand() == V)
+            continue;
+        if (auto *GEP = dyn_cast<GEPOperator>(U); GEP && GEP->getPointerOperand() == V)
+        {
+            if (zludaAddressEscapes(GEP))
+                return true;
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+// .global variables, and .const variables whose address escapes: the host
+// knows no address of a Metal program-scope constant, so one held in a
+// variable or compared as an integer must be in the buffer too (CUDA's
+// generic(cv), mask(foo+4), mov.u64 %r, foo). The AGX table of mask()
+// initializers is the init kernel's job, not a variable.
+static bool zludaIsBufferGlobal(GlobalVariable &GV)
+{
+    if (GV.getName().starts_with("llvm.") || GV.getName() == "__zluda_agx_masked_init")
+        return false;
+    if (GV.getAddressSpace() == 1)
+        return true;
+    return GV.getAddressSpace() == 2 && zludaAddressEscapes(&GV);
+}
+
+// Replaces the uses of Old, a variable in address space 1 or 2, with New, its
+// address in the buffer (address space 1): GEPs are rebuilt in the new address
+// space, casts to it disappear, other users take the device pointer.
+static void zludaRetarget(Value *Old, Value *New)
+{
+    for (Use &U : make_early_inc_range(Old->uses()))
+    {
+        auto *I = dyn_cast<Instruction>(U.getUser());
+        if (!I)
+            continue;
+        if (auto *GEP = dyn_cast<GetElementPtrInst>(I); GEP && GEP->getPointerOperand() == Old &&
+                                                         Old->getType() != New->getType())
+        {
+            IRBuilder<> B(GEP);
+            SmallVector<Value *, 4> idx(GEP->indices());
+            Value *NG = B.CreateGEP(GEP->getSourceElementType(), New, idx, "", GEP->getNoWrapFlags());
+            zludaRetarget(GEP, NG);
+            NG->takeName(GEP);
+            if (GEP->use_empty())
+                GEP->eraseFromParent();
+            continue;
+        }
+        if (auto *ASC = dyn_cast<AddrSpaceCastInst>(I); ASC && ASC->getType() == New->getType())
+        {
+            ASC->replaceAllUsesWith(New);
+            ASC->eraseFromParent();
+            continue;
+        }
+        U.set(New);
+    }
 }
 
 // The functions whose instructions use V, through constant expressions.
@@ -1420,7 +1481,7 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         return -1;
     };
 
-    ZludaGlobalsImage img{DL};
+    ZludaGlobalsImage img{DL, {}, {}, {}};
     uint64_t size = 0;
     for (GlobalVariable *GV : globals)
     {
@@ -1434,6 +1495,28 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         if (GV->hasInitializer())
             if (std::string e = img.put(GV->getInitializer(), img.offsets[GV]); !e.empty())
                 return fail(GV->getName().str() + ": " + e);
+
+    // The mask() initializers (ZLUDA's AGX table): bytes of a variable's
+    // address, written by the init kernel once the buffer has an address.
+    std::vector<std::array<uint64_t, 4>> masked;
+    if (GlobalVariable *T = Mod->getGlobalVariable("__zluda_agx_masked_init", true); T && T->hasInitializer())
+    {
+        auto *Arr = T->getInitializer();
+        for (unsigned i = 0, n = Arr->getType()->getArrayNumElements(); i < n; i++)
+        {
+            Constant *E = Arr->getAggregateElement(i);
+            GlobalValue *SG = nullptr, *TG = nullptr;
+            int64_t so = 0, to = 0;
+            auto *Desc = dyn_cast<ConstantInt>(E->getAggregateElement(2));
+            if (!img.addressOf(E->getAggregateElement(0u), SG, so) || !img.addressOf(E->getAggregateElement(1), TG, to) ||
+                !Desc || !img.offsets.count(SG) || !img.offsets.count(TG))
+                return fail("a mask() initializer the globals buffer cannot hold");
+            uint64_t d = Desc->getZExtValue();
+            masked.push_back({img.offsets[SG] + so, img.offsets[TG] + to, d & 63, d >> 8});
+        }
+        T->setInitializer(nullptr);
+        T->eraseFromParent();
+    }
 
     SmallPtrSet<Function *, 8> users;
     for (GlobalVariable *GV : globals)
@@ -1480,16 +1563,12 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         IRBuilder<> B(&*NK->getEntryBlock().getFirstInsertionPt());
         for (GlobalVariable *GV : globals)
         {
-            Value *Addr = nullptr;
-            for (Use &U : make_early_inc_range(GV->uses()))
-            {
-                auto *I = dyn_cast<Instruction>(U.getUser());
-                if (!I || I->getFunction() != NK)
-                    continue;
-                if (!Addr)
-                    Addr = B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName());
-                U.set(Addr);
-            }
+            bool used = any_of(GV->users(), [&](User *U) {
+                auto *I = dyn_cast<Instruction>(U);
+                return I && I->getFunction() == NK;
+            });
+            if (used)
+                zludaRetarget(GV, B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName()));
         }
         // Pointers held in the buffer are loaded and stored as i64: Metal's
         // typed-pointer reader rejects a pointer to a pointer ("Unexpected
@@ -1534,6 +1613,34 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         kernels += "\"" + NK->getName().str() + "\"";
     }
 
+    // The init kernel: each mask() byte group from the buffer's address.
+    std::string init;
+    if (!masked.empty())
+    {
+        Function *K = nullptr;
+        for (Function &F : *Mod)
+            if (F.hasFnAttribute("air-kernel"))
+                K = &F;
+        Function *IF = Function::Create(FunctionType::get(Type::getVoidTy(Ctx), {PointerType::get(Ctx, 1)}, false),
+                                        GlobalValue::ExternalLinkage, "__zluda_air_init", Mod);
+        if (K)
+            IF->setAttributes(AttributeList::get(Ctx, K->getAttributes().getFnAttrs(), {}, {}));
+        IF->addFnAttr("air-kernel");
+        Argument *G = IF->getArg(0);
+        G->setName("zluda_globals");
+        IF->addParamAttr(0, Attribute::get(Ctx, "zluda-globals"));
+        IRBuilder<> B(BasicBlock::Create(Ctx, "", IF));
+        Value *Addr = B.CreatePtrToInt(G, B.getInt64Ty());
+        for (auto &m : masked)
+        {
+            Value *V = B.CreateLShr(B.CreateAdd(Addr, B.getInt64(m[1])), m[2]);
+            Type *ET = B.getIntNTy(8 * m[3]);
+            B.CreateStore(B.CreateTrunc(V, ET), B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), G, m[0]));
+        }
+        B.CreateRetVoid();
+        init = IF->getName().str();
+    }
+
     std::string out = "{\"size\": " + std::to_string(size) + ", \"image\": \"" + zludaHex(img.image) +
                       "\", \"relocs\": [";
     for (size_t i = 0; i < img.relocs.size(); i++)
@@ -1543,7 +1650,11 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
     for (size_t i = 0; i < globals.size(); i++)
         out += std::string(i ? ", \"" : "\"") + globals[i]->getName().str() + "\": " +
                std::to_string(img.offsets[globals[i]]);
-    out += "}, \"kernels\": [" + kernels + "]}";
+    out += "}, \"kernels\": [" + kernels + "], \"masked\": [";
+    for (size_t i = 0; i < masked.size(); i++)
+        out += std::string(i ? ", [" : "[") + std::to_string(masked[i][0]) + ", " + std::to_string(masked[i][1]) +
+               ", " + std::to_string(masked[i][2]) + ", " + std::to_string(masked[i][3]) + "]";
+    out += "], \"init_kernel\": \"" + init + "\"}";
 
     // (their initializers, now in the image, may refer to each other)
     for (GlobalVariable *GV : globals)

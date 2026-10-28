@@ -214,6 +214,8 @@ def load_globals(tmp, heap, syms, bufs):
         heap.patches[off] = target
     for name, off in g['symbols'].items():
         syms[name] = BASE + off
+    # the kernel writing the mask() initializers from the buffer's address, which each job's heap has anew
+    heap.init_kernel = g.get('init_kernel') or None
     ordered = sorted(g['symbols'].items(), key=lambda kv: kv[1])
     for i, (name, off) in enumerate(ordered):
         end = ordered[i + 1][1] if i + 1 < len(ordered) else g['size']
@@ -266,6 +268,11 @@ def make_job(info, heap, pending, globals_off):
     patches = [{'buffer': 0, 'offset': o, 'target_buffer': 0, 'target_offset': t}
                for o, t in sorted(heap.patches.items())]
     commands = []
+    init = getattr(heap, 'init_kernel', None)
+    if init:
+        loc = [a[1] for a in kernels[init] if a[0] == 'globals'][0]
+        commands.append({'kernel': init, 'bindings': [{'index': loc, 'buffer': 0, 'offset': globals_off}],
+                         'grid': [1, 1, 1], 'group': [1, 1, 1]})
     for name, grid, block, dyn, pbufs in pending:
         bindings = []
         for loc, data, ppatches in pbufs:
