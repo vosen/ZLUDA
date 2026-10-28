@@ -21,6 +21,8 @@ pub static CONV_I32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv_i32.
 pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 /// The pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx (`kernels/dnn.mlir`).
 pub static DNN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn.agxfat"));
+/// The same kernels with 32-bit indices, named `<kernel>_i32`.
+pub static DNN_I32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn_i32.agxfat"));
 /// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
 pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
 /// The complex BLAS kernels of zluda_blas_agx (`kernels/blasc.mlir`, with f64 copies for the Z routines).

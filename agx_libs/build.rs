@@ -95,9 +95,10 @@ fn main() {
     }
     // The libraries compile side by side: each has a sequential front end that leaves processors idle.
     let mut children = Vec::new();
-    // conv_i32: the convolutions again with 32-bit indices (names ending in _i32), which zluda_dnn_agx runs when
-    // every offset fits: 64-bit index divisions cost a run-time 32-bit check and a slow path each.
-    for name in ["sgemm", "hgemm", "epilogue", "conv", "conv_i32", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
+    // conv_i32, dnn_i32: the convolutions and the DNN kernels again with 32-bit indices (names ending in _i32),
+    // which zluda_dnn_agx runs when every offset fits: each 64-bit index division costs a run-time 32-bit check
+    // and a slow path.
+    for name in ["sgemm", "hgemm", "epilogue", "conv", "conv_i32", "dnn_i32", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
         let out = out_dir.join(format!("{name}.agxfat"));
         let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") {
             out_dir.join(format!("{name}.mlir"))

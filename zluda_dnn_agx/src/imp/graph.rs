@@ -772,7 +772,7 @@ unsafe fn pw(
     let mut params = vec![arg(&mut x), arg(&mut b), arg(&mut t), arg(&mut y), arg(&mut total)];
     params.extend(a.0.iter_mut().map(|v| arg(v)));
     params.extend([arg(&mut p0), arg(&mut p1), arg(&mut p2), arg(&mut alpha1), arg(&mut alpha2)]);
-    dnn_launch(h, c"agx_dnn_pw_graph", &mut params, total)
+    dnn_launch(h, c"agx_dnn_pw_graph", &mut params, total, false)
 }
 
 /// The f32 conversion of a tensor of type `ty` between `src` and `dst` (`into` f32 or out of it).
@@ -916,7 +916,7 @@ pub unsafe fn execute(hraw: cudnnHandle_t, plan: &Desc, vp: &Desc) -> R<()> {
                 a.push(op as i64);
                 let mut params = vec![arg(&mut xp), arg(&mut yp), arg(&mut total)];
                 params.extend(a.0.iter_mut().map(|v| arg(v)));
-                dnn_launch(h, c"agx_dnn_reduce_graph", &mut params, total)?;
+                dnn_launch(h, c"agx_dnn_reduce_graph", &mut params, total, false)?;
             }
         }
     }

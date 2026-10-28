@@ -1372,13 +1372,49 @@ mod imp {
         view(obj::<Tensor>(d)?)
     }
 
-    /// One launch of 64-thread groups covering `threads`, with `params` the kernel's arguments in order.
-    unsafe fn dnn_launch(h: &Handle, name: &'static std::ffi::CStr, params: &mut [*mut c_void], threads: i64) -> cudnnStatus_t {
+    /// Whether the 32-bit index kernels (agx_libs' `dnn_i32`, `<name>_i32`) compute a launch: every integer
+    /// argument in `ints` and every element offset of `views` fits in 31 bits. Their index arguments are 32 bits
+    /// wide; the i64 values the arguments point to give their low halves (the driver copies each argument at the
+    /// kernel's width, little-endian).
+    pub(crate) fn fits32(views: &[&View], ints: &[i64]) -> bool {
+        let span = |v: &View| -> Option<i64> {
+            v.dims.iter().zip(&v.strides).try_fold(0i64, |acc, (&d, &st)| {
+                (d >= 0).then(|| ())?;
+                acc.checked_add((d - 1).max(0).checked_mul(st.checked_abs()?)?)
+            })
+        };
+        ints.iter().all(|v| v.unsigned_abs() < 1 << 31)
+            && views.iter().all(|v| span(v).is_some_and(|s| s < 1 << 31) && v.total() < 1 << 31)
+    }
+
+    /// `name` with `_i32`, interned (the engine keys functions by static names).
+    fn narrow_name(name: &'static std::ffi::CStr) -> &'static std::ffi::CStr {
+        static NAMES: std::sync::Mutex<Vec<(&'static std::ffi::CStr, &'static std::ffi::CStr)>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut names = NAMES.lock().unwrap();
+        if let Some(&(_, n)) = names.iter().find(|(k, _)| *k == name) {
+            return n;
+        }
+        let mut bytes = name.to_bytes().to_vec();
+        bytes.extend_from_slice(b"_i32");
+        let n: &'static std::ffi::CStr = Box::leak(std::ffi::CString::new(bytes).unwrap().into_boxed_c_str());
+        names.push((name, n));
+        n
+    }
+
+    /// One launch of 64-thread groups covering `threads`, with `params` the kernel's arguments in order; with the
+    /// 32-bit index kernel when `narrow` (fits32) and `threads` fits too.
+    unsafe fn dnn_launch(h: &Handle, name: &'static std::ffi::CStr, params: &mut [*mut c_void], threads: i64, narrow: bool) -> cudnnStatus_t {
         if threads <= 0 {
             return Ok(());
         }
         let groups = u32::try_from((threads as u64).div_ceil(64)).map_err(|_| cudnnError_t::NOT_SUPPORTED)?;
-        let f = engine::function(agx_libs::DNN, name).map_err(status)?;
+        let narrow = narrow && threads < 1 << 30 && std::env::var("ZLUDA_AGX_DNN_I32").map_or(true, |v| v != "0");
+        let f = if narrow {
+            engine::function(agx_libs::DNN_I32, narrow_name(name)).map_err(status)?
+        } else {
+            engine::function(agx_libs::DNN, name).map_err(status)?
+        };
         engine::launch_kernel(f, [groups, 1], [64, 1], params, h.stream).map_err(status)
     }
 
@@ -1423,7 +1459,8 @@ mod imp {
         let mut p = vec![arg(&mut src), arg(&mut dst), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.push(arg(&mut kind));
-        dnn_launch(h, name, &mut p, total)
+        let fit = fits32(&[sv, dv], &[&a.0[..], &[total, kind]].concat());
+        dnn_launch(h, name, &mut p, total, fit)
     }
 
     /// None when every tensor is f32, else the staging and the f32 descriptors and pointers to call with.
@@ -1545,7 +1582,8 @@ mod imp {
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut coef), arg(&mut alpha), arg(&mut beta)]);
         let _ = &mut mode;
-        dnn_launch(h, c"agx_dnn_act_fwd", &mut p, total)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_act_fwd", &mut p, total, fit)
     }
 
     pub(crate) unsafe fn cudnnActivationBackward(
@@ -1578,7 +1616,8 @@ mod imp {
         let mut p = vec![arg(&mut y), arg(&mut dy), arg(&mut x), arg(&mut dx), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut coef), arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_act_bwd", &mut p, total)
+        let fit = fits32(&views.iter().collect::<Vec<_>>(), &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_act_bwd", &mut p, total, fit)
     }
 
     unsafe fn pointwise(h: cudnnHandle_t, a_view: Option<View>, mut a: *const c_void, c_desc: cudnnTensorDescriptor_t, mut c: *mut c_void, op: i64, mut alpha: f32, mut beta: f32) -> cudnnStatus_t {
@@ -1599,7 +1638,8 @@ mod imp {
         let mut p = vec![arg(&mut a), arg(&mut c), arg(&mut total)];
         p.extend(args.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pointwise", &mut p, total)
+        let fit = fits32(&[&cv, &View { dims: cv.dims, strides: astr }], &[&args.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pointwise", &mut p, total, fit)
     }
 
     pub(crate) unsafe fn cudnnAddTensor(
@@ -1677,7 +1717,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows * 32)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[rows * 32, k]].concat());
+        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnSoftmaxBackward(
@@ -1710,7 +1751,8 @@ mod imp {
         let mut p = vec![arg(&mut y), arg(&mut dy), arg(&mut dx), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows * 32)
+        let fit = fits32(&[&yv, &dyv, &dxv], &[&a.0[..], &[rows * 32, k]].concat());
+        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnCreatePoolingDescriptor(d: *mut cudnnPoolingDescriptor_t) -> cudnnStatus_t {
@@ -1819,7 +1861,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pool_fwd", &mut p, total)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pool_fwd", &mut p, total, fit)
     }
 
     /// Max pooling gradients go to the first maximum of each window (the deterministic choice), whatever y holds.
@@ -1853,7 +1896,8 @@ mod imp {
         let mut p = vec![arg(&mut dy), arg(&mut x), arg(&mut dx), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pool_bwd", &mut p, total)
+        let fit = fits32(&[&yv, &dyv, &xv, &dxv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pool_bwd", &mut p, total, fit)
     }
 
     /// 1 for spatial batch normalization (parameters per channel), 0 per activation.
@@ -1919,7 +1963,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut scale), arg(&mut bias), arg(&mut mean), arg(&mut var), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut eps), arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_bn_apply", &mut p, total)
+        let fit = fits32(&[xv, yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_bn_apply", &mut p, total, fit)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1934,7 +1979,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut rmean), arg(&mut rvar), arg(&mut smean), arg(&mut sinv), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut factor), arg(&mut eps)]);
-        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params * 32)
+        let fit = fits32(&[xv], &[&a.0[..], &[params * 32, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnBatchNormalizationForwardInference(
@@ -2058,14 +2104,16 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut dy), arg(&mut smean), arg(&mut sinv), arg(&mut dscale), arg(&mut dbias), arg(&mut sums), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut ap), arg(&mut bp)]);
-        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params * 32)?;
+        let fit = fits32(&[&xv, &dyv], &[&a.0[..], &[params * 32, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params * 32, fit)?;
         let mut total = xv.total();
         let mut a = Args::shape(&xv).strides(&xv).strides(&dyv).strides(&dxv);
         a.push(spatial);
         let mut p = vec![arg(&mut x), arg(&mut dy), arg(&mut dx), arg(&mut scale), arg(&mut smean), arg(&mut sinv), arg(&mut sums), arg(&mut total), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut ad), arg(&mut bd)]);
-        dnn_launch(h, c"agx_dnn_bn_bwd_data", &mut p, total)
+        let fit = fits32(&[&xv, &dyv, &dxv], &[&a.0[..], &[total, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_bwd_data", &mut p, total, fit)
     }
 }
 
