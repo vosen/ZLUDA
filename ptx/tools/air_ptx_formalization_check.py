@@ -418,9 +418,9 @@ def main():
                     help='file of "TEST KERNEL" lines (# comments) whose requests hang the device; never sent')
     args = ap.parse_args()
     args.counts = {'pass': 0, 'fail': 0, 'skip': 0}
-    args.skip_hang = set()
-    if args.skip_hang and os.path.exists(args.skip_hang):
-        for line in open(args.skip_hang):
+    skip_file, args.skip_hang = args.skip_hang, set()
+    if skip_file and os.path.exists(skip_file):
+        for line in open(skip_file):
             line = line.split('#')[0].split()
             if len(line) == 2:
                 args.skip_hang.add(tuple(line))
