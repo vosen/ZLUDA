@@ -441,6 +441,9 @@ fn to_air(
             1 => globals = Some(Message::new(unsafe { CStr::from_ptr(json) }).to_str().to_string()),
             _ => {}
         }
+        module
+            .verify()
+            .map_err(|e| format!("the .air globals buffer left a broken module: {e}"))?;
     }
     let mut target = unsafe { std::mem::zeroed() };
     let mut err = std::ptr::null_mut();

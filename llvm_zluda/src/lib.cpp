@@ -1282,15 +1282,17 @@ static bool zludaIsBufferGlobal(GlobalVariable &GV)
     return GV.getAddressSpace() == 2 && zludaAddressEscapes(&GV);
 }
 
-// Replaces the uses of Old, a variable in address space 1 or 2, with New, its
-// address in the buffer (address space 1): GEPs are rebuilt in the new address
-// space, casts to it disappear, other users take the device pointer.
-static void zludaRetarget(Value *Old, Value *New)
+// Replaces the uses in F of Old, a variable in address space 1 or 2, with
+// New, its address in the buffer (address space 1): GEPs are rebuilt in the
+// new address space, casts to it disappear, other users take the device
+// pointer. (Each kernel has its own buffer argument: uses in other functions
+// stay.)
+static void zludaRetarget(Value *Old, Value *New, Function *F)
 {
     for (Use &U : make_early_inc_range(Old->uses()))
     {
         auto *I = dyn_cast<Instruction>(U.getUser());
-        if (!I)
+        if (!I || I->getFunction() != F)
             continue;
         if (auto *GEP = dyn_cast<GetElementPtrInst>(I); GEP && GEP->getPointerOperand() == Old &&
                                                          Old->getType() != New->getType())
@@ -1298,7 +1300,7 @@ static void zludaRetarget(Value *Old, Value *New)
             IRBuilder<> B(GEP);
             SmallVector<Value *, 4> idx(GEP->indices());
             Value *NG = B.CreateGEP(GEP->getSourceElementType(), New, idx, "", GEP->getNoWrapFlags());
-            zludaRetarget(GEP, NG);
+            zludaRetarget(GEP, NG, F);
             NG->takeName(GEP);
             if (GEP->use_empty())
                 GEP->eraseFromParent();
@@ -1568,7 +1570,8 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
                 return I && I->getFunction() == NK;
             });
             if (used)
-                zludaRetarget(GV, B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName()));
+                zludaRetarget(GV, B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName()),
+                              NK);
         }
         // Pointers held in the buffer are loaded and stored as i64: Metal's
         // typed-pointer reader rejects a pointer to a pointer ("Unexpected
