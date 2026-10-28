@@ -49,11 +49,28 @@ TRANSIENT = ('XPC_ERROR_CONNECTION_INTERRUPTED', 'did not reply')
 DEVICE_LOCK = os.environ.get('AIR_DEVICE_LOCK', '/scratch/air-device.lock')
 
 
+# Per-request limits the service enforces (capabilities: gpu_timeout_ms, compile_timeout_ms). A kernel that runs past
+# GPU_TIMEOUT_MS is reported (and the service refuses GPU work until it ends) instead of freezing the Mac's display.
+GPU_TIMEOUT_MS = 2000
+COMPILE_TIMEOUT_MS = 5000
+# Error texts of a request the service gave up on: a hang to record, never to retry.
+TIMED_OUT = ('gpu_timeout_ms=', 'compile_timeout_ms=', 'Refusing GPU work', 'timed out after')
+
+
+def is_hang(error):
+    return any(t in (error or '') for t in TIMED_OUT)
+
+
 def submit(job, queue, tries=4, transient=TRANSIENT):
-    """Send one request to the service holding the device lock, retrying the failures listed in transient."""
+    """Send one request to the service holding the device lock, retrying the failures listed in transient. A request
+    that timed out is not retried: the lock is held until the service has finished the timed-out kernel."""
     import fcntl
+    import time
     sys.path.insert(0, os.environ.get('AIR_CLIENT', '/air/client'))
     from client import submit as service_submit
+    if job.get('op') == 'execute':
+        job.setdefault('gpu_timeout_ms', GPU_TIMEOUT_MS)
+        job.setdefault('compile_timeout_ms', COMPILE_TIMEOUT_MS)
     reply = {}
     with open(DEVICE_LOCK, 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -62,6 +79,14 @@ def submit(job, queue, tries=4, transient=TRANSIENT):
                 reply = service_submit(job, queue, timeout=180)
             except TimeoutError as e:
                 reply = {'ok': False, 'error': str(e)}
+            if is_hang(reply.get('error')):
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline:
+                    caps = service_submit({'op': 'capabilities'}, queue, timeout=60)
+                    if not (caps.get('result') or {}).get('gpu_busy_with_timed_out_kernel'):
+                        break
+                    time.sleep(0.5)
+                break
             if reply.get('ok') or not any(t in reply.get('error', '') for t in transient):
                 break
     return reply
@@ -387,7 +412,7 @@ def run_test(path, args):
             elif kw in ('.patch', '.append'):
                 err = flush()
                 if err:
-                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
+                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('HANG' if is_hang(err) else 'GPU-ERROR', err)
                 m = re.fullmatch(r'\.(patch|append) ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = h.ty_of(m.group(3))
                 vals = h.split_vals(m.group(6))
@@ -425,7 +450,7 @@ def run_test(path, args):
             elif kw == '.expect':
                 err = flush()
                 if err:
-                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
+                    return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('HANG' if is_hang(err) else 'GPU-ERROR', err)
                 m = re.fullmatch(r'\.expect ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
                 t = h.ty_of(m.group(2))
                 name = m.group(1)
@@ -451,7 +476,7 @@ def run_test(path, args):
                     passed += 1
         err = flush()
         if err:
-            return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('GPU-ERROR', err)
+            return ('SKIPPED-HANG', err[14:]) if err.startswith('SKIPPED-HANG') else ('HANG' if is_hang(err) else 'GPU-ERROR', err)
         args.counts['pass'] += passed
         args.counts['skip'] += skipped
         if failures:
