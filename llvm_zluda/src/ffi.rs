@@ -127,6 +127,7 @@ extern "C" {
 
     pub fn LLVMZludaAirInlineGlobalUsers(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirSharedLayout(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaSetAirPrimitives(air: i32);
     pub fn LLVMZludaAirRemapAddressSpaces(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirFunctionPointers(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirGlobalsToBuffer(

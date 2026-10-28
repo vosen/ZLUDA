@@ -9,7 +9,7 @@
 //! ```
 //!
 //! NAME.air is the portable AIR with what only Metal needs from ZLUDA (the .global variables as one buffer,
-//! NAME.air.globals; function pointers as IDs; the shared memory registers in Metal's numbering); llc
+//! NAME.air.globals; the shared memory registers in Metal's numbering); llc
 //! -mtriple=air -filetype=obj packages it for Metal.
 
 use crate::compile_agx::{
@@ -17,7 +17,8 @@ use crate::compile_agx::{
 };
 use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
-    LLVMZludaAgxKeepGlobals, LLVMZludaAirFunctionPointers, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
+    LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
+    LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
     LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
@@ -113,7 +114,47 @@ pub fn compile_air(
         return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
     }
     internalize_helpers(&linked);
-    // the AIR primitives too, so that the unused ones go
+    unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
+    let air = target_machine(AIR_TRIPLE, c"")?;
+    let options = PassBuilderOptions::new();
+    let fail = |err: *mut std::ffi::c_char| Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string();
+    // ZLUDA's lowering of what PTX has and the GPU has not, on its own IR (ZLUDA's address spaces, the
+    // __zluda_air.* primitives), as for the Agx target: clusters as threadgroups, isspacep and the generic
+    // addresses of shared and private memory, cluster shared memory over 32 KiB in device memory
+    unsafe { LLVMZludaSetAirPrimitives(1) };
+    let lowered = (|| -> Result<(), String> {
+        run(&linked, c"default<O3>", &air, &options)?;
+        let mut err = std::ptr::null_mut();
+        let clusters = unsafe { LLVMZludaAgxLowerClusters(linked.get(), &mut err) };
+        if clusters < 0 {
+            return Err(fail(err));
+        }
+        for i in 0..4 {
+            let lowered = unsafe { LLVMZludaAgxLowerAddressSpaces(linked.get()) };
+            if !lowered && !(i == 0 && clusters > 0) {
+                break;
+            }
+            run(&linked, c"default<O3>", &air, &options)?;
+        }
+        let spilled = unsafe { LLVMZludaAgxSpillClusterShared(linked.get(), &mut err) };
+        if spilled < 0 {
+            return Err(fail(err));
+        }
+        if spilled > 0 {
+            run(&linked, c"default<O3>", &air, &options)?;
+        }
+        Ok(())
+    })();
+    unsafe { LLVMZludaSetAirPrimitives(0) };
+    lowered?;
+    // the primitives that lowering called anew, after O3 dropped the unused definitions
+    let mut err = std::ptr::null_mut();
+    if !unsafe {
+        LLVMZludaLinkUsedDefinitions(linked.get(), ptx_impl.as_ptr().cast(), ptx_impl.len(), c"zluda_ptx_impl_air".as_ptr(), &mut err)
+    } {
+        return Err(fail(err));
+    }
+    // the AIR primitives internal once nothing creates new calls of them, so that the unused ones go
     let mut f = unsafe { llvm_sys::core::LLVMGetFirstFunction(linked.get()) };
     while !f.is_null() {
         let mut len = 0;
@@ -123,13 +164,11 @@ pub fn compile_air(
         }
         f = unsafe { llvm_sys::core::LLVMGetNextFunction(f) };
     }
-    unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
     // AIR's address spaces, triple and data layout
     let mut err = std::ptr::null_mut();
     if unsafe { LLVMZludaAirRemapAddressSpaces(linked.get(), &mut err) } < 0 {
-        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+        return Err(fail(err));
     }
-    let air = target_machine(AIR_TRIPLE, c"")?;
     unsafe {
         llvm_sys::core::LLVMSetTarget(linked.get(), AIR_TRIPLE.as_ptr());
         let layout = llvm_sys::target_machine::LLVMCreateTargetDataLayout(air.get());
@@ -140,23 +179,16 @@ pub fn compile_air(
     if let Some(hook) = compiler_hook {
         hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("linked.ll"));
     }
-    let options = PassBuilderOptions::new();
     run(&linked, c"default<O3>", &air, &options)?;
-    run(&linked, c"air-portable", &air, &options)?;
-    diagnostics.check()?;
-    let portable = bitcode(&linked);
-    if let Some(hook) = compiler_hook {
-        hook(&portable, String::from("portable.air"));
-        hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("opt.ll"));
+    // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
+    let mut err = std::ptr::null_mut();
+    if unsafe { LLVMZludaAirFunctionPointers(linked.get(), &mut err) } < 0 {
+        return Err(fail(err));
     }
-
-    // Metal: what only Metal needs from ZLUDA, on a copy
+    // Metal: what only Metal needs from ZLUDA, on a copy, before the AIR kernel signatures are made (the
+    // globals buffer is a kernel parameter like the others)
     let metal = linked.clone();
     unsafe { LLVMZludaAirSharedLayout(metal.get()) };
-    let mut err = std::ptr::null_mut();
-    if unsafe { LLVMZludaAirFunctionPointers(metal.get(), &mut err) } < 0 {
-        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
-    }
     for _ in 0..16 {
         if unsafe { LLVMZludaAirInlineGlobalUsers(metal.get()) } == 0 {
             break;
@@ -170,6 +202,8 @@ pub fn compile_air(
         1 => Some(Message::new(unsafe { CStr::from_ptr(json) }).to_str().to_string()),
         _ => None,
     };
+    run(&metal, c"air-portable", &air, &options)?;
+    diagnostics.check()?;
     metal.verify().map_err(|e| format!("the AIR for Metal is broken: {e}"))?;
     let metal_air = bitcode(&metal);
     if let Some(hook) = compiler_hook {
@@ -177,6 +211,14 @@ pub fn compile_air(
         if let Some(json) = &metal_globals {
             hook(&json.as_bytes().to_vec(), String::from("air.globals"));
         }
+    }
+
+    run(&linked, c"air-portable", &air, &options)?;
+    diagnostics.check()?;
+    let portable = bitcode(&linked);
+    if let Some(hook) = compiler_hook {
+        hook(&portable, String::from("portable.air"));
+        hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("opt.ll"));
     }
 
     // AGX: the portable AIR through agx-lower-air and the AGX backend

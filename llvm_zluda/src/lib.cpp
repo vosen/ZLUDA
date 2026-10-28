@@ -44,6 +44,12 @@ LLD_HAS_DRIVER(elf)
 
 using namespace llvm;
 
+// The name prefix of ZLUDA's GPU primitives in the module being compiled: the AGX intrinsics (llvm.agx.*) for the
+// Agx target, the AIR primitives of zluda_ptx_impl_air.ll (__zluda_air.*) for the Air target. The ZLUDA passes
+// below that find or create them (clusters, address spaces, shared memory spill) use it.
+static std::string zludaPrimitivePrefix = "llvm.agx.";
+static std::string zludaPrim(const char *op) { return zludaPrimitivePrefix + op; }
+
 typedef enum
 {
     LLVMZludaAtomicRMWBinOpXchg,     /**< Set the new value and return the one old */
@@ -738,11 +744,11 @@ namespace
                         StringRef n = callee->getName();
                         if (n.starts_with("__zluda_agx_cluster"))
                             return true;
-                        if (ids && (n.starts_with("llvm.agx.thread.position.in.threadgroup") ||
-                            n.starts_with("llvm.agx.threads.per.threadgroup") ||
-                            n.starts_with("llvm.agx.threadgroup.position.in.grid") ||
-                            n.starts_with("llvm.agx.threadgroups.per.grid") ||
-                            n == "llvm.agx.thread.index.in.threadgroup"))
+                        if (ids && (n.starts_with(zludaPrim("thread.position.in.threadgroup")) ||
+                            n.starts_with(zludaPrim("threads.per.threadgroup")) ||
+                            n.starts_with(zludaPrim("threadgroup.position.in.grid")) ||
+                            n.starts_with(zludaPrim("threadgroups.per.grid")) ||
+                            n == zludaPrim("thread.index.in.threadgroup")))
                             return true;
                     }
             }
@@ -805,17 +811,17 @@ namespace
         }
 
         IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());
-        Value *hw_tid_z = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.z"));
-        Value *hw_ntid_z = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.z"));
-        Value *ntid_x = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.x"));
-        Value *ntid_y = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.y"));
-        Value *hw_linear = B.CreateCall(intrinsic("llvm.agx.thread.index.in.threadgroup"));
-        Value *hw_ctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.x")),
-                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.y")),
-                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.z"))};
-        Value *hw_nctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.x")),
-                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.y")),
-                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.z"))};
+        Value *hw_tid_z = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.z").c_str()));
+        Value *hw_ntid_z = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.z").c_str()));
+        Value *ntid_x = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.x").c_str()));
+        Value *ntid_y = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.y").c_str()));
+        Value *hw_linear = B.CreateCall(intrinsic(zludaPrim("thread.index.in.threadgroup").c_str()));
+        Value *hw_ctaid[3] = {B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.x").c_str())),
+                              B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.y").c_str())),
+                              B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.z").c_str()))};
+        Value *hw_nctaid[3] = {B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.x").c_str())),
+                               B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.y").c_str())),
+                               B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.z").c_str()))};
         auto k = [&](uint64_t v) { return ConstantInt::get(I32, v); };
         Value *ntid_z = B.CreateUDiv(hw_ntid_z, k(C));
         Value *rank = C > 1 ? B.CreateURem(hw_tid_z, k(C)) : static_cast<Value *>(k(0));
@@ -823,8 +829,8 @@ namespace
         Value *linear = hw_linear;
         if (C > 1)
         {
-            Value *tid_x = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.x"));
-            Value *tid_y = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.y"));
+            Value *tid_x = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.x").c_str()));
+            Value *tid_y = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.y").c_str()));
             linear = B.CreateAdd(tid_x, B.CreateMul(ntid_x, B.CreateAdd(tid_y, B.CreateMul(ntid_y, tid_z))));
         }
         const unsigned *d = shape.dims;
@@ -919,19 +925,19 @@ namespace
                                     : static_cast<Value *>(k(0));
             else if (C > 1)
             {
-                if (n == "llvm.agx.thread.position.in.threadgroup.z")
+                if (n == zludaPrim("thread.position.in.threadgroup.z"))
                     v = tid_z;
-                else if (n == "llvm.agx.threads.per.threadgroup.z")
+                else if (n == zludaPrim("threads.per.threadgroup.z"))
                     v = ntid_z;
-                else if (n == "llvm.agx.thread.index.in.threadgroup")
+                else if (n == zludaPrim("thread.index.in.threadgroup"))
                     v = linear;
                 else
                     for (int i = 0; i < 3; i++)
                     {
                         std::string axis(1, "xyz"[i]);
-                        if (n == "llvm.agx.threadgroup.position.in.grid." + axis)
+                        if (n == zludaPrim("threadgroup.position.in.grid.") + axis)
                             v = ctaid[i];
-                        else if (n == "llvm.agx.threadgroups.per.grid." + axis)
+                        else if (n == zludaPrim("threadgroups.per.grid.") + axis)
                             v = nctaid[i];
                     }
             }
@@ -1056,7 +1062,7 @@ namespace
         };
         auto barrier = [&](IRBuilder<> &B) {
             B.CreateFence(AtomicOrdering::SequentiallyConsistent);
-            B.CreateCall(M.getOrInsertFunction("llvm.agx.threadgroup.barrier", FunctionType::get(B.getVoidTy(), false)));
+            B.CreateCall(M.getOrInsertFunction(zludaPrim("threadgroup.barrier"), FunctionType::get(B.getVoidTy(), false)));
             B.CreateFence(AtomicOrdering::SequentiallyConsistent);
         };
 
@@ -1067,10 +1073,10 @@ namespace
         BasicBlock *claim = BasicBlock::Create(ctx, "spill.claim", &F, body);
         BasicBlock *join = BasicBlock::Create(ctx, "spill.join", &F, body);
         IRBuilder<> B(entry);
-        Value *first = B.CreateICmpEQ(call(B, "llvm.agx.thread.index.in.threadgroup"), B.getInt32(0));
-        Value *threads = B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.x"),
-                                     B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.y"),
-                                                 call(B, "llvm.agx.threads.per.threadgroup.z")));
+        Value *first = B.CreateICmpEQ(call(B, zludaPrim("thread.index.in.threadgroup").c_str()), B.getInt32(0));
+        Value *threads = B.CreateMul(call(B, zludaPrim("threads.per.threadgroup.x").c_str()),
+                                     B.CreateMul(call(B, zludaPrim("threads.per.threadgroup.y").c_str()),
+                                                 call(B, zludaPrim("threads.per.threadgroup.z").c_str())));
         B.CreateCondBr(first, claim, join);
         B.SetInsertPoint(claim);
         PHINode *i = B.CreatePHI(I32, 2);
@@ -1980,6 +1986,11 @@ namespace
 int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
 {
     Module *Mod = unwrap(M);
+    // llvm.used and llvm.compiler.used mean nothing in AIR (and keep variables used by name only, which the
+    // AIR for Metal moves into the globals buffer)
+    for (const char *name : {"llvm.used", "llvm.compiler.used"})
+        if (GlobalVariable *GV = Mod->getGlobalVariable(name, true))
+            GV->eraseFromParent();
     ZludaAirTypes types;
     ValueToValueMapTy vmap;
     SmallVector<GlobalVariable *, 16> oldGlobals;
@@ -2061,17 +2072,21 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
         Old->dropAllReferences();
     for (auto [Old, New] : globals)
         Old->setInitializer(nullptr);
+    // A use the mapping did not reach (a constant expression in an initializer) takes the new definition: a
+    // function directly (functions stay in address space 0), a variable through a cast to its old address space.
     for (auto [Old, New] : functions)
     {
         std::string name = Old->getName().str();
-        Old->replaceAllUsesWith(PoisonValue::get(Old->getType()));
+        Old->replaceAllUsesWith(New->getType() == Old->getType()
+                                    ? static_cast<Constant *>(New)
+                                    : ConstantExpr::getPointerCast(New, Old->getType()));
         Old->eraseFromParent();
         New->setName(name);
     }
     for (auto [Old, New] : globals)
     {
         std::string name = Old->getName().str();
-        Old->replaceAllUsesWith(PoisonValue::get(Old->getType()));
+        Old->replaceAllUsesWith(ConstantExpr::getAddrSpaceCast(New, Old->getType()));
         Old->eraseFromParent();
         New->setName(name);
     }
@@ -2084,6 +2099,17 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
                 C->eraseFromParent();
             }
     return 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// The prefix of ZLUDA's GPU primitives (zludaPrimitivePrefix): 1 for the Air target's __zluda_air.*, 0 for the
+// AGX intrinsics.
+void LLVMZludaSetAirPrimitives(int air)
+{
+    zludaPrimitivePrefix = air ? "__zluda_air." : "llvm.agx.";
 }
 
 LLVM_C_EXTERN_C_END
