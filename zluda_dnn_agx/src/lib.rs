@@ -927,6 +927,49 @@ mod imp {
 
     // ---- execution
 
+    /// Whether the convolution `s` (and `extra` more elements, a temporary's) keeps every element offset and
+    /// thread index below 2^31: agx_libs' `_i32` kernels (32-bit indices) then compute it.
+    pub(crate) fn index32(s: &[i32; 25], extra: i64) -> bool {
+        if s.iter().any(|&v| v < 0) {
+            return false;
+        }
+        let v: Vec<i64> = s.iter().map(|&v| v as i64).collect();
+        let [n, c, h, w, k, r, sw_, p, q, ph, pw, sh, sw, dh, dw, g, _, xsn, xsc, xsh, xsw, ysn, ysc, ysh, ysw] =
+            v[..] else { return false };
+        let _ = sw_;
+        let last = |e: i64| (e - 1).max(0);
+        let x = last(n) * xsn + last(c) * xsc + last(h) * xsh + last(w) * xsw;
+        let y = last(n) * ysn + last(k) * ysc + last(p) * ysh + last(q) * ysw;
+        let wt = k * (c / g.max(1)) * r * sw_;
+        let rows = p * sh + r * dh + ph + h;
+        let cols = q * sw + sw_ * dw + pw + w;
+        let threads = (n * k * p * q).max(n * c * h * w).max(wt) + 256;
+        [x, y, wt, rows, cols, threads, extra].iter().all(|&e| e < 1 << 31)
+    }
+
+    /// agx_libs' kernel `name`, its 32-bit index build when `narrow`.
+    unsafe fn conv_function(name: &'static std::ffi::CStr, narrow: bool) -> Result<cuda_types::cuda::CUfunction, cudnnError_t> {
+        let narrow_name: Option<&'static std::ffi::CStr> = match name.to_bytes() {
+            b"agx_conv2d_fwd_f32" => Some(c"agx_conv2d_fwd_f32_i32"),
+            b"agx_conv2d_fwd_f16" => Some(c"agx_conv2d_fwd_f16_i32"),
+            b"agx_conv2d_bwd_data_f32" => Some(c"agx_conv2d_bwd_data_f32_i32"),
+            b"agx_conv2d_bwd_data_f16" => Some(c"agx_conv2d_bwd_data_f16_i32"),
+            b"agx_conv2d_bwd_filter_f32" => Some(c"agx_conv2d_bwd_filter_f32_i32"),
+            b"agx_conv2d_bwd_filter_f16" => Some(c"agx_conv2d_bwd_filter_f16_i32"),
+            b"agx_conv2d_im2col_f32" => Some(c"agx_conv2d_im2col_f32_i32"),
+            b"agx_conv2d_im2col_f16" => Some(c"agx_conv2d_im2col_f16_i32"),
+            b"agx_conv2d_col2im_f32" => Some(c"agx_conv2d_col2im_f32_i32"),
+            b"agx_conv2d_col2im_f16" => Some(c"agx_conv2d_col2im_f16_i32"),
+            _ => None,
+        };
+        match narrow_name {
+            Some(n32) if narrow && std::env::var("ZLUDA_AGX_CONV_I32").map_or(true, |v| v != "0") => {
+                engine::function(agx_libs::CONV_I32, n32).map_err(status)
+            }
+            _ => engine::function(agx_libs::CONV, name).map_err(status),
+        }
+    }
+
     /// Runs `kernel_<f32|f16>` over `elements` outputs. Scaling factors are host floats (cuDNN's rule for f32 and f16
     /// data).
     #[allow(clippy::too_many_arguments)]
@@ -958,7 +1001,7 @@ mod imp {
             ("bwd_filter", false) => c"agx_conv2d_bwd_filter_f32",
             _ => c"agx_conv2d_bwd_filter_f16",
         };
-        let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+        let f = conv_function(name, index32(&shape, elements as i64))?;
         let mut shape = shape;
         let mut params: Vec<*mut c_void> =
             vec![&mut x as *mut _ as *mut c_void, &mut w as *mut _ as *mut c_void, &mut y as *mut _ as *mut c_void];
@@ -1061,7 +1104,7 @@ mod imp {
         Some((|| {
             let col = temp(h, elements * size)?;
             let name = if half { c"agx_conv2d_im2col_f16" } else { c"agx_conv2d_im2col_f32" };
-            let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+            let f = conv_function(name, index32(s, elements))?;
             let (alpha, beta) = (*(alpha as *const f32) as f64, *(beta as *const f32) as f64);
             for image in 0..n {
                 let mut colp = col.0;
@@ -1146,7 +1189,7 @@ mod imp {
         Some((|| {
             let col = temp(h, crs * pq * 4)?;
             let name = if half { c"agx_conv2d_col2im_f16" } else { c"agx_conv2d_col2im_f32" };
-            let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+            let f = conv_function(name, index32(s, crs * pq))?;
             let (mut alpha, mut beta) = (*(alpha as *const f32), *(beta as *const f32));
             for image in 0..n {
                 let g = engine::Gemm {
@@ -2029,6 +2072,20 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn index32_choice() {
+        // N C H W K R S P Q ph pw sh sw dh dw G flip, x strides, y strides
+        let mut s = [8, 64, 56, 56, 64, 3, 3, 56, 56, 1, 1, 1, 1, 1, 1, 1, 0, 200704, 3136, 56, 1, 200704, 3136, 56, 1];
+        assert!(imp::index32(&s, 0));
+        // x spans 2^31 elements
+        s[0] = 12000;
+        assert!(!imp::index32(&s, 0));
+        s[0] = 8;
+        assert!(!imp::index32(&s, 1 << 31));
+        s[17] = -1;
+        assert!(!imp::index32(&s, 0));
+    }
 
     #[test]
     fn output_dims_and_strides() {

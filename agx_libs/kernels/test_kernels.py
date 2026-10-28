@@ -95,6 +95,7 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). heap: the device heap of malloc / free, its size or
     its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
     zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
+    name += a.kernel_suffix
     tg_uniform, slots, glob, stack, consts = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
@@ -2381,6 +2382,8 @@ def main():
     ap.add_argument("--objcopy", required=True)
     ap.add_argument("--readelf", required=True)
     ap.add_argument("--chips", default=None)
+    ap.add_argument("--kernel-suffix", default="",
+                    help="the kernels' names end in this (agx-build-fatbin.py --kernel-suffix)")
     ap.add_argument("fat")
     a = ap.parse_args()
     entries = fat_entries(open(a.fat, "rb").read())
@@ -2397,6 +2400,9 @@ def main():
             else:
                 os.environ.pop("AGX_STRICT", None)
             records = kernel_records(obj, a, tmp)
+            if a.kernel_suffix:
+                records = {k[:-len(a.kernel_suffix)] if k.endswith(a.kernel_suffix) else k: v
+                           for k, v in records.items()}
             if "agx_dnn_act_fwd" in records:
                 cases = []
                 for mode in range(7):

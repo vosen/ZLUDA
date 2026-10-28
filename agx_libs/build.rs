@@ -95,9 +95,16 @@ fn main() {
     }
     // The libraries compile side by side: each has a sequential front end that leaves processors idle.
     let mut children = Vec::new();
-    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
+    // conv_i32: the convolutions again with 32-bit indices (names ending in _i32), which zluda_dnn_agx runs when
+    // every offset fits: 64-bit index divisions cost a run-time 32-bit check and a slow path each.
+    for name in ["sgemm", "hgemm", "epilogue", "conv", "conv_i32", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
+        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") {
+            out_dir.join(format!("{name}.mlir"))
+        } else {
+            PathBuf::from(format!("kernels/{}.mlir", name.trim_end_matches("_i32")))
+        };
+        let narrow: &[&str] = if name.ends_with("_i32") { &["--index-bitwidth=32", "--kernel-suffix=_i32"] } else { &[] };
         let child = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
@@ -107,6 +114,7 @@ fn main() {
             .arg("--llc")
             .arg(bin.join("llc"))
             .args(&llc_args)
+            .args(narrow)
             .arg("--via-air")
             .arg(&src)
             .arg("-o")

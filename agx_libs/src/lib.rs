@@ -15,6 +15,8 @@ static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
 static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxfat"));
 /// The 2-D convolution kernels of zluda_dnn_agx (`kernels/conv.mlir`).
 pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
+/// The same kernels with 32-bit indices, named `<kernel>_i32`, for problems whose offsets all fit in 31 bits.
+pub static CONV_I32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv_i32.agxfat"));
 /// The FFT kernels of zluda_fft_agx (`kernels/fft.mlir`).
 pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 /// The pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx (`kernels/dnn.mlir`).
