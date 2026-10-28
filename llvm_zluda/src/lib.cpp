@@ -1491,6 +1491,44 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
                 U.set(Addr);
             }
         }
+        // Pointers held in the buffer are loaded and stored as i64: Metal's
+        // typed-pointer reader rejects a pointer to a pointer ("Unexpected
+        // bitcode file", the sregs clock emulation's timer address).
+        SmallVector<Value *, 16> work{Base};
+        SmallPtrSet<Value *, 16> seen;
+        while (!work.empty())
+        {
+            Value *P = work.pop_back_val();
+            if (!seen.insert(P).second)
+                continue;
+            for (User *U : make_early_inc_range(P->users()))
+            {
+                if (isa<GetElementPtrInst>(U) || isa<BitCastInst>(U) || isa<PHINode>(U) || isa<SelectInst>(U))
+                {
+                    if (U->getType()->isPointerTy())
+                        work.push_back(U);
+                    continue;
+                }
+                if (auto *L = dyn_cast<LoadInst>(U); L && L->getType()->isPointerTy() && !L->isAtomic())
+                {
+                    IRBuilder<> LB(L);
+                    LoadInst *I = LB.CreateAlignedLoad(LB.getInt64Ty(), P, L->getAlign(), L->isVolatile());
+                    Value *R = LB.CreateIntToPtr(I, L->getType());
+                    R->takeName(L);
+                    L->replaceAllUsesWith(R);
+                    L->eraseFromParent();
+                }
+                else if (auto *S = dyn_cast<StoreInst>(U);
+                         S && S->getPointerOperand() == P && S->getValueOperand()->getType()->isPointerTy() &&
+                         !S->isAtomic())
+                {
+                    IRBuilder<> SB(S);
+                    SB.CreateAlignedStore(SB.CreatePtrToInt(S->getValueOperand(), SB.getInt64Ty()), P,
+                                          S->getAlign(), S->isVolatile());
+                    S->eraseFromParent();
+                }
+            }
+        }
         if (!kernels.empty())
             kernels += ", ";
         kernels += "\"" + NK->getName().str() + "\"";
