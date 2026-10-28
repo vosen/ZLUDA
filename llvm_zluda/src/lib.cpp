@@ -1319,6 +1319,16 @@ static void zludaRetarget(Value *Old, Value *New, Function *F)
             ASC->eraseFromParent();
             continue;
         }
+        if (Old->getType() != New->getType() && !isa<LoadInst>(I) && !isa<StoreInst>(I) && !isa<AtomicRMWInst>(I) &&
+            !isa<AtomicCmpXchgInst>(I) && !isa<CallBase>(I))
+        {
+            // A phi or select that also takes other pointers of the old address space (kernel arguments in the
+            // constant space): the buffer address in that space (one virtual address space for constant and
+            // device memory).
+            IRBuilder<> B(isa<PHINode>(I) ? cast<PHINode>(I)->getIncomingBlock(U)->getTerminator() : I);
+            U.set(B.CreateIntToPtr(B.CreatePtrToInt(New, B.getInt64Ty()), Old->getType()));
+            continue;
+        }
         U.set(New);
     }
 }
@@ -2016,7 +2026,8 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
     for (Function *F : oldFunctions)
     {
         auto *FT = cast<FunctionType>(types.remapType(F->getFunctionType()));
-        if (FT == F->getFunctionType())
+        // (a definition is cloned even with the same type: its body has ZLUDA's address spaces)
+        if (FT == F->getFunctionType() && (F->isDeclaration() || F->isIntrinsic()))
             continue;
         if (F->isIntrinsic())
         {
@@ -2086,7 +2097,7 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
     for (auto [Old, New] : globals)
     {
         std::string name = Old->getName().str();
-        Old->replaceAllUsesWith(ConstantExpr::getAddrSpaceCast(New, Old->getType()));
+        Old->replaceAllUsesWith(ConstantExpr::getPointerBitCastOrAddrSpaceCast(New, Old->getType()));
         Old->eraseFromParent();
         New->setName(name);
     }
