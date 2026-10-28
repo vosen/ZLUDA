@@ -542,15 +542,8 @@ mod imp {
             return Err(cublasError_t::INVALID_VALUE);
         }
         let f16 = t == Types::H;
-        if bias && d.bias_batch_stride != 0 && batch > 1 {
-            for i in 0..batch as isize {
-                let p = dptr.byte_offset(i * stride(ld) as isize * esize as isize);
-                let bp = bias_ptr.byte_offset(i * d.bias_batch_stride as isize * esize as isize);
-                engine::epilogue(f16, p, m, n, ld.ld as u64, 0, 1, bp, act, stream).map_err(status)?;
-            }
-        } else {
-            engine::epilogue(f16, dptr, m, n, ld.ld as u64, stride(ld), batch, bias_ptr, act, stream).map_err(status)?;
-        }
+        let bias_stride = if bias && batch > 1 { d.bias_batch_stride } else { 0 };
+        engine::epilogue(f16, dptr, m, n, ld.ld as u64, stride(ld), batch, bias_ptr, bias_stride, act, stream).map_err(status)?;
         Ok(())
     }
 }

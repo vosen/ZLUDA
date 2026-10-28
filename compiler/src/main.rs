@@ -64,6 +64,11 @@ pub struct Options {
     /// object (as nvcc -lineinfo), for tools that map a PC to a source line
     lineinfo: bool,
 
+    #[bpaf(long("object-only"))]
+    /// AGX: write the object alone (no LLVM IR, no assembly): the faster
+    /// compilation the runtime uses
+    object_only: bool,
+
     #[bpaf(long("stack-size"), argument("BYTES"), fallback(0))]
     /// AGX: stack per thread for alloca of a dynamic size (CUDA's
     /// CU_LIMIT_STACK_SIZE, 1024 by default); recursive functions get four
@@ -77,6 +82,12 @@ pub struct Options {
 }
 
 fn main() -> ExitCode {
+    if env::args().nth(1).as_deref() == Some("--serve") {
+        return match serve() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
     if let Err(e) = main_core() {
         eprintln!("Error: {}", e);
         return ExitCode::FAILURE;
@@ -119,10 +130,22 @@ fn main_core() -> Result<(), CompilerError> {
         None => ptx::Target::Amdgpu,
     };
     if target == ptx::Target::Agx {
+        let mut texts = vec![String::from_utf8(fs::read(&ptx_path)?).map_err(|e| e.utf8_error())?];
+        for path in &others {
+            texts.push(String::from_utf8(fs::read(path)?).map_err(|e| e.utf8_error())?);
+        }
+        let object_only = opts.object_only;
+        let sink = |bytes: &Vec<u8>, extension: String| {
+            let output_path = output_path.with_extension(extension);
+            if object_only {
+                fs::write(&output_path, bytes).unwrap();
+            } else {
+                write_to_file(bytes, &output_path).unwrap();
+            }
+        };
         return compile_agx(
-            &ptx_path,
-            &others,
-            &output_path,
+            &texts,
+            &sink,
             opts.arch,
             opts.ignore_errors,
             opts.strict_fp,
@@ -131,6 +154,7 @@ fn main_core() -> Result<(), CompilerError> {
             opts.lineinfo,
             opts.stack_size,
             opts.fast_mma,
+            opts.object_only,
         );
     }
 
@@ -154,6 +178,7 @@ fn main_core() -> Result<(), CompilerError> {
     let ptx = str::from_utf8(&ptx)?;
     let llvm = ptx_to_llvm(
         opts.ignore_errors,
+        true,
         ptx,
         ptx::Options {
             target,
@@ -209,9 +234,8 @@ fn compile_amdgpu(
 /// assembly (.asm) and the ELF object (.o).
 #[cfg(feature = "agx")]
 fn compile_agx(
-    ptx_path: &Path,
-    others: &[PathBuf],
-    output_path: &Path,
+    texts: &[String],
+    sink: &dyn Fn(&Vec<u8>, String),
     arch: Option<String>,
     ignore_errors: bool,
     strict_fp: bool,
@@ -220,14 +244,14 @@ fn compile_agx(
     lineinfo: bool,
     stack_size: u32,
     fast_mma: bool,
+    object_only: bool,
 ) -> Result<(), CompilerError> {
-    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked };
+    let agx_options = llvm_zluda::AgxOptions { strict_fp, agx_strict, checked, object_only };
     let arch = arch.unwrap_or_else(|| DEFAULT_AGX_ARCH.to_owned());
-    let ptx = fs::read(ptx_path)?;
-    let ptx = str::from_utf8(&ptx)?;
     let llvm = ptx_to_llvm(
         ignore_errors,
-        ptx,
+        !object_only,
+        &texts[0],
         ptx::Options {
             target: ptx::Target::Agx,
             strict_fp,
@@ -237,14 +261,16 @@ fn compile_agx(
             fast_mma,
         },
     )?;
-    write_to_file(&llvm.llvm_ir, output_path.with_extension("ll").as_path())?;
+    if !object_only {
+        sink(&llvm.llvm_ir, "ll".to_string());
+    }
     // the other modules, translated on their own and linked as LLVM IR
     let mut other_ir = Vec::new();
-    for path in others {
-        let ptx = fs::read(path)?;
+    for ptx in &texts[1..] {
         let other = ptx_to_llvm(
             ignore_errors,
-            str::from_utf8(&ptx)?,
+            true,
+            ptx,
             ptx::Options {
                 target: ptx::Target::Agx,
                 strict_fp,
@@ -256,10 +282,7 @@ fn compile_agx(
         other_ir.push(other.llvm_ir);
     }
     let other_ir: Vec<&[u8]> = other_ir.iter().map(|v| &v[..]).collect();
-    let compiler_hook = |bytes: &Vec<u8>, extension: String| {
-        let output_path = output_path.with_extension(extension);
-        write_to_file(bytes, &output_path).unwrap();
-    };
+    let compiler_hook = |bytes: &Vec<u8>, extension: String| sink(bytes, extension);
     let mut start = Instant::now();
     llvm_zluda::compile_agx_linked(
         &llvm.context,
@@ -280,15 +303,17 @@ fn compile_agx(
 
 #[cfg(not(feature = "agx"))]
 fn compile_agx(
-    _ptx_path: &Path,
-    _others: &[PathBuf],
-    _output_path: &Path,
+    _texts: &[String],
+    _sink: &dyn Fn(&Vec<u8>, String),
     _arch: Option<String>,
     _ignore_errors: bool,
     _strict_fp: bool,
     _agx_strict: bool,
     _checked: bool,
     _lineinfo: bool,
+    _stack_size: u32,
+    _fast_mma: bool,
+    _object_only: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError {
         cause: None,
@@ -296,8 +321,98 @@ fn compile_agx(
     })
 }
 
+/// `zoc --serve`: compile requests from stdin, one after another in this process, so that a runtime pays for
+/// starting LLVM once rather than per module (zluda_agx). Little-endian; a request is the zoc arguments other than
+/// the files (u32 count, then u32 length and bytes each) and the PTX sources (u32 count, then u64 length and bytes
+/// each), compiled as `zoc ARGS --output-dir D module.ptx module_1.ptx ...` would; the response is u8 0, the object
+/// and the assembly (u64 length and bytes each, the assembly empty with --object-only), or u8 1 and the error
+/// (u64 length and bytes). Ends at the end of stdin.
+fn serve() -> io::Result<()> {
+    use std::io::Read;
+    QUIET.store(true, std::sync::atomic::Ordering::Relaxed);
+    let (mut input, mut output) = (io::stdin().lock(), io::stdout().lock());
+    fn bytes(r: &mut impl Read, n: usize) -> io::Result<Vec<u8>> {
+        let mut v = vec![0u8; n];
+        r.read_exact(&mut v)?;
+        Ok(v)
+    }
+    fn u32_(r: &mut impl Read) -> io::Result<u32> {
+        Ok(u32::from_le_bytes(bytes(r, 4)?.try_into().unwrap()))
+    }
+    fn u64_(r: &mut impl Read) -> io::Result<u64> {
+        Ok(u64::from_le_bytes(bytes(r, 8)?.try_into().unwrap()))
+    }
+    loop {
+        let count = match u32_(&mut input) {
+            Ok(n) => n,
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        let mut args = Vec::new();
+        for _ in 0..count {
+            let n = u32_(&mut input)? as usize;
+            args.push(String::from_utf8_lossy(&bytes(&mut input, n)?).into_owned());
+        }
+        let mut texts = Vec::new();
+        for _ in 0..u32_(&mut input)? {
+            let n = u64_(&mut input)? as usize;
+            texts.push(String::from_utf8_lossy(&bytes(&mut input, n)?).into_owned());
+        }
+        let result = serve_one(&args, &texts);
+        match result {
+            Ok((object, asm)) => {
+                output.write_all(&[0])?;
+                for part in [&object, &asm] {
+                    output.write_all(&(part.len() as u64).to_le_bytes())?;
+                    output.write_all(part)?;
+                }
+            }
+            Err(message) => {
+                output.write_all(&[1])?;
+                output.write_all(&(message.len() as u64).to_le_bytes())?;
+                output.write_all(message.as_bytes())?;
+            }
+        }
+        output.flush()?;
+    }
+}
+
+/// One `--serve` request: the object and the assembly, or the error.
+fn serve_one(args: &[String], texts: &[String]) -> Result<(Vec<u8>, Vec<u8>), String> {
+    if texts.is_empty() {
+        return Err("no PTX source".to_string());
+    }
+    // the file names only satisfy the parser: the sources are in memory
+    let mut argv: Vec<&str> = args.iter().map(|a| a.as_str()).collect();
+    argv.push("module.ptx");
+    let opts = options().run_inner(&argv[..]).map_err(|e| format!("{e:?}"))?;
+    let outputs = std::cell::RefCell::new(std::collections::HashMap::<String, Vec<u8>>::new());
+    let sink = |bytes: &Vec<u8>, extension: String| {
+        outputs.borrow_mut().insert(extension, bytes.clone());
+    };
+    compile_agx(
+        texts,
+        &sink,
+        opts.arch,
+        opts.ignore_errors,
+        opts.strict_fp,
+        opts.agx_strict,
+        opts.agx_checked,
+        opts.lineinfo,
+        opts.stack_size,
+        opts.fast_mma,
+        opts.object_only,
+    )
+    .map_err(|e| e.to_string())?;
+    let mut outputs = outputs.into_inner();
+    let object = outputs.remove("o").ok_or("no object")?;
+    Ok((object, outputs.remove("asm").unwrap_or_default()))
+}
+
+/// `text`: also print the module as LLVM IR (`llvm_ir`, empty otherwise).
 fn ptx_to_llvm(
     ignore_errors: bool,
+    text: bool,
     ptx: &str,
     options: ptx::Options,
 ) -> Result<LLVMArtifacts, CompilerError> {
@@ -317,7 +432,7 @@ fn ptx_to_llvm(
             report_pass_time(pass, &mut start);
         },
     )?;
-    let llvm_ir = module.llvm_ir.print_module_to_string().to_bytes().to_vec();
+    let llvm_ir = if text { module.llvm_ir.print_module_to_string().to_bytes().to_vec() } else { Vec::new() };
     let linked_bitcode = module.linked_bitcode();
     let main = module.llvm_ir;
     let attributes = module.attributes_ir;
@@ -332,9 +447,14 @@ fn ptx_to_llvm(
     })
 }
 
+/// Set in `--serve` mode, where stdout carries the responses: no progress output.
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn report_pass_time(pass: &str, start: &mut Instant) {
     let duration = start.elapsed();
-    println!("Pass {:?} took {:?}", pass, duration);
+    if !QUIET.load(std::sync::atomic::Ordering::Relaxed) {
+        println!("Pass {:?} took {:?}", pass, duration);
+    }
     *start = Instant::now();
 }
 
@@ -362,7 +482,9 @@ fn write_to_file(content: &[u8], path: &Path) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(content)?;
     file.flush()?;
-    println!("Wrote to {}", path.to_str().unwrap());
+    if !QUIET.load(std::sync::atomic::Ordering::Relaxed) {
+        println!("Wrote to {}", path.to_str().unwrap());
+    }
     Ok(())
 }
 

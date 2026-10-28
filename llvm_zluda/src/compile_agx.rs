@@ -11,7 +11,7 @@ use crate::{
     LLVMInitializeAGXTargetMC, LLVMZludaParseCommandLineOptions,
     LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces,
     LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
-    LLVMZludaUpgradeFunctionAttributes,
+    LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
@@ -60,6 +60,9 @@ pub struct AgxOptions {
     pub agx_strict: bool,
     /// Check every memory access (`AGX_CHECKED_FEATURE`).
     pub checked: bool,
+    /// Produce the object alone: no assembly (a second code generation) and no textual IR for the hook. The
+    /// object's `.agx.kernels` records describe its kernels.
+    pub object_only: bool,
 }
 
 impl AgxOptions {
@@ -207,7 +210,6 @@ pub fn compile_agx_linked(
     let diagnostics = Diagnostics::new(ctx);
 
     let linked = Module::new(ctx, c"llvm-link");
-    let ptx_impl = load_module(ctx, ptx_impl, c"zluda_ptx_impl_agx.ll")?;
     linked.link(main)?;
     for (i, ir) in others.iter().enumerate() {
         let name = std::ffi::CString::new(format!("linked_module_{}", i + 1)).unwrap();
@@ -217,12 +219,19 @@ pub fn compile_agx_linked(
         internalize_functions(&linked);
     }
     unsafe { LLVMZludaAgxKeepGlobals(linked.get()) };
-    linked.link(ptx_impl)?;
+    // only the helpers the module uses (and theirs), the library loaded lazily when it is bitcode
+    let mut err = std::ptr::null_mut();
+    let linked_ok = unsafe {
+        LLVMZludaLinkUsedDefinitions(linked.get(), ptx_impl.as_ptr().cast(), ptx_impl.len(), c"zluda_ptx_impl_agx".as_ptr(), &mut err)
+    };
+    if !linked_ok {
+        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+    }
     internalize_helpers(&linked);
     unsafe { LLVMZludaUpgradeFunctionAttributes(linked.get()) };
     linked.verify()?;
 
-    if let Some(hook) = compiler_hook {
+    if let (Some(hook), false) = (compiler_hook, options.object_only) {
         let message = linked.print_module_to_string();
         hook(&message.to_bytes().to_vec(), String::from("linked.ll"));
     }
@@ -321,18 +330,33 @@ pub fn compile_agx_linked(
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }
 
-    if let Some(hook) = compiler_hook {
-        let message = linked.print_module_to_string();
-        hook(&message.to_bytes().to_vec(), String::from("opt.ll"));
+    // Experimental: through upstream AIR (ZLUDA_AGX_VIA_AIR=1). The optimized AGX IR is written as AIR
+    // (agx-raise-to-air: what AIR does not have as hints with AIR emulations, double precision in software,
+    // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
+    // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
+    if via_air() {
+        let bitcode = to_air(&linked, &target_machine, &pb_options)?;
+        if let Some(hook) = compiler_hook {
+            hook(&bitcode, String::from("air"));
+        }
     }
 
-    let assembly = target_machine
-        .emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?
-        .to_vec();
-    diagnostics.check()?;
-    if let Some(hook) = compiler_hook {
-        hook(&assembly, String::from("asm"));
-    }
+    let assembly = if options.object_only {
+        Vec::new()
+    } else {
+        if let Some(hook) = compiler_hook {
+            let message = linked.print_module_to_string();
+            hook(&message.to_bytes().to_vec(), String::from("opt.ll"));
+        }
+        let assembly = target_machine
+            .emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?
+            .to_vec();
+        diagnostics.check()?;
+        if let Some(hook) = compiler_hook {
+            hook(&assembly, String::from("asm"));
+        }
+        assembly
+    };
     let object = target_machine
         .emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?
         .to_vec();
@@ -343,6 +367,55 @@ pub fn compile_agx_linked(
     Ok(AgxCompilation { object, assembly })
 }
 
+/// ZLUDA_AGX_VIA_AIR=1: compile through upstream AIR (experimental).
+fn via_air() -> bool {
+    std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1")
+}
+
+/// The module in upstream AIR, in place, and its bitcode (the .air file).
+#[cfg(zluda_air)]
+fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+    let run = |pipeline: &CStr, tm: &TargetMachine| -> Result<(), String> {
+        let error = unsafe { LLVMRunPasses(module.get(), pipeline.as_ptr(), tm.get(), options.get()) };
+        if error.is_null() {
+            return Ok(());
+        }
+        let err_msg = unsafe { llvm_sys::error::LLVMGetErrorMessage(error) };
+        Err(Message::new(unsafe { CStr::from_ptr(err_msg) }).to_str().to_string())
+    };
+    run(c"agx-raise-to-air", agx)?;
+    let mut target = unsafe { std::mem::zeroed() };
+    let mut err = std::ptr::null_mut();
+    if unsafe { LLVMGetTargetFromTriple(c"air".as_ptr(), &mut target, &mut err) } != 0 {
+        return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+    }
+    let air = TargetMachine::new(
+        target,
+        c"air",
+        c"",
+        c"",
+        LLVMCodeGenOptLevel::LLVMCodeGenLevelAggressive,
+        LLVMRelocMode::LLVMRelocDefault,
+        LLVMCodeModel::LLVMCodeModelDefault,
+    );
+    run(c"air-portable", &air)?;
+    let buffer = unsafe { llvm_sys::bit_writer::LLVMWriteBitcodeToMemoryBuffer(module.get()) };
+    let bytes = unsafe {
+        std::slice::from_raw_parts(
+            llvm_sys::core::LLVMGetBufferStart(buffer) as *const u8,
+            llvm_sys::core::LLVMGetBufferSize(buffer),
+        )
+        .to_vec()
+    };
+    unsafe { llvm_sys::core::LLVMDisposeMemoryBuffer(buffer) };
+    Ok(bytes)
+}
+
+#[cfg(not(zluda_air))]
+fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+    Err("ZLUDA_AGX_VIA_AIR: this LLVM build has no AIR target".to_string())
+}
+
 fn init_globals() -> Result<(), String> {
     static INIT_AGX: OnceLock<Result<(), Message>> = OnceLock::new();
     INIT_AGX
@@ -350,6 +423,16 @@ fn init_globals() -> Result<(), String> {
             // ZLUDA_AGX_LLVM_ARGS: extra LLVM options, separated by whitespace (backend experiments, for example
             // -agx-threadgroup-unroll=4)
             let mut options = vec![std::ffi::CString::new("llvm_zluda").unwrap()];
+            // Wide constants of kernels in uniforms (.agx.kernels extension 6, which agx_runtime sets at launch):
+            // fewer registers, more resident SIMD-groups. ZLUDA_AGX_UNIFORM_CONSTANTS=0 turns it off.
+            if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").map_or(true, |v| v != "0") {
+                options.push(std::ffi::CString::new("-agx-uniform-constants").unwrap());
+            }
+            // Division by a 32-bit kernel argument with a multiplier and shifts agx_runtime computes at launch
+            // (.agx.kernels extension 7). ZLUDA_AGX_LAUNCH_DIVISORS=0 turns it off.
+            if std::env::var("ZLUDA_AGX_LAUNCH_DIVISORS").map_or(true, |v| v != "0") {
+                options.push(std::ffi::CString::new("-agx-launch-divisors").unwrap());
+            }
             if let Ok(extra) = std::env::var("ZLUDA_AGX_LLVM_ARGS") {
                 options.extend(extra.split_whitespace().filter_map(|a| std::ffi::CString::new(a).ok()));
             }
@@ -365,6 +448,12 @@ fn init_globals() -> Result<(), String> {
             unsafe { LLVMInitializeAGXTarget() };
             unsafe { LLVMInitializeAGXTargetMC() };
             unsafe { LLVMInitializeAGXAsmPrinter() };
+            #[cfg(zluda_air)]
+            unsafe {
+                crate::ffi::LLVMInitializeAIRTargetInfo();
+                crate::ffi::LLVMInitializeAIRTarget();
+                crate::ffi::LLVMInitializeAIRTargetMC();
+            }
             Ok(())
         })
         .as_ref()

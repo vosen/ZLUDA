@@ -927,6 +927,49 @@ mod imp {
 
     // ---- execution
 
+    /// Whether the convolution `s` (and `extra` more elements, a temporary's) keeps every element offset and
+    /// thread index below 2^31: agx_libs' `_i32` kernels (32-bit indices) then compute it.
+    pub(crate) fn index32(s: &[i32; 25], extra: i64) -> bool {
+        if s.iter().any(|&v| v < 0) {
+            return false;
+        }
+        let v: Vec<i64> = s.iter().map(|&v| v as i64).collect();
+        let [n, c, h, w, k, r, sw_, p, q, ph, pw, sh, sw, dh, dw, g, _, xsn, xsc, xsh, xsw, ysn, ysc, ysh, ysw] =
+            v[..] else { return false };
+        let _ = sw_;
+        let last = |e: i64| (e - 1).max(0);
+        let x = last(n) * xsn + last(c) * xsc + last(h) * xsh + last(w) * xsw;
+        let y = last(n) * ysn + last(k) * ysc + last(p) * ysh + last(q) * ysw;
+        let wt = k * (c / g.max(1)) * r * sw_;
+        let rows = p * sh + r * dh + ph + h;
+        let cols = q * sw + sw_ * dw + pw + w;
+        let threads = (n * k * p * q).max(n * c * h * w).max(wt) + 256;
+        [x, y, wt, rows, cols, threads, extra].iter().all(|&e| e < 1 << 31)
+    }
+
+    /// agx_libs' kernel `name`, its 32-bit index build when `narrow`.
+    unsafe fn conv_function(name: &'static std::ffi::CStr, narrow: bool) -> Result<cuda_types::cuda::CUfunction, cudnnError_t> {
+        let narrow_name: Option<&'static std::ffi::CStr> = match name.to_bytes() {
+            b"agx_conv2d_fwd_f32" => Some(c"agx_conv2d_fwd_f32_i32"),
+            b"agx_conv2d_fwd_f16" => Some(c"agx_conv2d_fwd_f16_i32"),
+            b"agx_conv2d_bwd_data_f32" => Some(c"agx_conv2d_bwd_data_f32_i32"),
+            b"agx_conv2d_bwd_data_f16" => Some(c"agx_conv2d_bwd_data_f16_i32"),
+            b"agx_conv2d_bwd_filter_f32" => Some(c"agx_conv2d_bwd_filter_f32_i32"),
+            b"agx_conv2d_bwd_filter_f16" => Some(c"agx_conv2d_bwd_filter_f16_i32"),
+            b"agx_conv2d_im2col_f32" => Some(c"agx_conv2d_im2col_f32_i32"),
+            b"agx_conv2d_im2col_f16" => Some(c"agx_conv2d_im2col_f16_i32"),
+            b"agx_conv2d_col2im_f32" => Some(c"agx_conv2d_col2im_f32_i32"),
+            b"agx_conv2d_col2im_f16" => Some(c"agx_conv2d_col2im_f16_i32"),
+            _ => None,
+        };
+        match narrow_name {
+            Some(n32) if narrow && std::env::var("ZLUDA_AGX_CONV_I32").map_or(true, |v| v != "0") => {
+                engine::function(agx_libs::CONV_I32, n32).map_err(status)
+            }
+            _ => engine::function(agx_libs::CONV, name).map_err(status),
+        }
+    }
+
     /// Runs `kernel_<f32|f16>` over `elements` outputs. Scaling factors are host floats (cuDNN's rule for f32 and f16
     /// data).
     #[allow(clippy::too_many_arguments)]
@@ -958,7 +1001,7 @@ mod imp {
             ("bwd_filter", false) => c"agx_conv2d_bwd_filter_f32",
             _ => c"agx_conv2d_bwd_filter_f16",
         };
-        let f = engine::function(agx_libs::CONV, name).map_err(status)?;
+        let f = conv_function(name, index32(&shape, elements as i64))?;
         let mut shape = shape;
         let mut params: Vec<*mut c_void> =
             vec![&mut x as *mut _ as *mut c_void, &mut w as *mut _ as *mut c_void, &mut y as *mut _ as *mut c_void];
@@ -985,8 +1028,242 @@ mod imp {
         y: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, wd, cd, yd)?;
-        let elements = s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64;
-        run(h, "fwd", s, half, elements, x, w, y, alpha, beta)
+        convolve(h, "fwd", s, half, x, w, y, alpha, beta)
+    }
+
+    /// Runs a convolution in direction `dir` ("fwd", "bwd_data", "bwd_filter"; x, w, y are dx or dw and dy as the
+    /// direction has them): on agx_libs' GEMM path where it applies (`pointwise_gemm`, `im2col_gemm`,
+    /// `col2im_gemm`), on the direct kernels otherwise.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn convolve(
+        h: cudnnHandle_t,
+        dir: &str,
+        s: [i32; 25],
+        half: bool,
+        x: *const c_void,
+        w: *const c_void,
+        y: *const c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> cudnnStatus_t {
+        let hd = obj::<Handle>(h)?;
+        let (xm, wm, ym) = (x as *mut c_void, w as *mut c_void, y as *mut c_void);
+        let elements = match dir {
+            "fwd" => {
+                if let Some(g) = pointwise_gemm(&s, half, x, w, ym, alpha, beta) {
+                    return engine::gemm(&g, hd.stream).map_err(status);
+                }
+                if let Some(r) = im2col_gemm(hd, &s, half, x, wm, ym, alpha, beta, false) {
+                    return r;
+                }
+                s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64
+            }
+            "bwd_data" => {
+                if let Some(r) = col2im_gemm(hd, &s, half, xm, w, y, alpha, beta) {
+                    return r;
+                }
+                s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64
+            }
+            _ => {
+                if let Some(r) = im2col_gemm(hd, &s, half, x, wm, ym, alpha, beta, true) {
+                    return r;
+                }
+                s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64
+            }
+        };
+        run(h, dir, s, half, elements, x, w, y, alpha, beta)
+    }
+
+    /// A convolution with one group and dense planes of y (dy), large enough for the matrix unit: each image becomes
+    /// its im2col matrix col (C R S x P Q, `agx_conv2d_im2col_*`, in a temporary buffer), then agx_libs' GEMM runs
+    /// the forward y[n] (K x PQ) = w (K x C R S) col (column-major y[n]^T = col^T w^T), or, for the filter gradient
+    /// (`filter`, w is dw and y is dy), dw (K x C R S) = sum over n of dy[n] (K x PQ) col^T (column-major
+    /// dw^T = col dy[n]^T, beta 1 after the first image). None when it does not apply.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn im2col_gemm(
+        h: &Handle,
+        s: &[i32; 25],
+        half: bool,
+        mut x: *const c_void,
+        w: *mut c_void,
+        y: *mut c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+        filter: bool,
+    ) -> Option<cudnnStatus_t> {
+        let [n, ch, _, _, k, r, sw, p, q, .., g, _, _, _, _, _, _, ys1, ys2, ys3] = *s;
+        let (pq, crs) = (p as i64 * q as i64, ch as i64 * r as i64 * sw as i64);
+        if g != 1 || (ys1 as i64, ys2, ys3) != (pq, q, 1) || k < 16 || crs < 16 || pq < 16 || alpha.is_null()
+            || beta.is_null()
+        {
+            return None;
+        }
+        let elements = crs * pq;
+        let groups = u32::try_from((elements as u64).div_ceil(256)).ok()?;
+        let size = if half { 2 } else { 4 };
+        Some((|| {
+            let col = temp(h, elements * size)?;
+            let name = if half { c"agx_conv2d_im2col_f16" } else { c"agx_conv2d_im2col_f32" };
+            let f = conv_function(name, index32(s, elements))?;
+            let (alpha, beta) = (*(alpha as *const f32) as f64, *(beta as *const f32) as f64);
+            for image in 0..n {
+                let mut colp = col.0;
+                let mut shape: [i32; 22] = std::array::from_fn(|i| if i < 21 { s[i] } else { image });
+                let mut params: Vec<*mut c_void> = vec![&mut x as *mut _ as *mut c_void, &mut colp as *mut _ as *mut c_void];
+                params.extend(shape.iter_mut().map(|v| v as *mut i32 as *mut c_void));
+                engine::launch_kernel(f, [groups, 1], [256, 1], &mut params, h.stream).map_err(status)?;
+                let y_n = y.byte_offset(image as isize * s[21] as isize * size as isize);
+                let types = if half { agx_libs::Types::H } else { agx_libs::Types::S };
+                let g = if filter {
+                    engine::Gemm {
+                        types,
+                        ta: true,
+                        tb: false,
+                        m: crs as u64,
+                        n: k as u64,
+                        k: pq as u64,
+                        alpha,
+                        beta: if image == 0 { beta } else { 1.0 },
+                        a: col.0,
+                        lda: pq as u64,
+                        stride_a: 0,
+                        b: y_n,
+                        ldb: pq as u64,
+                        stride_b: 0,
+                        c: w,
+                        ldc: crs as u64,
+                        stride_c: 0,
+                        batch: 1,
+                    }
+                } else {
+                    engine::Gemm {
+                        types,
+                        ta: false,
+                        tb: false,
+                        m: pq as u64,
+                        n: k as u64,
+                        k: crs as u64,
+                        alpha,
+                        beta,
+                        a: col.0,
+                        lda: pq as u64,
+                        stride_a: 0,
+                        b: w,
+                        ldb: crs as u64,
+                        stride_b: 0,
+                        c: y_n,
+                        ldc: pq as u64,
+                        stride_c: 0,
+                        batch: 1,
+                    }
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
+            Ok(())
+        })())
+    }
+
+    /// The data gradient of a convolution with one group and dense dy planes, large enough for the matrix unit: per
+    /// image, col (C R S x P Q, f32) = w^T (C R S x K) dy[n] (K x PQ) on agx_libs' GEMM (column-major col^T =
+    /// dy[n]^T w, B transposed), then `agx_conv2d_col2im_*` gathers dx[n] from col. None when it does not apply.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn col2im_gemm(
+        h: &Handle,
+        s: &[i32; 25],
+        half: bool,
+        mut dx: *mut c_void,
+        w: *const c_void,
+        dy: *const c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> Option<cudnnStatus_t> {
+        let [n, ch, hh, wd, k, r, sw, p, q, .., g, _, _, _, _, _, ys0, ys1, ys2, ys3] = *s;
+        let (pq, crs) = (p as i64 * q as i64, ch as i64 * r as i64 * sw as i64);
+        if g != 1 || (ys1 as i64, ys2, ys3) != (pq, q, 1) || k < 16 || crs < 16 || pq < 16 || alpha.is_null()
+            || beta.is_null()
+        {
+            return None;
+        }
+        let groups = u32::try_from((ch as u64 * hh as u64 * wd as u64).div_ceil(256)).ok()?;
+        let size = if half { 2 } else { 4 };
+        Some((|| {
+            let col = temp(h, crs * pq * 4)?;
+            let name = if half { c"agx_conv2d_col2im_f16" } else { c"agx_conv2d_col2im_f32" };
+            let f = conv_function(name, index32(s, crs * pq))?;
+            let (mut alpha, mut beta) = (*(alpha as *const f32), *(beta as *const f32));
+            for image in 0..n {
+                let g = engine::Gemm {
+                    types: if half { agx_libs::Types::HtoS } else { agx_libs::Types::S },
+                    ta: false,
+                    tb: true,
+                    m: pq as u64,
+                    n: crs as u64,
+                    k: k as u64,
+                    alpha: 1.0,
+                    beta: 0.0,
+                    a: dy.byte_offset(image as isize * ys0 as isize * size),
+                    lda: pq as u64,
+                    stride_a: 0,
+                    b: w,
+                    ldb: crs as u64,
+                    stride_b: 0,
+                    c: col.0,
+                    ldc: pq as u64,
+                    stride_c: 0,
+                    batch: 1,
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+                let mut colp = col.0;
+                let mut shape: [i32; 22] = std::array::from_fn(|i| if i < 21 { s[i] } else { image });
+                let mut params: Vec<*mut c_void> = vec![&mut colp as *mut _ as *mut c_void, &mut dx as *mut _ as *mut c_void];
+                params.extend(shape.iter_mut().map(|v| v as *mut i32 as *mut c_void));
+                params.push(&mut alpha as *mut f32 as *mut c_void);
+                params.push(&mut beta as *mut f32 as *mut c_void);
+                engine::launch_kernel(f, [groups, 1], [256, 1], &mut params, h.stream).map_err(status)?;
+            }
+            Ok(())
+        })())
+    }
+
+    /// A 1x1 convolution (stride 1, no padding, one group) of NCHW images whose planes are dense: per image n,
+    /// y[n] (K x HW) = w (K x C) x[n] (C x HW), which agx_libs' GEMM runs on its tile kernel. Seen column-major, that
+    /// is y[n]^T (HW x K, ld HW) = x[n]^T (HW x C, ld HW) w^T (C x K, ld C), batched over n.
+    unsafe fn pointwise_gemm(
+        s: &[i32; 25],
+        half: bool,
+        x: *const c_void,
+        w: *const c_void,
+        y: *mut c_void,
+        alpha: *const c_void,
+        beta: *const c_void,
+    ) -> Option<engine::Gemm> {
+        let [n, ch, hh, wd, k, r, sw, p, q, pad0, pad1, st0, st1, _, _, g, _, xs0, xs1, xs2, xs3, ys0, ys1, ys2, ys3] = *s;
+        let hw = hh * wd;
+        if r != 1 || sw != 1 || pad0 != 0 || pad1 != 0 || st0 != 1 || st1 != 1 || g != 1 || (p, q) != (hh, wd)
+            || (xs1, xs2, xs3) != (hw, wd, 1) || (ys1, ys2, ys3) != (hw, wd, 1) || alpha.is_null() || beta.is_null()
+        {
+            return None;
+        }
+        Some(engine::Gemm {
+            types: if half { agx_libs::Types::H } else { agx_libs::Types::S },
+            ta: false,
+            tb: false,
+            m: hw as u64,
+            n: k as u64,
+            k: ch as u64,
+            alpha: *(alpha as *const f32) as f64,
+            beta: *(beta as *const f32) as f64,
+            a: x,
+            lda: hw as u64,
+            stride_a: xs0 as i64,
+            b: w,
+            ldb: ch as u64,
+            stride_b: 0,
+            c: y,
+            ldc: hw as u64,
+            stride_c: ys0 as i64,
+            batch: n as u64,
+        })
     }
 
     pub(crate) unsafe fn cudnnConvolutionBackwardData(
@@ -1005,8 +1282,7 @@ mod imp {
         dx: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(dxd, wd, cd, dyd)?;
-        let elements = s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64;
-        run(h, "bwd_data", s, half, elements, dx, w, dy, alpha, beta)
+        convolve(h, "bwd_data", s, half, dx, w, dy, alpha, beta)
     }
 
     pub(crate) unsafe fn cudnnConvolutionBackwardFilter(
@@ -1025,8 +1301,7 @@ mod imp {
         dw: *mut c_void,
     ) -> cudnnStatus_t {
         let (s, half) = problem(xd, dwd, cd, dyd)?;
-        let elements = s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64;
-        run(h, "bwd_filter", s, half, elements, x, dw, dy, alpha, beta)
+        convolve(h, "bwd_filter", s, half, x, dw, dy, alpha, beta)
     }
 
     // ---- the backend (graph) API
@@ -1097,13 +1372,49 @@ mod imp {
         view(obj::<Tensor>(d)?)
     }
 
-    /// One launch of 64-thread groups covering `threads`, with `params` the kernel's arguments in order.
-    unsafe fn dnn_launch(h: &Handle, name: &'static std::ffi::CStr, params: &mut [*mut c_void], threads: i64) -> cudnnStatus_t {
+    /// Whether the 32-bit index kernels (agx_libs' `dnn_i32`, `<name>_i32`) compute a launch: every integer
+    /// argument in `ints` and every element offset of `views` fits in 31 bits. Their index arguments are 32 bits
+    /// wide; the i64 values the arguments point to give their low halves (the driver copies each argument at the
+    /// kernel's width, little-endian).
+    pub(crate) fn fits32(views: &[&View], ints: &[i64]) -> bool {
+        let span = |v: &View| -> Option<i64> {
+            v.dims.iter().zip(&v.strides).try_fold(0i64, |acc, (&d, &st)| {
+                (d >= 0).then(|| ())?;
+                acc.checked_add((d - 1).max(0).checked_mul(st.checked_abs()?)?)
+            })
+        };
+        ints.iter().all(|v| v.unsigned_abs() < 1 << 31)
+            && views.iter().all(|v| span(v).is_some_and(|s| s < 1 << 31) && v.total() < 1 << 31)
+    }
+
+    /// `name` with `_i32`, interned (the engine keys functions by static names).
+    fn narrow_name(name: &'static std::ffi::CStr) -> &'static std::ffi::CStr {
+        static NAMES: std::sync::Mutex<Vec<(&'static std::ffi::CStr, &'static std::ffi::CStr)>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut names = NAMES.lock().unwrap();
+        if let Some(&(_, n)) = names.iter().find(|(k, _)| *k == name) {
+            return n;
+        }
+        let mut bytes = name.to_bytes().to_vec();
+        bytes.extend_from_slice(b"_i32");
+        let n: &'static std::ffi::CStr = Box::leak(std::ffi::CString::new(bytes).unwrap().into_boxed_c_str());
+        names.push((name, n));
+        n
+    }
+
+    /// One launch of 64-thread groups covering `threads`, with `params` the kernel's arguments in order; with the
+    /// 32-bit index kernel when `narrow` (fits32) and `threads` fits too.
+    unsafe fn dnn_launch(h: &Handle, name: &'static std::ffi::CStr, params: &mut [*mut c_void], threads: i64, narrow: bool) -> cudnnStatus_t {
         if threads <= 0 {
             return Ok(());
         }
         let groups = u32::try_from((threads as u64).div_ceil(64)).map_err(|_| cudnnError_t::NOT_SUPPORTED)?;
-        let f = engine::function(agx_libs::DNN, name).map_err(status)?;
+        let narrow = narrow && threads < 1 << 30 && std::env::var("ZLUDA_AGX_DNN_I32").map_or(true, |v| v != "0");
+        let f = if narrow {
+            engine::function(agx_libs::DNN_I32, narrow_name(name)).map_err(status)?
+        } else {
+            engine::function(agx_libs::DNN, name).map_err(status)?
+        };
         engine::launch_kernel(f, [groups, 1], [64, 1], params, h.stream).map_err(status)
     }
 
@@ -1148,7 +1459,8 @@ mod imp {
         let mut p = vec![arg(&mut src), arg(&mut dst), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.push(arg(&mut kind));
-        dnn_launch(h, name, &mut p, total)
+        let fit = fits32(&[sv, dv], &[&a.0[..], &[total, kind]].concat());
+        dnn_launch(h, name, &mut p, total, fit)
     }
 
     /// None when every tensor is f32, else the staging and the f32 descriptors and pointers to call with.
@@ -1270,7 +1582,8 @@ mod imp {
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut coef), arg(&mut alpha), arg(&mut beta)]);
         let _ = &mut mode;
-        dnn_launch(h, c"agx_dnn_act_fwd", &mut p, total)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_act_fwd", &mut p, total, fit)
     }
 
     pub(crate) unsafe fn cudnnActivationBackward(
@@ -1303,7 +1616,8 @@ mod imp {
         let mut p = vec![arg(&mut y), arg(&mut dy), arg(&mut x), arg(&mut dx), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut coef), arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_act_bwd", &mut p, total)
+        let fit = fits32(&views.iter().collect::<Vec<_>>(), &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_act_bwd", &mut p, total, fit)
     }
 
     unsafe fn pointwise(h: cudnnHandle_t, a_view: Option<View>, mut a: *const c_void, c_desc: cudnnTensorDescriptor_t, mut c: *mut c_void, op: i64, mut alpha: f32, mut beta: f32) -> cudnnStatus_t {
@@ -1324,7 +1638,8 @@ mod imp {
         let mut p = vec![arg(&mut a), arg(&mut c), arg(&mut total)];
         p.extend(args.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pointwise", &mut p, total)
+        let fit = fits32(&[&cv, &View { dims: cv.dims, strides: astr }], &[&args.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pointwise", &mut p, total, fit)
     }
 
     pub(crate) unsafe fn cudnnAddTensor(
@@ -1402,7 +1717,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[rows * 32, k]].concat());
+        dnn_launch(h, c"agx_dnn_softmax_fwd", &mut p, rows * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnSoftmaxBackward(
@@ -1435,7 +1751,8 @@ mod imp {
         let mut p = vec![arg(&mut y), arg(&mut dy), arg(&mut dx), arg(&mut rows), arg(&mut k)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows)
+        let fit = fits32(&[&yv, &dyv, &dxv], &[&a.0[..], &[rows * 32, k]].concat());
+        dnn_launch(h, c"agx_dnn_softmax_bwd", &mut p, rows * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnCreatePoolingDescriptor(d: *mut cudnnPoolingDescriptor_t) -> cudnnStatus_t {
@@ -1544,7 +1861,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pool_fwd", &mut p, total)
+        let fit = fits32(&[&xv, &yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pool_fwd", &mut p, total, fit)
     }
 
     /// Max pooling gradients go to the first maximum of each window (the deterministic choice), whatever y holds.
@@ -1578,7 +1896,8 @@ mod imp {
         let mut p = vec![arg(&mut dy), arg(&mut x), arg(&mut dx), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_pool_bwd", &mut p, total)
+        let fit = fits32(&[&yv, &dyv, &xv, &dxv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_pool_bwd", &mut p, total, fit)
     }
 
     /// 1 for spatial batch normalization (parameters per channel), 0 per activation.
@@ -1644,7 +1963,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut y), arg(&mut scale), arg(&mut bias), arg(&mut mean), arg(&mut var), arg(&mut total)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut eps), arg(&mut alpha), arg(&mut beta)]);
-        dnn_launch(h, c"agx_dnn_bn_apply", &mut p, total)
+        let fit = fits32(&[xv, yv], &[&a.0[..], &[total]].concat());
+        dnn_launch(h, c"agx_dnn_bn_apply", &mut p, total, fit)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1659,7 +1979,8 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut rmean), arg(&mut rvar), arg(&mut smean), arg(&mut sinv), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut factor), arg(&mut eps)]);
-        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params)
+        let fit = fits32(&[xv], &[&a.0[..], &[params * 32, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_stats", &mut p, params * 32, fit)
     }
 
     pub(crate) unsafe fn cudnnBatchNormalizationForwardInference(
@@ -1783,20 +2104,36 @@ mod imp {
         let mut p = vec![arg(&mut x), arg(&mut dy), arg(&mut smean), arg(&mut sinv), arg(&mut dscale), arg(&mut dbias), arg(&mut sums), arg(&mut params), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut ap), arg(&mut bp)]);
-        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params)?;
+        let fit = fits32(&[&xv, &dyv], &[&a.0[..], &[params * 32, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_bwd_params", &mut p, params * 32, fit)?;
         let mut total = xv.total();
         let mut a = Args::shape(&xv).strides(&xv).strides(&dyv).strides(&dxv);
         a.push(spatial);
         let mut p = vec![arg(&mut x), arg(&mut dy), arg(&mut dx), arg(&mut scale), arg(&mut smean), arg(&mut sinv), arg(&mut sums), arg(&mut total), arg(&mut m)];
         p.extend(a.0.iter_mut().map(|v| arg(v)));
         p.extend([arg(&mut ad), arg(&mut bd)]);
-        dnn_launch(h, c"agx_dnn_bn_bwd_data", &mut p, total)
+        let fit = fits32(&[&xv, &dyv, &dxv], &[&a.0[..], &[total, m]].concat());
+        dnn_launch(h, c"agx_dnn_bn_bwd_data", &mut p, total, fit)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn index32_choice() {
+        // N C H W K R S P Q ph pw sh sw dh dw G flip, x strides, y strides
+        let mut s = [8, 64, 56, 56, 64, 3, 3, 56, 56, 1, 1, 1, 1, 1, 1, 1, 0, 200704, 3136, 56, 1, 200704, 3136, 56, 1];
+        assert!(imp::index32(&s, 0));
+        // x spans 2^31 elements
+        s[0] = 12000;
+        assert!(!imp::index32(&s, 0));
+        s[0] = 8;
+        assert!(!imp::index32(&s, 1 << 31));
+        s[17] = -1;
+        assert!(!imp::index32(&s, 0));
+    }
 
     #[test]
     fn output_dims_and_strides() {

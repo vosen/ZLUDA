@@ -397,6 +397,73 @@ pub fn spsm_plan(op_a: cusparseOperation_t, a: &SpMat, b: (i64, i64, i64, i64), 
     Ok((trans, [b.2, b.3, c.2, c.3]))
 }
 
+/// The level schedule of a triangular solve with a square CSR matrix (cusparseSpSV / SpSM analysis), for
+/// agx_spsv_level: the rows of op(A) with only the entries the solve uses (A's triangle, `upper` or lower, and the
+/// diagonal), as offsets `tptr`, zero-based columns `tcol` and positions `tmap` of their values in A; and the rows in
+/// `order`, level by level (`levels`: first position in `order` and count), each row after all the rows it reads.
+#[derive(Debug, PartialEq)]
+pub struct SolveSchedule {
+    pub tptr: Vec<i64>,
+    pub tcol: Vec<i64>,
+    pub tmap: Vec<i64>,
+    pub order: Vec<i64>,
+    pub levels: Vec<(i64, i64)>,
+}
+
+pub fn spsv_schedule(rows: usize, rowptr: &[i64], col: &[i64], base: i64, upper: bool, trans: bool) -> SolveSchedule {
+    // op(A)'s rows: (column, position in A) of each entry used
+    let mut op_rows: Vec<Vec<(i64, i64)>> = vec![Vec::new(); rows];
+    for r in 0..rows {
+        for k in (rowptr[r] - base)..(rowptr[r + 1] - base) {
+            let c = col[k as usize] - base;
+            if c < 0 || c >= rows as i64 || !(if upper { c >= r as i64 } else { c <= r as i64 }) {
+                continue;
+            }
+            if trans {
+                op_rows[c as usize].push((r as i64, k));
+            } else {
+                op_rows[r].push((c, k));
+            }
+        }
+    }
+    // op(A) is upper triangular when A's upper triangle is used untransposed or its lower one transposed
+    let op_upper = upper ^ trans;
+    let mut level = vec![0usize; rows];
+    let visit: Box<dyn Iterator<Item = usize>> = if op_upper { Box::new((0..rows).rev()) } else { Box::new(0..rows) };
+    for i in visit {
+        level[i] = op_rows[i].iter().filter(|&&(j, _)| j as usize != i).map(|&(j, _)| level[j as usize] + 1).max().unwrap_or(0);
+    }
+    let count = level.iter().max().map_or(0, |&l| l + 1);
+    let mut levels = vec![(0i64, 0i64); count];
+    for &l in &level {
+        levels[l].1 += 1;
+    }
+    for l in 1..count {
+        levels[l].0 = levels[l - 1].0 + levels[l - 1].1;
+    }
+    let mut next: Vec<i64> = levels.iter().map(|&(first, _)| first).collect();
+    let mut order = vec![0i64; rows];
+    for (i, &l) in level.iter().enumerate() {
+        order[next[l] as usize] = i as i64;
+        next[l] += 1;
+    }
+    let (mut tptr, mut tcol, mut tmap) = (vec![0i64], Vec::new(), Vec::new());
+    for row in &op_rows {
+        for &(j, k) in row {
+            tcol.push(j);
+            tmap.push(k);
+        }
+        tptr.push(tcol.len() as i64);
+    }
+    SolveSchedule { tptr, tcol, tmap, order, levels }
+}
+
+/// Whether the level-scheduled solve is expected to beat the single-thread one: a launch per level (tens of us of
+/// driver and idle GPU time) against about two dependent memory accesses per entry in one thread.
+pub fn spsv_levels_pay(s: &SolveSchedule) -> bool {
+    s.levels.len() as i64 * 64 <= s.tcol.len() as i64 + s.order.len() as i64
+}
+
 /// Csr2cscEx2 moves values in words of 4 bytes (f32 kernel) or 8 (f64 kernel): the words per value and whether
 /// they are 8 bytes.
 pub fn permute_words(ty: cudaDataType_t) -> Result<(i64, bool), cusparseError_t> {
@@ -1832,10 +1899,117 @@ mod imp {
     // ---- SpSV and SpSM (one thread per right-hand side)
 
     /// The (empty) SpSV and SpSM descriptors.
-    struct Solve;
+    /// An SpSV or SpSM descriptor: the level schedule its analysis made, when the levels are worth it.
+    #[derive(Default)]
+    struct Solve {
+        levels: Option<DeviceSchedule>,
+    }
+
+    /// A [`SolveSchedule`] in device memory (tptr, tcol, tmap and order, i64, in one allocation), for the matrix
+    /// and operation `key`.
+    struct DeviceSchedule {
+        key: (usize, usize, i64, i64, bool, bool, bool, i64),
+        mem: *mut c_void,
+        parts: [*mut c_void; 4],
+        levels: Vec<(i64, i64)>,
+    }
+
+    impl Drop for DeviceSchedule {
+        fn drop(&mut self) {
+            unsafe { engine::free(self.mem).ok() };
+        }
+    }
+
+    fn solve_key(a: &SpMat, trans: bool) -> (usize, usize, i64, i64, bool, bool, bool, i64) {
+        (a.a as usize, a.col as usize, a.rows, a.nnz, a.upper, trans, a.wide, a.base)
+    }
+
+    /// The analysis: reads A's structure (after the work queued before it) and keeps its level schedule when
+    /// [`spsv_levels_pay`]; otherwise the solve runs on one thread per column of C.
+    unsafe fn analyze(h: &Handle, d: &mut Solve, a: &SpMat, trans: bool) -> cusparseStatus_t {
+        d.levels = None;
+        let rows = a.rows as usize;
+        if rows == 0 {
+            return Ok(());
+        }
+        engine::synchronize(h.stream).map_err(status)?;
+        let read = |p: *const c_void, n: usize| -> Result<Vec<i64>, cusparseError_t> {
+            if a.wide {
+                let mut v = vec![0i64; n];
+                engine::read(v.as_mut_ptr().cast(), p, 8 * n).map_err(status)?;
+                Ok(v)
+            } else {
+                let mut v = vec![0i32; n];
+                engine::read(v.as_mut_ptr().cast(), p, 4 * n).map_err(status)?;
+                Ok(v.into_iter().map(i64::from).collect())
+            }
+        };
+        let rowptr = read(a.a, rows + 1)?;
+        let nnz = (rowptr[rows] - a.base).max(0) as usize;
+        let col = read(a.col, nnz)?;
+        let s = spsv_schedule(rows, &rowptr, &col, a.base, a.upper, trans);
+        if !spsv_levels_pay(&s) {
+            return Ok(());
+        }
+        let arrays = [&s.tptr, &s.tcol, &s.tmap, &s.order];
+        let total: usize = arrays.iter().map(|v| 8 * v.len().max(1)).sum();
+        let mem = engine::alloc(total).map_err(status)?;
+        let mut parts = [std::ptr::null_mut(); 4];
+        let mut offset = 0;
+        for (part, v) in parts.iter_mut().zip(arrays) {
+            *part = (mem as *mut u8).add(offset) as *mut c_void;
+            if !v.is_empty() {
+                engine::write(*part, v.as_ptr().cast(), 8 * v.len()).map_err(status)?;
+            }
+            offset += 8 * v.len().max(1);
+        }
+        d.levels = Some(DeviceSchedule { key: solve_key(a, trans), mem, parts, levels: s.levels });
+        Ok(())
+    }
+
+    /// op(A) C = alpha B (n columns): by levels when the analysis kept a schedule for this matrix, else on
+    /// agx_spsm.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn solve(h: &Handle, d: &Solve, a: &SpMat, b: *const c_void, c: *const c_void, n: i64, trans: bool, strides: [i64; 4], alpha: f64) -> cusparseStatus_t {
+        let Some(s) = d.levels.as_ref().filter(|s| s.key == solve_key(a, trans)) else {
+            return spsm(h, a, b, c, n, trans, strides, alpha);
+        };
+        let [mut tptr, mut tcol, mut tmap, mut order] = s.parts;
+        let (mut pv, mut pb, mut pc) = (ptr(a.val), ptr(b), ptr(c));
+        let [mut brs, mut bcs, mut crs, mut ccs] = strides;
+        let (mut n_, mut unit, mut alpha) = (n, a.unit as i64, Val::new(alpha));
+        for &(mut first, mut count) in &s.levels {
+            let grid = [count, n];
+            run(
+                h,
+                if a.double { c"agx_spsv_level_f64" } else { c"agx_spsv_level" },
+                &mut [
+                    arg(&mut tptr),
+                    arg(&mut tcol),
+                    arg(&mut tmap),
+                    arg(&mut order),
+                    arg(&mut pv),
+                    arg(&mut pb),
+                    arg(&mut pc),
+                    arg(&mut first),
+                    arg(&mut count),
+                    arg(&mut n_),
+                    arg(&mut brs),
+                    arg(&mut bcs),
+                    arg(&mut crs),
+                    arg(&mut ccs),
+                    arg(&mut unit),
+                    alpha.arg(a.double),
+                ],
+                grid,
+                [64, 1],
+            )?;
+        }
+        Ok(())
+    }
 
     pub(crate) unsafe fn cusparseSpSV_createDescr(d: *mut cusparseSpSVDescr_t) -> cusparseStatus_t {
-        new(d, Solve)
+        new(d, Solve::default())
     }
 
     pub(crate) unsafe fn cusparseSpSV_destroyDescr(d: cusparseSpSVDescr_t) -> cusparseStatus_t {
@@ -1843,7 +2017,7 @@ mod imp {
     }
 
     pub(crate) unsafe fn cusparseSpSM_createDescr(d: *mut cusparseSpSMDescr_t) -> cusparseStatus_t {
-        new(d, Solve)
+        new(d, Solve::default())
     }
 
     pub(crate) unsafe fn cusparseSpSM_destroyDescr(d: cusparseSpSMDescr_t) -> cusparseStatus_t {
@@ -1938,9 +2112,10 @@ mod imp {
         d: cusparseSpSVDescr_t,
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
-        obj::<Handle>(h)?;
-        obj::<Solve>(d)?;
-        spsv_check(op, obj(a)?, obj(x)?, obj(y)?, compute).map(|_| ())
+        let h = obj::<Handle>(h)?;
+        let d = obj::<Solve>(d)?;
+        let (a, trans, _) = spsv_check(op, obj(a)?, obj(x)?, obj(y)?, compute)?;
+        analyze(h, d, &a, trans)
     }
 
     pub(crate) unsafe fn cusparseSpSV_solve(
@@ -1955,11 +2130,11 @@ mod imp {
         d: cusparseSpSVDescr_t,
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
-        obj::<Solve>(d)?;
+        let d = obj::<Solve>(d)?;
         let (a, x, y) = (obj::<SpMat>(a)?, obj::<DnVec>(x)?, obj::<DnVec>(y)?);
         let (a, trans, strides) = spsv_check(op, a, x, y, compute)?;
         let alpha = scalar(h, alpha, a.double)?;
-        spsm(h, &a, x.values, y.values, 1, trans, strides, alpha)
+        solve(h, d, &a, x.values, y.values, 1, trans, strides, alpha)
     }
 
     pub(crate) unsafe fn cusparseSpSM_bufferSize(
@@ -1993,9 +2168,10 @@ mod imp {
         d: cusparseSpSMDescr_t,
         _buffer: *mut c_void,
     ) -> cusparseStatus_t {
-        obj::<Handle>(h)?;
-        obj::<Solve>(d)?;
-        spsm_check(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute).map(|_| ())
+        let h = obj::<Handle>(h)?;
+        let d = obj::<Solve>(d)?;
+        let (a, trans, _) = spsm_check(op_a, op_b, obj(a)?, obj(b)?, obj(c)?, compute)?;
+        analyze(h, d, &a, trans)
     }
 
     pub(crate) unsafe fn cusparseSpSM_solve(
@@ -2011,11 +2187,11 @@ mod imp {
         d: cusparseSpSMDescr_t,
     ) -> cusparseStatus_t {
         let h = obj::<Handle>(h)?;
-        obj::<Solve>(d)?;
+        let d = obj::<Solve>(d)?;
         let (a, b, c) = (obj::<SpMat>(a)?, obj::<DnMat>(b)?, obj::<DnMat>(c)?);
         let (a, trans, strides) = spsm_check(op_a, op_b, a, b, c, compute)?;
         let alpha = scalar(h, alpha, a.double)?;
-        spsm(h, &a, b.values, c.values, c.cols, trans, strides, alpha)
+        solve(h, d, &a, b.values, c.values, c.cols, trans, strides, alpha)
     }
 }
 
@@ -2125,6 +2301,86 @@ mod tests {
             d[a.row[k] as usize][a.col[k] as usize] = a.val[k];
         }
         d
+    }
+
+    #[test]
+    fn spsv_levels_solve_the_triangle() {
+        // a square matrix with entries on both sides of the diagonal, a large diagonal except in row 3 (none)
+        let n = 23usize;
+        let mut st = 7u64;
+        let mut next = || {
+            st = st.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (st >> 33) as u32
+        };
+        let (mut rowptr, mut col, mut val) = (vec![0i64], vec![], vec![]);
+        for i in 0..n {
+            for j in 0..n {
+                if (i == j && i != 3) || (i != j && next() % 4 == 0) {
+                    col.push(j as i64);
+                    val.push(if i == j { 20.0 } else { (next() % 9) as f64 - 4.0 });
+                }
+            }
+            rowptr.push(col.len() as i64);
+        }
+        for base in [0i64, 1] {
+            let rp: Vec<i64> = rowptr.iter().map(|r| r + base).collect();
+            let cl: Vec<i64> = col.iter().map(|c| c + base).collect();
+            for upper in [false, true] {
+                for trans in [false, true] {
+                    for unit in [false, true] {
+                        let sch = spsv_schedule(n, &rp, &cl, base, upper, trans);
+                        // every row is in one level, after the rows it reads
+                        let mut level_of = vec![usize::MAX; n];
+                        for (l, &(first, count)) in sch.levels.iter().enumerate() {
+                            for &i in &sch.order[first as usize..(first + count) as usize] {
+                                assert_eq!(level_of[i as usize], usize::MAX);
+                                level_of[i as usize] = l;
+                            }
+                        }
+                        // agx_spsv_level, level by level (rows of a level in reverse: they must not read each other)
+                        let b: Vec<f64> = (0..n).map(|i| i as f64 - 5.0).collect();
+                        let mut x = vec![f64::NAN; n];
+                        for &(first, count) in &sch.levels {
+                            for &i in sch.order[first as usize..(first + count) as usize].iter().rev() {
+                                let i = i as usize;
+                                let (mut acc, mut d) = (1.5 * b[i], 1.0);
+                                for k in sch.tptr[i] as usize..sch.tptr[i + 1] as usize {
+                                    let (j, v) = (sch.tcol[k] as usize, val[sch.tmap[k] as usize]);
+                                    if j == i {
+                                        d = v;
+                                    } else {
+                                        assert!(level_of[j] < level_of[i]);
+                                        acc -= v * x[j];
+                                    }
+                                }
+                                x[i] = acc / if unit { 1.0 } else { d };
+                            }
+                        }
+                        // op(T) x = alpha b with T A's triangle, the diagonal 1 when unit or missing
+                        let mut t = vec![vec![0.0f64; n]; n];
+                        for i in 0..n {
+                            for k in rowptr[i] as usize..rowptr[i + 1] as usize {
+                                let j = col[k] as usize;
+                                if if upper { j >= i } else { j <= i } {
+                                    t[i][j] = val[k];
+                                }
+                            }
+                            if unit || t[i][i] == 0.0 {
+                                t[i][i] = 1.0;
+                            }
+                        }
+                        for i in 0..n {
+                            let ax: f64 = (0..n).map(|j| if trans { t[j][i] } else { t[i][j] } * x[j]).sum();
+                            assert!((ax - 1.5 * b[i]).abs() < 1e-9 * (1.0 + b[i].abs()), "base {base} upper {upper} trans {trans} unit {unit} row {i}");
+                        }
+                    }
+                }
+            }
+        }
+        // a chain (bidiagonal) has a level per row: not worth launches
+        let chain = spsv_schedule(100, &(0..=100).map(|i| (2 * i - 1).max(0)).collect::<Vec<_>>(), &(0..100).flat_map(|i: i64| if i == 0 { vec![0] } else { vec![i - 1, i] }).collect::<Vec<_>>(), 0, false, false);
+        assert_eq!(chain.levels.len(), 100);
+        assert!(!spsv_levels_pay(&chain));
     }
 
     #[test]

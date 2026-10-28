@@ -35,7 +35,10 @@ def fat_entries(data):
 
 
 def kernel_records(obj, a, tmp):
-    """name -> (threadgroups_per_grid uniform, [(kind, bytes, first half) per argument]) from .agx.kernels."""
+    """name -> (threadgroups_per_grid uniform, [(kind, bytes, first half) per argument], global data half, stack
+    bytes, [(half, value) of the 32-bit constants to preload (extension 6, llc -agx-uniform-constants)],
+    [(half, source half, kind) of the values the launch computes from argument words (extension 7,
+    llc -agx-launch-divisors)]) from .agx.kernels."""
     p = os.path.join(tmp, "o.o")
     open(p, "wb").write(obj)
     sec = os.path.join(tmp, "k.bin")
@@ -53,9 +56,41 @@ def kernel_records(obj, a, tmp):
         _halves, tg_half, glob, _gprs, _tg, stack, nargs = struct.unpack_from("<7I", d, q)
         q += 28
         args = [struct.unpack_from("<3I", d, q + 12 * i) for i in range(nargs)]
-        out[name] = (tg_half // 2, args, glob, stack)
+        e, consts, derived = q + 12 * nargs, [], []
+        while e + 4 <= pos + size:
+            (tag,) = struct.unpack_from("<I", d, e)
+            if tag == 2:
+                e += 20 + 16 * struct.unpack_from("<I", d, e + 8)[0]
+            elif tag in (1, 3, 4, 5):
+                e += {1: 16, 3: 12, 4: 8, 5: 8}[tag]
+            elif tag == 6:
+                (n,) = struct.unpack_from("<I", d, e + 4)
+                consts = [struct.unpack_from("<2I", d, e + 8 + 8 * i) for i in range(n)]
+                e += 8 + 8 * n
+            elif tag == 7:
+                (n,) = struct.unpack_from("<I", d, e + 4)
+                derived = [struct.unpack_from("<3I", d, e + 8 + 12 * i) for i in range(n)]
+                e += 8 + 12 * n
+            else:
+                break
+        out[name] = (tg_half // 2, args, glob, stack, consts, derived)
         pos += size
     return out
+
+
+def launch_value(d, kind):
+    """Value `kind` of .agx.kernels extension 7 for the 32-bit argument word d, a divisor (|d| of a signed one for
+    kinds 3 to 5; of max(d, 1) for kinds 6 to 8), as agx_runtime's launch_value computes it: with l = ceil(log2(d)), the multiplier
+    2^32 (2^l - d) / d + 1 and the shifts min(l, 1) and max(l, 1) - 1; all 0 for d = 0."""
+    d &= 0xFFFFFFFF
+    if kind >= 6:  # of max(d, 1), a guarded unsigned divisor
+        d, kind = max(d, 1), kind - 6
+    if kind >= 3 and d >> 31:
+        d = (1 << 32) - d
+    if d == 0:
+        return 0
+    l = (d - 1).bit_length()
+    return [((1 << 32) * ((1 << l) - d)) // d + 1, min(l, 1), max(l, 1) - 1][kind % 3] & 0xFFFFFFFF
 
 
 def kernel_code(obj, name, a, tmp):
@@ -80,10 +115,12 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
     """args: ('buf', bytes, dump) | ('i64', v) | ('f32', v). heap: the device heap of malloc / free, its size or
     its contents (a heap returned by an earlier run); its address goes into the module's __zluda_agx_heap, as
     zluda_agx does, and its contents after the run follow the dumped buffers. Returns the dumped buffers."""
-    tg_uniform, slots, glob, stack = kernel_records(obj, a, tmp)[name]
+    name += a.kernel_suffix
+    tg_uniform, slots, glob, stack, consts, derived = kernel_records(obj, a, tmp)[name]
     code = os.path.join(tmp, name + ".bin")
     open(code, "wb").write(kernel_code(obj, name, a, tmp))
-    cmd = [a.agx_run, code, "--grid", "%d,%d,1" % grid, "--wg", "%d,%d,1" % wg]
+    grid3 = tuple(grid) + (1,) * (3 - len(grid))  # a third dimension for batched launches
+    cmd = [a.agx_run, code, "--grid", "%d,%d,%d" % grid3, "--wg", "%d,%d,1" % wg]
     # on the GPU, a kernel that uses the stack needs its scratch (the simulator gives every thread one)
     if stack and os.path.basename(a.agx_run).startswith("agx_run_hw"):
         cmd += ["--stack", str(stack)]
@@ -134,6 +171,10 @@ def run(a, obj, name, args, grid, wg, tmp, heap=0):
         g = (grid[d] if d < 2 else 1)
         w = (wg[d] if d < 2 else 1)
         uniforms[tg_uniform + d] = -(-g // w)
+    for half, v in consts:
+        uniforms[half // 2] = v
+    for half, src, kind in derived:
+        uniforms[half // 2] = launch_value(uniforms.get(src // 2, 0), kind)
     for u, v in sorted(uniforms.items()):
         cmd += ["--uniform", "%d=%d" % (u, v)]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -170,16 +211,20 @@ def close(got, want, idx, tol=1e-4):
     return bad
 
 
-def case_tile(a, obj, tmp, M, N, K, alpha, beta, rnd, kernel="agx_sgemm_tile64", ab="f", c="f"):
-    lda, ldb, ldc = K + 2, N + 2, N + 4
-    A = rounded([rnd.uniform(-1, 1) for _ in range(M * lda)], ab)
-    B = rounded([rnd.uniform(-1, 1) for _ in range(K * ldb)], ab)
+def case_tile(a, obj, tmp, M, N, K, alpha, beta, rnd, kernel="agx_sgemm_tile64", ab="f", c="f", ta=False, tb=False):
+    # the _ta / _tb variants read A[r, k] at a[k lda + r] and B[k, c] at b[c ldb + k]
+    kernel += {(0, 0): "", (1, 0): "_ta", (0, 1): "_tb", (1, 1): "_tatb"}[(int(ta), int(tb))]
+    lda, ldb, ldc = (M if ta else K) + 2, (K if tb else N) + 2, N + 4
+    sa, sb = ((1, lda) if ta else (lda, 1)), ((1, ldb) if tb else (ldb, 1))
+    A = rounded([rnd.uniform(-1, 1) for _ in range((K if ta else M) * lda)], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range((N if tb else K) * ldb)], ab)
     C = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(M * ldc)], c)
     (got,) = run(a, obj, kernel,
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
-                  ("i64", K), ("i64", lda), ("i64", ldb), ("i64", ldc), ("f32", alpha), ("f32", beta)],
+                  ("i64", K), ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", 0), ("i64", 0), ("i64", 0),
+                  ("f32", alpha), ("f32", beta)],
                  ((M // 64) * (N // 64) * 128, 1), (128, 1), tmp)
-    want = reference(M, N, K, A, (lda, 1), B, (ldb, 1), C, (ldc, 1), alpha, beta)
+    want = reference(M, N, K, A, sa, B, sb, C, (ldc, 1), alpha, beta)
     return close(unpack(got, c), want, [i * ldc + j for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
 
 
@@ -197,32 +242,168 @@ def case_generic(a, obj, tmp, M, N, K, ta, tb, alpha, beta, rnd, kernel="agx_sge
     (got,) = run(a, obj, kernel,
                  [("buf", pack(A, ab)), ("buf", pack(B, ab)), ("buf", pack(C, c), True), ("i64", M), ("i64", N),
                   ("i64", K), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]), ("i64", sb[1]), ("i64", sc[0]),
-                  ("i64", sc[1]), ("f64" if c == "d" else "f32", alpha), ("f64" if c == "d" else "f32", beta)],
-                 (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8), tmp)
+                  ("i64", sc[1]), ("i64", 0), ("i64", 0), ("i64", 0), ("f64" if c == "d" else "f32", alpha),
+                  ("f64" if c == "d" else "f32", beta)],
+                 *gemm_launch(kernel, M, N), tmp)
     want = reference(M, N, K, A, sa, B, sb, C, sc, alpha, beta)
     return close(unpack(got, c), want, [i * sc[0] + j * sc[1] for i in range(M) for j in range(N)],
                  {"f": 1e-4, "d": 1e-13}.get(c, 2e-3))
+
+
+DOT_SIDE = 8
+
+
+def use_dot(m, n, k, ta, tb):
+    """agx_libs' choice of the dot kernel over the generic one (generic in agx_libs/src/lib.rs)."""
+    return k >= 32 and ((n <= DOT_SIDE and ta) or (m <= DOT_SIDE and not tb))
+
+
+def gemm_launch(kernel, M, N):
+    """Grid and threadgroup of the generic kernel (a thread per element of C) or the dot kernel (a SIMD-group)."""
+    if "_dot" in kernel:
+        return (-(-M * N * 32 // 128) * 128, 1), (128, 1)
+    return (-(-N // 16) * 16, -(-M // 8) * 8), (16, 8)
+
+
+def split_plan(M, N, K, lda, ldb, ldc, ta=False, tb=False):
+    """zluda_blas_agx's plan for column-major C = alpha op(A) op(B) + beta C (agx_libs/src/lib.rs, plan): the tile
+    kernel on the largest block of C with sides multiples of 64 along the largest multiple of 8 of K, the generic
+    kernel on the columns right of it, the rows below it, then the remaining steps of K added to all of C. Each part:
+    (tile, (m, n, k), element offsets of A, B and C, accumulate)."""
+    m64, n64, k8 = M // 64 * 64, N // 64 * 64, K // 8 * 8
+    if not (m64 and n64 and k8):
+        return [(False, (M, N, K), (0, 0, 0), False)]
+    col_b = lambda j: j if tb else j * ldb
+    row_a = lambda i: i * lda if ta else i
+    step_a, step_b = (lambda l: l if ta else l * lda), (lambda l: l * ldb if tb else l)
+    parts = [(True, (m64, n64, k8), (0, 0, 0), False)]
+    if n64 < N:
+        parts.append((False, (M, N - n64, k8), (0, col_b(n64), n64 * ldc), False))
+    if m64 < M:
+        parts.append((False, (M - m64, n64, k8), (row_a(m64), 0, m64), False))
+    if k8 < K:
+        parts.append((False, (M, N, K - k8), (step_a(k8), step_b(k8), 0), True))
+    return parts
+
+
+def run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C, ldc, alpha, beta, tile, gen, ab, c, ta, tb,
+                  batch=1, strides=(0, 0, 0)):
+    """Column-major C = alpha op(A) op(B) + beta C as zluda_blas_agx runs it (split_plan's parts, each launched once
+    for `batch` matrices strides (A, B, C) elements apart); returns C."""
+    sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
+    sb = (ldb, 1) if tb else (1, ldb)
+    C = list(C)
+    for is_tile, (m, n, k), (oa, ob, oc), acc in split_plan(M, N, K, lda, ldb, ldc, ta, tb):
+        be = 1.0 if acc else beta
+        if is_tile:
+            # row-major C^T = op(B)^T op(A)^T: A' = B, read transposed when op(B) is, B' = A likewise
+            # the _u kernel unless the leading dimensions and strides are even (the buffers here are aligned)
+            aligned = all(v % 2 == 0 for v in (lda, ldb, ldc) + tuple(strides))
+            kernel = tile + ("" if aligned else "_u") + {(0, 0): "", (1, 0): "_ta", (0, 1): "_tb",
+                                                          (1, 1): "_tatb"}[(int(tb), int(ta))]
+            args = [("buf", pack(B[ob:], ab)), ("buf", pack(A[oa:], ab)), ("buf", pack(C[oc:], c), True),
+                    ("i64", n), ("i64", m), ("i64", k), ("i64", ldb), ("i64", lda), ("i64", ldc),
+                    ("i64", strides[1]), ("i64", strides[0]), ("i64", strides[2]), ("f32", alpha), ("f32", be)]
+            (got,) = run(a, obj, kernel, args, ((n // 64) * (m // 64) * 128, batch), (128, 1), tmp)
+        else:
+            args = [("buf", pack(A[oa:], ab)), ("buf", pack(B[ob:], ab)), ("buf", pack(C[oc:], c), True),
+                    ("i64", m), ("i64", n), ("i64", k), ("i64", sa[0]), ("i64", sa[1]), ("i64", sb[0]),
+                    ("i64", sb[1]), ("i64", 1), ("i64", ldc), ("i64", strides[0]), ("i64", strides[1]),
+                    ("i64", strides[2]), ("f32", alpha), ("f32", be)]
+            kernel = gen.replace("_generic", "_dot") if use_dot(m, n, k, ta, tb) else gen
+            (gx, gy), wg = gemm_launch(kernel, m, n)
+            grid = (gx, batch) if "_dot" in kernel else (gx, gy, batch)
+            (got,) = run(a, obj, kernel, args, grid, wg, tmp)
+        C[oc:] = unpack(got, c)
+    return C
+
+
+def case_batched(a, obj, tmp, M, N, K, batch, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic",
+                 ab="f", c="f", ta=False, tb=False):
+    """A strided batched GEMM, each part of its plan launched once for the whole batch."""
+    ra, rb = (K if ta else M), (N if tb else K)
+    lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+    na, nb, nc = lda * (M if ta else K), ldb * (K if tb else N), ldc * N
+    strides = (na + 6, nb + 4, nc + 2)  # even, with gaps between the matrices
+    A = rounded([rnd.uniform(-1, 1) for _ in range(strides[0] * batch)], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(strides[1] * batch)], ab)
+    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(strides[2] * batch)], c)
+    C = run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C0, ldc, alpha, beta, tile, gen, ab, c, ta, tb, batch,
+                      strides)
+    sa = (lda, 1) if ta else (1, lda)
+    sb = (ldb, 1) if tb else (1, ldb)
+    got, want = [], []
+    for e in range(batch):
+        w = reference(M, N, K, A[e * strides[0]:], sa, B[e * strides[1]:], sb, C0[e * strides[2]:], (1, ldc), alpha,
+                      beta)
+        idx = [i + j * ldc for i in range(M) for j in range(N)]
+        got += [C[e * strides[2] + i] for i in idx]
+        want += [w[i] for i in idx]
+    return close(got, want, range(len(got)), 1e-4 if c == "f" else 2e-3)
+
+
+def case_split(a, obj, tmp, M, N, K, alpha, beta, rnd, tile="agx_sgemm_tile64", gen="agx_sgemm_generic", ab="f",
+               c="f", ta=False, tb=False, odd=False):
+    # column-major op(A) and op(B), the leading dimensions even (the aligned tile kernel), or odd (the _u one)
+    ra, rb = (K if ta else M), (N if tb else K)
+    lda, ldb, ldc = ra + 2 + ra % 2, rb + 2 + rb % 2, M + 4 + M % 2
+    if odd:
+        lda, ldb, ldc = lda + 1, ldb + 1, ldc + 1
+    sa = (lda, 1) if ta else (1, lda)  # (row stride, column stride) of op(A)
+    sb = (ldb, 1) if tb else (1, ldb)
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (M if ta else K))], ab)
+    B = rounded([rnd.uniform(-1, 1) for _ in range(ldb * (K if tb else N))], ab)
+    C0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(ldc * N)], c)
+    C = run_gemm_plan(a, obj, tmp, M, N, K, A, lda, B, ldb, C0, ldc, alpha, beta, tile, gen, ab, c, ta, tb)
+    want = reference(M, N, K, A, sa, B, sb, C0, (1, ldc), alpha, beta)
+    return close(C, want, [i + j * ldc for i in range(M) for j in range(N)], 1e-4 if c == "f" else 2e-3)
+
+
+def case_conv_pointwise(a, obj, tmp, n, ch, h, w, k, alpha, beta, rnd, tile="agx_sgemm_tile64",
+                        gen="agx_sgemm_generic", t="f"):
+    """A 1x1 NCHW convolution as zluda_dnn_agx runs it (pointwise_gemm): per image, y^T (HW x K, ld HW) =
+    x^T (HW x C, ld HW) w^T (C x K, ld C), against the direct sum."""
+    hw = h * w
+    X = rounded([rnd.uniform(-1, 1) for _ in range(n * ch * hw)], t)
+    W = rounded([rnd.uniform(-1, 1) for _ in range(k * ch)], t)
+    Y0 = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(n * k * hw)], t)
+    got, want = [], []
+    for b in range(n):
+        xb, yb = X[b * ch * hw:(b + 1) * ch * hw], Y0[b * k * hw:(b + 1) * k * hw]
+        got += run_gemm_plan(a, obj, tmp, hw, k, ch, xb, hw, W, ch, yb, hw, alpha, beta, tile, gen, t, t, False, False)
+        for kk in range(k):
+            for p in range(hw):
+                v = alpha * sum(W[kk * ch + cc] * xb[cc * hw + p] for cc in range(ch))
+                want.append(v + (beta * yb[kk * hw + p] if beta != 0 else 0.0))
+    return close(got, want, range(len(want)), 1e-4 if t == "f" else 2e-3)
 
 
 def gelu(x):
     return 0.5 * x * (1 + math.tanh(0.7978845608 * (x + 0.044715 * x ** 3)))
 
 
-def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f"):
+def case_epilogue(a, obj, tmp, M, N, has_bias, act, rnd, t="f", batch=1):
+    """batch > 1: that many matrices (and biases) with gaps between them, in one launch."""
     ld = M + 3
-    D = rounded([rnd.uniform(-3, 3) for _ in range(ld * N)], t)
-    bias = rounded([rnd.uniform(-1, 1) for _ in range(M)], t)
+    stride, bstride = ld * N + 5, M + 2
+    D = rounded([rnd.uniform(-3, 3) for _ in range(stride * batch)], t)
+    bias = rounded([rnd.uniform(-1, 1) for _ in range(bstride * batch)], t)
     kernel = "agx_epilogue_f32" if t == "f" else "agx_epilogue_f16"
     (got,) = run(a, obj, kernel,
                  [("buf", pack(D, t), True), ("buf", pack(bias, t)), ("i64", M), ("i64", N), ("i64", ld),
-                  ("i64", has_bias), ("i64", act)],
-                 (-(-M // 16) * 16, -(-N // 8) * 8), (16, 8), tmp)
+                  ("i64", has_bias), ("i64", act), ("i64", stride if batch > 1 else 0),
+                  ("i64", bstride if batch > 1 else 0)],
+                 (-(-M // 16) * 16, -(-N // 8) * 8, batch), (16, 8), tmp)
     want = list(D)
-    for j in range(N):
-        for i in range(M):
-            x = D[j * ld + i] + (bias[i] if has_bias else 0.0)
-            want[j * ld + i] = max(x, 0.0) if act == 1 else gelu(x) if act == 2 else x
-    return close(unpack(got, t), want, [j * ld + i for j in range(N) for i in range(M)], 2e-5 if t == "f" else 2e-3)
+    idx = []
+    for e in range(batch):
+        for j in range(N):
+            for i in range(M):
+                p = e * stride + j * ld + i
+                x = D[p] + (bias[e * bstride + i] if has_bias else 0.0)
+                want[p] = max(x, 0.0) if act == 1 else gelu(x) if act == 2 else x
+                idx.append(p)
+    return close(unpack(got, t), want, idx, 2e-5 if t == "f" else 2e-3)
 
 
 class Conv:
@@ -301,6 +482,68 @@ def case_conv(a, obj, tmp, which, conv, alpha, beta, rnd, t="f"):
     return close(unpack(got, t), want, idx, 1e-4 if t == "f" else 3e-3)
 
 
+def case_conv_im2col(a, obj, tmp, conv, rnd, t="f", filter_grad=False):
+    """The im2col matrix of each image (agx_conv2d_im2col_*), multiplied here as zluda_dnn_agx's GEMMs do: y[n] =
+    w col (forward), or dw = sum over n of dy[n] col^T (filter gradient), against the direct sums (one group)."""
+    c = conv
+    X = rounded([rnd.uniform(-1, 1) for _ in range(c.xlen)], t)
+    Wt = rounded([rnd.uniform(-1, 1) for _ in range(c.wlen)], t)
+    Dy = rounded([rnd.uniform(-1, 1) for _ in range(c.ylen)], t)
+    crs, pq = c.C * c.R * c.S, c.P * c.Q
+    got = [0.0] * (c.wlen if filter_grad else c.ylen)
+    for n in range(c.N):
+        args = [("buf", pack(X, t)), ("buf", pack([math.nan] * (crs * pq), t), True)] + c.args()[:21] + [("i32", n)]
+        (col,) = run(a, obj, "agx_conv2d_im2col_%s" % ("f32" if t == "f" else "f16"), args,
+                     (-(-crs * pq // 256) * 256, 1), (256, 1), tmp)
+        col = unpack(col, t)
+        for k in range(c.K):
+            if filter_grad:
+                for j in range(crs):
+                    got[k * crs + j] += sum(Dy[c.yi(n, k, i // c.Q, i % c.Q)] * col[j * pq + i] for i in range(pq))
+            else:
+                for i in range(pq):
+                    got[c.yi(n, k, i // c.Q, i % c.Q)] = sum(Wt[k * crs + j] * col[j * pq + i] for j in range(crs))
+    want = [0.0] * len(got)
+    for n, k, p, q, ch, r, s_, h, w, wi in c.taps():
+        if filter_grad:
+            want[wi] += Dy[c.yi(n, k, p, q)] * X[c.xi(n, ch, h, w)]
+        else:
+            want[c.yi(n, k, p, q)] += X[c.xi(n, ch, h, w)] * Wt[wi]
+    return close(got, want, range(len(got)), 1e-5)
+
+
+def case_conv_col2im(a, obj, tmp, conv, alpha, beta, rnd, t="f"):
+    """The data gradient as zluda_dnn_agx runs it for one group: col = w^T dy[n] (f32, formed here as its GEMM
+    does), then agx_conv2d_col2im_* gathers dx[n] = alpha col2im(col) + beta dx[n]; against the direct sums."""
+    c = conv
+    Wt = rounded([rnd.uniform(-1, 1) for _ in range(c.wlen)], t)
+    Dy = rounded([rnd.uniform(-1, 1) for _ in range(c.ylen)], t)
+    Dx = rounded([rnd.uniform(-1, 1) if beta != 0 else math.nan for _ in range(c.xlen)], t)
+    crs, pq = c.C * c.R * c.S, c.P * c.Q
+    for n in range(c.N):
+        col = [sum(Wt[k * crs + j] * Dy[c.yi(n, k, i // c.Q, i % c.Q)] for k in range(c.K))
+               for j in range(crs) for i in range(pq)]
+        args = ([("buf", pack(col, "f")), ("buf", pack(Dx, t), True)] + c.args()[:21] +
+                [("i32", n), ("f32", alpha), ("f32", beta)])
+        (dx,) = run(a, obj, "agx_conv2d_col2im_%s" % ("f32" if t == "f" else "f16"), args,
+                    (-(-c.C * c.H * c.W // 256) * 256, 1), (256, 1), tmp)
+        Dx_n = unpack(dx, t)
+        if n == 0:
+            got = list(Dx_n)
+        else:
+            lo, hi = n * c.xs[0], (n + 1) * c.xs[0]
+            got[lo:hi] = Dx_n[lo:hi]
+    acc = {}
+    for n, k, p, q, ch, r, s_, h, w, wi in c.taps():
+        key = c.xi(n, ch, h, w)
+        acc[key] = acc.get(key, 0.0) + Dy[c.yi(n, k, p, q)] * Wt[wi]
+    idx = [c.xi(n, ch, h, w) for n in range(c.N) for ch in range(c.C) for h in range(c.H) for w in range(c.W)]
+    want = list(Dx)
+    for i in idx:
+        want[i] = alpha * acc.get(i, 0.0) + (beta * Dx[i] if beta != 0 else 0.0)
+    return close(got, want, idx, 1e-5 if t == "f" else 3e-3)
+
+
 def twiddles(n):
     out = []
     for t in range(n):
@@ -329,13 +572,16 @@ def case_fft(a, obj, tmp, n, batch, stride, dist, inverse, radix2, rnd, t="f"):
     tw = pack(twiddles(n), t)
     buf = pack(interleave(data), t)
     if radix2:
+        # zluda_fft_agx's passes: radix 2 when log2(n) is odd, then radix 4 (radix2 == "r2": radix 2 only)
+        stages = n.bit_length() - 1
+        radices = [2] * stages if radix2 == "r2" else [2] * (stages % 2) + [4] * (stages // 2)
         ns = 1
-        while ns < n:
-            (buf,) = run(a, obj, "agx_fft_radix2" + sfx,
+        for r in radices:
+            (buf,) = run(a, obj, "agx_fft_radix%d" % r + sfx,
                          [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", ns),
                           ("i32", batch), ("i32", stride), ("i32", dist), ("i32", inverse)],
-                         (n // 2, batch), (min(n // 2, 64), 1), tmp)
-            ns *= 2
+                         (n // r, batch), (min(n // r, 64), 1), tmp)
+            ns *= r
     else:
         (buf,) = run(a, obj, "agx_dft" + sfx,
                      [("buf", buf), ("buf", pack([0.0] * (2 * total), t), True), ("buf", tw), ("i32", n), ("i32", batch),
@@ -587,14 +833,40 @@ def case_sparse_ops(a, obj, tmp, what, I, base, rnd):
             if (j > i) if upper else (j < i):
                 return dense.get((i, j), 0.0)
             return 0.0
-        X = unpack(got, BT)
+        # the level-scheduled solve (zluda_sparse_agx's spsv_schedule): op(A)'s rows with the triangle's and the
+        # diagonal's entries, the rows by level; agx_spsv_level once per level, in place in C
+        op_rows = [[] for _ in range(m)]
+        for r in range(m):
+            for k in range(rowptr[r], rowptr[r + 1]):
+                c = col[k]
+                if (c >= r) if upper else (c <= r):
+                    (op_rows[c] if trans else op_rows[r]).append((r if trans else c, k))
+        level = [0] * m
+        for i in (range(m - 1, -1, -1) if upper ^ trans else range(m)):
+            level[i] = max([level[j] + 1 for j, _ in op_rows[i] if j != i], default=0)
+        order = sorted(range(m), key=lambda i: (level[i], i))
+        tptr, tcol, tmap = [0], [], []
+        for row in op_rows:
+            tcol += [j for j, _ in row]
+            tmap += [k for _, k in row]
+            tptr.append(len(tcol))
+        cl = pack([0.0] * (ldc * n), BT)
+        first = 0
+        for lvl in range(max(level) + 1):
+            count = level.count(lvl)
+            (cl,) = run(a, obj, K("agx_spsv_level"), [("buf", pack(tptr, "q")), ("buf", pack(tcol or [0], "q")), ("buf", pack(tmap or [0], "q")),
+                                                     ("buf", pack(order, "q")), ("buf", pack(val, BT)), ("buf", pack(Bm, BT)), ("buf", cl, True),
+                                                     ("i64", first), ("i64", count), ("i64", n), ("i64", 1), ("i64", ldb), ("i64", 1), ("i64", ldc),
+                                                     ("i64", unit), (S(), alpha)], (32, 4), (32, 1), tmp)
+            first += count
         # check op(T) X = alpha B
         errs = []
-        for j in range(n):
-            for i in range(m):
-                lhs = sum((tri(k, i) if trans else tri(i, k)) * X[k + j * ldc] for k in range(m))
-                if abs(lhs - alpha * Bm[i + j * ldb]) > TOL(1e-4) * 10:
-                    errs.append("residual at %d,%d: %g vs %g" % (i, j, lhs, alpha * Bm[i + j * ldb]))
+        for name, X in (("spsm", unpack(got, BT)), ("levels", unpack(cl, BT))):
+            for j in range(n):
+                for i in range(m):
+                    lhs = sum((tri(k, i) if trans else tri(i, k)) * X[k + j * ldc] for k in range(m))
+                    if abs(lhs - alpha * Bm[i + j * ldb]) > TOL(1e-4) * 10:
+                        errs.append("%s residual at %d,%d: %g vs %g" % (name, i, j, lhs, alpha * Bm[i + j * ldb]))
         return errs[:5]
     raise ValueError(what)
 
@@ -775,6 +1047,30 @@ def case_rand(a, obj, tmp, what, rnd):
     return close(got, want[:n], range(n), 2e-5)
 
 
+def case_qr_wy(a, obj, tmp, rnd):
+    """agx_qr_v and agx_qr_t of the blocked geqrf: V from a column panel, T from S = V^T V and tau."""
+    t = BT
+    m, lda, j0, jb = 11, 13, 2, 4
+    A = rounded([rnd.uniform(-1, 1) for _ in range(lda * (j0 + jb))], t)
+    mv = m - j0
+    (v,) = run(a, obj, K("agx_qr_v"), [("buf", pack(A, t)), ("buf", pack([math.nan] * (mv * jb), t), True), ("i64", m), ("i64", j0),
+                                      ("i64", jb), ("i64", lda)], (16, 8), (16, 4), tmp)
+    want = [1.0 if i == c else (A[(j0 + i) + (j0 + c) * lda] if i > c else 0.0) for c in range(jb) for i in range(mv)]
+    bad = ["V %d" % p for p, (g, w) in enumerate(zip(unpack(v, t), want)) if g != w]
+    S = rounded([rnd.uniform(-1, 1) for _ in range(jb * jb)], t)
+    tau = rounded([rnd.uniform(0.5, 1.5) for _ in range(j0 + jb)], t)
+    (tb,) = run(a, obj, K("agx_qr_t"), [("buf", pack(S, t)), ("buf", pack(tau, t)), ("buf", pack([math.nan] * (jb * jb), t), True),
+                                       ("i64", j0), ("i64", jb)], (1, 1), (1, 1), tmp)
+    T = [0.0] * (jb * jb)
+    for i in range(jb):
+        T[i + i * jb] = tau[j0 + i]
+        for r in range(i):
+            T[r + i * jb] = -tau[j0 + i] * sum(T[r + q * jb] * S[q + i * jb] for q in range(r, i))
+    got = unpack(tb, t)
+    bad += ["T %d" % p for p in range(jb * jb) if abs(got[p] - T[p]) > TOL(1e-5) * (1 + abs(T[p]))]
+    return bad
+
+
 def case_solver(a, obj, tmp, what, rnd):
     """The column steps of getrf / potrf / geqrf, then getrs / potrs / ormqr / orgqr, against Python references."""
     t = BT
@@ -823,6 +1119,18 @@ def case_solver(a, obj, tmp, what, rnd):
         if bad:
             return bad[:4]
         trans = what == "lu_t"
+        # the interchanges alone (the blocked getrs): in order, then in reverse back to B
+        (pb,) = run(a, obj, K("agx_getrs_pivots"), [("buf", ipiv), ("buf", bbuf, True), ("i64", n), ("i64", nrhs), ("i64", ldb),
+                                                  ("i64", 0)], (32, 1), (32, 1), tmp)
+        PB = from_col(unpack(bbuf, t), n, nrhs, ldb)
+        for k, p in enumerate(unpack(ipiv, "i")):
+            PB[k], PB[p - 1] = PB[p - 1], PB[k]
+        if from_col(unpack(pb, t), n, nrhs, ldb) != PB:
+            return ["agx_getrs_pivots"]
+        (back,) = run(a, obj, K("agx_getrs_pivots"), [("buf", ipiv), ("buf", pb, True), ("i64", n), ("i64", nrhs), ("i64", ldb),
+                                                    ("i64", 1)], (32, 1), (32, 1), tmp)
+        if back != bbuf:
+            return ["agx_getrs_pivots reverse"]
         (x,) = run(a, obj, K("agx_getrs"), [("buf", buf), ("i64", n), ("i64", lda), ("buf", ipiv), ("buf", bbuf, True),
                                            ("i64", nrhs), ("i64", ldb), ("i64", int(trans))], (32, 1), (32, 1), tmp)
         X = from_col(unpack(x, t), n, nrhs, ldb)
@@ -845,7 +1153,8 @@ def case_solver(a, obj, tmp, what, rnd):
                               (1, 1), (1, 1), tmp)
             (buf,) = run(a, obj, K("agx_chol_scale"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
                          grid1(n), (32, 1), tmp)
-            (buf,) = run(a, obj, K("agx_chol_update"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info)],
+            (buf,) = run(a, obj, K("agx_chol_update"), [("buf", buf, True), ("i64", n), ("i64", k), ("i64", rs), ("i64", cs), ("buf", info),
+                                                        ("i64", n)],
                          (16, 16), (16, 4), tmp)
         if unpack(info, "i")[0] != 0:
             return ["info %d" % unpack(info, "i")[0]]
@@ -1241,9 +1550,14 @@ def case_sgemv(a, obj, tmp, m, n, trans, incx, incy, beta, rnd):
     A = rounded([rnd.uniform(-1, 1) for _ in range(lda * n)], BT)
     x = rounded([rnd.uniform(-1, 1) for _ in range(1 + (xlen - 1) * abs(incx))], BT)
     y = rounded([rnd.uniform(-1, 1) for _ in range(1 + (ylen - 1) * abs(incy))], BT)
-    (got,) = run(a, obj, K("agx_sgemv"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True), ("i64", m), ("i64", n),
-                                       ("i64", lda), ("i64", incx), ("i64", incy), ("i64", trans), (S(), alpha),
-                                       (S(), beta)], (-(-ylen // 32) * 32, 1), (32, 1), tmp)
+    if trans:  # a SIMD-group per element of y, as zluda_blas_agx launches it
+        (got,) = run(a, obj, K("agx_sgemv_t"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True),
+                                             ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                             (S(), alpha), (S(), beta)], (-(-ylen * 32 // 128) * 128, 1), (128, 1), tmp)
+    else:
+        (got,) = run(a, obj, K("agx_sgemv"), [("buf", pack(A, BT)), ("buf", pack(x, BT)), ("buf", pack(y, BT), True),
+                                           ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                           ("i64", trans), (S(), alpha), (S(), beta)], (-(-ylen // 32) * 32, 1), (32, 1), tmp)
     want = list(y)
     for i in range(ylen):
         s = sum((A[k + i * lda] if trans else A[i + k * lda]) * x[blas_pos(k, xlen, incx)] for k in range(xlen))
@@ -1337,9 +1651,10 @@ def blend(r, old, alpha, beta):
     return alpha * r + (beta * old if beta != 0 else 0.0)
 
 
-def case_act(a, obj, tmp, mode, bwd, beta, rnd):
+def case_act(a, obj, tmp, mode, bwd, beta, rnd, packed=False):
     dims, coef, alpha = (2, 3, 4, 5), 1.5, 1.25
-    x, y = T4(dims, rnd, 1), T4(dims, rnd, 0, nhwc=True)
+    # packed: every tensor dense NCHW, the kernels' fast path
+    x, y = T4(dims, rnd, 0 if packed else 1), T4(dims, rnd, 0, nhwc=not packed)
     # values near 0 too, for the series of tanh and elu
     for k in range(0, x.len, 7):
         x.data[k] = rounded([x.data[k] * 1e-3], "f")[0]
@@ -1352,11 +1667,11 @@ def case_act(a, obj, tmp, mode, bwd, beta, rnd):
         for i in x.idx():
             want[y.off(*i)] = blend(act_ref(x.data[x.off(*i)], mode, coef), y.data[y.off(*i)], alpha, beta)
         return close(unpack(got), want, y.positions(), 2e-6)
-    yv = T4(dims, rnd, 2)
+    yv = T4(dims, rnd, 0 if packed else 2)
     for i in x.idx():
         yv.data[yv.off(*i)] = act_ref(x.data[x.off(*i)], mode, coef)
     yv.data = rounded(yv.data, "f")
-    dy, dx = T4(dims, rnd, 0), T4(dims, rnd, 3)
+    dy, dx = T4(dims, rnd, 0), T4(dims, rnd, 0 if packed else 3)
     (got,) = run(a, obj, "agx_dnn_act_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(x.data)),
                                              ("buf", pack(dx.data), True), ("i64", total)] + dnn_shape(x)
                  + dnn_strides(yv) + dnn_strides(dy) + dnn_strides(x) + dnn_strides(dx)
@@ -1368,9 +1683,9 @@ def case_act(a, obj, tmp, mode, bwd, beta, rnd):
     return close(unpack(got), want, dx.positions(), 2e-5)
 
 
-def case_pointwise(a, obj, tmp, op, rnd):
+def case_pointwise(a, obj, tmp, op, rnd, packed=False):
     dims = (2, 3, 4, 5)
-    c = T4(dims, rnd, 1)
+    c = T4(dims, rnd, 0 if packed else 1)
     bias = T4((1, 3, 1, 1), rnd, 0)
     astr = (0, bias.strides[1], 0, 0)
     alpha, beta = 0.75, 0.5
@@ -1385,8 +1700,8 @@ def case_pointwise(a, obj, tmp, op, rnd):
     return close(unpack(got), want, c.positions(), 1e-6)
 
 
-def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
-    dims, alpha, beta = (2, 5, 3, 2), 1.0, 0.25
+def case_softmax(a, obj, tmp, instance, algo, bwd, rnd, dims=(2, 5, 3, 2)):
+    alpha, beta = 1.0, 0.25
     N, C, H, W = dims
     x, y = T4(dims, rnd, 1, lo=-4, hi=4), T4(dims, rnd, 0, nhwc=True)
     groups = ([[(n, c, h, w) for c in range(C) for h in range(H) for w in range(W)] for n in range(N)] if instance else
@@ -1396,7 +1711,7 @@ def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
     if not bwd:
         (got,) = run(a, obj, "agx_dnn_softmax_fwd", [("buf", pack(x.data)), ("buf", pack(y.data), True), ("i64", rows),
                                                      ("i64", K)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(y) + tail,
-                     (32, 1), (32, 1), tmp)
+                     (32 * rows, 1), (32, 1), tmp)  # a SIMD-group per row
         want = list(y.data)
         for g in groups:
             vs = [x.data[x.off(*i)] for i in g]
@@ -1415,7 +1730,7 @@ def case_softmax(a, obj, tmp, instance, algo, bwd, rnd):
     yv.data = rounded(yv.data, "f")
     (got,) = run(a, obj, "agx_dnn_softmax_bwd", [("buf", pack(yv.data)), ("buf", pack(dy.data)), ("buf", pack(dx.data), True),
                                                  ("i64", rows), ("i64", K)] + dnn_shape(x) + dnn_strides(yv)
-                 + dnn_strides(dy) + dnn_strides(dx) + tail, (32, 1), (32, 1), tmp)
+                 + dnn_strides(dy) + dnn_strides(dx) + tail, (32 * rows, 1), (32, 1), tmp)  # a SIMD-group per row
     want = list(dx.data)
     for g in groups:
         ys = [yv.data[yv.off(*i)] for i in g]
@@ -1495,8 +1810,7 @@ def case_pool(a, obj, tmp, mode, bwd, R, S, pad, st, rnd):
     return close(unpack(got), want, dx.positions(), 1e-5)
 
 
-def case_bn(a, obj, tmp, spatial, what, rnd):
-    dims = (3, 4, 2, 3)
+def case_bn(a, obj, tmp, spatial, what, rnd, dims=(3, 4, 2, 3)):
     N, C, H, W = dims
     params = C if spatial else C * H * W
     M = N * H * W if spatial else N
@@ -1516,7 +1830,7 @@ def case_bn(a, obj, tmp, spatial, what, rnd):
                              [("buf", pack(x.data)), ("buf", pack(rmean), True), ("buf", pack(rvar), True),
                               ("buf", bytes(4 * params), True), ("buf", bytes(4 * params), True), ("i64", params), ("i64", M)]
                              + dnn_shape(x) + dnn_strides(x) + [("i64", spatial), ("i64", 1), ("f32", factor), ("f32", eps)],
-                             (32, 1), (32, 1), tmp)
+                             (32 * params, 1), (32, 1), tmp)  # a SIMD-group per parameter
         wrm = [(1 - factor) * o + factor * m for o, m in zip(rmean, mean)]
         wrv = [(1 - factor) * o + factor * v * M / (M - 1) for o, v in zip(rvar, var)]
         r = range(params)
@@ -1550,7 +1864,7 @@ def case_bn(a, obj, tmp, spatial, what, rnd):
                        [("buf", pack(x.data)), ("buf", pack(dy.data)), ("buf", pack(mv)), ("buf", pack(iv)),
                         ("buf", pack(ds0), True), ("buf", pack(db0), True), ("buf", bytes(8 * params), True),
                         ("i64", params), ("i64", M)] + dnn_shape(x) + dnn_strides(x) + dnn_strides(dy)
-                       + [("i64", spatial), ("f32", alpha), ("f32", beta)], (32, 1), (32, 1), tmp)
+                       + [("i64", spatial), ("f32", alpha), ("f32", beta)], (32 * params, 1), (32, 1), tmp)
     sdy = [sum(dy.data[dy.off(*i)] for i in groups[p]) for p in range(params)]
     sdyx = [sum(dy.data[dy.off(*i)] * (x.data[x.off(*i)] - mv[p]) * iv[p] for i in groups[p]) for p in range(params)]
     r = range(params)
@@ -1604,6 +1918,18 @@ def case_level3(a, obj, tmp, what, opts, rnd):
             for i in range(m):
                 want[i + j * ldc] = alpha * at(A, i, j, lda, ta) + beta * at(B, i, j, ldb, tb)
         return close(unpack(got, BT), want, range(len(C)), TOL(1e-6))
+    if what == "sum_slices":
+        slices, ldc = opts["slices"], m + 3
+        b = beta if opts.get("beta", True) else 0.0
+        P = rounded([rnd.uniform(-1, 1) for _ in range(slices * m * n)], BT)
+        C = mat(0, n, ldc, rnd)
+        (got,) = run(a, obj, K("agx_ssum_slices"), [("buf", pack(P, BT)), ("buf", pack(C, BT), True), ("i64", m), ("i64", n),
+                                                 ("i64", ldc), ("i64", slices), (S(), b)], (16, 8), (16, 4), tmp)
+        want = list(C)
+        for j in range(n):
+            for i in range(m):
+                want[i + j * ldc] = sum(P[s * m * n + i + j * m] for s in range(slices)) + b * C[i + j * ldc]
+        return close(unpack(got, BT), want, range(len(C)), TOL(1e-6))
     if what == "dgmm":
         right, incx = opts["right"], opts["incx"]
         lda, ldc = m + 1, m + 2
@@ -1622,12 +1948,13 @@ def case_level3(a, obj, tmp, what, opts, rnd):
         lda, ldc = (k if trans else n) + 1, n + 2
         A, C = mat(0, n if trans else k, lda, rnd), mat(0, n, ldc, rnd)
         (got,) = run(a, obj, K("agx_ssyrk"), [("buf", pack(A, BT)), ("buf", pack(C, BT), True), ("i64", n), ("i64", k), ("i64", lda),
-                                           ("i64", ldc), ("i64", upper), ("i64", trans), (S(), alpha), (S(), beta)],
-                     (16, 8), (16, 4), tmp)
+                                           ("i64", ldc), ("i64", upper), ("i64", trans), (S(), alpha), (S(), beta),
+                                           ("i64", opts["nb"])], (16, 8), (16, 4), tmp)
         want = list(C)
+        nb = opts["nb"]
         for j in range(n):
             for i in range(n):
-                if (i <= j) if upper else (i >= j):
+                if ((i <= j) if upper else (i >= j)) and (nb == 0 or i // nb == j // nb):
                     s = sum(at(A, i, l, lda, trans) * at(A, j, l, lda, trans) for l in range(k))
                     want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
         return close(unpack(got, BT), want, range(len(C)), TOL(1e-5))
@@ -1638,11 +1965,13 @@ def case_level3(a, obj, tmp, what, opts, rnd):
         C = mat(0, n, ldc, rnd)
         (got,) = run(a, obj, K("agx_ssyr2k"), [("buf", pack(A, BT)), ("buf", pack(B, BT)), ("buf", pack(C, BT), True), ("i64", n),
                                               ("i64", k), ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", upper),
-                                              ("i64", trans), (S(), alpha), (S(), beta)], (16, 8), (16, 4), tmp)
+                                              ("i64", trans), (S(), alpha), (S(), beta), ("i64", opts["nb"])],
+                     (16, 8), (16, 4), tmp)
         want = list(C)
+        nb = opts["nb"]
         for j in range(n):
             for i in range(n):
-                if (i <= j) if upper else (i >= j):
+                if ((i <= j) if upper else (i >= j)) and (nb == 0 or i // nb == j // nb):
                     s = sum(at(A, i, l, lda, trans) * at(B, j, l, ldb, trans) + at(B, i, l, ldb, trans) * at(A, j, l, lda, trans)
                             for l in range(k))
                     want[i + j * ldc] = alpha * s + beta * C[i + j * ldc]
@@ -1651,6 +1980,13 @@ def case_level3(a, obj, tmp, what, opts, rnd):
     na = n if right else m
     lda, ldb = na + 1, m + 2
     A, B = mat(0, na, lda, rnd), mat(0, n, ldb, rnd)
+    if what == "full":
+        sym, unit = opts["sym"], opts["unit"]
+        F = [math.nan] * (na * na)
+        (got,) = run(a, obj, K("agx_sfull"), [("buf", pack(A, BT)), ("buf", pack(F, BT), True), ("i64", na), ("i64", lda),
+                                           ("i64", upper), ("i64", unit), ("i64", sym)], (16, 8), (16, 4), tmp)
+        want = [tri(A, i, j, lda, upper, sym, unit) for j in range(na) for i in range(na)]
+        return close(unpack(got, BT), want, range(na * na), TOL(0))
     if what in ("symm", "trmm"):
         sym = what == "symm"
         trans, unit = (0, 0) if sym else (opts["trans"], opts["unit"])
@@ -1758,7 +2094,25 @@ def case_cblas(a, obj, tmp, what, o, rnd):
         for j in range(n):
             for i in range(m):
                 want[i + j * ldc] = alpha * sum(cop(A, i, l, lda, opa) * cop(B, l, j, ldb, opb) for l in range(k)) + beta * C[i + j * ldc]
-        return cclose(cunpack(got), want, range(len(C)), tol)
+        bad = cclose(cunpack(got), want, range(len(C)), tol)
+        # on the real GEMM (zluda_blas_agx): the expansion of alpha op(A) (2m x 2k, leading dimension 2m), op(B) as
+        # it is or copied (real 2k x n), C scaled by beta first as beta is not real; the real GEMM here
+        (xa,) = run(a, obj, K("agx_cgemm_expand_a"), [("buf", cpack(A)), ("buf", pack([math.nan] * (4 * m * k), BT), True), ("i64", m),
+                                                     ("i64", k), ("i64", lda), ("i64", opa)] + cs(alpha), (16, 8), (16, 4), tmp)
+        if opb:
+            (xb,) = run(a, obj, K("agx_cgemm_copy_b"), [("buf", cpack(B)), ("buf", pack([math.nan] * (2 * k * n), BT), True), ("i64", k),
+                                                       ("i64", n), ("i64", ldb), ("i64", opb)], (16, 8), (16, 4), tmp)
+            rb, ldrb = unpack(xb, BT), 2 * k
+        else:
+            rb, ldrb = interleave(B), 2 * ldb
+        (sc,) = run(a, obj, K("agx_cgemm_scale_c"), [("buf", cpack(C), True), ("i64", m), ("i64", n), ("i64", ldc)] + cs(beta),
+                    (16, 8), (16, 4), tmp)
+        ra, rc = unpack(xa, BT), list(unpack(sc, BT))
+        for j in range(n):
+            for i in range(2 * m):
+                rc[i + j * 2 * ldc] += sum(ra[i + l * 2 * m] * rb[l + j * ldrb] for l in range(2 * k))
+        bad += cclose([complex(rc[2 * i], rc[2 * i + 1]) for i in range(len(C))], want, range(len(C)), tol)
+        return bad
     if what == "hemm":
         m, n = 5, 4
         right, upper, herm = o["right"], o["upper"], o["herm"]
@@ -1776,7 +2130,25 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                 else:
                     v = sum(cherm(A, i, l, lda, upper, herm) * B[l + j * ldb] for l in range(m))
                 want[i + j * ldc] = alpha * v + beta * C[i + j * ldc]
-        return cclose(cunpack(got), want, range(len(C)), tol)
+        bad = cclose(cunpack(got), want, range(len(C)), tol)
+        # on the real GEMM (zluda_blas_agx): left, alpha A expanded times B's real view; right, alpha B expanded
+        # times A made full (its real view); beta C added here
+        (full,) = run(a, obj, K("agx_chemm_full"), [("buf", cpack(A)), ("buf", pack([math.nan] * ((8 if not right else 2) * na * na), BT), True),
+                                                   ("i64", na), ("i64", lda), ("i64", upper), ("i64", herm), ("i64", int(not right))] + cs(alpha),
+                      (16, 8), (16, 4), tmp)
+        if right:
+            (xb,) = run(a, obj, K("agx_cgemm_expand_a"), [("buf", cpack(B)), ("buf", pack([math.nan] * (4 * m * n), BT), True), ("i64", m),
+                                                         ("i64", n), ("i64", ldb), ("i64", 0)] + cs(alpha), (16, 8), (16, 4), tmp)
+            ra, lra, rb, lrb, kk = unpack(xb, BT), 2 * m, unpack(full, BT), 2 * n, 2 * n
+        else:
+            ra, lra, rb, lrb, kk = unpack(full, BT), 2 * m, interleave(B), 2 * ldb, 2 * m
+        rc = [0.0] * (2 * ldc * n)
+        for j in range(n):
+            for i in range(2 * m):
+                rc[i + j * 2 * ldc] = sum(ra[i + l * lra] * rb[l + j * lrb] for l in range(kk))
+        bad += cclose([complex(rc[2 * i], rc[2 * i + 1]) + beta * C[i] for i in range(len(C))], want,
+                      [i + j * ldc for j in range(n) for i in range(m)], tol)
+        return bad
     if what == "rankk":
         n, k = 5, 3
         upper, op, herm, two = o["upper"], o["op"], o["herm"], o["two"]
@@ -1789,12 +2161,13 @@ def case_cblas(a, obj, tmp, what, o, rnd):
             B, ldb = A, lda
         (got,) = run(a, obj, K("agx_crankk"), [("buf", cpack(A)), ("buf", cpack(B)), ("buf", cpack(C), True), ("i64", n), ("i64", k),
                                                ("i64", lda), ("i64", ldb), ("i64", ldc), ("i64", upper), ("i64", op), ("i64", herm),
-                                               ("i64", two)] + cs(a1) + cs(a2) + cs(b), (16, 8), (16, 4), tmp)
+                                               ("i64", two)] + cs(a1) + cs(a2) + cs(b) + [("i64", o["nb"])], (16, 8), (16, 4), tmp)
         cj = (lambda z: z.conjugate()) if herm else (lambda z: z)
         want = list(C)
+        nb = o["nb"]
         for j in range(n):
             for i in range(n):
-                if (i <= j) if upper else (i >= j):
+                if ((i <= j) if upper else (i >= j)) and (nb == 0 or i // nb == j // nb):
                     v = a1 * sum(cop(A, i, l, lda, op) * cj(cop(B, j, l, ldb, op)) for l in range(k))
                     if two:
                         v += a2 * sum(cop(B, i, l, ldb, op) * cj(cop(A, j, l, lda, op)) for l in range(k))
@@ -1805,16 +2178,21 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                     want[i + j * ldc] = complex(r.real, 0) if herm and i == j else r
         return cclose(cunpack(got), want, range(len(C)), tol)
     if what == "gemv":
-        m, n, op, hmode, incx, incy = 6, 4, o["op"], o.get("hmode", 0), o["incx"], o["incy"]
+        m, n, op, hmode, incx, incy = o.get("m", 6), 4, o["op"], o.get("hmode", 0), o["incx"], o["incy"]
         if hmode:
             m = n
         lda = m + 2
         ylen, xlen = (n, n) if hmode else ((n, m) if op else (m, n))
         A = crand(lda * n, rnd)
         x, y = crand(1 + (xlen - 1) * abs(incx), rnd), crand(1 + (ylen - 1) * abs(incy), rnd)
-        (got,) = run(a, obj, K("agx_cgemv"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True), ("i64", m), ("i64", n),
-                                              ("i64", lda), ("i64", incx), ("i64", incy), ("i64", op), ("i64", hmode)]
-                     + cs(alpha) + cs(beta), (32, 1), (32, 1), tmp)
+        if op and not hmode:  # a SIMD-group per element of y, as zluda_blas_agx launches it
+            (got,) = run(a, obj, K("agx_cgemv_t"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True),
+                                                    ("i64", m), ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy),
+                                                    ("i64", op)] + cs(alpha) + cs(beta), (32 * ylen, 1), (32, 1), tmp)
+        else:
+            (got,) = run(a, obj, K("agx_cgemv"), [("buf", cpack(A)), ("buf", cpack(x)), ("buf", cpack(y), True), ("i64", m),
+                                                  ("i64", n), ("i64", lda), ("i64", incx), ("i64", incy), ("i64", op),
+                                                  ("i64", hmode)] + cs(alpha) + cs(beta), grid1(ylen), (32, 1), tmp)
         want = list(y)
         for i in range(ylen):
             elem = (lambda l: cherm(A, i, l, lda, hmode == 1, True)) if hmode else (lambda l: cop(A, i, l, lda, op))
@@ -1890,7 +2268,14 @@ def case_cblas(a, obj, tmp, what, o, rnd):
                     else:
                         v = sum(tri(i, l) * B[l + j * ldb] for l in range(m))
                     want[i + j * ldc] = alpha * v
-            return cclose(cunpack(got), want, range(len(C)), tol)
+            bad = cclose(cunpack(got), want, range(len(C)), tol)
+            # the triangle made full (zluda_blas_agx's trmm on the GEMM): op of it is tri
+            (full,) = run(a, obj, K("agx_ctri_full"), [("buf", cpack(A)), ("buf", pack([math.nan] * (2 * na * na), BT), True), ("i64", na),
+                                                      ("i64", lda), ("i64", upper), ("i64", unit)], (16, 8), (16, 4), tmp)
+            F = cunpack(full)
+            bad += cclose([cop(F, r, c, na, op) for c in range(na) for r in range(na)], [tri(r, c) for c in range(na) for r in range(na)],
+                          range(na * na), 0)
+            return bad
         for d in range(na):
             A[d + d * lda] = complex(2.0 + 0.25 * d, 0.5)
         lower = int((not upper) ^ bool(op) ^ bool(right))
@@ -1977,10 +2362,13 @@ def cblas_cases(a, obj, tmp, rnd):
     for upper in (0, 1):
         for name, op, herm, two in (("herk N", 0, 1, 0), ("herk C", 2, 1, 0), ("syrk N", 0, 0, 0), ("syrk T", 1, 0, 0),
                                     ("her2k N", 0, 1, 1), ("her2k C", 2, 1, 1), ("syr2k N", 0, 0, 1), ("syr2k T", 1, 0, 1)):
-            cases.append(("c%s upper %d" % (name, upper),
-                          lambda o={"upper": upper, "op": op, "herm": herm, "two": two}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
+            for nb in (0, 2):  # nb 2: the diagonal blocks only
+                cases.append(("c%s upper %d nb %d" % (name, upper, nb),
+                              lambda o={"upper": upper, "op": op, "herm": herm, "two": two, "nb": nb}: case_cblas(a, obj, tmp, "rankk", o, rnd)))
     for op in (0, 1, 2):
         cases.append(("cgemv op %d inc -2,3" % op, lambda o={"op": op, "incx": -2, "incy": 3}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
+        cases.append(("cgemv op %d m=70 (several elements a lane)" % op,
+                      lambda o={"op": op, "incx": 1, "incy": 1, "m": 70}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
     for hmode in (1, 2):
         cases.append(("chemv %s inc 1,-1" % ("upper" if hmode == 1 else "lower"),
                       lambda o={"op": 0, "hmode": hmode, "incx": 1, "incy": -1}: case_cblas(a, obj, tmp, "gemv", o, rnd)))
@@ -2017,6 +2405,8 @@ def main():
     ap.add_argument("--objcopy", required=True)
     ap.add_argument("--readelf", required=True)
     ap.add_argument("--chips", default=None)
+    ap.add_argument("--kernel-suffix", default="",
+                    help="the kernels' names end in this (agx-build-fatbin.py --kernel-suffix)")
     ap.add_argument("fat")
     a = ap.parse_args()
     entries = fat_entries(open(a.fat, "rb").read())
@@ -2033,6 +2423,9 @@ def main():
             else:
                 os.environ.pop("AGX_STRICT", None)
             records = kernel_records(obj, a, tmp)
+            if a.kernel_suffix:
+                records = {k[:-len(a.kernel_suffix)] if k.endswith(a.kernel_suffix) else k: v
+                           for k, v in records.items()}
             if "agx_dnn_act_fwd" in records:
                 cases = []
                 for mode in range(7):
@@ -2040,6 +2433,9 @@ def main():
                         for beta in (0.0, 0.5):
                             cases.append(("dnn act mode %d %s beta %g" % (mode, "bwd" if bwd else "fwd", beta),
                                           lambda m=mode, b=bwd, be=beta: case_act(a, obj, tmp, m, b, be, rnd)))
+                    for bwd in (0, 1):
+                        cases.append(("dnn act mode %d %s packed" % (mode, "bwd" if bwd else "fwd"),
+                                      lambda m=mode, b=bwd: case_act(a, obj, tmp, m, b, 0.5, rnd, True)))
                 for kind in (0, 1):
                     cases.append(("dnn convert %s" % ("f16", "bf16")[kind], lambda k=kind: case_dnn_convert(a, obj, tmp, k, rnd)))
                 for start in range(0, len(PW_MODES), 8):
@@ -2049,11 +2445,16 @@ def main():
                     cases.append(("dnn graph reduction op %d" % op, lambda o=op: case_reduce_graph(a, obj, tmp, o, rnd)))
                 for op, label in ((0, "add bias"), (1, "set"), (2, "scale")):
                     cases.append(("dnn %s" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd)))
+                    cases.append(("dnn %s packed" % label, lambda op=op: case_pointwise(a, obj, tmp, op, rnd, True)))
                 for inst in (0, 1):
                     for algo in (0, 1, 2):
                         for bwd in (0, 1):
                             cases.append(("dnn softmax %s algo %d %s" % ("instance" if inst else "channel", algo, "bwd" if bwd else "fwd"),
                                           lambda i=inst, al=algo, b=bwd: case_softmax(a, obj, tmp, i, al, b, rnd)))
+                for algo in (1, 2):  # rows longer than a SIMD-group
+                    for bwd in (0, 1):
+                        cases.append(("dnn softmax instance algo %d %s 2x4x5x3" % (algo, "bwd" if bwd else "fwd"),
+                                      lambda al=algo, b=bwd: case_softmax(a, obj, tmp, 1, al, b, rnd, (2, 4, 5, 3))))
                 for mode in (0, 1, 2):
                     for bwd in (0, 1):
                         for R, S, pad, st in ((3, 3, (1, 1), (2, 2)), (2, 3, (0, 1), (1, 2))):
@@ -2063,6 +2464,9 @@ def main():
                     for what in ("stats", "infer", "apply_inv", "bwd"):
                         cases.append(("dnn batchnorm %s %s" % ("spatial" if sp else "per-activation", what),
                                       lambda sp=sp, w=what: case_bn(a, obj, tmp, sp, w, rnd)))
+                for what in ("stats", "bwd"):  # several elements a lane
+                    cases.append(("dnn batchnorm spatial %s 2x3x6x7" % what,
+                                  lambda w=what: case_bn(a, obj, tmp, 1, w, rnd, (2, 3, 6, 7))))
             elif "agx_blas_vec" in records:
                 cases = []
                 for op, label in ((0, "axpy"), (1, "scal"), (2, "copy"), (3, "swap")):
@@ -2081,20 +2485,30 @@ def main():
                                       lambda t=trans, b=beta: case_sgemv(a, obj, tmp, 13, 9, t, -2, 3, b, rnd)))
                     cases.append(("sgemv 40x5 trans %d inc 1,1" % trans,
                                   lambda t=trans: case_sgemv(a, obj, tmp, 40, 5, t, 1, 1, 1.0, rnd)))
+                    cases.append(("sgemv 100x7 trans %d beta 0.5 inc -1,1" % trans,
+                                  lambda t=trans: case_sgemv(a, obj, tmp, 100, 7, t, -1, 1, 0.5, rnd)))
                 for ta in (0, 1):
                     for tb in (0, 1):
                         cases.append(("sgeam ta %d tb %d" % (ta, tb), lambda ta=ta, tb=tb: case_level3(a, obj, tmp, "geam", {"ta": ta, "tb": tb}, rnd)))
+                for sl in (1, 3, 16):
+                    for bt in (True, False):
+                        cases.append(("ssum_slices %d beta %d" % (sl, bt), lambda sl=sl, bt=bt: case_level3(a, obj, tmp, "sum_slices", {"slices": sl, "beta": bt}, rnd)))
                 for right in (0, 1):
                     cases.append(("sdgmm right %d inc -2" % right, lambda r=right: case_level3(a, obj, tmp, "dgmm", {"right": r, "incx": -2}, rnd)))
                 for upper in (0, 1):
                     for trans in (0, 1):
-                        cases.append(("ssyrk upper %d trans %d" % (upper, trans),
-                                      lambda u=upper, t=trans: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t}, rnd)))
-                        cases.append(("ssyr2k upper %d trans %d" % (upper, trans),
-                                      lambda u=upper, t=trans: case_level3(a, obj, tmp, "syr2k", {"upper": u, "trans": t}, rnd)))
+                        for nb in (0, 2):  # nb 2: the diagonal blocks only
+                            cases.append(("ssyrk upper %d trans %d nb %d" % (upper, trans, nb),
+                                          lambda u=upper, t=trans, nb=nb: case_level3(a, obj, tmp, "syrk", {"upper": u, "trans": t, "nb": nb}, rnd)))
+                        for nb in (0, 2):
+                            cases.append(("ssyr2k upper %d trans %d nb %d" % (upper, trans, nb),
+                                          lambda u=upper, t=trans, nb=nb: case_level3(a, obj, tmp, "syr2k", {"upper": u, "trans": t, "nb": nb}, rnd)))
                     for right in (0, 1):
                         cases.append(("ssymm right %d upper %d" % (right, upper),
                                       lambda u=upper, r=right: case_level3(a, obj, tmp, "symm", {"upper": u, "right": r}, rnd)))
+                        for sym, unit in ((1, 0), (0, 0), (0, 1)):
+                            o = {"upper": upper, "right": right, "sym": sym, "unit": unit}
+                            cases.append(("sfull %s" % o, lambda o=o: case_level3(a, obj, tmp, "full", o, rnd)))
                         for trans in (0, 1):
                             for unit in (0, 1):
                                 o = {"upper": upper, "right": right, "trans": trans, "unit": unit}
@@ -2110,6 +2524,7 @@ def main():
             elif "agx_lu_pivot" in records:
                 cases = [("solver %s" % w, lambda w=w: case_solver(a, obj, tmp, w, rnd))
                          for w in ("lu", "lu_t", "chol_l", "chol_u", "chol_fail", "qr")]
+                cases.append(("solver qr_wy", lambda: case_qr_wy(a, obj, tmp, rnd)))
                 cases += [("solver %s" % w, lambda w=w: case_eigsvd(a, obj, tmp, w, rnd)) for w in ("svd", "eig_l", "eig_u")]
                 if "agx_lu_pivot_f64" in records:
                     cases += [("f64 " + label, lambda f=f: with_t("d", f)) for label, f in list(cases)]
@@ -2145,6 +2560,9 @@ def main():
                             ("fft%s radix2 n=16 x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 16, 3, 1, 16, inv, True, rnd, t)),
                             ("fft%s radix2 n=64 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 64, 2, 1, 64, inv, True, rnd, t)),
                             ("fft%s radix2 n=8 columns of 8x4 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 8, 4, 4, 1, inv, True, rnd, t)),
+                            ("fft%s radix2 only n=32 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 32, 2, 1, 32, inv, "r2", rnd, t)),
+                            ("fft%s n=256 x1 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 256, 1, 1, 256, inv, True, rnd, t)),
+                            ("fft%s n=32 columns of 32x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 32, 3, 3, 1, inv, True, rnd, t)),
                             ("dft%s n=12 x2 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 12, 2, 1, 12, inv, False, rnd, t)),
                             ("dft%s n=7 columns of 7x3 inverse=%d" % (p, inv), lambda inv=inv, t=t: case_fft(a, obj, tmp, 7, 3, 3, 1, inv, False, rnd, t)),
                         ]
@@ -2163,12 +2581,26 @@ def main():
                             for alpha, beta in ((1.0, 0.0), (1.5, 0.5)):
                                 cases.append(("conv %s %s %s a=%g b=%g" % (which, "f32" if t == "f" else "f16", label, alpha, beta),
                                               lambda t=t, w=which, cv=cv, al=alpha, be=beta: case_conv(a, obj, tmp, w, cv, al, be, rnd, t)))
+                    for label, cv in convs[1:2] + [
+                            ("3x2 pad 1,0 stride 2,1 dil 1,2", Conv(2, 4, 7, 6, 6, 3, 2, (1, 0), (2, 1), (1, 2), 1, 0, x_w_pad=3)),
+                            ("5x5 pad 2 stride 2 conv mode", Conv(1, 2, 9, 8, 3, 5, 5, (2, 2), (2, 2), (1, 1), 1, 1))]:
+                        for fg in (False, True):
+                            cases.append(("conv im2col %s %s %s" % ("dw" if fg else "fwd", "f32" if t == "f" else "f16",
+                                                                    label),
+                                          lambda t=t, cv=cv, fg=fg: case_conv_im2col(a, obj, tmp, cv, rnd, t, fg)))
+                        for alpha, beta in ((1.0, 0.0), (1.5, 0.5)):
+                            cases.append(("conv col2im dx %s %s a=%g b=%g" % ("f32" if t == "f" else "f16", label, alpha,
+                                                                              beta),
+                                          lambda t=t, cv=cv, al=alpha, be=beta: case_conv_col2im(a, obj, tmp, cv, al, be,
+                                                                                                  rnd, t)))
             elif "agx_epilogue_f32" in records:
                 cases = []
                 for t in ("f", "e"):
                     for has_bias, act, label in ((1, 0, "bias"), (0, 1, "relu"), (1, 1, "bias+relu"), (1, 2, "bias+gelu"), (0, 2, "gelu")):
                         cases.append(("epilogue %s %s 37x11" % ("f32" if t == "f" else "f16", label),
                                       lambda t=t, hb=has_bias, ac=act: case_epilogue(a, obj, tmp, 37, 11, hb, ac, rnd, t)))
+                    cases.append(("epilogue %s batched 3 bias relu" % ("f32" if t == "f" else "f16"),
+                                  lambda t=t: case_epilogue(a, obj, tmp, 21, 9, 1, 1, rnd, t, batch=3)))
             elif "agx_sgemm_tile64" in records:
                 cases = [
                     ("tile64 128x64x40 a=1.5 b=0.5", lambda: case_tile(a, obj, tmp, 128, 64, 40, 1.5, 0.5, rnd)),
@@ -2177,6 +2609,38 @@ def main():
                     ("generic 20x33x7 TN", lambda: case_generic(a, obj, tmp, 20, 33, 7, 1, 0, -2.0, 1.0, rnd)),
                     ("generic 17x9x31 NT b=0", lambda: case_generic(a, obj, tmp, 17, 9, 31, 0, 1, 0.5, 0.0, rnd)),
                     ("generic 5x40x3 TT", lambda: case_generic(a, obj, tmp, 5, 40, 3, 1, 1, 1.0, -1.0, rnd)),
+                    ("dot 300x1x200 TN", lambda: case_generic(a, obj, tmp, 300, 1, 200, 1, 0, 1.0, 0.0, rnd,
+                                                              "agx_sgemm_dot")),
+                    ("dot 3x70x150 NN b=0.5", lambda: case_generic(a, obj, tmp, 3, 70, 150, 0, 0, -1.5, 0.5, rnd,
+                                                                   "agx_sgemm_dot")),
+                    ("dot 50x8x33 TT b=1", lambda: case_generic(a, obj, tmp, 50, 8, 33, 1, 1, 0.5, 1.0, rnd,
+                                                                "agx_sgemm_dot")),
+                    ("split 70x130x21 b=0.5", lambda: case_split(a, obj, tmp, 70, 130, 21, 1.5, 0.5, rnd)),
+                    ("split 128x77x8 b=0 (C NaN)", lambda: case_split(a, obj, tmp, 128, 77, 8, 1.0, 0.0, rnd)),
+                    ("split 100x64x19", lambda: case_split(a, obj, tmp, 100, 64, 19, -1.0, 1.0, rnd)),
+                    ("tile64 ta 64x128x24", lambda: case_tile(a, obj, tmp, 64, 128, 24, 1.0, 0.5, rnd, ta=True)),
+                    ("tile64 tb 128x64x16", lambda: case_tile(a, obj, tmp, 128, 64, 16, 1.5, 0.0, rnd, tb=True)),
+                    ("tile64 tatb 64x64x40", lambda: case_tile(a, obj, tmp, 64, 64, 40, -1.0, 1.0, rnd, ta=True, tb=True)),
+                    ("split TN 77x130x21", lambda: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, ta=True)),
+                    ("split NT 130x70x13 b=0", lambda: case_split(a, obj, tmp, 130, 70, 13, 1.5, 0.0, rnd, tb=True)),
+                    ("split TT 64x100x8", lambda: case_split(a, obj, tmp, 64, 100, 8, -1.0, 1.0, rnd, ta=True, tb=True)),
+                    ("batched 3 x 70x65x40 TN", lambda: case_batched(a, obj, tmp, 70, 65, 40, 3, 1.0, 0.5, rnd,
+                                                                     ta=True)),
+                    ("batched 2 x 64x128x16 NT b=0", lambda: case_batched(a, obj, tmp, 64, 128, 16, 2, -1.0, 0.0, rnd,
+                                                                          tb=True)),
+                    ("batched 4 x 5x1x50 NN (dot)", lambda: case_batched(a, obj, tmp, 5, 1, 50, 4, 1.0, 0.0, rnd)),
+                    ("conv 1x1 as GEMM 2x40x8x9 to 72", lambda: case_conv_pointwise(a, obj, tmp, 2, 40, 8, 9, 72,
+                                                                                    1.0, 0.5, rnd)),
+                    ("conv 1x1 as GEMM 1x3x5x5 to 4 b=0", lambda: case_conv_pointwise(a, obj, tmp, 1, 3, 5, 5, 4,
+                                                                                      -0.5, 0.0, rnd)),
+                    # strips on the dot kernel: one column of C beside the tile (TN), five rows below it (NN)
+                    ("split 70x130x21 odd ld (unaligned tile)",
+                     lambda: case_split(a, obj, tmp, 70, 130, 21, 1.5, 0.5, rnd, odd=True)),
+                    ("split TT 77x64x13 odd ld (unaligned tile)",
+                     lambda: case_split(a, obj, tmp, 77, 64, 13, 1.0, 0.0, rnd, ta=True, tb=True, odd=True)),
+                    ("split TN 128x65x64 (dot strip)",
+                     lambda: case_split(a, obj, tmp, 128, 65, 64, 1.0, 0.5, rnd, ta=True)),
+                    ("split NN 69x128x40 (dot strip)", lambda: case_split(a, obj, tmp, 69, 128, 40, -1.0, 0.0, rnd)),
                 ]
                 dk = "agx_dgemm_generic"
                 cases += [
@@ -2186,6 +2650,8 @@ def main():
                     ("d generic 7x6x11 NT b=0 (C NaN)",
                      lambda: case_generic(a, obj, tmp, 7, 6, 11, 0, 1, 0.5, 0.0, rnd, dk, "d", "d")),
                     ("d generic 4x10x3 TT", lambda: case_generic(a, obj, tmp, 4, 10, 3, 1, 1, 1.0, -1.0, rnd, dk, "d", "d")),
+                    ("d dot 40x2x100 TN b=0.25",
+                     lambda: case_generic(a, obj, tmp, 40, 2, 100, 1, 0, 1.0, 0.25, rnd, "agx_dgemm_dot", "d", "d")),
                 ]
             else:
                 cases = []
@@ -2201,7 +2667,27 @@ def main():
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 21, 13, 9, 1, 0, 1.0, 0.5, rnd, gk, "e", c)),
                         ("h generic C %s 6x30x17 NT b=0" % ct,
                          lambda gk=gk, c=c: case_generic(a, obj, tmp, 6, 30, 17, 0, 1, -1.0, 0.0, rnd, gk, "e", c)),
+                        ("h dot C %s 64x1x96 TN b=0.5" % ct,
+                         lambda gk=gk, c=c: case_generic(a, obj, tmp, 64, 1, 96, 1, 0, 1.0, 0.5, rnd,
+                                                         gk.replace("_generic", "_dot"), "e", c)),
+                        ("h split C %s 70x130x21 b=0.5" % ct,
+                         lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c)),
+                        ("h tile64 ta C %s 64x64x16" % ct,
+                         lambda tk=tk, c=c: case_tile(a, obj, tmp, 64, 64, 16, 1.0, 0.5, rnd, tk, "e", c, ta=True)),
+                        ("h split C %s 70x130x21 odd ld (unaligned tile)" % ct,
+                         lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 70, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
+                                                              odd=True)),
+                        ("h split TN C %s 77x130x21" % ct,
+                         lambda tk=tk, gk=gk, c=c: case_split(a, obj, tmp, 77, 130, 21, 1.0, 0.5, rnd, tk, gk, "e", c,
+                                                              ta=True)),
                     ]
+                    cases.append(("h batched C %s 3 x 70x65x24 TN" % ct,
+                                  lambda tk=tk, gk=gk, c=c: case_batched(a, obj, tmp, 70, 65, 24, 3, 1.0, 0.5, rnd, tk, gk,
+                                                                         "e", c, ta=True)))
+                    if ct == "f16":  # f16 convolutions keep f16 data
+                        cases.append(("h conv 1x1 as GEMM 2x24x8x8 to 64",
+                                      lambda tk=tk, gk=gk: case_conv_pointwise(a, obj, tmp, 2, 24, 8, 8, 64, 1.0, 0.5,
+                                                                               rnd, tk, gk, "e")))
             for label, f in cases:
                 try:
                     bad = f()

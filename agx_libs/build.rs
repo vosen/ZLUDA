@@ -1,6 +1,8 @@
 //! Compiles the MLIR kernels in kernels/ for every AGX chip into fat AGX objects, with the LLVM fork's
 //! mlir/utils/agx-kernels/agx-build-fatbin.py and the mlir-opt, mlir-translate and llc of the LLVM build in
 //! ZLUDA_LLVM_BUILD_DIR. The LLVM sources are found through ZLUDA_LLVM_SOURCE_DIR or the build's CMakeCache.txt.
+//! The kernels go through AIR (`--via-air`: arith-emulate-f64 and convert-gpu-to-air in MLIR, AIR's portable passes,
+//! then the AGX backend's agx-lower-air), so they use only what AIR has.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -79,6 +81,17 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script.display());
     let bin = build.join("bin");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    // Wide constants in uniforms (.agx.kernels extension 6, which agx_runtime sets at launch): fewer registers,
+    // more resident SIMD-groups. ZLUDA_AGX_UNIFORM_CONSTANTS=0 builds without.
+    println!("cargo:rerun-if-env-changed=ZLUDA_AGX_UNIFORM_CONSTANTS");
+    let mut llc_args: Vec<&str> =
+        if env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") { vec![] } else { vec!["--llc-arg=-agx-uniform-constants"] };
+    // Division by a 32-bit kernel argument with a multiplier and shifts agx_runtime computes at launch
+    // (.agx.kernels extension 7). ZLUDA_AGX_LAUNCH_DIVISORS=0 builds without.
+    println!("cargo:rerun-if-env-changed=ZLUDA_AGX_LAUNCH_DIVISORS");
+    if !env::var("ZLUDA_AGX_LAUNCH_DIVISORS").is_ok_and(|v| v == "0") {
+        llc_args.push("--llc-arg=-agx-launch-divisors");
+    }
     for (name, wide) in [("fft", false), ("blas", true), ("blasc", true), ("sparse", false), ("solver", false)] {
         let mut text = read(&format!("kernels/{name}.mlir"));
         if name == "sparse" {
@@ -86,10 +99,20 @@ fn main() {
         }
         with_f64_copy(&text, &out_dir.join(format!("{name}.mlir")), wide);
     }
-    for name in ["sgemm", "hgemm", "epilogue", "conv", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
+    // The libraries compile side by side: each has a sequential front end that leaves processors idle.
+    let mut children = Vec::new();
+    // conv_i32, dnn_i32: the convolutions and the DNN kernels again with 32-bit indices (names ending in _i32),
+    // which zluda_dnn_agx runs when every offset fits: each 64-bit index division costs a run-time 32-bit check
+    // and a slow path.
+    for name in ["sgemm", "hgemm", "epilogue", "conv", "conv_i32", "dnn_i32", "fft", "sparse", "blas", "blasc", "dnn", "rand", "solver"] {
         let out = out_dir.join(format!("{name}.agxfat"));
-        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") { out_dir.join(format!("{name}.mlir")) } else { PathBuf::from(format!("kernels/{name}.mlir")) };
-        let status = Command::new("python3")
+        let src = if matches!(name, "fft" | "blas" | "blasc" | "sparse" | "solver") {
+            out_dir.join(format!("{name}.mlir"))
+        } else {
+            PathBuf::from(format!("kernels/{}.mlir", name.trim_end_matches("_i32")))
+        };
+        let narrow: &[&str] = if name.ends_with("_i32") { &["--index-bitwidth=32", "--kernel-suffix=_i32"] } else { &[] };
+        let child = Command::new("python3")
             .arg(&script)
             .arg("--mlir-opt")
             .arg(bin.join("mlir-opt"))
@@ -97,11 +120,17 @@ fn main() {
             .arg(bin.join("mlir-translate"))
             .arg("--llc")
             .arg(bin.join("llc"))
+            .args(&llc_args)
+            .args(narrow)
+            .arg("--via-air")
             .arg(&src)
             .arg("-o")
             .arg(&out)
-            .status()
+            .spawn()
             .unwrap_or_else(|e| panic!("{}: {e}", script.display()));
-        assert!(status.success(), "compiling kernels/{name}.mlir failed");
+        children.push((name, child));
+    }
+    for (name, mut child) in children {
+        assert!(child.wait().unwrap().success(), "compiling kernels/{name}.mlir failed");
     }
 }

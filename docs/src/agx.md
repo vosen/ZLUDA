@@ -47,6 +47,11 @@ zoc --target agx --arch agx-g14g kernel.ptx
 `zoc` writes the translated LLVM IR (`.ll`), the IR linked with the helper
 functions and optimized (`.linked.ll`, `.opt.ll`), the assembly (`.asm`) and
 an ELF object (`.o`) with each kernel's machine code in `.text`.
+`zoc --object-only` writes the object alone, skipping the IR text and the
+second code generation of the assembly; `zluda_agx` compiles that way (the
+object's `.agx.kernels` records describe its kernels). `zoc --serve` compiles
+requests from stdin in one process (the protocol is in `compiler/src/main.rs`),
+with the same output as one `zoc` per module.
 
 The assembly lists the resources of each kernel: uniform registers,
 general purpose registers, threadgroup memory, stack and, when the module has
@@ -71,9 +76,13 @@ an error.
 * The `__zluda_ptx_impl_*` helper functions are implemented in LLVM IR in
   `ptx/lib/zluda_ptx_impl_agx.ll` on top of the `llvm.agx.*` intrinsics
   (clang has no AGX target, so the C++ implementation cannot be reused).
-* `llvm_zluda::compile_agx` links the helpers (internal to the module, so
-  unused ones are removed), optimizes and generates code; backend errors are
-  returned as compilation errors.
+* `llvm_zluda::compile_agx` links the helpers the module uses (and those they
+  use) from the library, which `ptx/build.rs` assembles to bitcode and which is
+  loaded lazily, so the rest is never parsed or optimized; the linked helpers
+  are internal to the module. It then optimizes and generates code; backend
+  errors are returned as compilation errors. A small kernel compiles in about
+  10 ms, the 195 kernels of `ptx/src/test/spirv_run` in 3 s (from 21 s with the
+  whole library linked and every output written).
 * Integer division and remainder give the results of NVIDIA GPUs where PTX
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by
@@ -856,8 +865,8 @@ Mesa form. What the backend does differently:
 - device and threadgroup loads, stores and atomics are always encoded in their long form, as Mesa packs them.
 
 The mode is part of the compilation cache key. The library kernels (`agx_libs`) carry a `CHIP+agx-strict` build of every
-M1 and M2 entry, compiled with `#agxir.target<..., features = "+agx-strict">` so that the MLIR `agx` operations take
-their portable forms, and `zluda_agx` loads those entries in this mode. The AGX Performance Simulator's
+M1 and M2 entry, compiled by the AGX backend with `-mattr=+agx-strict`, and `zluda_agx` loads those entries in this
+mode. The AGX Performance Simulator's
 `--agx-strict GPU` (or `AGX_STRICT=GPU`) runs code with the same check, so a test fails on any instruction Mesa would
 not emit; `agx_ptx_formalization_check.py --agx-strict` and `test_kernels.py` (for `+agx-strict` entries) use it.
 
@@ -1003,6 +1012,16 @@ Launches of checked kernels, captured launches and kernels that use the stack or
 `ZLUDA_AGX_GRAPH_BATCH=0` submits one command per launch; with `ZLUDA_AGX_PROFILE`, the launches of a command share
 its time equally.
 
+`ZLUDA_AGX_LAUNCH_BATCH=1` (off by default, not yet measured on hardware) gathers ordinary launches (`cuLaunchKernel`,
+`cuLaunchKernelEx`, `cuLaunchCooperativeKernel`) the same way, but only while the GPU is busy: a launch whose stream's
+queue has finished its work (one syncobj query) is submitted at once, and later launches of the same stream join a
+batch until it is submitted. Every other API call submits the gathered launches before it does anything (as do
+context destruction and device reset), so they keep their order with copies, events, queries, host functions,
+synchronization and other streams. The cost of the policy: launches gathered while the program then only computes
+on the CPU wait for its next API call, and a program that polls host memory a kernel writes, with no API call
+meanwhile, would never see them run. Whether it pays (graph batching traded generation throughput for prompt
+throughput in Qwen) has to be measured on the M2 Max.
+
 Graph replay borrows its stored operation list rather than copying every node and its argument bytes on each replay.
 In a Geekbench 7 GPU run on the M2 Max, `cuGraphLaunch` accumulated 2.12 s over 8,854 calls (0.239 ms/call), versus
 3.61 s over 8,770 calls (0.412 ms/call) in the previous run. These full-run figures include other host load and
@@ -1031,6 +1050,18 @@ real launches with their real data.
 
 `ZLUDA_AGX_LLVM_ARGS` passes further options to LLVM in `zoc` and in the driver (part of the compilation cache key):
 backend experiments such as `-agx-threadgroup-unroll=4` or `-agx-fold-mode-phis=false`.
+
+Kernels read their 32-bit constants too wide for an immediate from uniform registers, which the launch preloads
+(`-agx-uniform-constants`, `.agx.kernels` extension 6: (half, value) pairs, which `pack_params` writes after the
+arguments): fewer general purpose registers and more resident SIMD-groups. `ZLUDA_AGX_UNIFORM_CONSTANTS=0` compiles
+with `mov_imm` instead, in the driver and `zoc` and, at build time, for the agx_libs kernels.
+
+`ZLUDA_AGX_VIA_AIR=1` (experimental) compiles through upstream AIR instead of straight to AGX: the optimized AGX IR is
+written as AIR (`agx-raise-to-air`, what AIR does not have as hints with AIR emulations, double precision in software),
+the AIR target's portable passes make it upstream AIR, and the AGX backend compiles that, restoring the hinted AGX
+operations. `zoc` also writes `NAME.air`. On the PTX-formalization tests the results are the direct path's, and in the
+agx-bench model the code is as fast; `ZLUDA_AGX_LLVM_ARGS=-agx-air-native-hints=false` runs the AIR emulations instead,
+as a consumer without AGX's operations would. See `llvm/docs/AIR/AIRHints.rst` in the LLVM fork.
 
 `agx_bench_kernel MODULE KERNEL --grid ... --block ... ARG...` times one kernel the way an application keeps the GPU
 busy (launches queued back to back between two events) and prints a hash of each buffer afterwards, so that two builds
@@ -1132,7 +1163,11 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
   executable or on `PATH`) and the result is cached in `ZLUDA_CACHE_DIR`
   (default `$XDG_CACHE_HOME/zluda/agx` or `~/.cache/zluda/agx`; disabled by
   `ZLUDA_CACHE_DISABLE`). Entries are keyed by the PTX, the chip and the `zoc`
-  binary, so a rebuilt compiler does not reuse old code.
+  binary, so a rebuilt compiler does not reuse old code. Cache misses go to one
+  `zoc --serve` process the driver keeps (LLVM starts once, about 7 ms saved per
+  module after the first: the 195 `spirv_run` modules compile in 1.5 s instead of
+  3.0 s); a compilation that finds it busy, and every one after it fails or dies,
+  runs a `zoc` of its own as before (`ZLUDA_AGX_ZOC_SERVER=0` always does).
   Cache misses take a per-entry advisory file lock and recheck the entry,
   so concurrent threads/processes compile the same input only once. Different
   keys stay independent; warm hits do not lock. Lock files persist to keep
@@ -1185,8 +1220,10 @@ ZLUDA_AGX_ZOC=target/debug/zoc target/debug/agx_cuda_smoke
 
 `libcublas` for zluda_agx, on the `agx_libs` engine (shared with cuBLASLt).
 Its kernels are MLIR (`agx_libs/kernels/*.mlir`:
-standard dialects and `agx` operations, no chip names), compiled at build time
-for every G13/G14 chip by the LLVM fork's
+standard dialects and the `air` dialect's SIMD-group matrices, no chip names),
+compiled at build time through AIR (`--via-air`: MLIR's `arith-emulate-f64`
+and `convert-gpu-to-air`, AIR's portable passes, then the AGX backend, which
+lowers AIR with `agx-lower-air`) for every G13/G14 chip by the LLVM fork's
 `mlir/utils/agx-kernels/agx-build-fatbin.py` into one fat AGX object
 (`ZAGXFAT1`). `cuModuleLoadData` picks the entry for the device's chip
 (`CUDA_ERROR_NO_BINARY_FOR_GPU` if there is none). The library calls the
@@ -1199,31 +1236,69 @@ it), as NVIDIA's does.
   `cublasGemmEx` / `cublasGemmStridedBatchedEx` with f32 A, B and C or f16 A
   and B with f16 or f32 C. All accumulate in f32, including the 16-bit
   computation types (alpha and beta are then f16, as in cuBLAS); f16 results
-  are rounded once at the end. Without transposes, with m and n multiples of 64, k a multiple
-  of 8, even leading dimensions and 8-byte aligned matrices, the column-major
-  product runs on the row-major tile kernel `agx_sgemm_tile64` (A and B
-  swapped): 64 x 64 tiles per threadgroup of 2 x 2 SIMD-groups built on
-  `agx.mma_tile` (`agx_libs/kernels/sgemm.mlir`; the f16 forms are in
-  `hgemm.mlir`). Everything else runs on a generic kernel, one
-  thread per element with arbitrary strides.
+  are rounded once at the end. The largest block of C whose sides are
+  multiples of 64,
+  along the largest multiple of 8 of k, runs on the row-major tile kernel
+  `agx_sgemm_tile64` (A and B swapped): 64 x 64 tiles per threadgroup of 2 x 2
+  SIMD-groups built on 8x8 `air.simdgroup_matrix_multiply_accumulate`
+  (`agx_libs/kernels/sgemm.mlir`; the f16 forms are in `hgemm.mlir`; both
+  generated by `gen_tile_gemm.py`). Transposed operands use the variants that
+  load A or B transposed (`_ta`, `_tb`, `_tatb`); with odd leading
+  dimensions or batch strides, or matrices not 8-byte aligned, the `_u`
+  variants, which load each element on its own (about 13% dearer for f32). The columns right of that
+  block, the rows below it, and then the rest of k (added to C, so an f16 C is
+  rounded once more there) run on a generic kernel, one thread per element
+  with arbitrary strides, or, when that part of C has at most 8 columns with
+  `op(A) = A^T` (or at most 8 rows with `op(B) = B`) and k is at least 32, on
+  a dot kernel with the same arguments (`agx_sgemm_dot`, generated by
+  `gen_small_gemm.py`): a SIMD-group per element of C whose lanes read the row
+  of op(A) (column of op(B)) together along k and sum by a SIMD-group
+  reduction. Matrix-vector products such as decoding's `n = 1` GEMMs take
+  about 21 times fewer SIMD-group cycles per element of C there (k = 4096).
+  Strided batched GEMMs launch each of these parts once for the whole batch
+  (the kernels take the batch entry from the grid and the element strides
+  of A, B and C), not once per matrix.
+  In the simulator's cost model the tile kernel is
+  about 47 times cheaper per element and step of k (the transposed variants
+  15% and 53% dearer than the plain one, their loads not being pairs), so a
+  77-row product or llama.cpp's `op(A) = T` products, which used to run on the
+  generic kernel entirely, now run tiled.
 * `cublasDgemm`, `cublasDgemmStridedBatched`, and `cublasGemmEx` /
   `cublasGemmStridedBatchedEx` with `CUDA_R_64F` A, B and C and
   `CUBLAS_COMPUTE_64F` (or `_PEDANTIC`): always on the generic kernel
-  `agx_dgemm_generic`, accumulating in f64. AGX has no f64 unit, so the
+  `agx_dgemm_generic` (or `agx_dgemm_dot` for the same shapes as above),
+  accumulating in f64. AGX has no f64 unit, so the
   arithmetic is software double precision and much slower than f32.
 * Level 1 and 2 in single precision, with their `_64` forms
   (`agx_libs/kernels/blas.mlir`): `cublasSaxpy`, `Sscal`, `Scopy`, `Sswap`,
   `Sdot`, `Sasum`, `Snrm2`, `Isamax`, `Isamin`, `Sgemv` and `Sger`, with
-  negative increments as BLAS defines them. Reductions are deterministic:
+  negative increments as BLAS defines them. `Sgemv` with a transposed A
+  gives each element of y a SIMD-group reading its column together. Reductions are deterministic:
   1024 threads keep fixed partials that one thread combines in order. `nrm2`
   keeps a scaled sum of squares (LAPACK's `slassq`), so it does not overflow
   when the squares would. In host pointer mode a reduction waits for the
   handle's stream.
-* Level 3 beyond GEMM in single precision, with their `_64` forms:
-  `cublasSgeam`, `Sdgmm`, `Ssyrk`, `Ssymm`, `Strmm` (in place when C is B,
-  through a copy) and `Strsm` (one thread per column of B, or per row for the
-  right side, solving by substitution), and `cublasSgemmBatched` (the pointer
-  arrays are read back once the stream is idle, then one GEMM per entry).
+* Level 3 beyond GEMM in single precision, with their `_64` forms: `cublasSgeam`, `Sdgmm`, `Ssyrk` and `Ssyr2k` (above
+  64 rows, the blocks off the diagonal are GEMMs on the tile kernels, two for syr2k, found by halving C at 64-row
+  boundaries, and one launch does the 64 x 64 diagonal blocks), `Ssymm` and `Strmm` (in place when C is B, through a
+  copy; with A of 64 rows or more and C of at least 64 x 64 elements, A is made full in a scratch buffer the handle
+  keeps, symmetric or with zeros outside the triangle, and one GEMM on the tile kernels does the product) and `Strsm`
+  (one thread per column of B, or per row for the right side, solving by substitution; with A above 64 rows, by blocks
+  of 64 rows of op(A), each solved that way and then taken out of the rest of B with a GEMM on the tile kernels, the
+  first of which also applies alpha; `Dtrsm` the same way on the generic f64 GEMM), and `cublasSgemmBatched` (the pointer arrays are read back once the stream is
+  idle, then one GEMM per entry).
+* `cublasCgemm` with C of at least 64 x 64 elements and k of 8 or more runs as one real GEMM on the tile kernels: an
+  interleaved complex m x n matrix is a real 2m x n one with twice the leading dimension, so C and an untransposed B
+  are used as they are; op(A), times alpha, is expanded into the real 2m x 2k matrix of 2 x 2 blocks
+  `[re -im; im re]` in a scratch buffer the handle keeps (a transposed op(B) is copied untransposed next to it), and a
+  beta that is not real is applied to C first. `cublasChemm` and `Csymm` with C of at least 64 x 64 elements (and
+  C not B) do the same with A made full: on the left, alpha A expanded; on the right, alpha B expanded times A made
+  full (complex). `cublasCherk`, `Csyrk`, `Cher2k` and `Csyr2k` above 64 rows split C's triangle as the real
+  syrk does: each corner outside the 64 x 64 diagonal blocks is one such complex GEMM (two for the 2k forms) and one
+  launch does the diagonal blocks. `cublasCtrmm` (C not B, C of at least 64 x 64 elements) makes the triangle full
+  and does one such GEMM with op on it, and `cublasCtrsm` above 64 rows of A is blocked like the real trsm (64-row
+  blocks solved one thread per column or row, the rest of B updated by complex GEMMs on the real kernels). Smaller
+  products and f64 run one thread per element of C.
 * All kernels are tested on the simulator for agx-g13g and agx-g14c
   (`agx_libs/kernels/test_kernels.py`: tile sizes, all four transpose
   combinations, `beta = 0` with NaN in C, f16 and f32 C).
@@ -1262,7 +1337,22 @@ f32, with `alpha` / `beta`. The algorithm queries (`Get*_v7`, `Find*`,
 `Find*Ex`) report one deterministic algorithm per direction that needs no
 workspace. The kernels compute one output element per thread; they are
 tested on the simulator for agx-g13g and agx-g14c (36 cases per chip in
-`test_kernels.py`).
+`test_kernels.py`). A forward 1x1 convolution (stride 1, no padding, one
+group) of images with dense NCHW planes is a GEMM per image instead,
+y[n] (K x HW) = w (K x C) x[n] (C x HW), and runs batched on the GEMM path
+(the matrix-unit tile kernel for its 64-aligned block). Other forward
+convolutions with one group and dense output planes, with K, C R S and
+P Q at least 16, write each image's im2col matrix (C R S x P Q,
+`agx_conv2d_im2col_*`) to a temporary buffer and run y[n] = w col on the GEMM
+path (in the cost model about 11 times cheaper per output than the direct
+kernel for a 3x3, 64-channel layer); the call then waits for its stream
+before it frees the buffer. `cudnnConvolutionBackwardFilter` does the same
+for one group and dense dy planes: dw = sum over n of dy[n] col^T, the
+images after the first added with beta 1. `cudnnConvolutionBackwardData`
+(one group, dense dy planes) forms col = w^T dy[n] in f32 on the GEMM path
+and gathers dx[n] from it (`agx_conv2d_col2im_*`, each element of dx written
+once, rounded once for f16). Convolutions of backend-API operation graphs
+take the same paths.
 
 The other common legacy operations run on `agx_libs/kernels/dnn.mlir`, for
 tensors of up to 4 dimensions with any strides, f32 directly and f16 or bf16
@@ -1310,8 +1400,8 @@ Single and double precision (C2C / Z2Z, R2C / D2Z, C2R / Z2D): complex to
 complex transforms of rank 1 to 3 (rank 1 also
 strided and batched through `cufftPlanMany`, with the same input and output
 layout), and real to complex / complex to real transforms of rank 1,
-batched, in or out of place. Power-of-two lengths use radix-2 Stockham passes
-alternating two work buffers; other lengths use a direct transform. The
+batched, in or out of place. Power-of-two lengths use radix-4 Stockham passes
+(after one radix-2 pass when log2 n is odd), alternating two work buffers; other lengths use a direct transform. The
 twiddles are computed on the host in double precision and uploaded with the
 plan. Double precision runs copies of the same kernels built for `f64`
 (generated by `agx_libs/build.rs`, named `<kernel>_f64`), in the backend's
@@ -1355,8 +1445,14 @@ of their transpose:
 - `cusparseSDDMM` on CSR output, `opA` and `opB` either way, one thread per row.
 - `cusparseSpSV` and `cusparseSpSM` on CSR matrices with the fill mode and
   diagonal type of `cusparseSpMatSetAttribute`, `opA` non-transposed or
-  transposed (and `opB` either way for SpSM): one thread per right-hand side
-  substitutes row after row, so a single SpSV runs on one thread.
+  transposed (and `opB` either way for SpSM). The analysis reads the matrix
+  structure back (after the stream's earlier work) and groups the rows of
+  op(A) into levels, each row after the rows it reads; when there are few
+  levels for the entries (at most one per 64 entries and rows, as a launch
+  costs about as much as that many dependent accesses in one thread), the
+  solve launches one kernel per level over its rows and the right-hand sides,
+  reading the values of A at solve time. Otherwise, or for a matrix other than
+  the analyzed one, one thread per right-hand side substitutes row after row.
 
 Only SpVV, Csr2cscEx2 and SpGEMM need external buffers. Handles, streams, host and
 device pointer modes and the legacy matrix descriptor are supported. Other
@@ -1392,7 +1488,26 @@ in the application's PTX and needs no library.
 their `_bufferSize` queries. The factorizations run one
 column at a time — a single-thread pivot or reflector step, then a parallel
 update of the rest of the matrix — and the solves run one thread per
-right-hand side. `devInfo` reports the first zero pivot (getrf) or the first
+right-hand side. The f32 getrf with more than 64 columns to factor works by
+panels of 64 columns: the columns of a panel as above with the update kept to
+the panel, then the BLAS triangular solve for the panel's rows of U and one
+GEMM on the tile kernels for the rest of the matrix (the same pivots, the
+products summed in another order). The f32 potrf above 64 rows does the same
+by panels, the rest of the triangle updated with each panel by a syrk on the
+tile GEMM (the other triangle is not written); after a non-positive minor the
+later kernels do nothing, but that panel's update still reaches the trailing
+matrix. getrs and potrs above 64 rows (f32 and f64) solve on the blocked trsm (shared
+with cuBLAS in `agx_libs::engine::trsm`; f64 updates on the generic f64 GEMM), with the row interchanges applied to B
+by their own kernel, instead of one thread per right-hand side. The f32 geqrf
+with more than 32 rows and columns works by panels of 32 columns when given the
+workspace its `_bufferSize` now asks for (32 (m + 64 + 2n) elements): the panel
+column by column as above, then the panel's block reflector (compact WY:
+`Q = I - V T V^T`, T built from `V^T V`) applied to the rest of A with GEMMs on
+the tile kernels. A smaller workspace runs the unblocked factorization. The f32
+ormqr and orgqr with Q of order 64 or more and at least 4 reflectors apply Q the
+same way, by blocks of 32 reflectors (in the order Q, Q^T and the side need),
+in the workspace their `_bufferSize` now asks for (orgqr: its reflector copy
+plus that); before, one thread per column or row of C applied every reflector. `devInfo` reports the first zero pivot (getrf) or the first
 non-positive leading minor (potrf) as LAPACK does. `gesvd` and `syevd` use
 one-sided Jacobi: each round rotates disjoint column pairs in parallel, and
 sweeps repeat until one rotates nothing (`devInfo` 1 if 60 sweeps do not get

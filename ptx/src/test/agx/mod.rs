@@ -27,7 +27,7 @@ fn compile_with(
     llvm_zluda::compile_agx(
         &module.context,
         cpu,
-        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, agx_strict, checked: false },
+        llvm_zluda::AgxOptions { strict_fp: module.strict_fp, agx_strict, checked: false, object_only: false },
         module.llvm_ir,
         impl_ir,
         None,

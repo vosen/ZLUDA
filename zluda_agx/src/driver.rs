@@ -254,6 +254,24 @@ fn graph_batching_enabled() -> bool {
     *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GRAPH_BATCH").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
+/// `ZLUDA_AGX_LAUNCH_BATCH=1`: ordinary kernel launches (outside graphs) are gathered into one command while the GPU
+/// is busy with the stream's earlier work, as graph launches are (`Batch`). A launch to an idle GPU is submitted at
+/// once; every API call other than a launch submits the gathered launches first, so they keep their order with
+/// copies, events, synchronizations and other streams. Off by default until measured on hardware: launches held while
+/// the program only computes on the CPU wait for its next API call (a program polling host memory a kernel writes,
+/// with no API call, would wait for ever).
+fn launch_batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("ZLUDA_AGX_LAUNCH_BATCH").is_ok_and(|v| !v.is_empty() && v != "0"))
+}
+
+/// Whether a launch goes into the batch: always while a graph runs (`graph`); for ordinary launches with
+/// `ZLUDA_AGX_LAUNCH_BATCH` (`ordinary`), when the batch already holds launches of the same stream or the stream's
+/// queue is still busy (so the GPU is not left idle waiting for the batch).
+fn gathers(graph: bool, ordinary: bool, batch_of_stream: bool, queue_busy: bool) -> bool {
+    graph || (ordinary && (batch_of_stream || queue_busy))
+}
+
 /// ZLUDA_AGX_SPECIALIZE=0 turns launch-time specialization off.
 fn specialize_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -422,7 +440,18 @@ impl Driver {
         let has_waits =
             !(if sh <= 2 { &*default_waits } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.waits }).is_empty();
         let k = &code.module.kernels[&name];
-        let batchable = *batching && unchecked && capture.is_none() && k.stack_bytes == 0 && k.texture_heap_half.is_none();
+        let ordinary = !*batching && launch_batching_enabled();
+        let batch_of_stream = batch.as_ref().is_some_and(|b| b.stream == sh);
+        // an ordinary launch is gathered only while its queue has work (one query, ~1 us, against a submit's ~25 us)
+        let queue_busy = ordinary && !batch_of_stream && {
+            let q = if sh <= 2 { &ctx.stream } else { &streams.get(&sh).ok_or(CUerror::INVALID_HANDLE)?.queue };
+            !q.is_done(q.last()).unwrap_or(true)
+        };
+        let batchable = gathers(*batching, ordinary, batch_of_stream, queue_busy)
+            && unchecked
+            && capture.is_none()
+            && k.stack_bytes == 0
+            && k.texture_heap_half.is_none();
         let fence = if batchable {
             // a batch of another stream, or one that this launch's waits would delay, goes first
             if batch.as_ref().is_some_and(|b| b.stream != sh || has_waits) {
@@ -942,11 +971,26 @@ pub(crate) fn with<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Resu
     })
 }
 
-/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context.
+/// `with`, also after a sticky error (cuCtxDestroy). Runs on the thread's current context, after submitting the
+/// launches gathered by `ZLUDA_AGX_LAUNCH_BATCH` (so every other operation is ordered after them).
 pub(crate) fn with_sticky<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
     with_contexts(|c| {
         let h = c.current();
-        f(c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?)
+        let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+        d.flush_batch()?;
+        f(d)
+    })
+}
+
+/// `with` for kernel launches: the launches already gathered stay gathered (`launch_batching_enabled`).
+pub(crate) fn with_launch<T>(f: impl FnOnce(&mut Driver) -> Result<T, CUerror>) -> Result<T, CUerror> {
+    with_contexts(|c| {
+        let h = c.current();
+        let d = c.get_mut(h).ok_or(CUerror::INVALID_CONTEXT)?;
+        match d.sticky {
+            Some(e) => Err(e),
+            None => f(d),
+        }
     })
 }
 
@@ -1013,6 +1057,8 @@ impl Driver {
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), CUerror> {
+        // gathered launches first (a context destroyed or reset outside `with`)
+        self.flush_batch()?;
         let last = self.ctx.stream.last();
         if let Err(e) = self.ctx.stream.synchronize() {
             return Err(self.failed(last.syncobj, e));
@@ -1179,6 +1225,14 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     if !llvm_args.is_empty() {
         options.push(&llvm_args);
     }
+    // and ZLUDA_AGX_UNIFORM_CONSTANTS=0 turns -agx-uniform-constants off
+    if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") {
+        options.push("no-uniform-constants");
+    }
+    // and ZLUDA_AGX_VIA_AIR=1 compiles through upstream AIR (experimental)
+    if std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1") {
+        options.push("via-air");
+    }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
     let compiled = std::cell::Cell::new(false);
     let started = Instant::now();
@@ -1187,6 +1241,18 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         if crate::log_enabled() {
             eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>());
         }
+        let mut args: Vec<String> = ["--target", "agx", "--arch", cpu, "--object-only"].iter().map(|a| a.to_string()).collect();
+        args.extend(mesa.then(|| "--agx-strict".to_string()));
+        args.extend(checked.then(|| "--agx-checked".to_string()));
+        args.extend(lineinfo.then(|| "--lineinfo".to_string()));
+        args.extend(fast_mma.then(|| "--fast-mma".to_string()));
+        args.extend((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")));
+        if let Some(result) = zoc_server::compile(&zoc, &args, sources) {
+            if crate::log_enabled() {
+                eprintln!("[zluda_agx] zoc server finished: ok={}, elapsed={:.3}s", result.is_ok(), started.elapsed().as_secs_f64());
+            }
+            return result;
+        }
         let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
         let mut paths = Vec::new();
         for (i, ptx) in sources.iter().enumerate() {
@@ -1194,13 +1260,9 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
             std::fs::write(&src, ptx).map_err(|e| e.to_string())?;
             paths.push(src);
         }
+        // the object alone: its .agx.kernels records describe the kernels, so no IR text or assembly
         let out = std::process::Command::new(&zoc)
-            .args(["--target", "agx", "--arch", cpu])
-            .args(mesa.then_some("--agx-strict"))
-            .args(checked.then_some("--agx-checked"))
-            .args(lineinfo.then_some("--lineinfo"))
-            .args(fast_mma.then_some("--fast-mma"))
-            .args((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")))
+            .args(&args)
             .arg("--output-dir")
             .arg(dir.path())
             .args(&paths)
@@ -1224,6 +1286,103 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         eprintln!("[zluda_agx] PTX cache hit: modules={}, bytes={}, elapsed={:.3}s", sources.len(), source.len(), started.elapsed().as_secs_f64());
     }
     result
+}
+
+/// A `zoc --serve` process kept for the process's compilations: LLVM starts once instead of for every module (about
+/// 7 ms each). One compilation at a time goes through it; a compilation that finds it busy, and any after it fails to
+/// start or dies (its request then too), runs a zoc of its own as before. `ZLUDA_AGX_ZOC_SERVER=0` turns it off.
+mod zoc_server {
+    use std::io::{Read, Write};
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+    use std::sync::Mutex;
+
+    struct Server {
+        zoc: PathBuf,
+        child: Child,
+        input: ChildStdin,
+        output: ChildStdout,
+    }
+
+    impl Drop for Server {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    /// The server, or None before it starts; `Err` once it could not be used (no more attempts).
+    static SERVER: Mutex<Result<Option<Server>, ()>> = Mutex::new(Ok(None));
+
+    /// The object and the assembly from the server, or None when the caller should run zoc itself.
+    pub(super) fn compile(zoc: &Path, args: &[String], sources: &[&[u8]]) -> Option<Result<(Vec<u8>, String), String>> {
+        if std::env::var("ZLUDA_AGX_ZOC_SERVER").as_deref() == Ok("0") {
+            return None;
+        }
+        let mut guard = SERVER.try_lock().ok()?;
+        let slot = guard.as_mut().ok()?;
+        if slot.as_ref().is_some_and(|s| s.zoc != zoc) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            match start(zoc) {
+                Some(s) => *slot = Some(s),
+                None => {
+                    *guard = Err(());
+                    return None;
+                }
+            }
+        }
+        match request(slot.as_mut().unwrap(), args, sources) {
+            Ok(result) => Some(result),
+            Err(_) => {
+                // a dead or confused server: no more requests to it
+                *guard = Err(());
+                None
+            }
+        }
+    }
+
+    fn start(zoc: &Path) -> Option<Server> {
+        let mut child = Command::new(zoc).arg("--serve").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+        let (input, output) = (child.stdin.take()?, child.stdout.take()?);
+        Some(Server { zoc: zoc.to_path_buf(), child, input, output })
+    }
+
+    /// One request (the protocol of `zoc --serve`).
+    fn request(s: &mut Server, args: &[String], sources: &[&[u8]]) -> std::io::Result<Result<(Vec<u8>, String), String>> {
+        let mut m = Vec::new();
+        m.extend((args.len() as u32).to_le_bytes());
+        for a in args {
+            m.extend((a.len() as u32).to_le_bytes());
+            m.extend(a.as_bytes());
+        }
+        m.extend((sources.len() as u32).to_le_bytes());
+        for src in sources {
+            m.extend((src.len() as u64).to_le_bytes());
+            m.extend(*src);
+        }
+        s.input.write_all(&m)?;
+        s.input.flush()?;
+        let mut status = [0u8];
+        s.output.read_exact(&mut status)?;
+        let mut part = || -> std::io::Result<Vec<u8>> {
+            let mut n = [0u8; 8];
+            s.output.read_exact(&mut n)?;
+            let mut v = vec![0u8; u64::from_le_bytes(n) as usize];
+            s.output.read_exact(&mut v)?;
+            Ok(v)
+        };
+        Ok(match status[0] {
+            0 => {
+                let object = part()?;
+                let asm = part()?;
+                Ok((object, String::from_utf8_lossy(&asm).into_owned()))
+            }
+            1 => Err(format!("zoc failed: {}", String::from_utf8_lossy(&part()?))),
+            _ => return Err(std::io::Error::other("bad zoc --serve response")),
+        })
+    }
 }
 
 /// The module in an image: an AGX object, or PTX text (NUL-terminated).
@@ -1996,7 +2155,7 @@ pub(crate) unsafe fn cuLaunchKernel(
     if !extra.is_null() {
         return Err(CUerror::NOT_SUPPORTED);
     }
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).cloned().ok_or(CUerror::INVALID_HANDLE)?;
         let slots = d.modules[&m].module.kernels[&name].args.clone();
         let args: Vec<&[u8]> = slots
@@ -2514,7 +2673,7 @@ pub(crate) unsafe fn cuLaunchKernelEx(config: *const CUlaunchConfig, f: CUfuncti
     let c = config.as_ref().ok_or(CUerror::INVALID_VALUE)?;
     let attrs = launch_attrs(c)?;
     let (grid, block) = ([c.gridDimX, c.gridDimY, c.gridDimZ], [c.blockDimX, c.blockDimY, c.blockDimZ]);
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         check_launch_attrs(&d.modules[m].module.kernels[name], attrs, grid, block, c.sharedMemBytes, d.ctx.props.cores)
     })?;
@@ -2534,7 +2693,7 @@ pub(crate) unsafe fn cuLaunchCooperativeKernel(
     params: *mut *mut c_void,
 ) -> CUresult {
     let attrs = LaunchAttrs { cooperative: true, ..Default::default() };
-    with(|d| {
+    with_launch(|d| {
         let (m, name) = d.functions.get(&(f.0 as usize)).ok_or(CUerror::INVALID_HANDLE)?;
         check_launch_attrs(&d.modules[m].module.kernels[name], attrs, [gx, gy, gz], [bx, by, bz], shared, d.ctx.props.cores)
     })?;
@@ -3965,6 +4124,61 @@ mod tests {
         assert_eq!(co_resident_threadgroups(0), 0);
     }
 
+    #[test]
+    fn launches_are_gathered_only_while_the_gpu_is_busy() {
+        // graphs always gather; without ZLUDA_AGX_LAUNCH_BATCH ordinary launches never do
+        assert!(gathers(true, false, false, false));
+        assert!(!gathers(false, false, true, true));
+        // with it: onto the stream's batch, or a new one while the stream's queue is busy; an idle GPU gets the launch now
+        assert!(gathers(false, true, true, false));
+        assert!(gathers(false, true, false, true));
+        assert!(!gathers(false, true, false, false));
+    }
+
+    // Needs zoc built with the agx feature (target/debug/zoc).
+    #[test]
+    fn zoc_server_compiles_as_zoc_does() {
+        let zoc = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug/zoc");
+        if !zoc.exists() {
+            eprintln!("skipped: no zoc");
+            return;
+        }
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../ptx/src/test/spirv_run/");
+        let (add, mul) = (std::fs::read(format!("{dir}add.ptx")).unwrap(), std::fs::read(format!("{dir}mul_lo.ptx")).unwrap());
+        let args: Vec<String> = ["--target", "agx", "--arch", "agx-g14c", "--object-only"].iter().map(|a| a.to_string()).collect();
+        // the server is the process's: other tests compiling at the same time make it busy (None) for a moment
+        let served = |sources: &[&[u8]]| {
+            for _ in 0..1000 {
+                if let Some(r) = zoc_server::compile(&zoc, &args, sources) {
+                    return r;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            panic!("the zoc server stayed busy");
+        };
+        let one_shot = |files: &[&str]| {
+            let out = tempfile::tempdir().unwrap();
+            let status = std::process::Command::new(&zoc)
+                .args(&args)
+                .arg("--output-dir")
+                .arg(out.path())
+                .args(files.iter().map(|f| format!("{dir}{f}")))
+                .status()
+                .unwrap();
+            assert!(status.success());
+            std::fs::read(out.path().join(files[0].replace(".ptx", ".o"))).unwrap()
+        };
+        // a module, a link of two, then the first again (nothing kept from the earlier requests)
+        for (sources, files) in [(vec![&add[..]], vec!["add.ptx"]), (vec![&add[..], &mul[..]], vec!["add.ptx", "mul_lo.ptx"]), (vec![&add[..]], vec!["add.ptx"])] {
+            let (object, _) = served(&sources).expect("compiled");
+            assert_eq!(object, one_shot(&files), "{files:?}");
+        }
+        // a compile error comes back as an error, and the server stays usable
+        let bad = b".version 7.0\n.target sm_80\n.address_size 64\n.visible .entry k() { bogus.instr; }\n";
+        assert!(served(&[&bad[..]]).is_err());
+        assert!(served(&[&add[..]]).is_ok());
+    }
+
     // Needs zoc built with the agx feature: target/debug/zoc, or ZLUDA_AGX_ZOC.
     #[test]
     fn compiles_ptx_into_a_launchable_module() {
@@ -4038,7 +4252,11 @@ mod tests {
                     .visible .entry first() { ret; }\n\
                     .visible .entry second() { ret; }\n\0";
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut module = CUmodule(std::ptr::null_mut());
@@ -4075,7 +4293,11 @@ mod tests {
         let image = &header as *const _ as *const c_void;
         unsafe {
             assert_eq!(ptx_in_fatbin(image.cast()).unwrap(), [0]);
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4115,7 +4337,11 @@ mod tests {
         b[20..24].copy_from_slice(&64u32.to_le_bytes());
         assert_eq!(unsafe { ptx_in_fatbin(b.as_ptr()) }, Err(CUerror::NO_BINARY_FOR_GPU));
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4157,7 +4383,11 @@ mod tests {
         bytes[44..48].copy_from_slice(&80u32.to_le_bytes());
         bytes[80..80 + ptx.len()].copy_from_slice(ptx);
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut library = CUlibrary(std::ptr::null_mut());
@@ -4185,7 +4415,11 @@ mod tests {
     #[test]
     fn vmm_adjacent_mappings_are_disjoint() {
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let page = VMM_GRANULARITY as usize;
@@ -4221,7 +4455,11 @@ mod tests {
     #[test]
     fn graph_update_replaces_parameters_and_preserves_exec_on_failure() {
         unsafe {
-            cuInit(0).unwrap();
+            // the driver opens the GPU (Asahi's DRM device): skipped where there is none, as without zoc
+            if let Err(CUerror::NO_DEVICE) = cuInit(0) {
+                eprintln!("skipped: no GPU");
+                return;
+            }
             let mut ctx = CUcontext(std::ptr::null_mut());
             cuCtxCreate_v2(&mut ctx, 0, 0).unwrap();
             let mut stream = CUstream(std::ptr::null_mut());

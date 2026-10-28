@@ -38,8 +38,9 @@ mod test;
 static ZLUDA_PTX_IMPL: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl.bc");
 static ZLUDA_PTX_IMPL_CONSTRAINED: &'static [u8] =
     include_bytes!("../../lib/zluda_ptx_impl_constrained.bc");
-// Textual LLVM IR, see the comment at its top.
-static ZLUDA_PTX_IMPL_AGX: &'static [u8] = include_bytes!("../../lib/zluda_ptx_impl_agx.ll");
+// lib/zluda_ptx_impl_agx.ll (textual LLVM IR, see the comment at its top) as bitcode when build.rs could assemble
+// it, else as it is.
+static ZLUDA_PTX_IMPL_AGX: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/zluda_ptx_impl_agx.bc"));
 const ZLUDA_PTX_PREFIX: &'static str = "__zluda_ptx_impl_";
 
 quick_error! {

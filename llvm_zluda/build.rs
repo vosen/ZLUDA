@@ -2,7 +2,7 @@ use cmake::Config;
 use core::panic;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, io};
 
@@ -36,6 +36,7 @@ fn main() {
         println!("cargo:rerun-if-changed={}", bc_path1);
         check_lfs_file(bc_path1);
     }
+    println!("cargo::rustc-check-cfg=cfg(zluda_air)");
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_BUILD_DIR");
     println!("cargo:rerun-if-env-changed=ZLUDA_LLVM_SOURCE_DIR");
 
@@ -50,13 +51,24 @@ fn main() {
         llvm_config(&llvm_build_path.join("bin/llvm-config")).unwrap();
     println!("cargo:rustc-link-arg={ldflags}");
     println!("cargo:rustc-link-search=native={libdir}");
-    for lib in system_libs.split_ascii_whitespace() {
-        println!("cargo:rustc-link-arg={lib}");
-    }
     if amdgpu_enabled() {
         link_lld_components();
     }
+    // Relink when a prebuilt LLVM library changes (a rebuilt backend), not only when this crate does.
+    if env::var_os("ZLUDA_LLVM_BUILD_DIR").is_some() {
+        for lib in lib_names.split_whitespace() {
+            println!("cargo:rerun-if-changed={}", Path::new(&libdir).join(lib).display());
+        }
+    }
     link_llvm_components(lib_names);
+    // After the LLVM libraries that use them: a -l passed as a link argument
+    // comes before them and --as-needed drops it (zlib's compress2 undefined).
+    for lib in system_libs.split_ascii_whitespace() {
+        match lib.strip_prefix("-l") {
+            Some(name) => println!("cargo:rustc-link-lib={name}"),
+            None => println!("cargo:rustc-link-arg={lib}"),
+        }
+    }
     compile_cxx_lib(cxxflags, &llvm_build_path);
 }
 
@@ -92,7 +104,7 @@ fn build_llvm() -> PathBuf {
         )
         .define(
             "LLVM_EXPERIMENTAL_TARGETS_TO_BUILD",
-            if agx_enabled() { "AGX" } else { "" },
+            if agx_enabled() { "AGX;AIR" } else { "" },
         )
         .define(
             "LLVM_ENABLE_PROJECTS",
@@ -189,6 +201,13 @@ fn get_llvm_build_path(llvm_build_dir: &PathBuf, cmake_profile: &str) -> PathBuf
     return llvm_build_path;
 }
 
+fn has_component(llvm_config_path: &PathBuf, name: &str) -> bool {
+    Command::new(llvm_config_path)
+        .arg("--components")
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).split_whitespace().any(|c| c == name))
+}
+
 fn llvm_config(llvm_config_path: &PathBuf) -> io::Result<(String, String, String, String, String)> {
     let mut cmd = Command::new(llvm_config_path);
     cmd.args([
@@ -206,6 +225,11 @@ fn llvm_config(llvm_config_path: &PathBuf) -> io::Result<(String, String, String
     }
     if agx_enabled() {
         cmd.arg("agx");
+        // The AIR target, for the experimental PTX -> AIR -> AGX path (ZLUDA_AGX_VIA_AIR), when the LLVM build has it
+        if has_component(llvm_config_path, "air") {
+            cmd.arg("air");
+            println!("cargo:rustc-cfg=zluda_air");
+        }
     }
     cmd.arg("option");
     cmd.arg("codegen");

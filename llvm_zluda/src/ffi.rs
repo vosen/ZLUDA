@@ -106,6 +106,14 @@ extern "C" {
         error_message: *mut *mut std::ffi::c_char,
     ) -> bool;
 
+    pub fn LLVMZludaLinkUsedDefinitions(
+        dest: LLVMModuleRef,
+        data: *const std::ffi::c_char,
+        size: usize,
+        name: *const std::ffi::c_char,
+        error: *mut *mut std::ffi::c_char,
+    ) -> bool;
+
     pub fn LLVMZludaUpgradeFunctionAttributes(module: LLVMModuleRef);
 
     pub fn LLVMZludaAgxLowerAddressSpaces(module: LLVMModuleRef) -> bool;
@@ -126,4 +134,12 @@ extern "C" {
     pub fn LLVMInitializeAGXTarget();
     pub fn LLVMInitializeAGXTargetMC();
     pub fn LLVMInitializeAGXAsmPrinter();
+}
+
+// The AIR target (not upstream either), for the experimental PTX -> AIR -> AGX path.
+#[cfg(all(feature = "agx", zluda_air))]
+extern "C" {
+    pub fn LLVMInitializeAIRTargetInfo();
+    pub fn LLVMInitializeAIRTarget();
+    pub fn LLVMInitializeAIRTargetMC();
 }

@@ -252,6 +252,25 @@ gpu.module @agx_solver {
     return
   }
 
+  // The row interchanges of getrf (ipiv) on the columns of B, in order, or in
+  // reverse order (reverse 1); one thread per column. For the blocked getrs,
+  // whose triangular solves run on BLAS trsm.
+  gpu.func @agx_getrs_pivots(%ipiv0: memref<1xi32, 1>, %b0: memref<1xf32, 1>, %n_: i64, %nrhs_: i64,
+                             %ldb_: i64, %reverse_: i64) kernel {
+    %z = arith.constant 0 : i64
+    %n = arith.index_cast %n_ : i64 to index
+    %nrhs = arith.index_cast %nrhs_ : i64 to index
+    %ldb = arith.index_cast %ldb_ : i64 to index
+    %reverse = arith.cmpi ne, %reverse_, %z : i64
+    %c = gpu.global_id x
+    %live = arith.cmpi ult, %c, %nrhs : index
+    scf.if %live {
+      %boff = arith.muli %c, %ldb : index
+      func.call @agx_sv_pivots(%ipiv0, %b0, %boff, %n, %reverse) : (memref<1xi32, 1>, memref<1xf32, 1>, index, index, i1) -> ()
+    }
+    gpu.return
+  }
+
   // getrs: op(A) X = B with A = P L U from agx_lu_*, one thread per column
   // of B (n x nrhs, leading dimension ldb).
   gpu.func @agx_getrs(%a0: memref<1xf32, 1>, %n_: i64, %lda_: i64, %ipiv0: memref<1xi32, 1>,
@@ -354,7 +373,8 @@ gpu.module @agx_solver {
 
   // L(r, c) -= L(r, k) L(c, k) for k < c <= r < n: launch an (n - k - 1)
   // square grid.
-  gpu.func @agx_chol_update(%a0: memref<1xf32, 1>, %n_: i64, %k_: i64, %rs_: i64, %cs_: i64, %info0: memref<1xi32, 1>) kernel {
+  gpu.func @agx_chol_update(%a0: memref<1xf32, 1>, %n_: i64, %k_: i64, %rs_: i64, %cs_: i64, %info0: memref<1xi32, 1>,
+                            %ncol_: i64) kernel {
     %i0 = arith.constant 0 : index
     %i1 = arith.constant 1 : index
     %z = arith.constant 0 : i32
@@ -369,7 +389,11 @@ gpu.module @agx_solver {
     %c = arith.addi %k1, %tj : index
     %in_r = arith.cmpi ult, %r, %n : index
     %tri = arith.cmpi ule, %c, %r : index
-    %in = arith.andi %in_r, %tri : i1
+    // columns below ncol only (a panel of the blocked factorization)
+    %ncol = arith.index_cast %ncol_ : i64 to index
+    %in_c = arith.cmpi ult, %c, %ncol : index
+    %in0 = arith.andi %in_r, %tri : i1
+    %in = arith.andi %in0, %in_c : i1
     %old = func.call @agx_sv_ldi(%info0, %i0) : (memref<1xi32, 1>, index) -> i32
     %ok = arith.cmpi eq, %old, %z : i32
     %live = arith.andi %in, %ok : i1
@@ -498,6 +522,88 @@ gpu.module @agx_solver {
       func.call @agx_sv_st(%x0, %xe, %nx) : (memref<1xf32, 1>, index, f32) -> ()
     }
     return
+  }
+
+  // Blocked geqrf (compact WY, Q = I - V T V^T for the reflectors j0 .. j0 +
+  // jb - 1): V, the (m - j0) x jb matrix of their vectors (leading dimension
+  // m - j0) with the implicit 1 on the diagonal and zeros above it. 2-D grid.
+  gpu.func @agx_qr_v(%a0: memref<1xf32, 1>, %v0: memref<1xf32, 1>, %m_: i64, %j0_: i64, %jb_: i64, %lda_: i64) kernel {
+    %f0 = arith.constant 0.0 : f32
+    %f1 = arith.constant 1.0 : f32
+    %m = arith.index_cast %m_ : i64 to index
+    %j0 = arith.index_cast %j0_ : i64 to index
+    %jb = arith.index_cast %jb_ : i64 to index
+    %lda = arith.index_cast %lda_ : i64 to index
+    %mv = arith.subi %m, %j0 : index
+    %i = gpu.global_id x
+    %c = gpu.global_id y
+    %in_i = arith.cmpi ult, %i, %mv : index
+    %in_c = arith.cmpi ult, %c, %jb : index
+    %in = arith.andi %in_i, %in_c : i1
+    scf.if %in {
+      %below = arith.cmpi ugt, %i, %c : index
+      %diag = arith.cmpi eq, %i, %c : index
+      %v = scf.if %below -> f32 {
+        %r = arith.addi %j0, %i : index
+        %cc = arith.addi %j0, %c : index
+        %col = arith.muli %cc, %lda : index
+        %o = arith.addi %col, %r : index
+        %x = func.call @agx_sv_ld(%a0, %o) : (memref<1xf32, 1>, index) -> f32
+        scf.yield %x : f32
+      } else {
+        %d = arith.select %diag, %f1, %f0 : f32
+        scf.yield %d : f32
+      }
+      %cm = arith.muli %c, %mv : index
+      %ov = arith.addi %cm, %i : index
+      func.call @agx_sv_st(%v0, %ov, %v) : (memref<1xf32, 1>, index, f32) -> ()
+    }
+    gpu.return
+  }
+
+  // T (jb x jb, leading dimension jb, zeros below the diagonal) of the
+  // compact WY form from S = V^T V and tau[j0 ..]: T(i, i) = tau_i,
+  // T(0 .. i, i) = -tau_i T(0 .. i, 0 .. i) S(0 .. i, i). One thread (jb^3 / 6
+  // multiply-adds).
+  gpu.func @agx_qr_t(%s0: memref<1xf32, 1>, %tau0: memref<1xf32, 1>, %t0: memref<1xf32, 1>, %j0_: i64, %jb_: i64) kernel {
+    %i0 = arith.constant 0 : index
+    %i1 = arith.constant 1 : index
+    %f0 = arith.constant 0.0 : f32
+    %j0 = arith.index_cast %j0_ : i64 to index
+    %jb = arith.index_cast %jb_ : i64 to index
+    %t = gpu.global_id x
+    %first = arith.cmpi eq, %t, %i0 : index
+    scf.if %first {
+      scf.for %i = %i0 to %jb step %i1 {
+        %ti_at = arith.addi %j0, %i : index
+        %ti = func.call @agx_sv_ld(%tau0, %ti_at) : (memref<1xf32, 1>, index) -> f32
+        %nti = arith.negf %ti : f32
+        %ci = arith.muli %i, %jb : index
+        %oii = arith.addi %ci, %i : index
+        func.call @agx_sv_st(%t0, %oii, %ti) : (memref<1xf32, 1>, index, f32) -> ()
+        // rows above the diagonal (T(r, q) for q >= r only), then zeros below
+        scf.for %r = %i0 to %i step %i1 {
+          %w = scf.for %q = %r to %i step %i1 iter_args(%acc = %f0) -> f32 {
+            %cq = arith.muli %q, %jb : index
+            %orq = arith.addi %cq, %r : index
+            %tq = func.call @agx_sv_ld(%t0, %orq) : (memref<1xf32, 1>, index) -> f32
+            %oqi = arith.addi %ci, %q : index
+            %sq = func.call @agx_sv_ld(%s0, %oqi) : (memref<1xf32, 1>, index) -> f32
+            %a1 = math.fma %tq, %sq, %acc : f32
+            scf.yield %a1 : f32
+          }
+          %v = arith.mulf %nti, %w : f32
+          %ori = arith.addi %ci, %r : index
+          func.call @agx_sv_st(%t0, %ori, %v) : (memref<1xf32, 1>, index, f32) -> ()
+        }
+        %i_1 = arith.addi %i, %i1 : index
+        scf.for %r = %i_1 to %jb step %i1 {
+          %ori = arith.addi %ci, %r : index
+          func.call @agx_sv_st(%t0, %ori, %f0) : (memref<1xf32, 1>, index, f32) -> ()
+        }
+      }
+    }
+    gpu.return
   }
 
   // Applies the reflector of column k to the columns k + 1 + j < n (one

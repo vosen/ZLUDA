@@ -772,7 +772,7 @@ unsafe fn pw(
     let mut params = vec![arg(&mut x), arg(&mut b), arg(&mut t), arg(&mut y), arg(&mut total)];
     params.extend(a.0.iter_mut().map(|v| arg(v)));
     params.extend([arg(&mut p0), arg(&mut p1), arg(&mut p2), arg(&mut alpha1), arg(&mut alpha2)]);
-    dnn_launch(h, c"agx_dnn_pw_graph", &mut params, total)
+    dnn_launch(h, c"agx_dnn_pw_graph", &mut params, total, false)
 }
 
 /// The f32 conversion of a tensor of type `ty` between `src` and `dst` (`into` f32 or out of it).
@@ -852,44 +852,12 @@ pub unsafe fn execute(hraw: cudnnHandle_t, plan: &Desc, vp: &Desc) -> R<()> {
                 let s = kernel_shape(&tx, &tw, &c, &ty_)?;
                 let (xp, wp, yp) = (f32_ptr(x)?, f32_ptr(w)?, f32_ptr(y)?);
                 let (a, b) = (alpha, beta);
-                match dir {
-                    0 => run(
-                        hraw,
-                        "fwd",
-                        s,
-                        false,
-                        s[0] as u64 * s[4] as u64 * s[7] as u64 * s[8] as u64,
-                        xp,
-                        wp,
-                        yp,
-                        &a as *const f32 as _,
-                        &b as *const f32 as _,
-                    )?,
-                    1 => run(
-                        hraw,
-                        "bwd_data",
-                        s,
-                        false,
-                        s[0] as u64 * s[1] as u64 * s[2] as u64 * s[3] as u64,
-                        xp,
-                        wp,
-                        yp,
-                        &a as *const f32 as _,
-                        &b as *const f32 as _,
-                    )?,
-                    _ => run(
-                        hraw,
-                        "bwd_filter",
-                        s,
-                        false,
-                        s[4] as u64 * (s[1] / s[15]) as u64 * s[5] as u64 * s[6] as u64,
-                        xp,
-                        wp,
-                        yp,
-                        &a as *const f32 as _,
-                        &b as *const f32 as _,
-                    )?,
-                }
+                let name = match dir {
+                    0 => "fwd",
+                    1 => "bwd_data",
+                    _ => "bwd_filter",
+                };
+                convolve(hraw, name, s, false, xp, wp, yp, &a as *const f32 as _, &b as *const f32 as _)?;
             }
             Op::Pointwise { mode, x, b, t: tt, y, p: params, alpha1, alpha2 } => {
                 let yv = packed_view(&t(y).dims);
@@ -948,7 +916,7 @@ pub unsafe fn execute(hraw: cudnnHandle_t, plan: &Desc, vp: &Desc) -> R<()> {
                 a.push(op as i64);
                 let mut params = vec![arg(&mut xp), arg(&mut yp), arg(&mut total)];
                 params.extend(a.0.iter_mut().map(|v| arg(v)));
-                dnn_launch(h, c"agx_dnn_reduce_graph", &mut params, total)?;
+                dnn_launch(h, c"agx_dnn_reduce_graph", &mut params, total, false)?;
             }
         }
     }

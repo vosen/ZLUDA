@@ -4,6 +4,9 @@
 // N x C x H x W with arbitrary element strides (0 broadcasts); a thread's
 // linear index runs over N C H W in that order. Outputs follow cuDNN's
 // blending, y = alpha r + beta y, and y is not read when beta is 0.
+// Activations, softmax and erf use the hardware's exp and log
+// (fastmath<afn>, a few units in the last place, as cuDNN's fast forms);
+// the pointwise math modes (exp, log, pow, sin, cos, tan) are precise.
 
 gpu.module @agx_dnn {
   func.func private @agx_dnn_coord(%i: index, %C: index, %H: index, %W: index)
@@ -29,12 +32,29 @@ gpu.module @agx_dnn {
     return %o : index
   }
 
+  // A packed NCHW tensor (strides C H W, H W, W, 1, the common case) is at offset i itself: a test of the
+  // strides, the same for every thread, instead of the three divisions of the coordinates.
   func.func private @agx_dnn_off(%i: index, %C: index, %H: index, %W: index,
       %s0: index, %s1: index, %s2: index, %s3: index) -> index {
-    %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
-        : (index, index, index, index) -> (index, index, index, index)
-    %o = func.call @agx_dnn_dot4(%n, %c, %h, %w, %s0, %s1, %s2, %s3)
-        : (index, index, index, index, index, index, index, index) -> index
+    %one = arith.constant 1 : index
+    %HW = arith.muli %H, %W : index
+    %CHW = arith.muli %C, %HW : index
+    %p3 = arith.cmpi eq, %s3, %one : index
+    %p2 = arith.cmpi eq, %s2, %W : index
+    %p1 = arith.cmpi eq, %s1, %HW : index
+    %p0 = arith.cmpi eq, %s0, %CHW : index
+    %p32 = arith.andi %p3, %p2 : i1
+    %p10 = arith.andi %p1, %p0 : i1
+    %packed = arith.andi %p32, %p10 : i1
+    %o = scf.if %packed -> index {
+      scf.yield %i : index
+    } else {
+      %n, %c, %h, %w = func.call @agx_dnn_coord(%i, %C, %H, %W)
+          : (index, index, index, index) -> (index, index, index, index)
+      %d = func.call @agx_dnn_dot4(%n, %c, %h, %w, %s0, %s1, %s2, %s3)
+          : (index, index, index, index, index, index, index, index) -> index
+      scf.yield %d : index
+    }
     return %o : index
   }
 
@@ -63,7 +83,7 @@ gpu.module @agx_dnn {
     %f1 = arith.constant 1.0 : f32
     %nlog2e = arith.constant -1.44269504 : f32
     %a = arith.mulf %x, %nlog2e : f32
-    %e = math.exp2 %a : f32
+    %e = math.exp2 %a fastmath<afn> : f32
     %d = arith.addf %e, %f1 : f32
     %r = arith.divf %f1, %d : f32
     return %r : f32
@@ -80,7 +100,7 @@ gpu.module @agx_dnn {
     %ax = math.absf %x : f32
     %near = arith.cmpf olt, %ax, %small : f32
     %a = arith.mulf %x, %log2e : f32
-    %e = math.exp2 %a : f32
+    %e = math.exp2 %a fastmath<afn> : f32
     %far = arith.subf %e, %f1 : f32
     // x + x^2/2 + x^3/6 + x^4/24
     %p0 = math.fma %x, %c4, %c3 : f32
@@ -332,7 +352,7 @@ gpu.module @agx_dnn {
   }
 
   // Softmax forward over rows rows of K elements; algo fast 0 (no maximum
-  // subtracted), accurate 1, log 2. One thread per row.
+  // subtracted), accurate 1, log 2. One SIMD-group per row.
   gpu.func @agx_dnn_softmax_fwd(%x0: memref<1xf32, 1>, %y0: memref<1xf32, 1>,
       %rows: index, %K: index, %C: index, %H: index, %W: index,
       %xs0: index, %xs1: index, %xs2: index, %xs3: index,
@@ -352,7 +372,12 @@ gpu.module @agx_dnn {
     %log2e = arith.constant 1.44269504 : f32
     %ln2 = arith.constant 0.693147182 : f32
     %HW = arith.muli %H, %W : index
-    %o = gpu.global_id x
+    // a SIMD-group per row: lane l takes the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %o = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %o, %rows : index
     scf.if %live {
       %fast = arith.cmpi eq, %algo, %k0 : index
@@ -360,7 +385,7 @@ gpu.module @agx_dnn {
       %m = scf.if %fast -> f32 {
         scf.yield %f0 : f32
       } else {
-        %mx = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %ninf) -> f32 {
+        %mxl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %ninf) -> f32 {
           %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
           %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
               : (index, index, index, index, index, index, index, index) -> index
@@ -368,22 +393,25 @@ gpu.module @agx_dnn {
           %a = arith.maximumf %acc, %v : f32
           scf.yield %a : f32
         }
+        // a NaN element makes the sum below NaN however the maximum treats it
+        %mx = gpu.subgroup_reduce maxnumf %mxl : (f32) -> f32
         scf.yield %mx : f32
       }
-      %s = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %f0) -> f32 {
+      %sl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %f0) -> f32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index) -> index
         %v = memref.load %x[%xo] : memref<?xf32, strided<[1]>, 1>
         %d = arith.subf %v, %m : f32
         %dl = arith.mulf %d, %log2e : f32
-        %e = math.exp2 %dl : f32
+        %e = math.exp2 %dl fastmath<afn> : f32
         %a = arith.addf %acc, %e : f32
         scf.yield %a : f32
       }
-      %l2 = math.log2 %s : f32
+      %s = gpu.subgroup_reduce add %sl : (f32) -> f32
+      %l2 = math.log2 %s fastmath<afn> : f32
       %lns = arith.mulf %l2, %ln2 : f32
-      scf.for %k = %k0 to %K step %k1 {
+      scf.for %k = %lane to %K step %k32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %xo = func.call @agx_dnn_off(%li, %C, %H, %W, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -392,7 +420,7 @@ gpu.module @agx_dnn {
         %v = memref.load %x[%xo] : memref<?xf32, strided<[1]>, 1>
         %d = arith.subf %v, %m : f32
         %dl = arith.mulf %d, %log2e : f32
-        %e = math.exp2 %dl : f32
+        %e = math.exp2 %dl fastmath<afn> : f32
         %p = arith.divf %e, %s : f32
         %lp = arith.subf %d, %lns : f32
         %r = arith.select %log, %lp, %p : f32
@@ -403,6 +431,7 @@ gpu.module @agx_dnn {
   }
 
   // Softmax backward: dx = y (dy - sum dy y), or dy - e^y sum dy for log.
+  // One SIMD-group per row.
   gpu.func @agx_dnn_softmax_bwd(%y0: memref<1xf32, 1>, %dy0: memref<1xf32, 1>,
       %dx0: memref<1xf32, 1>, %rows: index, %K: index, %C: index, %H: index, %W: index,
       %ys0: index, %ys1: index, %ys2: index, %ys3: index,
@@ -424,11 +453,16 @@ gpu.module @agx_dnn {
     %f0 = arith.constant 0.0 : f32
     %log2e = arith.constant 1.44269504 : f32
     %HW = arith.muli %H, %W : index
-    %o = gpu.global_id x
+    // a SIMD-group per row: lane l takes the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %o = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %o, %rows : index
     scf.if %live {
       %log = arith.cmpi eq, %algo, %k2 : index
-      %s = scf.for %k = %k0 to %K step %k1 iter_args(%acc = %f0) -> f32 {
+      %sl = scf.for %k = %lane to %K step %k32 iter_args(%acc = %f0) -> f32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %yo = func.call @agx_dnn_off(%li, %C, %H, %W, %ys0, %ys1, %ys2, %ys3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -441,7 +475,8 @@ gpu.module @agx_dnn {
         %a = arith.addf %acc, %t : f32
         scf.yield %a : f32
       }
-      scf.for %k = %k0 to %K step %k1 {
+      %s = gpu.subgroup_reduce add %sl : (f32) -> f32
+      scf.for %k = %lane to %K step %k32 {
         %li = func.call @agx_dnn_sm_index(%o, %k, %C, %HW, %instance) : (index, index, index, index, index) -> index
         %yo = func.call @agx_dnn_off(%li, %C, %H, %W, %ys0, %ys1, %ys2, %ys3)
             : (index, index, index, index, index, index, index, index) -> index
@@ -454,7 +489,7 @@ gpu.module @agx_dnn {
         %d = arith.subf %vdy, %s : f32
         %plain = arith.mulf %vy, %d : f32
         %yl = arith.mulf %vy, %log2e : f32
-        %e = math.exp2 %yl : f32
+        %e = math.exp2 %yl fastmath<afn> : f32
         %es = arith.mulf %e, %s : f32
         %lg = arith.subf %vdy, %es : f32
         %r = arith.select %log, %lg, %plain : f32
@@ -818,7 +853,7 @@ gpu.module @agx_dnn {
     return %o : index
   }
 
-  // Batch statistics, one thread per parameter over M elements: the mean and
+  // Batch statistics, one SIMD-group per parameter over M elements: the mean and
   // the biased variance (two passes). Writes save_mean and save_invstd =
   // 1 / sqrt(var + eps), and when update is set, running = (1 - factor)
   // running + factor batch, with the unbiased variance M / (M - 1) var.
@@ -846,20 +881,27 @@ gpu.module @agx_dnn {
     %k1 = arith.constant 1 : index
     %f0 = arith.constant 0.0 : f32
     %f1 = arith.constant 1.0 : f32
-    %pi = gpu.global_id x
+    // a SIMD-group per parameter: lane l sums the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %pi = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    %first = arith.cmpi eq, %lane, %k0 : index
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %pi, %params : index
     scf.if %live {
-      %sum = scf.for %m = %k0 to %M step %k1 iter_args(%acc = %f0) -> f32 {
+      %sum_l = scf.for %m = %lane to %M step %k32 iter_args(%acc = %f0) -> f32 {
         %o = func.call @agx_dnn_bn_elem(%pi, %m, %C, %H, %W, %spatial, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index, index, index) -> index
         %v = memref.load %x[%o] : memref<?xf32, strided<[1]>, 1>
         %a = arith.addf %acc, %v : f32
         scf.yield %a : f32
       }
+      %sum = gpu.subgroup_reduce add %sum_l : (f32) -> f32
       %Mi = arith.index_cast %M : index to i64
       %Mf = arith.sitofp %Mi : i64 to f32
       %mean = arith.divf %sum, %Mf : f32
-      %ss = scf.for %m = %k0 to %M step %k1 iter_args(%acc = %f0) -> f32 {
+      %ss_l = scf.for %m = %lane to %M step %k32 iter_args(%acc = %f0) -> f32 {
         %o = func.call @agx_dnn_bn_elem(%pi, %m, %C, %H, %W, %spatial, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index, index, index) -> index
         %v = memref.load %x[%o] : memref<?xf32, strided<[1]>, 1>
@@ -867,13 +909,17 @@ gpu.module @agx_dnn {
         %a = math.fma %d, %d, %acc : f32
         scf.yield %a : f32
       }
+      %ss = gpu.subgroup_reduce add %ss_l : (f32) -> f32
       %var = arith.divf %ss, %Mf : f32
       %ve = arith.addf %var, %eps : f32
       %sq = math.sqrt %ve : f32
       %inv = arith.divf %f1, %sq : f32
+      scf.if %first {
       memref.store %mean, %sm[%pi] : memref<?xf32, strided<[1]>, 1>
       memref.store %inv, %si[%pi] : memref<?xf32, strided<[1]>, 1>
-      %up = arith.cmpi ne, %update, %k0 : index
+      }
+      %up0 = arith.cmpi ne, %update, %k0 : index
+      %up = arith.andi %up0, %first : i1
       scf.if %up {
         %Mm1 = arith.subf %Mf, %f1 : f32
         %Mm1c = arith.maximumf %Mm1, %f1 : f32
@@ -892,7 +938,7 @@ gpu.module @agx_dnn {
     gpu.return
   }
 
-  // Batch normalization backward, parameter gradients, one thread per
+  // Batch normalization backward, parameter gradients, one SIMD-group per
   // parameter: sums[2 p] = sum dy, sums[2 p + 1] = sum dy xhat;
   // dscale = alpha sum dy xhat + beta dscale, dbias = alpha sum dy + beta dbias.
   gpu.func @agx_dnn_bn_bwd_params(%x0: memref<1xf32, 1>, %dy0: memref<1xf32, 1>,
@@ -927,12 +973,17 @@ gpu.module @agx_dnn {
     %k1 = arith.constant 1 : index
     %k2 = arith.constant 2 : index
     %f0 = arith.constant 0.0 : f32
-    %pi = gpu.global_id x
+    // a SIMD-group per parameter: lane l sums the elements l, l + 32, ...
+    %k32 = arith.constant 32 : index
+    %gid = gpu.global_id x
+    %pi = arith.divui %gid, %k32 : index
+    %lane = gpu.lane_id
+    // the same for the whole SIMD-group, which reduces together
     %live = arith.cmpi ult, %pi, %params : index
     scf.if %live {
       %mean = memref.load %sm[%pi] : memref<?xf32, strided<[1]>, 1>
       %inv = memref.load %si[%pi] : memref<?xf32, strided<[1]>, 1>
-      %r:2 = scf.for %m = %k0 to %M step %k1 iter_args(%a = %f0, %b = %f0) -> (f32, f32) {
+      %rl:2 = scf.for %m = %lane to %M step %k32 iter_args(%a = %f0, %b = %f0) -> (f32, f32) {
         %xo = func.call @agx_dnn_bn_elem(%pi, %m, %C, %H, %W, %spatial, %xs0, %xs1, %xs2, %xs3)
             : (index, index, index, index, index, index, index, index, index, index) -> index
         %dyo = func.call @agx_dnn_bn_elem(%pi, %m, %C, %H, %W, %spatial, %dys0, %dys1, %dys2, %dys3)
@@ -945,12 +996,17 @@ gpu.module @agx_dnn {
         %nb = math.fma %g, %xh, %b : f32
         scf.yield %na, %nb : f32, f32
       }
+      %r0 = gpu.subgroup_reduce add %rl#0 : (f32) -> f32
+      %r1 = gpu.subgroup_reduce add %rl#1 : (f32) -> f32
+      %first = arith.cmpi eq, %lane, %k0 : index
+      scf.if %first {
       %p0 = arith.muli %pi, %k2 : index
       %p1 = arith.addi %p0, %k1 : index
-      memref.store %r#0, %sums[%p0] : memref<?xf32, strided<[1]>, 1>
-      memref.store %r#1, %sums[%p1] : memref<?xf32, strided<[1]>, 1>
-      func.call @agx_dnn_blend(%dscale0, %pi, %r#1, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
-      func.call @agx_dnn_blend(%dbias0, %pi, %r#0, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+      memref.store %r0, %sums[%p0] : memref<?xf32, strided<[1]>, 1>
+      memref.store %r1, %sums[%p1] : memref<?xf32, strided<[1]>, 1>
+      func.call @agx_dnn_blend(%dscale0, %pi, %r1, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+      func.call @agx_dnn_blend(%dbias0, %pi, %r0, %alpha, %beta) : (memref<1xf32, 1>, index, f32, f32, f32) -> ()
+      }
     }
     gpu.return
   }
@@ -1139,7 +1195,7 @@ gpu.module @agx_dnn {
     %q4 = arith.mulf %q3, %t : f32
     %x2 = arith.mulf %ax, %ax : f32
     %e0 = arith.mulf %x2, %nlog2e : f32
-    %e = math.exp2 %e0 : f32
+    %e = math.exp2 %e0 fastmath<afn> : f32
     %qe = arith.mulf %q4, %e : f32
     %r = arith.subf %f1, %qe : f32
     %neg = arith.cmpf olt, %x, %f0 : f32
@@ -1302,9 +1358,9 @@ gpu.module @agx_dnn {
     case 105 {
       // log(1 + e^(beta x)) / beta, x beyond 20 / beta linear
       %bx = arith.mulf %x, %p0 : f32
-      %e = math.exp %bx : f32
+      %e = math.exp %bx fastmath<afn> : f32
       %e1 = arith.addf %e, %f1 : f32
-      %l = math.log %e1 : f32
+      %l = math.log %e1 fastmath<afn> : f32
       %sp = arith.divf %l, %p0 : f32
       %lim = arith.constant 20.0 : f32
       %big = arith.cmpf ogt, %bx, %lim : f32
@@ -1352,7 +1408,7 @@ gpu.module @agx_dnn {
     }
     case 203 {
       %pos = arith.cmpf ogt, %x, %f0 : f32
-      %e = math.exp %x : f32
+      %e = math.exp %x fastmath<afn> : f32
       %ae = arith.mulf %p0, %e : f32
       %g = arith.select %pos, %f1, %ae : f32
       %v = arith.mulf %g, %b : f32
@@ -1367,7 +1423,7 @@ gpu.module @agx_dnn {
       %x2 = arith.mulf %x, %x : f32
       %nh = arith.constant -0.5 : f32
       %ex = arith.mulf %x2, %nh : f32
-      %pe = math.exp %ex : f32
+      %pe = math.exp %ex fastmath<afn> : f32
       %pdf = arith.mulf %pe, %rsqrt2pi : f32
       %g = math.fma %x, %pdf, %cdf : f32
       %v = arith.mulf %g, %b : f32

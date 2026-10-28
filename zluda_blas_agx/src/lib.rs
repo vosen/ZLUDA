@@ -295,6 +295,30 @@ mod imp {
         math_mode: cublasMath_t,
         /// The partial sums of reductions and their result (`level1::WORKSPACE` bytes), allocated on first use.
         ws: *mut c_void,
+        /// Temporary matrices of level 3 routines (see `scratch`), `scratch_len` bytes, last used on `scratch_stream`.
+        scratch: *mut c_void,
+        scratch_len: usize,
+        scratch_stream: CUstream,
+    }
+
+    /// `bytes` of device memory for temporaries of work queued on the handle's stream. The buffer is kept and reused:
+    /// work queued earlier on the same stream is done with it before later work starts, and when the stream has
+    /// changed, or the buffer must grow, the stream that last used it is waited for first.
+    unsafe fn scratch(h: &mut Handle, bytes: usize) -> Result<*mut c_void, cublasError_t> {
+        if !h.scratch.is_null() && (h.scratch_stream.0 != h.stream.0 || h.scratch_len < bytes) {
+            engine::synchronize(h.scratch_stream).map_err(status)?;
+        }
+        if h.scratch_len < bytes {
+            if !h.scratch.is_null() {
+                engine::free(h.scratch).map_err(status)?;
+                h.scratch = std::ptr::null_mut();
+                h.scratch_len = 0;
+            }
+            h.scratch = engine::alloc(bytes).map_err(status)?;
+            h.scratch_len = bytes;
+        }
+        h.scratch_stream = h.stream;
+        Ok(h.scratch)
     }
 
     unsafe fn handle<'a>(h: cublasHandle_t) -> Result<&'a mut Handle, cublasError_t> {
@@ -311,6 +335,9 @@ mod imp {
             pointer_mode: cublasPointerMode_t::CUBLAS_POINTER_MODE_HOST,
             math_mode: cublasMath_t::CUBLAS_DEFAULT_MATH,
             ws: std::ptr::null_mut(),
+            scratch: std::ptr::null_mut(),
+            scratch_len: 0,
+            scratch_stream: CUstream(std::ptr::null_mut()),
         });
         *out = cublasHandle_t(Box::into_raw(h) as *mut cublasContext);
         Ok(())
@@ -322,6 +349,10 @@ mod imp {
         }
         let h = Box::from_raw(h.0 as *mut Handle);
         engine::free(h.ws).map_err(status)?;
+        if !h.scratch.is_null() {
+            engine::synchronize(h.scratch_stream).map_err(status)?;
+            engine::free(h.scratch).map_err(status)?;
+        }
         Ok(())
     }
 
@@ -422,6 +453,28 @@ mod imp {
         }
     }
 
+    /// The smallest n for which sgemm with op(A) = A^T transposes A first (see gemm).
+    const PRETRANSPOSE_MIN_N: c_int = 256;
+
+    /// Slices of K for a single f32 product (1: no split): with at most 16 output tiles of 64 x 64 and K >= 1024,
+    /// enough slices for ~64 workgroups, each at least 256 of K, at most 16.
+    fn split_k(m: u64, n: u64, k: u64) -> u64 {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ON.get_or_init(|| std::env::var("ZLUDA_AGX_GEMM_SPLITK").map_or(true, |v| v != "0")) {
+            return 1;
+        }
+        let tiles = (m / 64) * (n / 64);
+        if tiles == 0 || tiles > 16 || k < 1024 {
+            return 1;
+        }
+        (64 / tiles).min(k / 256).min(16).max(1)
+    }
+
+    fn pretranspose_enabled() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| std::env::var("ZLUDA_AGX_GEMM_PRETRANSPOSE").map_or(true, |v| v != "0"))
+    }
+
     #[allow(clippy::too_many_arguments)]
     unsafe fn gemm(
         types: Types,
@@ -460,6 +513,69 @@ mod imp {
         } else {
             (scalar(h, alpha, half_scalars)? as f64, scalar(h, beta, half_scalars)? as f64)
         };
+        let (mut a, mut lda, mut ta) = (a, lda, ta);
+        let pre = types == Types::S && ta && batch == 1 && n >= PRETRANSPOSE_MIN_N && m >= 64 && k >= 64
+            && pretranspose_enabled();
+        let slices = if types == Types::S && batch == 1 { split_k(m as u64, n as u64, k as u64) } else { 1 };
+        let pre_bytes = if pre { m as usize * k as usize * 4 } else { 0 };
+        let part_bytes = if slices > 1 { slices as usize * m as usize * n as usize * 4 } else { 0 };
+        let base = if pre_bytes + part_bytes > 0 { scratch(h, pre_bytes + part_bytes)? } else { std::ptr::null_mut() };
+        if pre {
+            // op(A) = A^T: the tile kernel for it (A's fragments loaded transposed) spills on G14 and costs about a
+            // third more per product than the untransposed one; A^T is m x k, a pass over m k elements
+            // (agx_cost: ~1.5 SIMD-group cycles per element against ~0.02 per m n k saved). ZLUDA_AGX_GEMM_PRETRANSPOSE=0
+            // turns it off.
+            let t = base;
+            let (mut src, mut dst) = (a, t);
+            let (mut rows, mut cols, mut ld_src, mut ld_dst) = (m as i64, k as i64, lda as i64, m as i64);
+            let (mut one, mut zero, mut tr, mut no) = (1.0f32, 0.0f32, 1i64, 0i64);
+            blas_launch(
+                h,
+                c"agx_sgeam",
+                &mut [arg(&mut src), arg(&mut src.clone()), arg(&mut dst), arg(&mut rows), arg(&mut cols), arg(&mut ld_src),
+                      arg(&mut ld_src.clone()), arg(&mut ld_dst), arg(&mut tr), arg(&mut no), arg(&mut one), arg(&mut zero)],
+                [m as i64, k as i64],
+                [16, 4],
+            )?;
+            (a, lda, ta) = (t as *const c_void, m, false);
+        }
+        if slices > 1 {
+            // Split K: a product with few 64 x 64 output tiles and a long K keeps a few cores busy for all of K. Its
+            // `slices` partial products (alpha op(A) op(B) over one slice of K each) run as one batched launch into
+            // the scratch buffer, then agx_ssum_slices adds them to beta C. ZLUDA_AGX_GEMM_SPLITK=0 turns it off.
+            let (m, n, k) = (m as u64, n as u64, k as u64);
+            let kc = k / slices / 8 * 8;
+            let part = base.byte_add(pre_bytes);
+            let step_a = |l: u64| if ta { l } else { l * lda as u64 };
+            let step_b = |l: u64| if tb { l * ldb as u64 } else { l };
+            let mut g = engine::Gemm {
+                types, ta, tb, m, n, k: kc, alpha, beta: 0.0,
+                a, lda: lda as u64, stride_a: step_a(kc) as i64,
+                b, ldb: ldb as u64, stride_b: step_b(kc) as i64,
+                c: part, ldc: m, stride_c: (m * n) as i64, batch: slices,
+            };
+            engine::gemm(&g, h.stream).map_err(status)?;
+            let done = kc * slices;
+            if done < k {
+                // the rest of K, added to the first partial product
+                g.k = k - done;
+                g.beta = 1.0;
+                g.batch = 1;
+                g.a = a.cast::<f32>().add(step_a(done) as usize).cast();
+                g.b = b.cast::<f32>().add(step_b(done) as usize).cast();
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
+            let (mut p, mut cc) = (part as *const c_void, c);
+            let (mut rows, mut cols, mut ldcc, mut sl, mut b) = (m as i64, n as i64, ldc as i64, slices as i64, beta as f32);
+            blas_launch(
+                h,
+                c"agx_ssum_slices",
+                &mut [arg(&mut p), arg(&mut cc), arg(&mut rows), arg(&mut cols), arg(&mut ldcc), arg(&mut sl), arg(&mut b)],
+                [m as i64, n as i64],
+                [16, 4],
+            )?;
+            return Ok(());
+        }
         let g = engine::Gemm {
             types,
             ta,
@@ -751,6 +867,16 @@ mod imp {
             return gemm(t, half, h, transa, transb, m, n, k, alpha, std::ptr::null(), lda, 0, std::ptr::null(), ldb, 0, beta, std::ptr::null_mut(), ldc, 0, batch);
         }
         let [pa, pb, pc] = pointer_arrays(h_ref, [a.cast(), b.cast(), c.cast()], batch as usize)?;
+        // element sizes of A and B, and of C
+        let (ab, cb) = match t {
+            Types::S => (4, 4),
+            Types::H => (2, 2),
+            Types::HtoS => (2, 4),
+            Types::D => (8, 8),
+        };
+        if let (Some(sa), Some(sb), Some(sc @ 1..)) = (even_stride(&pa, ab), even_stride(&pb, ab), even_stride(&pc, cb)) {
+            return gemm(t, half, h, transa, transb, m, n, k, alpha, pa[0] as *const c_void, lda, sa, pb[0] as *const c_void, ldb, sb, beta, pc[0] as *mut c_void, ldc, sc, batch);
+        }
         for i in 0..batch as usize {
             gemm(t, half, h, transa, transb, m, n, k, alpha, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta, pc[i] as *mut c_void, ldc, 0, 1)?;
         }
@@ -823,6 +949,7 @@ mod imp {
         unsafe fn scalar(h: &Handle, p: *const c_void) -> Result<Self, cublasError_t>;
         fn to_f64(self) -> f64;
         fn scalar_zero() -> Self;
+        fn one() -> Self;
         fn negate(self) -> Self;
         /// The f32 kernel, or its f64 copy.
         fn kernel(f32_name: &'static CStr, f64_name: &'static CStr) -> &'static CStr;
@@ -838,6 +965,9 @@ mod imp {
         }
         fn scalar_zero() -> f32 {
             0.0
+        }
+        fn one() -> f32 {
+            1.0
         }
         fn negate(self) -> f32 {
             -self
@@ -857,6 +987,9 @@ mod imp {
         }
         fn scalar_zero() -> f64 {
             0.0
+        }
+        fn one() -> f64 {
+            1.0
         }
         fn negate(self) -> f64 {
             -self
@@ -977,8 +1110,29 @@ mod imp {
         if a.is_null() || x.is_null() || y.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
-        let mut trans = t as i64;
-        let ylen = if t { n } else { m };
+        if t {
+            // a SIMD-group per element of y, reading its column of A together
+            return blas_launch(
+                h,
+                T::kernel(c"agx_sgemv_t", c"agx_sgemv_t_f64"),
+                &mut [
+                    arg(&mut a),
+                    arg(&mut x),
+                    arg(&mut y),
+                    arg(&mut m),
+                    arg(&mut n),
+                    arg(&mut lda),
+                    arg(&mut incx),
+                    arg(&mut incy),
+                    arg(&mut alpha),
+                    arg(&mut beta),
+                ],
+                [n * 32, 1],
+                [128, 1],
+            );
+        }
+        let mut trans = 0i64;
+        let ylen = m;
         blas_launch(
             h,
             T::kernel(c"agx_sgemv", c"agx_sgemv_f64"),
@@ -1224,14 +1378,64 @@ mod imp {
         if n == 0 || ((alpha.to_f64() == 0.0 || k == 0) && beta.to_f64() == 1.0) {
             return Ok(());
         }
+        // f32 matrices larger than a block: the blocks off the diagonal are GEMMs on the tile kernels, and one launch
+        // does the diagonal blocks.
+        let mut nb = if T::GEMM == Types::S && n > SYRK_BLOCK && k > 0 { SYRK_BLOCK } else { 0 };
+        if nb > 0 {
+            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, None, c as *mut c_void, ldc, T::BYTES)?;
+        }
         let (mut upper, mut t) = (upper as i64, t as i64);
         blas_launch(
             h,
             T::kernel(c"agx_ssyrk", c"agx_ssyrk_f64"),
-            &mut [arg(&mut a), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            &mut [arg(&mut a), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta), arg(&mut nb)],
             [n, n],
             [16, 4],
         )
+    }
+
+    /// The diagonal blocks of a blocked syrk: a multiple of the tile kernels' 64 rows.
+    const SYRK_BLOCK: i64 = 64;
+
+    /// The GEMMs of syrk's triangle outside the diagonal blocks, for each corner: C(rows, columns) = alpha
+    /// op(A)(rows) op(A)(columns)^T + beta C, or for syr2k (`b` is B and ldb) alpha op(A)(rows) op(B)(columns)^T +
+    /// beta C, then alpha op(B)(rows) op(A)(columns)^T added.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn syrk_off_diagonal(h: &Handle, upper: bool, t: bool, n: i64, k: i64, alpha: f64, beta: f64, a: *const c_void, lda: i64, b: Option<(*const c_void, i64)>, c: *mut c_void, ldc: i64, bytes: usize) -> cublasStatus_t {
+        // rows r.. of op(M): M's rows, or its columns when transposed
+        let rows = |m: *const c_void, ld: i64, r: i64| (m as *const u8).add(r as usize * if t { ld as usize } else { 1 } * bytes) as *const c_void;
+        for [first, second, m, n] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
+            // syrk: op(A) op(A)^T; syr2k: op(A) op(B)^T, then op(B) op(A)^T added
+            let (right, ldr) = b.unwrap_or((a, lda));
+            let mut products = vec![(a, lda, right, ldr, beta)];
+            if b.is_some() {
+                products.push((right, ldr, a, lda, 1.0));
+            }
+            for (l, ldl, r, ldr, beta) in products {
+                let g = engine::Gemm {
+                    types: Types::S,
+                    ta: t,
+                    tb: !t,
+                    m: m as u64,
+                    n: n as u64,
+                    k: k as u64,
+                    alpha,
+                    beta,
+                    a: rows(l, ldl, first),
+                    lda: ldl as u64,
+                    stride_a: 0,
+                    b: rows(r, ldr, second),
+                    ldb: ldr as u64,
+                    stride_b: 0,
+                    c: (c as *mut u8).add((first + second * ldc) as usize * bytes) as *mut c_void,
+                    ldc: ldc as u64,
+                    stride_c: 0,
+                    batch: 1,
+                };
+                engine::gemm(&g, h.stream).map_err(status)?;
+            }
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1249,15 +1453,23 @@ mod imp {
         if n == 0 || ((alpha.to_f64() == 0.0 || k == 0) && beta.to_f64() == 1.0) {
             return Ok(());
         }
+        // as syrk: GEMMs off the diagonal blocks for f32 above a block
+        let mut nb = if T::GEMM == Types::S && n > SYRK_BLOCK && k > 0 { SYRK_BLOCK } else { 0 };
+        if nb > 0 {
+            syrk_off_diagonal(h, upper, t, n, k, alpha.to_f64(), beta.to_f64(), a as *const c_void, lda, Some((b as *const c_void, ldb)), c as *mut c_void, ldc, T::BYTES)?;
+        }
         let (mut upper, mut t) = (upper as i64, t as i64);
         blas_launch(
             h,
             T::kernel(c"agx_ssyr2k", c"agx_ssyr2k_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta)],
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut t), arg(&mut alpha), arg(&mut beta), arg(&mut nb)],
             [n, n],
             [16, 4],
         )
     }
+
+    /// The smallest A for which symm and trmm (f32) run on the GEMM kernels, and the smallest C as a square.
+    const SYMM_GEMM_MIN: i64 = 64;
 
     /// symm (`sym`, with beta) and the out-of-place trmm (beta 0).
     #[allow(clippy::too_many_arguments)]
@@ -1274,6 +1486,53 @@ mod imp {
         let mut beta = if sym { T::scalar(h, beta as *const c_void)? } else { T::scalar_zero() };
         if m == 0 || n == 0 {
             return Ok(());
+        }
+        // f32 with A of 64 rows or more: A made full (symmetric, or the triangle with zeros) in scratch memory, then
+        // a GEMM on the tile kernels
+        let na = if right { n } else { m };
+        if T::GEMM == Types::S && na >= SYMM_GEMM_MIN && m * n >= SYMM_GEMM_MIN * SYMM_GEMM_MIN {
+            let full_bytes = (T::BYTES * (na * na) as usize).next_multiple_of(256);
+            let b_bytes = if c as *const T == b { T::BYTES * ((n - 1) * ldb + m) as usize } else { 0 };
+            let full = scratch(h, full_bytes + b_bytes)?;
+            if b_bytes > 0 {
+                // in place: the GEMM reads a copy of B
+                let copy = (full as *mut u8).add(full_bytes) as *mut c_void;
+                engine::copy(copy, b as *const c_void, b_bytes, h.stream).map_err(status)?;
+                b = copy as *const T;
+            }
+            let (mut fp, mut nn) = (full, na);
+            let (mut up, mut un, mut sy) = (upper as i64, (unit && !sym) as i64, sym as i64);
+            blas_launch(
+                h,
+                c"agx_sfull",
+                &mut [arg(&mut a), arg(&mut fp), arg(&mut nn), arg(&mut lda), arg(&mut up), arg(&mut un), arg(&mut sy)],
+                [na, na],
+                [16, 4],
+            )?;
+            let t = t && !sym;
+            // left: op(full) B; right: B op(full)
+            let (pa, la, ta, pb, lb, tb) = if right { (b as *const c_void, ldb, false, full as *const c_void, na, t) } else { (full as *const c_void, na, t, b as *const c_void, ldb, false) };
+            let g = engine::Gemm {
+                types: Types::S,
+                ta,
+                tb,
+                m: m as u64,
+                n: n as u64,
+                k: na as u64,
+                alpha: alpha.to_f64(),
+                beta: beta.to_f64(),
+                a: pa,
+                lda: la as u64,
+                stride_a: 0,
+                b: pb,
+                ldb: lb as u64,
+                stride_b: 0,
+                c: c as *mut c_void,
+                ldc: ldc as u64,
+                stride_c: 0,
+                batch: 1,
+            };
+            return engine::gemm(&g, h.stream).map_err(status);
         }
         // each element of C reads a row or column of B: in place, read a copy
         let mut copy = std::ptr::null_mut();
@@ -1315,7 +1574,7 @@ mod imp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    unsafe fn trsm<T: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const T, mut a: *const T, mut lda: i64, mut b: *mut T, mut ldb: i64) -> cublasStatus_t {
+    unsafe fn trsm<T: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const T, a: *const T, lda: i64, b: *mut T, ldb: i64) -> cublasStatus_t {
         let h = handle(h)?;
         let (right, upper, t, unit) = (side(sd)?, fill(uplo)?, op(trans)?, unit_diag(diag)?);
         if m < 0 || n < 0 {
@@ -1323,22 +1582,26 @@ mod imp {
         }
         ld_ok(lda, if right { n } else { m })?;
         ld_ok(ldb, m)?;
-        let mut alpha = T::scalar(h, alpha as *const c_void)?;
+        let alpha = T::scalar(h, alpha as *const c_void)?;
         if m == 0 || n == 0 {
             return Ok(());
         }
-        // the per-thread system is lower triangular when an even number of the stored lower triangle, the
-        // transpose and the right side flip it
-        let mut lower = (!upper ^ t ^ right) as i64;
-        let (mut right, mut upper, mut t, mut unit) = (right as i64, upper as i64, t as i64, unit as i64);
-        let threads = if right == 1 { m } else { n };
-        blas_launch(
-            h,
-            T::kernel(c"agx_strsm", c"agx_strsm_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut t), arg(&mut unit), arg(&mut lower), arg(&mut alpha)],
-            [threads, 1],
-            [64, 1],
-        )
+        // blocked above 64 rows, with GEMM updates (agx_libs; f64 on the generic f64 GEMM)
+        let g = engine::Trsm {
+            right,
+            upper,
+            trans: t,
+            unit,
+            m,
+            n,
+            alpha: alpha.to_f64(),
+            a: a as *const c_void,
+            lda,
+            b: b as *mut c_void,
+            ldb,
+            double: T::GEMM == Types::D,
+        };
+        engine::trsm(&g, h.stream).map_err(status)
     }
 
     /// Read arrays of device pointers after earlier operations on the handle's stream finish.
@@ -1357,6 +1620,49 @@ mod imp {
 
     /// GEMM over arrays of device pointers to the matrices (read back after the stream is idle).
     #[allow(clippy::too_many_arguments)]
+    /// The distance in elements of `bytes` between consecutive pointers, when it is the same for all of them.
+    fn even_stride(p: &[usize], bytes: usize) -> Option<c_longlong> {
+        let d = p.get(1).map_or(0, |&q| q.wrapping_sub(p[0]) as isize);
+        let uniform = p.windows(2).all(|w| w[1].wrapping_sub(w[0]) as isize == d);
+        (uniform && d % bytes as isize == 0).then(|| (d / bytes as isize) as c_longlong)
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn finds_even_strides() {
+        assert_eq!(even_stride(&[0x1000, 0x1100, 0x1200], 4), Some(64));
+        assert_eq!(even_stride(&[0x1200, 0x1100, 0x1000], 4), Some(-64));
+        assert_eq!(even_stride(&[0x1000, 0x1000], 4), Some(0));
+        assert_eq!(even_stride(&[0x1000], 4), Some(0));
+        assert_eq!(even_stride(&[0x1000, 0x1100, 0x1300], 4), None);
+        assert_eq!(even_stride(&[0x1000, 0x1006], 4), None);
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn syrk_corners_and_diagonal_blocks_cover_the_triangle_once() {
+        for upper in [false, true] {
+            for n in [65, 100, 128, 129, 200, 256, 300, 513] {
+                let mut count = vec![0u8; (n * n) as usize];
+                for [r, c, m, w] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
+                    for j in c..c + w {
+                        for i in r..r + m {
+                            count[(i + j * n) as usize] += 1;
+                        }
+                    }
+                }
+                for j in 0..n {
+                    for i in 0..n {
+                        // the diagonal launch (agx_ssyrk with nb = SYRK_BLOCK)
+                        let tri = if upper { i <= j } else { i >= j };
+                        let diagonal = tri && i / SYRK_BLOCK == j / SYRK_BLOCK;
+                        assert_eq!(count[(i + j * n) as usize] + diagonal as u8, tri as u8, "upper {upper} n {n} ({i}, {j})");
+                    }
+                }
+            }
+        }
+    }
+
     unsafe fn gemm_batched<T: Real>(h: cublasHandle_t, transa: cublasOperation_t, transb: cublasOperation_t, m: i64, n: i64, k: i64, alpha: *const T, a: *const *const T, lda: i64, b: *const *const T, ldb: i64, beta: *const T, c: *const *mut T, ldc: i64, batch: i64) -> cublasStatus_t {
         let hh = handle(h)?;
         if batch < 0 {
@@ -1378,6 +1684,10 @@ mod imp {
         };
         engine::synchronize(hh.stream).map_err(status)?;
         let (pa, pb, pc) = (fetch(a as *const c_void)?, fetch(b as *const c_void)?, fetch(c as *const c_void)?);
+        // Matrices equally far apart in each array (pointers taken from a strided tensor) are one strided batch.
+        if let (Some(sa), Some(sb), Some(sc @ 1..)) = (even_stride(&pa, T::BYTES), even_stride(&pb, T::BYTES), even_stride(&pc, T::BYTES)) {
+            return gemm(T::GEMM, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[0] as *const c_void, lda, sa, pb[0] as *const c_void, ldb, sb, beta as *const c_void, pc[0] as *mut c_void, ldc, sc, int(batch)?);
+        }
         for i in 0..batch as usize {
             gemm(T::GEMM, false, h, transa, transb, m, n, k, alpha as *const c_void, pa[i] as *const c_void, lda, 0, pb[i] as *const c_void, ldb, 0, beta as *const c_void, pc[i] as *mut c_void, ldc, 0, 1)?;
         }
@@ -1618,6 +1928,16 @@ mod imp {
         if a.is_null() || x.is_null() || y.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
+        if op != 0 && hmode == 0 {
+            // a SIMD-group per element of y, reading its column of A together
+            return cblas_launch(
+                h,
+                R::kernel(c"agx_cgemv_t", c"agx_cgemv_t_f64"),
+                &mut [arg(&mut a), arg(&mut x), arg(&mut y), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut incx), arg(&mut incy), arg(&mut op), arg(&mut ar), arg(&mut ai), arg(&mut br), arg(&mut bi)],
+                [n * 32, 1],
+                [64, 1],
+            );
+        }
         let ylen = if hmode != 0 || op != 0 { n } else { m };
         cblas_launch(
             h,
@@ -1672,6 +1992,9 @@ mod imp {
         if (k > 0 && (a.is_null() || b.is_null())) || c.is_null() {
             return Err(cublasError_t::INVALID_VALUE);
         }
+        if R::GEMM == Types::S && m * n >= CGEMM_REAL_MIN && k >= 8 {
+            return cgemm_real(h, m, n, k, (a, lda, opa), (b, ldb, opb), (c, ldc), (ar.to_f64() as f32, ai.to_f64() as f32), (br.to_f64() as f32, bi.to_f64() as f32));
+        }
         cblas_launch(
             h,
             R::kernel(c"agx_cgemm", c"agx_cgemm_f64"),
@@ -1679,6 +2002,101 @@ mod imp {
             [m, n],
             [16, 4],
         )
+    }
+
+    /// The smallest C (elements) for which the complex f32 GEMM runs on the real tile kernels.
+    const CGEMM_REAL_MIN: i64 = 64 * 64;
+
+    /// cgemm (f32) as one real GEMM on the tile kernels: C (m x n, ld ldc) read as a real 2m x n matrix with leading
+    /// dimension 2 ldc, op(B) the same way (copied untransposed first when it is transposed), and op(A) expanded
+    /// with alpha into the real 2m x 2k matrix of 2 x 2 blocks [xr -xi; xi xr] (agx_cgemm_expand_a), in the handle's
+    /// scratch memory. A beta that is not real is applied to C first (agx_cgemm_scale_c).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgemm_real(h: &mut Handle, m: i64, n: i64, k: i64, a: (*const c_void, i64, i64), b: (*const c_void, i64, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let mem = scratch(h, cgemm_real_bytes(m, n, k, b.2))?;
+        cgemm_real_in(h, mem, m, n, k, a, b, c, alpha, beta)
+    }
+
+    /// The scratch memory [`cgemm_real_in`] uses (`opb` op(B)'s operation).
+    fn cgemm_real_bytes(m: i64, n: i64, k: i64, opb: i64) -> usize {
+        ((16 * m * k) as usize).next_multiple_of(256) + if opb != 0 { (8 * k * n) as usize } else { 0 }
+    }
+
+    /// [`cgemm_real`] in `mem` (at least [`cgemm_real_bytes`]).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn cgemm_real_in(h: &Handle, mem: *mut c_void, m: i64, n: i64, k: i64, a: (*const c_void, i64, i64), b: (*const c_void, i64, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let a_bytes = ((16 * m * k) as usize).next_multiple_of(256);
+        let (mut pa, mut lda, mut opa, mut xa) = (a.0, a.1, a.2, mem);
+        let (mut m_, mut n_, mut k_) = (m, n, k);
+        let (mut ar, mut ai) = alpha;
+        cblas_launch(h, c"agx_cgemm_expand_a", &mut [arg(&mut pa), arg(&mut xa), arg(&mut m_), arg(&mut k_), arg(&mut lda), arg(&mut opa), arg(&mut ar), arg(&mut ai)], [m, k], [16, 4])?;
+        let (rb, ldrb) = if b.2 != 0 {
+            let (mut pb, mut ldb, mut opb, mut xb) = (b.0, b.1, b.2, (mem as *mut u8).add(a_bytes) as *mut c_void);
+            cblas_launch(h, c"agx_cgemm_copy_b", &mut [arg(&mut pb), arg(&mut xb), arg(&mut k_), arg(&mut n_), arg(&mut ldb), arg(&mut opb)], [k, n], [16, 4])?;
+            (xb as *const c_void, 2 * k)
+        } else {
+            (b.0, 2 * b.1)
+        };
+        real_product(h, m, n, 2 * k, xa, 2 * m, rb, ldrb, c, beta)
+    }
+
+    /// C (complex m x n) = the real product of `xa` (real 2m x k2, leading dimension `lda`) and `rb` (real k2 x n,
+    /// leading dimension `ldb`), read as complex, + beta C: one real GEMM on the tile kernels, after C is scaled by
+    /// a beta that is not real.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn real_product(h: &Handle, m: i64, n: i64, k2: i64, xa: *const c_void, lda: i64, rb: *const c_void, ldb: i64, c: (*mut c_void, i64), beta: (f32, f32)) -> cublasStatus_t {
+        let real_beta = if beta.1 != 0.0 {
+            let (mut pc, mut ldc, mut m_, mut n_, (mut br, mut bi)) = (c.0, c.1, m, n, beta);
+            cblas_launch(h, c"agx_cgemm_scale_c", &mut [arg(&mut pc), arg(&mut m_), arg(&mut n_), arg(&mut ldc), arg(&mut br), arg(&mut bi)], [m, n], [16, 4])?;
+            1.0
+        } else {
+            beta.0 as f64
+        };
+        let g = engine::Gemm {
+            types: Types::S,
+            ta: false,
+            tb: false,
+            m: 2 * m as u64,
+            n: n as u64,
+            k: k2 as u64,
+            alpha: 1.0,
+            beta: real_beta,
+            a: xa,
+            lda: lda as u64,
+            stride_a: 0,
+            b: rb,
+            ldb: ldb as u64,
+            stride_b: 0,
+            c: c.0,
+            ldc: 2 * c.1 as u64,
+            stride_c: 0,
+            batch: 1,
+        };
+        engine::gemm(&g, h.stream).map_err(status)
+    }
+
+    /// hemm / symm (f32) on the real GEMM kernels, as [`cgemm_real`]: left, alpha A expanded (agx_chemm_full) times
+    /// B's real view; right, alpha B expanded times A made full (its real view).
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn chemm_real(h: &mut Handle, right: bool, upper: bool, herm: bool, m: i64, n: i64, a: (*const c_void, i64), b: (*const c_void, i64), c: (*mut c_void, i64), alpha: (f32, f32), beta: (f32, f32)) -> cublasStatus_t {
+        let na = if right { n } else { m };
+        let (ar, ai) = alpha;
+        let full = |h: &Handle, out: *mut c_void, expand: bool| {
+            let (mut pa, mut po, mut na_, mut lda, mut up, mut he, mut ex, mut ar, mut ai) = (a.0, out, na, a.1, upper as i64, herm as i64, expand as i64, ar, ai);
+            cblas_launch(h, c"agx_chemm_full", &mut [arg(&mut pa), arg(&mut po), arg(&mut na_), arg(&mut lda), arg(&mut up), arg(&mut he), arg(&mut ex), arg(&mut ar), arg(&mut ai)], [na, na], [16, 4])
+        };
+        if !right {
+            let mem = scratch(h, (16 * m * m) as usize)?;
+            full(h, mem, true)?;
+            return real_product(h, m, n, 2 * m, mem, 2 * m, b.0, 2 * b.1, c, beta);
+        }
+        let b_bytes = ((16 * m * n) as usize).next_multiple_of(256);
+        let mem = scratch(h, b_bytes + (8 * n * n) as usize)?;
+        let af = (mem as *mut u8).add(b_bytes) as *mut c_void;
+        let (mut pb, mut xb, mut m_, mut n_, mut ldb, mut op, mut ar_, mut ai_) = (b.0, mem, m, n, b.1, 0i64, ar, ai);
+        cblas_launch(h, c"agx_cgemm_expand_a", &mut [arg(&mut pb), arg(&mut xb), arg(&mut m_), arg(&mut n_), arg(&mut ldb), arg(&mut op), arg(&mut ar_), arg(&mut ai_)], [m, n], [16, 4])?;
+        full(h, af, false)?;
+        real_product(h, m, n, 2 * n, mem, 2 * m, af, 2 * n, c, beta)
     }
 
     /// hemm (herm) and symm.
@@ -1696,6 +2114,10 @@ mod imp {
         let (mut br, mut bi) = cscalar::<R>(h, beta)?;
         if m == 0 || n == 0 {
             return Ok(());
+        }
+        if R::GEMM == Types::S && c as *const c_void != b && m * n >= CGEMM_REAL_MIN {
+            let f = |v: R| v.to_f64() as f32;
+            return chemm_real(h, right, upper, herm, m, n, (a, lda), (b, ldb), (c, ldc), (f(ar), f(ai)), (f(br), f(bi)));
         }
         // each element of C reads a row or column of B: in place, read a copy
         let mut copy = std::ptr::null_mut();
@@ -1755,11 +2177,30 @@ mod imp {
             (true, true) => (ar, R::negate(ai)),
             (true, false) => (ar, ai),
         };
+        // f32 above a block: the corners of the triangle outside the diagonal blocks are complex GEMMs on the real
+        // tile kernels (two for the 2k forms), and agx_crankk does only the diagonal blocks
+        let mut nb = 0i64;
+        if R::GEMM == Types::S && n > SYRK_BLOCK && k > 0 {
+            nb = SYRK_BLOCK;
+            let f = |v: R| v.to_f64() as f32;
+            let (alpha1, alpha2, beta) = ((f(ar), f(ai)), (f(a2r), f(a2i)), (f(br), f(bi)));
+            // rows r.. of op(M) (M's rows, or its columns when transposed): the left factor with op, and as the right
+            // factor, transposed (conjugated for the Hermitian forms), which for a transposed op is M's columns as they are
+            let at = |p: *const c_void, ld: i64, r: i64| p.byte_add(8 * if op == 0 { r } else { r * ld } as usize);
+            let op_right = if op == 0 { if herm { 2 } else { 1 } } else { 0 };
+            for [first, second, m, w] in agx_libs::syrk_corners(upper, n, SYRK_BLOCK) {
+                let cc = (c.byte_add(8 * (first + second * ldc) as usize), ldc);
+                cgemm_real(h, m, w, k, (at(a, lda, first), lda, op), (at(b, ldb, second), ldb, op_right), cc, alpha1, beta)?;
+                if two {
+                    cgemm_real(h, m, w, k, (at(b, ldb, first), ldb, op), (at(a, lda, second), lda, op_right), cc, alpha2, (1.0, 0.0))?;
+                }
+            }
+        }
         let (mut upper, mut herm, mut two) = (upper as i64, herm as i64, two as i64);
         cblas_launch(
             h,
             R::kernel(c"agx_crankk", c"agx_crankk_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut op), arg(&mut herm), arg(&mut two), arg(&mut ar), arg(&mut ai), arg(&mut a2r), arg(&mut a2i), arg(&mut br), arg(&mut bi)],
+            &mut [arg(&mut a), arg(&mut b), arg(&mut c), arg(&mut n), arg(&mut k), arg(&mut lda), arg(&mut ldb), arg(&mut ldc), arg(&mut upper), arg(&mut op), arg(&mut herm), arg(&mut two), arg(&mut ar), arg(&mut ai), arg(&mut a2r), arg(&mut a2i), arg(&mut br), arg(&mut bi), arg(&mut nb)],
             [n, n],
             [16, 4],
         )
@@ -2156,6 +2597,18 @@ mod imp {
         if m == 0 || n == 0 {
             return Ok(());
         }
+        if R::GEMM == Types::S && c as *const c_void != b && m * n >= CGEMM_REAL_MIN {
+            // the triangle made full (agx_ctri_full), then one complex GEMM on the real tile kernels with op on it
+            let na = if right { n } else { m };
+            let full_bytes = ((8 * na * na) as usize).next_multiple_of(256);
+            let mem = scratch(h, full_bytes + cgemm_real_bytes(m, n, na, if right { op } else { 0 }))?;
+            let (mut pa, mut full, mut na_, mut lda_, mut up, mut un) = (a, mem, na, lda, upper as i64, unit as i64);
+            cblas_launch(h, c"agx_ctri_full", &mut [arg(&mut pa), arg(&mut full), arg(&mut na_), arg(&mut lda_), arg(&mut up), arg(&mut un)], [na, na], [16, 4])?;
+            let rest = (mem as *mut u8).add(full_bytes) as *mut c_void;
+            let alpha = (ar.to_f64() as f32, ai.to_f64() as f32);
+            let (left_op, right_op) = if right { ((b, ldb, 0), (full as *const c_void, na, op)) } else { ((full as *const c_void, na, op), (b, ldb, 0)) };
+            return cgemm_real_in(h, rest, m, n, na, left_op, right_op, (c, ldc), alpha, (0.0, 0.0));
+        }
         let mut copy = std::ptr::null_mut();
         if c as *const c_void == b {
             let bytes = 2 * R::BYTES * ((n - 1) * ldb + m) as usize;
@@ -2179,28 +2632,64 @@ mod imp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    unsafe fn ctrsm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, mut m: i64, mut n: i64, alpha: *const c_void, mut a: *const c_void, mut lda: i64, mut b: *mut c_void, mut ldb: i64) -> cublasStatus_t {
+    unsafe fn ctrsm<R: Real>(h: cublasHandle_t, sd: cublasSideMode_t, uplo: cublasFillMode_t, trans: cublasOperation_t, diag: cublasDiagType_t, m: i64, n: i64, alpha: *const c_void, a: *const c_void, lda: i64, b: *mut c_void, ldb: i64) -> cublasStatus_t {
         let h = handle(h)?;
-        let (right, upper, mut op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
+        let (right, upper, op, unit) = (side(sd)?, fill(uplo)?, cop(trans)?, unit_diag(diag)?);
         if m < 0 || n < 0 {
             return Err(cublasError_t::INVALID_VALUE);
         }
         ld_ok(lda, if right { n } else { m })?;
         ld_ok(ldb, m)?;
-        let (mut ar, mut ai) = cscalar::<R>(h, alpha)?;
+        let (ar, ai) = cscalar::<R>(h, alpha)?;
         if m == 0 || n == 0 {
             return Ok(());
         }
-        let mut lower = (!upper ^ (op != 0) ^ right) as i64;
-        let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
-        let threads = if right == 1 { m } else { n };
-        cblas_launch(
-            h,
-            R::kernel(c"agx_ctrsm", c"agx_ctrsm_f64"),
-            &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut lower), arg(&mut ar), arg(&mut ai)],
-            [threads, 1],
-            [64, 1],
-        )
+        let lower = (!upper ^ (op != 0) ^ right) as i64;
+        let solve = |h: &Handle, mut a: *const c_void, mut b: *mut c_void, mut m: i64, mut n: i64, (mut ar, mut ai): (R, R)| {
+            let (mut lda, mut ldb, mut lower, mut op) = (lda, ldb, lower, op);
+            let (mut right, mut upper, mut unit) = (right as i64, upper as i64, unit as i64);
+            let threads = if right == 1 { m } else { n };
+            cblas_launch(
+                h,
+                R::kernel(c"agx_ctrsm", c"agx_ctrsm_f64"),
+                &mut [arg(&mut a), arg(&mut b), arg(&mut m), arg(&mut n), arg(&mut lda), arg(&mut ldb), arg(&mut right), arg(&mut upper), arg(&mut op), arg(&mut unit), arg(&mut lower), arg(&mut ar), arg(&mut ai)],
+                [threads, 1],
+                [64, 1],
+            )
+        };
+        let na = if right { n } else { m };
+        if R::GEMM != Types::S || na <= engine::TRSM_BLOCK {
+            return solve(h, a, b, m, n, (ar, ai));
+        }
+        // f32 above a block, as the real trsm: blocks of op(A) solved by agx_ctrsm, each taken out of the rest of B
+        // with a complex GEMM on the real tile kernels; the first applies alpha to the rest through its beta
+        let op_lower = !upper ^ (op != 0);
+        let alpha = (ar.to_f64() as f32, ai.to_f64() as f32);
+        // op(A) from row r and column c, for the GEMM with op
+        let op_a = |r: i64, c: i64| a.byte_add(8 * if op != 0 { c + r * lda } else { r + c * lda } as usize);
+        let at_b = |r: i64, c: i64| b.byte_add(8 * (r + c * ldb) as usize);
+        let one = (R::one(), R::scalar_zero());
+        for (i, [k0, k1, u0, u1]) in engine::trsm_steps(na, if right { !op_lower } else { op_lower }).into_iter().enumerate() {
+            let (bs, first) = (k1 - k0, i == 0);
+            let diagonal = a.byte_add(8 * (k0 * (lda + 1)) as usize);
+            if right {
+                solve(h, diagonal, at_b(0, k0), m, bs, if first { (ar, ai) } else { one })?;
+            } else {
+                solve(h, diagonal, at_b(k0, 0), bs, n, if first { (ar, ai) } else { one })?;
+            }
+            if u1 == u0 {
+                continue;
+            }
+            let beta = if first { alpha } else { (1.0, 0.0) };
+            if right {
+                // B(:, u) = -X(:, k) op(A)(k, u) + beta B(:, u)
+                cgemm_real(h, m, u1 - u0, bs, (at_b(0, k0), ldb, 0), (op_a(k0, u0), lda, op), (at_b(0, u0), ldb), (-1.0, 0.0), beta)?;
+            } else {
+                // B(u, :) = -op(A)(u, k) X(k, :) + beta B(u, :)
+                cgemm_real(h, u1 - u0, n, bs, (op_a(u0, k0), lda, op), (at_b(k0, 0), ldb, 0), (at_b(u0, 0), ldb), (-1.0, 0.0), beta)?;
+            }
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]

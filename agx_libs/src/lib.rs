@@ -15,10 +15,14 @@ static HGEMM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hgemm.agxfat"));
 static EPILOGUE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/epilogue.agxfat"));
 /// The 2-D convolution kernels of zluda_dnn_agx (`kernels/conv.mlir`).
 pub static CONV: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv.agxfat"));
+/// The same kernels with 32-bit indices, named `<kernel>_i32`, for problems whose offsets all fit in 31 bits.
+pub static CONV_I32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/conv_i32.agxfat"));
 /// The FFT kernels of zluda_fft_agx (`kernels/fft.mlir`).
 pub static FFT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/fft.agxfat"));
 /// The pointwise, softmax, pooling and batch normalization kernels of zluda_dnn_agx (`kernels/dnn.mlir`).
 pub static DNN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn.agxfat"));
+/// The same kernels with 32-bit indices, named `<kernel>_i32`.
+pub static DNN_I32: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dnn_i32.agxfat"));
 /// The level 1 and 2 kernels of zluda_blas_agx (`kernels/blas.mlir`).
 pub static BLAS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/blas.agxfat"));
 /// The complex BLAS kernels of zluda_blas_agx (`kernels/blasc.mlir`, with f64 copies for the Z routines).
@@ -66,32 +70,112 @@ impl Types {
 /// How one GEMM runs: which kernel, its launch shape and its arguments after the three matrix pointers.
 #[derive(Debug, PartialEq)]
 pub enum Plan {
-    /// `agx_sgemm_tile64` on row-major matrices: (a, b, c) pointers then M, N, K, lda, ldb, ldc.
-    Tile { swap: bool, dims: [u64; 6], groups: u32 },
+    /// `agx_sgemm_tile64` on row-major matrices: (a, b, c) pointers then M, N, K, lda, ldb, ldc, the variant reading
+    /// A transposed (`_ta`, A[r, k] at a[k lda + r]) and B transposed (`_tb`, B[k, c] at b[c ldb + k]) as `trans`.
+    /// `aligned`: the kernel that assumes 8-byte aligned matrices and even leading dimensions and batch strides (its
+    /// two-element loads are one access), else the `_u` one.
+    Tile { swap: bool, trans: [bool; 2], aligned: bool, dims: [u64; 6], groups: u32 },
     /// `agx_sgemm_generic`: (a, b, c) then M, N, K and the (row, column) element strides of op(A), op(B) and C.
     Generic { dims: [u64; 9], grid: [u32; 2] },
+    /// `agx_sgemm_dot`: the arguments of `Generic`, a SIMD-group per element of C (`groups` threadgroups of 128).
+    Dot { dims: [u64; 9], groups: u32 },
+}
+
+/// One launch of a GEMM: its plan, the element offsets of its A, B and C from the GEMM's, and whether it adds to C
+/// (beta 1: the K remainder of a product the earlier parts started).
+#[derive(Debug, PartialEq)]
+pub struct Part {
+    pub plan: Plan,
+    pub offsets: [u64; 3],
+    pub accumulate: bool,
 }
 
 pub const GENERIC_BLOCK: [u32; 2] = [16, 8];
 
-/// The kernel for column-major `C (m x n, ldc) = alpha op(A) op(B) + beta C`. Seen row-major, column-major C is C^T
-/// = op(B)^T op(A)^T, so without transposes the row-major tile kernel computes it with A and B swapped (`swap`).
-pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64, aligned: bool) -> Plan {
-    if !ta && !tb && m % 64 == 0 && n % 64 == 0 && k % 8 == 0 && [lda, ldb, ldc].iter().all(|l| l % 2 == 0) && aligned
-    {
-        // row-major M' = n, N' = m: A' = B (n x k, ld ldb), B' = A (k x m, ld lda)
-        return Plan::Tile { swap: true, dims: [n, m, k, ldb, lda, ldc], groups: ((n / 64) * (m / 64)) as u32 };
-    }
+/// Up to this many columns (or rows) of C, with op(A) (or op(B)) contiguous along K, a product runs on the dot kernel.
+pub const DOT_SIDE: u64 = 8;
+
+fn generic(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64) -> Plan {
     // element (i, k) of op(A): A[i + k lda], or A[k + i lda] transposed; (k, j) of op(B) likewise; C[i + j ldc]
     let sa = if ta { [lda, 1] } else { [1, lda] };
     let sb = if tb { [ldb, 1] } else { [1, ldb] };
+    let dims = [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc];
+    // A GEMV-shaped product: a thread per element of C would leave most lanes idle (or read K apart from each
+    // other); the dot kernel's lanes read the long operand along K together.
+    let threads = m.saturating_mul(n).saturating_mul(32);
+    if k >= 32 && ((n <= DOT_SIDE && ta) || (m <= DOT_SIDE && !tb)) && threads.div_ceil(128) <= u32::MAX as u64 {
+        return Plan::Dot { dims, groups: threads.div_ceil(128) as u32 };
+    }
     Plan::Generic {
-        dims: [m, n, k, sa[0], sa[1], sb[0], sb[1], 1, ldc],
+        dims,
         grid: [n.div_ceil(GENERIC_BLOCK[0] as u64) as u32, m.div_ceil(GENERIC_BLOCK[1] as u64) as u32],
     }
 }
 
+/// The launches for column-major `C (m x n, ldc) = alpha op(A) op(B) + beta C`. Seen row-major, column-major C is
+/// C^T = op(B)^T op(A)^T, which the row-major tile kernel computes with A and B swapped (`swap`): A' = op(B)^T is B
+/// read row-major (ld ldb), or transposed when op(B) is B^T, and B' = op(A)^T likewise A. The tile kernel takes the
+/// largest block of C whose sides are multiples of 64, along the largest multiple of 8 of K; the generic kernel the
+/// rest: the columns of C right of the block, the rows below it, and then the remaining steps of K added to all of C.
+/// `tile`: whether the type has tile kernels (not f64); `aligned`: whether the matrices are 8-byte aligned and the
+/// batch strides even (the leading dimensions are checked here).
+pub fn plan(ta: bool, tb: bool, m: u64, n: u64, k: u64, lda: u64, ldb: u64, ldc: u64, tile: bool, aligned: bool) -> Vec<Part> {
+    let part = |plan, offsets, accumulate| Part { plan, offsets, accumulate };
+    let (m64, n64, k8) = (m / 64 * 64, n / 64 * 64, k / 8 * 8);
+    if m64 == 0 || n64 == 0 || k8 == 0 || !tile {
+        return vec![part(generic(ta, tb, m, n, k, lda, ldb, ldc), [0; 3], false)];
+    }
+    // row-major M' = n, N' = m
+    let mut parts = vec![part(
+        Plan::Tile {
+            swap: true,
+            trans: [tb, ta],
+            aligned: aligned && [lda, ldb, ldc].iter().all(|l| l % 2 == 0),
+            dims: [n64, m64, k8, ldb, lda, ldc],
+            groups: ((n64 / 64) * (m64 / 64)) as u32,
+        },
+        [0; 3],
+        false,
+    )];
+    // element offsets of column j of op(B), row i of op(A), and step l of K in each
+    let col_b = |j: u64| if tb { j } else { j * ldb };
+    let row_a = |i: u64| if ta { i * lda } else { i };
+    let (step_a, step_b) = (|l: u64| if ta { l } else { l * lda }, |l: u64| if tb { l * ldb } else { l });
+    if n64 < n {
+        // columns n64.. of op(B) and C, all of op(A)
+        parts.push(part(generic(ta, tb, m, n - n64, k8, lda, ldb, ldc), [0, col_b(n64), n64 * ldc], false));
+    }
+    if m64 < m {
+        // rows m64.. of op(A) and C, columns ..n64 of op(B) and C
+        parts.push(part(generic(ta, tb, m - m64, n64, k8, lda, ldb, ldc), [row_a(m64), 0, m64], false));
+    }
+    if k8 < k {
+        // steps k8.. of K, added to C
+        parts.push(part(generic(ta, tb, m, n, k - k8, lda, ldb, ldc), [step_a(k8), step_b(k8), 0], true));
+    }
+    parts
+}
+
 /// IEEE binary16 to f32 (exact).
+/// The part of a triangle (upper or lower) of an n x n matrix outside its diagonal `block` x `block` blocks, as
+/// rectangles [first row, first column, rows, columns]: halving at a block boundary, the corner between the halves is
+/// one rectangle and the halves recurse. Blocked syrk-like updates (zluda_blas_agx's syrk / syr2k, zluda_solver_agx's
+/// potrf) run a GEMM on each and a kernel restricted to the diagonal blocks.
+pub fn syrk_corners(upper: bool, n: i64, block: i64) -> Vec<[i64; 4]> {
+    fn split(upper: bool, lo: i64, size: i64, block: i64, out: &mut Vec<[i64; 4]>) {
+        if size <= block {
+            return;
+        }
+        let half = (size / 2 + block - 1) / block * block;
+        out.push(if upper { [lo, lo + half, half, size - half] } else { [lo + half, lo, size - half, half] });
+        split(upper, lo, half, block, out);
+        split(upper, lo + half, size - half, block, out);
+    }
+    let mut out = Vec::new();
+    split(upper, 0, n, block, &mut out);
+    out
+}
+
 pub fn f16_to_f32(h: u16) -> f32 {
     let (sign, exp, frac) = ((h as u32 & 0x8000) << 16, (h >> 10) & 0x1f, h as u32 & 0x3ff);
     let bits = match exp {
@@ -208,9 +292,11 @@ pub mod engine {
     #[derive(Clone, Copy)]
     struct Kernels {
         ctx: usize,
-        /// By `Types::index`.
-        tile: [CUfunction; 3],
+        /// By `Types::index`, then whether the kernel reads A and B transposed.
+        /// ... and whether it assumes alignment (`Plan::Tile::aligned`, 1) or not (0).
+        tile: [[[[CUfunction; 2]; 2]; 2]; 3],
         generic: [CUfunction; 4],
+        dot: [CUfunction; 4],
         /// f32 and f16 D.
         epilogue: [CUfunction; 2],
     }
@@ -238,14 +324,28 @@ pub mod engine {
             let mut f = CUfunction(std::ptr::null_mut());
             (d.function)(&mut f, m, name.as_ptr() as *const c_char).map(|_| f).map_err(|_| Error::Failed)
         };
+        let variants = |m: CUmodule, base: &str| -> Result<[[CUfunction; 2]; 2], Error> {
+            let f = |suffix: &str| get(m, format!("{base}{suffix}\0").as_bytes());
+            Ok([[f("")?, f("_tb")?], [f("_ta")?, f("_tatb")?]])
+        };
         let k = Kernels {
             ctx: key,
-            tile: [get(sm, b"agx_sgemm_tile64\0")?, get(hm, b"agx_hgemm_tile64_cf16\0")?, get(hm, b"agx_hgemm_tile64_cf32\0")?],
+            tile: [
+                [variants(sm, "agx_sgemm_tile64_u")?, variants(sm, "agx_sgemm_tile64")?],
+                [variants(hm, "agx_hgemm_tile64_cf16_u")?, variants(hm, "agx_hgemm_tile64_cf16")?],
+                [variants(hm, "agx_hgemm_tile64_cf32_u")?, variants(hm, "agx_hgemm_tile64_cf32")?],
+            ],
             generic: [
                 get(sm, b"agx_sgemm_generic\0")?,
                 get(hm, b"agx_hgemm_generic_cf16\0")?,
                 get(hm, b"agx_hgemm_generic_cf32\0")?,
                 get(sm, b"agx_dgemm_generic\0")?,
+            ],
+            dot: [
+                get(sm, b"agx_sgemm_dot\0")?,
+                get(hm, b"agx_hgemm_dot_cf16\0")?,
+                get(hm, b"agx_hgemm_dot_cf32\0")?,
+                get(sm, b"agx_dgemm_dot\0")?,
             ],
             epilogue: [get(em, b"agx_epilogue_f32\0")?, get(em, b"agx_epilogue_f16\0")?],
         };
@@ -351,9 +451,16 @@ pub mod engine {
     }
 
     unsafe fn launch(d: &Driver, f: CUfunction, grid: [u32; 2], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
-        (d.launch)(f, grid[0], grid[1], 1, block[0], block[1], 1, 0, stream, params.as_mut_ptr(), std::ptr::null_mut())
+        launch3(d, f, [grid[0], grid[1], 1], block, params, stream)
+    }
+
+    unsafe fn launch3(d: &Driver, f: CUfunction, grid: [u32; 3], block: [u32; 2], params: &mut [*mut c_void], stream: CUstream) -> Result<(), Error> {
+        (d.launch)(f, grid[0], grid[1], grid[2], block[0], block[1], 1, 0, stream, params.as_mut_ptr(), std::ptr::null_mut())
             .map_err(|_| Error::Failed)
     }
+
+    /// Batch entries per launch: the kernels take the batch index from grid y (z for the generic kernel).
+    const BATCH_PER_LAUNCH: u64 = 65535;
 
     pub unsafe fn gemm(g: &Gemm, stream: CUstream) -> Result<(), Error> {
         if g.m == 0 || g.n == 0 || g.batch == 0 {
@@ -364,26 +471,35 @@ pub mod engine {
         let (types, (a, b, c)) = (g.types, (g.a, g.b, g.c));
         let aligned = [a as usize, b as usize, c as usize].iter().all(|p| p % 8 == 0)
             && [g.stride_a, g.stride_b, g.stride_c].iter().all(|s| s % 2 == 0);
-        let p = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, aligned && types != Types::D);
-        for i in 0..g.batch as isize {
+        let parts = plan(g.ta, g.tb, g.m, g.n, g.k, g.lda, g.ldb, g.ldc, types != Types::D, aligned);
+        // Each part runs once for up to BATCH_PER_LAUNCH batch entries, which the kernels find stride_* elements on.
+        let first_entries = (0..g.batch).step_by(BATCH_PER_LAUNCH as usize);
+        for (first, part) in first_entries.flat_map(|i| parts.iter().map(move |p| (i as isize, p))) {
+            let entries = (g.batch - first as u64).min(BATCH_PER_LAUNCH) as u32;
             let (ab, cb) = (types.ab_bytes(), types.c_bytes());
+            let [oa, ob, oc] = part.offsets.map(|o| o as isize);
             let (mut pa, mut pb, mut pc) = (
-                a.byte_offset(i * g.stride_a as isize * ab),
-                b.byte_offset(i * g.stride_b as isize * ab),
-                c.byte_offset(i * g.stride_c as isize * cb),
+                a.byte_offset((first * g.stride_a as isize + oa) * ab),
+                b.byte_offset((first * g.stride_b as isize + ob) * ab),
+                c.byte_offset((first * g.stride_c as isize + oc) * cb),
             );
-            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 2], [u32; 2]) = match &p {
-                Plan::Tile { swap, dims, groups } => {
+            let (mut sa, mut sb, sc) = (g.stride_a, g.stride_b, g.stride_c);
+            let (f, dims, grid, block): (CUfunction, &[u64], [u32; 3], [u32; 2]) = match &part.plan {
+                Plan::Tile { swap, trans, aligned, dims, groups } => {
                     if *swap {
                         std::mem::swap(&mut pa, &mut pb);
+                        std::mem::swap(&mut sa, &mut sb);
                     }
-                    (kernels.tile[types.index()], &dims[..], [*groups, 1], [128, 1])
+                    (kernels.tile[types.index()][*aligned as usize][trans[0] as usize][trans[1] as usize], &dims[..], [*groups, entries, 1], [128, 1])
                 }
-                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], *grid, GENERIC_BLOCK),
+                Plan::Generic { dims, grid } => (kernels.generic[types.index()], &dims[..], [grid[0], grid[1], entries], GENERIC_BLOCK),
+                Plan::Dot { dims, groups } => (kernels.dot[types.index()], &dims[..], [*groups, entries, 1], [128, 1]),
             };
             let mut dims = dims.to_vec();
-            let (mut alpha, mut beta) = (g.alpha as f32, g.beta as f32);
-            let (mut alpha64, mut beta64) = (g.alpha, g.beta);
+            dims.extend([sa, sb, sc].map(|s| s as u64));
+            let beta = if part.accumulate { 1.0 } else { g.beta };
+            let (mut alpha, mut beta) = (g.alpha as f32, beta as f32);
+            let (mut alpha64, mut beta64) = (g.alpha, beta as f64);
             let mut params: Vec<*mut c_void> = vec![
                 &mut pa as *mut _ as *mut c_void,
                 &mut pb as *mut _ as *mut c_void,
@@ -397,7 +513,7 @@ pub mod engine {
                 params.push(&mut alpha as *mut f32 as *mut c_void);
                 params.push(&mut beta as *mut f32 as *mut c_void);
             }
-            launch(d, f, grid, block, &mut params, stream)?;
+            launch3(d, f, grid, block, &mut params, stream)?;
         }
         Ok(())
     }
@@ -411,8 +527,121 @@ pub mod engine {
         Gelu,
     }
 
+    /// Column-major f32 `op(A) X = alpha B` (left) or `X op(A) = alpha B` (right), X overwriting B (m x n), for a
+    /// triangular A (`upper`, `unit` diagonal), as cuBLAS's trsm. The arguments must be valid.
+    pub struct Trsm {
+        pub right: bool,
+        pub upper: bool,
+        pub trans: bool,
+        pub unit: bool,
+        pub m: i64,
+        pub n: i64,
+        /// f32 values exactly, but for `double`
+        pub alpha: f64,
+        pub a: *const c_void,
+        pub lda: i64,
+        pub b: *mut c_void,
+        pub ldb: i64,
+        /// f64 matrices (agx_strsm_f64 and the f64 GEMM) instead of f32
+        pub double: bool,
+    }
+
+    /// The rows of op(A) [`trsm`] solves at once.
+    pub const TRSM_BLOCK: i64 = 64;
+
+    /// trsm on BLAS's agx_strsm (one thread per column of B, or per row on the right side). Above TRSM_BLOCK rows of
+    /// A, by blocks of TRSM_BLOCK rows of op(A), each solved that way and then taken out of the rest of B with a GEMM
+    /// on the tile kernels; the first GEMM also applies alpha to the rest.
+    pub unsafe fn trsm(t: &Trsm, stream: CUstream) -> Result<(), Error> {
+        if t.m == 0 || t.n == 0 {
+            return Ok(());
+        }
+        let f = function(BLAS, if t.double { c"agx_strsm_f64" } else { c"agx_strsm" })?;
+        // element bytes
+        let e = if t.double { 8 } else { 4 };
+        // the per-thread system is lower triangular when an even number of the stored lower triangle, the
+        // transpose and the right side flip it
+        let lower = (!t.upper ^ t.trans ^ t.right) as i64;
+        let solve = |a: *const c_void, b: *mut c_void, m: i64, n: i64, alpha: f64| {
+            // the kernel's alpha is of the value type
+            let (mut a, mut b, mut m, mut n, mut alpha32, mut alpha64) = (a, b, m, n, alpha as f32, alpha);
+            let (mut lda, mut ldb, mut lower) = (t.lda, t.ldb, lower);
+            let (mut right, mut upper, mut trans, mut unit) = (t.right as i64, t.upper as i64, t.trans as i64, t.unit as i64);
+            let threads = if t.right { m } else { n } as u64;
+            let mut params = [&mut a as *mut _ as *mut c_void, &mut b as *mut _ as *mut c_void, &mut m as *mut _ as *mut c_void,
+                              &mut n as *mut _ as *mut c_void, &mut lda as *mut _ as *mut c_void, &mut ldb as *mut _ as *mut c_void,
+                              &mut right as *mut _ as *mut c_void, &mut upper as *mut _ as *mut c_void,
+                              &mut trans as *mut _ as *mut c_void, &mut unit as *mut _ as *mut c_void,
+                              &mut lower as *mut _ as *mut c_void,
+                              if t.double { &mut alpha64 as *mut _ as *mut c_void } else { &mut alpha32 as *mut _ as *mut c_void }];
+            let groups = u32::try_from(threads.div_ceil(64)).map_err(|_| Error::Failed)?;
+            launch_kernel(f, [groups, 1], [64, 1], &mut params, stream)
+        };
+        let na = if t.right { t.n } else { t.m };
+        if na <= TRSM_BLOCK {
+            return solve(t.a, t.b, t.m, t.n, t.alpha);
+        }
+        let op_lower = !t.upper ^ t.trans;
+        // op(A) from row r and column c, and whether the GEMM transposes it
+        let op_a = |r: i64, c: i64| (t.a.byte_add(e * if t.trans { c + r * t.lda } else { r + c * t.lda } as usize), t.trans);
+        let at_b = |r: i64, c: i64| t.b.byte_add(e * (r + c * t.ldb) as usize);
+        for (i, [k0, k1, u0, u1]) in trsm_steps(na, if t.right { !op_lower } else { op_lower }).into_iter().enumerate() {
+            let (bs, first) = (k1 - k0, i == 0);
+            let diagonal = t.a.byte_add(e * (k0 * (t.lda + 1)) as usize);
+            if t.right {
+                solve(diagonal, at_b(0, k0), t.m, bs, if first { t.alpha } else { 1.0 })?;
+            } else {
+                solve(diagonal, at_b(k0, 0), bs, t.n, if first { t.alpha } else { 1.0 })?;
+            }
+            if u1 == u0 {
+                continue;
+            }
+            // left: B(u, :) -= op(A)(u, k) X(k, :); right: B(:, u) -= X(:, k) op(A)(k, u)
+            let ((pa, ta), (pb, tb), (m, n), pc, (lda, ldb)) = if t.right {
+                ((at_b(0, k0) as *const c_void, false), op_a(k0, u0), (t.m, u1 - u0), at_b(0, u0), (t.ldb, t.lda))
+            } else {
+                (op_a(u0, k0), (at_b(k0, 0) as *const c_void, false), (u1 - u0, t.n), at_b(u0, 0), (t.lda, t.ldb))
+            };
+            gemm(
+                &Gemm {
+                    types: if t.double { Types::D } else { Types::S },
+                    ta,
+                    tb,
+                    m: m as u64,
+                    n: n as u64,
+                    k: bs as u64,
+                    alpha: -1.0,
+                    beta: if first { t.alpha } else { 1.0 },
+                    a: pa,
+                    lda: lda as u64,
+                    stride_a: 0,
+                    b: pb,
+                    ldb: ldb as u64,
+                    stride_b: 0,
+                    c: pc,
+                    ldc: t.ldb as u64,
+                    stride_c: 0,
+                    batch: 1,
+                },
+                stream,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The steps of a blocked trsm over the n rows of op(A): [first, end) of the block solved, then [first, end) of
+    /// the rows that GEMM updates with it (all the blocks not yet solved). Forward from the first block (op(A)
+    /// lower on the left, upper on the right) or backward from the last.
+    pub fn trsm_steps(n: i64, forward: bool) -> Vec<[i64; 4]> {
+        let mut blocks: Vec<(i64, i64)> = (0..n).step_by(TRSM_BLOCK as usize).map(|k| (k, (k + TRSM_BLOCK).min(n))).collect();
+        if !forward {
+            blocks.reverse();
+        }
+        blocks.into_iter().map(|(k0, k1)| if forward { [k0, k1, k1, n] } else { [k0, k1, 0, k0] }).collect()
+    }
+
     /// `D[i, j] = act(D[i, j] + bias[i])` for column-major m x n matrices (bias has m elements of D's type, or none),
-    /// for `batch` matrices `stride` elements apart.
+    /// for `batch` matrices `stride` elements apart, with biases `bias_stride` elements apart (0: one bias).
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn epilogue(
         half: bool,
@@ -423,6 +652,7 @@ pub mod engine {
         stride: i64,
         batch: u64,
         bias: *const c_void,
+        bias_stride: i64,
         act: Activation,
         stream: CUstream,
     ) -> Result<(), Error> {
@@ -432,13 +662,15 @@ pub mod engine {
         let d = driver()?;
         let f = kernels(d)?.epilogue[half as usize];
         let size = if half { 2 } else { 4 };
-        for i in 0..batch as isize {
-            let mut p = d_ptr.byte_offset(i * stride as isize * size);
-            let mut bp = bias;
-            let mut dims = [m, n, ld, !bias.is_null() as u64, act as u64];
+        // the batch entry is grid z
+        for first in (0..batch).step_by(BATCH_PER_LAUNCH as usize) {
+            let entries = (batch - first).min(BATCH_PER_LAUNCH) as u32;
+            let mut p = d_ptr.byte_offset(first as isize * stride as isize * size);
+            let mut bp = if bias.is_null() { bias } else { bias.byte_offset(first as isize * bias_stride as isize * size) };
+            let mut dims = [m, n, ld, !bias.is_null() as u64, act as u64, stride as u64, bias_stride as u64];
             let mut params: Vec<*mut c_void> = vec![&mut p as *mut _ as *mut c_void, &mut bp as *mut _ as *mut c_void];
             params.extend(dims.iter_mut().map(|v| v as *mut u64 as *mut c_void));
-            launch(d, f, [m.div_ceil(16) as u32, n.div_ceil(8) as u32], [16, 8], &mut params, stream)?;
+            launch3(d, f, [m.div_ceil(16) as u32, n.div_ceil(8) as u32, entries], [16, 8], &mut params, stream)?;
         }
         Ok(())
     }
@@ -448,20 +680,32 @@ pub mod engine {
 mod tests {
     use super::*;
 
-    /// What the planned kernel computes, on the CPU, with the kernels' documented semantics.
+    /// What the planned launches compute, on the CPU, with the kernels' documented semantics.
+    fn run_parts(parts: &[Part], a: &[f32], b: &[f32], c: &mut [f32], alpha: f32, beta: f32) {
+        for part in parts {
+            let [oa, ob, oc] = part.offsets.map(|o| o as usize);
+            let beta = if part.accumulate { 1.0 } else { beta };
+            run_plan(&part.plan, &a[oa..], &b[ob..], &mut c[oc..], alpha, beta);
+        }
+    }
+
     fn run_plan(p: &Plan, a: &[f32], b: &[f32], c: &mut [f32], alpha: f32, beta: f32) {
         match p {
-            Plan::Tile { swap, dims: [mm, nn, kk, lda, ldb, ldc], .. } => {
+            Plan::Tile { swap, trans, dims: [mm, nn, kk, lda, ldb, ldc], .. } => {
                 let (a, b) = if *swap { (b, a) } else { (a, b) };
+                let (lda, ldb) = (*lda as usize, *ldb as usize);
+                let at = |i: usize, k: usize| if trans[0] { a[k * lda + i] } else { a[i * lda + k] };
+                let bt = |k: usize, j: usize| if trans[1] { b[j * ldb + k] } else { b[k * ldb + j] };
                 for i in 0..*mm as usize {
                     for j in 0..*nn as usize {
-                        let s: f32 = (0..*kk as usize).map(|k| a[i * *lda as usize + k] * b[k * *ldb as usize + j]).sum();
+                        let s: f32 = (0..*kk as usize).map(|k| at(i, k) * bt(k, j)).sum();
                         let p = i * *ldc as usize + j;
                         c[p] = alpha * s + if beta == 0.0 { 0.0 } else { beta * c[p] };
                     }
                 }
             }
-            Plan::Generic { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. } => {
+            Plan::Generic { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. }
+            | Plan::Dot { dims: [m, n, k, sar, sac, sbr, sbc, scr, scc], .. } => {
                 for i in 0..*m as usize {
                     for j in 0..*n as usize {
                         let s: f32 = (0..*k as usize)
@@ -492,6 +736,28 @@ mod tests {
     }
 
     #[test]
+    fn trsm_steps_solve_each_block_once_and_update_the_rest() {
+        for n in [65, 128, 129, 300] {
+            for forward in [false, true] {
+                let steps = engine::trsm_steps(n, forward);
+                let mut solved = vec![false; n as usize];
+                for [k0, k1, u0, u1] in steps {
+                    assert!(k1 - k0 <= engine::TRSM_BLOCK && k0 % engine::TRSM_BLOCK == 0);
+                    for r in k0..k1 {
+                        assert!(!solved[r as usize]);
+                        solved[r as usize] = true;
+                    }
+                    // the update covers exactly the rows not solved yet
+                    for r in 0..n {
+                        assert_eq!((u0..u1).contains(&r), !solved[r as usize], "n {n} forward {forward} row {r}");
+                    }
+                }
+                assert!(solved.iter().all(|&s| s));
+            }
+        }
+    }
+
+    #[test]
     fn plans_compute_column_major_gemm() {
         let mut seed = 7u32;
         let mut rnd = move || {
@@ -504,15 +770,25 @@ mod tests {
             (true, false, 9, 4, 6),
             (false, true, 3, 11, 2),
             (true, true, 8, 8, 8),
+            (false, false, 70, 130, 21),
+            (false, false, 64, 77, 8),
+            (false, false, 100, 64, 19),
+            (true, false, 70, 130, 21),
+            (false, true, 130, 70, 13),
+            (true, true, 64, 64, 8),
+            (true, false, 128, 64, 30),
         ] {
             let (lda, ldb, ldc) = ((if ta { k } else { m }) + 2, (if tb { n } else { k }) + 4, m + 6);
             let a: Vec<f32> = (0..lda * if ta { m } else { k }).map(|_| rnd()).collect();
             let b: Vec<f32> = (0..ldb * if tb { k } else { n }).map(|_| rnd()).collect();
             let c0: Vec<f32> = (0..ldc * n).map(|_| rnd()).collect();
-            let p = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, true);
-            assert_eq!(matches!(p, Plan::Tile { .. }), (ta, tb, m, n, k) == (false, false, 64, 128, 16));
+            let parts = plan(ta, tb, m as u64, n as u64, k as u64, lda as u64, ldb as u64, ldc as u64, true, true);
+            let tiled = m >= 64 && n >= 64 && k >= 8;
+            assert_eq!(matches!(parts[0].plan, Plan::Tile { .. }), tiled, "{ta} {tb} {m}x{n}x{k}");
+            let even = [lda, ldb, ldc].iter().all(|l| l % 2 == 0);
+            assert!(!tiled || matches!(parts[0].plan, Plan::Tile { aligned, .. } if aligned == even), "{ta} {tb} {m}x{n}x{k}");
             let (mut got, mut want) = (c0.clone(), c0.clone());
-            run_plan(&p, &a, &b, &mut got, 1.5, 0.25);
+            run_parts(&parts, &a, &b, &mut got, 1.5, 0.25);
             reference(ta, tb, m, n, k, &a, lda, &b, ldb, &mut want, ldc, 1.5, 0.25);
             for (g, w) in got.iter().zip(&want) {
                 assert!((g - w).abs() <= 1e-5 * (1.0 + w.abs()), "{ta} {tb} {m}x{n}x{k}: {g} != {w}");
@@ -523,8 +799,12 @@ mod tests {
     #[test]
     fn the_fat_objects_have_the_kernels_for_the_m2_max() {
         for (fat, names) in [
-            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_generic", "agx_dgemm_generic"][..]),
-            (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32"][..]),
+            (SGEMM, &["agx_sgemm_tile64", "agx_sgemm_tile64_ta", "agx_sgemm_tile64_tb", "agx_sgemm_tile64_tatb",
+                      "agx_sgemm_tile64_u", "agx_sgemm_tile64_u_tatb",
+                      "agx_sgemm_generic", "agx_dgemm_generic", "agx_sgemm_dot", "agx_dgemm_dot"][..]),
+            (HGEMM, &["agx_hgemm_tile64_cf16", "agx_hgemm_tile64_cf32", "agx_hgemm_tile64_cf16_tatb",
+                      "agx_hgemm_tile64_cf32_tb", "agx_hgemm_generic_cf16", "agx_hgemm_generic_cf32",
+                      "agx_hgemm_dot_cf16", "agx_hgemm_dot_cf32"][..]),
         ] {
             assert_eq!(&fat[..8], b"ZAGXFAT1");
             let s = String::from_utf8_lossy(fat);

@@ -5,6 +5,11 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/AutoUpgrade.h>
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/IRReader/IRReader.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/SourceMgr.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
@@ -300,6 +305,47 @@ bool LLVMZludaParseCommandLineOptions(int argc, const char *const *argv,
 // Function attributes are emitted in their textual form, which newer LLVM
 // versions only understand after upgrading them (for example
 // "denormal-fp-math" to denormal_fpenv).
+// Links into Dest the definitions of the library (bitcode, loaded lazily, or textual IR) that Dest uses, and
+// those they use in turn: the AGX helper library is linked into every module, and parsing, verifying and
+// optimizing all of it took most of a small kernel's compile time. Returns false with *Error set on failure.
+bool LLVMZludaLinkUsedDefinitions(LLVMModuleRef Dest, const char *Data, size_t Size, const char *Name, char **Error)
+{
+    using namespace llvm;
+    Module &D = *unwrap(Dest);
+    std::unique_ptr<MemoryBuffer> Buffer =
+        MemoryBuffer::getMemBuffer(StringRef(Data, Size), Name, /*RequiresNullTerminator=*/false);
+    std::unique_ptr<Module> Lib;
+    if (isBitcode(reinterpret_cast<const unsigned char *>(Data), reinterpret_cast<const unsigned char *>(Data) + Size))
+    {
+        Expected<std::unique_ptr<Module>> Lazy = getOwningLazyBitcodeModule(std::move(Buffer), D.getContext());
+        if (!Lazy)
+        {
+            *Error = strdup(toString(Lazy.takeError()).c_str());
+            return false;
+        }
+        Lib = std::move(*Lazy);
+    }
+    else
+    {
+        SMDiagnostic Diag;
+        Lib = parseIR(Buffer->getMemBufferRef(), Diag, D.getContext());
+        if (!Lib)
+        {
+            std::string Message;
+            raw_string_ostream OS(Message);
+            Diag.print(Name, OS);
+            *Error = strdup(Message.c_str());
+            return false;
+        }
+    }
+    if (Linker::linkModules(D, std::move(Lib), Linker::Flags::LinkOnlyNeeded))
+    {
+        *Error = strdup("could not link the helper library");
+        return false;
+    }
+    return true;
+}
+
 void LLVMZludaUpgradeFunctionAttributes(LLVMModuleRef M)
 {
     for (llvm::Function &F : *llvm::unwrap(M))
