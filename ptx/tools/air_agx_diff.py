@@ -18,15 +18,16 @@ that are addresses are compared as (symbol, offset): the device address of the A
 address-patched probe buffer in each job, global variables by their symbols on each side.
 
 Every differing element is classified:
-  ftz    one side flushed an f32 subnormal: the values are equal once f32 subnormals are flushed to zero
-  nan    both values are NaNs (only the payload or sign differs)
+  ftz    one side flushed an f32 subnormal: one value is an f32 subnormal, the other a zero
+  nan    both values are NaNs (only the payload or sign differs); also each half of a packed f16x2 / bf16x2
   ulp    the program uses an approximate function (rcp/rsqrt/sqrt/ex2/lg2/sin/cos/tanh .approx, div.approx/full)
          and the values are within --ulps ULPs (the distance is reported)
   real   anything else
 Float interpretations are taken from the buffer's (or its .expect's) type, else from the float types the module
 uses (most buffers are .u32 holding float bits); an element is an address match before anything else.
 A program is SAME, or DIFF-<worst class> (real > ulp > nan > ftz), with its first differing elements, and the
-.expect results of each side (which side matches the formal expectation).
+.expect results of each side (which side matches the formal expectation). A difference that persists is counted
+once (the same element with the same two values after a later job).
 
 The AIR service rules of air_ptx_formalization_check.py apply: one request at a time under the device lock, every
 request named in --progress before it is sent, never a kernel of the hang list; a request that times out stops all
@@ -92,9 +93,14 @@ def classify(a, b, size, ftypes, approx, max_ulps):
     for t in interps:
         if is_nan(a, t) and is_nan(b, t):
             return 'nan', None
+    # a packed pair of 16-bit floats (f16x2 / bf16x2 in a 32-bit element): each half equal or both NaNs
+    for t in [t for t in ftypes if t in ('f16', 'bf16')] if size == 4 else []:
+        halves = [(a >> s & 0xffff, b >> s & 0xffff) for s in (0, 16)]
+        if all(x == y or (is_nan(x, t) and is_nan(y, t)) for x, y in halves):
+            return 'nan', None
     for t in interps:
-        if t == 'f32' and (ftz32(a) == ftz32(b) or (ftz32(a) | ftz32(b)) & 0x7fffffff == 0) \
-                and (ftz32(a) != a or ftz32(b) != b):
+        # one side is the other's value flushed (to a zero of either sign)
+        if t == 'f32' and ((ftz32(a) != a and b & 0x7fffffff == 0) or (ftz32(b) != b and a & 0x7fffffff == 0)):
             return 'ftz', None
     if approx:
         for t in interps:
@@ -278,7 +284,8 @@ def run_program(path, args):
                 if p not in cols or q not in cols:
                     continue
                 key = '%s-%s' % (p, q)
-                pr = res['pairs'].setdefault(key, {'classes': {}, 'first': [], 'max_ulps': 0, 'elements': 0})
+                pr = res['pairs'].setdefault(key, {'classes': {}, 'first': [], 'max_ulps': 0, 'elements': 0,
+                                                   'seen': set()})
                 for n, (kind, t, aaddr, size) in regs.items():
                     esz = SIZES[t] if t != 'bf16' else 2
                     if size == 0:
@@ -306,6 +313,9 @@ def run_program(path, args):
                             continue
                         if esz == 8 and canon(p, x) is not None and canon(p, x) == canon(q, y):
                             continue  # the same address
+                        if (n, i, x, y) in pr['seen']:
+                            continue  # the same difference as after an earlier job
+                        pr['seen'].add((n, i, x, y))
                         cls, ulps = classify(x, y, esz, ftypes_of(n), approx, args.ulps)
                         pr['classes'][cls] = pr['classes'].get(cls, 0) + 1
                         pr['elements'] += 1
@@ -376,6 +386,8 @@ def run_program(path, args):
 
         def finish(st, detail=''):
             res['status'], res['detail'] = st, detail
+            for pr in res['pairs'].values():
+                pr.pop('seen', None)
             return res
 
         for di, d in enumerate(dirs):
@@ -504,6 +516,8 @@ def run_program(path, args):
         if any(s.error and s.label == 'agx' for s in sides):
             return finish('AGX-ERROR', sides[0].error)
         if not res['jobs']:
+            if skipped_launches:
+                return finish('NOT-COMPILED', 'every launch is of a kernel rejected on the AIR path')
             return finish('NO-LAUNCH', 'no launch ran')
         if not ab or not ab['classes']:
             return finish('SAME', '%d job(s)' % res['jobs'])
