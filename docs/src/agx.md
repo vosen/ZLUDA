@@ -38,6 +38,22 @@ LLD; `agx` selects the AGX backend. Both can be enabled together.
 
 ## Compiling
 
+**AIR is the first-class target.** `zoc --target air` compiles PTX straight to
+upstream AIR (Metal's IR): the portable AIR (`.portable.air`), the AIR for Metal
+(`.air`, with `.air.globals`), and, with an AGX `--arch`, the AGX object compiled
+from that same AIR (`.o`, `.asm`):
+
+```
+zoc --target air --arch agx-g14g kernel.ptx
+```
+
+The AGX code it gives is as good as the older route's below (4.4% fewer
+instructions over the PTX-formalization tests), which is kept only while
+`zluda_agx` still compiles with it. **`--target agx` is superseded**: new work
+goes to `--target air`.
+
+The older route, from PTX to the AGX backend without AIR:
+
 ```
 zoc --target agx --arch agx-g14g kernel.ptx
 ```

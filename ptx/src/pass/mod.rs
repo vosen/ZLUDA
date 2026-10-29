@@ -73,9 +73,12 @@ pub enum Target {
     Amdgpu,
     /// Apple GPUs, with the experimental AGX LLVM backend. Kernels use the
     /// agx_kernel calling convention and the helper functions are linked
-    /// from lib/zluda_ptx_impl_agx.bc.
+    /// from lib/zluda_ptx_impl_agx.bc. Superseded by Air, the first-class
+    /// target for Apple GPUs (whose AIR the AGX backend compiles as well);
+    /// kept while zluda_agx compiles with it.
     Agx,
-    /// Upstream AIR: portable AIR, which the AIR target's Metal pipeline
+    /// Upstream AIR, the first-class target for Apple GPUs: portable AIR,
+    /// which the AIR target's Metal pipeline
     /// packages for Metal and the AGX backend compiles (agx-lower-air). PTX
     /// semantics are those of the Agx target; the IR is AIR's: air-kernel
     /// kernels, AIR's system values and SIMD-group functions, no AGX

@@ -27,8 +27,10 @@ pub struct Options {
     arch: Option<String>,
 
     #[bpaf(long("target"), argument("TARGET"))]
-    /// GPU family: amdgpu (default) or agx (Apple GPUs, experimental). An
-    /// agx-* --arch selects agx
+    /// GPU family: amdgpu (default); air (Apple GPUs: PTX to portable AIR, for
+    /// Metal and, with an agx-* --arch, the AGX backend); or agx, the older
+    /// route to the AGX backend without AIR, superseded by air and kept while
+    /// zluda_agx still compiles with it. An agx-* --arch alone selects agx
     target: Option<String>,
 
     #[bpaf(long("ignore-errors"))]
