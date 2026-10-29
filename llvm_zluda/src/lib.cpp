@@ -2450,3 +2450,94 @@ int LLVMZludaAirCanonicalNaNs(LLVMModuleRef M)
 }
 
 LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, strict floating point: f32 comparisons on the bits. A GPU that flushes f32 denormals
+// (Metal's) compares a denormal as zero even where the AIR asks to keep denormals: the saturation of
+// mul.rn.sat.f32 took a denormal product for zero. Each scalar fcmp of floats becomes an integer comparison of
+// keys that order like the floats (sign and magnitude to an unsigned order, +0 and -0 equal), with the
+// unordered cases from the bits. Returns the number of comparisons rewritten.
+int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    int count = 0;
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+        {
+            auto *C = dyn_cast<FCmpInst>(&I);
+            if (!C || !C->getOperand(0)->getType()->isFloatTy())
+                continue;
+            IRBuilder<> B(C);
+            Type *I32 = B.getInt32Ty();
+            auto bits = [&](Value *v) { return B.CreateBitCast(v, I32); };
+            auto isNaN = [&](Value *b) { return B.CreateICmpUGT(B.CreateAnd(b, 0x7fffffff), B.getInt32(0x7f800000)); };
+            // key: zeros as 0x80000000, positives above it, negatives below it in reverse
+            auto key = [&](Value *b) {
+                Value *mag = B.CreateAnd(b, 0x7fffffff);
+                Value *neg = B.CreateICmpSLT(b, B.getInt32(0));
+                Value *k = B.CreateSelect(neg, B.CreateSub(B.getInt32(0x80000000), mag),
+                                          B.CreateAdd(B.getInt32(0x80000000), mag));
+                return k;
+            };
+            Value *a = bits(C->getOperand(0)), *b = bits(C->getOperand(1));
+            // .ftz (the function's f32 denormal mode, preserve-sign): denormal operands compare as zeros
+            if (F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
+            {
+                auto flush = [&](Value *x) {
+                    Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, 0x7f800000), B.getInt32(0));
+                    return B.CreateSelect(denormal, B.CreateAnd(x, 0x80000000), x);
+                };
+                a = flush(a);
+                b = flush(b);
+            }
+            Value *uno = B.CreateOr(isNaN(a), isNaN(b));
+            Value *ka = key(a), *kb = key(b);
+            Value *cmp;
+            switch (C->getPredicate())
+            {
+            case CmpInst::FCMP_OEQ:
+            case CmpInst::FCMP_UEQ:
+                cmp = B.CreateICmpEQ(ka, kb);
+                break;
+            case CmpInst::FCMP_ONE:
+            case CmpInst::FCMP_UNE:
+                cmp = B.CreateICmpNE(ka, kb);
+                break;
+            case CmpInst::FCMP_OLT:
+            case CmpInst::FCMP_ULT:
+                cmp = B.CreateICmpULT(ka, kb);
+                break;
+            case CmpInst::FCMP_OLE:
+            case CmpInst::FCMP_ULE:
+                cmp = B.CreateICmpULE(ka, kb);
+                break;
+            case CmpInst::FCMP_OGT:
+            case CmpInst::FCMP_UGT:
+                cmp = B.CreateICmpUGT(ka, kb);
+                break;
+            case CmpInst::FCMP_OGE:
+            case CmpInst::FCMP_UGE:
+                cmp = B.CreateICmpUGE(ka, kb);
+                break;
+            case CmpInst::FCMP_ORD:
+                cmp = B.CreateNot(uno);
+                break;
+            case CmpInst::FCMP_UNO:
+                cmp = uno;
+                break;
+            default:
+                continue;
+            }
+            Value *r = cmp;
+            if (C->getPredicate() != CmpInst::FCMP_ORD && C->getPredicate() != CmpInst::FCMP_UNO)
+                r = CmpInst::isUnordered(C->getPredicate()) ? B.CreateOr(uno, cmp)
+                                                            : B.CreateAnd(B.CreateNot(uno), cmp);
+            C->replaceAllUsesWith(r);
+            C->eraseFromParent();
+            count++;
+        }
+    return count;
+}
+
+LLVM_C_EXTERN_C_END

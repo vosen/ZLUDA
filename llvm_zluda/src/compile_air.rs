@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -250,6 +250,8 @@ pub fn compile_air(
             );
         }
         unsafe { LLVMZludaAirCanonicalNaNs(linked.get()) };
+        // f32 comparisons on the bits (a flushing GPU compares a denormal as zero)
+        unsafe { LLVMZludaAirCompareFloatBits(linked.get()) };
         // and the NaN constants the optimizations folded (as the Agx target)
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }

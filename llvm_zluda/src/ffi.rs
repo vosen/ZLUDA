@@ -130,6 +130,7 @@ extern "C" {
     pub fn LLVMZludaSetAirPrimitives(air: i32);
     pub fn LLVMZludaAirStaticRounding(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirCanonicalNaNs(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirCompareFloatBits(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirRemapAddressSpaces(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirFunctionPointers(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirGlobalsToBuffer(
