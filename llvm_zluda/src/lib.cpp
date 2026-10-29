@@ -2124,3 +2124,147 @@ void LLVMZludaSetAirPrimitives(int air)
 }
 
 LLVM_C_EXTERN_C_END
+
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Transforms/Utils/PromoteMemToReg.h>
+#include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Transforms/Utils/Local.h>
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
+// (__zluda_air.set.fpmode / __zluda_air.get.fpmode, as llvm.agx.set.fpmode for
+// the Agx target: f32 rounding in bits 0-1, f16/bf16/f64 in bits 2-3,
+// numbered like llvm.get.rounding) as the static rounding of each constrained
+// operation it reaches: AIR has no mode register. The mode starts as round to
+// nearest in every function (kernels have the others inlined). Where the
+// reaching mode is not a constant, the operation is made in each rounding and
+// the mode selects the result. Returns the number of functions changed.
+int LLVMZludaAirStaticRounding(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    LLVMContext &Ctx = Mod->getContext();
+    Function *Set = Mod->getFunction("__zluda_air.set.fpmode");
+    Function *Get = Mod->getFunction("__zluda_air.get.fpmode");
+    static const char *names[4] = {"round.towardzero", "round.tonearest", "round.upward", "round.downward"};
+    int changed = 0;
+    for (Function &F : *Mod)
+    {
+        if (F.isDeclaration())
+            continue;
+        SmallVector<CallInst *, 8> sets, gets;
+        SmallVector<ConstrainedFPIntrinsic *, 16> ops;
+        for (Instruction &I : instructions(F))
+            if (auto *CI = dyn_cast<CallInst>(&I))
+            {
+                if (Set && CI->getCalledFunction() == Set)
+                    sets.push_back(CI);
+                else if (Get && CI->getCalledFunction() == Get)
+                    gets.push_back(CI);
+                else if (auto *C = dyn_cast<ConstrainedFPIntrinsic>(CI))
+                    if (C->getRoundingMode() == RoundingMode::Dynamic)
+                        ops.push_back(C);
+            }
+        if (sets.empty() && gets.empty() && ops.empty())
+            continue;
+        changed++;
+        Type *I32 = Type::getInt32Ty(Ctx);
+        IRBuilder<> Entry(&*F.getEntryBlock().getFirstInsertionPt());
+        AllocaInst *mode = Entry.CreateAlloca(I32, nullptr, "fpmode");
+        Entry.CreateStore(ConstantInt::get(I32, 1 | (1 << 2)), mode);
+        for (CallInst *CI : sets)
+        {
+            new StoreInst(CI->getArgOperand(0), mode, CI->getIterator());
+            CI->eraseFromParent();
+        }
+        for (CallInst *CI : gets)
+        {
+            LoadInst *L = new LoadInst(I32, mode, "fpmode", CI->getIterator());
+            CI->replaceAllUsesWith(L);
+            CI->eraseFromParent();
+        }
+        // the mode at each operation, read through a freeze, which keeps its value through the promotion
+        DenseMap<ConstrainedFPIntrinsic *, FreezeInst *> at;
+        for (ConstrainedFPIntrinsic *C : ops)
+            at[C] = new FreezeInst(new LoadInst(I32, mode, "fpmode", C->getIterator()), "fpmode", C->getIterator());
+        DominatorTree DT(F);
+        PromoteMemToReg({mode}, DT);
+        // the modes as constants where they are (a set is usually the previous mode with new bits)
+        for (bool again = true; again;)
+        {
+            again = false;
+            for (Instruction &I : make_early_inc_range(instructions(F)))
+                if (!isa<FreezeInst>(I) && I.getType()->isIntegerTy())
+                    if (Value *V = simplifyInstruction(&I, SimplifyQuery(Mod->getDataLayout(), &I)); V && V != &I)
+                    {
+                        I.replaceAllUsesWith(V);
+                        if (isInstructionTriviallyDead(&I))
+                            I.eraseFromParent();
+                        again = true;
+                    }
+        }
+        for (ConstrainedFPIntrinsic *C : ops)
+        {
+            FreezeInst *Fr = at[C];
+            Value *m = Fr->getOperand(0);
+            Fr->eraseFromParent();
+            // f16 denormals flushed (bit 5): the operands and the result, as the hardware's mode would
+            if (C->getType()->getScalarType()->isHalfTy())
+            {
+                auto *K = dyn_cast<ConstantInt>(m);
+                if (!K || (K->getZExtValue() & 0x20))
+                {
+                    IRBuilder<> B(C);
+                    Value *on = K ? static_cast<Value *>(B.getTrue())
+                                  : B.CreateICmpNE(B.CreateAnd(m, 0x20), ConstantInt::get(I32, 0));
+                    auto flush = [&](IRBuilder<> &B, Value *v) -> Value * {
+                        Type *T = v->getType();
+                        Type *IT = T->getWithNewType(B.getInt16Ty());
+                        Value *bits = B.CreateBitCast(v, IT);
+                        Value *sub = B.CreateICmpEQ(B.CreateAnd(bits, ConstantInt::get(IT, 0x7c00)),
+                                                    Constant::getNullValue(IT));
+                        Value *zero = B.CreateAnd(bits, ConstantInt::get(IT, 0x8000));
+                        Value *flushed = B.CreateBitCast(B.CreateSelect(sub, zero, bits), T);
+                        return B.CreateSelect(on, flushed, v);
+                    };
+                    for (unsigned i = 0; i < C->arg_size(); i++)
+                        if (C->getArgOperand(i)->getType() == C->getType())
+                            C->setArgOperand(i, flush(B, C->getArgOperand(i)));
+                    IRBuilder<> A(C->getNextNode());
+                    Instruction *placeholder = cast<Instruction>(A.CreateFreeze(C));
+                    Value *out = flush(A, placeholder);
+                    C->replaceUsesWithIf(out, [&](Use &U) { return U.getUser() != placeholder; });
+                    placeholder->replaceAllUsesWith(C);
+                    placeholder->eraseFromParent();
+                }
+            }
+            unsigned shift = C->getType()->getScalarType()->isFloatTy() ? 0 : 2;
+            unsigned idx = C->arg_size() - 2;
+            auto withRounding = [&](CallInst *CI, unsigned r) {
+                CI->setArgOperand(idx, MetadataAsValue::get(Ctx, MDString::get(Ctx, names[r])));
+            };
+            if (auto *K = dyn_cast<ConstantInt>(m))
+            {
+                withRounding(C, (K->getZExtValue() >> shift) & 3);
+                continue;
+            }
+            // each rounding, chosen by the mode
+            IRBuilder<> B(C->getNextNode());
+            Value *r = B.CreateAnd(B.CreateLShr(m, shift), 3);
+            Value *result = nullptr;
+            for (unsigned k = 0; k < 4; k++)
+            {
+                auto *copy = cast<CallInst>(C->clone());
+                copy->insertBefore(B.GetInsertPoint());
+                withRounding(copy, k);
+                result = result ? B.CreateSelect(B.CreateICmpEQ(r, ConstantInt::get(I32, k)), copy, result)
+                                : static_cast<Value *>(copy);
+            }
+            C->replaceAllUsesWith(result);
+            C->eraseFromParent();
+        }
+    }
+    return changed;
+}
+
+LLVM_C_EXTERN_C_END

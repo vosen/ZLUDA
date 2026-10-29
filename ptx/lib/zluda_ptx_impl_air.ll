@@ -13,10 +13,7 @@
 ; private 5); llvm_zluda's AIR compilation maps them to AIR's.
 ;
 ; Not yet defined (a module using them does not link): texture sampling and
-; the 8x8 SIMD-group matrix multiply-add. The floating point mode register
-; does not exist in AIR: __zluda_air.get.fpmode reads round to nearest and
-; __zluda_air.set.fpmode does nothing; the Air front end is to round per
-; instruction instead.
+; the 8x8 SIMD-group matrix multiply-add.
 
 ; System values
 declare <3 x i32> @air.thread_position_in_threadgroup.v3i32() #4
@@ -258,18 +255,19 @@ define float @__zluda_air.cos.f32(float %x) #0 {
   ret float %r
 }
 
-; The floating point mode: AIR has none (see above).
-define i32 @__zluda_air.get.fpmode() #0 {
-  ret i32 0
-}
-define void @__zluda_air.set.fpmode(i32 %m) #0 {
-  ret void
-}
+; The floating point mode (rounding of f32 in bits 0-1, of f16/f64 in bits
+; 2-3, numbered like llvm.get.rounding): AIR has no mode register, so these
+; stay calls until llvm_zluda's LLVMZludaAirStaticRounding writes the mode
+; reaching each constrained operation as its static rounding.
+declare i32 @__zluda_air.get.fpmode() #5
+declare void @__zluda_air.set.fpmode(i32) #6
 
 attributes #0 = { alwaysinline nounwind willreturn memory(none) }
 ; SIMD-group functions: only the other lanes' values, no memory (as AGX's).
 attributes #1 = { convergent nocallback nofree nosync nounwind willreturn memory(none) }
 attributes #3 = { convergent nounwind willreturn }
 ; System values: constant for the thread.
+attributes #5 = { nounwind willreturn memory(inaccessiblemem: read) }
+attributes #6 = { nounwind willreturn memory(inaccessiblemem: write) }
 attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #2 = { alwaysinline convergent nounwind willreturn }
