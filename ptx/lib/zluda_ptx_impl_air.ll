@@ -125,6 +125,10 @@ define void @__zluda_air.threadgroup.barrier() #2 {
 }
 
 ; SIMD-group functions. AGX's shuffles take an i32 lane or delta, AIR's an i16.
+; A shuffle of a constant is the constant in every lane (reading an inactive
+; lane is undefined, so the constant is a valid result there too), once the
+; value is known after inlining (llvm.is.constant).
+declare i1 @llvm.is.constant.i32(i32)
 declare i64 @air.simd_ballot.i64(i1) #1
 declare i32 @air.simd_shuffle.u.i32(i32, i16) #1
 declare i32 @air.simd_shuffle_xor.u.i32(i32, i16) #1
@@ -138,26 +142,51 @@ define i32 @__zluda_air.simd.ballot(i1 %p) #2 {
   ret i32 %t
 }
 define i32 @__zluda_air.simd.shuffle.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
   %l16 = trunc i32 %l to i16
   %r = call i32 @air.simd_shuffle.u.i32(i32 %v, i16 %l16)
   ret i32 %r
 }
 define i32 @__zluda_air.simd.shuffle.xor.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
   %l16 = trunc i32 %l to i16
   %r = call i32 @air.simd_shuffle_xor.u.i32(i32 %v, i16 %l16)
   ret i32 %r
 }
 define i32 @__zluda_air.simd.shuffle.up.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
   %l16 = trunc i32 %l to i16
   %r = call i32 @air.simd_shuffle_up.u.i32(i32 %v, i16 %l16)
   ret i32 %r
 }
 define i32 @__zluda_air.simd.shuffle.down.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
   %l16 = trunc i32 %l to i16
   %r = call i32 @air.simd_shuffle_down.u.i32(i32 %v, i16 %l16)
   ret i32 %r
 }
 define i32 @__zluda_air.quad.shuffle.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
   %l16 = trunc i32 %l to i16
   %r = call i32 @air.quad_shuffle.u.i32(i32 %v, i16 %l16)
   ret i32 %r
