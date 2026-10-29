@@ -214,14 +214,9 @@ pub fn compile_air(
         }
     }
     stage("rounding, address space remap");
-    // ZLUDA's lowering ran O3 already: what is left is to inline the AIR primitives linked in again after it and
-    // clean up after the rounding and the remap (ZLUDA_AIR_FULL_O3=1: a full O3 instead)
-    let cleanup: &CStr = if std::env::var_os("ZLUDA_AIR_FULL_O3").is_some() {
-        c"default<O3>"
-    } else {
-        c"always-inline,globaldce,function(sroa,early-cse<memssa>,instcombine,simplifycfg,gvn,instcombine,simplifycfg,adce)"
-    };
-    run(&linked, cleanup, &air, &options)?;
+    // O3 again in AIR's address spaces: a lighter cleanup (inlining, SROA, EarlyCSE, InstCombine, SimplifyCFG,
+    // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
+    run(&linked, c"default<O3>", &air, &options)?;
     stage("O3 in AIR's address spaces");
     // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
     let mut err = std::ptr::null_mut();
