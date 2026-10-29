@@ -2537,13 +2537,17 @@ int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
             C->eraseFromParent();
             count++;
         }
-    // f32 minimum / maximum (PTX min / max, NaN-ignoring: minimumnum / maximumnum; .NaN: minimum / maximum) on the
-    // bits too, -0 below +0, .ftz operands as signed zeros
+    // f32 and bfloat minimum / maximum (PTX min / max, NaN-ignoring: minimumnum / maximumnum; .NaN: minimum /
+    // maximum) on the bits too, -0 below +0, .ftz f32 operands as signed zeros; vectors one element at a time.
+    // (Metal's bfloat min / max also compare denormals as zeros.)
     for (Function &F : *Mod)
         for (Instruction &I : make_early_inc_range(instructions(F)))
         {
             auto *II = dyn_cast<IntrinsicInst>(&I);
-            if (!II || !II->getType()->isFloatTy())
+            if (!II)
+                continue;
+            Type *E = II->getType()->getScalarType();
+            if (!E->isFloatTy() && !E->isBFloatTy())
                 continue;
             Intrinsic::ID id = II->getIntrinsicID();
             bool isMin = id == Intrinsic::minimumnum || id == Intrinsic::minimum;
@@ -2551,37 +2555,55 @@ int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
             if (!isMin && !isMax)
                 continue;
             bool propagate = id == Intrinsic::minimum || id == Intrinsic::maximum;
+            bool f32 = E->isFloatTy();
+            unsigned w = f32 ? 32 : 16;
+            uint64_t sign = f32 ? 0x80000000 : 0x8000, magMask = sign - 1, inf = f32 ? 0x7f800000 : 0x7f80;
+            bool ftz = f32 && F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE;
             IRBuilder<> B(II);
-            Type *I32 = B.getInt32Ty();
-            Value *a = B.CreateBitCast(II->getArgOperand(0), I32), *b = B.CreateBitCast(II->getArgOperand(1), I32);
-            if (F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
-            {
-                auto flush = [&](Value *x) {
-                    Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, 0x7f800000), B.getInt32(0));
-                    return B.CreateSelect(denormal, B.CreateAnd(x, 0x80000000), x);
+            Type *IT = B.getIntNTy(w);
+            auto k = [&](uint64_t v) { return ConstantInt::get(IT, v); };
+            auto one = [&](Value *fa, Value *fb) -> Value * {
+                Value *a = B.CreateBitCast(fa, IT), *b = B.CreateBitCast(fb, IT);
+                if (ftz)
+                {
+                    auto flush = [&](Value *x) {
+                        Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, k(inf)), k(0));
+                        return B.CreateSelect(denormal, B.CreateAnd(x, k(sign)), x);
+                    };
+                    a = flush(a);
+                    b = flush(b);
+                }
+                auto isNaN = [&](Value *x) { return B.CreateICmpUGT(B.CreateAnd(x, k(magMask)), k(inf)); };
+                // a total order of the non-NaN values: negatives below the sign bit (-0 just below), positives from it
+                auto key = [&](Value *x) {
+                    Value *mag = B.CreateAnd(x, k(magMask));
+                    return B.CreateSelect(B.CreateICmpSLT(x, k(0)), B.CreateSub(k(magMask), mag),
+                                          B.CreateAdd(k(sign), mag));
                 };
-                a = flush(a);
-                b = flush(b);
-            }
-            auto isNaN = [&](Value *x) { return B.CreateICmpUGT(B.CreateAnd(x, 0x7fffffff), B.getInt32(0x7f800000)); };
-            // a total order of the non-NaN floats: negatives below 0x80000000 (-0 just below), positives from it
-            auto key = [&](Value *x) {
-                Value *mag = B.CreateAnd(x, 0x7fffffff);
-                return B.CreateSelect(B.CreateICmpSLT(x, B.getInt32(0)), B.CreateSub(B.getInt32(0x7fffffff), mag),
-                                      B.CreateAdd(B.getInt32(0x80000000), mag));
+                Value *ka = key(a), *kb = key(b);
+                Value *pickA = isMin ? B.CreateICmpULE(ka, kb) : B.CreateICmpUGE(ka, kb);
+                Value *r = B.CreateSelect(pickA, a, b);
+                Value *nanA = isNaN(a), *nanB = isNaN(b);
+                if (propagate)
+                    r = B.CreateSelect(B.CreateOr(nanA, nanB), k(magMask), r);
+                else
+                {
+                    r = B.CreateSelect(nanA, b, B.CreateSelect(nanB, a, r));
+                    r = B.CreateSelect(B.CreateAnd(nanA, nanB), k(magMask), r);
+                }
+                return B.CreateBitCast(r, E);
             };
-            Value *ka = key(a), *kb = key(b);
-            Value *pickA = isMin ? B.CreateICmpULE(ka, kb) : B.CreateICmpUGE(ka, kb);
-            Value *r = B.CreateSelect(pickA, a, b);
-            Value *nanA = isNaN(a), *nanB = isNaN(b);
-            if (propagate)
-                r = B.CreateSelect(B.CreateOr(nanA, nanB), B.getInt32(0x7fffffff), r);
-            else
+            Value *f;
+            if (auto *VT = dyn_cast<FixedVectorType>(II->getType()))
             {
-                r = B.CreateSelect(nanA, b, B.CreateSelect(nanB, a, r));
-                r = B.CreateSelect(B.CreateAnd(nanA, nanB), B.getInt32(0x7fffffff), r);
+                f = PoisonValue::get(VT);
+                for (unsigned l = 0; l < VT->getNumElements(); ++l)
+                    f = B.CreateInsertElement(f, one(B.CreateExtractElement(II->getArgOperand(0), l),
+                                                     B.CreateExtractElement(II->getArgOperand(1), l)),
+                                              l);
             }
-            Value *f = B.CreateBitCast(r, II->getType());
+            else
+                f = one(II->getArgOperand(0), II->getArgOperand(1));
             II->replaceAllUsesWith(f);
             II->eraseFromParent();
             count++;
