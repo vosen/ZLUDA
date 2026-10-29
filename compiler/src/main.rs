@@ -137,10 +137,24 @@ fn main_core() -> Result<(), CompilerError> {
         for path in &others {
             texts.push(String::from_utf8(fs::read(path)?).map_err(|e| e.utf8_error())?);
         }
+        let object_only = opts.object_only;
         let sink = |bytes: &Vec<u8>, extension: String| {
-            write_to_file(bytes, &output_path.with_extension(extension)).unwrap();
+            let output_path = output_path.with_extension(extension);
+            if object_only {
+                fs::write(&output_path, bytes).unwrap();
+            } else {
+                write_to_file(bytes, &output_path).unwrap();
+            }
         };
-        return compile_air(&texts, &sink, opts.arch, opts.ignore_errors, opts.strict_fp, opts.stack_size);
+        return compile_air(
+            &texts,
+            &sink,
+            opts.arch,
+            opts.ignore_errors,
+            opts.strict_fp,
+            opts.stack_size,
+            opts.object_only,
+        );
     }
     if target == ptx::Target::Agx {
         let mut texts = vec![String::from_utf8(fs::read(&ptx_path)?).map_err(|e| e.utf8_error())?];
@@ -324,10 +338,13 @@ fn compile_air(
     ignore_errors: bool,
     strict_fp: bool,
     stack_size: u32,
+    object_only: bool,
 ) -> Result<(), CompilerError> {
     let options = ptx::Options { target: ptx::Target::Air, strict_fp, stack_size, ..ptx::Options::default() };
-    let llvm = ptx_to_llvm(ignore_errors, true, &texts[0], options)?;
-    sink(&llvm.llvm_ir, "ll".to_string());
+    let llvm = ptx_to_llvm(ignore_errors, !object_only, &texts[0], options)?;
+    if !object_only {
+        sink(&llvm.llvm_ir, "ll".to_string());
+    }
     let mut other_ir = Vec::new();
     for ptx in &texts[1..] {
         other_ir.push(ptx_to_llvm(ignore_errors, true, ptx, options)?.llvm_ir);
@@ -342,6 +359,7 @@ fn compile_air(
         llvm.linked_bitcode,
         arch.as_deref().filter(|a| a.starts_with("agx")),
         Some(&compiler_hook),
+        object_only,
     )
     .map_err(|message| CompilerError::GenericError { cause: None, message })?;
     report_pass_time("compile_air", &mut start);
@@ -356,6 +374,7 @@ fn compile_air(
     _ignore_errors: bool,
     _strict_fp: bool,
     _stack_size: u32,
+    _object_only: bool,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError { cause: None, message: "zoc was built without the agx feature".to_string() })
 }

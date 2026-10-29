@@ -90,7 +90,11 @@ pub fn compile_air(
     ptx_impl: &[u8],
     agx_cpu: Option<&str>,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
+    object_only: bool,
 ) -> Result<AirCompilation, String> {
+    // object_only: the compiled outputs (the AIR, the globals buffer, the AGX object) only, not the IR text or
+    // the AGX assembly, which take as long again to make
+    let text_hook = compiler_hook.filter(|_| !object_only);
     if ptx_impl.is_empty() {
         return Err("the Air target's helpers were not built (ptx/build.rs needs ZLUDA_LLVM_BUILD_DIR)".to_string());
     }
@@ -137,6 +141,15 @@ pub fn compile_air(
             llvm_sys::core::LLVMSetDataLayout(linked.get(), text.as_ptr());
         }
     }
+    // ZLUDA_AIR_TIMINGS: the time of each stage, on stderr
+    let timings = std::env::var_os("ZLUDA_AIR_TIMINGS").is_some();
+    let mut last = std::time::Instant::now();
+    let mut stage = |name: &str| {
+        if timings {
+            eprintln!("[zluda air] {name}: {:.3} s", last.elapsed().as_secs_f64());
+        }
+        last = std::time::Instant::now();
+    };
     unsafe { LLVMZludaSetAirPrimitives(1) };
     let lowered = (|| -> Result<(), String> {
         run(&linked, c"default<O3>", &air, &options)?;
@@ -163,6 +176,7 @@ pub fn compile_air(
     })();
     unsafe { LLVMZludaSetAirPrimitives(0) };
     lowered?;
+    stage("ZLUDA lowering (O3 in ZLUDA's address spaces)");
     // the primitives that lowering called anew, after O3 dropped the unused definitions
     let mut err = std::ptr::null_mut();
     if !unsafe {
@@ -195,9 +209,20 @@ pub fn compile_air(
     }
     linked.verify()?;
     if let Some(hook) = compiler_hook {
-        hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("linked.ll"));
+        if !object_only {
+            hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("linked.ll"));
+        }
     }
-    run(&linked, c"default<O3>", &air, &options)?;
+    stage("rounding, address space remap");
+    // ZLUDA's lowering ran O3 already: what is left is to inline the AIR primitives linked in again after it and
+    // clean up after the rounding and the remap (ZLUDA_AIR_FULL_O3=1: a full O3 instead)
+    let cleanup: &CStr = if std::env::var_os("ZLUDA_AIR_FULL_O3").is_some() {
+        c"default<O3>"
+    } else {
+        c"always-inline,globaldce,function(sroa,early-cse<memssa>,instcombine,simplifycfg,gvn,instcombine,simplifycfg,adce)"
+    };
+    run(&linked, cleanup, &air, &options)?;
+    stage("O3 in AIR's address spaces");
     // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
     let mut err = std::ptr::null_mut();
     if unsafe { LLVMZludaAirFunctionPointers(linked.get(), &mut err) } < 0 {
@@ -220,7 +245,9 @@ pub fn compile_air(
         1 => Some(Message::new(unsafe { CStr::from_ptr(json) }).to_str().to_string()),
         _ => None,
     };
+    stage("Metal copy: globals buffer, shared layout");
     run(&metal, c"air-portable", &air, &options)?;
+    stage("Metal copy: air-portable");
     diagnostics.check()?;
     metal.verify().map_err(|e| format!("the AIR for Metal is broken: {e}"))?;
     let metal_air = bitcode(&metal);
@@ -232,11 +259,14 @@ pub fn compile_air(
     }
 
     run(&linked, c"air-portable", &air, &options)?;
+    stage("portable: air-portable");
     diagnostics.check()?;
     let portable = bitcode(&linked);
     if let Some(hook) = compiler_hook {
         hook(&portable, String::from("portable.air"));
-        hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("opt.ll"));
+        if !object_only {
+            hook(&linked.print_module_to_string().to_bytes().to_vec(), String::from("opt.ll"));
+        }
     }
 
     // AGX: the portable AIR through agx-lower-air and the AGX backend
@@ -246,12 +276,15 @@ pub fn compile_air(
             let cpu = CString::new(if cpu.is_empty() { AGX_DEFAULT_CPU } else { cpu }).unwrap();
             let agx = target_machine(AGX_TRIPLE, &cpu)?;
             unsafe { llvm_sys::target_machine::LLVMSetTargetMachineAsmVerbosity(agx.get(), 1) };
-            if let Some(hook) = compiler_hook {
+            if let Some(hook) = text_hook {
+                stage("(writing the IR files)");
                 let asm = agx.emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?.to_vec();
                 diagnostics.check()?;
                 hook(&asm, String::from("asm"));
+                stage("AGX assembly");
             }
             let object = agx.emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?.to_vec();
+            stage("AGX object");
             diagnostics.check()?;
             if let Some(hook) = compiler_hook {
                 hook(&object, String::from("o"));
