@@ -160,7 +160,9 @@ pub fn compile_air(
     let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref() {
         // (with switches as lookup tables already, globals that the lowering lays out: made by the O3 after the
         // remap, the AGX backend rejected them, "unsupported global 'switch.table.k'")
-        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
+        // (and the loops with a constant trip count unrolled, as O3 does: a loop of simd_sum left whole made
+        // Metal's compiler crash, XPC_ERROR_CONNECTION_INTERRUPTED, on SIMD-group PTX tests)
+        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
         _ => c"default<O3>",
     };
     unsafe { LLVMZludaSetAirPrimitives(1) };
