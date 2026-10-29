@@ -2319,22 +2319,32 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M)
             FreezeInst *Fr = at[C];
             Value *m = Fr->getOperand(0);
             Fr->eraseFromParent();
-            // f16 denormals flushed (bit 5): the operands and the result, as the hardware's mode would
-            if (C->getType()->getScalarType()->isHalfTy())
+            // denormals flushed (bit 4 for f32, bit 5 for f16): the operands and the result, as the hardware's mode
+            // would (a GPU that flushes f32 does it itself, but not under IEEE f32 emulation, air.ieee-fp32)
+            Type *scalar = C->getType()->getScalarType();
+            if (scalar->isHalfTy() || scalar->isFloatTy())
             {
-                auto flushBit = zludaModeField(m, 0x20);
+                bool half = scalar->isHalfTy();
+                uint64_t bit = half ? 0x20 : 0x10;
+                unsigned width = half ? 16 : 32;
+                uint64_t expMask = half ? 0x7c00 : 0x7f800000, signMask = half ? 0x8000 : 0x80000000;
+                auto flushBit = zludaModeField(m, bit);
+                // (the front end writes .ftz as the function's denormal mode, preserve-sign)
+                if (F.getDenormalMode(half ? APFloat::IEEEhalf() : APFloat::IEEEsingle()).Output !=
+                    DenormalMode::IEEE)
+                    flushBit = bit;
                 if (!flushBit || *flushBit)
                 {
                     IRBuilder<> B(C);
                     Value *on = flushBit ? static_cast<Value *>(B.getTrue())
-                                         : B.CreateICmpNE(B.CreateAnd(m, 0x20), ConstantInt::get(I32, 0));
+                                         : B.CreateICmpNE(B.CreateAnd(m, bit), ConstantInt::get(I32, 0));
                     auto flush = [&](IRBuilder<> &B, Value *v) -> Value * {
                         Type *T = v->getType();
-                        Type *IT = T->getWithNewType(B.getInt16Ty());
+                        Type *IT = T->getWithNewType(B.getIntNTy(width));
                         Value *bits = B.CreateBitCast(v, IT);
-                        Value *sub = B.CreateICmpEQ(B.CreateAnd(bits, ConstantInt::get(IT, 0x7c00)),
+                        Value *sub = B.CreateICmpEQ(B.CreateAnd(bits, ConstantInt::get(IT, expMask)),
                                                     Constant::getNullValue(IT));
-                        Value *zero = B.CreateAnd(bits, ConstantInt::get(IT, 0x8000));
+                        Value *zero = B.CreateAnd(bits, ConstantInt::get(IT, signMask));
                         Value *flushed = B.CreateBitCast(B.CreateSelect(sub, zero, bits), T);
                         return B.CreateSelect(on, flushed, v);
                     };
