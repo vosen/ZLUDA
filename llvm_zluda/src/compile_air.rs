@@ -121,6 +121,17 @@ pub fn compile_air(
     // ZLUDA's lowering of what PTX has and the GPU has not, on its own IR (ZLUDA's address spaces, the
     // __zluda_air.* primitives), as for the Agx target: clusters as threadgroups, isspacep and the generic
     // addresses of shared and private memory, cluster shared memory over 32 KiB in device memory
+    // ZLUDA's address spaces have the layout of the AGX target (32-bit shared and private pointers, 16-, 32- and
+    // 64-bit native integers) until the remap: without one, the optimizations would see no native integer width
+    // and 64-bit pointers everywhere
+    {
+        let zluda_layout = target_machine(AGX_TRIPLE, &CString::new(AGX_DEFAULT_CPU).unwrap())?;
+        unsafe {
+            let layout = llvm_sys::target_machine::LLVMCreateTargetDataLayout(zluda_layout.get());
+            llvm_sys::target::LLVMSetModuleDataLayout(linked.get(), layout);
+            llvm_sys::target::LLVMDisposeTargetData(layout);
+        }
+    }
     unsafe { LLVMZludaSetAirPrimitives(1) };
     let lowered = (|| -> Result<(), String> {
         run(&linked, c"default<O3>", &air, &options)?;
