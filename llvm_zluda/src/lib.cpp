@@ -2146,72 +2146,101 @@ LLVM_C_EXTERN_C_BEGIN
 
 // The bits under Mask of a floating point mode value, where they are the same whichever way the value was
 // made: through phis and selects (the mode where control flow joins) and the front end's updates of the mode
-// (and / or with constants, the bits of one field replaced). Phis in a cycle are assumed to agree (the other
-// incoming values decide). None where the bits differ or are not known.
-static std::optional<uint64_t> zludaModeBits(Value *V, uint64_t Mask, SmallPtrSetImpl<Value *> &Visiting)
+// (and / or with constants, the bits of one field replaced). A phi's value is the agreement of its incoming
+// values, found by iterating to a fixed point over the phis and selects reached (a cycle agrees with whatever
+// enters it). None where the bits differ or are not known. Linear in the values reached, per mask.
+static std::optional<uint64_t> zludaModeField(Value *Root, uint64_t RootMask)
 {
-    if (auto *K = dyn_cast<ConstantInt>(V))
-        return K->getZExtValue() & Mask;
-    if (auto *Fr = dyn_cast<FreezeInst>(V))
-        return zludaModeBits(Fr->getOperand(0), Mask, Visiting);
-    if (auto *BO = dyn_cast<BinaryOperator>(V))
+    // lattice: Top (no information yet), a value, Bottom (differs / unknown)
+    constexpr uint64_t Top = UINT64_MAX - 1, Bottom = UINT64_MAX;
+    DenseMap<std::pair<Value *, uint64_t>, uint64_t> state;
+    SmallVector<std::pair<Value *, uint64_t>, 32> order;
+    // the values and masks reached
+    SmallVector<std::pair<Value *, uint64_t>, 32> stack{{Root, RootMask}};
+    while (!stack.empty())
     {
-        auto *K = dyn_cast<ConstantInt>(BO->getOperand(1));
-        if (!K)
-            return std::nullopt;
-        uint64_t c = K->getZExtValue() & Mask;
-        if (BO->getOpcode() == Instruction::Or)
-        {
-            if (c == Mask)
-                return Mask;
-            auto x = zludaModeBits(BO->getOperand(0), Mask & ~c, Visiting);
-            return x ? std::optional<uint64_t>(*x | c) : std::nullopt;
-        }
-        if (BO->getOpcode() == Instruction::And)
-        {
-            if (c == 0)
-                return 0;
-            auto x = zludaModeBits(BO->getOperand(0), c, Visiting);
-            return x ? std::optional<uint64_t>(*x & c) : std::nullopt;
-        }
-        return std::nullopt;
-    }
-    SmallVector<Value *, 8> incoming;
-    if (auto *P = dyn_cast<PHINode>(V))
-        incoming.append(P->incoming_values().begin(), P->incoming_values().end());
-    else if (auto *Sel = dyn_cast<SelectInst>(V))
-        incoming = {Sel->getTrueValue(), Sel->getFalseValue()};
-    else
-        return std::nullopt;
-    if (!Visiting.insert(V).second)
-        return UINT64_MAX; // in a cycle: whatever the others say
-    std::optional<uint64_t> bits = UINT64_MAX;
-    for (Value *In : incoming)
-    {
-        auto b = zludaModeBits(In, Mask, Visiting);
-        if (!b)
-        {
-            bits = std::nullopt;
-            break;
-        }
-        if (*b == UINT64_MAX)
+        auto key = stack.pop_back_val();
+        if (!state.try_emplace(key, Top).second)
             continue;
-        if (*bits != UINT64_MAX && *bits != *b)
+        order.push_back(key);
+        auto [V, Mask] = key;
+        if (auto *Fr = dyn_cast<FreezeInst>(V))
+            stack.push_back({Fr->getOperand(0), Mask});
+        else if (auto *BO = dyn_cast<BinaryOperator>(V))
         {
-            bits = std::nullopt;
-            break;
+            if (auto *K = dyn_cast<ConstantInt>(BO->getOperand(1)))
+            {
+                uint64_t c = K->getZExtValue() & Mask;
+                if (BO->getOpcode() == Instruction::Or && c != Mask)
+                    stack.push_back({BO->getOperand(0), Mask & ~c});
+                else if (BO->getOpcode() == Instruction::And && c != 0)
+                    stack.push_back({BO->getOperand(0), c});
+            }
         }
-        bits = b;
+        else if (auto *P = dyn_cast<PHINode>(V))
+            for (Value *In : P->incoming_values())
+                stack.push_back({In, Mask});
+        else if (auto *Sel = dyn_cast<SelectInst>(V))
+        {
+            stack.push_back({Sel->getTrueValue(), Mask});
+            stack.push_back({Sel->getFalseValue(), Mask});
+        }
     }
-    Visiting.erase(V);
-    return bits;
-}
-
-static std::optional<uint64_t> zludaModeField(Value *V, uint64_t Mask)
-{
-    SmallPtrSet<Value *, 16> visiting;
-    auto b = zludaModeBits(V, Mask, visiting);
-    return b && *b != UINT64_MAX ? b : std::nullopt;
+    auto get = [&](Value *V, uint64_t Mask) { return state.lookup({V, Mask}); };
+    auto meet = [&](uint64_t a, uint64_t b) {
+        if (a == Top)
+            return b;
+        if (b == Top)
+            return a;
+        return a == b ? a : Bottom;
+    };
+    for (bool changed = true; changed;)
+    {
+        changed = false;
+        for (auto key : order)
+        {
+            auto [V, Mask] = key;
+            uint64_t v = Bottom;
+            if (auto *K = dyn_cast<ConstantInt>(V))
+                v = K->getZExtValue() & Mask;
+            else if (auto *Fr = dyn_cast<FreezeInst>(V))
+                v = get(Fr->getOperand(0), Mask);
+            else if (auto *BO = dyn_cast<BinaryOperator>(V))
+            {
+                auto *K = dyn_cast<ConstantInt>(BO->getOperand(1));
+                if (K && BO->getOpcode() == Instruction::Or)
+                {
+                    uint64_t c = K->getZExtValue() & Mask;
+                    uint64_t x = c == Mask ? 0 : get(BO->getOperand(0), Mask & ~c);
+                    v = x >= Top ? x : (x | c);
+                }
+                else if (K && BO->getOpcode() == Instruction::And)
+                {
+                    uint64_t c = K->getZExtValue() & Mask;
+                    uint64_t x = c == 0 ? 0 : get(BO->getOperand(0), c);
+                    v = x >= Top ? x : (x & c);
+                }
+            }
+            else if (auto *P = dyn_cast<PHINode>(V))
+            {
+                v = Top;
+                for (Value *In : P->incoming_values())
+                    v = meet(v, get(In, Mask));
+            }
+            else if (auto *Sel = dyn_cast<SelectInst>(V))
+                v = meet(get(Sel->getTrueValue(), Mask), get(Sel->getFalseValue(), Mask));
+            uint64_t &cur = state[key];
+            // values only move down the lattice (Top, a value, Bottom)
+            uint64_t next = cur == Top ? v : (cur == Bottom || v == Top ? cur : (v == cur ? cur : Bottom));
+            if (next != cur)
+            {
+                cur = next;
+                changed = true;
+            }
+        }
+    }
+    uint64_t r = get(Root, RootMask);
+    return r >= Top ? std::nullopt : std::optional<uint64_t>(r);
 }
 
 // ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
