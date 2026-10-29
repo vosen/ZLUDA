@@ -2748,3 +2748,80 @@ int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
 }
 
 LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, AGX code a kernel at a time (a large module, whose AGX code generation inlines every
+// function into every kernel at once: Cycles' did not fit in 8 GB): a copy of M with only kernel `name` defined.
+// The other kernels are removed with their !air.kernel entries; every global variable is kept, used or not
+// (llvm.compiler.used), so that each kernel's global data buffer has the layout of the others'.
+LLVMModuleRef LLVMZludaAirKernelModule(LLVMModuleRef M, const char *name)
+{
+    Module *Mod = unwrap(M);
+    // The functions the kernel reaches (through calls, function pointers, constants and global initializers): only
+    // those are defined in the copy, which AGX code generation inlines into each other (every function of Cycles'
+    // module in each kernel's copy made it as large as the whole compilation).
+    SmallPtrSet<const Function *, 32> Reached;
+    {
+        SmallVector<const Value *, 64> Work;
+        SmallPtrSet<const Value *, 32> Seen;
+        if (Function *K = Mod->getFunction(name))
+            Work.push_back(K);
+        for (const GlobalVariable &GV : Mod->globals())
+            if (GV.hasInitializer())
+                Work.push_back(GV.getInitializer());
+        while (!Work.empty())
+        {
+            const Value *V = Work.pop_back_val();
+            if (!Seen.insert(V).second)
+                continue;
+            if (auto *F = dyn_cast<Function>(V))
+            {
+                if (F->hasFnAttribute("air-kernel") && F->getName() != name)
+                    continue;
+                Reached.insert(F);
+                for (const Instruction &I : instructions(*F))
+                    for (const Value *Op : I.operands())
+                        if (isa<Constant>(Op))
+                            Work.push_back(Op);
+            }
+            else if (auto *C = dyn_cast<Constant>(V); C && !isa<GlobalVariable>(C))
+                for (const Value *Op : C->operands())
+                    Work.push_back(Op);
+        }
+    }
+    ValueToValueMapTy VMap;
+    std::unique_ptr<Module> New = CloneModule(*Mod, VMap, [&](const GlobalValue *GV) {
+        auto *F = dyn_cast<Function>(GV);
+        return !F || Reached.contains(F);
+    });
+    if (NamedMDNode *Kernels = New->getNamedMetadata("air.kernel"))
+    {
+        SmallVector<MDNode *, 4> Keep;
+        for (MDNode *K : Kernels->operands())
+        {
+            auto *KF = K->getNumOperands() ? mdconst::dyn_extract_or_null<Function>(K->getOperand(0)) : nullptr;
+            if (KF && !KF->isDeclaration())
+                Keep.push_back(K);
+        }
+        Kernels->clearOperands();
+        for (MDNode *K : Keep)
+            Kernels->addOperand(K);
+    }
+    for (Function &F : make_early_inc_range(*New))
+        if (F.isDeclaration() && F.hasFnAttribute("air-kernel"))
+        {
+            F.replaceAllUsesWith(PoisonValue::get(F.getType()));
+            F.eraseFromParent();
+        }
+        else if (F.isDeclaration() && F.use_empty())
+            F.eraseFromParent();
+    SmallVector<GlobalValue *, 16> Globals;
+    for (GlobalVariable &GV : New->globals())
+        if (!GV.isDeclaration() && !GV.getName().starts_with("llvm.") && GV.getAddressSpace() != 3)
+            Globals.push_back(&GV);
+    appendToCompilerUsed(*New, Globals);
+    return wrap(New.release());
+}
+
+LLVM_C_EXTERN_C_END

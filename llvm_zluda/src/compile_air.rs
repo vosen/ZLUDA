@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -287,6 +287,8 @@ pub fn compile_air(
     diagnostics.check()?;
     metal.verify().map_err(|e| format!("the AIR for Metal is broken: {e}"))?;
     let metal_air = bitcode(&metal);
+    // (the copy is done with: freed before the AGX code generation, the largest stage of a large module)
+    drop(metal);
     if let Some(hook) = compiler_hook {
         hook(&metal_air, String::from("air"));
         if let Some(json) = &metal_globals {
@@ -312,6 +314,53 @@ pub fn compile_air(
             let cpu = CString::new(if cpu.is_empty() { AGX_DEFAULT_CPU } else { cpu }).unwrap();
             let agx = target_machine(AGX_TRIPLE, &cpu)?;
             unsafe { llvm_sys::target_machine::LLVMSetTargetMachineAsmVerbosity(agx.get(), 1) };
+            // A large module a kernel at a time: AGX code generation inlines every function into every kernel at
+            // once, which for Cycles' 75 kernels did not fit in 8 GB (one kernel took 2.7 GB). Each kernel's copy of
+            // the module keeps every global variable, and the objects are merged into the one a whole-module
+            // compilation makes (agx_merge). ZLUDA_AGX_PER_KERNEL: 1 always (several kernels), 0 never; by default
+            // for portable AIR over 4 MB.
+            let kernels = kernel_names(&linked);
+            let per_kernel = kernels.len() > 1
+                && match std::env::var("ZLUDA_AGX_PER_KERNEL").as_deref() {
+                    Ok("1") => true,
+                    Ok("0") => false,
+                    _ => portable.len() > 4 << 20,
+                };
+            if per_kernel {
+                // Each kernel in a context of its own, read back from the portable AIR, which is freed whole after
+                // the kernel's code (the module and its context are done with: kept, they held Cycles' compilation
+                // at 4 GB before its largest kernel's 3)
+                drop(linked);
+                let mut objects = Vec::with_capacity(kernels.len());
+                let mut asm = Vec::new();
+                for name in &kernels {
+                    if timings {
+                        eprintln!("[zluda air] AGX code of {}", name.to_string_lossy());
+                    }
+                    let kctx = Context::new();
+                    let kdiagnostics = Diagnostics::new(&kctx);
+                    let whole = Module::try_from_bitcode(&kctx, &portable, None)
+                        .ok_or("the portable AIR could not be read back for a kernel's AGX code")?;
+                    let one = Module::from_raw(unsafe { LLVMZludaAirKernelModule(whole.get(), name.as_ptr()) });
+                    drop(whole);
+                    if text_hook.is_some() {
+                        asm.extend(agx.emit_to_memory_buffer(&one.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?.to_vec());
+                        kdiagnostics.check()?;
+                    }
+                    objects.push(agx.emit_to_memory_buffer(&one, LLVMCodeGenFileType::LLVMObjectFile)?.to_vec());
+                    kdiagnostics.check()?;
+                }
+                stage("AGX objects, a kernel at a time");
+                let object = crate::agx_merge::merge(&objects)?;
+                stage("AGX object (merged)");
+                if let Some(hook) = text_hook {
+                    hook(&asm, String::from("asm"));
+                }
+                if let Some(hook) = compiler_hook {
+                    hook(&object, String::from("o"));
+                }
+                return Ok(AirCompilation { portable, metal: metal_air, metal_globals, agx_object: Some(object) });
+            }
             if let Some(hook) = text_hook {
                 stage("(writing the IR files)");
                 let asm = agx.emit_to_memory_buffer(&linked.clone(), LLVMCodeGenFileType::LLVMAssemblyFile)?.to_vec();
@@ -329,4 +378,28 @@ pub fn compile_air(
         }
     };
     Ok(AirCompilation { portable, metal: metal_air, metal_globals, agx_object })
+}
+
+/// The names of the kernels (functions with the air-kernel attribute) of `module`.
+fn kernel_names(module: &Module) -> Vec<CString> {
+    let mut names = Vec::new();
+    let key = "air-kernel";
+    unsafe {
+        let mut f = llvm_sys::core::LLVMGetFirstFunction(module.get());
+        while !f.is_null() {
+            let attr = llvm_sys::core::LLVMGetStringAttributeAtIndex(
+                f,
+                llvm_sys::LLVMAttributeFunctionIndex,
+                key.as_ptr().cast(),
+                key.len() as u32,
+            );
+            if !attr.is_null() && llvm_sys::core::LLVMIsDeclaration(f) == 0 {
+                let mut len = 0;
+                let name = llvm_sys::core::LLVMGetValueName2(f, &mut len);
+                names.push(CStr::from_ptr(name).to_owned());
+            }
+            f = llvm_sys::core::LLVMGetNextFunction(f);
+        }
+    }
+    names
 }
