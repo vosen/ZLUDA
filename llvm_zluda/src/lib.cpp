@@ -1598,7 +1598,10 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
     {
         FunctionType *FT = K->getFunctionType();
         SmallVector<Type *, 8> params(FT->params());
-        params.push_back(PointerType::get(Ctx, 1));
+        // (a kernel's is a pointer; another function's an i64, which the AIR target can keep as a function: Metal's
+        // reader rejects a pointer parameter of one, "Unexpected bitcode file")
+        bool kernel = K->hasFnAttribute("air-kernel");
+        params.push_back(kernel ? (Type *)PointerType::get(Ctx, 1) : Type::getInt64Ty(Ctx));
         Function *NK = Function::Create(FunctionType::get(FT->getReturnType(), params, false), K->getLinkage(),
                                         K->getAddressSpace(), "", Mod);
         NK->copyAttributesFrom(K);
@@ -1628,6 +1631,8 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
             auto *CI = cast<CallInst>(U);
             Function *Caller = CI->getFunction();
             Value *CallerBase = Caller->getArg(Caller->arg_size() - 1);
+            if (CallerBase->getType()->isPointerTy())
+                CallerBase = new PtrToIntInst(CallerBase, Type::getInt64Ty(Ctx), "", CI->getIterator());
             SmallVector<Value *, 8> args(CI->args());
             args.push_back(CallerBase);
             CallInst *New = CallInst::Create(NK, args, "", CI->getIterator());
@@ -1651,10 +1656,12 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
     for (Function *K : order)
     {
         Function *NK = renamed[K];
-        Argument *Base = NK->getArg(NK->arg_size() - 1);
         // Each use of a variable in NK becomes the buffer plus its offset.
         convertUsersOfConstantsToInstructions(consts, NK);
         IRBuilder<> B(&*NK->getEntryBlock().getFirstInsertionPt());
+        Value *Base = NK->getArg(NK->arg_size() - 1);
+        if (!Base->getType()->isPointerTy())
+            Base = B.CreateIntToPtr(Base, PointerType::get(Ctx, 1), "zluda_globals.ptr");
         for (GlobalVariable *GV : globals)
         {
             bool used = any_of(GV->users(), [&](User *U) {
