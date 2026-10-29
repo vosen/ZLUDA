@@ -219,6 +219,20 @@ pub fn compile_air(
     // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
     run(&linked, c"default<O3>", &air, &options)?;
     stage("O3 in AIR's address spaces");
+    // PTX has no fast math by default (only the .approx / .ftz forms, which the front end writes out): Metal is
+    // to compile without it (air.precise-math), which also keeps the error-free transformations of the directed
+    // rounding emulations intact
+    unsafe {
+        let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
+        let key = "air.precise-math";
+        llvm_sys::core::LLVMAddModuleFlag(
+            linked.get(),
+            llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
+            key.as_ptr().cast(),
+            key.len(),
+            llvm_sys::core::LLVMValueAsMetadata(one),
+        );
+    }
     // strict floating point: PTX's canonical NaNs (after the last O3, which could fold the bit tests of
     // operations whose results it proves are not NaNs, never the other way)
     if strict_fp {

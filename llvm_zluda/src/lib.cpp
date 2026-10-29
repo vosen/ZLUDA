@@ -2383,7 +2383,8 @@ LLVM_C_EXTERN_C_END
 LLVM_C_EXTERN_C_BEGIN
 
 // ZLUDA_AGX target Air, strict floating point (zoc --strict-fp): PTX's canonical NaN for every floating point
-// result that is a NaN (0x7fffffff in f32, 0x7fff in f16 and bf16, 0x7fffffffffffffff in f64), as the AGX
+// result that is a NaN (0x7fffffff in f32, 0x7fff in f16 and bf16; in f64 0x7fffffffffffffff only for a NaN no
+// operand was, a NaN operand's payload propagating, as Berkeley TestFloat's f64 vectors have it), as the AGX
 // target's canonical-nan feature makes it. The test is on the bits: Metal compiles with fast math, which may take
 // a float comparison with itself for true. Returns the number of results rewritten.
 int LLVMZludaAirCanonicalNaNs(LLVMModuleRef M)
@@ -2419,7 +2420,15 @@ int LLVMZludaAirCanonicalNaNs(LLVMModuleRef M)
             IRBuilder<> B(I->getNextNode());
             Instruction *placeholder = cast<Instruction>(B.CreateFreeze(I));
             Value *v = B.CreateBitCast(placeholder, IT);
-            Value *nan = B.CreateICmpUGT(B.CreateAnd(v, ConstantInt::get(IT, sign)), ConstantInt::get(IT, inf));
+            auto isNaN = [&](Value *x) {
+                return B.CreateICmpUGT(B.CreateAnd(x, ConstantInt::get(IT, sign)), ConstantInt::get(IT, inf));
+            };
+            Value *nan = isNaN(v);
+            // f64: a NaN operand's (quieted) payload propagates; only a NaN made of no NaN is canonical
+            if (S->isDoubleTy())
+                for (Value *op : I->operands())
+                    if (op->getType() == T)
+                        nan = B.CreateAnd(nan, B.CreateNot(isNaN(B.CreateBitCast(op, IT))));
             Value *r = B.CreateBitCast(B.CreateSelect(nan, ConstantInt::get(IT, sign), v), T);
             I->replaceUsesWithIf(r, [&](Use &U) { return U.getUser() != placeholder; });
             placeholder->replaceAllUsesWith(I);
