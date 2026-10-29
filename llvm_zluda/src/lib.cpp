@@ -2466,27 +2466,34 @@ int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
         for (Instruction &I : make_early_inc_range(instructions(F)))
         {
             auto *C = dyn_cast<FCmpInst>(&I);
-            if (!C || !C->getOperand(0)->getType()->isFloatTy())
+            if (!C)
                 continue;
+            // f32 and bfloat (Metal's bfloat compares flush too), scalars and vectors
+            Type *FT = C->getOperand(0)->getType(), *E = FT->getScalarType();
+            if (!E->isFloatTy() && !E->isBFloatTy())
+                continue;
+            bool f32 = E->isFloatTy();
+            uint64_t sign = f32 ? 0x80000000 : 0x8000, magMask = sign - 1, inf = f32 ? 0x7f800000 : 0x7f80;
             IRBuilder<> B(C);
-            Type *I32 = B.getInt32Ty();
-            auto bits = [&](Value *v) { return B.CreateBitCast(v, I32); };
-            auto isNaN = [&](Value *b) { return B.CreateICmpUGT(B.CreateAnd(b, 0x7fffffff), B.getInt32(0x7f800000)); };
-            // key: zeros as 0x80000000, positives above it, negatives below it in reverse
-            auto key = [&](Value *b) {
-                Value *mag = B.CreateAnd(b, 0x7fffffff);
-                Value *neg = B.CreateICmpSLT(b, B.getInt32(0));
-                Value *k = B.CreateSelect(neg, B.CreateSub(B.getInt32(0x80000000), mag),
-                                          B.CreateAdd(B.getInt32(0x80000000), mag));
-                return k;
+            Type *IT = B.getIntNTy(f32 ? 32 : 16);
+            if (auto *VT = dyn_cast<VectorType>(FT))
+                IT = VectorType::get(IT, VT->getElementCount());
+            auto k = [&](uint64_t v) { return ConstantInt::get(IT, v); };
+            auto bits = [&](Value *v) { return B.CreateBitCast(v, IT); };
+            auto isNaN = [&](Value *x) { return B.CreateICmpUGT(B.CreateAnd(x, k(magMask)), k(inf)); };
+            // key: zeros as the sign bit, positives above it, negatives below it in reverse
+            auto key = [&](Value *x) {
+                Value *mag = B.CreateAnd(x, k(magMask));
+                Value *neg = B.CreateICmpSLT(x, k(0));
+                return B.CreateSelect(neg, B.CreateSub(k(sign), mag), B.CreateAdd(k(sign), mag));
             };
             Value *a = bits(C->getOperand(0)), *b = bits(C->getOperand(1));
             // .ftz (the function's f32 denormal mode, preserve-sign): denormal operands compare as zeros
-            if (F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
+            if (f32 && F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
             {
                 auto flush = [&](Value *x) {
-                    Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, 0x7f800000), B.getInt32(0));
-                    return B.CreateSelect(denormal, B.CreateAnd(x, 0x80000000), x);
+                    Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, k(inf)), k(0));
+                    return B.CreateSelect(denormal, B.CreateAnd(x, k(sign)), x);
                 };
                 a = flush(a);
                 b = flush(b);
