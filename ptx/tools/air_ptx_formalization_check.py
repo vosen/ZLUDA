@@ -63,6 +63,10 @@ def is_hang(error):
     return any(t in (error or '') for t in TIMED_OUT)
 
 
+# [kernel, GPU seconds, pipeline seconds] of each dispatch, by file (the service's timings)
+TIMINGS = {}
+
+
 def submit(job, queue, tries=4, transient=TRANSIENT):
     """Send one request to the service holding the device lock, retrying the failures listed in transient. A request
     that timed out is not retried: the lock is held until the service has finished the timed-out kernel."""
@@ -404,6 +408,11 @@ def run_test(path, args):
             if not reply.get('ok'):
                 return reply.get('error', 'service error')[:300]
             read_heap(reply, heap)
+            # the GPU time of each dispatch (the service's performance timings), for --json
+            for d in reply.get('result', {}).get('dispatches', []):
+                if d.get('gpu_timing_available', True) and isinstance(d.get('gpu_seconds'), (int, float)):
+                    TIMINGS.setdefault(os.path.basename(path), []).append(
+                        [d.get('kernel'), d['gpu_seconds'], d.get('pipeline_seconds')])
             return None
 
         for d in dirs:
@@ -577,7 +586,9 @@ def main():
     print('---- .expect checks: %(pass)d pass, %(fail)d fail, %(skip)d skipped' % args.counts)
     if args.json:
         with open(args.json, 'w') as f:
-            json.dump({os.path.basename(p): {'status': s, 'detail': d} for p, (s, d) in results}, f, indent=1)
+            json.dump({os.path.basename(p): {'status': s, 'detail': d,
+                                             'gpu': TIMINGS.get(os.path.basename(p), [])} for p, (s, d) in results},
+                      f, indent=1)
     return 0 if all(s in ('PASS', 'PARTIAL', 'UNSUPPORTED', 'REJECTED', 'SKIPPED-HANG') for _, (s, _) in results) else 1
 
 
