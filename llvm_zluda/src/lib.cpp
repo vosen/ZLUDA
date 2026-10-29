@@ -2144,6 +2144,76 @@ LLVM_C_EXTERN_C_END
 
 LLVM_C_EXTERN_C_BEGIN
 
+// The bits under Mask of a floating point mode value, where they are the same whichever way the value was
+// made: through phis and selects (the mode where control flow joins) and the front end's updates of the mode
+// (and / or with constants, the bits of one field replaced). Phis in a cycle are assumed to agree (the other
+// incoming values decide). None where the bits differ or are not known.
+static std::optional<uint64_t> zludaModeBits(Value *V, uint64_t Mask, SmallPtrSetImpl<Value *> &Visiting)
+{
+    if (auto *K = dyn_cast<ConstantInt>(V))
+        return K->getZExtValue() & Mask;
+    if (auto *Fr = dyn_cast<FreezeInst>(V))
+        return zludaModeBits(Fr->getOperand(0), Mask, Visiting);
+    if (auto *BO = dyn_cast<BinaryOperator>(V))
+    {
+        auto *K = dyn_cast<ConstantInt>(BO->getOperand(1));
+        if (!K)
+            return std::nullopt;
+        uint64_t c = K->getZExtValue() & Mask;
+        if (BO->getOpcode() == Instruction::Or)
+        {
+            if (c == Mask)
+                return Mask;
+            auto x = zludaModeBits(BO->getOperand(0), Mask & ~c, Visiting);
+            return x ? std::optional<uint64_t>(*x | c) : std::nullopt;
+        }
+        if (BO->getOpcode() == Instruction::And)
+        {
+            if (c == 0)
+                return 0;
+            auto x = zludaModeBits(BO->getOperand(0), c, Visiting);
+            return x ? std::optional<uint64_t>(*x & c) : std::nullopt;
+        }
+        return std::nullopt;
+    }
+    SmallVector<Value *, 8> incoming;
+    if (auto *P = dyn_cast<PHINode>(V))
+        incoming.append(P->incoming_values().begin(), P->incoming_values().end());
+    else if (auto *Sel = dyn_cast<SelectInst>(V))
+        incoming = {Sel->getTrueValue(), Sel->getFalseValue()};
+    else
+        return std::nullopt;
+    if (!Visiting.insert(V).second)
+        return UINT64_MAX; // in a cycle: whatever the others say
+    std::optional<uint64_t> bits = UINT64_MAX;
+    for (Value *In : incoming)
+    {
+        auto b = zludaModeBits(In, Mask, Visiting);
+        if (!b)
+        {
+            bits = std::nullopt;
+            break;
+        }
+        if (*b == UINT64_MAX)
+            continue;
+        if (*bits != UINT64_MAX && *bits != *b)
+        {
+            bits = std::nullopt;
+            break;
+        }
+        bits = b;
+    }
+    Visiting.erase(V);
+    return bits;
+}
+
+static std::optional<uint64_t> zludaModeField(Value *V, uint64_t Mask)
+{
+    SmallPtrSet<Value *, 16> visiting;
+    auto b = zludaModeBits(V, Mask, visiting);
+    return b && *b != UINT64_MAX ? b : std::nullopt;
+}
+
 // ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
 // (__zluda_air.set.fpmode / __zluda_air.get.fpmode, as llvm.agx.set.fpmode for
 // the Agx target: f32 rounding in bits 0-1, f16/bf16/f64 in bits 2-3,
@@ -2223,12 +2293,12 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M)
             // f16 denormals flushed (bit 5): the operands and the result, as the hardware's mode would
             if (C->getType()->getScalarType()->isHalfTy())
             {
-                auto *K = dyn_cast<ConstantInt>(m);
-                if (!K || (K->getZExtValue() & 0x20))
+                auto flushBit = zludaModeField(m, 0x20);
+                if (!flushBit || *flushBit)
                 {
                     IRBuilder<> B(C);
-                    Value *on = K ? static_cast<Value *>(B.getTrue())
-                                  : B.CreateICmpNE(B.CreateAnd(m, 0x20), ConstantInt::get(I32, 0));
+                    Value *on = flushBit ? static_cast<Value *>(B.getTrue())
+                                         : B.CreateICmpNE(B.CreateAnd(m, 0x20), ConstantInt::get(I32, 0));
                     auto flush = [&](IRBuilder<> &B, Value *v) -> Value * {
                         Type *T = v->getType();
                         Type *IT = T->getWithNewType(B.getInt16Ty());
@@ -2255,9 +2325,9 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M)
             auto withRounding = [&](CallInst *CI, unsigned r) {
                 CI->setArgOperand(idx, MetadataAsValue::get(Ctx, MDString::get(Ctx, names[r])));
             };
-            if (auto *K = dyn_cast<ConstantInt>(m))
+            if (auto bits = zludaModeField(m, 3ull << shift))
             {
-                withRounding(C, (K->getZExtValue() >> shift) & 3);
+                withRounding(C, (*bits >> shift) & 3);
                 continue;
             }
             // each rounding, chosen by the mode
