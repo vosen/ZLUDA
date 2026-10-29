@@ -12,8 +12,8 @@
 ; Address spaces are ZLUDA's (generic 0, global 1, shared 3, constant 4,
 ; private 5); llvm_zluda's AIR compilation maps them to AIR's.
 ;
-; Not yet defined (a module using them does not link): texture sampling and
-; the 8x8 SIMD-group matrix multiply-add.
+; Not yet defined (a module using it does not link): the 8x8 SIMD-group
+; matrix multiply-add.
 
 ; System values
 declare <3 x i32> @air.thread_position_in_threadgroup.v3i32() #4
@@ -282,6 +282,16 @@ define float @__zluda_air.cos.f32(float %x) #0 {
   %a = fmul float %x, 0x3FF921FB60000000
   %r = call afn float @llvm.cos.f32(float %a)
   ret float %r
+}
+
+; Textures spill over from hardware slots to software: the helpers sample a
+; texture in software from its descriptor in device memory unless the
+; descriptor's word 16 has bit 63 set, a hardware slot the runtime bound for
+; it (zluda_ptx_impl_agx_tex.c). No slots are bound yet on the Air target, so
+; that path is never taken; the slot's sample is the texture's software one
+; once kernels have texture parameters.
+define <4 x i32> @__zluda_air.texture.sample(i32 %slot, i16 %sampler, float %x, float %y, i32 %dims) #0 {
+  ret <4 x i32> zeroinitializer
 }
 
 ; The floating point mode (rounding of f32 in bits 0-1, of f16/f64 in bits

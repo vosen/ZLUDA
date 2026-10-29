@@ -40,7 +40,7 @@ import agx_ptx_formalization_check as h  # noqa: E402
 from agx_ptx_formalization_check import SIZES, Unsupported  # noqa: E402
 
 BASE = h.BASE
-UNSUPPORTED_DIRECTIVES = ('.tensormap', '.texture', '.sampler', '.surface', '.multimem', '.fabric', '.cooplaunch')
+UNSUPPORTED_DIRECTIVES = ('.tensormap', '.multimem', '.fabric', '.cooplaunch')
 TRANSIENT = ('XPC_ERROR_CONNECTION_INTERRUPTED', 'did not reply')
 
 
@@ -425,6 +425,30 @@ def run_test(path, args):
                 for k, v in enumerate(vals):
                     bits, target = value(v, t)
                     heap.write(addr + k * SIZES[t], SIZES[t], bits, target)
+            elif kw in ('.texture', '.sampler', '.surface'):
+                # The descriptors of PTX-formalization's model (agx_ptx_formalization_check.object_words), with no
+                # hardware slot (word 16 bit 63 clear): the helpers sample in software from device memory, the
+                # spill-over path of the Air target's textures.
+                m = re.fullmatch(r'\.(texture|surface) ([\w$.]+) \.(\w+) ([\w$.]+) \.dims \{(.*?)\} \.attrs \{(.*?)\}\s*;?', d) \
+                    or re.fullmatch(r'\.(sampler) ([\w$.]+) \.attrs \{(.*?)\}\s*;?', d)
+                if not m:
+                    raise Unsupported(d)
+                ints = lambda g: [int(v, 0) for v in h.split_vals(g)] if g and g.strip() else []
+                data = None
+                if m.group(1) == 'sampler':
+                    words = h.object_words('sampler', None, 0, ints(m.group(3)), [])
+                else:
+                    data = syms[m.group(4)]
+                    words = h.object_words(m.group(1), m.group(3), data, ints(m.group(6)), ints(m.group(5)))
+                    if m.group(1) == 'texture':
+                        words = words + [0]
+                addr = BASE + ((heap.top + 255) & ~255)
+                heap.top = (addr - BASE) + 8 * len(words)
+                heap.ensure(heap.top)
+                syms[m.group(2)] = addr
+                bufs[m.group(2)] = [addr, 'u64', len(words)]
+                for k, v in enumerate(words):
+                    heap.write(addr + 8 * k, 8, v & (2**64 - 1), data if k == 1 and data is not None else None)
             elif kw in ('.patch', '.append'):
                 err = flush()
                 if err:
