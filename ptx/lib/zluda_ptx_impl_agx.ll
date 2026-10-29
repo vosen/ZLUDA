@@ -3376,7 +3376,7 @@ start_k:
   %snk = call i32 @__zluda_ptx_impl_agx_tma_nk(ptr %tm, i32 %sk)
   %smu.n = mul i32 %smu, %snk
   %sk.n = add i32 %sk, 1
-  br label %start
+  br label %start, !llvm.loop !50000
 start_n:
   %scn = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %last, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
   %sn = mul i32 %scn, %smu
@@ -3405,7 +3405,7 @@ pos_k:
   %acc.n = add i64 %acc, %po
   %idx.n = sdiv i32 %idx, %nk
   %k.n = add i32 %k, 1
-  br i1 %pbad, label %outside, label %pos
+  br i1 %pbad, label %outside, label %pos, !llvm.loop !50002
 pos_n:
   %no = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %last, i32 %idx, i32 %eb)
   br label %finish
@@ -3438,7 +3438,7 @@ wpos_k:
   %wbad = icmp slt i64 %wo, 0
   %wacc.n = add i64 %wacc, %wo
   %wk.n = add i32 %wk, 1
-  br i1 %wbad, label %outside, label %wpos
+  br i1 %wbad, label %outside, label %wpos, !llvm.loop !50003
 wpos_n:
   %wcn = call i32 @__zluda_ptx_impl_agx_tma_sel(i32 %last, i32 %c0, i32 %c1, i32 %c2, i32 %c3, i32 %c4)
   %wno = call i64 @__zluda_ptx_impl_agx_tma_offset(ptr %tm, i32 %last, i32 %wcn, i32 %eb)
@@ -3850,6 +3850,14 @@ declare i32 @llvm.agx.simdgroup.index.in.threadgroup()
 declare i32 @llvm.agx.core.id()
 
 declare void @llvm.memcpy.p3.p1.i32(ptr addrspace(3) noalias nocapture writeonly, ptr addrspace(1) noalias nocapture readonly, i32, i1 immarg)
+; The loops over the dimensions of a TMA im2col copy (__zluda_ptx_impl_agx_tma_*): neither unrolled nor peeled. Peeling
+; them for compares a constant tensor map decides grew the copy by a third (tma-i2c-4d: 1050 AGX instructions against
+; 768) for straight-line code the copy runs once per element.
+!50000 = distinct !{!50000, !50001}
+!50001 = !{!"llvm.loop.unroll.disable"}
+!50002 = distinct !{!50002, !50001}
+!50003 = distinct !{!50003, !50001}
+
 ; ---------------------------------------------------------------- BEGIN GENERATED (gen_agx_tex.py)
 ; regenerate with ptx/lib/gen_agx_tex.py
 
@@ -36884,4 +36892,3 @@ declare double @llvm.sqrt.f64(double)
 !40001 = !{i32 7, !"frame-pointer", i32 2}
 !40002 = !{!"Ubuntu clang version 18.1.3 (1ubuntu1)"}
 ; ---------------------------------------------------------------- END GENERATED (gen_agx_tex.py)
-
