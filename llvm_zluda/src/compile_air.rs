@@ -264,11 +264,15 @@ pub fn compile_air(
     // globals buffer is a kernel parameter like the others)
     let metal = linked.clone();
     unsafe { LLVMZludaAirSharedLayout(metal.get()) };
-    for _ in 0..16 {
-        if unsafe { LLVMZludaAirInlineGlobalUsers(metal.get()) } == 0 {
-            break;
+    // The functions that use a variable take the buffer's address as a parameter (LLVMZludaAirGlobalsToBuffer).
+    // ZLUDA_AIR_INLINE_GLOBAL_USERS, non-empty: inline them into the kernels instead, as before (comparisons).
+    if std::env::var("ZLUDA_AIR_INLINE_GLOBAL_USERS").is_ok_and(|v| !v.is_empty()) {
+        for _ in 0..16 {
+            if unsafe { LLVMZludaAirInlineGlobalUsers(metal.get()) } == 0 {
+                break;
+            }
+            run(&metal, c"always-inline", &air, &options)?;
         }
-        run(&metal, c"always-inline", &air, &options)?;
     }
     let mut json = std::ptr::null_mut();
     let mut err = std::ptr::null_mut();

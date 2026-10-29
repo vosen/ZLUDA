@@ -1570,14 +1570,32 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         users.erase(F);
         F->eraseFromParent();
     }
-    for (Function *K : users)
-        if (!K->hasFnAttribute("air-kernel"))
-            return fail(K->getName().str() + " uses a .global variable and could not be inlined into a kernel");
+    // The other functions that use a variable take the buffer's address as a last parameter too, as do their
+    // callers up to the kernels (instead of being inlined into every kernel: Cycles' integrator in each of 75
+    // kernels, a Metal module nine times the size). Function pointers are direct calls by now
+    // (LLVMZludaAirFunctionPointers): every use of these functions is a call.
+    SmallVector<Function *, 8> work(users.begin(), users.end());
+    while (!work.empty())
+    {
+        Function *F = work.pop_back_val();
+        if (F->hasFnAttribute("air-kernel"))
+            continue;
+        for (User *U : F->users())
+        {
+            auto *CB = dyn_cast<CallBase>(U);
+            if (!CB || CB->getCalledFunction() != F)
+                return fail(F->getName().str() + " uses a .global variable and is not only called directly");
+            if (users.insert(CB->getFunction()).second)
+                work.push_back(CB->getFunction());
+        }
+    }
     std::string kernels;
     SmallVector<Constant *, 8> consts(globals.begin(), globals.end());
-    for (Function *K : users)
+    // F with a last parameter, the buffer's address (the old function's calls are rewritten below)
+    DenseMap<Function *, Function *> renamed;
+    SmallVector<Function *, 8> order(users.begin(), users.end());
+    for (Function *K : order)
     {
-        // K with a last parameter, the buffer's address.
         FunctionType *FT = K->getFunctionType();
         SmallVector<Type *, 8> params(FT->params());
         params.push_back(PointerType::get(Ctx, 1));
@@ -1592,11 +1610,48 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         }
         Argument *Base = NK->getArg(NK->arg_size() - 1);
         Base->setName("zluda_globals");
-        NK->addParamAttr(Base->getArgNo(), Attribute::get(Ctx, "zluda-globals"));
-        NK->addParamAttr(Base->getArgNo(), Attribute::NoAlias);
+        // (noalias only on kernels: the AIR writer has no encoding for it on another function's parameter)
+        if (K->hasFnAttribute("air-kernel"))
+        {
+            NK->addParamAttr(Base->getArgNo(), Attribute::get(Ctx, "zluda-globals"));
+            NK->addParamAttr(Base->getArgNo(), Attribute::NoAlias);
+        }
         NK->takeName(K);
-        K->replaceAllUsesWith(NK);
+        renamed[K] = NK;
+    }
+    // the calls of the old functions: the new one, with the caller's buffer address
+    for (Function *K : order)
+    {
+        Function *NK = renamed[K];
+        for (User *U : make_early_inc_range(K->users()))
+        {
+            auto *CI = cast<CallInst>(U);
+            Function *Caller = CI->getFunction();
+            Value *CallerBase = Caller->getArg(Caller->arg_size() - 1);
+            SmallVector<Value *, 8> args(CI->args());
+            args.push_back(CallerBase);
+            CallInst *New = CallInst::Create(NK, args, "", CI->getIterator());
+            New->setCallingConv(CI->getCallingConv());
+            New->setTailCallKind(CI->getTailCallKind());
+            New->setDebugLoc(CI->getDebugLoc());
+            AttributeList AL = CI->getAttributes();
+            New->setAttributes(AttributeList::get(Ctx, AL.getFnAttrs(), AL.getRetAttrs(),
+                                                  [&] {
+                                                      SmallVector<AttributeSet, 8> ps;
+                                                      for (unsigned i = 0; i < CI->arg_size(); i++)
+                                                          ps.push_back(AL.getParamAttrs(i));
+                                                      return ps;
+                                                  }()));
+            New->takeName(CI);
+            CI->replaceAllUsesWith(New);
+            CI->eraseFromParent();
+        }
         K->eraseFromParent();
+    }
+    for (Function *K : order)
+    {
+        Function *NK = renamed[K];
+        Argument *Base = NK->getArg(NK->arg_size() - 1);
         // Each use of a variable in NK becomes the buffer plus its offset.
         convertUsersOfConstantsToInstructions(consts, NK);
         IRBuilder<> B(&*NK->getEntryBlock().getFirstInsertionPt());
@@ -1648,6 +1703,8 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
                 }
             }
         }
+        if (!NK->hasFnAttribute("air-kernel"))
+            continue;
         if (!kernels.empty())
             kernels += ", ";
         kernels += "\"" + NK->getName().str() + "\"";
