@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAirSaltKernels, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -29,6 +29,10 @@ use llvm_sys::transforms::pass_builder::LLVMRunPasses;
 use std::ffi::{CStr, CString};
 
 pub const AIR_TRIPLE: &CStr = c"air";
+
+/// DXMT's cleanup (its AIR converter's "passes that really matter") with the loop and redundancy passes the hash
+/// and soft-f64 loops lacked: LICM, GVN and InstCombine again.
+const LIGHT_PLUS: &CStr = c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg)";
 
 /// The result of compiling for the Air target.
 pub struct AirCompilation {
@@ -151,9 +155,17 @@ pub fn compile_air(
         }
         last = std::time::Instant::now();
     };
+    // The optimization before ZLUDA's lowering and after each of its rounds (ZLUDA_AIR_FIRST_PIPELINE): o3, or
+    // light+ (the Metal copy's cleanup), the O3 after the address space remap making the code
+    let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref() {
+        // (with switches as lookup tables already, globals that the lowering lays out: made by the O3 after the
+        // remap, the AGX backend rejected them, "unsupported global 'switch.table.k'")
+        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
+        _ => c"default<O3>",
+    };
     unsafe { LLVMZludaSetAirPrimitives(1) };
     let lowered = (|| -> Result<(), String> {
-        run(&linked, c"default<O3>", &air, &options)?;
+        run(&linked, first_pipeline, &air, &options)?;
         let mut err = std::ptr::null_mut();
         let clusters = unsafe { LLVMZludaAgxLowerClusters(linked.get(), &mut err) };
         if clusters < 0 {
@@ -164,14 +176,14 @@ pub fn compile_air(
             if !lowered && !(i == 0 && clusters > 0) {
                 break;
             }
-            run(&linked, c"default<O3>", &air, &options)?;
+            run(&linked, first_pipeline, &air, &options)?;
         }
         let spilled = unsafe { LLVMZludaAgxSpillClusterShared(linked.get(), &mut err) };
         if spilled < 0 {
             return Err(fail(err));
         }
         if spilled > 0 {
-            run(&linked, c"default<O3>", &air, &options)?;
+            run(&linked, first_pipeline, &air, &options)?;
         }
         Ok(())
     })();
@@ -215,55 +227,50 @@ pub fn compile_air(
         }
     }
     stage("rounding, address space remap");
+    // The Metal copy's optimization (ZLUDA_AIR_METAL_PIPELINE): o3 (the portable module's), o2, light+ or light, a
+    // cleanup like DXMT's AIR converter's (Metal's compiler optimizes the AIR again; DXMT runs "some passes that
+    // really matter", since an unoptimized shader makes the pipeline's compilation slow and a full pipeline is
+    // too heavy). Without AGX code to make, the portable module then skips its O3 too.
+    // By default light+ when only the Metal AIR is made (with AGX code, the portable module's O3 serves both):
+    // on the M2 Max it gives o3's GPU times and Metal compile times, and takes Cycles 16 s instead of 45.
+    let metal_pipeline = std::env::var("ZLUDA_AIR_METAL_PIPELINE")
+        .unwrap_or_else(|_| if agx_cpu.is_some() { "o3".into() } else { "light+".into() });
+    let metal_pipeline: Option<&CStr> = match metal_pipeline.as_str() {
+        "o2" => Some(c"default<O2>"),
+        "light" => Some(
+            c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg)",
+        ),
+        // light with the loop and redundancy passes the hash and soft-f64 loops lacked (LICM, GVN, InstCombine)
+        "light+" => Some(LIGHT_PLUS),
+        _ => None,
+    };
+    let metal_source = metal_pipeline.map(|_| linked.clone());
     // O3 again in AIR's address spaces: a lighter cleanup (inlining, SROA, EarlyCSE, InstCombine, SimplifyCFG,
     // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
-    run(&linked, c"default<O3>", &air, &options)?;
-    stage("O3 in AIR's address spaces");
-    // PTX has no fast math by default (only the .approx / .ftz forms, which the front end writes out): Metal is
-    // to compile without it (air.precise-math), which also keeps the error-free transformations of the directed
-    // rounding emulations intact
-    unsafe {
-        let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
-        let key = "air.precise-math";
-        llvm_sys::core::LLVMAddModuleFlag(
-            linked.get(),
-            llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
-            key.as_ptr().cast(),
-            key.len(),
-            llvm_sys::core::LLVMValueAsMetadata(one),
-        );
+    if metal_pipeline.is_none() || agx_cpu.is_some() {
+        run(&linked, c"default<O3>", &air, &options)?;
+        stage("O3 in AIR's address spaces");
     }
-    // strict floating point: PTX's canonical NaNs (after the last O3, which could fold the bit tests of
-    // operations whose results it proves are not NaNs, never the other way)
-    if strict_fp {
-        // f32 denormals where the function keeps them, which Metal's ALU flushes: AIR's portable passes
-        // emulate the operations whose operands or results are denormal (air.ieee-fp32)
-        unsafe {
-            let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
-            let key = "air.ieee-fp32";
-            llvm_sys::core::LLVMAddModuleFlag(
-                linked.get(),
-                llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
-                key.as_ptr().cast(),
-                key.len(),
-                llvm_sys::core::LLVMValueAsMetadata(one),
-            );
-        }
-        unsafe { LLVMZludaAirCanonicalNaNs(linked.get()) };
-        // f32 comparisons on the bits (a flushing GPU compares a denormal as zero)
-        unsafe { LLVMZludaAirCompareFloatBits(linked.get()) };
-        // and the NaN constants the optimizations folded (as the Agx target)
-        unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
-    }
-    // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
-    let mut err = std::ptr::null_mut();
-    if unsafe { LLVMZludaAirFunctionPointers(linked.get(), &mut err) } < 0 {
-        return Err(fail(err));
-    }
+    finish_air(ctx, &linked, strict_fp)?;
     // Metal: what only Metal needs from ZLUDA, on a copy, before the AIR kernel signatures are made (the
     // globals buffer is a kernel parameter like the others)
-    let metal = linked.clone();
+    let metal = match (metal_source, metal_pipeline) {
+        (Some(source), Some(pipeline)) => {
+            run(&source, pipeline, &air, &options)?;
+            stage("Metal copy: its pipeline");
+            finish_air(ctx, &source, strict_fp)?;
+            source
+        }
+        _ => linked.clone(),
+    };
     unsafe { LLVMZludaAirSharedLayout(metal.get()) };
+    // ZLUDA_AIR_SALT: an unused stack array, its length from the string, at the start of each kernel of the Metal
+    // copy, which makes Metal compile the pipelines anew instead of taking them from its cache, which ignores
+    // metadata (comparisons of the pipelines' compile times)
+    if let Ok(salt) = std::env::var("ZLUDA_AIR_SALT") {
+        let len = 1 + salt.bytes().fold(7u64, |h, b| h.wrapping_mul(31).wrapping_add(b as u64)) % 63;
+        unsafe { LLVMZludaAirSaltKernels(metal.get(), len) };
+    }
     // The functions that use a variable take the buffer's address as a parameter (LLVMZludaAirGlobalsToBuffer).
     // ZLUDA_AIR_INLINE_GLOBAL_USERS, non-empty: inline them into the kernels instead, as before (comparisons).
     if std::env::var("ZLUDA_AIR_INLINE_GLOBAL_USERS").is_ok_and(|v| !v.is_empty()) {
@@ -402,4 +409,52 @@ fn kernel_names(module: &Module) -> Vec<CString> {
         }
     }
     names
+}
+
+/// After the last optimization of `module` in AIR's address spaces: Metal compiles without fast math
+/// (air.precise-math); strict mode's canonical NaNs and denormal comparisons; function pointers as IDs.
+fn finish_air(ctx: &Context, module: &Module, strict_fp: bool) -> Result<(), String> {
+    let fail = |err: *mut std::ffi::c_char| Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string();
+    // PTX has no fast math by default (only the .approx / .ftz forms, which the front end writes out): Metal is
+    // to compile without it (air.precise-math), which also keeps the error-free transformations of the directed
+    // rounding emulations intact
+    unsafe {
+        let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
+        let key = "air.precise-math";
+        llvm_sys::core::LLVMAddModuleFlag(
+            module.get(),
+            llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
+            key.as_ptr().cast(),
+            key.len(),
+            llvm_sys::core::LLVMValueAsMetadata(one),
+        );
+    }
+    // strict floating point: PTX's canonical NaNs (after the last O3, which could fold the bit tests of
+    // operations whose results it proves are not NaNs, never the other way)
+    if strict_fp {
+        // f32 denormals where the function keeps them, which Metal's ALU flushes: AIR's portable passes
+        // emulate the operations whose operands or results are denormal (air.ieee-fp32)
+        unsafe {
+            let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
+            let key = "air.ieee-fp32";
+            llvm_sys::core::LLVMAddModuleFlag(
+                module.get(),
+                llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
+                key.as_ptr().cast(),
+                key.len(),
+                llvm_sys::core::LLVMValueAsMetadata(one),
+            );
+        }
+        unsafe { LLVMZludaAirCanonicalNaNs(module.get()) };
+        // f32 comparisons on the bits (a flushing GPU compares a denormal as zero)
+        unsafe { LLVMZludaAirCompareFloatBits(module.get()) };
+        // and the NaN constants the optimizations folded (as the Agx target)
+        unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(module.get()) };
+    }
+    // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
+    let mut err = std::ptr::null_mut();
+    if unsafe { LLVMZludaAirFunctionPointers(module.get(), &mut err) } < 0 {
+        return Err(fail(err));
+    }
+    Ok(())
 }

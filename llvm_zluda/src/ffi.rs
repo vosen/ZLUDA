@@ -132,6 +132,7 @@ extern "C" {
     pub fn LLVMZludaAirCanonicalNaNs(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirCompareFloatBits(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirKernelModule(module: LLVMModuleRef, name: *const std::ffi::c_char) -> LLVMModuleRef;
+    pub fn LLVMZludaAirSaltKernels(module: LLVMModuleRef, length: u64);
     pub fn LLVMZludaAirRemapAddressSpaces(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirFunctionPointers(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAirGlobalsToBuffer(

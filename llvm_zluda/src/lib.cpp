@@ -2825,3 +2825,20 @@ LLVMModuleRef LLVMZludaAirKernelModule(LLVMModuleRef M, const char *name)
 }
 
 LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// An unused [length x i8] stack array at the start of each kernel (ZLUDA_AIR_SALT): Metal's pipeline cache keys on
+// the code, so pipelines compile anew (comparisons of their compile times).
+void LLVMZludaAirSaltKernels(LLVMModuleRef M, uint64_t length)
+{
+    for (Function &F : *unwrap(M))
+        if (!F.isDeclaration() && F.hasFnAttribute("air-kernel"))
+        {
+            IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());
+            AllocaInst *A = B.CreateAlloca(ArrayType::get(B.getInt8Ty(), length), nullptr, "zluda.salt");
+            B.CreateStore(B.getInt8(0), A, /*isVolatile=*/true);
+        }
+}
+
+LLVM_C_EXTERN_C_END
