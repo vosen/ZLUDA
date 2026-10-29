@@ -1146,6 +1146,14 @@ pub(crate) fn agx_strict() -> bool {
     std::env::var("ZLUDA_AGX_STRICT").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// `ZLUDA_ROUNDING_STRICT=1`: PTX's floating point semantics exactly (zoc --strict-fp): denormals, correctly
+/// rounded division and square root, canonical NaNs, emulated in software where the GPU differs. Slower; off by
+/// default, where kernels use the GPU's own floating point. (`ZLUDA_AGX_STRICT` is another switch: Mesa's
+/// instructions only.)
+pub(crate) fn strict_fp() -> bool {
+    std::env::var("ZLUDA_ROUNDING_STRICT").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 /// `ZLUDA_AGX_CHECKED=1`: check every memory access of the kernels and report the first bad one with its source
 /// location (zoc --agx-checked), as compute-sanitizer's memcheck does.
 pub(crate) fn agx_checked() -> bool {
@@ -1207,6 +1215,11 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     if checked {
         options.push("agx-checked");
     }
+    // (in the cache key: a strict build and a fast one of the same source differ)
+    let strict_fp = strict_fp();
+    if strict_fp {
+        options.push("strict-fp");
+    }
     let lineinfo = agx_lineinfo() && !checked;
     if lineinfo {
         options.push("lineinfo");
@@ -1244,6 +1257,7 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
         let mut args: Vec<String> = ["--target", "agx", "--arch", cpu, "--object-only"].iter().map(|a| a.to_string()).collect();
         args.extend(mesa.then(|| "--agx-strict".to_string()));
         args.extend(checked.then(|| "--agx-checked".to_string()));
+        args.extend(strict_fp.then(|| "--strict-fp".to_string()));
         args.extend(lineinfo.then(|| "--lineinfo".to_string()));
         args.extend(fast_mma.then(|| "--fast-mma".to_string()));
         args.extend((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")));

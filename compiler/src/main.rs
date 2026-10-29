@@ -138,7 +138,7 @@ fn main_core() -> Result<(), CompilerError> {
         let sink = |bytes: &Vec<u8>, extension: String| {
             write_to_file(bytes, &output_path.with_extension(extension)).unwrap();
         };
-        return compile_air(&texts, &sink, opts.arch, opts.ignore_errors, opts.stack_size);
+        return compile_air(&texts, &sink, opts.arch, opts.ignore_errors, opts.strict_fp, opts.stack_size);
     }
     if target == ptx::Target::Agx {
         let mut texts = vec![String::from_utf8(fs::read(&ptx_path)?).map_err(|e| e.utf8_error())?];
@@ -320,9 +320,10 @@ fn compile_air(
     sink: &dyn Fn(&Vec<u8>, String),
     arch: Option<String>,
     ignore_errors: bool,
+    strict_fp: bool,
     stack_size: u32,
 ) -> Result<(), CompilerError> {
-    let options = ptx::Options { target: ptx::Target::Air, stack_size, ..ptx::Options::default() };
+    let options = ptx::Options { target: ptx::Target::Air, strict_fp, stack_size, ..ptx::Options::default() };
     let llvm = ptx_to_llvm(ignore_errors, true, &texts[0], options)?;
     sink(&llvm.llvm_ir, "ll".to_string());
     let mut other_ir = Vec::new();
@@ -351,6 +352,7 @@ fn compile_air(
     _sink: &dyn Fn(&Vec<u8>, String),
     _arch: Option<String>,
     _ignore_errors: bool,
+    _strict_fp: bool,
     _stack_size: u32,
 ) -> Result<(), CompilerError> {
     Err(CompilerError::GenericError { cause: None, message: "zoc was built without the agx feature".to_string() })
