@@ -272,15 +272,13 @@ define float @__zluda_air.log2.f32(float %x) #0 {
   %r = call afn float @llvm.log2.f32(float %x)
   ret float %r
 }
-; AGX's sin and cos take the angle in quarter turns.
+; (in radians, as llvm.agx.sin and llvm.agx.cos, which agx-lower-air restores)
 define float @__zluda_air.sin.f32(float %x) #0 {
-  %a = fmul float %x, 0x3FF921FB60000000
-  %r = call afn float @llvm.sin.f32(float %a)
+  %r = call afn float @llvm.sin.f32(float %x)
   ret float %r
 }
 define float @__zluda_air.cos.f32(float %x) #0 {
-  %a = fmul float %x, 0x3FF921FB60000000
-  %r = call afn float @llvm.cos.f32(float %a)
+  %r = call afn float @llvm.cos.f32(float %x)
   ret float %r
 }
 

@@ -2615,6 +2615,71 @@ int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
             II->eraseFromParent();
             count++;
         }
+    // f32 sin / exp2 / log2 / approximate sqrt (sin.approx, ex2.approx, lg2.approx, sqrt.approx, rsqrt.approx) where the function keeps f32 denormals: the
+    // hardware reads a denormal operand as zero and flushes a denormal result. sin(x) is x for |x| < 2^-12 (the
+    // rest of the series is below half an ulp); log2 of a denormal m * 2^-149 is log2(m) - 149, NaN if negative;
+    // exp2 of an integer n in [-149, 127] is the power of two, built on the bits (denormal from -149 to -127).
+    for (Function &F : *Mod)
+    {
+        if (F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
+            continue;
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+        {
+            auto *II = dyn_cast<IntrinsicInst>(&I);
+            if (!II || !II->getType()->isFloatTy())
+                continue;
+            Intrinsic::ID id = II->getIntrinsicID();
+            if (id != Intrinsic::sin && id != Intrinsic::exp2 && id != Intrinsic::log2 &&
+                !(id == Intrinsic::sqrt && II->hasApproxFunc()))
+                continue;
+            IRBuilder<> B(II->getNextNode());
+            Type *I32 = B.getInt32Ty(), *F32 = B.getFloatTy();
+            Value *x = II->getArgOperand(0);
+            Value *xb = B.CreateBitCast(x, I32);
+            Value *mag = B.CreateAnd(xb, 0x7fffffff);
+            Value *res = B.CreateBitCast(II, I32);
+            Value *r;
+            if (id == Intrinsic::sin)
+                r = B.CreateSelect(B.CreateICmpULT(mag, B.getInt32(0x39800000)), xb, res);
+            else if (id == Intrinsic::sqrt)
+            {
+                // (sqrt.approx and rsqrt.approx) sqrt(m * 2^-149) = sqrt(2m) * 2^-75, NaN if negative
+                Value *den = B.CreateAnd(B.CreateICmpNE(mag, B.getInt32(0)), B.CreateICmpULT(mag, B.getInt32(0x800000)));
+                Value *m2 = B.CreateUIToFP(B.CreateShl(mag, 1), F32);
+                Value *q = B.CreateFMul(B.CreateUnaryIntrinsic(Intrinsic::sqrt, m2), ConstantFP::get(F32, 0x1p-75));
+                Value *neg = B.CreateICmpSLT(xb, B.getInt32(0));
+                Value *d = B.CreateSelect(neg, B.getInt32(0x7fffffff), B.CreateBitCast(q, I32));
+                r = B.CreateSelect(den, d, res);
+            }
+            else if (id == Intrinsic::log2)
+            {
+                Value *den = B.CreateAnd(B.CreateICmpNE(mag, B.getInt32(0)), B.CreateICmpULT(mag, B.getInt32(0x800000)));
+                Value *m = B.CreateUIToFP(mag, F32);
+                Value *l = B.CreateFSub(B.CreateUnaryIntrinsic(Intrinsic::log2, m), ConstantFP::get(F32, 149.0));
+                Value *neg = B.CreateICmpSLT(xb, B.getInt32(0));
+                Value *d = B.CreateSelect(neg, B.getInt32(0x7fffffff), B.CreateBitCast(l, I32));
+                r = B.CreateSelect(den, d, res);
+            }
+            else
+            {
+                // n = x when x is an integer in range: the bits of sitofp(fptosi x) equal x's
+                Value *inRange = B.CreateAnd(B.CreateICmpSLE(B.CreateBitCast(x, I32), B.getInt32(0x42fe0000)),
+                                             B.CreateOr(B.CreateICmpSGE(xb, B.getInt32(0)),
+                                                        B.CreateICmpULE(xb, B.getInt32(0xc3150000))));
+                Value *n = B.CreateFPToSI(x, I32);
+                // (a select, not an and: fptosi of an out of range x is poison)
+                Value *exact = B.CreateSelect(inRange, B.CreateICmpEQ(B.CreateBitCast(B.CreateSIToFP(n, F32), I32), xb),
+                                              B.getFalse());
+                Value *normal = B.CreateShl(B.CreateAdd(n, B.getInt32(127)), 23);
+                Value *denormal = B.CreateShl(B.getInt32(1), B.CreateAnd(B.CreateAdd(n, B.getInt32(149)), 31));
+                Value *p = B.CreateSelect(B.CreateICmpSGE(n, B.getInt32(-126)), normal, denormal);
+                r = B.CreateSelect(exact, B.CreateFreeze(p), res);
+            }
+            Value *f = B.CreateBitCast(r, F32);
+            II->replaceUsesWithIf(f, [&](Use &U) { return U.getUser() != res; });
+            count++;
+        }
+    }
     return count;
 }
 
