@@ -2001,6 +2001,18 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
     for (const char *name : {"llvm.used", "llvm.compiler.used"})
         if (GlobalVariable *GV = Mod->getGlobalVariable(name, true))
             GV->eraseFromParent();
+    // A call of a kernel (through its address, which the optimizer made direct) is undefined: no AIR function
+    // can call a kernel, and the kernel's AIR signature is made later.
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+            if (auto *CB = dyn_cast<CallBase>(&I))
+                if (auto *Callee = dyn_cast<Function>(CB->getCalledOperand()->stripPointerCasts());
+                    Callee && Callee->hasFnAttribute("air-kernel"))
+                {
+                    if (!CB->getType()->isVoidTy())
+                        CB->replaceAllUsesWith(PoisonValue::get(CB->getType()));
+                    CB->eraseFromParent();
+                }
     ZludaAirTypes types;
     ValueToValueMapTy vmap;
     SmallVector<GlobalVariable *, 16> oldGlobals;
