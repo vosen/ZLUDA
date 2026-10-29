@@ -2379,3 +2379,55 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M)
 }
 
 LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, strict floating point (zoc --strict-fp): PTX's canonical NaN for every floating point
+// result that is a NaN (0x7fffffff in f32, 0x7fff in f16 and bf16, 0x7fffffffffffffff in f64), as the AGX
+// target's canonical-nan feature makes it. The test is on the bits: Metal compiles with fast math, which may take
+// a float comparison with itself for true. Returns the number of results rewritten.
+int LLVMZludaAirCanonicalNaNs(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    int count = 0;
+    for (Function &F : *Mod)
+    {
+        if (F.isDeclaration())
+            continue;
+        SmallVector<Instruction *, 64> work;
+        for (Instruction &I : instructions(F))
+        {
+            Type *T = I.getType();
+            if (!T->getScalarType()->isFloatingPointTy() || T->getScalarType()->isX86_FP80Ty() ||
+                T->getScalarType()->isFP128Ty() || T->getScalarType()->isPPC_FP128Ty())
+                continue;
+            bool arithmetic = isa<BinaryOperator>(I) || isa<UnaryOperator>(I) || isa<FPTruncInst>(I) ||
+                              isa<FPExtInst>(I) || isa<SIToFPInst>(I) || isa<UIToFPInst>(I);
+            if (auto *CI = dyn_cast<CallInst>(&I))
+                arithmetic = CI->getCalledFunction() && CI->getCalledFunction()->isIntrinsic();
+            if (arithmetic)
+                work.push_back(&I);
+        }
+        for (Instruction *I : work)
+        {
+            Type *T = I->getType();
+            Type *S = T->getScalarType();
+            unsigned bits = S->getPrimitiveSizeInBits();
+            Type *IT = T->getWithNewType(IntegerType::get(Mod->getContext(), bits));
+            APInt sign = APInt::getSignedMaxValue(bits);
+            APInt inf = APFloat::getInf(S->getFltSemantics()).bitcastToAPInt();
+            IRBuilder<> B(I->getNextNode());
+            Instruction *placeholder = cast<Instruction>(B.CreateFreeze(I));
+            Value *v = B.CreateBitCast(placeholder, IT);
+            Value *nan = B.CreateICmpUGT(B.CreateAnd(v, ConstantInt::get(IT, sign)), ConstantInt::get(IT, inf));
+            Value *r = B.CreateBitCast(B.CreateSelect(nan, ConstantInt::get(IT, sign), v), T);
+            I->replaceUsesWithIf(r, [&](Use &U) { return U.getUser() != placeholder; });
+            placeholder->replaceAllUsesWith(I);
+            placeholder->eraseFromParent();
+            count++;
+        }
+    }
+    return count;
+}
+
+LLVM_C_EXTERN_C_END

@@ -360,6 +360,7 @@ fn compile_air(
         arch.as_deref().filter(|a| a.starts_with("agx")),
         Some(&compiler_hook),
         object_only,
+        strict_fp,
     )
     .map_err(|message| CompilerError::GenericError { cause: None, message })?;
     report_pass_time("compile_air", &mut start);

@@ -542,6 +542,8 @@ def main():
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
     ap.add_argument('--arch', default='agx-g14g')
+    ap.add_argument('--strict-fp', dest='strict_fp', action='store_true',
+                    help='zoc --strict-fp: PTX floating point exactly (canonical NaNs...)')
     ap.add_argument('--via-agx', action='store_true',
                     help='the older route: AIR raised from ZLUDA\'s AGX IR (ZLUDA_AGX_VIA_AIR=1 zoc --target agx)')
     ap.add_argument('--queue', default=os.environ.get('AIR_QUEUE', '/air'))

@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirCanonicalNaNs, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -91,6 +91,7 @@ pub fn compile_air(
     agx_cpu: Option<&str>,
     compiler_hook: Option<&dyn Fn(&Vec<u8>, String)>,
     object_only: bool,
+    strict_fp: bool,
 ) -> Result<AirCompilation, String> {
     // object_only: the compiled outputs (the AIR, the globals buffer, the AGX object) only, not the IR text or
     // the AGX assembly, which take as long again to make
@@ -218,6 +219,13 @@ pub fn compile_air(
     // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
     run(&linked, c"default<O3>", &air, &options)?;
     stage("O3 in AIR's address spaces");
+    // strict floating point: PTX's canonical NaNs (after the last O3, which could fold the bit tests of
+    // operations whose results it proves are not NaNs, never the other way)
+    if strict_fp {
+        unsafe { LLVMZludaAirCanonicalNaNs(linked.get()) };
+        // and the NaN constants the optimizations folded (as the Agx target)
+        unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
+    }
     // function pointers as IDs and choices among direct calls: no AIR consumer has a call stack
     let mut err = std::ptr::null_mut();
     if unsafe { LLVMZludaAirFunctionPointers(linked.get(), &mut err) } < 0 {
