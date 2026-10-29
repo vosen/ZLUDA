@@ -222,6 +222,19 @@ pub fn compile_air(
     // strict floating point: PTX's canonical NaNs (after the last O3, which could fold the bit tests of
     // operations whose results it proves are not NaNs, never the other way)
     if strict_fp {
+        // f32 denormals where the function keeps them, which Metal's ALU flushes: AIR's portable passes
+        // emulate the operations whose operands or results are denormal (air.ieee-fp32)
+        unsafe {
+            let one = llvm_sys::core::LLVMConstInt(llvm_sys::core::LLVMInt32TypeInContext(ctx.get()), 1, 0);
+            let key = "air.ieee-fp32";
+            llvm_sys::core::LLVMAddModuleFlag(
+                linked.get(),
+                llvm_sys::LLVMModuleFlagBehavior::LLVMModuleFlagBehaviorOverride,
+                key.as_ptr().cast(),
+                key.len(),
+                llvm_sys::core::LLVMValueAsMetadata(one),
+            );
+        }
         unsafe { LLVMZludaAirCanonicalNaNs(linked.get()) };
         // and the NaN constants the optimizations folded (as the Agx target)
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
