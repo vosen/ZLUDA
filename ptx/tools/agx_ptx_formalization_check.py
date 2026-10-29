@@ -651,7 +651,7 @@ def run_test(path, args):
         if d.split()[0] in UNSUPPORTED:
             return 'UNSUPPORTED', 'harness directive ' + d.split()[0]
     with tempfile.TemporaryDirectory() as tmp:
-        status, detail = compile_ptx(args, module, tmp)
+        status, detail = compile_ptx(args, module, tmp, target=getattr(args, 'target', 'agx'))
         if status:
             return status, detail
         out, rejected, tainted = detail
@@ -864,6 +864,8 @@ def main():
     ap.add_argument('tests', nargs='+', help='PTX-formalization test programs (tests/*.ptx)')
     ap.add_argument('--zoc', default='zoc')
     ap.add_argument('--agx-run', dest='agx_run', default='agx_run')
+    ap.add_argument('--target', default='agx', choices=('agx', 'air'),
+                    help='zoc --target: agx (ZLUDA\'s AGX IR) or air (PTX to portable AIR, then the AGX backend)')
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
     ap.add_argument('--arch', default='agx-g14g')
