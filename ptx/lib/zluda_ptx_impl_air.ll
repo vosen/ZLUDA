@@ -19,14 +19,14 @@
 ; instruction instead.
 
 ; System values
-declare <3 x i32> @air.thread_position_in_threadgroup.v3i32()
-declare <3 x i32> @air.threadgroup_position_in_grid.v3i32()
-declare <3 x i32> @air.threads_per_threadgroup.v3i32()
-declare <3 x i32> @air.threadgroups_per_grid.v3i32()
-declare <3 x i32> @air.thread_position_in_grid.v3i32()
-declare i32 @air.thread_index_in_simdgroup()
-declare i32 @air.thread_index_in_threadgroup()
-declare i32 @air.simdgroup_index_in_threadgroup()
+declare <3 x i32> @air.thread_position_in_threadgroup.v3i32() #4
+declare <3 x i32> @air.threadgroup_position_in_grid.v3i32() #4
+declare <3 x i32> @air.threads_per_threadgroup.v3i32() #4
+declare <3 x i32> @air.threadgroups_per_grid.v3i32() #4
+declare <3 x i32> @air.thread_position_in_grid.v3i32() #4
+declare i32 @air.thread_index_in_simdgroup() #4
+declare i32 @air.thread_index_in_threadgroup() #4
+declare i32 @air.simdgroup_index_in_threadgroup() #4
 
 define i32 @__zluda_air.thread.position.in.threadgroup.x() #0 {
   %v = call <3 x i32> @air.thread_position_in_threadgroup.v3i32()
@@ -121,7 +121,7 @@ define i32 @__zluda_air.core.id() #0 {
 }
 
 ; Barriers: an execution barrier; the fences around it stay LLVM fences.
-declare void @air.wg.barrier(i32, i32) #1
+declare void @air.wg.barrier(i32, i32) #3
 define void @__zluda_air.threadgroup.barrier() #2 {
   call void @air.wg.barrier(i32 0, i32 1)
   ret void
@@ -267,5 +267,9 @@ define void @__zluda_air.set.fpmode(i32 %m) #0 {
 }
 
 attributes #0 = { alwaysinline nounwind willreturn memory(none) }
-attributes #1 = { convergent nounwind willreturn }
+; SIMD-group functions: only the other lanes' values, no memory (as AGX's).
+attributes #1 = { convergent nocallback nofree nosync nounwind willreturn memory(none) }
+attributes #3 = { convergent nounwind willreturn }
+; System values: constant for the thread.
+attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #2 = { alwaysinline convergent nounwind willreturn }
