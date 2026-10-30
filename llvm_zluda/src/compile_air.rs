@@ -170,8 +170,16 @@ pub fn compile_air(
         // (and loops unrolled as O3 does, llvm.is.constant resolved, which O3's shuffle primitives fold on: a loop
         // of simd_sum left whole made Metal's compiler crash, XPC_ERROR_CONNECTION_INTERRUPTED, on SIMD-group
         // PTX tests; and tail calls as loops, as O3 does: AIR has no call stack for the recursion left)
-        "light+" => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,lower-constant-intrinsics,instcombine<no-verify-fixpoint>,simplifycfg,tailcallelim,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),loop-unroll<O3>,gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
+        "light+" => LIGHT_PLUS_FIRST,
         _ => c"default<O3>",
+    };
+    // The reruns after the lowerings below only clean up what they made: light+ (O3 again for them doubled Blender
+    // Cycles' first stage, 9 s each; the AGX path runs O3 again in AIR's address spaces). ZLUDA_AIR_RERUN_PIPELINE=o3
+    // for the full pipeline.
+    const LIGHT_PLUS_FIRST: &CStr = c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,lower-constant-intrinsics,instcombine<no-verify-fixpoint>,simplifycfg,tailcallelim,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),loop-unroll<O3>,gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)";
+    let rerun_pipeline: &CStr = match std::env::var("ZLUDA_AIR_RERUN_PIPELINE").as_deref() {
+        Ok("o3") => c"default<O3>",
+        _ => LIGHT_PLUS_FIRST,
     };
     unsafe { LLVMZludaSetAirPrimitives(1) };
     let lowered = (|| -> Result<(), String> {
@@ -186,14 +194,14 @@ pub fn compile_air(
             if !lowered && !(i == 0 && clusters > 0) {
                 break;
             }
-            run(&linked, first_pipeline, &air, &options)?;
+            run(&linked, rerun_pipeline, &air, &options)?;
         }
         let spilled = unsafe { LLVMZludaAgxSpillClusterShared(linked.get(), &mut err) };
         if spilled < 0 {
             return Err(fail(err));
         }
         if spilled > 0 {
-            run(&linked, first_pipeline, &air, &options)?;
+            run(&linked, rerun_pipeline, &air, &options)?;
         }
         Ok(())
     })();
