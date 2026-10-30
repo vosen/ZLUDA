@@ -618,7 +618,9 @@ def compile_ptx(args, module, tmp, extra=(), env=None, product='m.o', target='ag
             flags.append('--strict-fp')
         if getattr(args, 'agx_strict', False):
             flags.append('--agx-strict')
-        return subprocess.run([args.zoc, *flags, '--target', target, '--arch', args.arch, '--output-dir', tmp, src],
+        # (--arch none: the AIR only, as compiled for Metal alone)
+        arch = [] if args.arch == 'none' else ['--arch', args.arch]
+        return subprocess.run([args.zoc, *flags, '--target', target, *arch, '--output-dir', tmp, src],
                               capture_output=True, text=True, timeout=args.timeout, env=env)
     try:
         # The statements the front end rejects (printed only without --ignore-errors); then compile the rest.

@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirDropCompareFlushes, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAirSaltKernels, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirDropCompareFlushes, LLVMZludaAirExpandDivisions, LLVMZludaAirCanonicalNaNs, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAirSaltKernels, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -273,6 +273,8 @@ pub fn compile_air(
     // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
     match metal_pipeline {
         Some(pipeline) if agx_cpu.is_none() => {
+            // (the Metal AIR's integer divisions, LLVMZludaAirExpandDivisions; also in the portable AIR here)
+            unsafe { LLVMZludaAirExpandDivisions(linked.get()) };
             run(&linked, pipeline, &air, &options)?;
             stage("the Metal pipeline in AIR's address spaces");
         }
@@ -286,12 +288,21 @@ pub fn compile_air(
     // globals buffer is a kernel parameter like the others)
     let metal = match (metal_source, metal_pipeline) {
         (Some(source), Some(pipeline)) => {
+            unsafe { LLVMZludaAirExpandDivisions(source.get()) };
             run(&source, pipeline, &air, &options)?;
             stage("Metal copy: its pipeline");
             finish_air(ctx, &source, strict_fp)?;
             source
         }
-        _ => linked.clone(),
+        _ => {
+            let metal = linked.clone();
+            // (with AGX code and the portable module's O3 for both: the Metal copy's divisions expanded here, and
+            // what of them depends on the divisor only hoisted out of loops)
+            if agx_cpu.is_some() && unsafe { LLVMZludaAirExpandDivisions(metal.get()) } > 0 {
+                run(&metal, c"function(loop-mssa(licm),instcombine<no-verify-fixpoint>,simplifycfg)", &air, &options)?;
+            }
+            metal
+        }
     };
     unsafe { LLVMZludaAirSharedLayout(metal.get()) };
     // ZLUDA_AIR_SALT: an unused stack array, its length from the string, at the start of each kernel of the Metal

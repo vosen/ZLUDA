@@ -230,10 +230,19 @@ def compile_module(args, module, tmp):
     dis = lambda p: subprocess.run([args.llvm_dis, p, '-o', '-'], capture_output=True, text=True,
                                    timeout=args.timeout).stdout
     portable, metal_text = dis(air), dis(metal)
-    # static threadgroup bytes and the cluster shape, from the AGX compilation of the same AIR
-    with open(os.path.join(tmp, 'm.asm')) as f:
+    # static threadgroup bytes and the cluster shape, from the AGX compilation of the same AIR (with --arch none,
+    # a second compilation with AGX code, in a directory of its own)
+    agx_dir = tmp
+    if args.arch == 'none':
+        agx_dir = os.path.join(tmp, 'agx')
+        os.makedirs(agx_dir, exist_ok=True)
+        status, _ = h.compile_ptx(argparse.Namespace(**dict(vars(args), arch='agx-g14g')), module, agx_dir,
+                                  product='m.air', target='air')
+        if status:
+            return status, 'the AGX compilation for the kernels\' resources'
+    with open(os.path.join(agx_dir, 'm.asm')) as f:
         asm = f.read()
-    agx, _, gsyms, _, _ = h.kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
+    agx, _, gsyms, _, _ = h.kernel_info(asm, os.path.join(agx_dir, 'm.o'), args.readelf, args.objcopy, agx_dir)
     return None, {'air': open(metal, 'rb').read(), 'kernels': air_kernels(metal_text),
                   'roles': hidden_roles(portable), 'agx': agx, 'tainted': tainted, 'rejected': rejected}
 
@@ -550,7 +559,8 @@ def main():
     ap.add_argument('--llvm-dis', dest='llvm_dis', default='llvm-dis')
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
-    ap.add_argument('--arch', default='agx-g14g')
+    ap.add_argument('--arch', default='agx-g14g',
+                    help='zoc --arch: the AIR as compiled with AGX code (the default) or, with none, for Metal alone')
     ap.add_argument('--strict-fp', dest='strict_fp', action='store_true',
                     help='zoc --strict-fp: PTX floating point exactly (canonical NaNs...)')
     ap.add_argument('--via-agx', action='store_true',

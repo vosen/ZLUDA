@@ -2324,6 +2324,97 @@ static std::optional<uint64_t> zludaModeField(Value *Root, uint64_t RootMask)
     return r >= Top ? std::nullopt : std::optional<uint64_t>(r);
 }
 
+// ZLUDA_AGX target Air, Metal: 32-bit integer division and remainder by a divisor that is not a constant, as
+// AMDGPU expands them (AMDGPUCodeGenPrepare's expandDivRem32): an f32 reciprocal estimate of the divisor scaled
+// to 2^32, one Newton step in integers, the quotient as the high half of x times it, and two corrections. On
+// the M2 Max, Metal's own udiv took 1.57 ms where this took 0.48 ms with the divisor's part hoisted out of the
+// loop (a loop-invariant divisor, as idx / width) and 1.37 ms without; exact for 134M divisions over the whole
+// u32 range. Signed ones on the magnitudes. Run before the Metal pipeline, whose LICM hoists the divisor's
+// part. Returns the number expanded.
+static Value *zludaUMulHi32(IRBuilder<> &B, Value *A, Value *C)
+{
+    Type *I64 = B.getInt64Ty();
+    Value *P = B.CreateMul(B.CreateZExt(A, I64), B.CreateZExt(C, I64));
+    return B.CreateTrunc(B.CreateLShr(P, 32), B.getInt32Ty());
+}
+
+static std::pair<Value *, Value *> zludaUDivRem32(IRBuilder<> &B, Value *X, Value *Y)
+{
+    Type *F32 = B.getFloatTy();
+    Type *I32 = B.getInt32Ty();
+    // z ~ 2^32 / y: the reciprocal (rcp.approx's fdiv afn), times 2^32 - 512, as an integer
+    Value *FY = B.CreateUIToFP(Y, F32);
+    auto *Rcp = cast<Instruction>(B.CreateFDiv(ConstantFP::get(F32, 1.0), FY));
+    Rcp->setHasApproxFunc(true);
+    Value *Scaled = B.CreateFMul(Rcp, ConstantFP::get(F32, 4294966784.0));
+    Value *Z = B.CreateIntrinsic(Intrinsic::fptoui_sat, {I32, F32}, {Scaled});
+    // one Newton step: z += mulhi(z, -y * z)
+    Value *E = B.CreateMul(B.CreateNeg(Y), Z);
+    Z = B.CreateAdd(Z, zludaUMulHi32(B, Z, E));
+    // q = mulhi(x, z), r = x - q * y, then two corrections
+    Value *Q = zludaUMulHi32(B, X, Z);
+    Value *R = B.CreateSub(X, B.CreateMul(Q, Y));
+    for (int i = 0; i < 2; i++)
+    {
+        Value *C = B.CreateICmpUGE(R, Y);
+        Q = B.CreateAdd(Q, B.CreateZExt(C, I32));
+        R = B.CreateSelect(C, B.CreateSub(R, Y), R);
+    }
+    return {Q, R};
+}
+
+int LLVMZludaAirExpandDivisions(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    SmallVector<BinaryOperator *, 16> Divs;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *BO = dyn_cast<BinaryOperator>(&I))
+                switch (BO->getOpcode())
+                {
+                case Instruction::UDiv:
+                case Instruction::URem:
+                case Instruction::SDiv:
+                case Instruction::SRem:
+                    if (BO->getType()->isIntegerTy(32) && !isa<Constant>(BO->getOperand(1)))
+                        Divs.push_back(BO);
+                    break;
+                default:
+                    break;
+                }
+    for (BinaryOperator *BO : Divs)
+    {
+        IRBuilder<> B(BO);
+        Value *X = BO->getOperand(0), *Y = BO->getOperand(1);
+        bool Signed = BO->getOpcode() == Instruction::SDiv || BO->getOpcode() == Instruction::SRem;
+        bool Rem = BO->getOpcode() == Instruction::URem || BO->getOpcode() == Instruction::SRem;
+        Value *R;
+        if (!Signed)
+        {
+            auto [Q, Remainder] = zludaUDivRem32(B, X, Y);
+            R = Rem ? Remainder : Q;
+        }
+        else
+        {
+            // on the magnitudes (INT_MIN's is 2^31 as an unsigned value); the quotient negative when the signs
+            // differ, the remainder of the dividend's sign
+            Value *Zero = B.getInt32(0);
+            Value *XNeg = B.CreateICmpSLT(X, Zero), *YNeg = B.CreateICmpSLT(Y, Zero);
+            Value *AX = B.CreateSelect(XNeg, B.CreateNeg(X), X);
+            Value *AY = B.CreateSelect(YNeg, B.CreateNeg(Y), Y);
+            auto [Q, Remainder] = zludaUDivRem32(B, AX, AY);
+            if (Rem)
+                R = B.CreateSelect(XNeg, B.CreateNeg(Remainder), Remainder);
+            else
+                R = B.CreateSelect(B.CreateXor(XNeg, YNeg), B.CreateNeg(Q), Q);
+        }
+        R->takeName(BO);
+        BO->replaceAllUsesWith(R);
+        BO->eraseFromParent();
+    }
+    return Divs.size();
+}
+
 // ZLUDA_AGX target Air: removes the f32 flushes the front end marked !zluda.ftz.compare (setp.ftz's operands
 // outside --strict-fp), the select of each replaced by its unflushed bits: the GPU's own f32 compares flush
 // denormals. Run after the first optimization, which folded the compares of constants (as IEEE does, so with
