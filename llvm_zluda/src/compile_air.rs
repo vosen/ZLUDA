@@ -254,12 +254,21 @@ pub fn compile_air(
         "light+" => Some(LIGHT_PLUS),
         _ => None,
     };
-    let metal_source = metal_pipeline.map(|_| linked.clone());
+    // With AGX code and another Metal pipeline, the Metal copy is taken before the portable module's O3; without
+    // AGX code, the Metal pipeline optimizes the portable module itself, which the Metal copy is taken from (one
+    // optimization for both, and portable AIR optimized as the Metal AIR is)
+    let metal_source = metal_pipeline.filter(|_| agx_cpu.is_some()).map(|_| linked.clone());
     // O3 again in AIR's address spaces: a lighter cleanup (inlining, SROA, EarlyCSE, InstCombine, SimplifyCFG,
     // GVN) gives the tensor-core PTX tests 18-23% more AGX code (their loops are unrolled differently)
-    if metal_pipeline.is_none() || agx_cpu.is_some() {
-        run(&linked, c"default<O3>", &air, &options)?;
-        stage("O3 in AIR's address spaces");
+    match metal_pipeline {
+        Some(pipeline) if agx_cpu.is_none() => {
+            run(&linked, pipeline, &air, &options)?;
+            stage("the Metal pipeline in AIR's address spaces");
+        }
+        _ => {
+            run(&linked, c"default<O3>", &air, &options)?;
+            stage("O3 in AIR's address spaces");
+        }
     }
     finish_air(ctx, &linked, strict_fp)?;
     // Metal: what only Metal needs from ZLUDA, on a copy, before the AIR kernel signatures are made (the
