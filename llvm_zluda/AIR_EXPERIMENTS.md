@@ -85,7 +85,15 @@ the order it was found:
   every kernel; the others differ by their call offsets and (measured) frame offsets. Sharing one copy needs
   the backend to emit relocations for calls to local functions (they are resolved PC-relative when each
   kernel's object is written), so that the merger can point every kernel's calls at the one copy; and one
-  frame layout for the shared functions. Not done yet.
+  frame layout for the shared functions. Done (ceafb92, `-agx-call-relocations`): 28.9 -> 16.7 MB, 516 copies
+  kept; the remaining duplicates differ by their kernels' measured frame offsets, so a frame layout common to
+  the kernels would be the next step (one copy each: about 6 MB).
+- **A single-kernel module never reaches the merger**, so with `-agx-call-relocations` its calls stayed unresolved
+  and the simulator crashed decoding them (17 tests, "index out of bounds" in fsem.rs). Any object with call
+  relocations now goes through the merger, on both routes.
+- **Small modules forced through the per-kernel path** (`ZLUDA_AGX_PER_KERNEL=1`): tma-red.ptx fails to merge,
+  "the kernels' objects have different global data", with or without calls; Cycles (and the default, over 4 MB)
+  does not hit it.
 - **zoc was not deterministic** (until 649b737's parent): the Metal copy's functions came out in heap-address
   order (LLVMZludaAirGlobalsToBuffer), almost a million lines of difference between two runs of Cycles. Compare
   outputs of two runs (`llvm-dis`, or md5sum now that they match) before attributing a difference to a change.
