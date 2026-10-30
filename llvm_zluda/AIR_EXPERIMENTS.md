@@ -100,6 +100,15 @@ the order it was found:
 - **Device-flaky PTX tests**: ldm-0, ldm2-st0 and occupancy pass or fail from one run to the next with the same
   zoc; rerun them with the previous build before calling a change a regression.
 
+## Metal GPU time of f32 math (M2 Max, 256 x 256 threads, 2048 dependent operations each; scratchpad bench/math32.ptx)
+
+Relative to an fma (0.161 ms): lg2.approx 1.0, ex2.approx.ftz 1.0 (was 1.6: a software flush the GPU makes
+itself), sin.approx 2.8, rcp.approx 2.3, div.approx 2.9, rsqrt.approx 1.3 (was 3.3: 1 / sqrt instead of AIR's
+fast_rsqrt), sqrt.approx 1.7 (was 4.0), sqrt.rn 3.0, div.full / div.rn 5.1. Dead ends: `fdiv arcp afn` for rcp
+(no change: the reciprocal is the hardware's already); a faster div.full from Metal's fast divide (2.5 ulp, PTX
+allows 2). The AIR service caps a request's buffers at 16 MiB in all (and rejects large request files), which
+fits in the M2 Max's 48 MB system cache: memory bandwidth cannot be measured through it.
+
 ## Dead ends and surprises
 
 - **The GPU's denormal behaviour, measured** (M2 Max, 2026-10-30): f32 compares flush denormals, f32 min / max
