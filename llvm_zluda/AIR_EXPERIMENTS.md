@@ -7,7 +7,8 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
 
 ## Open problems
 
-- **Blender Cycles to AGX code does not fit in ~7.9 GB**, on either route. Whole-module: the old route
+- **(Solved with real calls, below.) Blender Cycles to AGX code fully inlined does not fit in ~7.9 GB**, on
+  either route. Whole-module: the old route
   (`--target agx`) reached 5.7 GB and the AIR route 6.5 GB before the watchdog stopped them (2026-10-30, current
   trees). The user recalls AGX code generation working at one point; no record of a Cycles AGX build was found in
   /scratch or the commit history (the per-kernel commit 3435e7a already says shade_shadow needs over 6.5 GB), so
@@ -58,6 +59,21 @@ the order it was found:
   hardware cases); call timing is not calibrated. Most PTX suite programs keep no calls (the AIR inliner inlines
   functions under 100 instructions), so passing tests there say little about calls: indirect.ptx is the one that
   exercised them.
+
+- **Stack frames over the fixed 4 KB per call depth** (whole-module Cycles: shade_volume's kernel frame 6.3 KB;
+  per kernel: integrate_surface's callee frame 6.9 KB). Frame offsets are 15-bit, so all depths must fit in 32 KB.
+  `-agx-measured-call-frames` (a module of one kernel, so per-kernel compilation): the kernel's region is its
+  frame, each depth's is the largest frame at that depth, recorded as called functions compile in increasing
+  depth after the kernel; the kernel reserves all 32 KB. A larger kernel region alone, with fixed 4 KB depths,
+  was not enough (callee frames over 4 KB too).
+- **AGXGlobalDataArgs appended the rewritten functions to the module**, which undid the depth order measured frames
+  rely on ("called functions out of depth order"): each now takes its original's place.
+- **The per-kernel object merger refused duplicate function names**: each kernel's object now carries its own copy
+  of what it calls (local symbols, calls resolved within the object). It accepts duplicate locals and writes them
+  with the other local symbols.
+- Result, Cycles per kernel with `-agx-experimental-leaf-calls -agx-measured-call-frames`: all 75 kernels, a
+  28.9 MB object (1338 local called functions), 1.0 GB peak, 119 s in all (AGX stage 83 s). Fully inlined it ran
+  out at 6.4 GB on shade_shadow. Call timing on the GPU is not calibrated; no GPU time measured yet.
 
 ## Dead ends and surprises
 

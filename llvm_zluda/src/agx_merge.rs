@@ -19,6 +19,7 @@ const SHF_ALLOC: u64 = 2;
 const SHF_EXECINSTR: u64 = 4;
 const SHF_INFO_LINK: u64 = 0x40;
 const STT_SECTION: u8 = 3;
+const STB_LOCAL: u8 = 0;
 
 struct Section {
     name: String,
@@ -201,7 +202,10 @@ pub fn merge(objects: &[Vec<u8>]) -> Result<Vec<u8>, String> {
         }
     }
     {
-        let mut names: Vec<&str> = functions.iter().map(|s| s.name.as_str()).collect();
+        // (only global ones: with experimental calls, each kernel's object has its own copies of the functions it
+        // calls, local, and its calls to them are resolved within the object, so they stay right in the merged .text)
+        let mut names: Vec<&str> =
+            functions.iter().filter(|s| s.info >> 4 != STB_LOCAL).map(|s| s.name.as_str()).collect();
         names.sort();
         if names.windows(2).any(|w| w[0] == w[1]) {
             return Err("a function is defined in two kernels' objects".into());
@@ -233,23 +237,21 @@ pub fn merge(objects: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     let first_symbols = first.symbols()?;
     let mut symtab: Vec<(u32, u8, u8, u16, u64, u64)> = vec![(0, 0, 0, 0, 0, 0)];
     let mut renumber = vec![0u32; first_symbols.len()];
+    // (ELF wants the local symbols first: .agx.globals' locals and the local functions (the called ones of
+    // experimental calls), then its globals and the kernels)
     for pass_local in [true, false] {
         for (i, s) in first_symbols.iter().enumerate().skip(1) {
-            if globals.map_or(true, |g| s.shndx as usize != g) || (s.info >> 4 == 0) != pass_local {
+            if globals.map_or(true, |g| s.shndx as usize != g) || (s.info >> 4 == STB_LOCAL) != pass_local {
                 continue;
             }
             renumber[i] = symtab.len() as u32;
             symtab.push((string(&s.name), s.info, s.other, GLOBALS, s.value, s.size));
         }
-    }
-    // (ELF wants the local symbols first: .agx.globals' locals, then its globals and the functions, all global)
-    let first_global = symtab.iter().skip(1).position(|s| s.1 >> 4 != 0).map_or(symtab.len(), |p| p + 1);
-    for f in &functions {
-        if f.info >> 4 == 0 {
-            return Err(format!("local function symbol {} cannot be merged", f.name));
+        for f in functions.iter().filter(|f| (f.info >> 4 == STB_LOCAL) == pass_local) {
+            symtab.push((string(&f.name), f.info, f.other, TEXT, f.value, f.size));
         }
-        symtab.push((string(&f.name), f.info, f.other, TEXT, f.value, f.size));
     }
+    let first_global = symtab.iter().skip(1).position(|s| s.1 >> 4 != STB_LOCAL).map_or(symtab.len(), |p| p + 1);
     let relocations = match globals {
         Some(g) => first.relocations(g)?,
         None => Vec::new(),
