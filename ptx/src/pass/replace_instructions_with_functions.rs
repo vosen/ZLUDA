@@ -467,9 +467,9 @@ fn run_instruction<'input>(
                 },
             ..
         } => {
-            // (--strict-fp on the Air target: as a square root and a division, whose NaNs the strict mode makes
-            // canonical; zluda_ptx_impl_air.ll)
-            let name = if target.is_air() && strict_fp { "rsqrt_approx_ieee_f32" } else { "rsqrt_approx_f32" };
+            // (--strict-fp on the Air target only: as a square root and a division, whose NaNs the strict mode makes
+            // canonical; zluda_ptx_impl_air.ll, which the Agx target does not link)
+            let name = if matches!(target, Target::Air) && strict_fp { "rsqrt_approx_ieee_f32" } else { "rsqrt_approx_f32" };
             to_call(resolver, fn_declarations, name.into(), i)?
         }
         i @ ptx_parser::Instruction::Rcp {
