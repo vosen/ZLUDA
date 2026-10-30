@@ -267,7 +267,7 @@ ptx_parser_macros::generate_instruction_type!(
         Fabric {
             type: Type::Scalar(ScalarType::B8),
             data: FabricDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 src_le: {
                     repr: Option<T>,
                     type: { Type::Scalar(ScalarType::B32) },
@@ -1849,7 +1849,7 @@ ptx_parser_macros::generate_instruction_type!(
         // tcgen05.mma.cta_group::1.kind [d], a-desc | [a], b-desc, idesc{, disable-output-lane}, enable-input-d{, scale}
         Tcgen05Mma {
             data: Tcgen05MmaDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 src_d: {
                     repr: T,
                     type: Type::Scalar(ScalarType::B32),
@@ -2011,7 +2011,7 @@ ptx_parser_macros::generate_instruction_type!(
         TexAgx {
             type: !,
             data: TexAgxDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 dst0: {
                     repr: T,
                     type: { Type::Scalar(data.dtype) },
@@ -2150,7 +2150,7 @@ ptx_parser_macros::generate_instruction_type!(
         SuldAgx {
             type: !,
             data: SurfaceDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 dst0: {
                     repr: T,
                     type: { Type::Scalar(data.type_) },
@@ -2202,7 +2202,7 @@ ptx_parser_macros::generate_instruction_type!(
         SustAgx {
             type: !,
             data: SurfaceDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 src_surf: {
                     repr: T,
                     type: Type::Scalar(ScalarType::B64),
@@ -2307,7 +2307,7 @@ ptx_parser_macros::generate_instruction_type!(
         CpAsyncBulkTensor {
             type: Type::Scalar(ScalarType::B8),
             data: CpAsyncBulkTensorDetails,
-            arguments<T>: {
+            boxed_arguments<T>: {
                 // the shared-memory image: the destination of loads, the source of stores
                 src_smem: {
                     repr: T,

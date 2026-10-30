@@ -217,17 +217,29 @@ impl InstructionVariant {
             Some(args) => {
                 let args_name = self.args_name();
                 match &args {
-                    Arguments::Def(InstructionArguments { generic: None, .. }) => {
+                    Arguments::Def(InstructionArguments { generic: None, boxed: false, .. }) => {
                         quote! {
                             arguments: #args_name,
                         }
                     }
+                    Arguments::Def(InstructionArguments { generic: None, boxed: true, .. }) => {
+                        quote! {
+                            arguments: Box<#args_name>,
+                        }
+                    }
                     Arguments::Def(InstructionArguments {
                         generic: Some(generics),
+                        boxed,
                         ..
                     }) => {
-                        quote! {
-                            arguments: #args_name <#generics>,
+                        if *boxed {
+                            quote! {
+                                arguments: Box<#args_name <#generics>>,
+                            }
+                        } else {
+                            quote! {
+                                arguments: #args_name <#generics>,
+                            }
                         }
                     }
                     Arguments::Decl(type_) => quote! {
@@ -331,8 +343,14 @@ impl InstructionVariant {
             let arg_type = self.args_name();
             arg_calls = Some(arguments.emit_visit_map(&self.type_, &self.space));
             let arg_names = arguments.fields.iter().map(|arg| &arg.name);
-            quote! {
-                arguments: #arg_type { #(#arg_names),* }
+            if arguments.boxed {
+                quote! {
+                    arguments: Box::new(#arg_type { #(#arg_names),* })
+                }
+            } else {
+                quote! {
+                    arguments: #arg_type { #(#arg_names),* }
+                }
             }
         });
         quote! {
@@ -440,7 +458,8 @@ impl VariantProperty {
                     input.parse::<Token![:]>()?;
                     VariantProperty::Space(input.parse::<Expr>()?)
                 }
-                "arguments" => {
+                "arguments" | "boxed_arguments" => {
+                    let boxed = key == "boxed_arguments";
                     let generics = if input.peek(Token![<]) {
                         input.parse::<Token![<]>()?;
                         let gen_params =
@@ -454,9 +473,9 @@ impl VariantProperty {
                     if input.peek(token::Brace) {
                         let fields;
                         braced!(fields in input);
-                        VariantProperty::Arguments(Arguments::Def(InstructionArguments::parse(
-                            generics, &fields,
-                        )?))
+                        let mut arguments = InstructionArguments::parse(generics, &fields)?;
+                        arguments.boxed = boxed;
+                        VariantProperty::Arguments(Arguments::Def(arguments))
                     } else {
                         VariantProperty::Arguments(Arguments::Decl(input.parse::<Type>()?))
                     }
@@ -501,6 +520,9 @@ pub enum Arguments {
 pub struct InstructionArguments {
     pub generic: Option<Punctuated<PathSegment, syn::token::PathSep>>,
     pub fields: Punctuated<ArgumentField, Token![,]>,
+    /// `boxed_arguments`: the variant holds its arguments in a Box, so that an instruction of many operands does
+    /// not set the size of every instruction
+    pub boxed: bool,
 }
 
 impl InstructionArguments {
@@ -512,7 +534,7 @@ impl InstructionArguments {
             input,
             ArgumentField::parse,
         )?;
-        Ok(Self { generic, fields })
+        Ok(Self { generic, fields, boxed: false })
     }
 
     fn emit_visit(

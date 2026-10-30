@@ -1245,7 +1245,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
             ast::Instruction::AltFpX4 { data, arguments } => self.emit_alt_fp_x4(data, arguments),
             ast::Instruction::Multimem { data, arguments } => self.emit_multimem(data, arguments),
-            ast::Instruction::Fabric { data, arguments } => self.emit_fabric(data, arguments),
+            ast::Instruction::Fabric { data, arguments } => self.emit_fabric(data, *arguments),
             ast::Instruction::CvtRs { data, arguments } => self.emit_cvt_rs(data, arguments),
             ast::Instruction::CvtPzo { data, arguments } => {
                 let kind = self.const_u32(data.kind as u64);
@@ -1308,12 +1308,12 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_cp_async_mbarrier_arrive(data, arguments)
             }
             ast::Instruction::CpAsyncBulkTensor { data, arguments } => {
-                self.emit_cp_async_bulk_tensor(data, arguments)
+                self.emit_cp_async_bulk_tensor(data, *arguments)
             }
-            ast::Instruction::TexAgx { data, arguments } => self.emit_tex_agx(data, arguments),
+            ast::Instruction::TexAgx { data, arguments } => self.emit_tex_agx(data, *arguments),
             ast::Instruction::TexQuery { data, arguments } => self.emit_tex_query(data, arguments),
-            ast::Instruction::SuldAgx { data, arguments } => self.emit_suld(data, arguments),
-            ast::Instruction::SustAgx { data, arguments } => self.emit_sust(data, arguments),
+            ast::Instruction::SuldAgx { data, arguments } => self.emit_suld(data, *arguments),
+            ast::Instruction::SustAgx { data, arguments } => self.emit_sust(data, *arguments),
             ast::Instruction::SuredAgx { data, arguments } => self.emit_sured(data, arguments),
             ast::Instruction::Istypep { data, arguments } => self.emit_istypep(data, arguments),
             ast::Instruction::TensormapReplace { data, arguments } => {
