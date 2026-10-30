@@ -38,7 +38,8 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
   out now build (2026-10-30, wall time with the queue: shade_background 129 s, shade_surface 63 s,
   shade_surface_raytrace 110 s, shade_volume_ray_marching 38 s, shader_eval_curve_shadow_transparency 19 s; their
   AIR 40-55% smaller), so 74 of Cycles' 75 pipelines build. Metal's compile time for these kernels, not ZLUDA's,
-  is now the slow part.
+  is now the slow part. Not over-inlining: shade_surface_mnee packaged alone keeps 162 functions, and
+  `-air-keep-function-cost` 20000 / 5000 / 2000 left it byte-identical (its large functions are kept already).
 
 ## Real calls in the AGX backend (`-agx-experimental-leaf-calls`), 2026-10-30
 
