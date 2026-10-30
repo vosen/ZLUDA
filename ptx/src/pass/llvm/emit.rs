@@ -3098,8 +3098,16 @@ impl<'a> MethodEmitContext<'a> {
                     } else if flush {
                         let flushed = self.emit_flush_subnormal(data.type_, src);
                         unsafe {
-                            let select = LLVMGetOperand(flushed, 0);
-                            if LLVMIsASelectInst(select) != std::ptr::null_mut() {
+                            // (the select under the bitcast; a constant operand's flush is a constant, which has
+                            // nothing to mark: Blender Cycles' compilation asserted in getOperand)
+                            let select = if LLVMIsAInstruction(flushed) != std::ptr::null_mut()
+                                && LLVMGetNumOperands(flushed) > 0
+                            {
+                                LLVMGetOperand(flushed, 0)
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            if !select.is_null() && LLVMIsASelectInst(select) != std::ptr::null_mut() {
                                 let kind = LLVMGetMDKindIDInContext(
                                     self.context,
                                     c"zluda.ftz.compare".as_ptr(),
