@@ -13,7 +13,11 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
   /scratch or the commit history (the per-kernel commit 3435e7a already says shade_shadow needs over 6.5 GB), so
   the working build may have been an earlier commit, another machine, or smaller programs. If it was an earlier
   commit, it is a regression to bisect (candidates: the AGX always-inline policy, the texture and soft-f64
-  libraries, the AIR inliner's keep-function changes of 2026-10-29) rather than a limit to work around. A kernel at a time (`ZLUDA_AGX_PER_KERNEL=1`), 12 kernels compile, then
+  libraries, the AIR inliner's keep-function changes of 2026-10-29) rather than a limit to work around.
+  Rerun alone (nothing else on the container, 2026-10-30): the old route still stops at 6.4 GB within 73 s,
+  with or without `--object-only` (the IR text dumps are not the difference). Cycles' PTX only reached /scratch on
+  2026-10-28 23:14, and the first AGX attempt after it (3435e7a) already ran out, so in this container Cycles has
+  never compiled to AGX; a working build would have been on a machine with more memory. A kernel at a time (`ZLUDA_AGX_PER_KERNEL=1`), 12 kernels compile, then
   `kernel_gpu_integrator_shade_shadow` (about 5M instructions with everything inlined, as the AGX backend inlines
   every non-kernel function) runs out. Measured on that kernel alone with `llc`: straight-line strength reduction's
   scalar evolution took it from 0.9 to 4.4 GB (now skipped above 200k instructions,
