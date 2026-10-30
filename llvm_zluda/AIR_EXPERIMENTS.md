@@ -33,8 +33,12 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
   (the machine passes). It is the size of one fully inlined function in machine IR; pass tweaks will not bring
   it under 7.9 GB. What would: not inlining everything into the kernel (real calls in the AGX backend, now only
   `-agx-experimental-leaf-calls`), or a machine with more memory.
-- Six Cycles kernels exceed the AIR service worker's 60 s Metal compile cap (the client allows 120 s; the worker
-  was not restarted).
+- One Cycles kernel, `kernel_gpu_integrator_shade_surface_mnee` (3.7 MB of AIR packaged alone), exceeds the AIR
+  service's 120 s Metal compile cap. With the .ftz and texture fixes the other five of the six that used to time
+  out now build (2026-10-30, wall time with the queue: shade_background 129 s, shade_surface 63 s,
+  shade_surface_raytrace 110 s, shade_volume_ray_marching 38 s, shader_eval_curve_shadow_transparency 19 s; their
+  AIR 40-55% smaller), so 74 of Cycles' 75 pipelines build. Metal's compile time for these kernels, not ZLUDA's,
+  is now the slow part.
 
 ## Real calls in the AGX backend (`-agx-experimental-leaf-calls`), 2026-10-30
 
@@ -76,6 +80,9 @@ the order it was found:
   out at 6.4 GB on shade_shadow. Call timing on the GPU is not calibrated; no GPU time measured yet.
 
 ## Dead ends and surprises
+
+- **The scratch `guard.py` (compile a kernel's pipeline without running it) assumed a named entry block**; zoc's
+  current Metal AIR has unnamed ones. Run `opt -passes=instnamer` before it.
 
 - **"Cannot select: load (s64) ... addrspace 2" from AGX instruction selection** after regenerating the texture
   library was not about the loads: the newer clang made switch lookup tables (`@switch.table.*`), globals AIR and
