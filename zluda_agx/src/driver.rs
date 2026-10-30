@@ -1172,6 +1172,12 @@ fn agx_fast_mma() -> bool {
     std::env::var("ZLUDA_AGX_FAST_MMA").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
+/// The PTX size from which a module compiles a kernel at a time with real calls (`LARGE_MODULE_LLVM_ARGS`).
+const LARGE_MODULE_BYTES: usize = 4 << 20;
+/// The AGX backend's calls (experimental): called functions as calls, frames measured per call depth, and calls
+/// left to relocations, which the merger of the kernels' objects resolves to one copy of each function.
+const LARGE_MODULE_LLVM_ARGS: &str = "-agx-experimental-leaf-calls -agx-measured-call-frames -agx-call-relocations";
+
 /// Compiles PTX for `cpu` with zoc, through the compilation cache.
 pub(crate) fn compile_ptx(ptx: &[u8], cpu: &str) -> Result<(Vec<u8>, String), String> {
     compile_ptx_linked(&[ptx], cpu)
@@ -1242,8 +1248,14 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     if std::env::var("ZLUDA_AGX_UNIFORM_CONSTANTS").is_ok_and(|v| v == "0") {
         options.push("no-uniform-constants");
     }
-    // and ZLUDA_AGX_VIA_AIR=1 compiles through upstream AIR (experimental)
-    if std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1") {
+    // PTX goes to AIR and the AGX backend compiles that AIR (zoc --target air). The modes the AIR route does not
+    // implement (Mesa's strict instructions, checked accesses, line tables, SIMD-group mma) still take the direct
+    // route, where ZLUDA_AGX_VIA_AIR=1 raises the AGX IR to AIR (experimental).
+    let direct = mesa || checked || lineinfo || fast_mma;
+    if !direct {
+        options.push("air");
+    }
+    if direct && std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1") {
         options.push("via-air");
     }
     let key = Key { source, chip: cpu, compiler: &compiler, options: &options };
@@ -1252,16 +1264,22 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
     let compile = || -> Result<(Vec<u8>, String), String> {
         compiled.set(true);
         if crate::log_enabled() {
-            eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>());
+            eprintln!("[zluda_agx] invoking zoc: PTX modules={}, bytes={}, target={cpu}, air={}", sources.len(), sources.iter().map(|s| s.len()).sum::<usize>(), !direct);
         }
-        let mut args: Vec<String> = ["--target", "agx", "--arch", cpu, "--object-only"].iter().map(|a| a.to_string()).collect();
+        let target = if direct { "agx" } else { "air" };
+        let mut args: Vec<String> = ["--target", target, "--arch", cpu, "--object-only"].iter().map(|a| a.to_string()).collect();
         args.extend(mesa.then(|| "--agx-strict".to_string()));
         args.extend(checked.then(|| "--agx-checked".to_string()));
         args.extend(strict_fp.then(|| "--strict-fp".to_string()));
         args.extend(lineinfo.then(|| "--lineinfo".to_string()));
         args.extend(fast_mma.then(|| "--fast-mma".to_string()));
         args.extend((stack_size != DEFAULT_STACK_SIZE).then(|| format!("--stack-size={stack_size}")));
-        if let Some(result) = zoc_server::compile(&zoc, &args, sources) {
+        // a large module (Blender Cycles: 13 MB of PTX, 75 kernels) a kernel at a time, with called functions kept
+        // as calls: fully inlined, Cycles' largest kernel alone did not fit in 8 GB (llvm_zluda AIR_EXPERIMENTS.md).
+        // Its own zoc: the options are LLVM's, for the whole process.
+        let large = !direct && sources.iter().map(|s| s.len()).sum::<usize>() > LARGE_MODULE_BYTES;
+        let served = if large { None } else { zoc_server::compile(&zoc, &args, sources) };
+        if let Some(result) = served {
             if crate::log_enabled() {
                 eprintln!("[zluda_agx] zoc server finished: ok={}, elapsed={:.3}s", result.is_ok(), started.elapsed().as_secs_f64());
             }
@@ -1275,7 +1293,14 @@ fn compile_or_cached(sources: &[&[u8]], cpu: &str, cached_only: bool) -> Result<
             paths.push(src);
         }
         // the object alone: its .agx.kernels records describe the kernels, so no IR text or assembly
-        let out = std::process::Command::new(&zoc)
+        let mut command = std::process::Command::new(&zoc);
+        if large {
+            let llvm_args = std::env::var("ZLUDA_AGX_LLVM_ARGS").unwrap_or_default();
+            command
+                .env("ZLUDA_AGX_LLVM_ARGS", format!("{LARGE_MODULE_LLVM_ARGS} {llvm_args}"))
+                .env("ZLUDA_AGX_PER_KERNEL", "1");
+        }
+        let out = command
             .args(&args)
             .arg("--output-dir")
             .arg(dir.path())

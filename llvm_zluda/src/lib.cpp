@@ -16,6 +16,7 @@
 #include <llvm/IR/ReplaceConstant.h>
 #include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Support/KnownFPClass.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/InstIterator.h>
@@ -951,6 +952,65 @@ namespace
     }
 }
 
+namespace
+{
+    // The Air target: its primitives (__zluda_air.thread.position.in.threadgroup.x, ...) are inlined by the time
+    // clusters are lowered, leaving AIR's system values (air.thread_position_in_threadgroup.v3i32, ...), which the
+    // lowering does not know. Each becomes the primitives again, one per component, for the lowering to replace (and
+    // the pipeline after it to inline). Returns whether the module changed.
+    bool zludaAirSystemValuesAsPrimitives(Module &M)
+    {
+        static const std::pair<const char *, const char *> vectors[] = {
+            {"air.thread_position_in_threadgroup.v3i32", "thread.position.in.threadgroup."},
+            {"air.threadgroup_position_in_grid.v3i32", "threadgroup.position.in.grid."},
+            {"air.threads_per_threadgroup.v3i32", "threads.per.threadgroup."},
+            {"air.threadgroups_per_grid.v3i32", "threadgroups.per.grid."},
+            {"air.thread_position_in_grid.v3i32", nullptr},
+        };
+        LLVMContext &ctx = M.getContext();
+        Type *I32 = Type::getInt32Ty(ctx);
+        auto prim = [&](IRBuilder<> &B, std::string op) {
+            return B.CreateCall(M.getOrInsertFunction(zludaPrim(op.c_str()), FunctionType::get(I32, false)));
+        };
+        // (not in the primitives themselves, which read the hardware's values)
+        auto outside = [&](CallInst *CI) {
+            return !CI->getFunction()->getName().starts_with(zludaPrimitivePrefix);
+        };
+        bool changed = false;
+        for (auto [name, op] : vectors)
+            if (Function *F = M.getFunction(name))
+                for (User *U : make_early_inc_range(F->users()))
+                    if (auto *CI = dyn_cast<CallInst>(U); CI && CI->getCalledFunction() == F && outside(CI))
+                    {
+                        IRBuilder<> B(CI);
+                        Value *v = PoisonValue::get(CI->getType());
+                        for (unsigned i = 0; i < 3; i++)
+                        {
+                            std::string axis(1, "xyz"[i]);
+                            Value *e = op ? static_cast<Value *>(prim(B, op + axis))
+                                          // the position in the grid: of the CTA's threads in the CTA's position
+                                          : B.CreateAdd(B.CreateMul(prim(B, "threadgroup.position.in.grid." + axis),
+                                                                    prim(B, "threads.per.threadgroup." + axis)),
+                                                        prim(B, "thread.position.in.threadgroup." + axis));
+                            v = B.CreateInsertElement(v, e, i);
+                        }
+                        CI->replaceAllUsesWith(v);
+                        CI->eraseFromParent();
+                        changed = true;
+                    }
+        if (Function *F = M.getFunction("air.thread_index_in_threadgroup"))
+            for (User *U : make_early_inc_range(F->users()))
+                if (auto *CI = dyn_cast<CallInst>(U); CI && CI->getCalledFunction() == F && outside(CI))
+                {
+                    IRBuilder<> B(CI);
+                    CI->replaceAllUsesWith(prim(B, "thread.index.in.threadgroup"));
+                    CI->eraseFromParent();
+                    changed = true;
+                }
+        return changed;
+    }
+}
+
 LLVM_C_EXTERN_C_BEGIN
 
 // Returns 1 if the module changed, 0 if not, and -1 with a message (to
@@ -961,17 +1021,23 @@ int LLVMZludaAgxLowerClusters(LLVMModuleRef M, char **error)
     SmallVector<Function *, 8> kernels, functions;
     for (Function &F : *Mod)
         if (!F.isDeclaration())
-            (F.getCallingConv() == CallingConv::AGX_KERNEL ? kernels : functions).push_back(&F);
+            // (the Air target's kernels: the "air-kernel" attribute, with the C calling convention)
+            (F.getCallingConv() == CallingConv::AGX_KERNEL || F.hasFnAttribute("air-kernel") ? kernels : functions)
+                .push_back(&F);
     std::optional<ClusterShape> common;
     bool mixed = false;
+    bool clusters = false;
     for (Function *F : kernels)
     {
         ClusterShape s = zludaClusterShape(*F);
         if (common && !(*common == s))
             mixed = true;
         common = s;
+        clusters |= s.count() > 1;
     }
     bool changed = false;
+    if (clusters && zludaPrimitivePrefix != "llvm.agx.")
+        changed = zludaAirSystemValuesAsPrimitives(*Mod);
     for (Function *F : kernels)
     {
         if (zludaClusterShape(*F).count() == 1 && !zludaUsesClusterState(*F, false))
@@ -2436,6 +2502,50 @@ int LLVMZludaAirDropCompareFlushes(LLVMModuleRef M)
     return Flushes.size();
 }
 
+// CUDA's roundf in PTX: add.rz.f32 of x and copysign(0.5, x), whose only users truncate it (cvt.rzi). That is
+// round(x), half away from zero, for every x: rounding toward zero never carries x + 0.5 past the next integer,
+// from 2^23 on x is an integer the addition gives back, and zeros, flushed denormals, infinities and NaN agree
+// (AGXStrictFP.cpp's lowerRoundf); or x + 0.5 where x is not below zero. m is the mode reaching C; null when C is not that.
+static Value *zludaAirRoundf(ConstrainedFPIntrinsic *C, Value *m)
+{
+    if (C->getIntrinsicID() != Intrinsic::experimental_constrained_fadd || !C->getType()->isFloatTy() ||
+        C->use_empty())
+        return nullptr;
+    auto rounding = zludaModeField(m, 3);
+    if (!rounding || *rounding != 0)
+        return nullptr;
+    for (User *U : C->users())
+    {
+        auto *II = dyn_cast<IntrinsicInst>(U);
+        if (!II || (II->getIntrinsicID() != Intrinsic::trunc &&
+                    II->getIntrinsicID() != Intrinsic::experimental_constrained_trunc))
+            return nullptr;
+    }
+    for (unsigned i : {0u, 1u})
+    {
+        Value *X = C->getArgOperand(i);
+        auto *H = dyn_cast<IntrinsicInst>(C->getArgOperand(1 - i));
+        auto *K = H && H->getIntrinsicID() == Intrinsic::copysign && H->getArgOperand(1) == X
+                      ? dyn_cast<ConstantFP>(H->getArgOperand(0))
+                      : nullptr;
+        if (K && (K->isExactlyValue(0.5) || K->isExactlyValue(-0.5)))
+            return IRBuilder<>(C).CreateUnaryIntrinsic(Intrinsic::round, X);
+        // x + 0.5 once x is known not to be below zero (its copysign folded): round(x), or round(x) + 0 where x
+        // may be -0 (-0 + 0.5 truncates to +0)
+        auto *Half = dyn_cast<ConstantFP>(C->getArgOperand(1 - i));
+        if (!Half || !Half->isExactlyValue(0.5))
+            continue;
+        SimplifyQuery Q(C->getDataLayout(), C);
+        KnownFPClass Known = computeKnownFPClass(X, fcAllFlags, Q);
+        IRBuilder<> B(C);
+        if (Known.getSignBit() == false)
+            return B.CreateUnaryIntrinsic(Intrinsic::round, X);
+        if (cannotBeOrderedLessThanZero(X, Q))
+            return B.CreateFAdd(B.CreateUnaryIntrinsic(Intrinsic::round, X), ConstantFP::get(X->getType(), 0.0));
+    }
+    return nullptr;
+}
+
 // ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
 // (__zluda_air.set.fpmode / __zluda_air.get.fpmode, as llvm.agx.set.fpmode for
 // the Agx target: f32 rounding in bits 0-1, f16/bf16/f64 in bits 2-3,
@@ -2453,6 +2563,23 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
     Function *Get = Mod->getFunction("__zluda_air.get.fpmode");
     static const char *names[4] = {"round.towardzero", "round.tonearest", "round.upward", "round.downward"};
     int changed = 0;
+    // rcp.approx as an afn 1 / x, now that the inlining is done (zluda_ptx_impl_air.ll: inlined as a division,
+    // a strictfp function would have made it an exact one)
+    if (Function *Rcp = Mod->getFunction("__zluda_air.fast.rcp.f32"))
+    {
+        for (User *U : make_early_inc_range(Rcp->users()))
+            if (auto *CI = dyn_cast<CallInst>(U); CI && CI->getCalledFunction() == Rcp)
+            {
+                IRBuilder<> B(CI);
+                FastMathFlags afn;
+                afn.setApproxFunc();
+                B.setFastMathFlags(afn);
+                CI->replaceAllUsesWith(B.CreateFDiv(ConstantFP::get(CI->getType(), 1.0), CI->getArgOperand(0)));
+                CI->eraseFromParent();
+            }
+        if (Rcp->use_empty())
+            Rcp->eraseFromParent();
+    }
     for (Function &F : *Mod)
     {
         if (F.isDeclaration())
@@ -2513,9 +2640,24 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
             FreezeInst *Fr = at[C];
             Value *m = Fr->getOperand(0);
             Fr->eraseFromParent();
+            // CUDA's roundf, trunc(x + copysign(0.5, x)) with the addition rounded toward zero (add.rz, then
+            // cvt.rzi): round(x), which AIR and AGX have, instead of the directed addition's software emulation and
+            // flushes (as AGXLowerFPEnv's lowerRoundf on the Agx target, which those flushes hide from it)
+            if (Value *r = zludaAirRoundf(C, m))
+            {
+                C->replaceAllUsesWith(r);
+                C->eraseFromParent();
+                continue;
+            }
             // denormals flushed (bit 4 for f32, bit 5 for f16): the operands and the result, as the hardware's mode
             // would (a GPU that flushes f32 does it itself, but not under IEEE f32 emulation, air.ieee-fp32)
-            Type *scalar = C->getType()->getScalarType();
+            // A conversion between floating point types is in its operand's mode (as AGXLowerFPEnv's): f64 to f32
+            // (cvt.rm.bf16.f64 goes through it) flushes nothing, whatever the f32 mode
+            Type *flushTy = C->getType();
+            if (C->getType()->isFPOrFPVectorTy() && C->arg_size() > 0 &&
+                C->getArgOperand(0)->getType()->isFPOrFPVectorTy())
+                flushTy = C->getArgOperand(0)->getType();
+            Type *scalar = flushTy->getScalarType();
             if (scalar->isHalfTy() || scalar->isFloatTy())
             {
                 bool half = scalar->isHalfTy();
@@ -2549,14 +2691,17 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
                         return B.CreateSelect(on, flushed, v);
                     };
                     for (unsigned i = 0; i < C->arg_size(); i++)
-                        if (C->getArgOperand(i)->getType() == C->getType())
+                        if (C->getArgOperand(i)->getType() == flushTy)
                             C->setArgOperand(i, flush(B, C->getArgOperand(i)));
-                    IRBuilder<> A(C->getNextNode());
-                    Instruction *placeholder = cast<Instruction>(A.CreateFreeze(C));
-                    Value *out = flush(A, placeholder);
-                    C->replaceUsesWithIf(out, [&](Use &U) { return U.getUser() != placeholder; });
-                    placeholder->replaceAllUsesWith(C);
-                    placeholder->eraseFromParent();
+                    if (C->getType() == flushTy)
+                    {
+                        IRBuilder<> A(C->getNextNode());
+                        Instruction *placeholder = cast<Instruction>(A.CreateFreeze(C));
+                        Value *out = flush(A, placeholder);
+                        C->replaceUsesWithIf(out, [&](Use &U) { return U.getUser() != placeholder; });
+                        placeholder->replaceAllUsesWith(C);
+                        placeholder->eraseFromParent();
+                    }
                 }
             }
             unsigned shift = C->getType()->getScalarType()->isFloatTy() ? 0 : 2;
@@ -2591,6 +2736,48 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
 LLVM_C_EXTERN_C_END
 
 LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air: the texture unit's sample (__zluda_air.texture.sample.unit, zluda_ptx_impl_air.ll) as an
+// AIR hint, which agx-lower-air makes llvm.agx.texture.sample: an internal noinline function whose "air-hint"
+// names it. Its body, what a consumer without AGX's texture heap runs (never: no runtime of its makes the
+// descriptors that select this sample), gives the operands back, not a constant. Made after the optimizations,
+// which would drop operands that are constants at every call (the dimensions). Returns the calls rewritten.
+int LLVMZludaAirTextureSampleHint(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    Function *Unit = Mod->getFunction("__zluda_air.texture.sample.unit");
+    if (!Unit)
+        return 0;
+    int count = 0;
+    if (!Unit->use_empty())
+    {
+        LLVMContext &ctx = Mod->getContext();
+        Function *Hint = Function::Create(Unit->getFunctionType(), GlobalValue::InternalLinkage,
+                                          "__air_hint.agx.texture.sample", Mod);
+        Hint->addFnAttr(Attribute::NoInline);
+        Hint->addFnAttr(Attribute::NoUnwind);
+        Hint->addFnAttr(Attribute::WillReturn);
+        Hint->setMemoryEffects(MemoryEffects::readOnly());
+        Hint->addFnAttr("air-hint", "call:llvm.agx.texture.sample|------");
+        IRBuilder<> B(BasicBlock::Create(ctx, "", Hint));
+        Type *I32 = B.getInt32Ty();
+        Value *r = PoisonValue::get(Unit->getReturnType());
+        Value *parts[4] = {B.CreateBitCast(Hint->getArg(2), I32), B.CreateBitCast(Hint->getArg(3), I32),
+                           B.CreateAdd(Hint->getArg(0), Hint->getArg(4)), B.CreateZExt(Hint->getArg(1), I32)};
+        for (unsigned i = 0; i < 4; i++)
+            r = B.CreateInsertElement(r, parts[i], i);
+        B.CreateRet(r);
+        for (User *U : make_early_inc_range(Unit->users()))
+            if (auto *CI = dyn_cast<CallInst>(U); CI && CI->getCalledFunction() == Unit)
+            {
+                CI->setCalledFunction(Hint);
+                count++;
+            }
+    }
+    if (Unit->use_empty())
+        Unit->eraseFromParent();
+    return count;
+}
 
 // ZLUDA_AGX target Air, strict floating point (zoc --strict-fp): PTX's canonical NaN for every floating point
 // result that is a NaN (0x7fffffff in f32, 0x7fff in f16 and bf16; in f64 0x7fffffffffffffff only for a NaN no

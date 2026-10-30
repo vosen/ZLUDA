@@ -132,6 +132,7 @@ extern "C" {
     pub fn LLVMZludaAirDropCompareFlushes(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirExpandDivisions(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirCanonicalNaNs(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirTextureSampleHint(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirCompareFloatBits(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirKernelModule(module: LLVMModuleRef, name: *const std::ffi::c_char) -> LLVMModuleRef;
     pub fn LLVMZludaAirSaltKernels(module: LLVMModuleRef, length: u64);

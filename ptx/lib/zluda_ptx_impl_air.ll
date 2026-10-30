@@ -238,16 +238,22 @@ umax:
   ret i32 %ua
 }
 
-; The hardware's approximations, as portable LLVM math with afn (which the AIR
-; target writes as AIR's fast functions and the AGX backend compiles to its
-; rcp, rsqrt, exp2, log2 and sin instructions).
+; The hardware's approximations, as AIR's fast functions (which the AGX backend
+; compiles to its rcp, rsqrt, exp2, log2 and sin instructions). Not as LLVM math
+; with afn: inlined into a function that changes the floating point mode
+; (strictfp, as almost every .ftz kernel is), LLVM's inliner turns each such
+; operation into a constrained intrinsic without afn, which both back ends then
+; compile as the exact operation (ex2.approx in software on AGX). AIR has no
+; fast reciprocal that AGX reads back, so rcp is __zluda_air.fast.rcp.f32, which
+; LLVMZludaAirStaticRounding makes an afn 1 / x once the inlining is done.
 declare float @llvm.sqrt.f32(float)
-declare float @llvm.exp2.f32(float)
-declare float @llvm.log2.f32(float)
-declare float @llvm.sin.f32(float)
-declare float @llvm.cos.f32(float)
+declare float @air.fast_exp2.f32(float)
+declare float @air.fast_log2.f32(float)
+declare float @air.fast_sin.f32(float)
+declare float @air.fast_cos.f32(float)
+declare float @__zluda_air.fast.rcp.f32(float) #4
 define float @__zluda_air.rcp.f32(float %x) #0 {
-  %r = fdiv afn float 1.0, %x
+  %r = call float @__zluda_air.fast.rcp.f32(float %x)
   ret float %r
 }
 ; (AIR's own reciprocal square root, Metal's rsqrt, which the AGX backend
@@ -280,31 +286,36 @@ define float @__zluda_air.rsqrt.special.f32(float %x) #0 {
   ret float %r2
 }
 define float @__zluda_air.exp2.f32(float %x) #0 {
-  %r = call afn float @llvm.exp2.f32(float %x)
+  %r = call afn float @air.fast_exp2.f32(float %x)
   ret float %r
 }
 define float @__zluda_air.log2.f32(float %x) #0 {
-  %r = call afn float @llvm.log2.f32(float %x)
+  %r = call afn float @air.fast_log2.f32(float %x)
   ret float %r
 }
 ; (in radians, as llvm.agx.sin and llvm.agx.cos, which agx-lower-air restores)
 define float @__zluda_air.sin.f32(float %x) #0 {
-  %r = call afn float @llvm.sin.f32(float %x)
+  %r = call afn float @air.fast_sin.f32(float %x)
   ret float %r
 }
 define float @__zluda_air.cos.f32(float %x) #0 {
-  %r = call afn float @llvm.cos.f32(float %x)
+  %r = call afn float @air.fast_cos.f32(float %x)
   ret float %r
 }
 
 ; Textures spill over from hardware slots to software: the helpers sample a
 ; texture in software from its descriptor in device memory unless the
-; descriptor's word 16 has bit 63 set, a hardware slot the runtime bound for
-; it (zluda_ptx_impl_agx_tex.c). No slots are bound yet on the Air target, so
-; that path is never taken; the slot's sample is the texture's software one
-; once kernels have texture parameters.
+; descriptor's word 16 has bit 63 set, hardware descriptors the runtime made for
+; it in the texture heap (zluda_ptx_impl_agx_tex.c; zluda_agx sets it for the
+; textures the texture unit samples as CUDA does). That sample becomes an AIR
+; hint (llvm/docs/AIR/AIRHints.rst in the LLVM fork) once the module is optimized
+; (llvm_zluda's LLVMZludaAirTextureSampleHint: made earlier, the optimizations
+; drop the hint's constant operands, and agx-lower-air no longer knows it):
+; agx-lower-air makes each call llvm.agx.texture.sample, the texture unit's.
+declare <4 x i32> @__zluda_air.texture.sample.unit(i32, i16, float, float, i32) #7
 define <4 x i32> @__zluda_air.texture.sample(i32 %slot, i16 %sampler, float %x, float %y, i32 %dims) #0 {
-  ret <4 x i32> zeroinitializer
+  %r = call <4 x i32> @__zluda_air.texture.sample.unit(i32 %slot, i16 %sampler, float %x, float %y, i32 %dims)
+  ret <4 x i32> %r
 }
 
 ; The floating point mode (rounding of f32 in bits 0-1, of f16/f64 in bits
@@ -323,3 +334,5 @@ attributes #5 = { nounwind willreturn memory(inaccessiblemem: read) }
 attributes #6 = { nounwind willreturn memory(inaccessiblemem: write) }
 attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #2 = { alwaysinline convergent nounwind willreturn }
+; The texture unit's sample: a read of the texture heap.
+attributes #7 = { nounwind willreturn memory(read) }
