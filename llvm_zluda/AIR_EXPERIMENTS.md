@@ -8,8 +8,12 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
 ## Open problems
 
 - **Blender Cycles to AGX code does not fit in ~7.9 GB**, on either route. Whole-module: the old route
-  (`--target agx`) reached 5.7 GB and the AIR route 6.5 GB before the watchdog stopped them, so this is not an
-  AIR-route regression. A kernel at a time (`ZLUDA_AGX_PER_KERNEL=1`), 12 kernels compile, then
+  (`--target agx`) reached 5.7 GB and the AIR route 6.5 GB before the watchdog stopped them (2026-10-30, current
+  trees). The user recalls AGX code generation working at one point; no record of a Cycles AGX build was found in
+  /scratch or the commit history (the per-kernel commit 3435e7a already says shade_shadow needs over 6.5 GB), so
+  the working build may have been an earlier commit, another machine, or smaller programs. If it was an earlier
+  commit, it is a regression to bisect (candidates: the AGX always-inline policy, the texture and soft-f64
+  libraries, the AIR inliner's keep-function changes of 2026-10-29) rather than a limit to work around. A kernel at a time (`ZLUDA_AGX_PER_KERNEL=1`), 12 kernels compile, then
   `kernel_gpu_integrator_shade_shadow` (about 5M instructions with everything inlined, as the AGX backend inlines
   every non-kernel function) runs out. Measured on that kernel alone with `llc`: straight-line strength reduction's
   scalar evolution took it from 0.9 to 4.4 GB (now skipped above 200k instructions,
