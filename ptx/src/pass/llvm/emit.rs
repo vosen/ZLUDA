@@ -5594,8 +5594,10 @@ impl<'a> MethodEmitContext<'a> {
                 get_scalar_type(self.context, data.type_),
             )],
         )?;
-        // the half formats keep subnormal results
-        let result = if self.target.is_air() && data.flush_to_zero == Some(true) {
+        // the half formats keep subnormal results; the GPU's f32 exp2 flushes them (on the M2 Max ex2.approx.ftz.f32
+        // of -127.5 and -140 is +0 without a flush), except under IEEE f32 emulation (--strict-fp)
+        let gpu_flushes = data.type_ == ast::ScalarType::F32 && !self.strict_fp;
+        let result = if self.target.is_air() && data.flush_to_zero == Some(true) && !gpu_flushes {
             self.emit_flush_subnormal(data.type_, result)
         } else {
             result
