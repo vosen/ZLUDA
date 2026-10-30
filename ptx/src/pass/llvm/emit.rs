@@ -3087,11 +3087,40 @@ impl<'a> MethodEmitContext<'a> {
             }
             ptx_parser::SetpCompareOp::Float(setp_compare_float) => {
                 // .ftz in a function of several modes, whose comparisons follow its attribute
-                let (src1, src2) = if self.explicit_ftz(data.flush_to_zero) {
-                    (self.emit_flush_subnormal(data.type_, src1), self.emit_flush_subnormal(data.type_, src2))
-                } else {
-                    (src1, src2)
+                // (an f32 flush the GPU's compare makes is marked !zluda.ftz.compare: LLVM folds a compare of
+                // constants as IEEE does, so the flush stays through the first optimization, which folds it for
+                // constants, and LLVMZludaAirDropCompareFlushes removes those of the operands known at run time only)
+                let flush = self.explicit_ftz(data.flush_to_zero);
+                let compare = self.explicit_ftz_compare(data.type_, data.flush_to_zero);
+                let mut flush_operand = |src: LLVMValueRef| {
+                    if compare {
+                        self.emit_flush_subnormal(data.type_, src)
+                    } else if flush {
+                        let flushed = self.emit_flush_subnormal(data.type_, src);
+                        unsafe {
+                            let select = LLVMGetOperand(flushed, 0);
+                            if LLVMIsASelectInst(select) != std::ptr::null_mut() {
+                                let kind = LLVMGetMDKindIDInContext(
+                                    self.context,
+                                    c"zluda.ftz.compare".as_ptr(),
+                                    "zluda.ftz.compare".len() as u32,
+                                );
+                                LLVMSetMetadata(
+                                    select,
+                                    kind,
+                                    LLVMMetadataAsValue(
+                                        self.context,
+                                        LLVMMDNodeInContext2(self.context, std::ptr::null_mut(), 0),
+                                    ),
+                                );
+                            }
+                        }
+                        flushed
+                    } else {
+                        src
+                    }
                 };
+                let (src1, src2) = (flush_operand(src1), flush_operand(src2));
                 self.emit_setp_float(setp_compare_float, src1, src2)
             }
         }
@@ -3103,6 +3132,23 @@ impl<'a> MethodEmitContext<'a> {
         self.target.is_air()
             && self.fp.mode == FloatingPointMode::Constrained
             && flush_to_zero == Some(true)
+    }
+
+    // setp.ftz's runtime operands flushed with bit operations as explicit_ftz, except f32 ones outside IEEE f32 emulation
+    // (--strict-fp, which keeps denormals): the GPU's own f32 compares flush them (on the M2 Max, setp.lt.ftz of
+    // -2^-127 and 0 is false without a flush; 16-bit denormals are kept). Flushed, they made a constrained module's
+    // f32 loop 61% slower than the same loop elsewhere.
+    fn explicit_ftz_compare(&self, type_: ast::ScalarType, flush_to_zero: Option<bool>) -> bool {
+        self.explicit_ftz(flush_to_zero) && (self.strict_fp || type_ != ast::ScalarType::F32)
+    }
+
+    // min.ftz / max.ftz's result flushed with bit operations: f32 in any mode, as the GPU's min and max return a
+    // denormal operand as it is (on the M2 Max, min.ftz of -2^-127 and 0 gave -2^-127, not -0); the other types as
+    // explicit_ftz. (Not with the GPU's compare, (r == 0) ? copysign(0, r) : r, three operations instead of five:
+    // LLVM folds it for a known denormal, comparing it as IEEE does.)
+    fn explicit_ftz_min_max(&self, type_: ast::ScalarType, flush_to_zero: Option<bool>) -> bool {
+        self.explicit_ftz(flush_to_zero)
+            || (self.target.is_air() && type_ == ast::ScalarType::F32 && flush_to_zero == Some(true))
     }
 
     fn emit_setp_int(
@@ -5742,7 +5788,7 @@ impl<'a> MethodEmitContext<'a> {
             },
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. }) => {
                 // min and max of the flushed inputs are the flushed min and max
-                let result = if self.explicit_ftz(flush_to_zero) {
+                let result = if self.explicit_ftz_min_max(type_, flush_to_zero) {
                     self.emit_flush_subnormal(type_, result)
                 } else {
                     result
@@ -5786,7 +5832,7 @@ impl<'a> MethodEmitContext<'a> {
                 )?;
                 let result = match data {
                     ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. })
-                        if self.explicit_ftz(flush_to_zero) =>
+                        if self.explicit_ftz_min_max(type_, flush_to_zero) =>
                     {
                         self.emit_flush_subnormal(type_, result)
                     }

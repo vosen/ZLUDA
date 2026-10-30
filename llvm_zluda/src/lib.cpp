@@ -2324,6 +2324,27 @@ static std::optional<uint64_t> zludaModeField(Value *Root, uint64_t RootMask)
     return r >= Top ? std::nullopt : std::optional<uint64_t>(r);
 }
 
+// ZLUDA_AGX target Air: removes the f32 flushes the front end marked !zluda.ftz.compare (setp.ftz's operands
+// outside --strict-fp), the select of each replaced by its unflushed bits: the GPU's own f32 compares flush
+// denormals. Run after the first optimization, which folded the compares of constants (as IEEE does, so with
+// their flushes). A flush whose select an optimization changed stays. Returns the number removed.
+int LLVMZludaAirDropCompareFlushes(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    unsigned Kind = Mod->getContext().getMDKindID("zluda.ftz.compare");
+    SmallVector<SelectInst *, 16> Flushes;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *S = dyn_cast<SelectInst>(&I); S && S->getMetadata(Kind))
+                Flushes.push_back(S);
+    for (SelectInst *S : Flushes)
+    {
+        S->replaceAllUsesWith(S->getFalseValue());
+        S->eraseFromParent();
+    }
+    return Flushes.size();
+}
+
 // ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
 // (__zluda_air.set.fpmode / __zluda_air.get.fpmode, as llvm.agx.set.fpmode for
 // the Agx target: f32 rounding in bits 0-1, f16/bf16/f64 in bits 2-3,
