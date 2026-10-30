@@ -383,6 +383,12 @@ pub fn compile_agx_linked(
         .emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?
         .to_vec();
     diagnostics.check()?;
+    // (calls left to relocations, -agx-call-relocations: resolved by the object merger)
+    let object = if crate::agx_merge::has_call_relocations(&object) {
+        crate::agx_merge::merge(&[object])?
+    } else {
+        object
+    };
     if let Some(hook) = compiler_hook {
         hook(&object, String::from("o"));
     }

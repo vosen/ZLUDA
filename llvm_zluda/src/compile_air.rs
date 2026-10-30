@@ -454,6 +454,12 @@ pub fn compile_air(
             let object = agx.emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?.to_vec();
             stage("AGX object");
             diagnostics.check()?;
+            // (calls left to relocations, -agx-call-relocations: resolved as the per-kernel objects' are)
+            let object = if crate::agx_merge::has_call_relocations(&object) {
+                crate::agx_merge::merge(&[object])?
+            } else {
+                object
+            };
             if let Some(hook) = compiler_hook {
                 hook(&object, String::from("o"));
             }

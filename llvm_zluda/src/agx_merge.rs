@@ -5,8 +5,11 @@
 //! relocations.
 //!
 //! The kernels' objects have the same `.agx.globals` (each kernel's module keeps every global variable), which the
-//! merged object takes once; `.text` has no relocations, and `.agx.kernels` records name their kernels. An object
-//! with any other section that has contents is not merged (an error: the caller compiles the module whole).
+//! merged object takes once, and `.agx.kernels` records name their kernels. `.text` has no relocations, or only
+//! calls (R_AGX_CALL32, llc -agx-call-relocations, with the backend's experimental calls): then the merged `.text`
+//! has every kernel first and one copy of each called function that is the same in several kernels' objects (its
+//! bytes and what it calls), each call resolved to it (Blender Cycles: 1338 copies of 213 functions otherwise). An
+//! object with any other section that has contents is not merged (an error: the caller compiles the module whole).
 
 const EM_AGX: u16 = 0x4147;
 const SHT_PROGBITS: u32 = 1;
@@ -19,6 +22,9 @@ const SHF_ALLOC: u64 = 2;
 const SHF_EXECINSTR: u64 = 4;
 const SHF_INFO_LINK: u64 = 0x40;
 const STT_SECTION: u8 = 3;
+/// A call's 32-bit offset from the start of the call instruction (two bytes before the field) to the function:
+/// S + A - P + 2 (AGXELFObjectWriter)
+const R_AGX_CALL32: u32 = 3;
 const STB_LOCAL: u8 = 0;
 
 struct Section {
@@ -150,18 +156,157 @@ impl<'a> Elf<'a> {
     }
 }
 
+/// .text as each object's after the previous ones', and its functions (with their values in it).
+fn concatenate(elves: &[Elf], text_align: u64) -> Result<(Vec<u8>, Vec<Symbol>), String> {
+    let mut text = Vec::new();
+    let mut functions = Vec::new();
+    for e in elves {
+        let Some(t) = e.index(".text") else { continue };
+        while text.len() as u64 % text_align != 0 {
+            text.push(0);
+        }
+        let base = text.len() as u64;
+        text.extend_from_slice(e.bytes(t));
+        for s in e.symbols()? {
+            if s.shndx as usize == t && s.info & 0xf != STT_SECTION && !s.name.is_empty() {
+                let value = base + s.value;
+                functions.push(Symbol { value, ..s });
+            }
+        }
+    }
+    Ok((text, functions))
+}
+
+/// .text of objects whose calls are relocations, and its functions: the kernels (global functions), each object's
+/// in turn, then one copy of each called (local) function that is the same in several objects (its name, its bytes
+/// without the calls' fields, and the copies it calls), every call resolved to the copy kept. A kernel's code, from
+/// its symbol to the end of .text (as agx_runtime loads a module with called functions), holds all it calls.
+fn link_calls(elves: &[Elf], text_align: u64) -> Result<(Vec<u8>, Vec<Symbol>), String> {
+    struct Func<'a> {
+        symbol: Symbol,
+        bytes: &'a [u8],
+        // (the call's field, from the function's start; the function it calls)
+        calls: Vec<(u64, usize)>,
+    }
+    let mut funcs: Vec<Func> = Vec::new();
+    for e in elves {
+        let Some(t) = e.index(".text") else { continue };
+        let text = e.bytes(t);
+        let symbols = e.symbols()?;
+        let first = funcs.len();
+        for s in &symbols {
+            if s.shndx as usize == t && s.info & 0xf != STT_SECTION && !s.name.is_empty() {
+                let bytes = text
+                    .get(s.value as usize..(s.value + s.size) as usize)
+                    .ok_or_else(|| format!("function {} outside .text", s.name))?;
+                funcs.push(Func { symbol: Symbol { name: s.name.clone(), ..*s }, bytes, calls: Vec::new() });
+            }
+        }
+        for (offset, symbol, kind, addend) in e.relocations(t)? {
+            if kind != R_AGX_CALL32 {
+                return Err(format!("relocation type {kind} of .text cannot be merged"));
+            }
+            let s = symbols.get(symbol as usize).ok_or("bad relocation symbol")?;
+            if s.shndx as usize != t {
+                return Err("a call to a function outside .text".into());
+            }
+            let target = s.value as i64 + addend;
+            let from = (first..funcs.len())
+                .find(|&i| funcs[i].symbol.value <= offset && offset + 4 <= funcs[i].symbol.value + funcs[i].symbol.size)
+                .ok_or("a call outside every function")?;
+            let to = (first..funcs.len())
+                .find(|&i| funcs[i].symbol.value as i64 == target)
+                .ok_or("a call to no function's start")?;
+            let field = offset - funcs[from].symbol.value;
+            funcs[from].calls.push((field, to));
+        }
+    }
+    // The copy kept of each function (kernels: themselves), in the order first met; calls form no cycles (AGX has
+    // no recursion), and a function's key holds the copies it calls.
+    fn kept(
+        i: usize,
+        funcs: &[Func],
+        memo: &mut Vec<Option<usize>>,
+        seen: &mut std::collections::HashMap<(String, Vec<u8>, Vec<(u64, usize)>), usize>,
+        depth: usize,
+    ) -> Result<usize, String> {
+        if let Some(k) = memo[i] {
+            return Ok(k);
+        }
+        if depth > funcs.len() {
+            return Err("recursive calls cannot be merged".into());
+        }
+        let f = &funcs[i];
+        let mut calls = Vec::with_capacity(f.calls.len());
+        for &(field, to) in &f.calls {
+            calls.push((field, kept(to, funcs, memo, seen, depth + 1)?));
+        }
+        let k = if f.symbol.info >> 4 != STB_LOCAL {
+            i
+        } else {
+            let mut bytes = f.bytes.to_vec();
+            for &(field, _) in &f.calls {
+                bytes[field as usize..field as usize + 4].fill(0);
+            }
+            *seen.entry((f.symbol.name.clone(), bytes, calls)).or_insert(i)
+        };
+        memo[i] = Some(k);
+        Ok(k)
+    }
+    let mut memo = vec![None; funcs.len()];
+    let mut seen = std::collections::HashMap::new();
+    let mut keep = Vec::with_capacity(funcs.len());
+    for i in 0..funcs.len() {
+        keep.push(kept(i, &funcs, &mut memo, &mut seen, 0)?);
+    }
+    // Kernels first, then the copies kept, each at the alignment of the most aligned .text
+    let mut order: Vec<usize> = (0..funcs.len()).filter(|&i| funcs[i].symbol.info >> 4 != STB_LOCAL).collect();
+    order.extend((0..funcs.len()).filter(|&i| funcs[i].symbol.info >> 4 == STB_LOCAL && keep[i] == i));
+    let mut text = Vec::new();
+    let mut address = vec![u64::MAX; funcs.len()];
+    for &i in &order {
+        while text.len() as u64 % text_align != 0 {
+            text.push(0);
+        }
+        address[i] = text.len() as u64;
+        text.extend_from_slice(funcs[i].bytes);
+    }
+    for &i in &order {
+        for &(field, to) in &funcs[i].calls {
+            let p = address[i] + field;
+            let s = address[keep[to]];
+            let value = s as i64 - p as i64 + 2;
+            let value = i32::try_from(value).map_err(|_| "a call out of range")?;
+            text[p as usize..p as usize + 4].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+    let functions = order
+        .iter()
+        .map(|&i| Symbol { name: funcs[i].symbol.name.clone(), value: address[i], ..funcs[i].symbol })
+        .collect();
+    Ok((text, functions))
+}
+
+/// Whether `object` has relocations of .text (calls, llc -agx-call-relocations), which `merge` resolves.
+pub fn has_call_relocations(object: &[u8]) -> bool {
+    Elf::parse(object).is_ok_and(|e| {
+        e.index(".text").is_some_and(|t| e.sections.iter().any(|s| s.kind == SHT_RELA && s.info as usize == t))
+    })
+}
+
 /// The merged object of `objects` (each a kernel's AGX object of the same module), or why they cannot be merged.
 pub fn merge(objects: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     let elves = objects.iter().map(|o| Elf::parse(o)).collect::<Result<Vec<_>, _>>()?;
     let first = elves.first().ok_or("no objects to merge")?;
     for e in &elves {
         for s in &e.sections {
-            let known = matches!(s.name.as_str(), "" | ".text" | ".agx.kernels" | ".agx.globals" | ".rela.agx.globals"
+            let known = matches!(s.name.as_str(), "" | ".text" | ".rela.text" | ".agx.kernels" | ".agx.globals" | ".rela.agx.globals"
                 | ".note.GNU-stack" | ".symtab" | ".strtab" | ".shstrtab");
             if !known && s.size != 0 {
                 return Err(format!("section {} (in a kernel's AGX object) cannot be merged", s.name));
             }
-            if s.kind == SHT_RELA && e.sections.get(s.info as usize).map(|t| t.name.as_str()) != Some(".agx.globals") {
+            let target = e.sections.get(s.info as usize).map(|t| t.name.as_str());
+            if s.kind == SHT_RELA && target != Some(".agx.globals") && target != Some(".text") {
                 return Err(format!("relocations of section {} cannot be merged", e.sections[s.info as usize].name));
             }
         }
@@ -181,26 +326,14 @@ pub fn merge(objects: &[Vec<u8>]) -> Result<Vec<u8>, String> {
         .filter_map(|e| e.index(".text").map(|t| e.sections[t].align.max(1)))
         .max()
         .unwrap_or(4);
-    let mut text = Vec::new();
-    let mut functions = Vec::new(); // (symbol, value in the merged .text)
     let mut kernels = Vec::new();
     for e in &elves {
-        let Some(t) = e.index(".text") else { continue };
-        while text.len() as u64 % text_align != 0 {
-            text.push(0);
-        }
-        let base = text.len() as u64;
-        text.extend_from_slice(e.bytes(t));
-        for s in e.symbols()? {
-            if s.shndx as usize == t && s.info & 0xf != STT_SECTION && !s.name.is_empty() {
-                let value = base + s.value;
-                functions.push(Symbol { value, ..s });
-            }
-        }
         if let Some(k) = e.index(".agx.kernels") {
             kernels.extend_from_slice(e.bytes(k));
         }
     }
+    let calls = elves.iter().any(|e| e.index(".text").is_some_and(|t| e.sections.iter().any(|s| s.kind == SHT_RELA && s.info as usize == t)));
+    let (text, functions) = if calls { link_calls(&elves, text_align)? } else { concatenate(&elves, text_align)? };
     {
         // (only global ones: with experimental calls, each kernel's object has its own copies of the functions it
         // calls, local, and its calls to them are resolved within the object, so they stay right in the merged .text)
