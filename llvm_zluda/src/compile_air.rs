@@ -208,7 +208,7 @@ pub fn compile_air(
         return Err(fail(err));
     }
     // PTX's rounding modifiers as the static rounding of each operation (AIR has no mode register)
-    unsafe { LLVMZludaAirStaticRounding(linked.get()) };
+    unsafe { LLVMZludaAirStaticRounding(linked.get(), strict_fp as i32) };
     // the AIR primitives internal once nothing creates new calls of them, so that the unused ones go
     let mut f = unsafe { llvm_sys::core::LLVMGetFirstFunction(linked.get()) };
     while !f.is_null() {

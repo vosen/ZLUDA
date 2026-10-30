@@ -1613,6 +1613,9 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         }
         Argument *Base = NK->getArg(NK->arg_size() - 1);
         Base->setName("zluda_globals");
+        // (the buffer's air.arg_name, by which it is told from the parameters: an attribute survives where the
+        // context discards value names, as release builds do)
+        Base->addAttr(Attribute::get(Ctx, "air-arg-name", "zluda_globals"));
         // (noalias only on kernels: the AIR writer has no encoding for it on another function's parameter)
         if (K->hasFnAttribute("air-kernel"))
         {
@@ -1733,6 +1736,7 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         Argument *G = IF->getArg(0);
         G->setName("zluda_globals");
         IF->addParamAttr(0, Attribute::get(Ctx, "zluda-globals"));
+        IF->addParamAttr(0, Attribute::get(Ctx, "air-arg-name", "zluda_globals"));
         IRBuilder<> B(BasicBlock::Create(Ctx, "", IF));
         Value *Addr = B.CreatePtrToInt(G, B.getInt64Ty());
         for (auto &m : masked)
@@ -2320,8 +2324,9 @@ static std::optional<uint64_t> zludaModeField(Value *Root, uint64_t RootMask)
 // operation it reaches: AIR has no mode register. The mode starts as round to
 // nearest in every function (kernels have the others inlined). Where the
 // reaching mode is not a constant, the operation is made in each rounding and
-// the mode selects the result. Returns the number of functions changed.
-int LLVMZludaAirStaticRounding(LLVMModuleRef M)
+// the mode selects the result. strict: strict floating point (IEEE f32 emulation), where f32 operations keep
+// denormals. Returns the number of functions changed.
+int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
 {
     Module *Mod = unwrap(M);
     LLVMContext &Ctx = Mod->getContext();
@@ -2403,7 +2408,13 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M)
                 if (F.getDenormalMode(half ? APFloat::IEEEhalf() : APFloat::IEEEsingle()).Output !=
                     DenormalMode::IEEE)
                     flushBit = bit;
-                if (!flushBit || *flushBit)
+                // An f32 operation rounding to nearest is the hardware's, which flushes f32 denormals itself unless
+                // strict mode keeps them (IEEE f32 emulation): flushed here only in strict mode or for the directed
+                // roundings, whose software emulation keeps denormals. (Flushed always, Blender Cycles' .ftz
+                // operations doubled its IR.)
+                auto rounding = zludaModeField(m, 3);
+                bool hardware = !half && !strict && rounding && (*rounding & 3) == 1;
+                if (!hardware && (!flushBit || *flushBit))
                 {
                     IRBuilder<> B(C);
                     Value *on = flushBit ? static_cast<Value *>(B.getTrue())
