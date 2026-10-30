@@ -111,6 +111,17 @@ fits in the M2 Max's 48 MB system cache: memory bandwidth cannot be measured thr
 
 ## Dead ends and surprises
 
+- **The AIR device harness measured the AGX-mode AIR**: air_ptx_formalization_check.py always passed
+  `--arch agx-g14g`, so every GPU time and suite result before 2026-10-30 evening was of the AIR made with AGX
+  code (its Metal copy from the O3 path), not of a Metal-only compilation. `--arch none` measures the Metal-only
+  path; the suite gives the same results both ways. A change to one path only (as the division expansion first
+  was) shows no effect in the other.
+- **Integer division**: Metal's udiv i32 costs about nine mul.wide; AMDGPU's expansion (reciprocal estimate, one
+  Newton step, two corrections) is exact on the M2 Max and, with the divisor's part hoisted, 2.8x faster in a
+  loop; recomputed every time it is only 13% faster. Integer-op timings in a dependent chain (x = x / y + c)
+  measure latency, where the expansion gains nothing: use independent work per iteration.
+- **Half arithmetic in a .ftz function costs nothing extra** (h_plain vs h_ftz, the same time).
+
 - **The GPU's denormal behaviour, measured** (M2 Max, 2026-10-30): f32 compares flush denormals, f32 min / max
   return a denormal operand unchanged, 16-bit denormals are kept. So setp.ftz.f32 needs no flush outside strict
   mode and min/max.ftz.f32 always do.
