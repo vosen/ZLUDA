@@ -1593,7 +1593,12 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
     SmallVector<Constant *, 8> consts(globals.begin(), globals.end());
     // F with a last parameter, the buffer's address (the old function's calls are rewritten below)
     DenseMap<Function *, Function *> renamed;
-    SmallVector<Function *, 8> order(users.begin(), users.end());
+    // (in the module's order, not the pointer set's, which follows heap addresses: the Metal AIR differed from one
+    // run to the next, defeating Metal's pipeline cache)
+    SmallVector<Function *, 8> order;
+    for (Function &F : *Mod)
+        if (users.contains(&F))
+            order.push_back(&F);
     for (Function *K : order)
     {
         FunctionType *FT = K->getFunctionType();
@@ -1602,8 +1607,10 @@ int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
         // reader rejects a pointer parameter of one, "Unexpected bitcode file")
         bool kernel = K->hasFnAttribute("air-kernel");
         params.push_back(kernel ? (Type *)PointerType::get(Ctx, 1) : Type::getInt64Ty(Ctx));
+        // (in K's place)
         Function *NK = Function::Create(FunctionType::get(FT->getReturnType(), params, false), K->getLinkage(),
-                                        K->getAddressSpace(), "", Mod);
+                                        K->getAddressSpace(), "");
+        Mod->getFunctionList().insert(K->getIterator(), NK);
         NK->copyAttributesFrom(K);
         NK->splice(NK->begin(), K);
         for (auto [Old, New] : zip(K->args(), NK->args()))
