@@ -250,9 +250,24 @@ define float @__zluda_air.rcp.f32(float %x) #0 {
   %r = fdiv afn float 1.0, %x
   ret float %r
 }
+; (AIR's own reciprocal square root, Metal's rsqrt, which the AGX backend
+; compiles to its rsqrt instruction: as 1 / sqrt, Metal made a square root and
+; a division of it, and rsqrt.approx took 3.3 times an fma on the M2 Max)
+declare float @air.fast_rsqrt.f32(float)
 define float @__zluda_air.rsqrt.f32(float %x) #0 {
+  %r = call afn float @air.fast_rsqrt.f32(float %x)
+  ret float %r
+}
+; (--strict-fp: a square root and a division, whose NaNs the strict mode
+; makes canonical; rsqrt.approx.f32 without .ftz calls it through
+; __zluda_ptx_impl_rsqrt_approx_ieee_f32)
+define float @__zluda_air.rsqrt.ieee.f32(float %x) #0 {
   %s = call afn float @llvm.sqrt.f32(float %x)
   %r = fdiv afn float 1.0, %s
+  ret float %r
+}
+define float @__zluda_ptx_impl_rsqrt_approx_ieee_f32(float %x) #0 {
+  %r = call float @__zluda_air.rsqrt.ieee.f32(float %x)
   ret float %r
 }
 ; rsqrt such that rsqrt_special(x) * x == sqrt(x): 0 for 0, +inf for +inf.

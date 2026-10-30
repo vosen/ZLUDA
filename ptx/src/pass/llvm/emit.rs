@@ -5263,6 +5263,9 @@ impl<'a> MethodEmitContext<'a> {
             return Ok(());
         }
         let intrinsic = match (self.target, data.type_, self.fp.mode) {
+            // (under --strict-fp as a square root and a division, whose NaNs the strict mode canonicalizes; AIR's
+            // rsqrt gives Metal's NaN)
+            (Target::Air, ast::ScalarType::F32, _) if self.strict_fp => c"llvm.agx.rsqrt.ieee.f32",
             (Target::Agx | Target::Air, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
             (Target::Agx | Target::Air, _, _) => return Err(error_unreachable()),
             (_, ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",

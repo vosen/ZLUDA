@@ -466,7 +466,12 @@ fn run_instruction<'input>(
                     flush_to_zero: None | Some(false),
                 },
             ..
-        } => to_call(resolver, fn_declarations, "rsqrt_approx_f32".into(), i)?,
+        } => {
+            // (--strict-fp on the Air target: as a square root and a division, whose NaNs the strict mode makes
+            // canonical; zluda_ptx_impl_air.ll)
+            let name = if target.is_air() && strict_fp { "rsqrt_approx_ieee_f32" } else { "rsqrt_approx_f32" };
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Rcp {
             data:
                 ast::RcpData {
