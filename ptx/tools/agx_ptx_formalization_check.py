@@ -417,10 +417,15 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts, derived)
             pos += size
     kernels = {}
+    # a module with called functions (llc -agx-experimental-leaf-calls) has them after every kernel: a kernel's code
+    # is then from its symbol to the end of .text, which holds what it calls (as agx_runtime loads it)
+    calls = any(v[2] == 'FUNC' and n not in records for n, v in syms.items())
     for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts, derived) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
+        if calls:
+            size = len(text) - off
         kernels[name] = {
             'code': text[off:off + size],
             'halves': halves,

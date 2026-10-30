@@ -35,6 +35,30 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
 - Six Cycles kernels exceed the AIR service worker's 60 s Metal compile cap (the client allows 120 s; the worker
   was not restarted).
 
+## Real calls in the AGX backend (`-agx-experimental-leaf-calls`), 2026-10-30
+
+The way out of Cycles' AGX memory: shade_shadow with its large helpers kept as called functions compiles in 14 s at
+156 MB (fully inlined: 6.4 GB and over 25 minutes in StructurizeCFG without finishing). What was in the way, in
+the order it was found:
+
+- **A crash at once on Cycles**: AGXAlwaysInline's call-depth computation held a DenseMap iterator across an insert
+  into the same map (fine for the small lit tests, not for 120 functions).
+- **63 of the 71 refused helpers read global data** (`kernel_params`, lookup tables, `switch.table.*`), which only a
+  kernel can address (a uniform register). AGXGlobalDataArgs now passes the buffer's address as an extra i64
+  parameter to the kept functions that need it and their callers; their global references become address + the
+  variable's offset in computeGlobalDataLayout's layout. (A first test module made with `llvm-extract --recursive`
+  had every global as a declaration, which gives the same "unsupported external global" error: extract with
+  `--rglob='.*'`.)
+- **Callees before the kernel in .text**: modules from AIR list functions before kernels, and a kernel's program
+  runs from its symbol on, so a call jumped backwards out of it (indirect.ptx: "targets -52 outside the program").
+  Called functions are now moved after every kernel.
+- **The runtime and the harness loaded only the kernel symbol's own bytes**; with called functions in the module,
+  a kernel's code now extends to the end of .text in agx_runtime and agx_ptx_formalization_check.py.
+- **The simulator rejects `ret`** unless `AGX_EXPERIMENTAL_RET=buffer-pop2` (the return model measured on 570
+  hardware cases); call timing is not calibrated. Most PTX suite programs keep no calls (the AIR inliner inlines
+  functions under 100 instructions), so passing tests there say little about calls: indirect.ptx is the one that
+  exercised them.
+
 ## Dead ends and surprises
 
 - **"Cannot select: load (s64) ... addrspace 2" from AGX instruction selection** after regenerating the texture

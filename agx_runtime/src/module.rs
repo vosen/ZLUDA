@@ -455,7 +455,15 @@ impl Module {
         let records = elf.kernel_records()?;
         let res = resources(assembly);
         let mut kernels = HashMap::new();
-        for (name, value, size) in elf.functions()? {
+        let functions = elf.functions()?;
+        // A module with called functions (llc -agx-experimental-leaf-calls) has them after every kernel: a kernel's
+        // code is then from its symbol to the end of .text, which holds what it calls.
+        let calls = match &records {
+            Some(records) => functions.iter().any(|(name, _, _)| !records.contains_key(name)),
+            None => false,
+        };
+        for (name, value, size) in functions {
+            let size = if calls { text.len() as u64 - value } else { size };
             if value % 2 != 0 || value + size > text.len() as u64 {
                 return err(format!("{name}: symbol outside .text"));
             }
