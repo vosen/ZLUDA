@@ -27,7 +27,8 @@ END = '; ---------------------------------------------------------------- END GE
 
 def convert(clang, source, prefix, metadata_base, declared, defined):
     ir = subprocess.run([clang, '-O2', '-S', '-emit-llvm', '-target', 'nvptx64-nvidia-cuda', '-std=c11', '-ffreestanding',
-                         '-fno-builtin', '-ffp-contract=off', '-Wall', '-Werror', '-o', '-', str(LIB / source)],
+                         # (-fno-jump-tables: no switch lookup tables either, globals AIR and AGX do not have)
+                         '-fno-builtin', '-ffp-contract=off', '-fno-jump-tables', '-Wall', '-Werror', '-o', '-', str(LIB / source)],
                         check=True, capture_output=True, text=True).stdout
     internal = set(re.findall(r'^define internal [^@]*@([\w.$]+)\(', ir, re.M))
     out = []
