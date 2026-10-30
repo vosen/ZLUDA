@@ -8,7 +8,7 @@ inputs, on
          (as air_ptx_formalization_check.py runs it), and
   agx    NAME.o on the functional AGX simulator agx_run (as agx_ptx_formalization_check.py runs it),
 and, with --direct, also on
-  direct the AGX code of the direct PTX -> AGX path (zoc without ZLUDA_AGX_VIA_AIR) on agx_run,
+  direct the AGX code of the direct PTX -> AGX path (zoc with ZLUDA_AGX_VIA_AIR=0) on agx_run,
 which separates bugs of the AIR raise / AGX lowering from bugs of the PTX front end.
 
 Consecutive launches run as one service job on the AIR side; after each job (or each launch, with --per-launch)
@@ -212,7 +212,7 @@ def run_program(path, args):
         sides = [AgxSide('agx', tmp_air, args, module, harness_syms)]
         if args.direct:
             os.makedirs(tmp_direct)
-            st, detail = h.compile_ptx(args, module, tmp_direct)
+            st, detail = h.compile_ptx(args, module, tmp_direct, env=dict(os.environ, ZLUDA_AGX_VIA_AIR='0'))
             if st:
                 res['notes'].append('direct: %s %s' % (st, detail[:200]))
                 direct_tainted = set()

@@ -1091,7 +1091,8 @@ Kernels read their 32-bit constants too wide for an immediate from uniform regis
 arguments): fewer general purpose registers and more resident SIMD-groups. `ZLUDA_AGX_UNIFORM_CONSTANTS=0` compiles
 with `mov_imm` instead, in the driver and `zoc` and, at build time, for the agx_libs kernels.
 
-`ZLUDA_AGX_VIA_AIR=1` (experimental) compiles through upstream AIR instead of straight to AGX: the optimized AGX IR is
+Code is compiled through upstream AIR (the default; `ZLUDA_AGX_VIA_AIR=0` selects the deprecated direct PTX -> AGX
+path, which is kept only for differential testing): the optimized AGX IR is
 written as AIR (`agx-raise-to-air`, what AIR does not have as hints with AIR emulations, double precision in software),
 the AIR target's portable passes make it upstream AIR, and the AGX backend compiles that, restoring the hinted AGX
 operations. `zoc` also writes `NAME.air`. On the PTX-formalization tests the results are the direct path's, and in the

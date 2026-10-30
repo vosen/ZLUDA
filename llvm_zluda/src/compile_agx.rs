@@ -334,7 +334,7 @@ pub fn compile_agx_linked(
         unsafe { LLVMZludaAgxCanonicalizeFoldedNaNs(linked.get()) };
     }
 
-    // Experimental: through upstream AIR (ZLUDA_AGX_VIA_AIR=1). The optimized AGX IR is written as AIR
+    // Through upstream AIR (the default; ZLUDA_AGX_VIA_AIR=0 selects the deprecated direct path). The optimized AGX IR is written as AIR
     // (agx-raise-to-air: what AIR does not have as hints with AIR emulations, double precision in software,
     // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
     // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
@@ -395,9 +395,9 @@ pub fn compile_agx_linked(
     Ok(AgxCompilation { object, assembly })
 }
 
-/// ZLUDA_AGX_VIA_AIR=1: compile through upstream AIR (experimental).
+/// Compile through upstream AIR unless ZLUDA_AGX_VIA_AIR=0 selects the deprecated direct PTX -> AGX path.
 fn via_air() -> bool {
-    std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "1")
+    !std::env::var("ZLUDA_AGX_VIA_AIR").is_ok_and(|v| v == "0")
 }
 
 /// The module in upstream AIR, in place, and its bitcode (the .air file).
