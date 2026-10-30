@@ -159,14 +159,18 @@ pub fn compile_air(
         last = std::time::Instant::now();
     };
     // The optimization before ZLUDA's lowering and after each of its rounds (ZLUDA_AIR_FIRST_PIPELINE): o3, or
-    // light+ (the Metal copy's cleanup), the O3 after the address space remap making the code
-    let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref() {
+    // light+ (the Metal copy's pipeline, after DXMT's: see LIGHT_PLUS) with what the lowering and Metal's compiler
+    // need from O3
+    // By default light+ when only the Metal AIR is made (as the Metal copy's pipeline below): on the M2 Max the same
+    // GPU times and PTX suite results as O3, and Cycles' first stage 9.5 s instead of 38. With AGX code, O3.
+    let first_default = if agx_cpu.is_some() { "o3" } else { "light+" };
+    let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref().unwrap_or(first_default) {
         // (with switches as lookup tables already, globals that the lowering lays out: made by the O3 after the
         // remap, the AGX backend rejected them, "unsupported global 'switch.table.k'")
         // (and loops unrolled as O3 does, llvm.is.constant resolved, which O3's shuffle primitives fold on: a loop
         // of simd_sum left whole made Metal's compiler crash, XPC_ERROR_CONNECTION_INTERRUPTED, on SIMD-group
-        // PTX tests)
-        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,lower-constant-intrinsics,instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),loop-unroll<O3>,gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
+        // PTX tests; and tail calls as loops, as O3 does: AIR has no call stack for the recursion left)
+        "light+" => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,lower-constant-intrinsics,instcombine<no-verify-fixpoint>,simplifycfg,tailcallelim,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),loop-unroll<O3>,gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
         _ => c"default<O3>",
     };
     unsafe { LLVMZludaSetAirPrimitives(1) };
@@ -195,7 +199,7 @@ pub fn compile_air(
     })();
     unsafe { LLVMZludaSetAirPrimitives(0) };
     lowered?;
-    stage("ZLUDA lowering (O3 in ZLUDA's address spaces)");
+    stage("ZLUDA lowering (its pipeline in ZLUDA's address spaces)");
     // the primitives that lowering called anew, after O3 dropped the unused definitions
     let mut err = std::ptr::null_mut();
     if !unsafe {
