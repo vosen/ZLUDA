@@ -35,7 +35,9 @@ pub const AIR_TRIPLE: &CStr = c"air";
 /// "some passes that really matter" instead of a full pipeline, since Metal's compiler optimizes the AIR again),
 /// written here as an LLVM pipeline (no DXMT code), with the loop and redundancy passes the hash and soft-f64 loops
 /// lacked: LICM, GVN and InstCombine again.
-const LIGHT_PLUS: &CStr = c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg)";
+// (with aggressive-instcombine's narrowing of integer computations to the width their uses need: a 64-bit sum
+// of which only the low half is used stayed 64-bit, 69% slower on the M2 Max than O3's 32-bit one)
+const LIGHT_PLUS: &CStr = c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,aggressive-instcombine,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg)";
 
 /// The result of compiling for the Air target.
 pub struct AirCompilation {
