@@ -80,6 +80,18 @@ the order it was found:
   28.9 MB object (1338 local called functions), 1.0 GB peak, 119 s in all (AGX stage 83 s). Fully inlined it ran
   out at 6.4 GB on shade_shadow. Call timing on the GPU is not calibrated; no GPU time measured yet.
 
+- **The AGX object is mostly duplicates**: Cycles' 28.9 MB holds 0.7 MB of kernels and 28.0 MB of called
+  functions, 1338 copies of 213 functions (5.3 MB with one copy each). 151 of the 213 are byte-identical in
+  every kernel; the others differ by their call offsets and (measured) frame offsets. Sharing one copy needs
+  the backend to emit relocations for calls to local functions (they are resolved PC-relative when each
+  kernel's object is written), so that the merger can point every kernel's calls at the one copy; and one
+  frame layout for the shared functions. Not done yet.
+- **zoc was not deterministic** (until 649b737's parent): the Metal copy's functions came out in heap-address
+  order (LLVMZludaAirGlobalsToBuffer), almost a million lines of difference between two runs of Cycles. Compare
+  outputs of two runs (`llvm-dis`, or md5sum now that they match) before attributing a difference to a change.
+- **Device-flaky PTX tests**: ldm-0, ldm2-st0 and occupancy pass or fail from one run to the next with the same
+  zoc; rerun them with the previous build before calling a change a regression.
+
 ## Dead ends and surprises
 
 - **The scratch `guard.py` (compile a kernel's pipeline without running it) assumed a named entry block**; zoc's
