@@ -161,9 +161,11 @@ pub fn compile_air(
     // The optimization before ZLUDA's lowering and after each of its rounds (ZLUDA_AIR_FIRST_PIPELINE): o3, or
     // light+ (the Metal copy's pipeline, after DXMT's: see LIGHT_PLUS) with what the lowering and Metal's compiler
     // need from O3
-    // By default light+ when only the Metal AIR is made (as the Metal copy's pipeline below): on the M2 Max the same
-    // GPU times and PTX suite results as O3, and Cycles' first stage 9.5 s instead of 38. With AGX code, O3.
-    let first_default = if agx_cpu.is_some() { "o3" } else { "light+" };
+    // By default light+: with only the Metal AIR (as the Metal copy's pipeline below), on the M2 Max the same GPU
+    // times and PTX suite results as O3, and Cycles' first stage 9.5 s instead of 38; with AGX code too, which O3
+    // in AIR's address spaces optimizes afterwards (Geekbench's 101 kernels: 91 the same code size, +0.4% in all;
+    // the same simulator results; Cycles' first stage 15.2 -> 7.0 s).
+    let first_default = "light+";
     let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref().unwrap_or(first_default) {
         // (with switches as lookup tables already, globals that the lowering lays out: made by the O3 after the
         // remap, the AGX backend rejected them, "unsupported global 'switch.table.k'")
