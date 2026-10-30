@@ -19,8 +19,10 @@ section. GPU times are from the M2 Max behind the AIR service; "suite" is PTX-fo
   scalar evolution took it from 0.9 to 4.4 GB (now skipped above 200k instructions,
   `-agx-straight-line-sr-max-instructions`; 2.8 GB without it), the load/store vectorizer adds ~1.2 GB, and
   StructurizeCFG then ran for over 25 minutes. Inside `zoc`, RSS only grew across the per-kernel loop (1 → 5.6 GB
-  over the first 12 kernels) although each kernel has its own context: being checked with `malloc_trim` after each
-  kernel.
+  over the first 12 kernels) although each kernel has its own context. Not the allocator keeping freed memory:
+  `malloc_trim(0)` after each kernel (with its module, diagnostics and context dropped first) left the curve the
+  same (6.6 GB at shade_shadow); reverted. Still to find: whether something accumulates across kernels or
+  shade_shadow alone is that large inside zoc (timestamp the per-kernel log to tell).
 - Six Cycles kernels exceed the AIR service worker's 60 s Metal compile cap (the client allows 120 s; the worker
   was not restarted).
 
