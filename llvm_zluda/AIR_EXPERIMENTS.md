@@ -111,6 +111,12 @@ fits in the M2 Max's 48 MB system cache: memory bandwidth cannot be measured thr
 
 ## Dead ends and surprises
 
+- **The PTX suite passing is not enough: compile Cycles and Geekbench too.** 1a856ba (.ftz compare marking)
+  passed the whole suite and made Blender Cycles' compilation assert (a constant compare operand, which no suite
+  test has); three more commits went in on top before it was noticed (fixed in 17f4490). Before committing a
+  front-end or pass change: `zoc --target air --object-only --ignore-errors` on Cycles' PTX and on
+  scratchpad gb7/mod*.ptx, both with and without `--arch agx-g14g`.
+
 - **The AIR device harness measured the AGX-mode AIR**: air_ptx_formalization_check.py always passed
   `--arch agx-g14g`, so every GPU time and suite result before 2026-10-30 evening was of the AIR made with AGX
   code (its Metal copy from the O3 path), not of a Metal-only compilation. `--arch none` measures the Metal-only
