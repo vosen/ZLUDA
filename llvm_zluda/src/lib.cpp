@@ -2142,6 +2142,8 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
     for (GlobalVariable *GV : oldGlobals)
         if (!vmap.count(GV) && GV->hasInitializer())
             GV->setInitializer(mapInit(GV->getInitializer()));
+    // The bodies move to the new functions and are remapped in place (each instruction's type and operands,
+    // as CloneFunctionInto's local changes would): a copy of every instruction took Cycles' remap 8 s.
     for (auto [Old, New] : functions)
     {
         if (Old->isDeclaration())
@@ -2152,9 +2154,13 @@ int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
             arg->setName(A.getName());
             vmap[&A] = &*arg++;
         }
-        SmallVector<ReturnInst *, 4> returns;
-        CloneFunctionInto(New, Old, vmap, CloneFunctionChangeType::LocalChangesOnly, returns, "", nullptr, &types);
+        New->copyMetadata(Old, 0);
+        New->splice(New->begin(), Old);
     }
+    for (auto [Old, New] : functions)
+        for (BasicBlock &BB : *New)
+            for (Instruction &I : BB)
+                RemapInstruction(&I, vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals, &types);
     for (auto [Old, New] : functions)
         Old->dropAllReferences();
     for (auto [Old, New] : globals)
