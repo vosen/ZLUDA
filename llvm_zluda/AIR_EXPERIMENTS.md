@@ -102,6 +102,17 @@ the order it was found:
 
 ## Dead ends and surprises
 
+- **The GPU's denormal behaviour, measured** (M2 Max, 2026-10-30): f32 compares flush denormals, f32 min / max
+  return a denormal operand unchanged, 16-bit denormals are kept. So setp.ftz.f32 needs no flush outside strict
+  mode and min/max.ftz.f32 always do.
+- **Tricks that rely on the GPU's flushing compares fail on constants**: LLVM folds compares as IEEE does.
+  Dropping setp.ftz's flush in the front end broke half-oob-set (constants moved through registers, so not
+  constants when emitted); a min/max flush as `(r == 0) ? copysign(0, r) : r` broke minmax3. The flushes are
+  now removed after the first optimization only (marked !zluda.ftz.compare), and min/max keep the bit flush.
+- **Constrained mode costs GPU time**: any mode change in a module (a .rz anywhere) makes every function's f32
+  .ftz compares flush in software; the same f32 loop ran 61% slower in such a module. Look for other per-module
+  switches that tax unrelated code.
+
 - **The scratch `guard.py` (compile a kernel's pipeline without running it) assumed a named entry block**; zoc's
   current Metal AIR has unnamed ones. Run `opt -passes=instnamer` before it.
 
