@@ -417,10 +417,15 @@ def kernel_info(asm, obj, readelf, objcopy, tmp):
             records[name] = (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts, derived)
             pos += size
     kernels = {}
+    # a module with called functions (llc -agx-experimental-leaf-calls) has them after every kernel: a kernel's code
+    # is then from its symbol to the end of .text, which holds what it calls (as agx_runtime loads it)
+    calls = any(v[2] == 'FUNC' and n not in records for n, v in syms.items())
     for name, (halves, tg_half, glob, tg_bytes, args, cluster, tgb_half, tex_half, consts, derived) in records.items():
         if name not in syms or syms[name][2] != 'FUNC':
             continue
         off, size = syms[name][0], syms[name][1]
+        if calls:
+            size = len(text) - off
         kernels[name] = {
             'code': text[off:off + size],
             'halves': halves,
@@ -481,6 +486,170 @@ class Memory:
         return int.from_bytes(self.buf[off:off + n], 'little')
 
 
+def globals_image(gdata, gsyms, gsizes, relocs):
+    """The global data buffer at GLOBALS_BASE as agx_runtime loads it: .agx.globals with its relocations applied."""
+    globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
+    for off, n, target in relocs:
+        globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
+    # the mask(name + offset) initializer elements (agx_runtime MASKED_INIT_SYMBOL)
+    if '__zluda_agx_masked_init' in gsyms:
+        t = gsyms['__zluda_agx_masked_init']
+        words = lambda a: int.from_bytes(globals_mem[a:a + 8], 'little')
+        for e in range(t, t + gsizes.get('__zluda_agx_masked_init', 0), 24):
+            slot, address, desc = words(e) - GLOBALS_BASE, words(e + 8), words(e + 16)
+            n = desc >> 8
+            globals_mem[slot:slot + n] = ((address >> (desc & 63)) & 0xff).to_bytes(n, 'little')
+    return globals_mem
+
+
+def simulate(args, tmp, name, k, ps, ops, grid, block, dyn, syms, mem, globals_mem, tag='k', address32=False,
+             extra=()):
+    """Run one launch of kernel `name` (record k of kernel_info) on agx_run: harness memory mem at BASE, the global
+    data globals_mem at GLOBALS_BASE (both updated in place), parameters ps (kernel_params) with launch operands ops.
+    extra: more agx_run arguments (maps of the multimem / fabric / texture tables). Returns None or an error."""
+    if len(ops) != len(ps):
+        raise Unsupported('launch argument count')
+    pmem = bytearray()
+    halves = {}
+
+    def put(half, value, nbytes):
+        for j in range((nbytes + 1) // 2):
+            halves[half + j] = (value >> (16 * j)) & 0xffff
+
+    ps_all = list(zip(ps, ops))
+    if address32:
+        # 32-bit modules take the 64-bit base of their 32-bit addresses as a last parameter; the harness
+        # buffers are below 4 GiB, so it is 0.
+        ps_all.append((('u64', 1, 8), '0'))
+    if len(k['args']) != len(ps_all):
+        raise Unsupported('kernel record argument count')
+    for ((t, n, al), o), (by_pointer, nbytes, half) in zip(ps_all, k['args']):
+        if half == 0xffffffff:
+            continue  # unused by the kernel
+        size = SIZES[t] * n
+        if n != 1:
+            # an aggregate (.b8 a[16]): the launch value fills its bytes, little-endian
+            value = (syms[o] if o in syms else int(o, 0)) & ((1 << (8 * size)) - 1)
+            if not by_pointer and size > nbytes:
+                raise Unsupported('aggregate kernel parameter')
+        else:
+            value = lit_bits(o, t, syms)
+        if by_pointer:
+            off = (len(pmem) + 15) & ~15
+            pmem.extend(b'\0' * (off - len(pmem)))
+            pmem.extend(value.to_bytes(size, 'little'))
+            put(half, PARAM_BASE + off, 8)
+        else:
+            put(half, value, nbytes)
+    c = k['cluster']
+    if any(grid[j] % c[j] for j in range(3)):
+        raise Unsupported('grid not a multiple of the cluster dimensions')
+    hw_grid = [grid[j] // c[j] for j in range(3)]
+    hw_block = [block[0], block[1], block[2] * c[0] * c[1] * c[2]]
+    for j in range(3):
+        put(k['grid_half'] + 2 * j, hw_grid[j], 4)
+    if k['globals_half'] is not None:
+        put(k['globals_half'], GLOBALS_BASE, 8)
+    if k['tgb_half'] is not None:
+        put(k['tgb_half'], k['shared'] + dyn, 4)
+    if k['tex_half'] is not None:
+        put(k['tex_half'], TEX_HEAP, 8)
+    for h, v in k['consts']:
+        put(h, v, 4)
+    for h, src, kind in k['derived']:
+        put(h, launch_value(halves.get(src, 0) | halves.get(src + 1, 0) << 16, kind), 4)
+    # agx_run takes 32-bit uniforms
+    uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
+                       for h in halves})
+    f_code = os.path.join(tmp, tag + '.bin')
+    f_mem = os.path.join(tmp, 'mem.bin')
+    f_par = os.path.join(tmp, 'par.bin')
+    f_glob = os.path.join(tmp, 'glob.bin')
+    with open(f_code, 'wb') as f:
+        f.write(k['code'])
+    mem.ensure(max(mem.top, 16))
+    with open(f_mem, 'wb') as f:
+        f.write(mem.buf)
+    with open(f_par, 'wb') as f:
+        f.write(pmem or b'\0' * 16)
+    with open(f_glob, 'wb') as f:
+        f.write(globals_mem or b'\0' * 16)
+    cmd = [args.agx_run, f_code,
+           '--grid', ','.join(str(hw_grid[j] * hw_block[j]) for j in range(3)),
+           '--wg', ','.join(map(str, hw_block)),
+           '--shared', str(k['shared'] + dyn),
+           '--map', '%#x=%s' % (BASE, f_mem), '--map', '%#x=%s' % (PARAM_BASE, f_par),
+           '--map', '%#x=%s' % (GLOBALS_BASE, f_glob),
+           '--dump', '%#x=%d:%s' % (BASE, len(mem.buf), f_mem),
+           '--dump', '%#x=%d:%s' % (GLOBALS_BASE, len(globals_mem), f_glob)] + list(extra)
+    for u, v in uniforms:
+        cmd += ['--uniform', '%d=%d' % (u, v)]
+    if getattr(args, 'agx_strict', False):
+        cmd += ['--agx-strict', args.arch]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout)
+    except subprocess.TimeoutExpired:
+        return 'simulation timed out (%s)' % name
+    if r.returncode != 0:
+        try:
+            err = json.loads(r.stdout.strip().splitlines()[-1])['error']
+        except Exception:
+            err = (r.stdout + r.stderr).strip()[-300:]
+        return '%s: %s' % (name, err[:300])
+    with open(f_mem, 'rb') as f:
+        mem.buf = bytearray(f.read())
+    with open(f_glob, 'rb') as f:
+        g = f.read()
+        globals_mem[:] = g[:len(globals_mem)]
+    return None
+
+
+def compile_ptx(args, module, tmp, extra=(), env=None, product='m.o', target='agx'):
+    """Compile module (PTX text) with zoc --target agx into tmp, dropping the statements the front end rejects.
+    Returns (status, detail) of a failure, or (None, (zoc output, rejected statements, tainted functions or None
+    when nothing can be attributed))."""
+    src = os.path.join(tmp, 'm.ptx')
+    with open(src, 'w') as f:
+        f.write(module)
+
+    def zoc(*more):
+        flags = list(extra) + list(more)
+        if getattr(args, 'strict_fp', False):
+            flags.append('--strict-fp')
+        if getattr(args, 'agx_strict', False):
+            flags.append('--agx-strict')
+        # (--arch none: the AIR only, as compiled for Metal alone)
+        arch = [] if args.arch == 'none' else ['--arch', args.arch]
+        return subprocess.run([args.zoc, *flags, '--target', target, *arch, '--output-dir', tmp, src],
+                              capture_output=True, text=True, timeout=args.timeout, env=env)
+    try:
+        # The statements the front end rejects (printed only without --ignore-errors); then compile the rest.
+        r = zoc()
+        out = r.stderr + r.stdout
+        rejected = sorted(set(re.findall(r'PtxError::\w+: ([^\n]*)', out)))
+        if rejected or 'PtxError::' in out:
+            r = zoc('--ignore-errors')
+            out = out + r.stderr + r.stdout
+    except subprocess.TimeoutExpired:
+        return 'COMPILE-ERROR', 'zoc timed out'
+    if 'PtxError::Parser' in out or 'UnrecognizedDirective' in out:
+        tainted = None
+    else:
+        tainted = tainted_functions(module, [x for x in rejected if x.strip()])
+    if r.returncode != 0 or not os.path.exists(os.path.join(tmp, product)):
+        panic = re.search(r"panicked at [^\n]*\n([^\n]*)", out)
+        if panic and rejected:
+            # dropping the rejected statements broke the rest of the module
+            return 'REJECTED', ' | '.join(rejected)[:300]
+        if panic:
+            return 'CRASH', panic.group(0).replace('\n', ' ')[:300]
+        if rejected:
+            return 'REJECTED', ' | '.join(rejected)[:300]
+        msg = [l for l in out.splitlines() if l.strip() and not l.startswith(('Pass "', 'Wrote to'))]
+        return 'COMPILE-ERROR', ' | '.join(msg[:3])[:300]
+    return None, (out, rejected, tainted)
+
+
 def run_test(path, args):
     with open(path) as f:
         module, dirs = split_program(f.read())
@@ -489,43 +658,10 @@ def run_test(path, args):
         if d.split()[0] in UNSUPPORTED:
             return 'UNSUPPORTED', 'harness directive ' + d.split()[0]
     with tempfile.TemporaryDirectory() as tmp:
-        src = os.path.join(tmp, 'm.ptx')
-        with open(src, 'w') as f:
-            f.write(module)
-        def zoc(*extra):
-            if args.strict_fp:
-                extra = extra + ('--strict-fp',)
-            if args.agx_strict:
-                extra = extra + ('--agx-strict',)
-            return subprocess.run([args.zoc, *extra, '--target', 'agx', '--arch', args.arch,
-                                   '--output-dir', tmp, src],
-                                  capture_output=True, text=True, timeout=args.timeout)
-        try:
-            # The statements the front end rejects (printed only without
-            # --ignore-errors); then compile the rest.
-            r = zoc()
-            out = r.stderr + r.stdout
-            rejected = sorted(set(re.findall(r'PtxError::\w+: ([^\n]*)', out)))
-            if rejected or 'PtxError::' in out:
-                r = zoc('--ignore-errors')
-                out = out + r.stderr + r.stdout
-        except subprocess.TimeoutExpired:
-            return 'COMPILE-ERROR', 'zoc timed out'
-        if 'PtxError::Parser' in out or 'UnrecognizedDirective' in out:
-            tainted = None
-        else:
-            tainted = tainted_functions(module, [x for x in rejected if x.strip()])
-        if r.returncode != 0 or not os.path.exists(os.path.join(tmp, 'm.o')):
-            panic = re.search(r"panicked at [^\n]*\n([^\n]*)", out)
-            if panic and rejected:
-                # dropping the rejected statements broke the rest of the module
-                return 'REJECTED', ' | '.join(rejected)[:300]
-            if panic:
-                return 'CRASH', panic.group(0).replace('\n', ' ')[:300]
-            if rejected:
-                return 'REJECTED', ' | '.join(rejected)[:300]
-            msg = [l for l in out.splitlines() if l.strip() and not l.startswith(('Pass "', 'Wrote to'))]
-            return 'COMPILE-ERROR', ' | '.join(msg[:3])[:300]
+        status, detail = compile_ptx(args, module, tmp, target=getattr(args, 'target', 'agx'))
+        if status:
+            return status, detail
+        out, rejected, tainted = detail
         with open(os.path.join(tmp, 'm.asm')) as f:
             asm = f.read()
         kernels, gdata, gsyms, gsizes, relocs = kernel_info(asm, os.path.join(tmp, 'm.o'), args.readelf, args.objcopy, tmp)
@@ -536,17 +672,7 @@ def run_test(path, args):
         mm_entries = []
         fab_entries = {}
         textures, samplers = [], []
-        globals_mem = bytearray(gdata) + bytearray(max(0, 16 - len(gdata)))
-        for off, n, target in relocs:
-            globals_mem[off:off + n] = ((GLOBALS_BASE + target) & ((1 << (8 * n)) - 1)).to_bytes(n, 'little')
-        # the mask(name + offset) initializer elements (agx_runtime MASKED_INIT_SYMBOL)
-        if '__zluda_agx_masked_init' in gsyms:
-            t = gsyms['__zluda_agx_masked_init']
-            words = lambda a: int.from_bytes(globals_mem[a:a + 8], 'little')
-            for e in range(t, t + gsizes.get('__zluda_agx_masked_init', 0), 24):
-                slot, address, desc = words(e) - GLOBALS_BASE, words(e + 8), words(e + 16)
-                n = desc >> 8
-                globals_mem[slot:slot + n] = ((address >> (desc & 63)) & 0xff).to_bytes(n, 'little')
+        globals_mem = globals_image(gdata, gsyms, gsizes, relocs)
         for n, off in gsyms.items():
             syms[n] = GLOBALS_BASE + off
         failures, launches, skipped, passed, skipped_launches = [], 0, 0, 0, []
@@ -674,88 +800,14 @@ def run_test(path, args):
                 dyn = int(m.group(5)) if m.group(5) else 0
                 ops = [o.strip() for o in m.group(6).split(',') if o.strip()]
                 ps = params.get(name, [])
-                if len(ops) != len(ps):
-                    raise Unsupported('launch argument count')
-                pmem = bytearray()
-                halves = {}
-
-                def put(half, value, nbytes):
-                    for j in range((nbytes + 1) // 2):
-                        halves[half + j] = (value >> (16 * j)) & 0xffff
-
-                ps_all = list(zip(ps, ops))
-                if re.search(r'^\s*\.address_size\s+32\b', module, re.M):
-                    # 32-bit modules take the 64-bit base of their 32-bit addresses as a last parameter; the harness
-                    # buffers are below 4 GiB, so it is 0.
-                    ps_all.append((('u64', 1, 8), '0'))
-                if len(k['args']) != len(ps_all):
-                    raise Unsupported('kernel record argument count')
-                for ((t, n, al), o), (by_pointer, nbytes, half) in zip(ps_all, k['args']):
-                    if half == 0xffffffff:
-                        continue  # unused by the kernel
-                    size = SIZES[t] * n
-                    if n != 1:
-                        # an aggregate (.b8 a[16]): the launch value fills its bytes, little-endian
-                        value = (syms[o] if o in syms else int(o, 0)) & ((1 << (8 * size)) - 1)
-                        if not by_pointer and size > nbytes:
-                            raise Unsupported('aggregate kernel parameter')
-                    else:
-                        value = lit_bits(o, t, syms)
-                    if by_pointer:
-                        off = (len(pmem) + 15) & ~15
-                        pmem.extend(b'\0' * (off - len(pmem)))
-                        pmem.extend(value.to_bytes(size, 'little'))
-                        put(half, PARAM_BASE + off, 8)
-                    else:
-                        put(half, value, nbytes)
-                c = k['cluster']
-                if any(grid[j] % c[j] for j in range(3)):
-                    raise Unsupported('grid not a multiple of the cluster dimensions')
-                hw_grid = [grid[j] // c[j] for j in range(3)]
-                hw_block = [block[0], block[1], block[2] * c[0] * c[1] * c[2]]
-                for j in range(3):
-                    put(k['grid_half'] + 2 * j, hw_grid[j], 4)
-                if k['globals_half'] is not None:
-                    put(k['globals_half'], GLOBALS_BASE, 8)
-                if k['tgb_half'] is not None:
-                    put(k['tgb_half'], k['shared'] + dyn, 4)
-                if k['tex_half'] is not None:
-                    put(k['tex_half'], TEX_HEAP, 8)
-                for h, v in k['consts']:
-                    put(h, v, 4)
-                for h, src, kind in k['derived']:
-                    put(h, launch_value(halves.get(src, 0) | halves.get(src + 1, 0) << 16, kind), 4)
-                # agx_run takes 32-bit uniforms
-                uniforms = sorted({(h // 2, halves.get(h // 2 * 2, 0) | halves.get(h // 2 * 2 + 1, 0) << 16)
-                                   for h in halves})
-                f_code = os.path.join(tmp, 'k%d.bin' % launches)
-                f_mem = os.path.join(tmp, 'mem.bin')
-                f_par = os.path.join(tmp, 'par.bin')
-                f_glob = os.path.join(tmp, 'glob.bin')
-                with open(f_code, 'wb') as f:
-                    f.write(k['code'])
-                mem.ensure(max(mem.top, 16))
-                with open(f_mem, 'wb') as f:
-                    f.write(mem.buf)
-                with open(f_par, 'wb') as f:
-                    f.write(pmem or b'\0' * 16)
-                with open(f_glob, 'wb') as f:
-                    f.write(globals_mem or b'\0' * 16)
-                cmd = [args.agx_run, f_code,
-                       '--grid', ','.join(str(hw_grid[j] * hw_block[j]) for j in range(3)),
-                       '--wg', ','.join(map(str, hw_block)),
-                       '--shared', str(k['shared'] + dyn),
-                       '--map', '%#x=%s' % (BASE, f_mem), '--map', '%#x=%s' % (PARAM_BASE, f_par),
-                       '--map', '%#x=%s' % (GLOBALS_BASE, f_glob),
-                       '--dump', '%#x=%d:%s' % (BASE, len(mem.buf), f_mem),
-                       '--dump', '%#x=%d:%s' % (GLOBALS_BASE, len(globals_mem), f_glob)]
+                extra = []
                 if mm_entries:
                     f_mm = os.path.join(tmp, 'mm.bin')
                     with open(f_mm, 'wb') as f:
                         for members in mm_entries:
                             row = len(members).to_bytes(8, 'little') + b''.join(a.to_bytes(8, 'little') for a in members)
                             f.write(row + b'\0' * (64 - len(row)))
-                    cmd += ['--map', '%#x=%s' % (MM_BASE, f_mm)]
+                    extra += ['--map', '%#x=%s' % (MM_BASE, f_mm)]
                 if fab_entries:
                     f_fab = os.path.join(tmp, 'fab.bin')
                     table = bytearray(64 * (max(fab_entries) + 1))
@@ -765,34 +817,20 @@ def run_test(path, args):
                         table[64 * le:64 * le + len(row)] = row
                     with open(f_fab, 'wb') as f:
                         f.write(table)
-                    cmd += ['--map', '%#x=%s' % (FAB_TABLE, f_fab)]
+                    extra += ['--map', '%#x=%s' % (FAB_TABLE, f_fab)]
                 if k['tex_half'] is not None and textures:
                     f_tex, f_smp = os.path.join(tmp, 'tex.bin'), os.path.join(tmp, 'smp.bin')
                     with open(f_tex, 'wb') as f:
                         f.write(b''.join(textures))
                     with open(f_smp, 'wb') as f:
                         f.write(b''.join(samplers))
-                    cmd += ['--map', '%#x=%s' % (TEX_HEAP, f_tex), '--map', '%#x=%s' % (SAMPLER_HEAP, f_smp),
-                            '--sampler-heap', '%#x=%d' % (SAMPLER_HEAP, len(samplers))]
-                for u, v in uniforms:
-                    cmd += ['--uniform', '%d=%d' % (u, v)]
-                if args.agx_strict:
-                    cmd += ['--agx-strict', args.arch]
-                try:
-                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout)
-                except subprocess.TimeoutExpired:
-                    return 'SIM-ERROR', 'simulation timed out (%s)' % name
-                if r.returncode != 0:
-                    try:
-                        err = json.loads(r.stdout.strip().splitlines()[-1])['error']
-                    except Exception:
-                        err = (r.stdout + r.stderr).strip()[-300:]
-                    return 'SIM-ERROR', '%s: %s' % (name, err[:300])
-                with open(f_mem, 'rb') as f:
-                    mem.buf = bytearray(f.read())
-                with open(f_glob, 'rb') as f:
-                    g = f.read()
-                    globals_mem[:] = g[:len(globals_mem)]
+                    extra += ['--map', '%#x=%s' % (TEX_HEAP, f_tex), '--map', '%#x=%s' % (SAMPLER_HEAP, f_smp),
+                              '--sampler-heap', '%#x=%d' % (SAMPLER_HEAP, len(samplers))]
+                address32 = bool(re.search(r'^\s*\.address_size\s+32\b', module, re.M))
+                err = simulate(args, tmp, name, k, ps, ops, grid, block, dyn, syms, mem, globals_mem,
+                               'k%d' % launches, address32, extra)
+                if err:
+                    return 'SIM-ERROR', err
                 launches += 1
             elif kw == '.expect':
                 m = re.fullmatch(r'\.expect ([\w$.]+) \.(\w+)\s*(@\s*(\d+))?\s*=\s*\{(.*)\}', d)
@@ -833,6 +871,8 @@ def main():
     ap.add_argument('tests', nargs='+', help='PTX-formalization test programs (tests/*.ptx)')
     ap.add_argument('--zoc', default='zoc')
     ap.add_argument('--agx-run', dest='agx_run', default='agx_run')
+    ap.add_argument('--target', default='agx', choices=('agx', 'air'),
+                    help='zoc --target: agx (ZLUDA\'s AGX IR) or air (PTX to portable AIR, then the AGX backend)')
     ap.add_argument('--readelf', default='llvm-readelf')
     ap.add_argument('--objcopy', default='llvm-objcopy')
     ap.add_argument('--arch', default='agx-g14g')

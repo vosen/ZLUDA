@@ -3362,7 +3362,7 @@ fn tensor_instruction<'a, 'input>(
             override_address: ov_addr || ov_dim,
             report,
         },
-        arguments: ast::CpAsyncBulkTensorArgs {
+        arguments: Box::new(ast::CpAsyncBulkTensorArgs {
             src_smem: smem,
             src_tmap: tmap,
             src_c0,
@@ -3387,7 +3387,7 @@ fn tensor_instruction<'a, 'input>(
             src_i2: info.next(),
             src_cta_mask,
             src_cache_policy,
-        },
+        }),
     })
 }
 
@@ -3770,7 +3770,7 @@ fn tcgen05_instruction<'a, 'input>(
             };
             Ok(ast::Instruction::Tcgen05Mma {
                 data,
-                arguments: Tcgen05MmaArgs {
+                arguments: Box::new(Tcgen05MmaArgs {
                     src_d: d,
                     src_a: a,
                     src_b: b,
@@ -3782,7 +3782,7 @@ fn tcgen05_instruction<'a, 'input>(
                     src_enable: enable,
                     src_scale: scale,
                     src_zmask: zmask,
-                },
+                }),
             })
         }
         "cp" => {
@@ -4270,7 +4270,7 @@ fn fabric_instruction<'a, 'input>(
     };
     let kind = match modifiers.first().copied() {
         Some("submit" | "wait") => {
-            return Ok(ast::Instruction::Fabric { data: ast::FabricDetails { kind: 0, rank: 0, op: 0, type_: 0, flags: 0 }, arguments: none });
+            return Ok(ast::Instruction::Fabric { data: ast::FabricDetails { kind: 0, rank: 0, op: 0, type_: 0, flags: 0 }, arguments: Box::new(none) });
         }
         Some("try_get") => 1u8,
         Some("try_put") => 2,
@@ -4364,7 +4364,7 @@ fn fabric_instruction<'a, 'input>(
             a.src_mbar = Some(memory(stream)?);
         }
     }
-    Ok(ast::Instruction::Fabric { data, arguments: a })
+    Ok(ast::Instruction::Fabric { data, arguments: Box::new(a) })
 }
 
 // the completion mechanisms, semantics and scopes do not change the emulation
@@ -4445,7 +4445,7 @@ fn fabric_tensor<'a, 'input>(
     Token::Comma.parse_next(stream)?;
     a.src_mbar = Some(memory_operand(stream)?);
     let data = ast::FabricDetails { kind: kind + 5, rank, op: 0, type_: 0, flags };
-    Ok(ast::Instruction::Fabric { data, arguments: a })
+    Ok(ast::Instruction::Fabric { data, arguments: Box::new(a) })
 }
 
 // multimem.ld_reduce{.sem}{.scope}{.global}.op{.acc_prec}{.vec}.type d, [a];
@@ -4721,7 +4721,7 @@ fn texture_instruction<'a, 'input>(
             let mut o = offsets.into_iter();
             Ok(ast::Instruction::TexAgx {
                 data: ast::TexAgxDetails { op, geometry, lod_mode, dtype, ctype },
-                arguments: ast::TexAgxArgs {
+                arguments: Box::new(ast::TexAgxArgs {
                     dst0: d.next().unwrap(),
                     dst1: d.next().unwrap(),
                     dst2: d.next().unwrap(),
@@ -4744,7 +4744,7 @@ fn texture_instruction<'a, 'input>(
                     src_o1: o.next(),
                     src_o2: o.next(),
                     src_ref,
-                },
+                }),
             })
         }
         "txq" | "suq" => {
@@ -4879,7 +4879,7 @@ fn texture_instruction<'a, 'input>(
                 let mut c = coords.into_iter();
                 return Ok(ast::Instruction::SuldAgx {
                     data,
-                    arguments: ast::SuldAgxArgs {
+                    arguments: Box::new(ast::SuldAgxArgs {
                         dst0: d.next().unwrap(),
                         dst1: d.next(),
                         dst2: d.next(),
@@ -4889,7 +4889,7 @@ fn texture_instruction<'a, 'input>(
                         src_c1: c.next(),
                         src_c2: c.next(),
                         src_c3: c.next(),
-                    },
+                    }),
                 });
             }
             let (src_surf, coords) = surface(stream)?;
@@ -4918,7 +4918,7 @@ fn texture_instruction<'a, 'input>(
             let mut v = values.into_iter();
             Ok(ast::Instruction::SustAgx {
                 data,
-                arguments: ast::SustAgxArgs {
+                arguments: Box::new(ast::SustAgxArgs {
                     src_surf,
                     src_c0: c.next(),
                     src_c1: c.next(),
@@ -4928,7 +4928,7 @@ fn texture_instruction<'a, 'input>(
                     src_v1: v.next(),
                     src_v2: v.next(),
                     src_v3: v.next(),
-                },
+                }),
             })
         }
     }

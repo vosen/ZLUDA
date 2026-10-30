@@ -1,0 +1,325 @@
+; ZLUDA's primitives for the Air target (ptx::Target::Air), in upstream AIR.
+;
+; The AIR helpers (zluda_ptx_impl_agx.ll) and the front end use a few
+; operations of the GPU: system values, SIMD-group functions, barriers and the
+; hardware's approximations. For the Agx target they are AGX intrinsics
+; (llvm.agx.*); for the Air target ptx/build.rs renames them to the
+; __zluda_air.* primitives defined here, in AIR's own terms: AIR's system
+; values and SIMD-group functions, and LLVM math that the AIR target's portable
+; passes write as AIR (and that the AGX backend compiles back to its
+; instructions). Nothing here is AGX IR.
+;
+; Address spaces are ZLUDA's (generic 0, global 1, shared 3, constant 4,
+; private 5); llvm_zluda's AIR compilation maps them to AIR's.
+;
+; Not yet defined (a module using it does not link): the 8x8 SIMD-group
+; matrix multiply-add.
+
+; System values
+declare <3 x i32> @air.thread_position_in_threadgroup.v3i32() #4
+declare <3 x i32> @air.threadgroup_position_in_grid.v3i32() #4
+declare <3 x i32> @air.threads_per_threadgroup.v3i32() #4
+declare <3 x i32> @air.threadgroups_per_grid.v3i32() #4
+declare <3 x i32> @air.thread_position_in_grid.v3i32() #4
+declare i32 @air.thread_index_in_simdgroup() #4
+declare i32 @air.thread_index_in_threadgroup() #4
+declare i32 @air.simdgroup_index_in_threadgroup() #4
+
+define i32 @__zluda_air.thread.position.in.threadgroup.x() #0 {
+  %v = call <3 x i32> @air.thread_position_in_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 0
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.position.in.threadgroup.y() #0 {
+  %v = call <3 x i32> @air.thread_position_in_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 1
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.position.in.threadgroup.z() #0 {
+  %v = call <3 x i32> @air.thread_position_in_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 2
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroup.position.in.grid.x() #0 {
+  %v = call <3 x i32> @air.threadgroup_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 0
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroup.position.in.grid.y() #0 {
+  %v = call <3 x i32> @air.threadgroup_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 1
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroup.position.in.grid.z() #0 {
+  %v = call <3 x i32> @air.threadgroup_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 2
+  ret i32 %e
+}
+define i32 @__zluda_air.threads.per.threadgroup.x() #0 {
+  %v = call <3 x i32> @air.threads_per_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 0
+  ret i32 %e
+}
+define i32 @__zluda_air.threads.per.threadgroup.y() #0 {
+  %v = call <3 x i32> @air.threads_per_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 1
+  ret i32 %e
+}
+define i32 @__zluda_air.threads.per.threadgroup.z() #0 {
+  %v = call <3 x i32> @air.threads_per_threadgroup.v3i32()
+  %e = extractelement <3 x i32> %v, i32 2
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroups.per.grid.x() #0 {
+  %v = call <3 x i32> @air.threadgroups_per_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 0
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroups.per.grid.y() #0 {
+  %v = call <3 x i32> @air.threadgroups_per_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 1
+  ret i32 %e
+}
+define i32 @__zluda_air.threadgroups.per.grid.z() #0 {
+  %v = call <3 x i32> @air.threadgroups_per_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 2
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.position.in.grid.x() #0 {
+  %v = call <3 x i32> @air.thread_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 0
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.position.in.grid.y() #0 {
+  %v = call <3 x i32> @air.thread_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 1
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.position.in.grid.z() #0 {
+  %v = call <3 x i32> @air.thread_position_in_grid.v3i32()
+  %e = extractelement <3 x i32> %v, i32 2
+  ret i32 %e
+}
+define i32 @__zluda_air.thread.index.in.simdgroup() #0 {
+  %v = call i32 @air.thread_index_in_simdgroup()
+  ret i32 %v
+}
+define i32 @__zluda_air.thread.index.in.threadgroup() #0 {
+  %v = call i32 @air.thread_index_in_threadgroup()
+  ret i32 %v
+}
+define i32 @__zluda_air.simdgroup.index.in.threadgroup() #0 {
+  %v = call i32 @air.simdgroup_index_in_threadgroup()
+  ret i32 %v
+}
+; No core numbering in AIR (%smid is any value in [0, %nsmid)).
+define i32 @__zluda_air.core.id() #0 {
+  ret i32 0
+}
+
+; Barriers: an execution barrier; the fences around it stay LLVM fences.
+declare void @air.wg.barrier(i32, i32) #3
+define void @__zluda_air.threadgroup.barrier() #2 {
+  call void @air.wg.barrier(i32 0, i32 1)
+  ret void
+}
+
+; SIMD-group functions. AGX's shuffles take an i32 lane or delta, AIR's an i16.
+; A shuffle of a constant is the constant in every lane (reading an inactive
+; lane is undefined, so the constant is a valid result there too), once the
+; value is known after inlining (llvm.is.constant).
+declare i1 @llvm.is.constant.i32(i32)
+declare i64 @air.simd_ballot.i64(i1) #1
+declare i32 @air.simd_shuffle.u.i32(i32, i16) #1
+declare i32 @air.simd_shuffle_xor.u.i32(i32, i16) #1
+declare i32 @air.simd_shuffle_up.u.i32(i32, i16) #1
+declare i32 @air.simd_shuffle_down.u.i32(i32, i16) #1
+declare i32 @air.quad_shuffle.u.i32(i32, i16) #1
+
+define i32 @__zluda_air.simd.ballot(i1 %p) #2 {
+  %b = call i64 @air.simd_ballot.i64(i1 %p)
+  %t = trunc i64 %b to i32
+  ret i32 %t
+}
+define i32 @__zluda_air.simd.shuffle.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
+  %l16 = trunc i32 %l to i16
+  %r = call i32 @air.simd_shuffle.u.i32(i32 %v, i16 %l16)
+  ret i32 %r
+}
+define i32 @__zluda_air.simd.shuffle.xor.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
+  %l16 = trunc i32 %l to i16
+  %r = call i32 @air.simd_shuffle_xor.u.i32(i32 %v, i16 %l16)
+  ret i32 %r
+}
+define i32 @__zluda_air.simd.shuffle.up.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
+  %l16 = trunc i32 %l to i16
+  %r = call i32 @air.simd_shuffle_up.u.i32(i32 %v, i16 %l16)
+  ret i32 %r
+}
+define i32 @__zluda_air.simd.shuffle.down.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
+  %l16 = trunc i32 %l to i16
+  %r = call i32 @air.simd_shuffle_down.u.i32(i32 %v, i16 %l16)
+  ret i32 %r
+}
+define i32 @__zluda_air.quad.shuffle.i32(i32 %v, i32 %l) #2 {
+  %c = call i1 @llvm.is.constant.i32(i32 %v)
+  br i1 %c, label %same, label %shuffle
+same:
+  ret i32 %v
+shuffle:
+  %l16 = trunc i32 %l to i16
+  %r = call i32 @air.quad_shuffle.u.i32(i32 %v, i16 %l16)
+  ret i32 %r
+}
+
+; Reductions: the operation is AGX::SIMDOp (and = 0, or = 2, xor = 4,
+; iadd = 16, smin = 20, smax = 22, umin = 28, umax = 30), a constant at every
+; use, so all but one case folds away once inlined.
+declare i32 @air.simd_and.u.i32(i32) #1
+declare i32 @air.simd_or.u.i32(i32) #1
+declare i32 @air.simd_xor.u.i32(i32) #1
+declare i32 @air.simd_sum.s.i32(i32) #1
+declare i32 @air.simd_min.s.i32(i32) #1
+declare i32 @air.simd_max.s.i32(i32) #1
+declare i32 @air.simd_min.u.i32(i32) #1
+declare i32 @air.simd_max.u.i32(i32) #1
+define i32 @__zluda_air.simd.reduce.i32(i32 %v, i32 %op) #2 {
+entry:
+  switch i32 %op, label %umax [ i32 0, label %and
+                                i32 2, label %or
+                                i32 4, label %xor
+                                i32 16, label %add
+                                i32 20, label %smin
+                                i32 22, label %smax
+                                i32 28, label %umin ]
+and:
+  %a = call i32 @air.simd_and.u.i32(i32 %v)
+  ret i32 %a
+or:
+  %o = call i32 @air.simd_or.u.i32(i32 %v)
+  ret i32 %o
+xor:
+  %x = call i32 @air.simd_xor.u.i32(i32 %v)
+  ret i32 %x
+add:
+  %s = call i32 @air.simd_sum.s.i32(i32 %v)
+  ret i32 %s
+smin:
+  %mi = call i32 @air.simd_min.s.i32(i32 %v)
+  ret i32 %mi
+smax:
+  %ma = call i32 @air.simd_max.s.i32(i32 %v)
+  ret i32 %ma
+umin:
+  %ui = call i32 @air.simd_min.u.i32(i32 %v)
+  ret i32 %ui
+umax:
+  %ua = call i32 @air.simd_max.u.i32(i32 %v)
+  ret i32 %ua
+}
+
+; The hardware's approximations, as portable LLVM math with afn (which the AIR
+; target writes as AIR's fast functions and the AGX backend compiles to its
+; rcp, rsqrt, exp2, log2 and sin instructions).
+declare float @llvm.sqrt.f32(float)
+declare float @llvm.exp2.f32(float)
+declare float @llvm.log2.f32(float)
+declare float @llvm.sin.f32(float)
+declare float @llvm.cos.f32(float)
+define float @__zluda_air.rcp.f32(float %x) #0 {
+  %r = fdiv afn float 1.0, %x
+  ret float %r
+}
+; (AIR's own reciprocal square root, Metal's rsqrt, which the AGX backend
+; compiles to its rsqrt instruction: as 1 / sqrt, Metal made a square root and
+; a division of it, and rsqrt.approx took 3.3 times an fma on the M2 Max)
+declare float @air.fast_rsqrt.f32(float)
+define float @__zluda_air.rsqrt.f32(float %x) #0 {
+  %r = call afn float @air.fast_rsqrt.f32(float %x)
+  ret float %r
+}
+; (--strict-fp: a square root and a division, whose NaNs the strict mode
+; makes canonical; rsqrt.approx.f32 without .ftz calls it through
+; __zluda_ptx_impl_rsqrt_approx_ieee_f32)
+define float @__zluda_air.rsqrt.ieee.f32(float %x) #0 {
+  %s = call afn float @llvm.sqrt.f32(float %x)
+  %r = fdiv afn float 1.0, %s
+  ret float %r
+}
+define float @__zluda_ptx_impl_rsqrt_approx_ieee_f32(float %x) #0 {
+  %r = call float @__zluda_air.rsqrt.ieee.f32(float %x)
+  ret float %r
+}
+; rsqrt such that rsqrt_special(x) * x == sqrt(x): 0 for 0, +inf for +inf.
+define float @__zluda_air.rsqrt.special.f32(float %x) #0 {
+  %r = call float @__zluda_air.rsqrt.f32(float %x)
+  %zero = fcmp oeq float %x, 0.0
+  %inf = fcmp oeq float %x, 0x7FF0000000000000
+  %r1 = select i1 %zero, float 0.0, float %r
+  %r2 = select i1 %inf, float 0x7FF0000000000000, float %r1
+  ret float %r2
+}
+define float @__zluda_air.exp2.f32(float %x) #0 {
+  %r = call afn float @llvm.exp2.f32(float %x)
+  ret float %r
+}
+define float @__zluda_air.log2.f32(float %x) #0 {
+  %r = call afn float @llvm.log2.f32(float %x)
+  ret float %r
+}
+; (in radians, as llvm.agx.sin and llvm.agx.cos, which agx-lower-air restores)
+define float @__zluda_air.sin.f32(float %x) #0 {
+  %r = call afn float @llvm.sin.f32(float %x)
+  ret float %r
+}
+define float @__zluda_air.cos.f32(float %x) #0 {
+  %r = call afn float @llvm.cos.f32(float %x)
+  ret float %r
+}
+
+; Textures spill over from hardware slots to software: the helpers sample a
+; texture in software from its descriptor in device memory unless the
+; descriptor's word 16 has bit 63 set, a hardware slot the runtime bound for
+; it (zluda_ptx_impl_agx_tex.c). No slots are bound yet on the Air target, so
+; that path is never taken; the slot's sample is the texture's software one
+; once kernels have texture parameters.
+define <4 x i32> @__zluda_air.texture.sample(i32 %slot, i16 %sampler, float %x, float %y, i32 %dims) #0 {
+  ret <4 x i32> zeroinitializer
+}
+
+; The floating point mode (rounding of f32 in bits 0-1, of f16/f64 in bits
+; 2-3, numbered like llvm.get.rounding): AIR has no mode register, so these
+; stay calls until llvm_zluda's LLVMZludaAirStaticRounding writes the mode
+; reaching each constrained operation as its static rounding.
+declare i32 @__zluda_air.get.fpmode() #5
+declare void @__zluda_air.set.fpmode(i32) #6
+
+attributes #0 = { alwaysinline nounwind willreturn memory(none) }
+; SIMD-group functions: only the other lanes' values, no memory (as AGX's).
+attributes #1 = { convergent nocallback nofree nosync nounwind willreturn memory(none) }
+attributes #3 = { convergent nounwind willreturn }
+; System values: constant for the thread.
+attributes #5 = { nounwind willreturn memory(inaccessiblemem: read) }
+attributes #6 = { nounwind willreturn memory(inaccessiblemem: write) }
+attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #2 = { alwaysinline convergent nounwind willreturn }

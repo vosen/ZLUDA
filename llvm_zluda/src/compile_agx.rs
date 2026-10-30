@@ -13,6 +13,10 @@ use crate::{
     LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaLinkUsedDefinitions, LLVMZludaUpgradeFunctionAttributes,
 };
+#[cfg(zluda_air)]
+use crate::{
+    LLVMZludaAirFunctionPointers, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers, LLVMZludaAirSharedLayout,
+};
 use llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
     LLVMGetDiagInfoSeverity, LLVMGetFirstFunction, LLVMGetNextFunction, LLVMGetValueName2,
@@ -93,7 +97,7 @@ pub struct AgxCompilation {
 /// Collects the errors the backend reports through the context's diagnostic
 /// handler (unsupported operations, missing encodings ...), which would
 /// otherwise only be printed.
-struct Diagnostics<'a> {
+pub(crate) struct Diagnostics<'a> {
     ctx: &'a Context,
     errors: Box<Vec<String>>,
 }
@@ -112,7 +116,7 @@ extern "C" fn collect_diagnostic(info: LLVMDiagnosticInfoRef, errors: *mut c_voi
 }
 
 impl<'a> Diagnostics<'a> {
-    fn new(ctx: &'a Context) -> Self {
+    pub(crate) fn new(ctx: &'a Context) -> Self {
         let mut errors = Box::new(Vec::new());
         unsafe {
             LLVMContextSetDiagnosticHandler(
@@ -124,7 +128,7 @@ impl<'a> Diagnostics<'a> {
         Self { ctx, errors }
     }
 
-    fn check(&self) -> Result<(), String> {
+    pub(crate) fn check(&self) -> Result<(), String> {
         if self.errors.is_empty() {
             Ok(())
         } else {
@@ -139,7 +143,7 @@ impl Drop for Diagnostics<'_> {
     }
 }
 
-fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> {
+pub(crate) fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> {
     let module = Module::try_from_ir(ctx, ir, name)?;
     module.verify()?;
     Ok(module)
@@ -149,7 +153,7 @@ fn load_module(ctx: &Context, ir: &[u8], name: &CStr) -> Result<Module, String> 
 /// them internal, so that the unused ones are removed instead of being
 /// compiled as entry points (for example when every kernel of the module was
 /// dropped by `--ignore-errors`).
-fn internalize_helpers(module: &Module) {
+pub(crate) fn internalize_helpers(module: &Module) {
     unsafe {
         let mut function = LLVMGetFirstFunction(module.get());
         while !function.is_null() {
@@ -167,7 +171,7 @@ fn internalize_helpers(module: &Module) {
 
 /// A linked image is complete: its functions (hidden, as the PTX translation emits every non-kernel function)
 /// become internal, so that they are inlined into the kernels and the unused ones disappear.
-fn internalize_functions(module: &Module) {
+pub(crate) fn internalize_functions(module: &Module) {
     unsafe {
         let mut function = LLVMGetFirstFunction(module.get());
         while !function.is_null() {
@@ -334,10 +338,28 @@ pub fn compile_agx_linked(
     // (agx-raise-to-air: what AIR does not have as hints with AIR emulations, double precision in software,
     // llvm/docs/AIR/AIRHints.rst), the AIR target's portable passes make it upstream AIR, and the AGX backend
     // compiles that (agx-lower-air restores the hinted AGX operations). The hook receives the .air bitcode.
+    //
+    // The .air for Metal is made from a copy, changed where Metal differs from
+    // AGX: a module's .global variables are one buffer, a last kernel
+    // parameter, which NAME.air.globals describes for the host
+    // (LLVMZludaAirGlobalsToBuffer), the shared memory registers follow
+    // Metal's numbering of threadgroup addresses (LLVMZludaAirSharedLayout),
+    // and function pointers are IDs, indirect calls choices among direct ones
+    // (LLVMZludaAirFunctionPointers).
+    // AGX compiles the AIR of the module without those changes, so its code and
+    // kernel arguments do not change.
     if via_air() {
-        let bitcode = to_air(&linked, &target_machine, &pb_options)?;
+        let metal = Some(linked.clone());
+        let (mut bitcode, _) = to_air(&linked, &target_machine, &pb_options, false)?;
+        let mut globals = None;
+        if let Some(metal) = metal {
+            (bitcode, globals) = to_air(&metal, &target_machine, &pb_options, true)?;
+        }
         if let Some(hook) = compiler_hook {
             hook(&bitcode, String::from("air"));
+            if let Some(json) = globals {
+                hook(&json.into_bytes(), String::from("air.globals"));
+            }
         }
     }
 
@@ -361,6 +383,12 @@ pub fn compile_agx_linked(
         .emit_to_memory_buffer(&linked, LLVMCodeGenFileType::LLVMObjectFile)?
         .to_vec();
     diagnostics.check()?;
+    // (calls left to relocations, -agx-call-relocations: resolved by the object merger)
+    let object = if crate::agx_merge::has_call_relocations(&object) {
+        crate::agx_merge::merge(&[object])?
+    } else {
+        object
+    };
     if let Some(hook) = compiler_hook {
         hook(&object, String::from("o"));
     }
@@ -373,8 +401,15 @@ fn via_air() -> bool {
 }
 
 /// The module in upstream AIR, in place, and its bitcode (the .air file).
+/// With buffer_globals, the .global variables become one buffer
+/// (LLVMZludaAirGlobalsToBuffer), described by the returned JSON.
 #[cfg(zluda_air)]
-fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+fn to_air(
+    module: &Module,
+    agx: &TargetMachine,
+    options: &PassBuilderOptions,
+    buffer_globals: bool,
+) -> Result<(Vec<u8>, Option<String>), String> {
     let run = |pipeline: &CStr, tm: &TargetMachine| -> Result<(), String> {
         let error = unsafe { LLVMRunPasses(module.get(), pipeline.as_ptr(), tm.get(), options.get()) };
         if error.is_null() {
@@ -384,6 +419,34 @@ fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) ->
         Err(Message::new(unsafe { CStr::from_ptr(err_msg) }).to_str().to_string())
     };
     run(c"agx-raise-to-air", agx)?;
+    let mut globals = None;
+    if buffer_globals {
+        unsafe { LLVMZludaAirSharedLayout(module.get()) };
+        // function pointers as IDs and choices among direct calls (before the
+        // globals buffer, whose image then holds the IDs)
+        let mut err = std::ptr::null_mut();
+        if unsafe { LLVMZludaAirFunctionPointers(module.get(), &mut err) } < 0 {
+            return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string());
+        }
+        // The functions using the variables, inlined into the kernels (AIR
+        // inlines every call anyway), until no other function uses them.
+        for _ in 0..16 {
+            if unsafe { LLVMZludaAirInlineGlobalUsers(module.get()) } == 0 {
+                break;
+            }
+            run(c"always-inline", agx)?;
+        }
+        let mut json = std::ptr::null_mut();
+        let mut err = std::ptr::null_mut();
+        match unsafe { LLVMZludaAirGlobalsToBuffer(module.get(), &mut json, &mut err) } {
+            -1 => return Err(Message::new(unsafe { CStr::from_ptr(err) }).to_str().to_string()),
+            1 => globals = Some(Message::new(unsafe { CStr::from_ptr(json) }).to_str().to_string()),
+            _ => {}
+        }
+        module
+            .verify()
+            .map_err(|e| format!("the .air globals buffer left a broken module: {e}"))?;
+    }
     let mut target = unsafe { std::mem::zeroed() };
     let mut err = std::ptr::null_mut();
     if unsafe { LLVMGetTargetFromTriple(c"air".as_ptr(), &mut target, &mut err) } != 0 {
@@ -408,15 +471,15 @@ fn to_air(module: &Module, agx: &TargetMachine, options: &PassBuilderOptions) ->
         .to_vec()
     };
     unsafe { llvm_sys::core::LLVMDisposeMemoryBuffer(buffer) };
-    Ok(bytes)
+    Ok((bytes, globals))
 }
 
 #[cfg(not(zluda_air))]
-fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions) -> Result<Vec<u8>, String> {
+fn to_air(_: &Module, _: &TargetMachine, _: &PassBuilderOptions, _: bool) -> Result<(Vec<u8>, Option<String>), String> {
     Err("ZLUDA_AGX_VIA_AIR: this LLVM build has no AIR target".to_string())
 }
 
-fn init_globals() -> Result<(), String> {
+pub(crate) fn init_globals() -> Result<(), String> {
     static INIT_AGX: OnceLock<Result<(), Message>> = OnceLock::new();
     INIT_AGX
         .get_or_init(|| {

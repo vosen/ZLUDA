@@ -124,6 +124,24 @@ extern "C" {
 
     pub fn LLVMZludaAgxLowerClusters(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
     pub fn LLVMZludaAgxSpillClusterShared(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
+
+    pub fn LLVMZludaAirInlineGlobalUsers(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirSharedLayout(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaSetAirPrimitives(air: i32);
+    pub fn LLVMZludaAirStaticRounding(module: LLVMModuleRef, strict: i32) -> i32;
+    pub fn LLVMZludaAirDropCompareFlushes(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirExpandDivisions(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirCanonicalNaNs(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirCompareFloatBits(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirKernelModule(module: LLVMModuleRef, name: *const std::ffi::c_char) -> LLVMModuleRef;
+    pub fn LLVMZludaAirSaltKernels(module: LLVMModuleRef, length: u64);
+    pub fn LLVMZludaAirRemapAddressSpaces(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
+    pub fn LLVMZludaAirFunctionPointers(module: LLVMModuleRef, error: *mut *mut std::ffi::c_char) -> i32;
+    pub fn LLVMZludaAirGlobalsToBuffer(
+        module: LLVMModuleRef,
+        json: *mut *mut std::ffi::c_char,
+        error: *mut *mut std::ffi::c_char,
+    ) -> i32;
 }
 
 // The AGX target is not part of upstream LLVM, so llvm-sys has no bindings

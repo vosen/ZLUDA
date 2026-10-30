@@ -21,7 +21,7 @@ pub(crate) fn run<'input>(
     // AGX keeps the division as a single precise fdiv (its helpers were a
     // plain fdiv anyway), so the global mode pass can give it the
     // instruction's rounding mode.
-    if target == Target::Agx {
+    if target.is_air() {
         return Ok(directives);
     }
     let mut imports = None;

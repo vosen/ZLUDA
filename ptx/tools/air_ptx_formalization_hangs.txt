@@ -1,0 +1,18 @@
+# Requests that hang the AIR service's Mac (the Metal compiler or the GPU never finishes; the runner times out after
+# 30 s and the Mac's display can freeze meanwhile). air_ptx_formalization_check.py never sends them. One line per
+# kernel: TEST KERNEL.
+#
+# 2026-10-28: the request after cvt-N.ptx k17 timed out: k18 of one of cvt-0..cvt-11 (half -> 64-bit integer in
+# cvt-0..5, bfloat -> 8-bit integer in cvt-6..11, directed rounding). Which one is not known; all are listed.
+cvt-0.ptx k18
+cvt-1.ptx k18
+cvt-2.ptx k18
+cvt-3.ptx k18
+cvt-4.ptx k18
+cvt-5.ptx k18
+cvt-6.ptx k18
+cvt-7.ptx k18
+cvt-8.ptx k18
+cvt-9.ptx k18
+cvt-10.ptx k18
+cvt-11.ptx k18

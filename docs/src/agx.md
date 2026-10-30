@@ -38,6 +38,22 @@ LLD; `agx` selects the AGX backend. Both can be enabled together.
 
 ## Compiling
 
+**AIR is the first-class target.** `zoc --target air` compiles PTX straight to
+upstream AIR (Metal's IR): the portable AIR (`.portable.air`), the AIR for Metal
+(`.air`, with `.air.globals`), and, with an AGX `--arch`, the AGX object compiled
+from that same AIR (`.o`, `.asm`):
+
+```
+zoc --target air --arch agx-g14g kernel.ptx
+```
+
+The AGX code it gives is as good as the older route's below (4.4% fewer
+instructions over the PTX-formalization tests), which is kept only while
+`zluda_agx` still compiles with it. **`--target agx` is superseded**: new work
+goes to `--target air`.
+
+The older route, from PTX to the AGX backend without AIR:
+
 ```
 zoc --target agx --arch agx-g14g kernel.ptx
 ```
@@ -83,6 +99,25 @@ an error.
   errors are returned as compilation errors. A small kernel compiles in about
   10 ms, the 195 kernels of `ptx/src/test/spirv_run` in 3 s (from 21 s with the
   whole library linked and every output written).
+* The Air target (`zoc --target air`, PTX straight to AIR) optimizes the
+  module before ZLUDA's lowering and again after the module moves to AIR's
+  address spaces. With AGX code (the AGX backend makes the final code) both
+  are O3. When only the AIR for Metal is made, which Metal's compiler
+  optimizes again, both are a light pipeline instead (`light+`;
+  `ZLUDA_AIR_FIRST_PIPELINE`: `o3`, `light+`; `ZLUDA_AIR_METAL_PIPELINE`:
+  `o3`, `o2`, `light`, `light+`). The first adds what ZLUDA's lowering and
+  Metal's compiler need from O3: switch lookup tables before globals are laid
+  out, `llvm.is.constant` resolved, loops unrolled as O3 unrolls them (Metal's
+  compiler crashed on loops of SIMD-group operations O3 would have unrolled)
+  and tail calls as loops. Blender Cycles' kernels compile to Metal AIR in 62 s
+  instead of 99. Its pass
+  selection comes from [DXMT](https://github.com/3Shain/dxmt)'s AIR converter
+  (`src/airconv/airconv_context.cpp`, `runOptimizationPasses`, by Feifan He for
+  CodeWeavers): only "some passes that really matter", since a full pipeline
+  is too heavy for AIR that Metal compiles again. ZLUDA writes the same choice
+  of LLVM passes as a pipeline of its own and adds LICM, GVN and a second
+  InstCombine. On the M2 Max it gives the same GPU times and Metal pipeline
+  compile times as O3, and the same PTX suite results.
 * Integer division and remainder give the results of NVIDIA GPUs where PTX
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by

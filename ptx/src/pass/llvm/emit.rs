@@ -79,7 +79,7 @@ pub(crate) fn run<'input>(
     if stack_size != 0 {
         emit_ctx.stack_size = stack_size as u64;
     }
-    emit_ctx.threadgroup_bytes_argument = target == Target::Agx && reads_threadgroup_bytes(&id_defs, &directives);
+    emit_ctx.threadgroup_bytes_argument = target.is_air() && reads_threadgroup_bytes(&id_defs, &directives);
     for directive in directives {
         match directive {
             Directive2::Variable(linking, variable) => emit_ctx.emit_global(linking, variable)?,
@@ -90,8 +90,8 @@ pub(crate) fn run<'input>(
     if let Some(d) = emit_ctx.debug.take() {
         d.finish();
     }
-    if target == Target::Agx {
-        super::super::agx_matrix::define_helpers(context, &module)?;
+    if target.is_air() {
+        super::super::agx_matrix::define_helpers(context, &module, target == Target::Air)?;
         // the backend sizes the stack of recursive functions from it
         unsafe {
             let i32_type = LLVMInt32TypeInContext(context.get());
@@ -275,6 +275,8 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             Target::Amdgpu => LLVMCallConv::LLVMAMDGPUKERNELCallConv as u32,
             // CallingConv::AGX_KERNEL, which llvm-sys does not know.
             Target::Agx => 128,
+            // AIR kernels have the C calling convention and the "air-kernel" attribute
+            Target::Air => LLVMCallConv::LLVMCCallConv as u32,
         }
     }
 
@@ -370,6 +372,9 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             Self::func_call_convention()
         };
         unsafe { LLVMSetFunctionCallConv(fn_, call_conv) };
+        if is_kernel && self.target == Target::Air {
+            self.emit_fn_attribute_string(fn_, "air-kernel", "");
+        }
         for directive in method.tuning {
             match directive {
                 ptx_parser::TuningDirective::NoReturn => {
@@ -511,7 +516,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             ast::Type::Scalar(s) | ast::Type::Array(None, s, _) => *s,
             _ => return Err(error_todo_msg("mask() in an initializer of vectors")),
         };
-        if self.target != Target::Agx {
+        if !self.target.is_air() {
             return Err(error_todo_msg("mask() of an address in an initializer"));
         }
         // its initial value is not that of the initializer
@@ -675,7 +680,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 
     fn emit_tuning(&self, fn_: LLVMValueRef, tuning_directives: &[ast::TuningDirective]) {
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             // The register budget follows the threads a core must hold: the threadgroup size, times the
             // threadgroups .minnctapersm asks for.
             let mut threads = None;
@@ -739,7 +744,7 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
 
     fn emit_target_features(&mut self, fn_: LLVMValueRef) {
         // The AGX processor and its features are chosen when compiling.
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             return;
         }
         let value = format!(
@@ -1065,7 +1070,7 @@ impl<'a> MethodEmitContext<'a> {
         // On AGX registers (scalar variables) start as zero, so that reading
         // one that was never written is deterministic (stores that are
         // always overwritten are removed by the optimizer)
-        if self.target == Target::Agx
+        if self.target.is_air()
             && matches!(
                 var.info.state_space,
                 ast::StateSpace::Reg | ast::StateSpace::Local
@@ -1240,7 +1245,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::Instruction::MixedFloat { .. } => Err(error_unreachable()),
             ast::Instruction::AltFpX4 { data, arguments } => self.emit_alt_fp_x4(data, arguments),
             ast::Instruction::Multimem { data, arguments } => self.emit_multimem(data, arguments),
-            ast::Instruction::Fabric { data, arguments } => self.emit_fabric(data, arguments),
+            ast::Instruction::Fabric { data, arguments } => self.emit_fabric(data, *arguments),
             ast::Instruction::CvtRs { data, arguments } => self.emit_cvt_rs(data, arguments),
             ast::Instruction::CvtPzo { data, arguments } => {
                 let kind = self.const_u32(data.kind as u64);
@@ -1303,12 +1308,12 @@ impl<'a> MethodEmitContext<'a> {
                 self.emit_cp_async_mbarrier_arrive(data, arguments)
             }
             ast::Instruction::CpAsyncBulkTensor { data, arguments } => {
-                self.emit_cp_async_bulk_tensor(data, arguments)
+                self.emit_cp_async_bulk_tensor(data, *arguments)
             }
-            ast::Instruction::TexAgx { data, arguments } => self.emit_tex_agx(data, arguments),
+            ast::Instruction::TexAgx { data, arguments } => self.emit_tex_agx(data, *arguments),
             ast::Instruction::TexQuery { data, arguments } => self.emit_tex_query(data, arguments),
-            ast::Instruction::SuldAgx { data, arguments } => self.emit_suld(data, arguments),
-            ast::Instruction::SustAgx { data, arguments } => self.emit_sust(data, arguments),
+            ast::Instruction::SuldAgx { data, arguments } => self.emit_suld(data, *arguments),
+            ast::Instruction::SustAgx { data, arguments } => self.emit_sust(data, *arguments),
             ast::Instruction::SuredAgx { data, arguments } => self.emit_sured(data, arguments),
             ast::Instruction::Istypep { data, arguments } => self.emit_istypep(data, arguments),
             ast::Instruction::TensormapReplace { data, arguments } => {
@@ -2009,7 +2014,7 @@ impl<'a> MethodEmitContext<'a> {
                 ast::Type::Vector(n, t) => Some((*t, Some(*n))),
                 _ => None,
             };
-            if let (Some((ast::ScalarType::F32, count)), Target::Agx) = (element, self.target) {
+            if let (Some((ast::ScalarType::F32, count)), true) = (element, self.target.is_air()) {
                 return self.emit_atom_fadd_ieee(data.space, src1, src2, count);
             }
         }
@@ -2241,7 +2246,7 @@ impl<'a> MethodEmitContext<'a> {
     // rounded to the 16-bit type, which gives the same result as rounding
     // once. Both rounding modes are set by instruction_mode_to_global_mode.
     fn is_half_directed_rounding(&self, arith: &ast::ArithFloat) -> bool {
-        self.target == Target::Agx
+        self.target.is_air()
             && self.fp.mode == FloatingPointMode::Constrained
             && arith.rounding != ast::RoundingMode::NearestEven
             && matches!(
@@ -2335,7 +2340,7 @@ impl<'a> MethodEmitContext<'a> {
     // rounding converts to f32 under the same rounding mode first, which
     // instruction_mode_to_global_mode sets for both f32 and f16/f64
     fn is_bf16_directed_rounding(&self, to: ast::ScalarType, rounding: ast::RoundingMode) -> bool {
-        self.target == Target::Agx
+        self.target.is_air()
             && self.fp.mode == FloatingPointMode::Constrained
             && rounding != ast::RoundingMode::NearestEven
             && to == ast::ScalarType::BF16
@@ -2535,7 +2540,7 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
         // launch-time specialized kernel gives the bits of the generic one)
-        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+        if self.target.is_air() && self.fp.mode == FloatingPointMode::Normal {
             self.emit_intrinsic(
                 c"llvm.agx.cos.f32",
                 Some(arguments.dst),
@@ -2657,7 +2662,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             let signed = matches!(data, ptx_parser::DivDetails::Signed(_));
             return self.emit_defined_int_div(arguments.dst, signed, false, src1, src2);
         }
@@ -2723,7 +2728,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        if self.target == Target::Agx
+        if self.target.is_air()
             && matches!(float_div.kind, ptx_parser::DivFloatKind::Rounding(_))
         {
             self.fp
@@ -2736,7 +2741,7 @@ impl<'a> MethodEmitContext<'a> {
         ) {
             return Err(error_unreachable());
         }
-        if self.target == Target::Agx && float_div.type_ == ast::ScalarType::F32 {
+        if self.target.is_air() && float_div.type_ == ast::ScalarType::F32 {
             // d = a * (1/b), where 1/b of 2^126 < |b| is a zero of the sign of b (PTX ISA 9.7.3.8): infinite a
             // gives NaN, any other a a zero. 1/b is the hardware's reciprocal (as rcp.approx), which LLVM does not
             // fold: a constant b (from launch-time specialization) gives the same result as a variable one.
@@ -2878,7 +2883,7 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         // the hardware's approximation, which LLVM does not fold on the host for a constant argument (a
         // launch-time specialized kernel gives the bits of the generic one)
-        if self.target == Target::Agx && self.fp.mode == FloatingPointMode::Normal {
+        if self.target.is_air() && self.fp.mode == FloatingPointMode::Normal {
             self.emit_intrinsic(
                 c"llvm.agx.sin.f32",
                 Some(arguments.dst),
@@ -2918,6 +2923,16 @@ impl<'a> MethodEmitContext<'a> {
             return_types.iter().copied(),
             arguments.iter().map(|(_, type_)| Ok(*type_)),
         )?;
+        // Air: the AGX intrinsics are ZLUDA primitives, which the AIR target's library defines in AIR
+        // (zluda_ptx_impl_air.ll: AIR's system values, SIMD-group functions and portable math)
+        let air_name;
+        let name = match name.to_bytes().strip_prefix(b"llvm.agx.") {
+            Some(op) if self.target == Target::Air => {
+                air_name = std::ffi::CString::new([b"__zluda_air.", op].concat()).map_err(|_| error_unreachable())?;
+                air_name.as_c_str()
+            }
+            _ => name,
+        };
         let mut fn_ = unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) };
         if fn_ == ptr::null_mut() {
             fn_ = unsafe { LLVMAddFunction(self.module, name.as_ptr(), fn_type) };
@@ -2957,7 +2972,7 @@ impl<'a> MethodEmitContext<'a> {
         } else {
             LLVMBuildNeg
         };
-        if is_floating_point && data.flush_to_zero == Some(true) && self.target == Target::Agx {
+        if is_floating_point && data.flush_to_zero == Some(true) && self.target.is_air() {
             let flushed = self.emit_flush_subnormal(data.type_, src);
             let result = self.emit_sign_bit_op(data.type_, flushed, true);
             self.resolver.register(arguments.dst, result);
@@ -2970,7 +2985,7 @@ impl<'a> MethodEmitContext<'a> {
                 vec![&data.type_.into()],
                 vec![(negated, get_scalar_type(self.context, data.type_))],
             )?;
-        } else if is_floating_point && self.target == Target::Agx {
+        } else if is_floating_point && self.target.is_air() {
             // A bit operation: the backend may canonicalize the NaNs of
             // floating point negations
             let result = self.emit_sign_bit_op(data.type_, src, true);
@@ -3072,11 +3087,48 @@ impl<'a> MethodEmitContext<'a> {
             }
             ptx_parser::SetpCompareOp::Float(setp_compare_float) => {
                 // .ftz in a function of several modes, whose comparisons follow its attribute
-                let (src1, src2) = if self.explicit_ftz(data.flush_to_zero) {
-                    (self.emit_flush_subnormal(data.type_, src1), self.emit_flush_subnormal(data.type_, src2))
-                } else {
-                    (src1, src2)
+                // (an f32 flush the GPU's compare makes is marked !zluda.ftz.compare: LLVM folds a compare of
+                // constants as IEEE does, so the flush stays through the first optimization, which folds it for
+                // constants, and LLVMZludaAirDropCompareFlushes removes those of the operands known at run time only)
+                let flush = self.explicit_ftz(data.flush_to_zero);
+                let compare = self.explicit_ftz_compare(data.type_, data.flush_to_zero);
+                let mut flush_operand = |src: LLVMValueRef| {
+                    if compare {
+                        self.emit_flush_subnormal(data.type_, src)
+                    } else if flush {
+                        let flushed = self.emit_flush_subnormal(data.type_, src);
+                        unsafe {
+                            // (the select under the bitcast; a constant operand's flush is a constant, which has
+                            // nothing to mark: Blender Cycles' compilation asserted in getOperand)
+                            let select = if LLVMIsAInstruction(flushed) != std::ptr::null_mut()
+                                && LLVMGetNumOperands(flushed) > 0
+                            {
+                                LLVMGetOperand(flushed, 0)
+                            } else {
+                                std::ptr::null_mut()
+                            };
+                            if !select.is_null() && LLVMIsASelectInst(select) != std::ptr::null_mut() {
+                                let kind = LLVMGetMDKindIDInContext(
+                                    self.context,
+                                    c"zluda.ftz.compare".as_ptr(),
+                                    "zluda.ftz.compare".len() as u32,
+                                );
+                                LLVMSetMetadata(
+                                    select,
+                                    kind,
+                                    LLVMMetadataAsValue(
+                                        self.context,
+                                        LLVMMDNodeInContext2(self.context, std::ptr::null_mut(), 0),
+                                    ),
+                                );
+                            }
+                        }
+                        flushed
+                    } else {
+                        src
+                    }
                 };
+                let (src1, src2) = (flush_operand(src1), flush_operand(src2));
                 self.emit_setp_float(setp_compare_float, src1, src2)
             }
         }
@@ -3085,9 +3137,26 @@ impl<'a> MethodEmitContext<'a> {
     // .ftz done with bit operations: on AGX, in a function whose instructions take several denormal modes
     // (FloatingPointMode::Constrained), for the operations that don't follow the mode set at run time
     fn explicit_ftz(&self, flush_to_zero: Option<bool>) -> bool {
-        self.target == Target::Agx
+        self.target.is_air()
             && self.fp.mode == FloatingPointMode::Constrained
             && flush_to_zero == Some(true)
+    }
+
+    // setp.ftz's runtime operands flushed with bit operations as explicit_ftz, except f32 ones outside IEEE f32 emulation
+    // (--strict-fp, which keeps denormals): the GPU's own f32 compares flush them (on the M2 Max, setp.lt.ftz of
+    // -2^-127 and 0 is false without a flush; 16-bit denormals are kept). Flushed, they made a constrained module's
+    // f32 loop 61% slower than the same loop elsewhere.
+    fn explicit_ftz_compare(&self, type_: ast::ScalarType, flush_to_zero: Option<bool>) -> bool {
+        self.explicit_ftz(flush_to_zero) && (self.strict_fp || type_ != ast::ScalarType::F32)
+    }
+
+    // min.ftz / max.ftz's result flushed with bit operations: f32 in any mode, as the GPU's min and max return a
+    // denormal operand as it is (on the M2 Max, min.ftz of -2^-127 and 0 gave -2^-127, not -0); the other types as
+    // explicit_ftz. (Not with the GPU's compare, (r == 0) ? copysign(0, r) : r, three operations instead of five:
+    // LLVM folds it for a known denormal, comparing it as IEEE does.)
+    fn explicit_ftz_min_max(&self, type_: ast::ScalarType, flush_to_zero: Option<bool>) -> bool {
+        self.explicit_ftz(flush_to_zero)
+            || (self.target.is_air() && type_ == ast::ScalarType::F32 && flush_to_zero == Some(true))
     }
 
     fn emit_setp_int(
@@ -3158,7 +3227,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         // On AGX the conversions to and from fp8 are computed here, see
         // emit_cvt_mini
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             let mini = |t| match t {
                 ast::ScalarType::E4m3x2 => Some(ast::MiniFormat::E4m3x2),
                 ast::ScalarType::E5m2x2 => Some(ast::MiniFormat::E5m2x2),
@@ -3228,7 +3297,7 @@ impl<'a> MethodEmitContext<'a> {
                 relu: false,
                 satfinite: false,
                 ..
-            } if self.target == Target::Agx
+            } if self.target.is_air()
                 && data.to == ast::ScalarType::F32
                 && data.from != ast::ScalarType::F32
                 && arguments.src2.is_none() =>
@@ -3246,7 +3315,7 @@ impl<'a> MethodEmitContext<'a> {
                 relu: false,
                 satfinite: false,
                 ..
-            } if self.target == Target::Agx
+            } if self.target.is_air()
                 && data.to == ast::ScalarType::F32
                 && data.from == ast::ScalarType::F64
                 && arguments.src2.is_none() =>
@@ -3263,7 +3332,7 @@ impl<'a> MethodEmitContext<'a> {
                 relu: false,
                 satfinite: false,
                 ..
-            } if self.target == Target::Agx && data.from == ast::ScalarType::F32 => {
+            } if self.target.is_air() && data.from == ast::ScalarType::F32 => {
                 // .ftz flushes subnormal f32 sources, which f64 represents
                 let src = self.resolver.value(arguments.src)?;
                 let flushed = self.emit_flush_f32(src);
@@ -3278,7 +3347,7 @@ impl<'a> MethodEmitContext<'a> {
                 relu,
                 satfinite,
                 ..
-            } if self.target == Target::Agx
+            } if self.target.is_air()
                 && data.from == ast::ScalarType::F32
                 && arguments.src2.is_none() =>
             {
@@ -3599,7 +3668,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::ScalarType::F32 => 0x7fff_ffff,
             _ => return value,
         };
-        if self.target != Target::Agx {
+        if !self.target.is_air() {
             return value;
         }
         unsafe {
@@ -4034,7 +4103,7 @@ impl<'a> MethodEmitContext<'a> {
             }
         };
         let constant_size = constant_size.filter(|s| *s < (1 << 24));
-        if constant_size.is_none() && self.target != Target::Agx {
+        if constant_size.is_none() && !self.target.is_air() {
             // Allocations of a dynamic size are not freed by stackrestore
             let alloca = unsafe {
                 LLVMZludaBuildArrayAlloca(
@@ -4062,7 +4131,7 @@ impl<'a> MethodEmitContext<'a> {
             let old_top = LLVMBuildLoad2(self.builder, i32_type, top, LLVM_UNNAMED.as_ptr());
             let size = LLVMBuildZExtOrBitCast(self.builder, size, i64_type, LLVM_UNNAMED.as_ptr());
             let old_top = LLVMBuildZExt(self.builder, old_top, i64_type, LLVM_UNNAMED.as_ptr());
-            if self.target == Target::Agx {
+            if self.target.is_air() {
                 let overflow = LLVMBuildICmp(
                     self.builder,
                     LLVMIntPredicate::LLVMIntUGT,
@@ -4771,7 +4840,7 @@ impl<'a> MethodEmitContext<'a> {
             ast::StateSpace::Param => "param",
             _ => return Err(error_unreachable()),
         };
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             // Decided after optimization by llvm_zluda, from the address
             // space the address comes from (AGX has no generic addressing
             // of threadgroup and private memory)
@@ -5050,7 +5119,7 @@ impl<'a> MethodEmitContext<'a> {
         // For that reason, all from-to combinations that we know have a direct corresponding
         // v_cvt_* instruction get special treatment. AGX has no such guarantee (the out-of-range
         // fptosi folds to anything), so it always takes the .sat intrinsics
-        let is_saturating_cast = self.target != Target::Agx && match (to, from) {
+        let is_saturating_cast = !self.target.is_air() && match (to, from) {
             (ast::ScalarType::S16, ast::ScalarType::F16)
             | (ast::ScalarType::S32, ast::ScalarType::F32)
             | (ast::ScalarType::S32, ast::ScalarType::F64)
@@ -5095,7 +5164,7 @@ impl<'a> MethodEmitContext<'a> {
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
             // A NaN gives 0 (the .sat intrinsics) unless the source is .f64 or the destination 64-bit: then
             // 1 << (BitWidth(dst) - 1) (PTX ISA 9.7.9.22, Integer Notes)
-            let nan_top_bit = self.target == Target::Agx && (from == ast::ScalarType::F64 || to.size_of() == 8);
+            let nan_top_bit = self.target.is_air() && (from == ast::ScalarType::F64 || to.size_of() == 8);
             let converted = self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
                 (!nan_top_bit).then_some(arguments.dst),
@@ -5192,7 +5261,7 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::RsqrtArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
-        if self.target == Target::Agx && data.type_ == ast::ScalarType::F64 {
+        if self.target.is_air() && data.type_ == ast::ScalarType::F64 {
             // No f64 hardware: 1 / sqrt(x) with the software f64 square root and division, which is more
             // accurate than PTX's approximation requires.
             let src = self.resolver.value(arguments.src)?;
@@ -5202,8 +5271,11 @@ impl<'a> MethodEmitContext<'a> {
             return Ok(());
         }
         let intrinsic = match (self.target, data.type_, self.fp.mode) {
-            (Target::Agx, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
-            (Target::Agx, _, _) => return Err(error_unreachable()),
+            // (under --strict-fp as a square root and a division, whose NaNs the strict mode canonicalizes; AIR's
+            // rsqrt gives Metal's NaN)
+            (Target::Air, ast::ScalarType::F32, _) if self.strict_fp => c"llvm.agx.rsqrt.ieee.f32",
+            (Target::Agx | Target::Air, ast::ScalarType::F32, _) => c"llvm.agx.rsqrt.f32",
+            (Target::Agx | Target::Air, _, _) => return Err(error_unreachable()),
             (_, ast::ScalarType::F32, FloatingPointMode::Normal) => c"llvm.amdgcn.rsq.f32",
             (_, ast::ScalarType::F32, FloatingPointMode::Constrained) => {
                 c"llvm.amdgcn.constrained.rsq.f32"
@@ -5230,7 +5302,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let mode = self.fp.mode;
-        if self.target == Target::Agx && data.type_ == ast::ScalarType::F32 && !self.strict_fp && mode == FloatingPointMode::Normal {
+        if self.target.is_air() && data.type_ == ast::ScalarType::F32 && !self.strict_fp && mode == FloatingPointMode::Normal {
             // x * rsqrt_special(x), the code of llvm.sqrt without strict floating point (a hardware approximation),
             // which LLVM does not fold on the host for a constant x: a launch-time specialized kernel gives the bits
             // of the generic one
@@ -5245,7 +5317,7 @@ impl<'a> MethodEmitContext<'a> {
             return Ok(());
         }
         let (intrinsic, metadata): (_, &[&str]) = match (data.type_, data.kind, mode) {
-            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target.is_air() => {
                 (c"llvm.sqrt.f32", &[])
             }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
@@ -5291,17 +5363,17 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let type_ = get_scalar_type(self.context, data.type_);
         let intrinsic = match (data.type_, data.kind, self.fp.mode) {
-            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target == Target::Agx => {
+            (ast::ScalarType::F32, ast::RcpKind::Approx, _) if self.target.is_air() => {
                 c"llvm.agx.rcp.f32"
             }
-            (ast::ScalarType::F64, _, _) if self.target == Target::Agx => {
+            (ast::ScalarType::F64, _, _) if self.target.is_air() => {
                 // 1 / x with the software f64 division (exact, so also rcp.rn.f64)
                 let src = self.resolver.value(arguments.src)?;
                 let one = unsafe { LLVMConstReal(type_, 1.0) };
                 self.fp.fdiv(self.resolver, data.type_, arguments.dst, one, src)?;
                 return Ok(());
             }
-            (_, _, _) if self.target == Target::Agx => {
+            (_, _, _) if self.target.is_air() => {
                 return Err(TranslateError::Unsupported("rcp of this type is not supported on AGX".into()))
             }
             (ast::ScalarType::F32, ast::RcpKind::Approx, FloatingPointMode::Normal) => {
@@ -5497,7 +5569,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let agx_name;
         let intrinsic = match (data.type_, self.fp.mode) {
-            (_, _) if self.target == Target::Agx => {
+            (_, _) if self.target.is_air() => {
                 let suffix = match data.type_ {
                     ast::ScalarType::F16 => "f16",
                     ast::ScalarType::F32 => "f32",
@@ -5530,8 +5602,10 @@ impl<'a> MethodEmitContext<'a> {
                 get_scalar_type(self.context, data.type_),
             )],
         )?;
-        // the half formats keep subnormal results
-        let result = if self.target == Target::Agx && data.flush_to_zero == Some(true) {
+        // the half formats keep subnormal results; the GPU's f32 exp2 flushes them (on the M2 Max ex2.approx.ftz.f32
+        // of -127.5 and -140 is +0 without a flush), except under IEEE f32 emulation (--strict-fp)
+        let gpu_flushes = data.type_ == ast::ScalarType::F32 && !self.strict_fp;
+        let result = if self.target.is_air() && data.flush_to_zero == Some(true) && !gpu_flushes {
             self.emit_flush_subnormal(data.type_, result)
         } else {
             result
@@ -5547,7 +5621,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let intrinsic = match self.fp.mode {
             // the hardware's log2, which LLVM does not fold on the host for a constant argument
-            _ if self.target == Target::Agx => c"llvm.agx.log2.f32",
+            _ if self.target.is_air() => c"llvm.agx.log2.f32",
             FloatingPointMode::Normal => c"llvm.amdgcn.log.f32",
             FloatingPointMode::Constrained => c"llvm.amdgcn.constrained.log.f32",
         };
@@ -5589,7 +5663,7 @@ impl<'a> MethodEmitContext<'a> {
         };
         let src1 = self.resolver.value(arguments.src1)?;
         let src2 = self.resolver.value(arguments.src2)?;
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             let signed = data.kind() == ptx_parser::ScalarKind::Signed;
             return self.emit_defined_int_div(arguments.dst, signed, true, src1, src2);
         }
@@ -5601,7 +5675,7 @@ impl<'a> MethodEmitContext<'a> {
 
     fn emit_bar_warp(&mut self) -> Result<(), TranslateError> {
         // SIMD-groups execute in lockstep on AGX.
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             return Ok(());
         }
         self.emit_intrinsic(c"llvm.amdgcn.wave.barrier", None, vec![], vec![])?;
@@ -5705,7 +5779,7 @@ impl<'a> MethodEmitContext<'a> {
         // instructions", PTX ISA 9.7.3): explicit, as the intrinsics are commutative and their operands may swap
         let result = match data {
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { nan, .. })
-                if type_ == ast::ScalarType::F64 && !xorsign_abs && self.target == Target::Agx =>
+                if type_ == ast::ScalarType::F64 && !xorsign_abs && self.target.is_air() =>
             unsafe {
                 let src_b = b;
                 let b = self.builder;
@@ -5727,7 +5801,7 @@ impl<'a> MethodEmitContext<'a> {
             },
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. }) => {
                 // min and max of the flushed inputs are the flushed min and max
-                let result = if self.explicit_ftz(flush_to_zero) {
+                let result = if self.explicit_ftz_min_max(type_, flush_to_zero) {
                     self.emit_flush_subnormal(type_, result)
                 } else {
                     result
@@ -5771,7 +5845,7 @@ impl<'a> MethodEmitContext<'a> {
                 )?;
                 let result = match data {
                     ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. })
-                        if self.explicit_ftz(flush_to_zero) =>
+                        if self.explicit_ftz_min_max(type_, flush_to_zero) =>
                     {
                         self.emit_flush_subnormal(type_, result)
                     }
@@ -6044,13 +6118,13 @@ impl<'a> MethodEmitContext<'a> {
         let llvm_type = get_scalar_type(self.context, data.type_);
         let src = self.resolver.value(arguments.src)?;
         let is_floating_point = data.type_.kind() == ast::ScalarKind::Float;
-        if is_floating_point && data.flush_to_zero == Some(true) && self.target == Target::Agx {
+        if is_floating_point && data.flush_to_zero == Some(true) && self.target.is_air() {
             let flushed = self.emit_flush_subnormal(data.type_, src);
             let result = self.emit_sign_bit_op(data.type_, flushed, false);
             self.resolver.register(arguments.dst, result);
             return Ok(());
         }
-        if is_floating_point && data.flush_to_zero != Some(true) && self.target == Target::Agx {
+        if is_floating_point && data.flush_to_zero != Some(true) && self.target.is_air() {
             // A bit operation, which keeps NaN payloads
             let mut result = self.emit_sign_bit_op(data.type_, src, false);
             if data.type_ == ast::ScalarType::F64 {
@@ -6163,7 +6237,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::Mul24Details,
         arguments: ast::Mul24Args<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             return self.emit_mul24_expanded(data, arguments);
         }
         let src1 = self.resolver.value(arguments.src1)?;
@@ -6318,7 +6392,7 @@ impl<'a> MethodEmitContext<'a> {
     }
 
     fn emit_set_mode(&mut self, mode_reg: ModeRegister) -> Result<(), TranslateError> {
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             return self.emit_set_mode_agx(mode_reg);
         }
         fn hwreg(reg: u32, offset: u32, size: u32) -> u32 {
@@ -6497,7 +6571,7 @@ impl<'a> MethodEmitContext<'a> {
         let to = self.resolver.value(arguments.src_to)?;
         let from = self.resolver.value(arguments.src_from)?;
         let cp_size = data.cp_size;
-        if self.target == Target::Agx || arguments.src_size.is_some() {
+        if self.target.is_air() || arguments.src_size.is_some() {
             // Copy the first src-size bytes (none with a true ignore-src) and
             // zero the rest
             let i32_type = unsafe { LLVMInt32TypeInContext(self.context) };
@@ -6592,7 +6666,7 @@ impl<'a> MethodEmitContext<'a> {
         return_type: Option<ast::ScalarType>,
         arguments: &[LLVMValueRef],
     ) -> Result<LLVMValueRef, TranslateError> {
-        if self.target != Target::Agx {
+        if !self.target.is_air() {
             return Err(error_todo_msg(
                 "mbarrier objects are only supported on AGX",
             ));
@@ -8438,7 +8512,7 @@ impl<'a> MethodEmitContext<'a> {
         data: ast::Dp4aDetails,
         arguments: ast::Dp4aArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
-        if self.target == Target::Agx {
+        if self.target.is_air() {
             return self.emit_dp4a_expanded(data, arguments);
         }
         let intrinsic = match (data.atype, data.btype) {

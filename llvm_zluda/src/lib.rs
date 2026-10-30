@@ -6,6 +6,10 @@ pub use llvm_sys::*;
 pub mod compile;
 #[cfg(feature = "agx")]
 pub mod compile_agx;
+#[cfg(all(feature = "agx", zluda_air))]
+mod agx_merge;
+#[cfg(all(feature = "agx", zluda_air))]
+pub mod compile_air;
 mod ffi;
 pub mod utils;
 

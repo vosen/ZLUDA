@@ -270,6 +270,105 @@ static inline rgba sample(desc_t t, struct q *q, int filter, int addr, int norm,
     return acc;
 }
 
+// ---------------------------------------------------------------- in f32
+
+// Outside --strict-fp, tex.1d / tex.2d with float coordinates and results (the `unit` forms) sample level 0 in f32,
+// as a texture unit would: the texel values, the per-axis weights (still quantised to 1/256) and the sum of the
+// weighted texels are floats, each step rounded to nearest, instead of the model's exact sum rounded once. Results
+// may differ from the model's by a few ulps; the double precision code above, which each tex instruction otherwise
+// inlines in software, was most of the code of texture-heavy kernels (Blender Cycles).
+typedef float rgbaf __attribute__((ext_vector_type(4)));
+
+static inline float half_to_f32(uint32_t h) {
+    uint32_t s = h >> 15, e = (h >> 10) & 31, m = h & 1023;
+    uint32_t b;
+    if (e == 31)
+        b = 0x7f800000u | (m << 13);
+    else if (e != 0)
+        b = ((e + 112) << 23) | (m << 13);
+    else {
+        // subnormal half: exact as a float (m * 2^-24)
+        float v = (float)m * 0x1p-24f;
+        return s ? -v : v;
+    }
+    union {
+        uint32_t u;
+        float f;
+    } c = {b | (s << 31)};
+    return c.f;
+}
+
+static inline float channel_f32(desc_t t, uint64_t addr) {
+    uint64_t code = tw(t, 2);
+    int bytes = code_bytes(code);
+    const GLOBAL uint8_t *p = (const GLOBAL uint8_t *)addr;
+    uint32_t v = 0;
+    for (int i = 0; i < bytes; i++)
+        v |= (uint32_t)p[i] << (8 * i);
+    if (code == 6)
+        return half_to_f32(v);
+    if (code == 7) {
+        union {
+            uint32_t u;
+            float f;
+        } c = {v};
+        return c.f;
+    }
+    int bits = code_bits(code);
+    int64_t iv = v;
+    if (code_signed(code) && bits < 64 && (v >> (bits - 1)) & 1)
+        iv = (int64_t)v - ((int64_t)1 << bits);
+    if (!tw(t, 7))
+        return (float)iv;
+    int64_t max = code_signed(code) ? ((int64_t)1 << (bits - 1)) - 1 : ((int64_t)1 << bits) - 1;
+    float r = (float)iv / (float)max;
+    return r >= -1.0f ? r : -1.0f;
+}
+
+static inline rgbaf texel_f32(desc_t t, int64_t i, int64_t j) {
+    rgbaf r = {0, 0, 0, 0};
+    if (i < 0 || j < 0)
+        return r;
+    int64_t ch = (int64_t)tw(t, 3);
+    int bytes = code_bytes(tw(t, 2));
+    int64_t pitch = (int64_t)tw(t, 14);
+    uint64_t a = pitch ? tw(t, 1) + (uint64_t)(j * pitch + i * ch * bytes)
+                       : tw(t, 1) + (uint64_t)((j * lv_dim(t, 0, 0) + i) * ch * bytes);
+    NO_UNROLL
+    for (int c = 0; c < 4; c++)
+        r[c] = c < ch ? channel_f32(t, a + (uint64_t)(c * bytes)) : (c == 3 ? 1.0f : 0.0f);
+    return r;
+}
+
+// x scaled to texels (an fma: the shift by `d` rounds once with the scaling)
+static inline float pos_f32(float x, int64_t n, int norm, float d) {
+    return norm == 1 ? __builtin_fmaf(x, (float)n, d) : x + d;
+}
+
+static inline rgbaf sample_f32(desc_t t, int filter, int addr, int norm, float x, float y, int rank) {
+    int64_t n0 = lv_dim(t, 0, 0), n1 = lv_dim(t, 0, 1);
+    if (filter != 1) {
+        int64_t i = ad_idx(addr, (int64_t)__builtin_floorf(pos_f32(x, n0, norm, 0.0f)), n0);
+        int64_t j = rank >= 2 ? ad_idx(addr, (int64_t)__builtin_floorf(pos_f32(y, n1, norm, 0.0f)), n1) : 0;
+        return texel_f32(t, i, j);
+    }
+    float xb = pos_f32(x, n0, norm, -0.5f), yb = rank >= 2 ? pos_f32(y, n1, norm, -0.5f) : 0.0f;
+    float fx = __builtin_floorf(xb), fy = __builtin_floorf(yb);
+    int64_t i0 = ad_idx(addr, (int64_t)fx, n0), i1 = ad_idx(addr, (int64_t)fx + 1, n0);
+    int64_t j0 = rank >= 2 ? ad_idx(addr, (int64_t)fy, n1) : 0;
+    int64_t j1 = rank >= 2 ? ad_idx(addr, (int64_t)fy + 1, n1) : 0;
+    // the weights of the upper texels, quantised to 1/256 (exact in float, as are their products)
+    float wx = __builtin_floorf((xb - fx) * 256.0f + 0.5f) * (1.0f / 256.0f);
+    float wy = rank >= 2 ? __builtin_floorf((yb - fy) * 256.0f + 0.5f) * (1.0f / 256.0f) : 0.0f;
+    rgbaf acc = (1.0f - wx) * (1.0f - wy) * texel_f32(t, i0, j0);
+    acc += wx * (1.0f - wy) * texel_f32(t, i1, j0);
+    if (rank >= 2) {
+        acc += (1.0f - wx) * wy * texel_f32(t, i0, j1);
+        acc += wx * wy * texel_f32(t, i1, j1);
+    }
+    return acc;
+}
+
 // ---------------------------------------------------------------- mipmaps
 
 // log2 for x > 0 at double precision (the model's log(x) / log(2) at 53 bits)
@@ -426,6 +525,16 @@ API v4u32 __zluda_ptx_impl_agx_tex(desc_t t, desc_t s, int geom, int lod_mode, i
         if ((native >> 63) && (int)((native >> 62) & 1) == (dtype != 0) &&
             (int)((native >> 61) & 1) == (geom == G_2D))
             return __zluda_ptx_impl_agx_tex_unit(native, bits_to_float(c0), bits_to_float(c1));
+        if (dtype == 0) {
+            struct sampling sm = sampling_of(t, s);
+            union {
+                uint32_t u;
+                float f;
+            } x = {c0}, y = {c1};
+            rgbaf r = sample_f32(t, sm.filter, sm.addr, sm.norm, x.f, y.f, geom == G_2D ? 2 : 1);
+            v4u32 out = {float_bits(r[0]), float_bits(r[1]), float_bits(r[2]), float_bits(r[3])};
+            return out;
+        }
     }
     struct sampling sm = sampling_of(t, s);
     struct q q = {0, {o0, o1, o2}, has_ref, ref};

@@ -101,6 +101,11 @@ impl Module {
         Self(unsafe { LLVMCloneModule(self.0) })
     }
 
+    /// Takes ownership of a module LLVM made.
+    pub(crate) fn from_raw(module: LLVMModuleRef) -> Self {
+        Self(module)
+    }
+
     pub fn get(&self) -> LLVMModuleRef {
         self.0
     }

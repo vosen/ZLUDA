@@ -14,12 +14,15 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/ReplaceConstant.h>
+#include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
+#include <array>
 #include <optional>
 #include <string>
 #include <llvm/IR/CallingConv.h>
@@ -40,6 +43,12 @@ LLD_HAS_DRIVER(elf)
 #endif
 
 using namespace llvm;
+
+// The name prefix of ZLUDA's GPU primitives in the module being compiled: the AGX intrinsics (llvm.agx.*) for the
+// Agx target, the AIR primitives of zluda_ptx_impl_air.ll (__zluda_air.*) for the Air target. The ZLUDA passes
+// below that find or create them (clusters, address spaces, shared memory spill) use it.
+static std::string zludaPrimitivePrefix = "llvm.agx.";
+static std::string zludaPrim(const char *op) { return zludaPrimitivePrefix + op; }
 
 typedef enum
 {
@@ -735,11 +744,11 @@ namespace
                         StringRef n = callee->getName();
                         if (n.starts_with("__zluda_agx_cluster"))
                             return true;
-                        if (ids && (n.starts_with("llvm.agx.thread.position.in.threadgroup") ||
-                            n.starts_with("llvm.agx.threads.per.threadgroup") ||
-                            n.starts_with("llvm.agx.threadgroup.position.in.grid") ||
-                            n.starts_with("llvm.agx.threadgroups.per.grid") ||
-                            n == "llvm.agx.thread.index.in.threadgroup"))
+                        if (ids && (n.starts_with(zludaPrim("thread.position.in.threadgroup")) ||
+                            n.starts_with(zludaPrim("threads.per.threadgroup")) ||
+                            n.starts_with(zludaPrim("threadgroup.position.in.grid")) ||
+                            n.starts_with(zludaPrim("threadgroups.per.grid")) ||
+                            n == zludaPrim("thread.index.in.threadgroup")))
                             return true;
                     }
             }
@@ -802,17 +811,17 @@ namespace
         }
 
         IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());
-        Value *hw_tid_z = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.z"));
-        Value *hw_ntid_z = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.z"));
-        Value *ntid_x = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.x"));
-        Value *ntid_y = B.CreateCall(intrinsic("llvm.agx.threads.per.threadgroup.y"));
-        Value *hw_linear = B.CreateCall(intrinsic("llvm.agx.thread.index.in.threadgroup"));
-        Value *hw_ctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.x")),
-                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.y")),
-                              B.CreateCall(intrinsic("llvm.agx.threadgroup.position.in.grid.z"))};
-        Value *hw_nctaid[3] = {B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.x")),
-                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.y")),
-                               B.CreateCall(intrinsic("llvm.agx.threadgroups.per.grid.z"))};
+        Value *hw_tid_z = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.z").c_str()));
+        Value *hw_ntid_z = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.z").c_str()));
+        Value *ntid_x = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.x").c_str()));
+        Value *ntid_y = B.CreateCall(intrinsic(zludaPrim("threads.per.threadgroup.y").c_str()));
+        Value *hw_linear = B.CreateCall(intrinsic(zludaPrim("thread.index.in.threadgroup").c_str()));
+        Value *hw_ctaid[3] = {B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.x").c_str())),
+                              B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.y").c_str())),
+                              B.CreateCall(intrinsic(zludaPrim("threadgroup.position.in.grid.z").c_str()))};
+        Value *hw_nctaid[3] = {B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.x").c_str())),
+                               B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.y").c_str())),
+                               B.CreateCall(intrinsic(zludaPrim("threadgroups.per.grid.z").c_str()))};
         auto k = [&](uint64_t v) { return ConstantInt::get(I32, v); };
         Value *ntid_z = B.CreateUDiv(hw_ntid_z, k(C));
         Value *rank = C > 1 ? B.CreateURem(hw_tid_z, k(C)) : static_cast<Value *>(k(0));
@@ -820,8 +829,8 @@ namespace
         Value *linear = hw_linear;
         if (C > 1)
         {
-            Value *tid_x = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.x"));
-            Value *tid_y = B.CreateCall(intrinsic("llvm.agx.thread.position.in.threadgroup.y"));
+            Value *tid_x = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.x").c_str()));
+            Value *tid_y = B.CreateCall(intrinsic(zludaPrim("thread.position.in.threadgroup.y").c_str()));
             linear = B.CreateAdd(tid_x, B.CreateMul(ntid_x, B.CreateAdd(tid_y, B.CreateMul(ntid_y, tid_z))));
         }
         const unsigned *d = shape.dims;
@@ -916,19 +925,19 @@ namespace
                                     : static_cast<Value *>(k(0));
             else if (C > 1)
             {
-                if (n == "llvm.agx.thread.position.in.threadgroup.z")
+                if (n == zludaPrim("thread.position.in.threadgroup.z"))
                     v = tid_z;
-                else if (n == "llvm.agx.threads.per.threadgroup.z")
+                else if (n == zludaPrim("threads.per.threadgroup.z"))
                     v = ntid_z;
-                else if (n == "llvm.agx.thread.index.in.threadgroup")
+                else if (n == zludaPrim("thread.index.in.threadgroup"))
                     v = linear;
                 else
                     for (int i = 0; i < 3; i++)
                     {
                         std::string axis(1, "xyz"[i]);
-                        if (n == "llvm.agx.threadgroup.position.in.grid." + axis)
+                        if (n == zludaPrim("threadgroup.position.in.grid.") + axis)
                             v = ctaid[i];
-                        else if (n == "llvm.agx.threadgroups.per.grid." + axis)
+                        else if (n == zludaPrim("threadgroups.per.grid.") + axis)
                             v = nctaid[i];
                     }
             }
@@ -1053,7 +1062,7 @@ namespace
         };
         auto barrier = [&](IRBuilder<> &B) {
             B.CreateFence(AtomicOrdering::SequentiallyConsistent);
-            B.CreateCall(M.getOrInsertFunction("llvm.agx.threadgroup.barrier", FunctionType::get(B.getVoidTy(), false)));
+            B.CreateCall(M.getOrInsertFunction(zludaPrim("threadgroup.barrier"), FunctionType::get(B.getVoidTy(), false)));
             B.CreateFence(AtomicOrdering::SequentiallyConsistent);
         };
 
@@ -1064,10 +1073,10 @@ namespace
         BasicBlock *claim = BasicBlock::Create(ctx, "spill.claim", &F, body);
         BasicBlock *join = BasicBlock::Create(ctx, "spill.join", &F, body);
         IRBuilder<> B(entry);
-        Value *first = B.CreateICmpEQ(call(B, "llvm.agx.thread.index.in.threadgroup"), B.getInt32(0));
-        Value *threads = B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.x"),
-                                     B.CreateMul(call(B, "llvm.agx.threads.per.threadgroup.y"),
-                                                 call(B, "llvm.agx.threads.per.threadgroup.z")));
+        Value *first = B.CreateICmpEQ(call(B, zludaPrim("thread.index.in.threadgroup").c_str()), B.getInt32(0));
+        Value *threads = B.CreateMul(call(B, zludaPrim("threads.per.threadgroup.x").c_str()),
+                                     B.CreateMul(call(B, zludaPrim("threads.per.threadgroup.y").c_str()),
+                                                 call(B, zludaPrim("threads.per.threadgroup.z").c_str())));
         B.CreateCondBr(first, claim, join);
         B.SetInsertPoint(claim);
         PHINode *i = B.CreatePHI(I32, 2);
@@ -1226,6 +1235,1746 @@ void LLVMZludaAgxKeepGlobals(LLVMModuleRef M)
     }
     if (!keep.empty())
         appendToUsed(*Mod, keep);
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air written for Metal: Metal compiles no writable
+// program-scope variables (MSL has none; a module with a device global
+// crashes its compiler on an M2 Max), so a PTX module's .global variables
+// become one device buffer. The functions other than kernels that use them
+// are first inlined into the kernels (LLVMZludaAirInlineGlobalUsers and the
+// always-inline pass); LLVMZludaAirGlobalsToBuffer then lays the variables
+// out in the buffer, gives each kernel using them a last parameter, a
+// pointer to it ("zluda-globals"), and describes the buffer in JSON for the
+// host, which allocates it and writes its initial contents:
+//   {"size": N, "image": "<hex>", "relocs": [[offset, target], ...],
+//    "symbols": {"name": offset, ...}, "kernels": ["name", ...]}
+// An 8-byte reloc at offset holds the buffer's address plus target (an
+// initializer's address of a variable). The AGX compilation is unaffected:
+// these run on a copy of the module.
+
+// Whether V's address is used other than to load through it (as an integer,
+// in a variable's initializer, stored, passed ...).
+static bool zludaAddressEscapes(Value *V)
+{
+    for (User *U : V->users())
+    {
+        if (auto *L = dyn_cast<LoadInst>(U); L && L->getPointerOperand() == V)
+            continue;
+        if (auto *GEP = dyn_cast<GEPOperator>(U); GEP && GEP->getPointerOperand() == V)
+        {
+            if (zludaAddressEscapes(GEP))
+                return true;
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+// .global variables, and .const variables whose address escapes: the host
+// knows no address of a Metal program-scope constant, so one held in a
+// variable or compared as an integer must be in the buffer too (CUDA's
+// generic(cv), mask(foo+4), mov.u64 %r, foo). The AGX table of mask()
+// initializers is the init kernel's job, not a variable.
+static bool zludaIsBufferGlobal(GlobalVariable &GV)
+{
+    if (GV.getName().starts_with("llvm.") || GV.getName() == "__zluda_agx_masked_init")
+        return false;
+    if (GV.getAddressSpace() == 1)
+        return true;
+    return GV.getAddressSpace() == 2 && zludaAddressEscapes(&GV);
+}
+
+// Replaces the uses in F of Old, a variable in address space 1 or 2, with
+// New, its address in the buffer (address space 1): GEPs are rebuilt in the
+// new address space, casts to it disappear, other users take the device
+// pointer. (Each kernel has its own buffer argument: uses in other functions
+// stay.)
+static void zludaRetarget(Value *Old, Value *New, Function *F)
+{
+    for (Use &U : make_early_inc_range(Old->uses()))
+    {
+        auto *I = dyn_cast<Instruction>(U.getUser());
+        if (!I || I->getFunction() != F)
+            continue;
+        if (auto *GEP = dyn_cast<GetElementPtrInst>(I); GEP && GEP->getPointerOperand() == Old &&
+                                                         Old->getType() != New->getType())
+        {
+            IRBuilder<> B(GEP);
+            SmallVector<Value *, 4> idx(GEP->indices());
+            Value *NG = B.CreateGEP(GEP->getSourceElementType(), New, idx, "", GEP->getNoWrapFlags());
+            zludaRetarget(GEP, NG, F);
+            NG->takeName(GEP);
+            if (GEP->use_empty())
+                GEP->eraseFromParent();
+            continue;
+        }
+        if (auto *ASC = dyn_cast<AddrSpaceCastInst>(I); ASC && ASC->getType() == New->getType())
+        {
+            ASC->replaceAllUsesWith(New);
+            ASC->eraseFromParent();
+            continue;
+        }
+        if (Old->getType() != New->getType() && !isa<LoadInst>(I) && !isa<StoreInst>(I) && !isa<AtomicRMWInst>(I) &&
+            !isa<AtomicCmpXchgInst>(I) && !isa<CallBase>(I))
+        {
+            // A phi or select that also takes other pointers of the old address space (kernel arguments in the
+            // constant space): the buffer address in that space (one virtual address space for constant and
+            // device memory).
+            IRBuilder<> B(isa<PHINode>(I) ? cast<PHINode>(I)->getIncomingBlock(U)->getTerminator() : I);
+            U.set(B.CreateIntToPtr(B.CreatePtrToInt(New, B.getInt64Ty()), Old->getType()));
+            continue;
+        }
+        U.set(New);
+    }
+}
+
+// The functions whose instructions use V, through constant expressions.
+static void zludaUsingFunctions(Value *V, SmallPtrSetImpl<Function *> &Out)
+{
+    for (User *U : V->users())
+    {
+        if (auto *I = dyn_cast<Instruction>(U))
+            Out.insert(I->getFunction());
+        else if (isa<ConstantExpr>(U) || isa<ConstantAggregate>(U))
+            zludaUsingFunctions(U, Out);
+    }
+}
+
+// Marks the functions other than kernels that use a buffer global
+// alwaysinline; returns how many it marked.
+int LLVMZludaAirInlineGlobalUsers(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    SmallPtrSet<Function *, 8> users;
+    for (GlobalVariable &GV : Mod->globals())
+        if (zludaIsBufferGlobal(GV))
+            zludaUsingFunctions(&GV, users);
+    int marked = 0;
+    for (Function *F : users)
+    {
+        if (F->hasFnAttribute("air-kernel") || F->hasFnAttribute(Attribute::AlwaysInline) || F->use_empty())
+            continue;
+        F->removeFnAttr(Attribute::NoInline);
+        F->addFnAttr(Attribute::AlwaysInline);
+        marked++;
+    }
+    return marked;
+}
+
+static std::string zludaHex(const std::vector<uint8_t> &bytes)
+{
+    static const char digits[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(bytes.size() * 2);
+    for (uint8_t b : bytes)
+    {
+        out += digits[b >> 4];
+        out += digits[b & 15];
+    }
+    return out;
+}
+
+namespace
+{
+    struct ZludaGlobalsImage
+    {
+        const DataLayout &DL;
+        DenseMap<const GlobalValue *, uint64_t> offsets;
+        std::vector<uint8_t> image;
+        std::vector<std::pair<uint64_t, uint64_t>> relocs;
+
+        void putInt(const APInt &v, uint64_t at, uint64_t size)
+        {
+            for (uint64_t i = 0; i < size && i * 8 < v.getBitWidth(); i++)
+                image[at + i] = (uint8_t)v.extractBitsAsZExtValue(
+                    std::min<unsigned>(8, v.getBitWidth() - i * 8), i * 8);
+        }
+
+        // Whether C is a variable's address plus a constant: a GEP or cast
+        // of it (IsConstantOffsetFromGlobal), or integer arithmetic on its
+        // ptrtoint (PTX's generic(v)+4).
+        bool addressOf(Constant *C, GlobalValue *&GV, int64_t &off)
+        {
+            APInt o;
+            if (IsConstantOffsetFromGlobal(C, GV, o, DL))
+            {
+                off = o.getSExtValue();
+                return true;
+            }
+            auto *CE = dyn_cast<ConstantExpr>(C);
+            if (!CE)
+                return false;
+            if (CE->getOpcode() == Instruction::PtrToInt || CE->getOpcode() == Instruction::IntToPtr ||
+                CE->isCast())
+                return addressOf(CE->getOperand(0), GV, off);
+            if (CE->getOpcode() == Instruction::Add || CE->getOpcode() == Instruction::Sub)
+            {
+                auto *K = dyn_cast<ConstantInt>(CE->getOperand(1));
+                Constant *Base = CE->getOperand(0);
+                if (!K && CE->getOpcode() == Instruction::Add)
+                {
+                    K = dyn_cast<ConstantInt>(CE->getOperand(0));
+                    Base = CE->getOperand(1);
+                }
+                if (!K || !addressOf(Base, GV, off))
+                    return false;
+                off += CE->getOpcode() == Instruction::Add ? K->getSExtValue() : -K->getSExtValue();
+                return true;
+            }
+            return false;
+        }
+
+        // Writes C at offset at; returns an error message or "".
+        std::string put(Constant *C, uint64_t at)
+        {
+            Type *T = C->getType();
+            if (isa<UndefValue>(C) || isa<ConstantAggregateZero>(C) || isa<ConstantPointerNull>(C))
+                return "";
+            if (auto *CI = dyn_cast<ConstantInt>(C))
+            {
+                putInt(CI->getValue(), at, DL.getTypeStoreSize(T));
+                return "";
+            }
+            if (auto *CF = dyn_cast<ConstantFP>(C))
+            {
+                putInt(CF->getValueAPF().bitcastToAPInt(), at, DL.getTypeStoreSize(T));
+                return "";
+            }
+            if (auto *ST = dyn_cast<StructType>(T))
+            {
+                const StructLayout *SL = DL.getStructLayout(ST);
+                for (unsigned i = 0; i < ST->getNumElements(); i++)
+                    if (std::string e = put(C->getAggregateElement(i), at + SL->getElementOffset(i)); !e.empty())
+                        return e;
+                return "";
+            }
+            if (T->isArrayTy() || T->isVectorTy())
+            {
+                Type *E = T->isArrayTy() ? T->getArrayElementType() : cast<VectorType>(T)->getElementType();
+                uint64_t n = T->isArrayTy() ? T->getArrayNumElements() : cast<FixedVectorType>(T)->getNumElements();
+                uint64_t stride = T->isArrayTy() ? DL.getTypeAllocSize(E) : DL.getTypeStoreSize(E);
+                for (uint64_t i = 0; i < n; i++)
+                    if (std::string e = put(C->getAggregateElement(i), at + i * stride); !e.empty())
+                        return e;
+                return "";
+            }
+            // A number seen through pointer casts (a function's ID, LLVMZludaAirFunctionPointers:
+            // inttoptr ID, and ptrtoint of that).
+            {
+                Constant *V = C;
+                while (auto *CE = dyn_cast<ConstantExpr>(V))
+                {
+                    if (CE->getOpcode() != Instruction::IntToPtr && CE->getOpcode() != Instruction::PtrToInt)
+                        break;
+                    V = CE->getOperand(0);
+                }
+                if (auto *K = dyn_cast<ConstantInt>(V); K && V != C)
+                {
+                    putInt(K->getValue().zextOrTrunc(8 * DL.getTypeStoreSize(T)), at, DL.getTypeStoreSize(T));
+                    return "";
+                }
+            }
+            // The address of a variable (possibly offset, cast to an integer).
+            GlobalValue *GV = nullptr;
+            int64_t off = 0;
+            if (addressOf(C, GV, off))
+            {
+                auto it = offsets.find(GV);
+                if (it == offsets.end())
+                    return "an initializer holds the address of " + GV->getName().str() +
+                           ", which is not in the globals buffer";
+                if (DL.getTypeStoreSize(T) != 8)
+                    return "an initializer holds a variable's address in fewer than 8 bytes";
+                relocs.push_back({at, it->second + off});
+                return "";
+            }
+            std::string text;
+            raw_string_ostream os(text);
+            os << *C;
+            return "an initializer the globals buffer cannot hold: " + os.str();
+        }
+    };
+}
+
+// Returns 1 with *json set if the module had buffer globals, 0 if not, -1
+// with *error.
+int LLVMZludaAirGlobalsToBuffer(LLVMModuleRef M, char **json, char **error)
+{
+    Module *Mod = unwrap(M);
+    const DataLayout &DL = Mod->getDataLayout();
+    LLVMContext &Ctx = Mod->getContext();
+    SmallVector<GlobalVariable *, 8> globals;
+    for (GlobalVariable &GV : Mod->globals())
+        if (zludaIsBufferGlobal(GV))
+            globals.push_back(&GV);
+    if (globals.empty())
+        return 0;
+    auto fail = [&](const std::string &e) {
+        *error = LLVMCreateMessage(e.c_str());
+        return -1;
+    };
+
+    ZludaGlobalsImage img{DL, {}, {}, {}};
+    uint64_t size = 0;
+    for (GlobalVariable *GV : globals)
+    {
+        Align a = DL.getValueOrABITypeAlignment(GV->getAlign(), GV->getValueType());
+        size = alignTo(size, a);
+        img.offsets[GV] = size;
+        size += DL.getTypeAllocSize(GV->getValueType());
+    }
+    img.image.assign(std::max<uint64_t>(size, 1), 0);
+    for (GlobalVariable *GV : globals)
+        if (GV->hasInitializer())
+            // (folded: a function's ID reads ptrtoint (inttoptr ID), which needs the data layout to fold)
+            if (std::string e = img.put(ConstantFoldConstant(GV->getInitializer(), DL), img.offsets[GV]); !e.empty())
+                return fail(GV->getName().str() + ": " + e);
+
+    // The mask() initializers (ZLUDA's AGX table): bytes of a variable's
+    // address, written by the init kernel once the buffer has an address.
+    std::vector<std::array<uint64_t, 4>> masked;
+    if (GlobalVariable *T = Mod->getGlobalVariable("__zluda_agx_masked_init", true); T && T->hasInitializer())
+    {
+        auto *Arr = T->getInitializer();
+        for (unsigned i = 0, n = Arr->getType()->getArrayNumElements(); i < n; i++)
+        {
+            Constant *E = Arr->getAggregateElement(i);
+            GlobalValue *SG = nullptr, *TG = nullptr;
+            int64_t so = 0, to = 0;
+            auto *Desc = dyn_cast<ConstantInt>(E->getAggregateElement(2));
+            if (!img.addressOf(E->getAggregateElement(0u), SG, so) || !img.addressOf(E->getAggregateElement(1), TG, to) ||
+                !Desc || !img.offsets.count(SG) || !img.offsets.count(TG))
+                return fail("a mask() initializer the globals buffer cannot hold");
+            uint64_t d = Desc->getZExtValue();
+            masked.push_back({img.offsets[SG] + so, img.offsets[TG] + to, d & 63, d >> 8});
+        }
+        T->setInitializer(nullptr);
+        T->eraseFromParent();
+    }
+
+    SmallPtrSet<Function *, 8> users;
+    for (GlobalVariable *GV : globals)
+        zludaUsingFunctions(GV, users);
+    // Functions inlined into every caller are dead.
+    SmallVector<Function *, 4> dead;
+    for (Function *F : users)
+        if (!F->hasFnAttribute("air-kernel") && F->use_empty())
+            dead.push_back(F);
+    for (Function *F : dead)
+    {
+        users.erase(F);
+        F->eraseFromParent();
+    }
+    // The other functions that use a variable take the buffer's address as a last parameter too, as do their
+    // callers up to the kernels (instead of being inlined into every kernel: Cycles' integrator in each of 75
+    // kernels, a Metal module nine times the size). Function pointers are direct calls by now
+    // (LLVMZludaAirFunctionPointers): every use of these functions is a call.
+    SmallVector<Function *, 8> work(users.begin(), users.end());
+    while (!work.empty())
+    {
+        Function *F = work.pop_back_val();
+        if (F->hasFnAttribute("air-kernel"))
+            continue;
+        for (User *U : F->users())
+        {
+            auto *CB = dyn_cast<CallBase>(U);
+            if (!CB || CB->getCalledFunction() != F)
+                return fail(F->getName().str() + " uses a .global variable and is not only called directly");
+            if (users.insert(CB->getFunction()).second)
+                work.push_back(CB->getFunction());
+        }
+    }
+    std::string kernels;
+    SmallVector<Constant *, 8> consts(globals.begin(), globals.end());
+    // F with a last parameter, the buffer's address (the old function's calls are rewritten below)
+    DenseMap<Function *, Function *> renamed;
+    // (in the module's order, not the pointer set's, which follows heap addresses: the Metal AIR differed from one
+    // run to the next, defeating Metal's pipeline cache)
+    SmallVector<Function *, 8> order;
+    for (Function &F : *Mod)
+        if (users.contains(&F))
+            order.push_back(&F);
+    for (Function *K : order)
+    {
+        FunctionType *FT = K->getFunctionType();
+        SmallVector<Type *, 8> params(FT->params());
+        // (a kernel's is a pointer; another function's an i64, which the AIR target can keep as a function: Metal's
+        // reader rejects a pointer parameter of one, "Unexpected bitcode file")
+        bool kernel = K->hasFnAttribute("air-kernel");
+        params.push_back(kernel ? (Type *)PointerType::get(Ctx, 1) : Type::getInt64Ty(Ctx));
+        // (in K's place)
+        Function *NK = Function::Create(FunctionType::get(FT->getReturnType(), params, false), K->getLinkage(),
+                                        K->getAddressSpace(), "");
+        Mod->getFunctionList().insert(K->getIterator(), NK);
+        NK->copyAttributesFrom(K);
+        NK->splice(NK->begin(), K);
+        for (auto [Old, New] : zip(K->args(), NK->args()))
+        {
+            New.takeName(&Old);
+            Old.replaceAllUsesWith(&New);
+        }
+        Argument *Base = NK->getArg(NK->arg_size() - 1);
+        Base->setName("zluda_globals");
+        // (the buffer's air.arg_name, by which it is told from the parameters: an attribute survives where the
+        // context discards value names, as release builds do)
+        Base->addAttr(Attribute::get(Ctx, "air-arg-name", "zluda_globals"));
+        // (noalias only on kernels: the AIR writer has no encoding for it on another function's parameter)
+        if (K->hasFnAttribute("air-kernel"))
+        {
+            NK->addParamAttr(Base->getArgNo(), Attribute::get(Ctx, "zluda-globals"));
+            NK->addParamAttr(Base->getArgNo(), Attribute::NoAlias);
+        }
+        NK->takeName(K);
+        renamed[K] = NK;
+    }
+    // the calls of the old functions: the new one, with the caller's buffer address
+    for (Function *K : order)
+    {
+        Function *NK = renamed[K];
+        for (User *U : make_early_inc_range(K->users()))
+        {
+            auto *CI = cast<CallInst>(U);
+            Function *Caller = CI->getFunction();
+            Value *CallerBase = Caller->getArg(Caller->arg_size() - 1);
+            if (CallerBase->getType()->isPointerTy())
+                CallerBase = new PtrToIntInst(CallerBase, Type::getInt64Ty(Ctx), "", CI->getIterator());
+            SmallVector<Value *, 8> args(CI->args());
+            args.push_back(CallerBase);
+            CallInst *New = CallInst::Create(NK, args, "", CI->getIterator());
+            New->setCallingConv(CI->getCallingConv());
+            New->setTailCallKind(CI->getTailCallKind());
+            New->setDebugLoc(CI->getDebugLoc());
+            AttributeList AL = CI->getAttributes();
+            New->setAttributes(AttributeList::get(Ctx, AL.getFnAttrs(), AL.getRetAttrs(),
+                                                  [&] {
+                                                      SmallVector<AttributeSet, 8> ps;
+                                                      for (unsigned i = 0; i < CI->arg_size(); i++)
+                                                          ps.push_back(AL.getParamAttrs(i));
+                                                      return ps;
+                                                  }()));
+            New->takeName(CI);
+            CI->replaceAllUsesWith(New);
+            CI->eraseFromParent();
+        }
+        K->eraseFromParent();
+    }
+    for (Function *K : order)
+    {
+        Function *NK = renamed[K];
+        // Each use of a variable in NK becomes the buffer plus its offset.
+        convertUsersOfConstantsToInstructions(consts, NK);
+        IRBuilder<> B(&*NK->getEntryBlock().getFirstInsertionPt());
+        Value *Base = NK->getArg(NK->arg_size() - 1);
+        if (!Base->getType()->isPointerTy())
+            Base = B.CreateIntToPtr(Base, PointerType::get(Ctx, 1), "zluda_globals.ptr");
+        for (GlobalVariable *GV : globals)
+        {
+            bool used = any_of(GV->users(), [&](User *U) {
+                auto *I = dyn_cast<Instruction>(U);
+                return I && I->getFunction() == NK;
+            });
+            if (used)
+                zludaRetarget(GV, B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), Base, img.offsets[GV], GV->getName()),
+                              NK);
+        }
+        // Pointers held in the buffer are loaded and stored as i64: Metal's
+        // typed-pointer reader rejects a pointer to a pointer ("Unexpected
+        // bitcode file", the sregs clock emulation's timer address).
+        SmallVector<Value *, 16> work{Base};
+        SmallPtrSet<Value *, 16> seen;
+        while (!work.empty())
+        {
+            Value *P = work.pop_back_val();
+            if (!seen.insert(P).second)
+                continue;
+            for (User *U : make_early_inc_range(P->users()))
+            {
+                if (isa<GetElementPtrInst>(U) || isa<BitCastInst>(U) || isa<PHINode>(U) || isa<SelectInst>(U))
+                {
+                    if (U->getType()->isPointerTy())
+                        work.push_back(U);
+                    continue;
+                }
+                if (auto *L = dyn_cast<LoadInst>(U); L && L->getType()->isPointerTy() && !L->isAtomic())
+                {
+                    IRBuilder<> LB(L);
+                    LoadInst *I = LB.CreateAlignedLoad(LB.getInt64Ty(), P, L->getAlign(), L->isVolatile());
+                    Value *R = LB.CreateIntToPtr(I, L->getType());
+                    R->takeName(L);
+                    L->replaceAllUsesWith(R);
+                    L->eraseFromParent();
+                }
+                else if (auto *S = dyn_cast<StoreInst>(U);
+                         S && S->getPointerOperand() == P && S->getValueOperand()->getType()->isPointerTy() &&
+                         !S->isAtomic())
+                {
+                    IRBuilder<> SB(S);
+                    SB.CreateAlignedStore(SB.CreatePtrToInt(S->getValueOperand(), SB.getInt64Ty()), P,
+                                          S->getAlign(), S->isVolatile());
+                    S->eraseFromParent();
+                }
+            }
+        }
+        if (!NK->hasFnAttribute("air-kernel"))
+            continue;
+        if (!kernels.empty())
+            kernels += ", ";
+        kernels += "\"" + NK->getName().str() + "\"";
+    }
+
+    // The init kernel: each mask() byte group from the buffer's address.
+    std::string init;
+    if (!masked.empty())
+    {
+        Function *K = nullptr;
+        for (Function &F : *Mod)
+            if (F.hasFnAttribute("air-kernel"))
+                K = &F;
+        Function *IF = Function::Create(FunctionType::get(Type::getVoidTy(Ctx), {PointerType::get(Ctx, 1)}, false),
+                                        GlobalValue::ExternalLinkage, "__zluda_air_init", Mod);
+        if (K)
+            IF->setAttributes(AttributeList::get(Ctx, K->getAttributes().getFnAttrs(), {}, {}));
+        IF->addFnAttr("air-kernel");
+        Argument *G = IF->getArg(0);
+        G->setName("zluda_globals");
+        IF->addParamAttr(0, Attribute::get(Ctx, "zluda-globals"));
+        IF->addParamAttr(0, Attribute::get(Ctx, "air-arg-name", "zluda_globals"));
+        IRBuilder<> B(BasicBlock::Create(Ctx, "", IF));
+        Value *Addr = B.CreatePtrToInt(G, B.getInt64Ty());
+        for (auto &m : masked)
+        {
+            Value *V = B.CreateLShr(B.CreateAdd(Addr, B.getInt64(m[1])), m[2]);
+            Type *ET = B.getIntNTy(8 * m[3]);
+            B.CreateStore(B.CreateTrunc(V, ET), B.CreateConstInBoundsGEP1_64(B.getInt8Ty(), G, m[0]));
+        }
+        B.CreateRetVoid();
+        init = IF->getName().str();
+    }
+
+    std::string out = "{\"size\": " + std::to_string(size) + ", \"image\": \"" + zludaHex(img.image) +
+                      "\", \"relocs\": [";
+    for (size_t i = 0; i < img.relocs.size(); i++)
+        out += std::string(i ? ", [" : "[") + std::to_string(img.relocs[i].first) + ", " +
+               std::to_string(img.relocs[i].second) + "]";
+    out += "], \"symbols\": {";
+    for (size_t i = 0; i < globals.size(); i++)
+        out += std::string(i ? ", \"" : "\"") + globals[i]->getName().str() + "\": " +
+               std::to_string(img.offsets[globals[i]]);
+    out += "}, \"kernels\": [" + kernels + "], \"masked\": [";
+    for (size_t i = 0; i < masked.size(); i++)
+        out += std::string(i ? ", [" : "[") + std::to_string(masked[i][0]) + ", " + std::to_string(masked[i][1]) +
+               ", " + std::to_string(masked[i][2]) + ", " + std::to_string(masked[i][3]) + "]";
+    out += "], \"init_kernel\": \"" + init + "\"}";
+
+    // (their initializers, now in the image, may refer to each other)
+    for (GlobalVariable *GV : globals)
+        GV->setInitializer(nullptr);
+    for (GlobalVariable *GV : globals)
+    {
+        GV->removeDeadConstantUsers();
+        if (!GV->use_empty())
+            return fail(GV->getName().str() + " is used outside the kernels (in another variable's initializer?)");
+        GV->eraseFromParent();
+    }
+    *json = LLVMCreateMessage(out.c_str());
+    return 1;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air for Metal: the shared memory registers in
+// Metal's numbering of threadgroup addresses. AGX numbers shared memory from
+// 0 (static variables in module order, then the dynamic shared memory), so
+// zluda_ptx_impl_agx.ll computes sizes and offsets alike. Metal numbers its
+// threadgroup allocations its own way (on an M2 Max static ones from 0x10000,
+// reordered, and dynamic threadgroup memory from 0x80000000 after the static
+// bytes), so in the .air:
+// - ptrtoint(__zluda_agx_smem_end), the end of the static variables, is their
+//   size in AGX's layout (%dynamic_smem_size is the launch's bytes minus it);
+// - the bias added to the reserved region's offsets places it after the
+//   highest threadgroup address the kernel uses (its static variables and its
+//   dynamic shared memory), rounded to 128 bytes: every relation PTX states
+//   between shared addresses and %reserved_smem_offset_* holds. Sizes
+//   (%total_smem_size, %dynamic_smem_size, %aggr_smem_size) are unchanged.
+// Returns 1 if the module changed.
+int LLVMZludaAirSharedLayout(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    const DataLayout &DL = Mod->getDataLayout();
+    LLVMContext &Ctx = Mod->getContext();
+    GlobalVariable *End = Mod->getGlobalVariable("__zluda_agx_smem_end", true);
+    GlobalVariable *Bias = Mod->getGlobalVariable("__zluda_agx_reserved_smem_bias", true);
+    GlobalVariable *Bytes = Mod->getGlobalVariable("__zluda_agx_smem_bytes", true);
+    if (!End && !Bias)
+        return 0;
+    // The static variables in AGX's layout, and the dynamic shared memory.
+    uint64_t statics = 0;
+    SmallVector<std::pair<GlobalVariable *, uint64_t>, 8> sized;
+    SmallVector<GlobalVariable *, 2> dynamic;
+    for (GlobalVariable &GV : Mod->globals())
+    {
+        if (GV.getAddressSpace() != 3 || &GV == End)
+            continue;
+        uint64_t size = DL.getTypeAllocSize(GV.getValueType());
+        if (size)
+        {
+            statics = alignTo(statics, DL.getValueOrABITypeAlignment(GV.getAlign(), GV.getValueType())) + size;
+            sized.push_back({&GV, size});
+        }
+        else
+            dynamic.push_back(&GV);
+    }
+    bool changed = false;
+    if (End)
+    {
+        convertUsersOfConstantsToInstructions({End});
+        for (User *U : make_early_inc_range(End->users()))
+            if (auto *P = dyn_cast<PtrToIntInst>(U))
+            {
+                P->replaceAllUsesWith(ConstantInt::get(P->getType(), statics));
+                P->eraseFromParent();
+                changed = true;
+            }
+        End->removeDeadConstantUsers();
+        if (End->use_empty())
+            End->eraseFromParent();
+    }
+    if (Bias)
+    {
+        for (User *U : make_early_inc_range(Bias->users()))
+        {
+            auto *L = dyn_cast<LoadInst>(U);
+            if (!L)
+                continue;
+            IRBuilder<> B(L);
+            Type *I64 = B.getInt64Ty();
+            Value *Total = Bytes ? B.CreateZExt(B.CreateLoad(B.getInt32Ty(), Bytes), I64)
+                                 : static_cast<Value *>(B.getInt64(statics));
+            Value *Top = B.getInt64(0);
+            auto Max = [&](Value *E) { Top = B.CreateBinaryIntrinsic(Intrinsic::umax, Top, E); };
+            for (auto [GV, size] : sized)
+                Max(B.CreateAdd(B.CreatePtrToInt(GV, I64), B.getInt64(size)));
+            for (GlobalVariable *GV : dynamic)
+                Max(B.CreateAdd(B.CreatePtrToInt(GV, I64), B.CreateSub(Total, B.getInt64(statics))));
+            auto Round = [&](Value *V) { return B.CreateAnd(B.CreateAdd(V, B.getInt64(127)), B.getInt64(~127ull)); };
+            Value *R = B.CreateTrunc(B.CreateSub(Round(Top), Round(Total)), L->getType());
+            L->replaceAllUsesWith(R);
+            L->eraseFromParent();
+            changed = true;
+        }
+        if (Bias->use_empty())
+            Bias->eraseFromParent();
+    }
+    (void)Ctx;
+    return changed ? 1 : 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX_VIA_AIR, the .air for Metal: function pointers without Metal's
+// function pointers. AIR has no call stack and the AIR target inlines every
+// call, so an indirect call becomes a choice among the functions it can call:
+// those of its type whose address the module takes, which are all a CUDA
+// function pointer can hold (ZLUDA compiles the whole linked program as one
+// module). A function's address is a small integer ID (1, 2, ...; 0 stays
+// null), wherever it appears: in instructions and in variable initializers
+// (which the globals buffer then holds as numbers). An indirect call compares
+// the callee's ID with each candidate's and calls it directly; with none of
+// them matching (an invalid pointer, undefined in CUDA) it calls the last.
+// Returns -1 with *error if a call has no candidate, else 1 if the module
+// changed.
+int LLVMZludaAirFunctionPointers(LLVMModuleRef M, char **error)
+{
+    Module *Mod = unwrap(M);
+    LLVMContext &Ctx = Mod->getContext();
+    Type *I64 = Type::getInt64Ty(Ctx);
+    auto isCallee = [](const Use &U) {
+        auto *CB = dyn_cast<CallBase>(U.getUser());
+        return CB && CB->isCallee(&U);
+    };
+    SmallVector<Function *, 8> taken;
+    for (Function &F : *Mod)
+        if (!F.isDeclaration() && !F.isIntrinsic() &&
+            any_of(F.uses(), [&](const Use &U) { return !isCallee(U) && !isa<BlockAddress>(U.getUser()); }))
+            taken.push_back(&F);
+    SmallVector<CallBase *, 8> indirect;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *CB = dyn_cast<CallBase>(&I); CB && CB->isIndirectCall() && !CB->isInlineAsm())
+                indirect.push_back(CB);
+    if (taken.empty() && indirect.empty())
+        return 0;
+
+    // Addresses as IDs.
+    DenseMap<Function *, uint64_t> ids;
+    for (size_t i = 0; i < taken.size(); i++)
+    {
+        Function *F = taken[i];
+        uint64_t id = i + 1;
+        ids[F] = id;
+        Constant *IdPtr = ConstantExpr::getIntToPtr(ConstantInt::get(I64, id), F->getType());
+        SmallVector<Use *, 8> uses;
+        for (Use &U : F->uses())
+            if (!isCallee(U) && !isa<BlockAddress>(U.getUser()) && !isa<GlobalValue>(U.getUser()))
+                uses.push_back(&U);
+        for (Use *U : uses)
+        {
+            if (auto *C = dyn_cast<Constant>(U->getUser()))
+                C->handleOperandChange(F, IdPtr);
+            else
+                U->set(IdPtr);
+        }
+    }
+    // llvm.used and the like may still list a function; they are not addresses the program sees.
+
+    // Indirect calls as a choice among direct ones.
+    for (CallBase *CB : indirect)
+    {
+        auto *CI = dyn_cast<CallInst>(CB);
+        if (!CI)
+        {
+            *error = LLVMCreateMessage("an indirect invoke has no Metal form");
+            return -1;
+        }
+        FunctionType *FT = CI->getFunctionType();
+        SmallVector<Function *, 8> cands;
+        for (Function *F : taken)
+            if (F->getFunctionType() == FT)
+                cands.push_back(F);
+        if (cands.empty())
+        {
+            std::string s;
+            raw_string_ostream os(s);
+            os << "an indirect call of type " << *FT << " in " << CI->getFunction()->getName()
+               << " has no function it can call";
+            *error = LLVMCreateMessage(os.str().c_str());
+            return -1;
+        }
+        BasicBlock *Head = CI->getParent();
+        BasicBlock *Tail = SplitBlock(Head, CI);
+        Head->getTerminator()->eraseFromParent();
+        IRBuilder<> B(Head);
+        Value *Id = B.CreatePtrToInt(CI->getCalledOperand(), I64);
+        Function *Fn = Head->getParent();
+        PHINode *Phi = nullptr;
+        if (!CI->getType()->isVoidTy())
+        {
+            Phi = PHINode::Create(CI->getType(), cands.size(), "", Tail->begin());
+            CI->replaceAllUsesWith(Phi);
+        }
+        SmallVector<Value *, 8> args(CI->args());
+        BasicBlock *Test = Head;
+        for (size_t i = 0; i < cands.size(); i++)
+        {
+            BasicBlock *Arm = BasicBlock::Create(Ctx, "indirect." + cands[i]->getName(), Fn, Tail);
+            IRBuilder<> AB(Arm);
+            CallInst *Direct = AB.CreateCall(FT, cands[i], args);
+            Direct->setCallingConv(cands[i]->getCallingConv());
+            Direct->setAttributes(CI->getAttributes());
+            AB.CreateBr(Tail);
+            if (Phi)
+                Phi->addIncoming(Direct, Arm);
+            IRBuilder<> TB(Test);
+            if (i + 1 == cands.size())
+                TB.CreateBr(Arm);
+            else
+            {
+                BasicBlock *Next = BasicBlock::Create(Ctx, "indirect.next", Fn, Tail);
+                TB.CreateCondBr(TB.CreateICmpEQ(Id, TB.getInt64(ids[cands[i]])), Arm, Next);
+                Test = Next;
+            }
+        }
+        CI->eraseFromParent();
+    }
+    return 1;
+}
+
+LLVM_C_EXTERN_C_END
+
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
+
+LLVM_C_EXTERN_C_BEGIN
+
+namespace
+{
+    // ZLUDA's address spaces (ptx/src/pass/llvm/mod.rs: generic 0, global 1,
+    // shared 3, constant 4, private 5) as AIR's (thread 0, device 1, constant
+    // 2, threadgroup 3, and the generic-pointer hint 4 of llvm/IR/AIR.h, which
+    // the AIR target's Metal pipeline emulates and the AGX backend compiles).
+    struct ZludaAirTypes : public ValueMapTypeRemapper
+    {
+        DenseMap<Type *, Type *> cache;
+
+        static unsigned space(unsigned as)
+        {
+            switch (as)
+            {
+            case 0:
+                return 4;
+            case 4:
+                return 2;
+            case 5:
+                return 0;
+            default:
+                return as;
+            }
+        }
+
+        Type *remapType(Type *T) override
+        {
+            auto it = cache.find(T);
+            if (it != cache.end())
+                return it->second;
+            Type *R = T;
+            if (auto *PT = dyn_cast<PointerType>(T))
+                R = PointerType::get(T->getContext(), space(PT->getAddressSpace()));
+            else if (auto *VT = dyn_cast<VectorType>(T))
+                R = VectorType::get(remapType(VT->getElementType()), VT->getElementCount());
+            else if (auto *AT = dyn_cast<ArrayType>(T))
+                R = ArrayType::get(remapType(AT->getElementType()), AT->getNumElements());
+            else if (auto *FT = dyn_cast<FunctionType>(T))
+            {
+                SmallVector<Type *, 8> params;
+                for (Type *P : FT->params())
+                    params.push_back(remapType(P));
+                R = FunctionType::get(remapType(FT->getReturnType()), params, FT->isVarArg());
+            }
+            else if (auto *ST = dyn_cast<StructType>(T); ST && !ST->isOpaque())
+            {
+                SmallVector<Type *, 8> elts;
+                for (Type *E : ST->elements())
+                    elts.push_back(remapType(E));
+                if (!std::equal(elts.begin(), elts.end(), ST->element_begin()))
+                    R = ST->isLiteral() ? StructType::get(T->getContext(), elts, ST->isPacked())
+                                        : StructType::create(T->getContext(), elts, ST->getName().str() + ".air",
+                                                             ST->isPacked());
+            }
+            cache[T] = R;
+            return R;
+        }
+    };
+}
+
+// ZLUDA_AGX target Air: the linked module (front end and helpers) in AIR's
+// address spaces, by cloning every global and function whose type changes.
+// Returns -1 with *error, else 0.
+int LLVMZludaAirRemapAddressSpaces(LLVMModuleRef M, char **error)
+{
+    Module *Mod = unwrap(M);
+    // llvm.used and llvm.compiler.used mean nothing in AIR (and keep variables used by name only, which the
+    // AIR for Metal moves into the globals buffer)
+    for (const char *name : {"llvm.used", "llvm.compiler.used"})
+        if (GlobalVariable *GV = Mod->getGlobalVariable(name, true))
+            GV->eraseFromParent();
+    // A call of a kernel (through its address, which the optimizer made direct) is undefined: no AIR function
+    // can call a kernel, and the kernel's AIR signature is made later.
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+            if (auto *CB = dyn_cast<CallBase>(&I))
+                if (auto *Callee = dyn_cast<Function>(CB->getCalledOperand()->stripPointerCasts());
+                    Callee && Callee->hasFnAttribute("air-kernel"))
+                {
+                    if (!CB->getType()->isVoidTy())
+                        CB->replaceAllUsesWith(PoisonValue::get(CB->getType()));
+                    CB->eraseFromParent();
+                }
+    ZludaAirTypes types;
+    ValueToValueMapTy vmap;
+    SmallVector<GlobalVariable *, 16> oldGlobals;
+    for (GlobalVariable &GV : Mod->globals())
+        oldGlobals.push_back(&GV);
+    SmallVector<Function *, 32> oldFunctions;
+    for (Function &F : *Mod)
+        oldFunctions.push_back(&F);
+    SmallVector<std::pair<GlobalVariable *, GlobalVariable *>, 16> globals;
+    SmallVector<std::pair<Function *, Function *>, 32> functions;
+    for (GlobalVariable *GV : oldGlobals)
+    {
+        Type *T = types.remapType(GV->getValueType());
+        unsigned as = ZludaAirTypes::space(GV->getAddressSpace());
+        if (T == GV->getValueType() && as == GV->getAddressSpace())
+            continue;
+        auto *N = new GlobalVariable(*Mod, T, GV->isConstant(), GV->getLinkage(), nullptr, GV->getName() + ".air",
+                                     nullptr, GV->getThreadLocalMode(), as, GV->isExternallyInitialized());
+        N->copyAttributesFrom(GV);
+        vmap[GV] = N;
+        globals.push_back({GV, N});
+    }
+    for (Function *F : oldFunctions)
+    {
+        auto *FT = cast<FunctionType>(types.remapType(F->getFunctionType()));
+        // (a definition is cloned even with the same type: its body has ZLUDA's address spaces)
+        if (FT == F->getFunctionType() && (F->isDeclaration() || F->isIntrinsic()))
+            continue;
+        if (F->isIntrinsic())
+        {
+            SmallVector<Type *, 4> overloads;
+            if (!Intrinsic::isSignatureValid(F->getIntrinsicID(), FT, overloads))
+            {
+                *error = LLVMCreateMessage(("no form of " + F->getName().str() + " in AIR's address spaces").c_str());
+                return -1;
+            }
+            vmap[F] = Intrinsic::getOrInsertDeclaration(Mod, F->getIntrinsicID(), overloads);
+            continue;
+        }
+        Function *N = Function::Create(FT, F->getLinkage(), F->getAddressSpace(), F->getName() + ".air", Mod);
+        N->copyAttributesFrom(F);
+        vmap[F] = N;
+        functions.push_back({F, N});
+    }
+    std::function<Constant *(Constant *)> mapInit = [&](Constant *C) -> Constant * {
+        if (isa<ConstantAggregate>(C))
+        {
+            SmallVector<Constant *, 8> ops;
+            for (Use &U : C->operands())
+                ops.push_back(mapInit(cast<Constant>(U)));
+            Type *T = types.remapType(C->getType());
+            if (auto *AT = dyn_cast<ArrayType>(T))
+                return ConstantArray::get(AT, ops);
+            if (auto *ST = dyn_cast<StructType>(T))
+                return ConstantStruct::get(ST, ops);
+            return ConstantVector::get(ops);
+        }
+        return MapValue(C, vmap, RF_None, &types);
+    };
+    for (auto [Old, New] : globals)
+        if (Old->hasInitializer())
+            New->setInitializer(mapInit(Old->getInitializer()));
+    for (GlobalVariable *GV : oldGlobals)
+        if (!vmap.count(GV) && GV->hasInitializer())
+            GV->setInitializer(mapInit(GV->getInitializer()));
+    // The bodies move to the new functions and are remapped in place (each instruction's type and operands,
+    // as CloneFunctionInto's local changes would): a copy of every instruction took Cycles' remap 8 s.
+    for (auto [Old, New] : functions)
+    {
+        if (Old->isDeclaration())
+            continue;
+        auto arg = New->arg_begin();
+        for (Argument &A : Old->args())
+        {
+            arg->setName(A.getName());
+            vmap[&A] = &*arg++;
+        }
+        New->copyMetadata(Old, 0);
+        New->splice(New->begin(), Old);
+    }
+    for (auto [Old, New] : functions)
+        for (BasicBlock &BB : *New)
+            for (Instruction &I : BB)
+                RemapInstruction(&I, vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals, &types);
+    for (auto [Old, New] : functions)
+        Old->dropAllReferences();
+    for (auto [Old, New] : globals)
+        Old->setInitializer(nullptr);
+    // A use the mapping did not reach (a constant expression in an initializer) takes the new definition: a
+    // function directly (functions stay in address space 0), a variable through a cast to its old address space.
+    for (auto [Old, New] : functions)
+    {
+        std::string name = Old->getName().str();
+        Old->replaceAllUsesWith(New->getType() == Old->getType()
+                                    ? static_cast<Constant *>(New)
+                                    : ConstantExpr::getPointerCast(New, Old->getType()));
+        Old->eraseFromParent();
+        New->setName(name);
+    }
+    for (auto [Old, New] : globals)
+    {
+        std::string name = Old->getName().str();
+        Old->replaceAllUsesWith(ConstantExpr::getPointerBitCastOrAddrSpaceCast(New, Old->getType()));
+        Old->eraseFromParent();
+        New->setName(name);
+    }
+    // casts that became no-ops (generic to generic...)
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+            if (auto *C = dyn_cast<AddrSpaceCastInst>(&I); C && C->getSrcTy() == C->getDestTy())
+            {
+                C->replaceAllUsesWith(C->getOperand(0));
+                C->eraseFromParent();
+            }
+    return 0;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// The prefix of ZLUDA's GPU primitives (zludaPrimitivePrefix): 1 for the Air target's __zluda_air.*, 0 for the
+// AGX intrinsics.
+void LLVMZludaSetAirPrimitives(int air)
+{
+    zludaPrimitivePrefix = air ? "__zluda_air." : "llvm.agx.";
+}
+
+LLVM_C_EXTERN_C_END
+
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Transforms/Utils/PromoteMemToReg.h>
+#include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Transforms/Utils/Local.h>
+
+LLVM_C_EXTERN_C_BEGIN
+
+// The bits under Mask of a floating point mode value, where they are the same whichever way the value was
+// made: through phis and selects (the mode where control flow joins) and the front end's updates of the mode
+// (and / or with constants, the bits of one field replaced). A phi's value is the agreement of its incoming
+// values, found by iterating to a fixed point over the phis and selects reached (a cycle agrees with whatever
+// enters it). None where the bits differ or are not known. Linear in the values reached, per mask.
+static std::optional<uint64_t> zludaModeField(Value *Root, uint64_t RootMask)
+{
+    // lattice: Top (no information yet), a value, Bottom (differs / unknown)
+    constexpr uint64_t Top = UINT64_MAX - 1, Bottom = UINT64_MAX;
+    DenseMap<std::pair<Value *, uint64_t>, uint64_t> state;
+    SmallVector<std::pair<Value *, uint64_t>, 32> order;
+    // the values and masks reached
+    SmallVector<std::pair<Value *, uint64_t>, 32> stack{{Root, RootMask}};
+    while (!stack.empty())
+    {
+        auto key = stack.pop_back_val();
+        if (!state.try_emplace(key, Top).second)
+            continue;
+        order.push_back(key);
+        auto [V, Mask] = key;
+        if (auto *Fr = dyn_cast<FreezeInst>(V))
+            stack.push_back({Fr->getOperand(0), Mask});
+        else if (auto *BO = dyn_cast<BinaryOperator>(V))
+        {
+            if (auto *K = dyn_cast<ConstantInt>(BO->getOperand(1)))
+            {
+                uint64_t c = K->getZExtValue() & Mask;
+                if (BO->getOpcode() == Instruction::Or && c != Mask)
+                    stack.push_back({BO->getOperand(0), Mask & ~c});
+                else if (BO->getOpcode() == Instruction::And && c != 0)
+                    stack.push_back({BO->getOperand(0), c});
+            }
+        }
+        else if (auto *P = dyn_cast<PHINode>(V))
+            for (Value *In : P->incoming_values())
+                stack.push_back({In, Mask});
+        else if (auto *Sel = dyn_cast<SelectInst>(V))
+        {
+            stack.push_back({Sel->getTrueValue(), Mask});
+            stack.push_back({Sel->getFalseValue(), Mask});
+        }
+    }
+    auto get = [&](Value *V, uint64_t Mask) { return state.lookup({V, Mask}); };
+    auto meet = [&](uint64_t a, uint64_t b) {
+        if (a == Top)
+            return b;
+        if (b == Top)
+            return a;
+        return a == b ? a : Bottom;
+    };
+    for (bool changed = true; changed;)
+    {
+        changed = false;
+        for (auto key : order)
+        {
+            auto [V, Mask] = key;
+            uint64_t v = Bottom;
+            if (auto *K = dyn_cast<ConstantInt>(V))
+                v = K->getZExtValue() & Mask;
+            else if (auto *Fr = dyn_cast<FreezeInst>(V))
+                v = get(Fr->getOperand(0), Mask);
+            else if (auto *BO = dyn_cast<BinaryOperator>(V))
+            {
+                auto *K = dyn_cast<ConstantInt>(BO->getOperand(1));
+                if (K && BO->getOpcode() == Instruction::Or)
+                {
+                    uint64_t c = K->getZExtValue() & Mask;
+                    uint64_t x = c == Mask ? 0 : get(BO->getOperand(0), Mask & ~c);
+                    v = x >= Top ? x : (x | c);
+                }
+                else if (K && BO->getOpcode() == Instruction::And)
+                {
+                    uint64_t c = K->getZExtValue() & Mask;
+                    uint64_t x = c == 0 ? 0 : get(BO->getOperand(0), c);
+                    v = x >= Top ? x : (x & c);
+                }
+            }
+            else if (auto *P = dyn_cast<PHINode>(V))
+            {
+                v = Top;
+                for (Value *In : P->incoming_values())
+                    v = meet(v, get(In, Mask));
+            }
+            else if (auto *Sel = dyn_cast<SelectInst>(V))
+                v = meet(get(Sel->getTrueValue(), Mask), get(Sel->getFalseValue(), Mask));
+            uint64_t &cur = state[key];
+            // values only move down the lattice (Top, a value, Bottom)
+            uint64_t next = cur == Top ? v : (cur == Bottom || v == Top ? cur : (v == cur ? cur : Bottom));
+            if (next != cur)
+            {
+                cur = next;
+                changed = true;
+            }
+        }
+    }
+    uint64_t r = get(Root, RootMask);
+    return r >= Top ? std::nullopt : std::optional<uint64_t>(r);
+}
+
+// ZLUDA_AGX target Air, Metal: 32-bit integer division and remainder by a divisor that is not a constant, as
+// AMDGPU expands them (AMDGPUCodeGenPrepare's expandDivRem32): an f32 reciprocal estimate of the divisor scaled
+// to 2^32, one Newton step in integers, the quotient as the high half of x times it, and two corrections. On
+// the M2 Max, Metal's own udiv took 1.57 ms where this took 0.48 ms with the divisor's part hoisted out of the
+// loop (a loop-invariant divisor, as idx / width) and 1.37 ms without; exact for 134M divisions over the whole
+// u32 range. Signed ones on the magnitudes. Run before the Metal pipeline, whose LICM hoists the divisor's
+// part. Returns the number expanded.
+static Value *zludaUMulHi32(IRBuilder<> &B, Value *A, Value *C)
+{
+    Type *I64 = B.getInt64Ty();
+    Value *P = B.CreateMul(B.CreateZExt(A, I64), B.CreateZExt(C, I64));
+    return B.CreateTrunc(B.CreateLShr(P, 32), B.getInt32Ty());
+}
+
+static std::pair<Value *, Value *> zludaUDivRem32(IRBuilder<> &B, Value *X, Value *Y)
+{
+    Type *F32 = B.getFloatTy();
+    Type *I32 = B.getInt32Ty();
+    // z ~ 2^32 / y: the reciprocal (rcp.approx's fdiv afn), times 2^32 - 512, as an integer
+    Value *FY = B.CreateUIToFP(Y, F32);
+    auto *Rcp = cast<Instruction>(B.CreateFDiv(ConstantFP::get(F32, 1.0), FY));
+    Rcp->setHasApproxFunc(true);
+    Value *Scaled = B.CreateFMul(Rcp, ConstantFP::get(F32, 4294966784.0));
+    Value *Z = B.CreateIntrinsic(Intrinsic::fptoui_sat, {I32, F32}, {Scaled});
+    // one Newton step: z += mulhi(z, -y * z)
+    Value *E = B.CreateMul(B.CreateNeg(Y), Z);
+    Z = B.CreateAdd(Z, zludaUMulHi32(B, Z, E));
+    // q = mulhi(x, z), r = x - q * y, then two corrections
+    Value *Q = zludaUMulHi32(B, X, Z);
+    Value *R = B.CreateSub(X, B.CreateMul(Q, Y));
+    for (int i = 0; i < 2; i++)
+    {
+        Value *C = B.CreateICmpUGE(R, Y);
+        Q = B.CreateAdd(Q, B.CreateZExt(C, I32));
+        R = B.CreateSelect(C, B.CreateSub(R, Y), R);
+    }
+    return {Q, R};
+}
+
+int LLVMZludaAirExpandDivisions(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    SmallVector<BinaryOperator *, 16> Divs;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *BO = dyn_cast<BinaryOperator>(&I))
+                switch (BO->getOpcode())
+                {
+                case Instruction::UDiv:
+                case Instruction::URem:
+                case Instruction::SDiv:
+                case Instruction::SRem:
+                    if (BO->getType()->isIntegerTy(32) && !isa<Constant>(BO->getOperand(1)))
+                        Divs.push_back(BO);
+                    break;
+                default:
+                    break;
+                }
+    for (BinaryOperator *BO : Divs)
+    {
+        IRBuilder<> B(BO);
+        Value *X = BO->getOperand(0), *Y = BO->getOperand(1);
+        bool Signed = BO->getOpcode() == Instruction::SDiv || BO->getOpcode() == Instruction::SRem;
+        bool Rem = BO->getOpcode() == Instruction::URem || BO->getOpcode() == Instruction::SRem;
+        Value *R;
+        if (!Signed)
+        {
+            auto [Q, Remainder] = zludaUDivRem32(B, X, Y);
+            R = Rem ? Remainder : Q;
+        }
+        else
+        {
+            // on the magnitudes (INT_MIN's is 2^31 as an unsigned value); the quotient negative when the signs
+            // differ, the remainder of the dividend's sign
+            Value *Zero = B.getInt32(0);
+            Value *XNeg = B.CreateICmpSLT(X, Zero), *YNeg = B.CreateICmpSLT(Y, Zero);
+            Value *AX = B.CreateSelect(XNeg, B.CreateNeg(X), X);
+            Value *AY = B.CreateSelect(YNeg, B.CreateNeg(Y), Y);
+            auto [Q, Remainder] = zludaUDivRem32(B, AX, AY);
+            if (Rem)
+                R = B.CreateSelect(XNeg, B.CreateNeg(Remainder), Remainder);
+            else
+                R = B.CreateSelect(B.CreateXor(XNeg, YNeg), B.CreateNeg(Q), Q);
+        }
+        R->takeName(BO);
+        BO->replaceAllUsesWith(R);
+        BO->eraseFromParent();
+    }
+    return Divs.size();
+}
+
+// ZLUDA_AGX target Air: removes the f32 flushes the front end marked !zluda.ftz.compare (setp.ftz's operands
+// outside --strict-fp), the select of each replaced by its unflushed bits: the GPU's own f32 compares flush
+// denormals. Run after the first optimization, which folded the compares of constants (as IEEE does, so with
+// their flushes). A flush whose select an optimization changed stays. Returns the number removed.
+int LLVMZludaAirDropCompareFlushes(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    unsigned Kind = Mod->getContext().getMDKindID("zluda.ftz.compare");
+    SmallVector<SelectInst *, 16> Flushes;
+    for (Function &F : *Mod)
+        for (Instruction &I : instructions(F))
+            if (auto *S = dyn_cast<SelectInst>(&I); S && S->getMetadata(Kind))
+                Flushes.push_back(S);
+    for (SelectInst *S : Flushes)
+    {
+        S->replaceAllUsesWith(S->getFalseValue());
+        S->eraseFromParent();
+    }
+    return Flushes.size();
+}
+
+// ZLUDA_AGX target Air: the floating point mode of PTX's rounding modifiers
+// (__zluda_air.set.fpmode / __zluda_air.get.fpmode, as llvm.agx.set.fpmode for
+// the Agx target: f32 rounding in bits 0-1, f16/bf16/f64 in bits 2-3,
+// numbered like llvm.get.rounding) as the static rounding of each constrained
+// operation it reaches: AIR has no mode register. The mode starts as round to
+// nearest in every function (kernels have the others inlined). Where the
+// reaching mode is not a constant, the operation is made in each rounding and
+// the mode selects the result. strict: strict floating point (IEEE f32 emulation), where f32 operations keep
+// denormals. Returns the number of functions changed.
+int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
+{
+    Module *Mod = unwrap(M);
+    LLVMContext &Ctx = Mod->getContext();
+    Function *Set = Mod->getFunction("__zluda_air.set.fpmode");
+    Function *Get = Mod->getFunction("__zluda_air.get.fpmode");
+    static const char *names[4] = {"round.towardzero", "round.tonearest", "round.upward", "round.downward"};
+    int changed = 0;
+    for (Function &F : *Mod)
+    {
+        if (F.isDeclaration())
+            continue;
+        SmallVector<CallInst *, 8> sets, gets;
+        SmallVector<ConstrainedFPIntrinsic *, 16> ops;
+        for (Instruction &I : instructions(F))
+            if (auto *CI = dyn_cast<CallInst>(&I))
+            {
+                if (Set && CI->getCalledFunction() == Set)
+                    sets.push_back(CI);
+                else if (Get && CI->getCalledFunction() == Get)
+                    gets.push_back(CI);
+                else if (auto *C = dyn_cast<ConstrainedFPIntrinsic>(CI))
+                    if (C->getRoundingMode() == RoundingMode::Dynamic)
+                        ops.push_back(C);
+            }
+        if (sets.empty() && gets.empty() && ops.empty())
+            continue;
+        changed++;
+        Type *I32 = Type::getInt32Ty(Ctx);
+        IRBuilder<> Entry(&*F.getEntryBlock().getFirstInsertionPt());
+        AllocaInst *mode = Entry.CreateAlloca(I32, nullptr, "fpmode");
+        Entry.CreateStore(ConstantInt::get(I32, 1 | (1 << 2)), mode);
+        for (CallInst *CI : sets)
+        {
+            new StoreInst(CI->getArgOperand(0), mode, CI->getIterator());
+            CI->eraseFromParent();
+        }
+        for (CallInst *CI : gets)
+        {
+            LoadInst *L = new LoadInst(I32, mode, "fpmode", CI->getIterator());
+            CI->replaceAllUsesWith(L);
+            CI->eraseFromParent();
+        }
+        // the mode at each operation, read through a freeze, which keeps its value through the promotion
+        DenseMap<ConstrainedFPIntrinsic *, FreezeInst *> at;
+        for (ConstrainedFPIntrinsic *C : ops)
+            at[C] = new FreezeInst(new LoadInst(I32, mode, "fpmode", C->getIterator()), "fpmode", C->getIterator());
+        DominatorTree DT(F);
+        PromoteMemToReg({mode}, DT);
+        // the modes as constants where they are (a set is usually the previous mode with new bits)
+        for (bool again = true; again;)
+        {
+            again = false;
+            for (Instruction &I : make_early_inc_range(instructions(F)))
+                if (!isa<FreezeInst>(I) && I.getType()->isIntegerTy())
+                    if (Value *V = simplifyInstruction(&I, SimplifyQuery(Mod->getDataLayout(), &I)); V && V != &I)
+                    {
+                        I.replaceAllUsesWith(V);
+                        if (isInstructionTriviallyDead(&I))
+                            I.eraseFromParent();
+                        again = true;
+                    }
+        }
+        for (ConstrainedFPIntrinsic *C : ops)
+        {
+            FreezeInst *Fr = at[C];
+            Value *m = Fr->getOperand(0);
+            Fr->eraseFromParent();
+            // denormals flushed (bit 4 for f32, bit 5 for f16): the operands and the result, as the hardware's mode
+            // would (a GPU that flushes f32 does it itself, but not under IEEE f32 emulation, air.ieee-fp32)
+            Type *scalar = C->getType()->getScalarType();
+            if (scalar->isHalfTy() || scalar->isFloatTy())
+            {
+                bool half = scalar->isHalfTy();
+                uint64_t bit = half ? 0x20 : 0x10;
+                unsigned width = half ? 16 : 32;
+                uint64_t expMask = half ? 0x7c00 : 0x7f800000, signMask = half ? 0x8000 : 0x80000000;
+                auto flushBit = zludaModeField(m, bit);
+                // (the front end writes .ftz as the function's denormal mode, preserve-sign)
+                if (F.getDenormalMode(half ? APFloat::IEEEhalf() : APFloat::IEEEsingle()).Output !=
+                    DenormalMode::IEEE)
+                    flushBit = bit;
+                // An f32 operation rounding to nearest is the hardware's, which flushes f32 denormals itself unless
+                // strict mode keeps them (IEEE f32 emulation): flushed here only in strict mode or for the directed
+                // roundings, whose software emulation keeps denormals. (Flushed always, Blender Cycles' .ftz
+                // operations doubled its IR.)
+                auto rounding = zludaModeField(m, 3);
+                bool hardware = !half && !strict && rounding && (*rounding & 3) == 1;
+                if (!hardware && (!flushBit || *flushBit))
+                {
+                    IRBuilder<> B(C);
+                    Value *on = flushBit ? static_cast<Value *>(B.getTrue())
+                                         : B.CreateICmpNE(B.CreateAnd(m, bit), ConstantInt::get(I32, 0));
+                    auto flush = [&](IRBuilder<> &B, Value *v) -> Value * {
+                        Type *T = v->getType();
+                        Type *IT = T->getWithNewType(B.getIntNTy(width));
+                        Value *bits = B.CreateBitCast(v, IT);
+                        Value *sub = B.CreateICmpEQ(B.CreateAnd(bits, ConstantInt::get(IT, expMask)),
+                                                    Constant::getNullValue(IT));
+                        Value *zero = B.CreateAnd(bits, ConstantInt::get(IT, signMask));
+                        Value *flushed = B.CreateBitCast(B.CreateSelect(sub, zero, bits), T);
+                        return B.CreateSelect(on, flushed, v);
+                    };
+                    for (unsigned i = 0; i < C->arg_size(); i++)
+                        if (C->getArgOperand(i)->getType() == C->getType())
+                            C->setArgOperand(i, flush(B, C->getArgOperand(i)));
+                    IRBuilder<> A(C->getNextNode());
+                    Instruction *placeholder = cast<Instruction>(A.CreateFreeze(C));
+                    Value *out = flush(A, placeholder);
+                    C->replaceUsesWithIf(out, [&](Use &U) { return U.getUser() != placeholder; });
+                    placeholder->replaceAllUsesWith(C);
+                    placeholder->eraseFromParent();
+                }
+            }
+            unsigned shift = C->getType()->getScalarType()->isFloatTy() ? 0 : 2;
+            unsigned idx = C->arg_size() - 2;
+            auto withRounding = [&](CallInst *CI, unsigned r) {
+                CI->setArgOperand(idx, MetadataAsValue::get(Ctx, MDString::get(Ctx, names[r])));
+            };
+            if (auto bits = zludaModeField(m, 3ull << shift))
+            {
+                withRounding(C, (*bits >> shift) & 3);
+                continue;
+            }
+            // each rounding, chosen by the mode
+            IRBuilder<> B(C->getNextNode());
+            Value *r = B.CreateAnd(B.CreateLShr(m, shift), 3);
+            Value *result = nullptr;
+            for (unsigned k = 0; k < 4; k++)
+            {
+                auto *copy = cast<CallInst>(C->clone());
+                copy->insertBefore(B.GetInsertPoint());
+                withRounding(copy, k);
+                result = result ? B.CreateSelect(B.CreateICmpEQ(r, ConstantInt::get(I32, k)), copy, result)
+                                : static_cast<Value *>(copy);
+            }
+            C->replaceAllUsesWith(result);
+            C->eraseFromParent();
+        }
+    }
+    return changed;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, strict floating point (zoc --strict-fp): PTX's canonical NaN for every floating point
+// result that is a NaN (0x7fffffff in f32, 0x7fff in f16 and bf16; in f64 0x7fffffffffffffff only for a NaN no
+// operand was, a NaN operand's payload propagating, as Berkeley TestFloat's f64 vectors have it), as the AGX
+// target's canonical-nan feature makes it. The test is on the bits: Metal compiles with fast math, which may take
+// a float comparison with itself for true. Returns the number of results rewritten.
+int LLVMZludaAirCanonicalNaNs(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    int count = 0;
+    for (Function &F : *Mod)
+    {
+        if (F.isDeclaration())
+            continue;
+        SmallVector<Instruction *, 64> work;
+        for (Instruction &I : instructions(F))
+        {
+            Type *T = I.getType();
+            if (!T->getScalarType()->isFloatingPointTy() || T->getScalarType()->isX86_FP80Ty() ||
+                T->getScalarType()->isFP128Ty() || T->getScalarType()->isPPC_FP128Ty())
+                continue;
+            bool arithmetic = isa<BinaryOperator>(I) || isa<UnaryOperator>(I) || isa<FPTruncInst>(I) ||
+                              isa<FPExtInst>(I) || isa<SIToFPInst>(I) || isa<UIToFPInst>(I);
+            if (auto *CI = dyn_cast<CallInst>(&I))
+                arithmetic = CI->getCalledFunction() && CI->getCalledFunction()->isIntrinsic();
+            if (arithmetic)
+                work.push_back(&I);
+        }
+        for (Instruction *I : work)
+        {
+            Type *T = I->getType();
+            Type *S = T->getScalarType();
+            unsigned bits = S->getPrimitiveSizeInBits();
+            Type *IT = T->getWithNewType(IntegerType::get(Mod->getContext(), bits));
+            APInt sign = APInt::getSignedMaxValue(bits);
+            APInt inf = APFloat::getInf(S->getFltSemantics()).bitcastToAPInt();
+            IRBuilder<> B(I->getNextNode());
+            Instruction *placeholder = cast<Instruction>(B.CreateFreeze(I));
+            Value *v = B.CreateBitCast(placeholder, IT);
+            auto isNaN = [&](Value *x) {
+                return B.CreateICmpUGT(B.CreateAnd(x, ConstantInt::get(IT, sign)), ConstantInt::get(IT, inf));
+            };
+            Value *nan = isNaN(v);
+            // f64: a NaN operand's (quieted) payload propagates; only a NaN made of no NaN is canonical
+            if (S->isDoubleTy())
+                for (Value *op : I->operands())
+                    if (op->getType() == T)
+                        nan = B.CreateAnd(nan, B.CreateNot(isNaN(B.CreateBitCast(op, IT))));
+            Value *r = B.CreateBitCast(B.CreateSelect(nan, ConstantInt::get(IT, sign), v), T);
+            I->replaceUsesWithIf(r, [&](Use &U) { return U.getUser() != placeholder; });
+            placeholder->replaceAllUsesWith(I);
+            placeholder->eraseFromParent();
+            count++;
+        }
+    }
+    return count;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, strict floating point: f32 comparisons on the bits. A GPU that flushes f32 denormals
+// (Metal's) compares a denormal as zero even where the AIR asks to keep denormals: the saturation of
+// mul.rn.sat.f32 took a denormal product for zero. Each scalar fcmp of floats becomes an integer comparison of
+// keys that order like the floats (sign and magnitude to an unsigned order, +0 and -0 equal), with the
+// unordered cases from the bits. Returns the number of comparisons rewritten.
+int LLVMZludaAirCompareFloatBits(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    int count = 0;
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+        {
+            auto *C = dyn_cast<FCmpInst>(&I);
+            if (!C)
+                continue;
+            // f32 and bfloat (Metal's bfloat compares flush too), scalars and vectors
+            Type *FT = C->getOperand(0)->getType(), *E = FT->getScalarType();
+            if (!E->isFloatTy() && !E->isBFloatTy())
+                continue;
+            bool f32 = E->isFloatTy();
+            uint64_t sign = f32 ? 0x80000000 : 0x8000, magMask = sign - 1, inf = f32 ? 0x7f800000 : 0x7f80;
+            IRBuilder<> B(C);
+            Type *IT = B.getIntNTy(f32 ? 32 : 16);
+            if (auto *VT = dyn_cast<VectorType>(FT))
+                IT = VectorType::get(IT, VT->getElementCount());
+            auto k = [&](uint64_t v) { return ConstantInt::get(IT, v); };
+            auto bits = [&](Value *v) { return B.CreateBitCast(v, IT); };
+            auto isNaN = [&](Value *x) { return B.CreateICmpUGT(B.CreateAnd(x, k(magMask)), k(inf)); };
+            // key: zeros as the sign bit, positives above it, negatives below it in reverse
+            auto key = [&](Value *x) {
+                Value *mag = B.CreateAnd(x, k(magMask));
+                Value *neg = B.CreateICmpSLT(x, k(0));
+                return B.CreateSelect(neg, B.CreateSub(k(sign), mag), B.CreateAdd(k(sign), mag));
+            };
+            Value *a = bits(C->getOperand(0)), *b = bits(C->getOperand(1));
+            // .ftz (the function's f32 denormal mode, preserve-sign): denormal operands compare as zeros
+            if (f32 && F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
+            {
+                auto flush = [&](Value *x) {
+                    Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, k(inf)), k(0));
+                    return B.CreateSelect(denormal, B.CreateAnd(x, k(sign)), x);
+                };
+                a = flush(a);
+                b = flush(b);
+            }
+            Value *uno = B.CreateOr(isNaN(a), isNaN(b));
+            Value *ka = key(a), *kb = key(b);
+            Value *cmp;
+            switch (C->getPredicate())
+            {
+            case CmpInst::FCMP_OEQ:
+            case CmpInst::FCMP_UEQ:
+                cmp = B.CreateICmpEQ(ka, kb);
+                break;
+            case CmpInst::FCMP_ONE:
+            case CmpInst::FCMP_UNE:
+                cmp = B.CreateICmpNE(ka, kb);
+                break;
+            case CmpInst::FCMP_OLT:
+            case CmpInst::FCMP_ULT:
+                cmp = B.CreateICmpULT(ka, kb);
+                break;
+            case CmpInst::FCMP_OLE:
+            case CmpInst::FCMP_ULE:
+                cmp = B.CreateICmpULE(ka, kb);
+                break;
+            case CmpInst::FCMP_OGT:
+            case CmpInst::FCMP_UGT:
+                cmp = B.CreateICmpUGT(ka, kb);
+                break;
+            case CmpInst::FCMP_OGE:
+            case CmpInst::FCMP_UGE:
+                cmp = B.CreateICmpUGE(ka, kb);
+                break;
+            case CmpInst::FCMP_ORD:
+                cmp = B.CreateNot(uno);
+                break;
+            case CmpInst::FCMP_UNO:
+                cmp = uno;
+                break;
+            default:
+                continue;
+            }
+            Value *r = cmp;
+            if (C->getPredicate() != CmpInst::FCMP_ORD && C->getPredicate() != CmpInst::FCMP_UNO)
+                r = CmpInst::isUnordered(C->getPredicate()) ? B.CreateOr(uno, cmp)
+                                                            : B.CreateAnd(B.CreateNot(uno), cmp);
+            C->replaceAllUsesWith(r);
+            C->eraseFromParent();
+            count++;
+        }
+    // f32 and bfloat minimum / maximum (PTX min / max, NaN-ignoring: minimumnum / maximumnum; .NaN: minimum /
+    // maximum) on the bits too, -0 below +0, .ftz f32 operands as signed zeros; vectors one element at a time.
+    // (Metal's bfloat min / max also compare denormals as zeros.)
+    for (Function &F : *Mod)
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+        {
+            auto *II = dyn_cast<IntrinsicInst>(&I);
+            if (!II)
+                continue;
+            Type *E = II->getType()->getScalarType();
+            if (!E->isFloatTy() && !E->isBFloatTy())
+                continue;
+            Intrinsic::ID id = II->getIntrinsicID();
+            bool isMin = id == Intrinsic::minimumnum || id == Intrinsic::minimum;
+            bool isMax = id == Intrinsic::maximumnum || id == Intrinsic::maximum;
+            if (!isMin && !isMax)
+                continue;
+            bool propagate = id == Intrinsic::minimum || id == Intrinsic::maximum;
+            bool f32 = E->isFloatTy();
+            unsigned w = f32 ? 32 : 16;
+            uint64_t sign = f32 ? 0x80000000 : 0x8000, magMask = sign - 1, inf = f32 ? 0x7f800000 : 0x7f80;
+            bool ftz = f32 && F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE;
+            IRBuilder<> B(II);
+            Type *IT = B.getIntNTy(w);
+            auto k = [&](uint64_t v) { return ConstantInt::get(IT, v); };
+            auto one = [&](Value *fa, Value *fb) -> Value * {
+                Value *a = B.CreateBitCast(fa, IT), *b = B.CreateBitCast(fb, IT);
+                if (ftz)
+                {
+                    auto flush = [&](Value *x) {
+                        Value *denormal = B.CreateICmpEQ(B.CreateAnd(x, k(inf)), k(0));
+                        return B.CreateSelect(denormal, B.CreateAnd(x, k(sign)), x);
+                    };
+                    a = flush(a);
+                    b = flush(b);
+                }
+                auto isNaN = [&](Value *x) { return B.CreateICmpUGT(B.CreateAnd(x, k(magMask)), k(inf)); };
+                // a total order of the non-NaN values: negatives below the sign bit (-0 just below), positives from it
+                auto key = [&](Value *x) {
+                    Value *mag = B.CreateAnd(x, k(magMask));
+                    return B.CreateSelect(B.CreateICmpSLT(x, k(0)), B.CreateSub(k(magMask), mag),
+                                          B.CreateAdd(k(sign), mag));
+                };
+                Value *ka = key(a), *kb = key(b);
+                Value *pickA = isMin ? B.CreateICmpULE(ka, kb) : B.CreateICmpUGE(ka, kb);
+                Value *r = B.CreateSelect(pickA, a, b);
+                Value *nanA = isNaN(a), *nanB = isNaN(b);
+                if (propagate)
+                    r = B.CreateSelect(B.CreateOr(nanA, nanB), k(magMask), r);
+                else
+                {
+                    r = B.CreateSelect(nanA, b, B.CreateSelect(nanB, a, r));
+                    r = B.CreateSelect(B.CreateAnd(nanA, nanB), k(magMask), r);
+                }
+                return B.CreateBitCast(r, E);
+            };
+            Value *f;
+            if (auto *VT = dyn_cast<FixedVectorType>(II->getType()))
+            {
+                f = PoisonValue::get(VT);
+                for (unsigned l = 0; l < VT->getNumElements(); ++l)
+                    f = B.CreateInsertElement(f, one(B.CreateExtractElement(II->getArgOperand(0), l),
+                                                     B.CreateExtractElement(II->getArgOperand(1), l)),
+                                              l);
+            }
+            else
+                f = one(II->getArgOperand(0), II->getArgOperand(1));
+            II->replaceAllUsesWith(f);
+            II->eraseFromParent();
+            count++;
+        }
+    // f32 sin / exp2 / log2 / approximate sqrt (sin.approx, ex2.approx, lg2.approx, sqrt.approx, rsqrt.approx) where the function keeps f32 denormals: the
+    // hardware reads a denormal operand as zero and flushes a denormal result. sin(x) is x for |x| < 2^-12 (the
+    // rest of the series is below half an ulp); log2 of a denormal m * 2^-149 is log2(m) - 149, NaN if negative;
+    // exp2 of an integer n in [-149, 127] is the power of two, built on the bits (denormal from -149 to -127).
+    for (Function &F : *Mod)
+    {
+        if (F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE)
+            continue;
+        for (Instruction &I : make_early_inc_range(instructions(F)))
+        {
+            auto *II = dyn_cast<IntrinsicInst>(&I);
+            if (!II || !II->getType()->isFloatTy())
+                continue;
+            Intrinsic::ID id = II->getIntrinsicID();
+            if (id != Intrinsic::sin && id != Intrinsic::exp2 && id != Intrinsic::log2 &&
+                !(id == Intrinsic::sqrt && II->hasApproxFunc()))
+                continue;
+            IRBuilder<> B(II->getNextNode());
+            Type *I32 = B.getInt32Ty(), *F32 = B.getFloatTy();
+            Value *x = II->getArgOperand(0);
+            Value *xb = B.CreateBitCast(x, I32);
+            Value *mag = B.CreateAnd(xb, 0x7fffffff);
+            Value *res = B.CreateBitCast(II, I32);
+            Value *r;
+            if (id == Intrinsic::sin)
+                r = B.CreateSelect(B.CreateICmpULT(mag, B.getInt32(0x39800000)), xb, res);
+            else if (id == Intrinsic::sqrt)
+            {
+                // (sqrt.approx and rsqrt.approx) sqrt(m * 2^-149) = sqrt(2m) * 2^-75, NaN if negative
+                Value *den = B.CreateAnd(B.CreateICmpNE(mag, B.getInt32(0)), B.CreateICmpULT(mag, B.getInt32(0x800000)));
+                Value *m2 = B.CreateUIToFP(B.CreateShl(mag, 1), F32);
+                Value *q = B.CreateFMul(B.CreateUnaryIntrinsic(Intrinsic::sqrt, m2), ConstantFP::get(F32, 0x1p-75));
+                Value *neg = B.CreateICmpSLT(xb, B.getInt32(0));
+                Value *d = B.CreateSelect(neg, B.getInt32(0x7fffffff), B.CreateBitCast(q, I32));
+                r = B.CreateSelect(den, d, res);
+            }
+            else if (id == Intrinsic::log2)
+            {
+                Value *den = B.CreateAnd(B.CreateICmpNE(mag, B.getInt32(0)), B.CreateICmpULT(mag, B.getInt32(0x800000)));
+                Value *m = B.CreateUIToFP(mag, F32);
+                Value *l = B.CreateFSub(B.CreateUnaryIntrinsic(Intrinsic::log2, m), ConstantFP::get(F32, 149.0));
+                Value *neg = B.CreateICmpSLT(xb, B.getInt32(0));
+                Value *d = B.CreateSelect(neg, B.getInt32(0x7fffffff), B.CreateBitCast(l, I32));
+                r = B.CreateSelect(den, d, res);
+            }
+            else
+            {
+                // n = x when x is an integer in range: the bits of sitofp(fptosi x) equal x's
+                Value *inRange = B.CreateAnd(B.CreateICmpSLE(B.CreateBitCast(x, I32), B.getInt32(0x42fe0000)),
+                                             B.CreateOr(B.CreateICmpSGE(xb, B.getInt32(0)),
+                                                        B.CreateICmpULE(xb, B.getInt32(0xc3150000))));
+                Value *n = B.CreateFPToSI(x, I32);
+                // (a select, not an and: fptosi of an out of range x is poison)
+                Value *exact = B.CreateSelect(inRange, B.CreateICmpEQ(B.CreateBitCast(B.CreateSIToFP(n, F32), I32), xb),
+                                              B.getFalse());
+                Value *normal = B.CreateShl(B.CreateAdd(n, B.getInt32(127)), 23);
+                Value *denormal = B.CreateShl(B.getInt32(1), B.CreateAnd(B.CreateAdd(n, B.getInt32(149)), 31));
+                Value *p = B.CreateSelect(B.CreateICmpSGE(n, B.getInt32(-126)), normal, denormal);
+                r = B.CreateSelect(exact, B.CreateFreeze(p), res);
+            }
+            Value *f = B.CreateBitCast(r, F32);
+            II->replaceUsesWithIf(f, [&](Use &U) { return U.getUser() != res; });
+            count++;
+        }
+    }
+    return count;
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// ZLUDA_AGX target Air, AGX code a kernel at a time (a large module, whose AGX code generation inlines every
+// function into every kernel at once: Cycles' did not fit in 8 GB): a copy of M with only kernel `name` defined.
+// The other kernels are removed with their !air.kernel entries; every global variable is kept, used or not
+// (llvm.compiler.used), so that each kernel's global data buffer has the layout of the others'.
+LLVMModuleRef LLVMZludaAirKernelModule(LLVMModuleRef M, const char *name)
+{
+    Module *Mod = unwrap(M);
+    // The functions the kernel reaches (through calls, function pointers, constants and global initializers): only
+    // those are defined in the copy, which AGX code generation inlines into each other (every function of Cycles'
+    // module in each kernel's copy made it as large as the whole compilation).
+    SmallPtrSet<const Function *, 32> Reached;
+    {
+        SmallVector<const Value *, 64> Work;
+        SmallPtrSet<const Value *, 32> Seen;
+        if (Function *K = Mod->getFunction(name))
+            Work.push_back(K);
+        for (const GlobalVariable &GV : Mod->globals())
+            if (GV.hasInitializer())
+                Work.push_back(GV.getInitializer());
+        while (!Work.empty())
+        {
+            const Value *V = Work.pop_back_val();
+            if (!Seen.insert(V).second)
+                continue;
+            if (auto *F = dyn_cast<Function>(V))
+            {
+                if (F->hasFnAttribute("air-kernel") && F->getName() != name)
+                    continue;
+                Reached.insert(F);
+                for (const Instruction &I : instructions(*F))
+                    for (const Value *Op : I.operands())
+                        if (isa<Constant>(Op))
+                            Work.push_back(Op);
+            }
+            else if (auto *C = dyn_cast<Constant>(V); C && !isa<GlobalVariable>(C))
+                for (const Value *Op : C->operands())
+                    Work.push_back(Op);
+        }
+    }
+    ValueToValueMapTy VMap;
+    std::unique_ptr<Module> New = CloneModule(*Mod, VMap, [&](const GlobalValue *GV) {
+        auto *F = dyn_cast<Function>(GV);
+        return !F || Reached.contains(F);
+    });
+    if (NamedMDNode *Kernels = New->getNamedMetadata("air.kernel"))
+    {
+        SmallVector<MDNode *, 4> Keep;
+        for (MDNode *K : Kernels->operands())
+        {
+            auto *KF = K->getNumOperands() ? mdconst::dyn_extract_or_null<Function>(K->getOperand(0)) : nullptr;
+            if (KF && !KF->isDeclaration())
+                Keep.push_back(K);
+        }
+        Kernels->clearOperands();
+        for (MDNode *K : Keep)
+            Kernels->addOperand(K);
+    }
+    for (Function &F : make_early_inc_range(*New))
+        if (F.isDeclaration() && F.hasFnAttribute("air-kernel"))
+        {
+            F.replaceAllUsesWith(PoisonValue::get(F.getType()));
+            F.eraseFromParent();
+        }
+        else if (F.isDeclaration() && F.use_empty())
+            F.eraseFromParent();
+    SmallVector<GlobalValue *, 16> Globals;
+    for (GlobalVariable &GV : New->globals())
+        if (!GV.isDeclaration() && !GV.getName().starts_with("llvm.") && GV.getAddressSpace() != 3)
+            Globals.push_back(&GV);
+    appendToCompilerUsed(*New, Globals);
+    return wrap(New.release());
+}
+
+LLVM_C_EXTERN_C_END
+
+LLVM_C_EXTERN_C_BEGIN
+
+// An unused [length x i8] stack array at the start of each kernel (ZLUDA_AIR_SALT): Metal's pipeline cache keys on
+// the code, so pipelines compile anew (comparisons of their compile times).
+void LLVMZludaAirSaltKernels(LLVMModuleRef M, uint64_t length)
+{
+    for (Function &F : *unwrap(M))
+        if (!F.isDeclaration() && F.hasFnAttribute("air-kernel"))
+        {
+            IRBuilder<> B(&*F.getEntryBlock().getFirstInsertionPt());
+            AllocaInst *A = B.CreateAlloca(ArrayType::get(B.getInt8Ty(), length), nullptr, "zluda.salt");
+            B.CreateStore(B.getInt8(0), A, /*isVolatile=*/true);
+        }
 }
 
 LLVM_C_EXTERN_C_END
