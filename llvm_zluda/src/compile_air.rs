@@ -30,8 +30,11 @@ use std::ffi::{CStr, CString};
 
 pub const AIR_TRIPLE: &CStr = c"air";
 
-/// DXMT's cleanup (its AIR converter's "passes that really matter") with the loop and redundancy passes the hash
-/// and soft-f64 loops lacked: LICM, GVN and InstCombine again.
+/// The Metal copy's optimization by default, light+: the pass selection of DXMT's AIR converter (Feifan He for
+/// CodeWeavers, LGPL-2.1; https://github.com/3Shain/dxmt, src/airconv/airconv_context.cpp, runOptimizationPasses:
+/// "some passes that really matter" instead of a full pipeline, since Metal's compiler optimizes the AIR again),
+/// written here as an LLVM pipeline (no DXMT code), with the loop and redundancy passes the hash and soft-f64 loops
+/// lacked: LICM, GVN and InstCombine again.
 const LIGHT_PLUS: &CStr = c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),gvn,instcombine<no-verify-fixpoint>,simplifycfg)";
 
 /// The result of compiling for the Air target.
@@ -160,9 +163,10 @@ pub fn compile_air(
     let first_pipeline: &CStr = match std::env::var("ZLUDA_AIR_FIRST_PIPELINE").as_deref() {
         // (with switches as lookup tables already, globals that the lowering lays out: made by the O3 after the
         // remap, the AGX backend rejected them, "unsupported global 'switch.table.k'")
-        // (and the loops with a constant trip count unrolled, as O3 does: a loop of simd_sum left whole made
-        // Metal's compiler crash, XPC_ERROR_CONNECTION_INTERRUPTED, on SIMD-group PTX tests)
-        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
+        // (and loops unrolled as O3 does, llvm.is.constant resolved, which O3's shuffle primitives fold on: a loop
+        // of simd_sum left whole made Metal's compiler crash, XPC_ERROR_CONNECTION_INTERRUPTED, on SIMD-group
+        // PTX tests)
+        Ok("light+") => c"function(simplifycfg,sroa,early-cse),always-inline,ipsccp,globalopt,function(mem2reg),deadargelim,function(instcombine<no-verify-fixpoint>,simplifycfg,lower-constant-intrinsics,instcombine<no-verify-fixpoint>,simplifycfg,loop-mssa(licm),loop(loop-rotate,indvars,loop-unroll-full),loop-unroll<O3>,gvn,instcombine<no-verify-fixpoint>,simplifycfg<switch-to-lookup>)",
         _ => c"default<O3>",
     };
     unsafe { LLVMZludaSetAirPrimitives(1) };
@@ -230,7 +234,7 @@ pub fn compile_air(
     }
     stage("rounding, address space remap");
     // The Metal copy's optimization (ZLUDA_AIR_METAL_PIPELINE): o3 (the portable module's), o2, light+ or light, a
-    // cleanup like DXMT's AIR converter's (Metal's compiler optimizes the AIR again; DXMT runs "some passes that
+    // cleanup like DXMT's AIR converter's (see LIGHT_PLUS for the credit) (Metal's compiler optimizes the AIR again; DXMT runs "some passes that
     // really matter", since an unoptimized shader makes the pipeline's compilation slow and a full pipeline is
     // too heavy). Without AGX code to make, the portable module then skips its O3 too.
     // By default light+ when only the Metal AIR is made (with AGX code, the portable module's O3 serves both):

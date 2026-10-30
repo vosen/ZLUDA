@@ -99,6 +99,19 @@ an error.
   errors are returned as compilation errors. A small kernel compiles in about
   10 ms, the 195 kernels of `ptx/src/test/spirv_run` in 3 s (from 21 s with the
   whole library linked and every output written).
+* The Air target (`zoc --target air`, PTX straight to AIR) optimizes the
+  module with O3 before ZLUDA's lowering and, after the module moves to AIR's
+  address spaces, again with O3 when AGX code is made (the AGX backend makes
+  the final code). The AIR for Metal, which Metal's compiler optimizes again,
+  gets a light pipeline instead by default (`light+`,
+  `ZLUDA_AIR_METAL_PIPELINE`: `o3`, `o2`, `light`, `light+`). Its pass
+  selection comes from [DXMT](https://github.com/3Shain/dxmt)'s AIR converter
+  (`src/airconv/airconv_context.cpp`, `runOptimizationPasses`, by Feifan He for
+  CodeWeavers): only "some passes that really matter", since a full pipeline
+  is too heavy for AIR that Metal compiles again. ZLUDA writes the same choice
+  of LLVM passes as a pipeline of its own and adds LICM, GVN and a second
+  InstCombine. On the M2 Max it gives the same GPU times and Metal pipeline
+  compile times as O3, and takes Blender Cycles' kernels 16 s instead of 45.
 * Integer division and remainder give the results of NVIDIA GPUs where PTX
   leaves them unspecified: division by zero gives all ones, the remainder of
   a division by zero is the dividend, and the minimum signed value divided by
