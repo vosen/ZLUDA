@@ -1882,13 +1882,17 @@ unsafe fn load_module_data(d: &mut Driver, bytes: *const u8) -> Result<usize, CU
     // the PTX of a module without heap or clock for launch-time specialization (its kernels' copies use the
     // module's global data)
     let ptx = !empty_library && !image.starts_with(b"\x7fELF") && image.get(..8) != Some(&module::FAT_MAGIC[..]);
-    if ptx && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
+    // nor of a large module: each new set of scalar arguments rewrites and hashes all of its PTX (Blender Cycles:
+    // 13 MB, ~40 ms per launch, 5.8 s of a 512x512 render that takes 0.9 s without), and a specialized copy
+    // recompiles every function the kernel calls
+    let large = image.len() > LARGE_MODULE_BYTES;
+    if ptx && !large && specialize_enabled() && !agx_checked() && !loaded.uses_heap() && !loaded.uses_timer() {
         if let Ok(text) = std::str::from_utf8(image) {
             d.spec_sources.insert(h, std::sync::Arc::from(text));
         }
     } else if crate::log_enabled() {
         eprintln!(
-            "[zluda_agx] module {h:#x} not specialized: ptx {ptx} heap {} timer {}",
+            "[zluda_agx] module {h:#x} not specialized: ptx {ptx} large {large} heap {} timer {}",
             loaded.uses_heap(),
             loaded.uses_timer()
         );
