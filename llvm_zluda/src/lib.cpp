@@ -2499,7 +2499,7 @@ namespace
     std::optional<ZludaMinMax> zludaMinMaxFixups(Value *V)
     {
         auto *op = dyn_cast<IntrinsicInst>(V);
-        if (!op || !op->getType()->isFloatTy() || !op->hasNUses(2))
+        if (!op || !op->getType()->isFloatTy())
             return std::nullopt;
         switch (op->getIntrinsicID())
         {
@@ -2512,56 +2512,66 @@ namespace
             return std::nullopt;
         }
         using namespace PatternMatch;
-        // its users: the canonical NaN's select and its condition
-        SelectInst *canonical = nullptr;
-        for (User *U : op->users())
-            if (auto *S = dyn_cast<SelectInst>(U))
-                canonical = S;
-        const APFloat *nan = nullptr;
-        if (!canonical || canonical->getFalseValue() != op || !canonical->getCondition()->hasOneUse() ||
-            !match(canonical->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_UNO, m_Specific(op), m_Value())) ||
-            !match(canonical->getTrueValue(), m_APFloat(nan)) || !nan->isNaN())
-            return std::nullopt;
-        ZludaMinMax r{op, canonical, nullptr, canonical};
-        // the flush: a select of N, whose other users are its condition's and its copysign
-        {
-            Value *N = canonical;
-            for (User *U : canonical->users())
-            {
-                auto *S = dyn_cast<SelectInst>(U);
-                if (!S || S->getFalseValue() != N ||
-                    !match(S->getTrueValue(), m_Intrinsic<Intrinsic::copysign>(m_PosZeroFP(), m_Specific(N))))
-                    continue;
-                const APFloat *min = nullptr;
-                bool tiny = (match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OLT,
-                                                                     m_Intrinsic<Intrinsic::fabs>(m_Specific(N)),
-                                                                     m_APFloat(min))) &&
-                             min->isSmallestNormalized() && !min->isNegative()) ||
-                            match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OEQ, m_Specific(N), m_PosZeroFP()));
-                if (!tiny)
-                    continue;
-                // every user of N is the flush or its parts
-                bool parts = all_of(N->users(), [&](User *W) {
-                    return W == S || W == S->getCondition() || W == S->getTrueValue() ||
-                           (isa<Instruction>(W) && cast<Instruction>(W)->hasOneUse() &&
-                            cast<Instruction>(W)->user_back() == S->getCondition());
-                });
-                if (parts)
+        ZludaMinMax r{op, nullptr, nullptr, op};
+        // the canonical NaN: a select of the result and its NaN test, the result's only users (none where an
+        // operand is known not to be NaN: the optimization folded the test)
+        if (op->hasNUses(2))
+            for (User *U : op->users())
+                if (auto *S = dyn_cast<SelectInst>(U))
                 {
-                    r.flush = S;
-                    r.out = S;
+                    const APFloat *nan = nullptr;
+                    if (S->getFalseValue() == op && S->getCondition()->hasOneUse() &&
+                        match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_UNO, m_Specific(op), m_Value())) &&
+                        match(S->getTrueValue(), m_APFloat(nan)) && nan->isNaN())
+                        r.canonical = S;
                 }
-                break;
+        Value *N = r.canonical ? static_cast<Value *>(r.canonical) : op;
+        // the flush: a select of N, whose other users are its condition's and its copysign
+        for (User *U : N->users())
+        {
+            auto *S = dyn_cast<SelectInst>(U);
+            if (!S || S->getFalseValue() != N)
+                continue;
+            const APFloat *min = nullptr;
+            bool tiny = false;
+            if (match(S->getTrueValue(), m_Intrinsic<Intrinsic::copysign>(m_PosZeroFP(), m_Specific(N))))
+                tiny = (match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OLT,
+                                                                m_Intrinsic<Intrinsic::fabs>(m_Specific(N)),
+                                                                m_APFloat(min))) &&
+                        min->isSmallestNormalized() && !min->isNegative()) ||
+                       match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OEQ, m_Specific(N), m_PosZeroFP()));
+            // of a result not below zero (a max with 0): select(N < FLT_MIN, 0, N)
+            else if (match(S->getTrueValue(), m_PosZeroFP()))
+                tiny = match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OLT, m_Specific(N), m_APFloat(min))) &&
+                       min->isSmallestNormalized() && !min->isNegative();
+            if (!tiny)
+                continue;
+            // every user of N is the flush or its parts
+            bool parts = all_of(N->users(), [&](User *W) {
+                return W == S || W == S->getCondition() || W == S->getTrueValue() ||
+                       (isa<Instruction>(W) && cast<Instruction>(W)->hasOneUse() &&
+                        cast<Instruction>(W)->user_back() == S->getCondition());
+            });
+            if (parts)
+            {
+                r.flush = S;
+                r.out = S;
             }
+            break;
         }
+        if (!r.flush && r.canonical)
+            r.out = r.canonical;
         return r;
     }
 }
 
 // ZLUDA_AGX target Air: drops the fix-ups of a float min / max (its canonical NaN and .ftz flush, emit_min_max)
 // whose result only other min / max with the same fix-ups read, as in the slab tests of ray tracing
-// (max(min(a, b), min(c, d))): such a reader makes a canonical NaN of any NaN it gives, gives an operand that is
-// not NaN unchanged, and its flush, being monotone, gives what flushing its operands would. Run after the first
+// (max(min(a, b), min(c, d))) and clamps (max(min(x, 1), 0)): such a reader makes a canonical NaN of any NaN it
+// gives (or gives none: an operand is not NaN, and its NaN test folded), gives an operand that is not NaN
+// unchanged, and its flush, being monotone, gives what flushing its operands would; and of those that only
+// conversions to integers read. The flush alone goes where f32 arithmetic that reads denormals as zero (the
+// function's input mode) reads the value. Run after the first
 // optimization, which settles the fix-ups' form. Returns the number of min / max whose fix-ups went.
 int LLVMZludaAirDropMinMaxFixups(LLVMModuleRef M)
 {
@@ -2583,29 +2593,56 @@ int LLVMZludaAirDropMinMaxFixups(LLVMModuleRef M)
         for (auto &m : all)
             if (m.flush)
                 flushing.insert(m.op);
-        SmallVector<ZludaMinMax, 16> drop;
+        // f32 arithmetic that reads denormals as zero (the function's input mode), as its flush would make them
+        bool daz = F.getDenormalMode(APFloat::IEEEsingle()).Input != DenormalMode::IEEE;
+        auto toInteger = [](User *U) {
+            if (isa<FPToUIInst>(U) || isa<FPToSIInst>(U))
+                return true;
+            auto *II = dyn_cast<IntrinsicInst>(U);
+            return II && (II->getIntrinsicID() == Intrinsic::fptoui_sat || II->getIntrinsicID() == Intrinsic::fptosi_sat);
+        };
+        auto flushingArithmetic = [&](User *U) {
+            if (!daz)
+                return false;
+            if (auto *BO = dyn_cast<BinaryOperator>(U))
+                return BO->getOpcode() == Instruction::FAdd || BO->getOpcode() == Instruction::FSub ||
+                       BO->getOpcode() == Instruction::FMul || BO->getOpcode() == Instruction::FDiv;
+            auto *II = dyn_cast<IntrinsicInst>(U);
+            return II && (II->getIntrinsicID() == Intrinsic::fma || II->getIntrinsicID() == Intrinsic::fmuladd);
+        };
+        // (min / max, the value its fix-ups' readers should read)
+        SmallVector<std::pair<ZludaMinMax, Value *>, 16> drop;
         for (auto &m : all)
         {
-            if (m.out->use_empty())
+            if (m.out == m.op || m.out->use_empty())
                 continue;
-            bool readers = all_of(m.out->users(), [&](User *U) {
-                return outs.count(U) && (!m.flush || flushing.count(U));
+            // the canonical NaN goes where every reader makes NaNs canonical, gives none or converts to integers;
+            // the flush where every reader flushes too (a min / max with a flush, or f32 arithmetic reading
+            // denormals as zero) or converts to integers
+            bool canonical = !m.canonical || all_of(m.out->users(), [&](User *U) {
+                return toInteger(U) || outs.count(U);
             });
-            if (readers)
-                drop.push_back(m);
+            bool flush = !m.flush || all_of(m.out->users(), [&](User *U) {
+                return toInteger(U) || flushingArithmetic(U) || flushing.count(U);
+            });
+            if (canonical && flush)
+                drop.push_back({m, m.op});
+            else if (flush && m.flush)
+                drop.push_back({m, m.canonical ? static_cast<Value *>(m.canonical) : m.op});
         }
-        for (auto &m : drop)
+        for (auto &[m, to] : drop)
         {
-            m.out->replaceAllUsesWith(m.op);
+            m.out->replaceAllUsesWith(to);
             count++;
         }
         // the fix-ups, now unused (deleting a flush deletes its canonical NaN too)
         SmallVector<WeakTrackingVH, 32> dead;
-        for (auto &m : drop)
+        for (auto &[m, to] : drop)
         {
             if (m.flush)
                 dead.push_back(m.flush);
-            dead.push_back(m.canonical);
+            if (m.canonical)
+                dead.push_back(m.canonical);
         }
         RecursivelyDeleteTriviallyDeadInstructionsPermissive(dead);
     }
