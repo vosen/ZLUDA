@@ -357,7 +357,14 @@ pub fn compile_air(
         }
     }
 
-    // AGX: the portable AIR through agx-lower-air and the AGX backend
+    // AGX: the portable AIR through agx-lower-air and the AGX backend, with O3 again for AGX first
+    // (ZLUDA_AIR_AGX_PIPELINE: o3, none): its pipeline lowers AIR to AGX before anything else, and then optimizes
+    // with AGX's cost model, which AIR's O3 has not (Geekbench's GEMM unrolled half as far as AGX's
+    // threadgroup-load unrolling makes it: 24% slower)
+    let agx_pipeline: Option<&CStr> = match std::env::var("ZLUDA_AIR_AGX_PIPELINE").as_deref() {
+        Ok("none") => None,
+        _ => Some(c"default<O3>"),
+    };
     let agx_object = match agx_cpu {
         None => None,
         Some(cpu) => {
@@ -423,6 +430,9 @@ pub fn compile_air(
                                         LLVMZludaAirKernelModule(whole.get(), name.as_ptr())
                                     });
                                     drop(whole);
+                                    if let Some(pipeline) = agx_pipeline {
+                                        run(&one, pipeline, &agx, &PassBuilderOptions::new())?;
+                                    }
                                     let mut asm = Vec::new();
                                     if want_asm {
                                         asm = agx
@@ -457,6 +467,10 @@ pub fn compile_air(
                     hook(&object, String::from("o"));
                 }
                 return Ok(AirCompilation { portable, metal: metal_air, metal_globals, agx_object: Some(object) });
+            }
+            if let Some(pipeline) = agx_pipeline {
+                run(&linked, pipeline, &agx, &options)?;
+                stage("the AGX pipeline");
             }
             if let Some(hook) = text_hook {
                 stage("(writing the IR files)");
