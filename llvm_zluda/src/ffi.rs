@@ -130,6 +130,7 @@ extern "C" {
     pub fn LLVMZludaSetAirPrimitives(air: i32);
     pub fn LLVMZludaAirStaticRounding(module: LLVMModuleRef, strict: i32) -> i32;
     pub fn LLVMZludaAirDropCompareFlushes(module: LLVMModuleRef) -> i32;
+    pub fn LLVMZludaAirDropMinMaxFixups(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirExpandDivisions(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirCanonicalNaNs(module: LLVMModuleRef) -> i32;
     pub fn LLVMZludaAirTextureSampleHint(module: LLVMModuleRef) -> i32;

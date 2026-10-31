@@ -20,6 +20,7 @@
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/PatternMatch.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/Support/Alignment.h>
@@ -2479,6 +2480,136 @@ int LLVMZludaAirExpandDivisions(LLVMModuleRef M)
         BO->eraseFromParent();
     }
     return Divs.size();
+}
+
+namespace
+{
+    // A float min / max with the front end's fix-ups (emit_min_max): R = minimumnum / maximumnum / minimum /
+    // maximum, N = select(R is NaN, canonical NaN, R), then for .ftz F = flush(N), in either form the first
+    // optimization leaves: select(|N| < FLT_MIN, copysign(0, N), N), or select(N == 0, copysign(0, N), N) where
+    // the function compares denormals as zero. Its result (F, or N) in `out`.
+    struct ZludaMinMax
+    {
+        IntrinsicInst *op = nullptr;
+        SelectInst *canonical = nullptr;
+        SelectInst *flush = nullptr;
+        Value *out = nullptr;
+    };
+
+    std::optional<ZludaMinMax> zludaMinMaxFixups(Value *V)
+    {
+        auto *op = dyn_cast<IntrinsicInst>(V);
+        if (!op || !op->getType()->isFloatTy() || !op->hasNUses(2))
+            return std::nullopt;
+        switch (op->getIntrinsicID())
+        {
+        case Intrinsic::minimumnum:
+        case Intrinsic::maximumnum:
+        case Intrinsic::minimum:
+        case Intrinsic::maximum:
+            break;
+        default:
+            return std::nullopt;
+        }
+        using namespace PatternMatch;
+        // its users: the canonical NaN's select and its condition
+        SelectInst *canonical = nullptr;
+        for (User *U : op->users())
+            if (auto *S = dyn_cast<SelectInst>(U))
+                canonical = S;
+        const APFloat *nan = nullptr;
+        if (!canonical || canonical->getFalseValue() != op || !canonical->getCondition()->hasOneUse() ||
+            !match(canonical->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_UNO, m_Specific(op), m_Value())) ||
+            !match(canonical->getTrueValue(), m_APFloat(nan)) || !nan->isNaN())
+            return std::nullopt;
+        ZludaMinMax r{op, canonical, nullptr, canonical};
+        // the flush: a select of N, whose other users are its condition's and its copysign
+        {
+            Value *N = canonical;
+            for (User *U : canonical->users())
+            {
+                auto *S = dyn_cast<SelectInst>(U);
+                if (!S || S->getFalseValue() != N ||
+                    !match(S->getTrueValue(), m_Intrinsic<Intrinsic::copysign>(m_PosZeroFP(), m_Specific(N))))
+                    continue;
+                const APFloat *min = nullptr;
+                bool tiny = (match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OLT,
+                                                                     m_Intrinsic<Intrinsic::fabs>(m_Specific(N)),
+                                                                     m_APFloat(min))) &&
+                             min->isSmallestNormalized() && !min->isNegative()) ||
+                            match(S->getCondition(), m_SpecificFCmp(FCmpInst::FCMP_OEQ, m_Specific(N), m_PosZeroFP()));
+                if (!tiny)
+                    continue;
+                // every user of N is the flush or its parts
+                bool parts = all_of(N->users(), [&](User *W) {
+                    return W == S || W == S->getCondition() || W == S->getTrueValue() ||
+                           (isa<Instruction>(W) && cast<Instruction>(W)->hasOneUse() &&
+                            cast<Instruction>(W)->user_back() == S->getCondition());
+                });
+                if (parts)
+                {
+                    r.flush = S;
+                    r.out = S;
+                }
+                break;
+            }
+        }
+        return r;
+    }
+}
+
+// ZLUDA_AGX target Air: drops the fix-ups of a float min / max (its canonical NaN and .ftz flush, emit_min_max)
+// whose result only other min / max with the same fix-ups read, as in the slab tests of ray tracing
+// (max(min(a, b), min(c, d))): such a reader makes a canonical NaN of any NaN it gives, gives an operand that is
+// not NaN unchanged, and its flush, being monotone, gives what flushing its operands would. Run after the first
+// optimization, which settles the fix-ups' form. Returns the number of min / max whose fix-ups went.
+int LLVMZludaAirDropMinMaxFixups(LLVMModuleRef M)
+{
+    Module *Mod = unwrap(M);
+    int count = 0;
+    for (Function &F : *Mod)
+    {
+        if (F.isDeclaration())
+            continue;
+        SmallVector<ZludaMinMax, 16> all;
+        for (Instruction &I : instructions(F))
+            if (auto m = zludaMinMaxFixups(&I))
+                all.push_back(*m);
+        // decided on the unchanged function: whether every reader is a fixed-up min / max with a flush if this one
+        // has one
+        SmallPtrSet<Value *, 16> outs, flushing;
+        for (auto &m : all)
+            outs.insert(m.op);
+        for (auto &m : all)
+            if (m.flush)
+                flushing.insert(m.op);
+        SmallVector<ZludaMinMax, 16> drop;
+        for (auto &m : all)
+        {
+            if (m.out->use_empty())
+                continue;
+            bool readers = all_of(m.out->users(), [&](User *U) {
+                return outs.count(U) && (!m.flush || flushing.count(U));
+            });
+            if (readers)
+                drop.push_back(m);
+        }
+        for (auto &m : drop)
+        {
+            m.out->replaceAllUsesWith(m.op);
+            count++;
+        }
+        // the fix-ups, now unused (deleting a flush deletes its canonical NaN too)
+        SmallVector<WeakTrackingVH, 32> dead;
+        for (auto &m : drop)
+        {
+            if (m.flush)
+                dead.push_back(m.flush);
+            dead.push_back(m.canonical);
+        }
+        RecursivelyDeleteTriviallyDeadInstructionsPermissive(dead);
+    }
+    return count;
 }
 
 // ZLUDA_AGX target Air: removes the f32 flushes the front end marked !zluda.ftz.compare (setp.ftz's operands

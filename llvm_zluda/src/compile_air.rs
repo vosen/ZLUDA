@@ -19,7 +19,7 @@ use crate::utils::{Context, Message, Module, PassBuilderOptions, TargetMachine};
 use crate::{
     LLVMZludaAgxKeepGlobals, LLVMZludaAgxLowerAddressSpaces, LLVMZludaAgxLowerClusters, LLVMZludaAgxSpillClusterShared,
     LLVMZludaAirFunctionPointers, LLVMZludaSetAirPrimitives, LLVMZludaAirGlobalsToBuffer, LLVMZludaAirInlineGlobalUsers,
-    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirDropCompareFlushes, LLVMZludaAirExpandDivisions, LLVMZludaAirCanonicalNaNs, LLVMZludaAirTextureSampleHint, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAirSaltKernels, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
+    LLVMZludaAirRemapAddressSpaces, LLVMZludaAirSharedLayout, LLVMZludaAirStaticRounding, LLVMZludaAirDropCompareFlushes, LLVMZludaAirDropMinMaxFixups, LLVMZludaAirExpandDivisions, LLVMZludaAirCanonicalNaNs, LLVMZludaAirTextureSampleHint, LLVMZludaAirCompareFloatBits, LLVMZludaAirKernelModule, LLVMZludaAirSaltKernels, LLVMZludaAgxCanonicalizeFoldedNaNs, LLVMZludaLinkUsedDefinitions,
     LLVMZludaUpgradeFunctionAttributes,
 };
 use llvm_sys::target_machine::{
@@ -221,6 +221,8 @@ pub fn compile_air(
     }
     // PTX's rounding modifiers as the static rounding of each operation (AIR has no mode register)
     unsafe { LLVMZludaAirDropCompareFlushes(linked.get()) };
+    // and the fix-ups of float min / max that only other min / max read
+    unsafe { LLVMZludaAirDropMinMaxFixups(linked.get()) };
     unsafe { LLVMZludaAirStaticRounding(linked.get(), strict_fp as i32) };
     // the AIR primitives internal once nothing creates new calls of them, so that the unused ones go
     let mut f = unsafe { llvm_sys::core::LLVMGetFirstFunction(linked.get()) };
