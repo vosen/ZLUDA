@@ -5800,13 +5800,16 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMBuildSelect(b, any, first, result, LLVM_UNNAMED.as_ptr())
             },
             ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. }) => {
+                // The canonical NaN before the flush, which keeps NaNs: on the intrinsic's result, its NaN test
+                // folds away where an operand is known not to be NaN (a clamp to a constant); after the flush's bit
+                // operations it did not (Geekbench's raw_process, 93 clamps: 0.60 -> 0.53 ms)
+                let result = self.emit_canonical_nan(type_, result);
                 // min and max of the flushed inputs are the flushed min and max
-                let result = if self.explicit_ftz_min_max(type_, flush_to_zero) {
-                    self.emit_flush_subnormal(type_, result)
+                if self.explicit_ftz_min_max(type_, flush_to_zero) {
+                    self.emit_flush_subnormal_fp(type_, result)
                 } else {
                     result
-                };
-                self.emit_canonical_nan(type_, result)
+                }
             }
             _ => result,
         };
@@ -5843,15 +5846,15 @@ impl<'a> MethodEmitContext<'a> {
                     vec![&type_.into()],
                     vec![(result, llvm_type), (c, llvm_type)],
                 )?;
-                let result = match data {
+                let result = self.emit_canonical_nan(type_, result);
+                match data {
                     ptx_parser::MinMaxDetails::Float(ptx_parser::MinMaxFloat { flush_to_zero, .. })
                         if self.explicit_ftz_min_max(type_, flush_to_zero) =>
                     {
-                        self.emit_flush_subnormal(type_, result)
+                        self.emit_flush_subnormal_fp(type_, result)
                     }
                     _ => result,
-                };
-                self.emit_canonical_nan(type_, result)
+                }
             }
             None => result,
         };
@@ -6167,6 +6170,39 @@ impl<'a> MethodEmitContext<'a> {
 
     // A subnormal value (or element) replaced by the zero of its sign, with bit operations: .ftz, independent of
     // the denormal mode of the function
+    // emit_flush_subnormal of a scalar f32 in the form agx-lower-air recognizes, select(|x| < FLT_MIN,
+    // copysign(0, x), x), and drops where the f32 ALU flushes the value anyway (an f32 operation reads it). Other
+    // types as emit_flush_subnormal.
+    fn emit_flush_subnormal_fp(&mut self, type_: ast::ScalarType, src: LLVMValueRef) -> LLVMValueRef {
+        if type_ != ast::ScalarType::F32 || self.target != Target::Air {
+            return self.emit_flush_subnormal(type_, src);
+        }
+        unsafe {
+            let float = get_scalar_type(self.context, type_);
+            let abs = self.emit_intrinsic(c"llvm.fabs.f32", None, vec![&type_.into()], vec![(src, float)]);
+            let zero = self.emit_intrinsic(
+                c"llvm.copysign.f32",
+                None,
+                vec![&type_.into()],
+                vec![(LLVMConstReal(float, 0.0), float), (src, float)],
+            );
+            match (abs, zero) {
+                (Ok(abs), Ok(zero)) => {
+                    let b = self.builder;
+                    let tiny = LLVMBuildFCmp(
+                        b,
+                        LLVMRealPredicate::LLVMRealOLT,
+                        abs,
+                        LLVMConstReal(float, f32::MIN_POSITIVE as f64),
+                        LLVM_UNNAMED.as_ptr(),
+                    );
+                    LLVMBuildSelect(b, tiny, zero, src, LLVM_UNNAMED.as_ptr())
+                }
+                _ => self.emit_flush_subnormal(type_, src),
+            }
+        }
+    }
+
     fn emit_flush_subnormal(&mut self, type_: ast::ScalarType, src: LLVMValueRef) -> LLVMValueRef {
         let element = type_.packed_type().unwrap_or(type_);
         let element_bits = element.size_of() as u32 * 8;
