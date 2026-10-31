@@ -2633,6 +2633,40 @@ int LLVMZludaAirDropCompareFlushes(LLVMModuleRef M)
     return Flushes.size();
 }
 
+// A constrained approximation (afn sin, cos, exp2, log2, sqrt) as the plain intrinsic with its fast-math flags;
+// null for anything else.
+static Value *zludaApproxAsPlain(ConstrainedFPIntrinsic *C)
+{
+    if (!C->hasApproxFunc())
+        return nullptr;
+    Intrinsic::ID id;
+    switch (C->getIntrinsicID())
+    {
+    case Intrinsic::experimental_constrained_sin:
+        id = Intrinsic::sin;
+        break;
+    case Intrinsic::experimental_constrained_cos:
+        id = Intrinsic::cos;
+        break;
+    case Intrinsic::experimental_constrained_exp2:
+        id = Intrinsic::exp2;
+        break;
+    case Intrinsic::experimental_constrained_log2:
+        id = Intrinsic::log2;
+        break;
+    case Intrinsic::experimental_constrained_sqrt:
+        id = Intrinsic::sqrt;
+        break;
+    default:
+        return nullptr;
+    }
+    IRBuilder<> B(C);
+    B.setFastMathFlags(C->getFastMathFlags());
+    Value *r = B.CreateUnaryIntrinsic(id, C->getArgOperand(0));
+    r->takeName(C);
+    return r;
+}
+
 // CUDA's roundf in PTX: add.rz.f32 of x and copysign(0.5, x), whose only users truncate it (cvt.rzi). That is
 // round(x), half away from zero, for every x: rounding toward zero never carries x + 0.5 past the next integer,
 // from 2^23 on x is an integer the addition gives back, and zeros, flushed denormals, infinities and NaN agree
@@ -2842,7 +2876,16 @@ int LLVMZludaAirStaticRounding(LLVMModuleRef M, int strict)
             };
             if (auto bits = zludaModeField(m, 3ull << shift))
             {
-                withRounding(C, (*bits >> shift) & 3);
+                unsigned r = (*bits >> shift) & 3;
+                // the approximations (sin.approx, ...) rounding to nearest as the plain intrinsic, keeping afn: the
+                // constrained call's lowering drops it, which made them exact software functions
+                if (Value *plain = r == 1 ? zludaApproxAsPlain(C) : nullptr)
+                {
+                    C->replaceAllUsesWith(plain);
+                    C->eraseFromParent();
+                    continue;
+                }
+                withRounding(C, r);
                 continue;
             }
             // each rounding, chosen by the mode
