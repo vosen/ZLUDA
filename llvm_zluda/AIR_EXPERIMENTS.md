@@ -100,6 +100,16 @@ the order it was found:
 - **Device-flaky PTX tests**: ldm-0, ldm2-st0 and occupancy pass or fail from one run to the next with the same
   zoc; rerun them with the previous build before calling a change a regression.
 
+## Application benchmarks, AIR route (driver default), 2026-10-31
+
+- **Geekbench 7 GPU (CUDA)**: every workload completes; summed GPU time 25.26 s (air06) vs 25.08 / 25.34 s on the
+  direct route (direct40/41). Per-kernel differences are run-to-run noise: `build_patches_padding` measured
+  0.89–2.40 s with identical AGX code on both routes. The Preview cannot show scores (upload host unreachable).
+- **llama.cpp (b11706 llama-app, Qwen2.5 0.5B Q5_K_M, `-fa 0 -b 8 -ub 8`, 3 repetitions)**: pp128 347.1 ± 1.0 t/s,
+  tg32 43.8 ± 0.8 t/s, vs 93.9 / 39.7 for the staged 2026-10-24 direct-route driver (older driver too, so not a
+  pure route comparison). Greedy completions of the four llama_cpp.md prompts match the CPU output exactly.
+  Without `-fa 0 -b 8 -ub 8` completions reach cuBLAS (no PTX, error 209) on either route.
+
 ## Metal GPU time of f32 math (M2 Max, 256 x 256 threads, 2048 dependent operations each; scratchpad bench/math32.ptx)
 
 Relative to an fma (0.161 ms): lg2.approx 1.0, ex2.approx.ftz 1.0 (was 1.6: a software flush the GPU makes
