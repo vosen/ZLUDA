@@ -1,3 +1,4 @@
+; Function Attrs: denormal_fpenv(preservesign)
 define amdgpu_kernel void @set_gt_f16x2(ptr addrspace(4) byref(i64) %"46", ptr addrspace(4) byref(i64) %"47") #0 {
   %"48" = alloca i64, align 8, addrspace(5)
   %"49" = alloca i64, align 8, addrspace(5)
@@ -11,6 +12,7 @@ define amdgpu_kernel void @set_gt_f16x2(ptr addrspace(4) byref(i64) %"46", ptr a
   br label %"45"
 
 "45":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   %2 = load i64, ptr addrspace(4) %"46", align 8
   store i64 %2, ptr addrspace(5) %"48", align 8
   %3 = load i64, ptr addrspace(4) %"47", align 8
@@ -35,8 +37,8 @@ define amdgpu_kernel void @set_gt_f16x2(ptr addrspace(4) byref(i64) %"46", ptr a
   %13 = extractelement <2 x half> %"69", i8 1
   %14 = fcmp ogt half %10, %12
   %15 = fcmp ogt half %11, %13
-  %16 = select i1 %14, half 0xH3C00, half 0xH0000
-  %17 = select i1 %15, half 0xH3C00, half 0xH0000
+  %16 = select i1 %14, half 1.000000e+00, half 0.000000e+00
+  %17 = select i1 %15, half 1.000000e+00, half 0.000000e+00
   %18 = insertelement <2 x half> poison, half %16, i8 0
   %19 = insertelement <2 x half> %18, half %17, i8 1
   %"60" = bitcast <2 x half> %19 to i32
@@ -48,4 +50,8 @@ define amdgpu_kernel void @set_gt_f16x2(ptr addrspace(4) byref(i64) %"46", ptr a
   ret void
 }
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #1
+
+attributes #0 = { denormal_fpenv(preservesign) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { nocallback nofree nosync nounwind willreturn }

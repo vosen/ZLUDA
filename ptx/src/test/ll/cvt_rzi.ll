@@ -1,3 +1,4 @@
+; Function Attrs: denormal_fpenv(preservesign, float: ieee)
 define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #0 {
   %"46" = alloca i64, align 8, addrspace(5)
   %"47" = alloca i64, align 8, addrspace(5)
@@ -9,6 +10,7 @@ define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"44", ptr addrsp
   br label %"43"
 
 "43":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   %2 = load i64, ptr addrspace(4) %"44", align 8
   store i64 %2, ptr addrspace(5) %"46", align 8
   %3 = load i64, ptr addrspace(4) %"45", align 8
@@ -40,8 +42,12 @@ define amdgpu_kernel void @cvt_rzi(ptr addrspace(4) byref(i64) %"44", ptr addrsp
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare float @llvm.trunc.f32(float) #1
+; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #1
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
-attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
+declare float @llvm.trunc.f32(float) #2
+
+attributes #0 = { denormal_fpenv(preservesign, float: ieee) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { nocallback nofree nosync nounwind willreturn }
+attributes #2 = { nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none) }

@@ -1,10 +1,13 @@
 @values_g = addrspace(1) externally_initialized global [64 x i32] [i32 340, i32 122, i32 527, i32 693, i32 958, i32 394, i32 668, i32 432, i32 646, i32 354, i32 761, i32 449, i32 252, i32 778, i32 218, i32 800, i32 656, i32 493, i32 659, i32 787, i32 672, i32 203, i32 343, i32 845, i32 318, i32 286, i32 206, i32 253, i32 194, i32 489, i32 29, i32 323, i32 7, i32 619, i32 998, i32 930, i32 773, i32 749, i32 172, i32 465, i32 937, i32 96, i32 88, i32 621, i32 909, i32 298, i32 283, i32 286, i32 779, i32 290, i32 429, i32 930, i32 25, i32 687, i32 423, i32 200, i32 918, i32 10, i32 515, i32 248, i32 158, i32 911, i32 270, i32 459]
 @values_s = external addrspace(3) global [64 x i32], align 16
 
+; Function Attrs: denormal_fpenv(dynamic)
 declare hidden <2 x i32> @__zluda_ptx_impl_ldmatrix_m8n8_x2_b16(ptr addrspace(3)) #0
 
+; Function Attrs: denormal_fpenv(dynamic)
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
+; Function Attrs: denormal_fpenv(preservesign)
 define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"60") #1 {
   %"61" = alloca i64, align 8, addrspace(5)
   %"62" = alloca i32, align 4, addrspace(5)
@@ -21,6 +24,7 @@ define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"60") #1 {
   br label %"58"
 
 "58":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   %2 = load i64, ptr addrspace(4) %"60", align 8
   store i64 %2, ptr addrspace(5) %"61", align 8
   %"46" = call i32 @__zluda_ptx_impl_sreg_tid(i8 0)
@@ -93,5 +97,9 @@ define amdgpu_kernel void @ldmatrix(ptr addrspace(4) byref(i64) %"60") #1 {
   ret void
 }
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
-attributes #1 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #2
+
+attributes #0 = { denormal_fpenv(dynamic) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { denormal_fpenv(preservesign) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #2 = { nocallback nofree nosync nounwind willreturn }

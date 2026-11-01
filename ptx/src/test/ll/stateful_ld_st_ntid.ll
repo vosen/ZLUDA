@@ -1,5 +1,7 @@
+; Function Attrs: denormal_fpenv(dynamic)
 declare hidden i32 @__zluda_ptx_impl_sreg_tid(i8) #0
 
+; Function Attrs: denormal_fpenv(preservesign)
 define amdgpu_kernel void @stateful_ld_st_ntid(ptr addrspace(4) byref(i64) %"44", ptr addrspace(4) byref(i64) %"45") #1 {
   %"46" = alloca i64, align 8, addrspace(5)
   %"47" = alloca i64, align 8, addrspace(5)
@@ -12,6 +14,7 @@ define amdgpu_kernel void @stateful_ld_st_ntid(ptr addrspace(4) byref(i64) %"44"
   br label %"42"
 
 "42":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   %2 = load i64, ptr addrspace(4) %"44", align 8
   store i64 %2, ptr addrspace(5) %"46", align 8
   %3 = load i64, ptr addrspace(4) %"45", align 8
@@ -50,5 +53,9 @@ define amdgpu_kernel void @stateful_ld_st_ntid(ptr addrspace(4) byref(i64) %"44"
   ret void
 }
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
-attributes #1 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="preserve-sign" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #2
+
+attributes #0 = { denormal_fpenv(dynamic) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { denormal_fpenv(preservesign) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #2 = { nocallback nofree nosync nounwind willreturn }

@@ -1,4 +1,4 @@
-; Function Attrs: strictfp
+; Function Attrs: strictfp denormal_fpenv(dynamic)
 define hidden float @add_rm(float %"88", float %"89") #0 {
   %"137" = alloca float, align 4, addrspace(5)
   %"138" = alloca float, align 4, addrspace(5)
@@ -12,6 +12,7 @@ define hidden float @add_rm(float %"88", float %"89") #0 {
   br label %"98"
 
 "98":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   call void @llvm.amdgcn.s.setreg(i32 6145, i32 2)
   br label %"96"
 
@@ -34,7 +35,7 @@ define hidden float @add_rm(float %"88", float %"89") #0 {
   ret float %8
 }
 
-; Function Attrs: strictfp
+; Function Attrs: strictfp denormal_fpenv(dynamic)
 define hidden float @add_rp(float %"91", float %"92") #0 {
   %"150" = alloca float, align 4, addrspace(5)
   %"151" = alloca float, align 4, addrspace(5)
@@ -48,6 +49,7 @@ define hidden float @add_rp(float %"91", float %"92") #0 {
   br label %"97"
 
 "97":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   store float %"91", ptr addrspace(5) %"152", align 4
   store float %"92", ptr addrspace(5) %"153", align 4
   %2 = load float, ptr addrspace(5) %"152", align 4
@@ -66,7 +68,7 @@ define hidden float @add_rp(float %"91", float %"92") #0 {
   ret float %8
 }
 
-; Function Attrs: strictfp
+; Function Attrs: strictfp denormal_fpenv(preservesign, float: ieee)
 define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"101", ptr addrspace(4) byref(i64) %"102") #1 {
   %"103" = alloca i64, align 8, addrspace(5)
   %"104" = alloca i64, align 8, addrspace(5)
@@ -88,6 +90,7 @@ define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"101", ptr addr
   br label %"93"
 
 "93":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   call void @llvm.amdgcn.s.setreg(i32 6145, i32 1)
   %2 = load i64, ptr addrspace(4) %"101", align 8
   store i64 %2, ptr addrspace(5) %"103", align 8
@@ -151,12 +154,15 @@ define amdgpu_kernel void @call_rnd(ptr addrspace(4) byref(i64) %"101", ptr addr
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #2
+
+; Function Attrs: nocallback nofree nosync nounwind willreturn
 declare void @llvm.amdgcn.s.setreg(i32 immarg, i32) #2
 
 ; Function Attrs: nocallback nofree nosync nounwind strictfp willreturn memory(inaccessiblemem: readwrite)
 declare float @llvm.experimental.constrained.fadd.f32(float, float, metadata, metadata) #3
 
-attributes #0 = { strictfp "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="dynamic" "denormal-fp-math-f32"="dynamic" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
-attributes #1 = { strictfp "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="preserve-sign" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #0 = { strictfp denormal_fpenv(dynamic) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { strictfp denormal_fpenv(preservesign, float: ieee) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
 attributes #2 = { nocallback nofree nosync nounwind willreturn }
 attributes #3 = { nocallback nofree nosync nounwind strictfp willreturn memory(inaccessiblemem: readwrite) }

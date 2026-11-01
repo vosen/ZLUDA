@@ -1,3 +1,4 @@
+; Function Attrs: denormal_fpenv(ieee)
 define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"52", ptr addrspace(4) byref(i64) %"53") #0 {
   %"54" = alloca i64, align 8, addrspace(5)
   %"55" = alloca i64, align 8, addrspace(5)
@@ -13,6 +14,7 @@ define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"52",
   br label %"51"
 
 "51":                                             ; preds = %1
+  call void @llvm.amdgcn.s.dcache.inv()
   %2 = load i64, ptr addrspace(4) %"52", align 8
   store i64 %2, ptr addrspace(5) %"54", align 8
   %3 = load i64, ptr addrspace(4) %"53", align 8
@@ -46,8 +48,8 @@ define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"52",
   %"91" = bitcast i32 %13 to float
   %14 = fptrunc float %"90" to half
   %15 = fptrunc float %"91" to half
-  %16 = call half @llvm.maximum.f16(half %14, half 0xH0000)
-  %17 = call half @llvm.maximum.f16(half %15, half 0xH0000)
+  %16 = call half @llvm.maximum.f16(half %14, half 0.000000e+00)
+  %17 = call half @llvm.maximum.f16(half %15, half 0.000000e+00)
   %18 = insertelement <2 x half> poison, half %16, i32 1
   %"72" = insertelement <2 x half> %18, half %17, i32 0
   store <2 x half> %"72", ptr addrspace(5) %"60", align 4
@@ -57,8 +59,8 @@ define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"52",
   %"93" = bitcast i32 %20 to float
   %21 = fptrunc float %"92" to half
   %22 = fptrunc float %"93" to half
-  %23 = call half @llvm.maximum.f16(half %21, half 0xH0000)
-  %24 = call half @llvm.maximum.f16(half %22, half 0xH0000)
+  %23 = call half @llvm.maximum.f16(half %21, half 0.000000e+00)
+  %24 = call half @llvm.maximum.f16(half %22, half 0.000000e+00)
   %25 = insertelement <2 x half> poison, half %23, i32 1
   %"75" = insertelement <2 x half> %25, half %24, i32 0
   store <2 x half> %"75", ptr addrspace(5) %"61", align 4
@@ -76,8 +78,12 @@ define amdgpu_kernel void @cvt_relu_f16x2_f32(ptr addrspace(4) byref(i64) %"52",
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
-declare half @llvm.maximum.f16(half, half) #1
+; Function Attrs: nocallback nofree nosync nounwind willreturn
+declare void @llvm.amdgcn.s.dcache.inv() #1
 
-attributes #0 = { "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "denormal-fp-math"="ieee" "denormal-fp-math-f32"="ieee" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
-attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
+declare half @llvm.maximum.f16(half, half) #2
+
+attributes #0 = { denormal_fpenv(ieee) "amdgpu-ieee"="false" "amdgpu-unsafe-fp-atomics"="true" "no-trapping-math"="true" "target-features"="+wavefrontsize32,-wavefrontsize64,+cumode,+precise-memory" "uniform-work-group-size"="true" }
+attributes #1 = { nocallback nofree nosync nounwind willreturn }
+attributes #2 = { nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none) }

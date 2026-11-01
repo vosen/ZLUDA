@@ -144,25 +144,25 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
             if self.fp_mode == FloatingPointMode::Constrained {
                 self.emit_fn_attribute_enum(fn_, "strictfp");
             }
+            self.resolver.register(method.name, fn_);
         }
         self.emit_target_features(fn_);
         self.emit_tuning(fn_, &method.tuning);
-        if let Some(kernel_attrs) = &method.kernel_attributes {
-            self.emit_fn_attribute_string(
-                fn_,
-                "denormal-fp-math-f32",
-                llvm_ftz(kernel_attrs.flush_to_zero_f32),
-            );
-            self.emit_fn_attribute_string(
-                fn_,
-                "denormal-fp-math",
+        let (f16f64mode, f32mode) = if let Some(kernel_attrs) = &method.kernel_attributes {
+            (
                 llvm_ftz(kernel_attrs.flush_to_zero_f16f64),
-            );
+                llvm_ftz(kernel_attrs.flush_to_zero_f32),
+            )
         } else {
-            self.resolver.register(method.name, fn_);
-            self.emit_fn_attribute_string(fn_, "denormal-fp-math-f32", "dynamic");
-            self.emit_fn_attribute_string(fn_, "denormal-fp-math", "dynamic");
-        }
+            (
+                LLVMDenormalModeKind::LLVMDenormalModeKindDynamic,
+                LLVMDenormalModeKind::LLVMDenormalModeKindDynamic,
+            )
+        };
+        let denormal_mode = unsafe {
+            LLVMCreateDenormalFPEnvAttribute(self.context, f16f64mode, f16f64mode, f32mode, f32mode)
+        };
+        unsafe { LLVMAddAttributeAtIndex(fn_, LLVMAttributeFunctionIndex, denormal_mode) };
         self.emit_fn_attribute_string(fn_, "amdgpu-ieee", "false");
         for (i, param) in method.input_arguments.iter().enumerate() {
             let value = unsafe { LLVMGetParam(fn_, i as u32) };
@@ -432,6 +432,33 @@ impl<'a, 'input> ModuleEmitContext<'a, 'input> {
     }
 }
 
+fn get_const_int_unsigned(
+    context: LLVMContextRef,
+    scalar_type: ast::ScalarType,
+    x: u64,
+) -> LLVMValueRef {
+    let mask = 1u64
+        .unbounded_shl(scalar_type.bit_size() as u32)
+        .wrapping_sub(1);
+    let value = x & mask;
+    unsafe { LLVMConstInt(get_scalar_type(context, scalar_type), value, 0) }
+}
+
+fn get_const_int_signed(
+    context: LLVMContextRef,
+    scalar_type: ast::ScalarType,
+    x: i64,
+) -> LLVMValueRef {
+    let type_ = get_scalar_type(context, scalar_type);
+    unsafe {
+        LLVMConstInt(
+            type_,
+            sign_extend(x, scalar_type.bit_size() as u32) as u64,
+            1,
+        )
+    }
+}
+
 fn get_immediate_value(
     context: LLVMContextRef,
     scalar_type: &ast::ScalarType,
@@ -439,18 +466,23 @@ fn get_immediate_value(
 ) -> *mut LLVMValue {
     let type_ = get_scalar_type(context, *scalar_type);
     match imm {
-        ast::ImmediateValue::U64(x) => unsafe { LLVMConstInt(type_, *x, 0) },
-        ast::ImmediateValue::S64(x) => unsafe { LLVMConstInt(type_, *x as u64, 0) },
+        ast::ImmediateValue::U64(x) => get_const_int_unsigned(context, *scalar_type, *x),
+        ast::ImmediateValue::S64(x) => get_const_int_signed(context, *scalar_type, *x),
         ast::ImmediateValue::F32(x) => unsafe { LLVMConstReal(type_, *x as f64) },
         ast::ImmediateValue::F64(x) => unsafe { LLVMConstReal(type_, *x) },
     }
 }
 
-fn llvm_ftz(ftz: bool) -> &'static str {
+fn sign_extend(x: i64, bits: u32) -> i64 {
+    let otherbits = 64u32 - bits;
+    x.unbounded_shl(otherbits).wrapping_shr(otherbits)
+}
+
+fn llvm_ftz(ftz: bool) -> LLVMDenormalModeKind {
     if ftz {
-        "preserve-sign"
+        LLVMDenormalModeKind::LLVMDenormalModeKindPreserveSign
     } else {
-        "ieee"
+        LLVMDenormalModeKind::LLVMDenormalModeKindIEEE
     }
 }
 
@@ -1037,7 +1069,7 @@ impl<'a> MethodEmitContext<'a> {
         let mut load =
             unsafe { LLVMBuildLoad2(builder, pred_type, carry_flag, LLVM_UNNAMED.as_ptr()) };
         if reverse_carry {
-            load = self.emit_not_impl(pred_type, load);
+            load = self.emit_not_impl(ast::ScalarType::Pred, load);
         }
         let zext = unsafe {
             LLVMBuildZExt(
@@ -1057,7 +1089,7 @@ impl<'a> MethodEmitContext<'a> {
     ) -> Result<(), TranslateError> {
         let carry_flag = self.get_or_emit_carry_flag()?;
         if reverse_carry {
-            value = self.emit_not_impl(unsafe { LLVMIntTypeInContext(self.context, 1) }, value);
+            value = self.emit_not_impl(ast::ScalarType::Pred, value);
         }
         unsafe {
             LLVMBuildStore(self.builder, value, carry_flag);
@@ -1895,14 +1927,13 @@ impl<'a> MethodEmitContext<'a> {
         arguments: ptx_parser::NotArgs<SpirvWord>,
     ) -> Result<(), TranslateError> {
         let src = self.resolver.value(arguments.src)?;
-        let type_ = get_scalar_type(self.context, type_);
         let dst = self.emit_not_impl(type_, src);
         self.resolver.register(arguments.dst, dst);
         Ok(())
     }
 
-    fn emit_not_impl(&mut self, type_: LLVMTypeRef, src: LLVMValueRef) -> LLVMValueRef {
-        let constant = unsafe { LLVMConstInt(type_, u64::MAX, 0) };
+    fn emit_not_impl(&mut self, type_: ast::ScalarType, src: LLVMValueRef) -> LLVMValueRef {
+        let constant = get_const_int_unsigned(self.context, type_, u64::MAX);
         unsafe { LLVMBuildXor(self.builder, src, constant, LLVM_UNNAMED.as_ptr()) }
     }
 
@@ -2418,7 +2449,7 @@ impl<'a> MethodEmitContext<'a> {
                 return Ok(());
             }
         };
-        if is_saturating_cast {
+        let llvm_dst = if is_saturating_cast {
             let src =
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
             let poisoned_dst = if signed_cast {
@@ -2426,9 +2457,7 @@ impl<'a> MethodEmitContext<'a> {
             } else {
                 self.fp.fptoui(self.resolver, to, None, from, src)?
             };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
-            });
+            unsafe { LLVMBuildFreeze(self.builder, poisoned_dst, LLVM_UNNAMED.as_ptr()) }
         } else {
             let cvt_op = if to.kind() == ptx_parser::ScalarKind::Unsigned {
                 "fptoui"
@@ -2444,10 +2473,82 @@ impl<'a> MethodEmitContext<'a> {
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
             self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-                Some(arguments.dst),
+                None,
                 vec![&to.into()],
                 vec![(src, get_scalar_type(self.context, from))],
+            )?
+        };
+        // AMDDGPU rounds fp16/bf16 -> u64/s64 incorrectly
+        // It does double rounding: fp16/bf16 -> u32/s32 -> u64/s64 without
+        // checking for INF, so in the of INF we get U32_MAX instead of U64_MAX
+        if from.bit_size() == 16 && to.bit_size() == 64 {
+            const LLVM_POSITIVE_INF: u64 = 9;
+            const LLVM_NEGATIVE_INF: u64 = 2;
+            let intrinsic = format!("llvm.is.fpclass.{}\0", LLVMTypeDisplay(from));
+            let is_pos_inf = self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                None,
+                vec![&ast::Type::Scalar(ast::ScalarType::Pred)],
+                vec![
+                    (
+                        self.resolver.value(arguments.src).unwrap(),
+                        get_scalar_type(self.context, from),
+                    ),
+                    (
+                        get_const_int_unsigned(
+                            self.context,
+                            ast::ScalarType::B32,
+                            LLVM_POSITIVE_INF,
+                        ),
+                        get_scalar_type(self.context, ast::ScalarType::B32),
+                    ),
+                ],
             )?;
+            let is_neg_inf = self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                None,
+                vec![&ast::Type::Scalar(ast::ScalarType::Pred)],
+                vec![
+                    (
+                        self.resolver.value(arguments.src).unwrap(),
+                        get_scalar_type(self.context, from),
+                    ),
+                    (
+                        get_const_int_unsigned(
+                            self.context,
+                            ast::ScalarType::B32,
+                            LLVM_NEGATIVE_INF,
+                        ),
+                        get_scalar_type(self.context, ast::ScalarType::B32),
+                    ),
+                ],
+            )?;
+            let (min, max) = if to.kind() == ast::ScalarKind::Signed {
+                (
+                    get_const_int_signed(self.context, ast::ScalarType::B64, i64::MIN),
+                    get_const_int_signed(self.context, ast::ScalarType::B64, i64::MAX),
+                )
+            } else {
+                (
+                    get_const_int_unsigned(self.context, ast::ScalarType::B64, u64::MIN),
+                    get_const_int_unsigned(self.context, ast::ScalarType::B64, u64::MAX),
+                )
+            };
+            let min = unsafe {
+                LLVMBuildSelect(
+                    self.builder,
+                    is_neg_inf,
+                    min,
+                    llvm_dst,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            };
+            let max = unsafe {
+                LLVMBuildSelect(self.builder, is_pos_inf, max, min, LLVM_UNNAMED.as_ptr())
+            };
+            self.resolver.register(arguments.dst, max);
+        } else {
+            self.resolver.register(arguments.dst, llvm_dst);
         }
         Ok(())
     }
@@ -3445,8 +3546,7 @@ impl<'a> MethodEmitContext<'a> {
             ptx_parser::SetpBoolPostOp::Or => LLVMBuildOr,
         };
         let src3 = if data.negate_src3 {
-            let constant =
-                unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), u64::MAX, 0) };
+            let constant = unsafe { LLVMConstInt(LLVMIntTypeInContext(self.context, 1), 1, 0) };
             unsafe { LLVMBuildXor(self.builder, src3, constant, LLVM_UNNAMED.as_ptr()) }
         } else {
             src3
@@ -3470,7 +3570,7 @@ impl<'a> MethodEmitContext<'a> {
         let one = if dtype.kind() == ast::ScalarKind::Float {
             unsafe { LLVMConstReal(llvm_dtype, 1.0) }
         } else {
-            unsafe { LLVMConstInt(llvm_dtype, u64::MAX, 0) }
+            get_const_int_unsigned(self.context, dtype, u64::MAX)
         };
         Ok(unsafe { LLVMBuildSelect(self.builder, setp_result, one, zero, LLVM_UNNAMED.as_ptr()) })
     }
@@ -3634,7 +3734,7 @@ impl<'a> MethodEmitContext<'a> {
         let src = self.resolver.value(arguments.src)?;
         let llvm_i32 = get_scalar_type(self.context, ast::ScalarType::B32);
         let const_0 = unsafe { LLVMConstInt(llvm_i32, 0, 0) };
-        let const_max = unsafe { LLVMConstInt(llvm_i32, u64::MAX, 0) };
+        let const_max = unsafe { LLVMConstInt(llvm_i32, u32::MAX as u64, 0) };
         let src_is_zero = unsafe {
             LLVMBuildICmp(
                 self.builder,
