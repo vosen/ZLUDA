@@ -658,6 +658,14 @@ extern "C"
 
     __device__ static __hip_fp8_storage_t cvt_float_to_fp8(float f, __hip_fp8_interpretation_t interp)
     {
+        if (std::isinf(f)) {
+            if (std::signbit(f)) {
+                return interp == __HIP_E4M3 ? 0xFE : 0xFB;
+            } else {
+                return interp == __HIP_E4M3 ? 0x7E : 0x7B;
+            }
+        }
+
         const uint32_t bits = reinterpret_cast<uint32_t &>(f);
         const uint8_t sign = (bits & 0x80000000) ? 0x80 : 0x0;
         const uint32_t abs = bits & 0x7fffffff;
@@ -677,14 +685,35 @@ extern "C"
         __hip_fp8_storage_t a : 8;
     };
 
+    __device__ static float saturate_e4m3(float f)
+    {
+        if (!std::isnan(f))
+            f = __builtin_amdgcn_fmed3f(f, 448.0, -448.0);
+        return f;
+    }
+
+    __device__ static float saturate_e5m2(float f)
+    {
+        if (!std::isnan(f))
+            f = __builtin_amdgcn_fmed3f(f, 57344.0, -57344.0);
+        return f;
+    }
+
     Fp8x2 FUNC(cvt_rn_satfinite_e4m3x2_f32)(float a, float b)
     {
-        // If built-in support for fp8 formats is added to LLVM IR we should switch to use that.
+        if (__oclc_ISA_version >= 12000) {
+            __device__ uint32_t __llvm_amdgcn_cvt_pk_fp8_f32(float a, float b, uint32_t old_reg, bool sel) __asm("llvm.amdgcn.cvt.pk.fp8.f32");
+            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_fp8_f32(saturate_e4m3(a), saturate_e4m3(b), 0, 0)));
+        }
         return {cvt_float_to_fp8(b, __HIP_E4M3), cvt_float_to_fp8(a, __HIP_E4M3)};
     }
 
     Fp8x2 FUNC(cvt_rn_satfinite_e5m2x2_f32)(float a, float b)
     {
+        if (__oclc_ISA_version >= 12000) {
+            __device__ uint32_t __llvm_amdgcn_cvt_pk_bf8_f32(float a, float b, uint32_t old_reg, bool sel) __asm("llvm.amdgcn.cvt.pk.bf8.f32");
+            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_bf8_f32(saturate_e5m2(a), saturate_e5m2(b), 0, 0)));
+        }
         return {cvt_float_to_fp8(b, __HIP_E5M2), cvt_float_to_fp8(a, __HIP_E5M2)};
     }
 
