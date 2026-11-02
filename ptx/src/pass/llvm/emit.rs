@@ -2449,7 +2449,7 @@ impl<'a> MethodEmitContext<'a> {
                 return Ok(());
             }
         };
-        let llvm_dst = if is_saturating_cast {
+        if is_saturating_cast {
             let src =
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
             let poisoned_dst = if signed_cast {
@@ -2457,7 +2457,9 @@ impl<'a> MethodEmitContext<'a> {
             } else {
                 self.fp.fptoui(self.resolver, to, None, from, src)?
             };
-            unsafe { LLVMBuildFreeze(self.builder, poisoned_dst, LLVM_UNNAMED.as_ptr()) }
+            self.resolver.with_result(arguments.dst, |dst| unsafe {
+                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
+            });
         } else {
             let cvt_op = if to.kind() == ptx_parser::ScalarKind::Unsigned {
                 "fptoui"
@@ -2473,82 +2475,10 @@ impl<'a> MethodEmitContext<'a> {
                 dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
             self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-                None,
+                Some(arguments.dst),
                 vec![&to.into()],
                 vec![(src, get_scalar_type(self.context, from))],
-            )?
-        };
-        // AMDDGPU rounds fp16/bf16 -> u64/s64 incorrectly
-        // It does double rounding: fp16/bf16 -> u32/s32 -> u64/s64 without
-        // checking for INF, so in the of INF we get U32_MAX instead of U64_MAX
-        if from.bit_size() == 16 && to.bit_size() == 64 {
-            const LLVM_POSITIVE_INF: u64 = 9;
-            const LLVM_NEGATIVE_INF: u64 = 2;
-            let intrinsic = format!("llvm.is.fpclass.{}\0", LLVMTypeDisplay(from));
-            let is_pos_inf = self.emit_intrinsic(
-                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
-                None,
-                vec![&ast::Type::Scalar(ast::ScalarType::Pred)],
-                vec![
-                    (
-                        self.resolver.value(arguments.src).unwrap(),
-                        get_scalar_type(self.context, from),
-                    ),
-                    (
-                        get_const_int_unsigned(
-                            self.context,
-                            ast::ScalarType::B32,
-                            LLVM_POSITIVE_INF,
-                        ),
-                        get_scalar_type(self.context, ast::ScalarType::B32),
-                    ),
-                ],
             )?;
-            let is_neg_inf = self.emit_intrinsic(
-                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
-                None,
-                vec![&ast::Type::Scalar(ast::ScalarType::Pred)],
-                vec![
-                    (
-                        self.resolver.value(arguments.src).unwrap(),
-                        get_scalar_type(self.context, from),
-                    ),
-                    (
-                        get_const_int_unsigned(
-                            self.context,
-                            ast::ScalarType::B32,
-                            LLVM_NEGATIVE_INF,
-                        ),
-                        get_scalar_type(self.context, ast::ScalarType::B32),
-                    ),
-                ],
-            )?;
-            let (min, max) = if to.kind() == ast::ScalarKind::Signed {
-                (
-                    get_const_int_signed(self.context, ast::ScalarType::B64, i64::MIN),
-                    get_const_int_signed(self.context, ast::ScalarType::B64, i64::MAX),
-                )
-            } else {
-                (
-                    get_const_int_unsigned(self.context, ast::ScalarType::B64, u64::MIN),
-                    get_const_int_unsigned(self.context, ast::ScalarType::B64, u64::MAX),
-                )
-            };
-            let min = unsafe {
-                LLVMBuildSelect(
-                    self.builder,
-                    is_neg_inf,
-                    min,
-                    llvm_dst,
-                    LLVM_UNNAMED.as_ptr(),
-                )
-            };
-            let max = unsafe {
-                LLVMBuildSelect(self.builder, is_pos_inf, max, min, LLVM_UNNAMED.as_ptr())
-            };
-            self.resolver.register(arguments.dst, max);
-        } else {
-            self.resolver.register(arguments.dst, llvm_dst);
         }
         Ok(())
     }
