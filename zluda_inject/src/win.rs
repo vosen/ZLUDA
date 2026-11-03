@@ -1,7 +1,16 @@
 #![allow(non_snake_case)]
 
 use std::error;
+use std::ffi::OsString;
 use std::fmt;
+use std::mem;
+use std::os::windows::ffi::OsStringExt;
+use windows::core::{w, PCWSTR, PWSTR};
+use windows::Win32::Foundation::ERROR_CANCELLED;
+use windows::Win32::UI::Controls::Dialogs::{
+    CommDlgExtendedError, GetOpenFileNameW, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_NOCHANGEDIR,
+    OFN_PATHMUSTEXIST, OPENFILENAMEW,
+};
 
 mod c {
     use std::os::raw::c_ulong;
@@ -43,6 +52,72 @@ impl error::Error for OsError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }
+}
+
+fn executable_filter(path_ext: &str) -> Vec<u16> {
+    let mut patterns = path_ext
+        .split(';')
+        .filter_map(|extension| {
+            let extension = extension.trim();
+            if extension.is_empty() {
+                None
+            } else if extension.starts_with("*.") {
+                Some(extension.to_string())
+            } else if extension.starts_with('.') {
+                Some(format!("*{extension}"))
+            } else {
+                Some(format!("*.{extension}"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    if patterns.is_empty() {
+        patterns = "*.COM;*.EXE;*.BAT;*.CMD".to_string();
+    }
+
+    let description = format!("Executable files ({patterns})");
+    let mut filter = Vec::with_capacity(description.len() + patterns.len() + 3);
+    filter.extend(description.encode_utf16());
+    filter.push(0);
+    filter.extend(patterns.encode_utf16());
+    filter.extend([0, 0]);
+    filter
+}
+
+pub(crate) fn select_executable() -> Result<OsString, OsError> {
+    let mut path = [0u16; 32768];
+    let path_ext = std::env::var("PATHEXT").unwrap_or_default();
+    let filter = executable_filter(&path_ext);
+    let mut dialog = OPENFILENAMEW {
+        lStructSize: mem::size_of::<OPENFILENAMEW>() as u32,
+        lpstrFilter: PCWSTR(filter.as_ptr()),
+        lpstrFile: PWSTR(path.as_mut_ptr()),
+        nMaxFile: path.len() as u32,
+        nFilterIndex: 1,
+        lpstrTitle: w!("Select an application to launch with ZLUDA"),
+        Flags: OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
+        lpstrDefExt: w!("exe"),
+        ..Default::default()
+    };
+    if unsafe { GetOpenFileNameW(&mut dialog) }.as_bool() {
+        let path_len = path
+            .iter()
+            .position(|character| *character == 0)
+            .unwrap_or(path.len());
+        return Ok(OsString::from_wide(&path[..path_len]));
+    }
+
+    let error = unsafe { CommDlgExtendedError() };
+    let (error_code, message) = if error.0 == 0 {
+        (ERROR_CANCELLED.0, error_string(ERROR_CANCELLED.0 as i32))
+    } else {
+        (error.0, format!("Common dialog error 0x{:08x}", error.0))
+    };
+    Err(OsError {
+        function: "GetOpenFileNameW",
+        error_code,
+        message,
+    })
 }
 
 /// Gets a detailed string description for the given error number.
@@ -101,6 +176,31 @@ pub fn error_string(mut errnum: i32) -> String {
                  invalid UTF-16)",
                 errnum
             ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::executable_filter;
+
+    #[test]
+    fn executable_filter_uses_pathext() {
+        let filter = executable_filter(".COM;.EXE;CMD;*.BAT;;");
+        assert_eq!(
+            String::from_utf16(&filter).unwrap(),
+            "Executable files (*.COM;*.EXE;*.CMD;*.BAT)\0*.COM;*.EXE;*.CMD;*.BAT\0\0"
+        );
+    }
+
+    #[test]
+    fn executable_filter_defaults_when_pathext_is_empty() {
+        for path_ext in ["", " ; ; "] {
+            let filter = executable_filter(path_ext);
+            assert_eq!(
+                String::from_utf16(&filter).unwrap(),
+                "Executable files (*.COM;*.EXE;*.BAT;*.CMD)\0*.COM;*.EXE;*.BAT;*.CMD\0\0"
+            );
         }
     }
 }
