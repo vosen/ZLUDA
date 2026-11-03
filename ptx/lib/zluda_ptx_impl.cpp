@@ -703,7 +703,7 @@ extern "C"
     {
         if (__oclc_ISA_version >= 12000) {
             __device__ uint32_t __llvm_amdgcn_cvt_pk_fp8_f32(float a, float b, uint32_t old_reg, bool sel) __asm("llvm.amdgcn.cvt.pk.fp8.f32");
-            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_fp8_f32(saturate_e4m3(a), saturate_e4m3(b), 0, 0)));
+            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_fp8_f32(saturate_e4m3(b), saturate_e4m3(a), 0, 0)));
         }
         return {cvt_float_to_fp8(b, __HIP_E4M3), cvt_float_to_fp8(a, __HIP_E4M3)};
     }
@@ -712,7 +712,7 @@ extern "C"
     {
         if (__oclc_ISA_version >= 12000) {
             __device__ uint32_t __llvm_amdgcn_cvt_pk_bf8_f32(float a, float b, uint32_t old_reg, bool sel) __asm("llvm.amdgcn.cvt.pk.bf8.f32");
-            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_bf8_f32(saturate_e5m2(a), saturate_e5m2(b), 0, 0)));
+            return std::bit_cast<Fp8x2>(uint16_t(__llvm_amdgcn_cvt_pk_bf8_f32(saturate_e5m2(b), saturate_e5m2(a), 0, 0)));
         }
         return {cvt_float_to_fp8(b, __HIP_E5M2), cvt_float_to_fp8(a, __HIP_E5M2)};
     }

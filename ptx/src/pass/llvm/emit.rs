@@ -2449,17 +2449,15 @@ impl<'a> MethodEmitContext<'a> {
                 return Ok(());
             }
         };
-        if is_saturating_cast {
-            let src =
-                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+        let llvm_src = self.resolver.value(arguments.src)?;
+        let llvm_dst = if is_saturating_cast {
+            let src = dst_int_rounded.unwrap_or(llvm_src);
             let poisoned_dst = if signed_cast {
                 self.fp.fptosi(self.resolver, to, None, from, src)?
             } else {
                 self.fp.fptoui(self.resolver, to, None, from, src)?
             };
-            self.resolver.with_result(arguments.dst, |dst| unsafe {
-                LLVMBuildFreeze(self.builder, poisoned_dst, dst)
-            });
+            unsafe { LLVMBuildFreeze(self.builder, poisoned_dst, LLVM_UNNAMED.as_ptr()) }
         } else {
             let cvt_op = if to.kind() == ptx_parser::ScalarKind::Unsigned {
                 "fptoui"
@@ -2471,15 +2469,52 @@ impl<'a> MethodEmitContext<'a> {
                 LLVMTypeDisplay(to),
                 LLVMTypeDisplay(from)
             );
-            let src =
-                dst_int_rounded.unwrap_or_else(|| self.resolver.value(arguments.src).unwrap());
+            let src = dst_int_rounded.unwrap_or(llvm_src);
             self.emit_intrinsic(
                 unsafe { CStr::from_bytes_with_nul_unchecked(cast_intrinsic.as_bytes()) },
-                Some(arguments.dst),
+                None,
                 vec![&to.into()],
                 vec![(src, get_scalar_type(self.context, from))],
+            )?
+        };
+        // This is dumb, but as the documentation says:
+        // https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt
+        // In float-to-integer conversions, depending upon conversion types, NaN input results in following value:
+        //   Zero if source is not .f64 and destination is not .s64, .u64.
+        //   Otherwise 1 << (BitWidth(dst) - 1) corresponding to the value of (MAXINT >> 1) + 1 for unsigned type or MININT for signed type.
+        let llvm_dst = if from.bit_size() == 64 || to.bit_size() == 64 {
+            let intrinsic = format!("llvm.is.fpclass.{}\0", LLVMTypeDisplay(from));
+            let is_nan = self.emit_intrinsic(
+                unsafe { CStr::from_bytes_with_nul_unchecked(intrinsic.as_bytes()) },
+                None,
+                vec![&ast::Type::Scalar(ast::ScalarType::Pred)],
+                vec![
+                    (llvm_src, get_scalar_type(self.context, from)),
+                    (
+                        get_const_int_unsigned(self.context, ast::ScalarType::B32, 0b11),
+                        get_scalar_type(self.context, ast::ScalarType::B32),
+                    ),
+                ],
             )?;
-        }
+            let nan_value = 1u64 << (to.bit_size() as u64 - 1);
+            let nan_value_llvm = if to.kind() == ptx_parser::ScalarKind::Unsigned {
+                get_const_int_unsigned(self.context, to, nan_value)
+            } else {
+                get_const_int_signed(self.context, to, nan_value as i64)
+            };
+            unsafe {
+                LLVMBuildSelect(
+                    self.builder,
+                    is_nan,
+                    nan_value_llvm,
+                    llvm_dst,
+                    LLVM_UNNAMED.as_ptr(),
+                )
+            }
+        } else {
+            llvm_dst
+        };
+        self.resolver.register(arguments.dst, llvm_dst);
         Ok(())
     }
 

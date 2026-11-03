@@ -21,12 +21,12 @@ define amdgpu_kernel void @cvt_rni_u16_f32(ptr addrspace(4) byref(i64) %"40", pt
   store float %5, ptr addrspace(5) %"44", align 4
   %6 = load float, ptr addrspace(5) %"44", align 4
   %7 = call float @llvm.roundeven.f32(float %6)
-  %"50" = call i16 @llvm.fptoui.sat.i16.f32(float %7)
-  store i16 %"50", ptr addrspace(5) %"45", align 2
-  %8 = load i64, ptr addrspace(5) %"43", align 8
-  %9 = load i16, ptr addrspace(5) %"45", align 2
-  %"55" = inttoptr i64 %8 to ptr
-  store i16 %9, ptr %"55", align 2
+  %8 = call i16 @llvm.fptoui.sat.i16.f32(float %7)
+  store i16 %8, ptr addrspace(5) %"45", align 2
+  %9 = load i64, ptr addrspace(5) %"43", align 8
+  %10 = load i16, ptr addrspace(5) %"45", align 2
+  %"55" = inttoptr i64 %9 to ptr
+  store i16 %10, ptr %"55", align 2
   ret void
 }
 
