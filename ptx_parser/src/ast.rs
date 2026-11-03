@@ -1461,6 +1461,9 @@ impl ScalarType {
     }
 
     pub fn bit_size(self) -> u8 {
+        if matches!(self, ScalarType::Pred) {
+            return 1;
+        }
         self.layout().size() as u8 * 8u8
     }
 

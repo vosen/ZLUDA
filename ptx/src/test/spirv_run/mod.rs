@@ -329,6 +329,15 @@ test_ptx!(
 test_ptx!(cvt_rn_f16x2_e4m3x2, [0x2D55u16], [0x36804a80u32]);
 test_ptx!(cvt_rn_f16x2_e5m2x2, [0x36EDu16], [0x3600ED00u32]);
 test_ptx!(cvt_rn_bf16x2_f32, [0.40625, 12.9f32], [0x3ED0414Eu32]);
+test_ptx!(
+    cvt_u64_f16,
+    [
+        half::f16::from_f32(-0.0),
+        half::f16::NAN,
+        half::f16::INFINITY
+    ],
+    [0u64, 9223372036854775808, 18446744073709551615u64]
+);
 test_ptx!(clz, [0b00000101_00101101_00010011_10101011u32], [5u32]);
 test_ptx!(
     bfind_shiftamt,
@@ -1855,12 +1864,12 @@ pub fn verify_symbols(test_name: &str, ctx: &llvm_zluda::utils::Context, elf_mod
     let expected = [
         "_DYNAMIC".to_string(),
         test_name.to_string(),
-        format!("{}.has_dyn_sized_stack", test_name),
-        format!("{}.has_recursion", test_name),
+        //format!("{}.has_dyn_sized_stack", test_name),
+        //format!("{}.has_recursion", test_name),
         format!("{}.kd", test_name),
-        format!("{}.num_agpr", test_name),
-        format!("{}.num_vgpr", test_name),
-        format!("{}.private_seg_size", test_name),
+        //format!("{}.num_agpr", test_name),
+        //format!("{}.num_vgpr", test_name),
+        //format!("{}.private_seg_size", test_name),
     ];
     if symbols != expected {
         panic!(

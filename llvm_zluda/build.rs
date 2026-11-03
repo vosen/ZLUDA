@@ -15,6 +15,7 @@ const COMPONENTS: &[&'static str] = &[
     "lldELF",
     "LLVMBitReader",
     "LLVMAnalysis", // for module verify
+    "LLVMDTLTO",    // required by lldELF (Distributed ThinLTO)
 ];
 
 fn main() {
@@ -158,6 +159,8 @@ fn llvm_config(llvm_config_path: &PathBuf) -> io::Result<(String, String, String
     cmd.arg("passes");
     // LLD seems to require this
     cmd.arg("lto");
+    // lldELF requires this (Distributed ThinLTO)
+    cmd.arg("dtlto");
 
     if cfg!(debug_assertions) {
         cmd.arg("analysis");
