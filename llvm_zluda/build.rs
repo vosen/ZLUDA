@@ -15,7 +15,7 @@ const COMPONENTS: &[&'static str] = &[
     "lldELF",
     "LLVMBitReader",
     "LLVMAnalysis", // for module verify
-    "LLVMDTLTO",   // required by lldELF (Distributed ThinLTO)
+    "LLVMDTLTO",    // required by lldELF (Distributed ThinLTO)
 ];
 
 fn main() {
