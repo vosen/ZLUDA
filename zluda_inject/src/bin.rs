@@ -8,9 +8,11 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::{env, mem, process, ptr};
 use windows::Win32::Foundation::{ERROR_CANCELLED, HANDLE, WAIT_FAILED};
+use windows::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
 use windows::Win32::System::Threading::{
-    self, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_SUSPENDED,
-    CREATE_UNICODE_ENVIRONMENT,
+    self, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_DEFAULT_ERROR_MODE,
+    CREATE_NEW_CONSOLE, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, DETACHED_PROCESS,
+    PROCESS_CREATION_FLAGS,
 };
 use zluda_windows::LibraryInfo;
 
@@ -37,31 +39,9 @@ macro_rules! os_call {
     };
 }
 
-pub fn main_impl() -> Result<(), Box<dyn Error>> {
-    let mut application_name = None;
-    let args = if env::args_os().nth(1).is_none() {
-        let exe = match crate::win::select_executable() {
-            Ok(exe) => exe,
-            Err(err) if err.error_code == ERROR_CANCELLED.0 => return Ok(()),
-            Err(err) => return Err(Box::new(err)),
-        };
-        application_name = Some(
-            exe.encode_wide()
-                .chain(std::iter::once(0))
-                .collect::<Vec<_>>(),
-        );
-        args::Arguments {
-            paths: args::ConfigSet::Zluda,
-            exe,
-            args: Vec::new(),
-        }
-    } else {
-        args::arguments().run()
-    };
-    let injection_env = InjectionConfig::new(args.clone())?;
-    let mut command_line = application_name
-        .is_none()
-        .then(|| args.command_line_zero_terminated());
+pub fn main_impl(args: args::Arguments, detached: bool) -> Result<(), Box<dyn Error>> {
+    let mut command_line = args.command_line_zero_terminated();
+    let injection_env = InjectionConfig::new(args)?;
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
     let mut env_vars_block = injection_env.get_env_variables_block()?;
@@ -72,16 +52,13 @@ pub fn main_impl() -> Result<(), Box<dyn Error>> {
         .collect::<Vec<_>>();
     os_call! {
         detours_sys::DetourCreateProcessWithDllsW(
-            application_name
-                .as_ref()
-                .map_or(ptr::null(), |application_name| application_name.as_ptr()),
-            command_line
-                .as_mut()
-                .map_or(ptr::null_mut(), |command_line| command_line.as_mut_ptr()),
+            ptr::null_mut(),
+            command_line.as_mut_ptr(),
             ptr::null_mut(),
             ptr::null_mut(),
-            0,
-            (CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT).0,
+            (!detached) as i32,
+            // Without DETACHED_PROCESS blender pops up a console window
+            (CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | CREATE_DEFAULT_ERROR_MODE | if detached { DETACHED_PROCESS } else { PROCESS_CREATION_FLAGS(0) }).0,
             env_vars_block.as_mut_ptr().cast(),
             ptr::null(),
             std::ptr::from_mut(&mut startup_info),

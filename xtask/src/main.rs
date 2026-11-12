@@ -65,7 +65,9 @@ impl Project {
                     .targets
                     .into_iter()
                     .find_map(|target| {
-                        if target.is_cdylib() {
+                        if target.is_dylib() {
+                            Some((target.name, ProjectTarget::Dylib))
+                        } else if target.is_cdylib() {
                             Some((target.name, ProjectTarget::Cdylib))
                         } else if target.is_bin() {
                             Some((target.name, ProjectTarget::Bin))
@@ -94,7 +96,7 @@ impl Project {
     fn prefix(&self) -> &'static str {
         match self.target_kind {
             ProjectTarget::Bin => "",
-            ProjectTarget::Cdylib => "lib",
+            ProjectTarget::Dylib | ProjectTarget::Cdylib => "lib",
         }
     }
 
@@ -107,7 +109,7 @@ impl Project {
     fn suffix(&self) -> &'static str {
         match self.target_kind {
             ProjectTarget::Bin => "",
-            ProjectTarget::Cdylib => ".so",
+            ProjectTarget::Dylib | ProjectTarget::Cdylib => ".so",
         }
     }
 
@@ -115,7 +117,7 @@ impl Project {
     fn suffix(&self) -> &'static str {
         match self.target_kind {
             ProjectTarget::Bin => ".exe",
-            ProjectTarget::Cdylib => ".dll",
+            ProjectTarget::Dylib | ProjectTarget::Cdylib => ".dll",
         }
     }
 
@@ -228,6 +230,7 @@ struct WindowsPaths {
 
 #[derive(Clone, Copy)]
 enum ProjectTarget {
+    Dylib,
     Cdylib,
     Bin,
 }

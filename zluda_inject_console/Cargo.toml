@@ -1,0 +1,17 @@
+[package]
+name = "zluda_inject_console"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "zluda"
+path = "src/main.rs"
+
+[dependencies]
+zluda_inject = { path = "../zluda_inject" }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
+
+[package.metadata.zluda]
+windows_only = true
+32bit = true

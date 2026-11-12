@@ -1,0 +1,26 @@
+[package]
+name = "zluda_inject_gui"
+version = "0.0.0"
+authors = ["Andrzej Janik <vosen@vosen.pl>"]
+edition = "2021"
+
+[[bin]]
+name = "zluda-gui"
+path = "src/main.rs"
+
+[dependencies]
+zluda_inject = { path = "../zluda_inject" }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Controls_Dialogs",
+] }
+bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
+
+[package.metadata.zluda]
+windows_only = true
+32bit = true

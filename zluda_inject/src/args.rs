@@ -8,25 +8,14 @@ pub struct Arguments {
     #[bpaf(external(config_set))]
     pub paths: ConfigSet,
 
-    /// Executable to be injected with custom CUDA libraries
+    /// Executable to be launched with the specified arguments
     #[bpaf(positional("EXE"))]
     pub exe: OsString,
-
-    /// Arguments to the executable
-    #[bpaf(positional("ARGS"))]
-    pub args: Vec<OsString>,
 }
 
 impl Arguments {
     pub fn command_line_zero_terminated(&self) -> Vec<u16> {
-        let mut cmdline = Vec::with_capacity(1 + self.exe.len());
-        cmdline.extend(self.exe.encode_wide());
-        for arg in self.args.iter() {
-            cmdline.push(' ' as u16);
-            cmdline.extend(arg.encode_wide());
-        }
-        cmdline.push(0);
-        cmdline
+        self.exe.encode_wide().chain(std::iter::once(0)).collect()
     }
 }
 
@@ -101,6 +90,8 @@ pub fn custom_args() -> impl Parser<Vec<LibraryWithPath>> {
 
 #[cfg(test)]
 mod tests {
+    use bpaf::ParseFailure;
+
     use super::*;
 
     #[test]
@@ -140,5 +131,13 @@ mod tests {
         let parser = config_set().to_options();
         let err = parser.run_inner(&args[..]).unwrap_err();
         assert!(format!("{:?}", err).contains("cufoobar"));
+    }
+
+    #[test]
+    fn empty_args() {
+        let args: [&str; 0] = [];
+        let parser = arguments().to_options();
+        let empty_parse = parser.run_inner(&args[..]);
+        assert!(matches!(empty_parse, Err(ParseFailure::Stderr(_))));
     }
 }

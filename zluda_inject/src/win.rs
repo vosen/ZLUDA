@@ -180,6 +180,11 @@ pub fn error_string(mut errnum: i32) -> String {
     }
 }
 
+pub(crate) fn is_console() -> bool {
+    let count = unsafe { windows::Win32::System::Console::GetConsoleProcessList(&mut []) };
+    count > 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::executable_filter;
