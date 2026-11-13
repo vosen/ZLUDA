@@ -10,6 +10,7 @@ use windows::{
             CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_INPROC_SERVER,
             COINIT_APARTMENTTHREADED,
         },
+        UI::Controls::{TaskDialog, TDCBF_OK_BUTTON, TD_ERROR_ICON},
         UI::Shell::{
             Common::COMDLG_FILTERSPEC, FileOpenDialog, IFileDialogCustomize, IFileOpenDialog,
             FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
@@ -19,7 +20,25 @@ use windows::{
 
 fn main() {
     let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-    run().unwrap();
+    if let Err(error) = run() {
+        show_error(&error.to_string());
+    }
+}
+
+fn show_error(message: &str) {
+    let message = HSTRING::from(message);
+    unsafe {
+        let _ = TaskDialog(
+            None,
+            None,
+            w!("ZLUDA error"),
+            w!("ZLUDA error"),
+            &message,
+            TDCBF_OK_BUTTON,
+            TD_ERROR_ICON,
+            None,
+        );
+    }
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {

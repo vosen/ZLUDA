@@ -20,8 +20,13 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Com",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
+    "Win32_UI_Controls",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3.0"
 
 [package.metadata.zluda]
 windows_only = true

@@ -5324,6 +5324,7 @@ name = "zluda_inject_gui"
 version = "0.0.0"
 dependencies = [
  "bpaf",
+ "embed-resource",
  "windows",
  "zluda_inject",
 ]
