@@ -1,13 +1,24 @@
 #![windows_subsystem = "windows"]
 
 use bpaf::Parser;
-use std::{ffi::OsString, mem, os::windows::ffi::OsStringExt};
+use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 use windows::{
-    core::{w, PCWSTR, PWSTR},
-    Win32::UI::Controls::Dialogs::*,
+    core::{w, Interface, HRESULT, HSTRING, PCWSTR},
+    Win32::{
+        Foundation::ERROR_CANCELLED,
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_INPROC_SERVER,
+            COINIT_APARTMENTTHREADED,
+        },
+        UI::Shell::{
+            Common::COMDLG_FILTERSPEC, FileOpenDialog, IFileDialogCustomize, IFileOpenDialog,
+            FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+        },
+    },
 };
 
 fn main() {
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
     run().unwrap();
 }
 
@@ -16,42 +27,55 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(config) = parser.run_inner(bpaf::Args::current_args()) {
         return zluda_inject::run(config, true);
     }
-    let executable = select_executable();
+    let (executable, launch_with_tracing) = unsafe { select_executable() }?;
+    let config = if launch_with_tracing {
+        zluda_inject::args::ConfigSet::ZludaTrace
+    } else {
+        zluda_inject::args::ConfigSet::Zluda
+    };
     zluda_inject::run(
         zluda_inject::args::Arguments {
-            paths: zluda_inject::args::ConfigSet::Zluda,
+            paths: config,
             exe: executable,
         },
         true,
     )
 }
 
-fn select_executable() -> OsString {
-    let mut path = vec![0u16; 32768];
-    let path_ext = std::env::var("PATHEXT").unwrap_or_default();
-    let filter = executable_filter(&path_ext);
-    let mut dialog = OPENFILENAMEW {
-        lStructSize: mem::size_of::<OPENFILENAMEW>() as u32,
-        lpstrFilter: PCWSTR(filter.as_ptr()),
-        lpstrFile: PWSTR(path.as_mut_ptr()),
-        nMaxFile: path.len() as u32,
-        nFilterIndex: 1,
-        lpstrTitle: w!("Select an application to launch with ZLUDA"),
-        Flags: OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST,
-        lpstrDefExt: w!("exe"),
-        ..Default::default()
-    };
-    if !unsafe { GetOpenFileNameW(&mut dialog) }.as_bool() {
-        std::process::exit(1);
-    }
-    OsString::from_wide(&path[..path.iter().position(|&c| c == 0).unwrap_or(path.len())])
-}
+const TRACE_CHECKBOX_ID: u32 = 0x1;
 
-fn executable_filter(path_ext: &str) -> Vec<u16> {
-    let patterns = executable_patterns(path_ext);
-    format!("Executables ({patterns})\0{patterns}\0Any file (*.*)\0*.*\0\0")
-        .encode_utf16()
-        .collect()
+unsafe fn select_executable() -> windows::core::Result<(OsString, bool)> {
+    let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+    let path_ext = std::env::var("PATHEXT").unwrap_or_default();
+    let patterns = HSTRING::from(executable_patterns(&path_ext));
+    dialog.SetTitle(w!("Launch with ZLUDA"))?;
+    dialog.SetOptions(
+        dialog.GetOptions()? | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST,
+    )?;
+    dialog.SetFileTypes(&[
+        COMDLG_FILTERSPEC {
+            pszName: w!("Executables"),
+            pszSpec: PCWSTR::from_raw(patterns.as_ptr()),
+        },
+        COMDLG_FILTERSPEC {
+            pszName: w!("Any file"),
+            pszSpec: w!("*.*"),
+        },
+    ])?;
+    dialog.SetDefaultExtension(w!("exe"))?;
+    let customize: IFileDialogCustomize = dialog.cast()?;
+    customize.AddCheckButton(TRACE_CHECKBOX_ID, w!("Save trace log"), false)?;
+    match dialog.Show(None) {
+        Ok(()) => {}
+        Err(e) if e.code() == HRESULT::from_win32(ERROR_CANCELLED.0) => std::process::exit(1),
+        Err(e) => return Err(e),
+    }
+    let trace = customize.GetCheckButtonState(TRACE_CHECKBOX_ID)?.as_bool();
+    let item = dialog.GetResult()?;
+    let path = item.GetDisplayName(SIGDN_FILESYSPATH)?;
+    let result = OsString::from_wide(path.as_wide());
+    CoTaskMemFree(Some(path.0 as *const core::ffi::c_void));
+    Ok((result, trace))
 }
 
 // https://superuser.com/a/1027081
