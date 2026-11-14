@@ -9,9 +9,10 @@ name = "zluda_windows"
 
 [dependencies]
 uuid = "1.18.1"
-trie-hard = "0.1.0"
+trie-hard = "0.2.0"
 widestring = "1.2.1"
 alloca = "0.4.0"
+winnow = { version =  "1.0.5" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

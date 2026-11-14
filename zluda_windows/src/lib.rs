@@ -8,7 +8,6 @@ use std::{
     ptr,
 };
 use trie_hard::TrieHard;
-use uuid::uuid;
 use widestring::{u16str, U16Str, U16String};
 use windows::{
     core::{w, HRESULT, PCWSTR},
@@ -41,237 +40,154 @@ use windows::{
     },
 };
 
-#[cfg(target_pointer_width = "32")]
-pub static LIBRARIES: [LibraryInfo; 2] = [NVCUDA, NVAPI];
+pub static LIBRARIES32: [LibraryInfo; 2] = [NVCUDA32, NVAPI32];
 
-#[cfg(target_pointer_width = "64")]
-pub static LIBRARIES: [LibraryInfo; 17] = [
-    NVCUDA, NVML, DNN8, DNN9, BLAS13, BLAS12, BLAS11, BLAS_LT13, BLAS_LT12, BLAS_LT11, SPARSE12,
-    SPARSE11, SPARSE10, FFT12, FFT11, FFT10, NVAPI,
+pub static LIBRARIES64: [LibraryInfo; 10] = [
+    NVCUDA, NVML, DNN8, DNN9, BLAS, BLASLT, SPARSE, FFT, NVAPI, NVRTC,
 ];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
-    short_name: "nvcuda",
-    is_alias: false,
-    ascii_name: "nvcuda.dll",
-    utf16_name: u16str!("nvcuda.dll"),
-    guid: uuid!("9ab28276-52f4-4fe4-bc19-4c966f3aa468"),
-    trace_env_var: "ZLUDA_CUDA_LIB",
+    name: u16str!("nvcuda.dll"),
+    zluda_name: Some(u16str!("nvcuda.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_CUDA_LIB"),
+    in_system32: true,
+};
+
+pub const NVCUDA32: LibraryInfo = LibraryInfo {
+    name: u16str!("nvcuda.dll"),
+    zluda_name: Some(u16str!("nvcuda32.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_CUDA32_LIB"),
     in_system32: true,
 };
 
 pub const NVML: LibraryInfo = LibraryInfo {
-    short_name: "nvml",
-    is_alias: false,
-    ascii_name: "nvml.dll",
-    utf16_name: u16str!("nvml.dll"),
-    guid: uuid!("4fd0ef13-df98-40a7-b34b-6cf55f34a8e9"),
-    trace_env_var: "ZLUDA_ML_LIB",
+    name: u16str!("nvml.dll"),
+    zluda_name: Some(u16str!("nvml.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_ML_LIB"),
     in_system32: true,
 };
 
 pub const DNN8: LibraryInfo = LibraryInfo {
-    short_name: "cudnn8",
-    is_alias: false,
-    ascii_name: "cudnn64_8.dll",
-    utf16_name: u16str!("cudnn64_8.dll"),
-    guid: uuid!("7ed2e46c-82ce-4779-adbd-b39cd6d9da80"),
-    trace_env_var: "ZLUDA_DNN8_LIB",
+    name: u16str!("cudnn64_8.dll"),
+    zluda_name: Some(u16str!("cudnn64_8.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_DNN8_LIB"),
     in_system32: false,
 };
 
 pub const DNN9: LibraryInfo = LibraryInfo {
-    short_name: "cudnn9",
-    is_alias: false,
-    ascii_name: "cudnn64_9.dll",
-    utf16_name: u16str!("cudnn64_9.dll"),
-    guid: uuid!("6c258b11-104a-4ab0-b343-4e490e136ddd"),
-    trace_env_var: "ZLUDA_DNN9_LIB",
+    name: u16str!("cudnn64_9.dll"),
+    zluda_name: Some(u16str!("cudnn64_9.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_DNN9_LIB"),
     in_system32: false,
 };
 
-pub const BLAS13: LibraryInfo = LibraryInfo {
-    short_name: "cublas13",
-    is_alias: false,
-    ascii_name: "cublas64_13.dll",
-    utf16_name: u16str!("cublas64_13.dll"),
-    guid: uuid!("b9dcf552-c7a1-4dfe-b27a-58b56695effe"),
-    trace_env_var: "ZLUDA_BLAS_LIB",
+pub const BLAS: LibraryInfo = LibraryInfo {
+    name: u16str!("cublas64_"),
+    zluda_name: Some(u16str!("cublas.dll")),
+    name_kind: LibraryNameKind::Versioned,
+    trace_env_var: Some("ZLUDA_BLAS_LIB"),
     in_system32: false,
 };
 
-pub const BLAS12: LibraryInfo = LibraryInfo {
-    short_name: "cublas12",
-    is_alias: true,
-    ascii_name: "cublas64_12.dll",
-    utf16_name: u16str!("cublas64_12.dll"),
-    guid: uuid!("2c77f12f-e7dc-4dac-88a0-f06f43ceb566"),
-    trace_env_var: "ZLUDA_BLAS_LIB",
+pub const BLASLT: LibraryInfo = LibraryInfo {
+    name: u16str!("cublaslt64_"),
+    zluda_name: Some(u16str!("cublaslt.dll")),
+    name_kind: LibraryNameKind::Versioned,
+    trace_env_var: Some("ZLUDA_BLASLT_LIB"),
     in_system32: false,
 };
 
-pub const BLAS11: LibraryInfo = LibraryInfo {
-    short_name: "cublas11",
-    is_alias: true,
-    ascii_name: "cublas64_11.dll",
-    utf16_name: u16str!("cublas64_11.dll"),
-    guid: uuid!("3ca5e756-ed7e-4235-a7f4-952e5140f8f6"),
-    trace_env_var: "ZLUDA_BLAS_LIB",
+pub const SPARSE: LibraryInfo = LibraryInfo {
+    name: u16str!("cusparse64_"),
+    zluda_name: Some(u16str!("cusparse.dll")),
+    name_kind: LibraryNameKind::Versioned,
+    trace_env_var: Some("ZLUDA_SPARSE_LIB"),
     in_system32: false,
 };
 
-pub const BLAS_LT13: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt13",
-    is_alias: false,
-    ascii_name: "cublaslt64_13.dll",
-    utf16_name: u16str!("cublaslt64_13.dll"),
-    guid: uuid!("667b6076-c4c2-44f4-8b81-073dea1d6125"),
-    trace_env_var: "ZLUDA_BLASLT_LIB",
-    in_system32: false,
-};
-
-pub const BLAS_LT12: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt12",
-    is_alias: true,
-    ascii_name: "cublaslt64_12.dll",
-    utf16_name: u16str!("cublaslt64_12.dll"),
-    guid: uuid!("14aeb961-4ef2-480b-9813-df4a6dde454f"),
-    trace_env_var: "ZLUDA_BLASLT_LIB",
-    in_system32: false,
-};
-
-pub const BLAS_LT11: LibraryInfo = LibraryInfo {
-    short_name: "cublaslt11",
-    is_alias: true,
-    ascii_name: "cublaslt64_11.dll",
-    utf16_name: u16str!("cublaslt64_11.dll"),
-    guid: uuid!("59413153-dbcd-45e1-aa78-b4df4197b447"),
-    trace_env_var: "ZLUDA_BLASLT_LIB",
-    in_system32: false,
-};
-
-pub const SPARSE12: LibraryInfo = LibraryInfo {
-    short_name: "cusparse12",
-    is_alias: false,
-    ascii_name: "cusparse64_12.dll",
-    utf16_name: u16str!("cusparse64_12.dll"),
-    guid: uuid!("741fb1b7-2e24-4484-8205-4794175ccb78"),
-    trace_env_var: "ZLUDA_SPARSE_LIB",
-    in_system32: false,
-};
-
-pub const SPARSE11: LibraryInfo = LibraryInfo {
-    short_name: "cusparse11",
-    is_alias: true,
-    ascii_name: "cusparse64_11.dll",
-    utf16_name: u16str!("cusparse64_11.dll"),
-    guid: uuid!("7d03e8d0-6153-48de-af82-5a53828c9568"),
-    trace_env_var: "ZLUDA_SPARSE_LIB",
-    in_system32: false,
-};
-
-pub const SPARSE10: LibraryInfo = LibraryInfo {
-    short_name: "cusparse10",
-    is_alias: true,
-    ascii_name: "cusparse64_10.dll",
-    utf16_name: u16str!("cusparse64_10.dll"),
-    guid: uuid!("b2502d2a-7aa5-4fa6-9ee7-b8acf9e66679"),
-    trace_env_var: "ZLUDA_SPARSE_LIB",
-    in_system32: false,
-};
-
-pub const FFT12: LibraryInfo = LibraryInfo {
-    short_name: "cufft12",
-    is_alias: false,
-    ascii_name: "cufft64_12.dll",
-    utf16_name: u16str!("cufft64_12.dll"),
-    guid: uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8"),
-    trace_env_var: "ZLUDA_FFT_LIB",
-    in_system32: false,
-};
-
-pub const FFT11: LibraryInfo = LibraryInfo {
-    short_name: "cufft11",
-    is_alias: true,
-    ascii_name: "cufft64_11.dll",
-    utf16_name: u16str!("cufft64_11.dll"),
-    guid: uuid!("34d2be7e-e992-4aee-8502-b5fc14a02db3"),
-    trace_env_var: "ZLUDA_FFT_LIB",
-    in_system32: false,
-};
-
-pub const FFT10: LibraryInfo = LibraryInfo {
-    short_name: "cufft10",
-    is_alias: true,
-    ascii_name: "cufft64_10.dll",
-    utf16_name: u16str!("cufft64_10.dll"),
-    guid: uuid!("5f199520-4f7c-4fcb-b2b0-0e8b99f15e81"),
-    trace_env_var: "ZLUDA_FFT_LIB",
+pub const FFT: LibraryInfo = LibraryInfo {
+    name: u16str!("cufft64_"),
+    zluda_name: Some(u16str!("cufft.dll")),
+    name_kind: LibraryNameKind::Versioned,
+    trace_env_var: Some("ZLUDA_FFT_LIB"),
     in_system32: false,
 };
 
 pub const NVAPI: LibraryInfo = LibraryInfo {
-    short_name: "nvapi",
-    is_alias: false,
-    #[cfg(target_pointer_width = "32")]
-    ascii_name: "nvapi.dll",
-    #[cfg(target_pointer_width = "64")]
-    ascii_name: "nvapi64.dll",
-    #[cfg(target_pointer_width = "32")]
-    utf16_name: u16str!("nvapi.dll"),
-    #[cfg(target_pointer_width = "64")]
-    utf16_name: u16str!("nvapi64.dll"),
-    guid: uuid!("f7449ed6-d01c-4376-9fc4-446eb2e4cf70"),
-    trace_env_var: "ZLUDA_NVAPI_LIB",
+    name: u16str!("nvapi64.dll"),
+    zluda_name: Some(u16str!("nvapi64.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_NVAPI_LIB"),
     in_system32: true,
+};
+
+pub const NVAPI32: LibraryInfo = LibraryInfo {
+    name: u16str!("nvapi.dll"),
+    zluda_name: Some(u16str!("nvapi.dll")),
+    name_kind: LibraryNameKind::Exact,
+    trace_env_var: Some("ZLUDA_NVAPI32_LIB"),
+    in_system32: true,
+};
+
+pub const NVRTC: LibraryInfo = LibraryInfo {
+    name: u16str!("nvrtc64_"),
+    zluda_name: None,
+    trace_env_var: None,
+    name_kind: LibraryNameKind::Versioned,
+    in_system32: false,
 };
 
 #[derive(Debug)]
 pub struct LibraryInfo {
-    pub short_name: &'static str,
-    pub is_alias: bool,
-    pub ascii_name: &'static str,
-    pub utf16_name: &'static U16Str,
-    pub guid: uuid::Uuid,
-    pub trace_env_var: &'static str,
+    pub name: &'static U16Str,
+    pub zluda_name: Option<&'static U16Str>,
+    name_kind: LibraryNameKind,
+    pub trace_env_var: Option<&'static str>,
     pub in_system32: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LibraryNameKind {
+    Exact,
+    Versioned,
+}
+
 pub struct DllLookup {
+    is_64: bool,
     max_dll_len: usize,
-    ascii_trie: TrieHard<'static, usize>,
-    utf16_trie: TrieHard<'static, usize>,
+    trie: TrieHard<'static, usize>,
 }
 
 impl DllLookup {
-    pub fn new() -> Self {
-        let library_names = LIBRARIES
+    pub fn new32() -> Self {
+        Self::new(&LIBRARIES32, false)
+    }
+
+    pub fn new64() -> Self {
+        Self::new(&LIBRARIES64, true)
+    }
+
+    fn new(libraries: &[LibraryInfo], is_64: bool) -> Self {
+        let library_names = libraries
             .iter()
             .enumerate()
-            .map(|(i, lib)| {
-                let ascii_bytes = lib.ascii_name.as_bytes();
-                (ascii_bytes, i)
-            })
+            .map(|(i, lib)| (Self::to_byte_slice(lib.name.as_slice()), i))
             .collect::<Vec<_>>();
-        let ascii_trie = TrieHard::new(library_names);
-        let max_dll_len = ascii_trie
+        let trie = TrieHard::new(library_names);
+        let max_dll_len = trie
             .iter()
             .map(|(dll_name, _)| dll_name.len())
             .max()
             .unwrap_or(0);
-        let library_names_utf16 = LIBRARIES
-            .iter()
-            .enumerate()
-            .map(|(i, lib)| {
-                let utf16_bytes = Self::to_byte_slice(lib.utf16_name.as_slice());
-                (utf16_bytes, i)
-            })
-            .collect::<Vec<_>>();
-        let utf16_trie = TrieHard::new(library_names_utf16);
         Self {
+            is_64,
             max_dll_len,
-            ascii_trie,
-            utf16_trie,
+            trie,
         }
     }
 
@@ -281,24 +197,54 @@ impl DllLookup {
         }
     }
 
-    pub fn lookup_impl<T: Copy>(
-        max_dll_len: usize,
-        trie: &TrieHard<'static, usize>,
-        dll_name: &[T],
-        as_char: impl Fn(T) -> char,
-        lower_case: impl Fn(T) -> T,
-    ) -> Option<usize> {
+    pub fn lookup(&self, dll_name: &[u16]) -> Option<usize> {
+        let AncestorMatch {
+            file_name,
+            library_index,
+        } = self.find(dll_name)?;
+        let libraries = if self.is_64 {
+            &LIBRARIES64[..]
+        } else {
+            &LIBRARIES32[..]
+        };
+        match libraries[library_index].name_kind {
+            LibraryNameKind::Exact => {
+                if file_name.len() == libraries[library_index].name.as_slice().len() {
+                    Some(library_index)
+                } else {
+                    None
+                }
+            }
+            LibraryNameKind::Versioned => {
+                if parser::is_version_dll(
+                    &file_name[libraries[library_index].name.as_slice().len()..],
+                ) {
+                    Some(library_index)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    fn find<'a>(&self, dll_name: &'a [u16]) -> Option<AncestorMatch<'a>> {
         let file_name_len = dll_name
             .iter()
             .rev()
             .copied()
             .enumerate()
             .try_fold((), |_, (i, c)| {
-                if i > max_dll_len {
+                if let Ok(c) = u8::try_from(c) {
+                    if !c.is_ascii() {
+                        return ControlFlow::Break(None);
+                    }
+                } else {
                     return ControlFlow::Break(None);
                 }
-                let c = as_char(c);
-                if c == '\\' || c == '/' {
+                if i > self.max_dll_len {
+                    return ControlFlow::Break(None);
+                }
+                if c == b'\\' as u16 || c == b'/' as u16 {
                     return ControlFlow::Break(Some(i));
                 }
                 ControlFlow::Continue(())
@@ -309,43 +255,33 @@ impl DllLookup {
             ControlFlow::Continue(()) => dll_name.len(),
         };
         let file_name = &dll_name[dll_name.len() - file_name_length..];
-        alloca::with_alloca(file_name.len() * std::mem::size_of::<T>(), |uninit_slice| {
-            let lower_case_slice = unsafe {
-                std::slice::from_raw_parts_mut(
-                    uninit_slice.as_mut_ptr().cast::<T>(),
-                    file_name.len(),
-                )
-            };
-            for (dst, src) in lower_case_slice.iter_mut().zip(file_name.iter().copied()) {
-                *dst = lower_case(src);
-            }
-            trie.get(Self::to_byte_slice(lower_case_slice))
-        })
-    }
-
-    pub fn lookup_ascii(&self, dll_name: &[u8]) -> Option<usize> {
-        Self::lookup_impl(
-            self.max_dll_len,
-            &self.ascii_trie,
-            dll_name,
-            |c| c as char,
-            |c| c.to_ascii_lowercase(),
-        )
-    }
-
-    pub fn lookup_utf16(&self, dll_name: &[u16]) -> Option<usize> {
-        Self::lookup_impl(
-            self.max_dll_len,
-            &self.utf16_trie,
-            dll_name,
-            |c| char::from_u32(c as u32).unwrap_or_default(),
-            |c| {
-                char::from_u32(c as u32)
-                    .unwrap_or_default()
-                    .to_ascii_lowercase() as u16
+        alloca::with_alloca(
+            file_name.len() * std::mem::size_of::<u16>(),
+            |alloca_slice| {
+                let alloca_slice = unsafe {
+                    std::slice::from_raw_parts_mut(
+                        alloca_slice.as_mut_ptr().cast::<mem::MaybeUninit<u16>>(),
+                        file_name.len(),
+                    )
+                };
+                for (i, c) in file_name.iter().copied().enumerate() {
+                    alloca_slice[i].write((c as u8).to_ascii_lowercase() as u16);
+                }
+                let init_slice = unsafe { alloca_slice.assume_init_ref() };
+                self.trie
+                    .ancestor(Self::to_byte_slice(init_slice))
+                    .map(|(_, library_index)| AncestorMatch {
+                        library_index,
+                        file_name,
+                    })
             },
         )
     }
+}
+
+struct AncestorMatch<'a> {
+    library_index: usize,
+    file_name: &'a [u16],
 }
 
 pub type DWORD = u32;
@@ -651,63 +587,169 @@ pub fn kill_child_on_process_exit(child: *mut c_void) -> windows::core::Result<(
     Ok(())
 }
 
+mod parser {
+    use widestring::{u16str, U16Str};
+    use winnow::Result;
+    use winnow::{
+        combinator::*,
+        prelude::*,
+        stream::{Stream, StreamIsPartial, TokenSlice},
+        token::take_while,
+    };
+
+    fn is_dec_digit(c: &u16) -> bool {
+        u8::try_from(u16::from(*c))
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
+    }
+
+    fn numeric<'a, S: Stream<Token = &'a u16> + StreamIsPartial>(input: &mut S) -> Result<(), ()> {
+        take_while(1.., is_dec_digit).void().parse_next(input)
+    }
+
+    fn to_ascii_lowercase(x: u16) -> Option<u16> {
+        u8::try_from(x).ok().map(|c| c.to_ascii_lowercase() as u16)
+    }
+
+    fn literal<'a, S: Stream<Token = &'a u16> + StreamIsPartial>(
+        value: &'static U16Str,
+    ) -> impl Parser<S, S::Slice, ()> {
+        move |stream: &mut S| {
+            let start = stream.checkpoint();
+
+            let mut iter = value.as_slice().iter().copied();
+            while let Some(c1) = iter.next() {
+                if let Some(c2) = stream.next_token().copied() {
+                    if let Some(c1) = to_ascii_lowercase(c1) {
+                        if c1 == to_ascii_lowercase(c2).unwrap_or(c2) {
+                            continue;
+                        }
+                    }
+                }
+                stream.reset(&start);
+                return Err(());
+            }
+            Ok(stream.next_slice(0))
+        }
+    }
+
+    pub fn is_version_dll(s: &[u16]) -> bool {
+        let stream = TokenSlice::new(s);
+        (
+            numeric,
+            opt((literal(u16str!("_")), numeric)),
+            literal(u16str!(".dll")),
+            eof,
+        )
+            .parse(stream)
+            .is_ok()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_is_version_dll() {
+            assert!(is_version_dll(&u16str!("1.dll").as_slice()));
+            assert!(is_version_dll(&u16str!("1_2.dll").as_slice()));
+            assert!(!is_version_dll(&u16str!("1_2.txt").as_slice()));
+            assert!(!is_version_dll(&u16str!("abc.dll").as_slice()));
+        }
+
+        #[test]
+        fn test_is_version_dll_long_numeric() {
+            assert!(is_version_dll(
+                &u16str!("123456789012345678901234567890.dll").as_slice()
+            ));
+            assert!(is_version_dll(
+                &u16str!("123456789012345678901234567890_123456789012345678901234567890.dll")
+                    .as_slice()
+            ));
+        }
+
+        #[test]
+        fn test_is_version_dll_uppercase() {
+            assert!(is_version_dll(&u16str!("11.DLL").as_slice()));
+            assert!(is_version_dll(&u16str!("11.Dll").as_slice()));
+            assert!(is_version_dll(&u16str!("11_12.DLL").as_slice()));
+        }
+
+        #[test]
+        fn test_is_version_dll_multiple_numerics() {
+            assert!(is_version_dll(&u16str!("11_12.dll").as_slice()));
+            assert!(!is_version_dll(&u16str!("1_2_3.dll").as_slice()));
+            assert!(!is_version_dll(&u16str!("1__2.dll").as_slice()));
+            assert!(!is_version_dll(&u16str!("_1.dll").as_slice()));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn can_look_up_from_full_path() {
-        let lookup = DllLookup::new();
-        let path = r#"C:\Windows\System32\nvml.dll"#;
+        let lookup = DllLookup::new64();
+        let path = u16str!(r#"C:\Windows\System32\nvml.dll"#);
         assert_eq!(
-            NVML.guid,
-            LIBRARIES[lookup.lookup_ascii(path.as_bytes()).unwrap()].guid
+            u16str!("nvml.dll"),
+            LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
+                .zluda_name
+                .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_from_just_file_name() {
-        let lookup = DllLookup::new();
-        let path = r#"cusparse64_11.dll"#;
+        let lookup = DllLookup::new64();
+        let path = u16str!(r#"cusparse64_11.dll"#);
         assert_eq!(
-            SPARSE11.guid,
-            LIBRARIES[lookup.lookup_ascii(path.as_bytes()).unwrap()].guid
+            u16str!("cusparse.dll"),
+            LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
+                .zluda_name
+                .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_utf16() {
-        let lookup = DllLookup::new();
+        let lookup = DllLookup::new64();
         let path = u16str!("\\cublaslt64_13.dll");
         assert_eq!(
-            BLAS_LT13.guid,
-            LIBRARIES[lookup.lookup_utf16(path.as_slice()).unwrap()].guid
+            u16str!("cublaslt.dll"),
+            LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
+                .zluda_name
+                .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_utf16_case_insensitive() {
-        let lookup = DllLookup::new();
+        let lookup = DllLookup::new64();
         let path = u16str!("\\CUBLASLT64_13.dll");
         assert_eq!(
-            BLAS_LT13.guid,
-            LIBRARIES[lookup.lookup_utf16(path.as_slice()).unwrap()].guid
+            u16str!("cublaslt.dll"),
+            LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
+                .zluda_name
+                .unwrap()
         );
     }
 
     #[test]
     fn fails_on_mismatch() {
-        let lookup = DllLookup::new();
-        let path = u16str!("cusparse64_99.dll");
-        assert!(lookup.lookup_utf16(path.as_slice()).is_none());
+        let lookup = DllLookup::new64();
+        let path = u16str!("cusparse64_99.dllb");
+        assert!(lookup.lookup(path.as_slice()).is_none());
     }
 
     #[test]
     fn does_not_explode_on_utf16() {
-        let lookup = DllLookup::new();
+        let lookup = DllLookup::new64();
         let path = u16str!("🇧🇴");
         assert_eq!(path.chars().count(), 2);
         assert_eq!(path.as_slice().len(), 4);
-        assert!(lookup.lookup_utf16(path.as_slice()).is_none());
+        assert!(lookup.lookup(path.as_slice()).is_none());
     }
 }
