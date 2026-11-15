@@ -15,12 +15,11 @@ struct Options {
 }
 
 fn libraries() -> impl Parser<Vec<&'static LibraryInfo>> {
-    zluda_windows::LIBRARIES.iter().fold(
-        Parser::boxed(pure(Vec::with_capacity(zluda_windows::LIBRARIES.len()))),
+    zluda_windows::LIBRARIES64.iter().fold(
+        Parser::boxed(pure(Vec::with_capacity(zluda_windows::LIBRARIES64.len()))),
         |parser, library| {
-            let dlls = library.ascii_name;
-            let arg = bpaf::long(library.short_name)
-                .help(&*format!("Look for {dlls}"))
+            let arg = bpaf::long(library.display)
+                .help(&*format!("Look for {}", library.display))
                 .switch();
             construct!(parser, arg)
                 .map(move |(mut acc, cur)| {
@@ -37,7 +36,7 @@ fn libraries() -> impl Parser<Vec<&'static LibraryInfo>> {
 pub fn main() {
     let mut opts = options().run();
     if opts.libraries.is_empty() {
-        opts.libraries = zluda_windows::LIBRARIES.iter().collect();
+        opts.libraries = zluda_windows::LIBRARIES64.iter().collect();
     }
     let mut lib_set = opts.libraries;
     if !opts.driver_first {
@@ -47,7 +46,7 @@ pub fn main() {
         remainder.shuffle(&mut rand::rng());
     }
     for lib in lib_set {
-        print_result(lib.short_name, unsafe { try_load_library(lib) });
+        print_result(lib.display, unsafe { try_load_library(lib) });
     }
 }
 
@@ -71,42 +70,40 @@ fn print_result(short_name: &str, lib: Result<Option<OsString>, Error>) {
 }
 
 unsafe fn try_load_library(lib: &LibraryInfo) -> Result<Option<OsString>, Error> {
+    let (dllname, checker) = match lib.display {
+        "nvcuda" => (
+            "nvcuda.dll",
+            check_cuda as unsafe fn(libloading::Library) -> Result<Option<OsString>, Error>,
+        ),
+        "nvml" => ("nvml.dll", check_nvml as _),
+        "cudnn8" => ("cudnn64_8.dll", check_cudnn8 as _),
+        "cudnn9" => ("cudnn64_9.dll", check_cudnn9 as _),
+        "cublas" => ("cublas64_13.dll", check_cublas as _),
+        "cublaslt" => ("cublaslt64_13.dll", check_cublaslt as _),
+        "cusparse" => ("cusparse64_13.dll", check_cusparse as _),
+        "cufft" => ("cufft64_13.dll", check_cufft as _),
+        _ => {
+            return Err(Error::Initialization(
+                format!("Library check not implemented for {}", lib.display),
+                0,
+            ))
+        }
+    };
     let library = if lib.in_system32 {
-        libloading::Library::new(lib.ascii_name)?
+        libloading::Library::new(dllname)?
     } else {
         match std::env::var("CUDA_PATH") {
             Ok(cuda_path) => {
                 let path = std::path::Path::new(&cuda_path)
                     .join("bin")
                     .join("x64")
-                    .join(lib.ascii_name);
+                    .join(dllname);
                 libloading::Library::new(path)?
             }
-            Err(_) => libloading::Library::new(lib.ascii_name)?,
+            Err(_) => libloading::Library::new(dllname)?,
         }
     };
-    match lib.short_name {
-        "nvcuda" => check_cuda(library),
-        "nvml" => check_nvml(library),
-        "cudnn8" => check_cudnn8(library),
-        "cudnn9" => check_cudnn9(library),
-        "cublas11" => check_cublas(library),
-        "cublas12" => check_cublas(library),
-        "cublas13" => check_cublas(library),
-        "cublaslt11" => check_cublaslt(library),
-        "cublaslt12" => check_cublaslt(library),
-        "cublaslt13" => check_cublaslt(library),
-        "cusparse10" => check_cusparse(library),
-        "cusparse11" => check_cusparse(library),
-        "cusparse12" => check_cusparse(library),
-        "cufft10" => check_cufft(library),
-        "cufft11" => check_cufft(library),
-        "cufft12" => check_cufft(library),
-        _ => Err(Error::Initialization(
-            format!("Library check not implemented for {}", lib.short_name),
-            0,
-        )),
-    }
+    checker(library)
 }
 
 unsafe fn path_for_loaded_lib(lib: &'static str) -> Option<OsString> {

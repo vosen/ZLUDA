@@ -14,7 +14,7 @@ zluda_windows = { path = "../zluda_windows" }
 bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 owo-colors = { version = "4", features = ["supports-colors"] }
 rand = "0.9"
-libloading = "0.8"
+libloading = "0.9"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_Foundation"] }
