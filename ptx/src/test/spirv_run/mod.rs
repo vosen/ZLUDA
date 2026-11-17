@@ -411,6 +411,10 @@ test_ptx_with_32!(const, [0u16], [10u16, 20, 30, 40]);
 test_ptx!(const_ident, [0u16], [0u64, 0u64]);
 test_ptx!(cvt_s16_s8, [0x139231C2u32], [0xFFFFFFC2u32]);
 test_ptx!(cvt_f64_f32, [0.125f32], [0.125f64]);
+// f16 subnormal input must not be flushed even though f32 mode is ftz
+test_ptx!(cvt_f32_f16_ftz, [0x0001u32, 0x1f800000u32], [0x33800000u32, 0u32]);
+// f16 subnormal result must not be flushed even though f32 mode is ftz
+test_ptx!(cvt_rn_f16_f32_ftz, [0x35800000u32, 0x1f800000u32], [0x0010u32, 0u32]);
 test_ptx!(prmt, [0x70c507d6u32, 0x6fbd4b5cu32], [0x6fbdd65cu32]);
 test_ptx!(
     prmt_slow,
