@@ -3548,10 +3548,7 @@ impl<'a> MethodEmitContext<'a> {
         let intrinsic = match (data.atype, data.btype) {
             (ast::ScalarType::U32, ast::ScalarType::U32) => c"llvm.amdgcn.udot4",
             (ast::ScalarType::S32, ast::ScalarType::S32) => c"llvm.amdgcn.sdot4",
-            (ast::ScalarType::U32, ast::ScalarType::S32)
-            | (ast::ScalarType::S32, ast::ScalarType::U32) => {
-                return Err(error_todo_msg("dp4a with mixed types is not yet supported"))
-            }
+            // mixed signedness: replace_instructions_with_functions
             _ => return Err(error_unreachable()),
         };
         let pred = get_scalar_type(self.context, ast::ScalarType::Pred);

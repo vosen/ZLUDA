@@ -494,6 +494,11 @@ test_ptx!(
     [613065134u32]
 );
 test_ptx!(
+    dp4a_mixed,
+    [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
+    [613024174u32, 613060782]
+);
+test_ptx!(
     dp2a,
     [0x8e2da590u32, 0xedeaee14, 0x248a9f70],
     [614127545u32]
