@@ -517,6 +517,14 @@ fn run_instruction<'input>(
             );
             to_call(resolver, fn_declarations, name.into(), i)?
         }
+        i @ ptx_parser::Instruction::Dp4a { data, .. } if data.atype != data.btype => {
+            let name = format!(
+                "dp4a_{}_{}",
+                scalar_to_ptx_name(data.atype),
+                scalar_to_ptx_name(data.btype),
+            );
+            to_call(resolver, fn_declarations, name.into(), i)?
+        }
         i @ ptx_parser::Instruction::Mma {
             data:
                 ast::MmaDetails {

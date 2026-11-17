@@ -1188,6 +1188,40 @@ extern "C"
                c;
     }
 
+    // gfx11+ only (v_dot4_i32_iu8). We wrap the intrinsic in an optnone function to prevent
+    // ZLUDA-specific passes from optimizing away the intrinsic call
+    static __device__ int32_t __llvm_amdgcn_sudot4_optnone [[clang::optnone]](int32_t a, int32_t b, int32_t c)
+    {
+        __device__ int32_t __llvm_amdgcn_sudot4(bool a_signed, int32_t a, bool b_signed, int32_t b, int32_t c, bool clamp) __asm("llvm.amdgcn.sudot4");
+        return __llvm_amdgcn_sudot4(true, a, false, b, c, false);
+    }
+
+    static __device__ int32_t dp4a_mixed_fallback(int32_t a, int32_t b, int32_t c)
+    {
+        auto a_typed = std::bit_cast<char4::Native_vec_>(a);
+        auto b_typed = std::bit_cast<uchar4::Native_vec_>(b);
+        // unsigned, because dp4a wraps on overflow
+        uint32_t result = uint32_t(c);
+        for (int i = 0; i < 4; i++)
+            result += uint32_t(int32_t(a_typed[i]) * int32_t(b_typed[i]));
+        return int32_t(result);
+    }
+
+    int32_t FUNC(dp4a_s32_u32)(int32_t a, int32_t b, int32_t c)
+    {
+        if (__oclc_ISA_version >= 11000)
+        {
+            [[clang::always_inline]] return __llvm_amdgcn_sudot4_optnone(a, b, c);
+        }
+        return dp4a_mixed_fallback(a, b, c);
+    }
+
+    int32_t FUNC(dp4a_u32_s32)(int32_t a, int32_t b, int32_t c)
+    {
+        // the dot product is commutative
+        return FUNC_CALL(dp4a_s32_u32)(b, a, c);
+    }
+
     static std::pair<GLOBAL_SPACE void *, GLOBAL_SPACE void *> get_image_and_sampler(uint64_t texobj) __device__
     {
         unsigned int GLOBAL_SPACE *image = (unsigned int GLOBAL_SPACE *)texobj;
