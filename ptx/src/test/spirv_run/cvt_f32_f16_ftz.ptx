@@ -1,0 +1,27 @@
+.version 6.5
+.target sm_53
+.address_size 64
+
+.visible .entry cvt_f32_f16_ftz(
+	.param .u64 input,
+	.param .u64 output
+)
+{
+	.reg .u64 	    in_addr;
+    .reg .u64 	    out_addr;
+    .reg .b16 	    temp_f16;
+    .reg .f32 	    temp_f32;
+    .reg .f32 	    force_ftz_mode;
+
+	ld.param.u64 	in_addr, [input];
+    ld.param.u64 	out_addr, [output];
+
+    ld.b16          temp_f16, [in_addr];
+    ld.f32          force_ftz_mode, [in_addr+4];
+    // DO NOT REMOVE THIS MULTIPLICATION, it sets f32 denormal mode to flush
+    mul.ftz.f32     force_ftz_mode, force_ftz_mode, force_ftz_mode;
+	cvt.f32.f16     temp_f32, temp_f16;
+    st.f32          [out_addr], temp_f32;
+    st.f32          [out_addr+4], force_ftz_mode;
+	ret;
+}

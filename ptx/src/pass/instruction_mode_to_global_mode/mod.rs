@@ -253,6 +253,13 @@ impl InstructionModes {
             | ast::CvtMode::Bitcast
             | ast::CvtMode::IntSaturateToSigned
             | ast::CvtMode::IntSaturateToUnsigned => Self::none(),
+            // f16 values, subnormal or not, are normal f32 values. On AMD GPUs, v_cvt_f32_f16
+            // flushes subnormal inputs according to the f16/f64 denormal mode only, the f32
+            // denormal mode does not matter.
+            ast::CvtMode::FPExtend { .. } if cvt.from == ast::ScalarType::F16 => InstructionModes {
+                denormal_f16f64: Some(DenormalMode::Preserve),
+                ..Self::none()
+            },
             ast::CvtMode::FPExtend { flush_to_zero, .. } => Self::from_typed_denormal(
                 cvt.from,
                 cvt.to,
@@ -260,6 +267,19 @@ impl InstructionModes {
                     .map(DenormalMode::from_ftz)
                     .unwrap_or(DenormalMode::Preserve),
             ),
+            // f32 subnormals are below half the smallest f16 subnormal: rounded to nearest or
+            // toward zero they become a zero of the same sign, flushed first or not.
+            // On AMD GPUs, v_cvt_f16_f32 ignores both the f32 denormal and rounding modes, but
+            // flushes subnormal results and rounds according to the f16/f64 modes.
+            ast::CvtMode::FPTruncate {
+                rounding: rounding @ (ast::RoundingMode::NearestEven | ast::RoundingMode::Zero),
+                is_integer_rounding: false,
+                ..
+            } if cvt.from == ast::ScalarType::F32 && cvt.to == ast::ScalarType::F16 => InstructionModes {
+                denormal_f16f64: Some(DenormalMode::Preserve),
+                rounding_f16f64: Some(RoundingMode::from_ast(rounding)),
+                ..Self::none()
+            },
             ast::CvtMode::FPTruncate {
                 rounding,
                 flush_to_zero,
