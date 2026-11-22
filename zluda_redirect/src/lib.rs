@@ -11,7 +11,7 @@ use std::ffi::{CStr, CString};
 use std::iter::Peekable;
 use std::path;
 use std::sync::{Mutex, OnceLock};
-use std::{ffi::c_void, mem, ptr, slice, usize};
+use std::{ffi::c_void, mem, ptr, slice};
 use widestring::{U16CStr, U16CString};
 use windows::Win32::Foundation::{
     CloseHandle, HANDLE, NTSTATUS, STATUS_INVALID_PARAMETER_3, UNICODE_STRING,

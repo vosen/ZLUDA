@@ -7,7 +7,6 @@ links = "detours"
 # Package stuff
 description = "Rust bindings to Microsoft Detours"
 documentation = "https://github.com/microsoft/Detours/wiki/Reference"
-homepage = "https://github.com/DianaNites/detours"
 repository = "https://github.com/DianaNites/detours"
 readme = "README.md"
 keywords = [

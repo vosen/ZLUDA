@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::LazyLock;
 use std::{env, error::Error, fs, path::PathBuf, sync::Mutex};
-use std::{io, mem, ptr, usize};
+use std::{io, mem, ptr};
 
 extern crate cuda_types;
 

@@ -25,7 +25,7 @@
 // but it will too fail similarly, but with "unable to legalize instruction"
 
 use std::ffi::{CStr, NulError};
-use std::{i8, ptr, u64};
+use std::ptr;
 
 use super::*;
 use crate::pass::*;

@@ -87,6 +87,7 @@ unsafe fn try_load_library(lib: &LibraryInfo) -> Result<Option<OsString>, Error>
     };
     match lib.short_name {
         "nvcuda" => check_cuda(library),
+        "nvapi" => check_nvapi(library),
         "nvml" => check_nvml(library),
         "cudnn8" => check_cudnn8(library),
         "cudnn9" => check_cudnn9(library),
@@ -210,6 +211,66 @@ unsafe fn check_cublaslt(library: libloading::Library) -> Result<Option<OsString
         Error::Initialization("cublasLtDestroy".to_string(), err.0.get() as usize)
     })?;
     Ok(result)
+}
+
+unsafe fn check_nvapi(library: libloading::Library) -> Result<Option<OsString>, Error> {
+    type QueryInterface =
+        unsafe extern "C" fn(u32) -> *mut core::ffi::c_void;
+    type NvApiFunction = unsafe extern "C" fn() -> i32;
+
+    let query = library.get::<QueryInterface>(b"nvapi_QueryInterface\0")?;
+
+    // NvAPI_Initialize
+    let init_ptr = query(0x0150e828);
+
+    if init_ptr.is_null() {
+        return Err(Error::Initialization(
+            "NvAPI_Initialize interface unavailable".into(),
+            0,
+        ));
+    }
+
+    let init: NvApiFunction = mem::transmute(init_ptr);
+    let status = init();
+
+    if status != 0 {
+        return Err(Error::Initialization(
+            "NvAPI_Initialize".into(),
+            status as u32 as usize,
+        ));
+    }
+
+    // Check availability of CUDA GPU enumeration.
+    let gpu_ptr = query(0x5786cc6e);
+
+    // NvAPI_Unload
+    let unload_ptr = query(0xd22bdd7e);
+
+    if unload_ptr.is_null() {
+        return Err(Error::Initialization(
+            "NvAPI_Unload interface unavailable".into(),
+            0,
+        ));
+    }
+
+    let unload: NvApiFunction = mem::transmute(unload_ptr);
+    let status = unload();
+
+    if status != 0 {
+        return Err(Error::Initialization(
+            "NvAPI_Unload".into(),
+            status as u32 as usize,
+        ));
+    }
+
+    if gpu_ptr.is_null() {
+        return Err(Error::Initialization(
+            "NvAPI_GPU_CudaEnumComputeCapableGpus interface unavailable".into(),
+            0,
+        ));
+    }
+
+    Ok(None)
 }
 
 unsafe fn check_cuda(library: libloading::Library) -> Result<Option<OsString>, Error> {

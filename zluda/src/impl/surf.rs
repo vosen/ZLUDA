@@ -167,6 +167,9 @@ fn num_channels_for_array(array: hipArray_t) -> Result<(hipArray_Format, u32), h
     unsafe {
         let mut desc = std::mem::zeroed();
         hipArrayGetDescriptor(&mut desc, array)?;
+        if crate::r#impl::graphics::zluda_gl16f_array_info(array).is_some() {
+            return Ok((hipArray_Format::HIP_AD_FORMAT_HALF, desc.NumChannels));
+        }
         Ok((desc.Format, desc.NumChannels))
     }
 }
@@ -209,6 +212,18 @@ fn pixel_size_from_format_channels(
     Ok((bits_per_channel * num_channels) / 8)
 }
 
+// ZLUDA_GL16F_SURFACE_HANDLE_REGISTRY_V1
+static ZLUDA_GL16F_SURFACE_HANDLES: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashSet<u64>>,
+> = std::sync::OnceLock::new();
+fn zluda_gl16f_surface_handles() -> &'static std::sync::Mutex<std::collections::HashSet<u64>> {
+    ZLUDA_GL16F_SURFACE_HANDLES.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+pub(crate) fn zluda_gl16f_is_surface(handle: u64) -> bool {
+    if !crate::r#impl::graphics::zluda_gl16f_enabled() { return false; }
+    zluda_gl16f_surface_handles().lock().map_or(false, |m| m.contains(&handle))
+}
+
 pub(crate) unsafe fn object_create(
     p_tex_object: &mut CUsurfObject,
     p_res_desc: &HIP_RESOURCE_DESC,
@@ -219,10 +234,27 @@ pub(crate) unsafe fn object_create(
     let mut hip_surfobj = std::mem::zeroed();
     hipCreateSurfaceObject(&mut hip_surfobj, &resource_desc)?;
     *p_tex_object = to_cuda(hip_surfobj, pixel_size)?;
+    if p_res_desc.resType == hipResourcetype::HIP_RESOURCE_TYPE_ARRAY {
+        let mapped = unsafe { p_res_desc.res.array.hArray };
+        if crate::r#impl::graphics::zluda_gl16f_array_info(mapped).is_some() {
+            zluda_gl16f_surface_handles().lock().ok()
+                .map(|mut m| m.insert(*p_tex_object as u64));
+            crate::r#impl::graphics::zluda_gl16f_log(&format!("SURFACE GL16F bytes_per_pixel={pixel_size} cuda_handle={:x}", *p_tex_object as u64));
+        }
+    }
     Ok(())
 }
 
 pub(crate) unsafe fn object_destroy(tex_object: CUsurfObject) -> hipError_t {
+    if let Ok(mut m) = zluda_gl16f_surface_handles().lock() { m.remove(&(tex_object as u64)); }
+    // ZLUDA_EXPORT_SYNC_AB_V1: experimental lifetime synchronization.
+    // Low 3 surface handle bits encode bytes/pixel as log2. Value 2 = 4 bytes.
+    // Disabled by default. Slow: synchronization waits for the whole device.
+    if std::env::var("ZLUDA_SURFACE_DESTROY_SYNC").ok().as_deref() == Some("1")
+        && (tex_object & 7) == 2
+    {
+        hipDeviceSynchronize()?;
+    }
     hipDestroySurfaceObject(to_hip(tex_object))
 }
 

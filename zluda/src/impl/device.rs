@@ -587,3 +587,16 @@ mod tests {
         assert_eq!(current_ctx.0, ptr::null_mut());
     }
 }
+
+// CUDA current/default memory pool API. Return the real HIP runtime status.
+pub(crate) unsafe fn get_memory_pool(pool: &mut hipMemPool_t, dev: hipDevice_t) -> hipError_t {
+    hipDeviceGetMemPool(pool, dev)
+}
+
+pub(crate) unsafe fn get_default_memory_pool(pool: &mut hipMemPool_t, dev: hipDevice_t) -> hipError_t {
+    hipDeviceGetDefaultMemPool(pool, dev)
+}
+
+pub(crate) unsafe fn set_memory_pool(dev: hipDevice_t, pool: hipMemPool_t) -> hipError_t {
+    hipDeviceSetMemPool(dev, pool)
+}

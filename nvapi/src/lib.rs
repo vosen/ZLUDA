@@ -27,13 +27,13 @@ interface_to_name!(
     // { NvAPI_SetViewEx, 0x06b89e68 },
     { NvAPI_GetDisplayDriverVersion, 0xf951a4d1 },
     { NvAPI_SYS_GetDriverAndBranchVersion, 0x2926aaad },
-    // { NvAPI_GPU_GetMemoryInfo, 0x07f9b368 },
+    { NvAPI_GPU_GetMemoryInfo, 0x07f9b368 },
     // { NvAPI_GPU_GetMemoryInfoEx, 0xc0599498 },
     // { NvAPI_OGL_ExpertModeSet, 0x3805ef7a },
     // { NvAPI_OGL_ExpertModeGet, 0x22ed9516 },
     // { NvAPI_OGL_ExpertModeDefaultsSet, 0xb47a657e },
     // { NvAPI_OGL_ExpertModeDefaultsGet, 0xae921f12 },
-    // { NvAPI_EnumPhysicalGPUs, 0xe5ac921f },
+    { NvAPI_EnumPhysicalGPUs, 0xe5ac921f },
     // { NvAPI_EnumTCCPhysicalGPUs, 0xd9930b07 },
     // { NvAPI_EnumLogicalGPUs, 0x48b3ea59 },
     // { NvAPI_GetPhysicalGPUsFromDisplay, 0x34ef9506 },
@@ -57,12 +57,12 @@ interface_to_name!(
     // { NvAPI_GPU_SetEDID, 0xe83d6456 },
     // { NvAPI_GPU_GetOutputType, 0x40a505e4 },
     // { NvAPI_GPU_ValidateOutputCombination, 0x34c9c2d4 },
-    // { NvAPI_GPU_GetFullName, 0xceee8e9f },
-    // { NvAPI_GPU_GetPCIIdentifiers, 0x2ddfb66e },
-    // { NvAPI_GPU_GetGPUType, 0xc33baeb1 },
+    { NvAPI_GPU_GetFullName, 0xceee8e9f },
+    { NvAPI_GPU_GetPCIIdentifiers, 0x2ddfb66e },
+    { NvAPI_GPU_GetGPUType, 0xc33baeb1 },
     // { NvAPI_GPU_GetBusType, 0x1bb18724 },
-    // { NvAPI_GPU_GetBusId, 0x1be0b8e5 },
-    // { NvAPI_GPU_GetBusSlotId, 0x2a0a350f },
+    { NvAPI_GPU_GetBusId, 0x1be0b8e5 },
+    { NvAPI_GPU_GetBusSlotId, 0x2a0a350f },
     // { NvAPI_GPU_GetIRQ, 0xe4715417 },
     // { NvAPI_GPU_GetVbiosRevision, 0xacc3da0a },
     // { NvAPI_GPU_GetVbiosOEMRevision, 0x2d43fb31 },
@@ -617,43 +617,345 @@ unsafe extern "C" fn NvAPI_GPU_CudaEnumComputeCapableGpus(version_ptr: *mut NvU3
     }
 }
 
-#[allow(non_snake_case)]
-unsafe fn NvAPI_GPU_CudaEnumComputeCapableGpus_v1(
-    compute_topo: &mut NV_COMPUTE_GPU_TOPOLOGY_V1,
-) -> i32 {
-    compute_topo.gpuCount = 1;
-    compute_topo.computeGpus[0] = NV_COMPUTE_GPU_TOPOLOGY_V1__bindgen_ty_1 {
-        hPhysicalGpu: 1 as _,
-        flags: NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE
+fn zluda_nvapi_compute_flags() -> u32 {
+    NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE
             | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_ENABLE
             | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_RECOMMENDED
             | NV_COMPUTE_GPU_TOPOLOGY_CUDA_AVAILABLE
             | NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE
-            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE,
+            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE
+}
+
+#[allow(non_snake_case)]
+unsafe fn NvAPI_GPU_CudaEnumComputeCapableGpus_v1(
+    compute_topo: &mut NV_COMPUTE_GPU_TOPOLOGY_V1,
+) -> i32 {
+    let gpu_count = match zluda_nvapi_cuda_count() {
+        Ok(count) => count.min(compute_topo.computeGpus.len()),
+        Err(error) => return error,
     };
+    compute_topo.gpuCount = gpu_count as NvU32;
+    for index in 0..gpu_count {
+        compute_topo.computeGpus[index] = NV_COMPUTE_GPU_TOPOLOGY_V1__bindgen_ty_1 {
+            hPhysicalGpu: (index + 1) as NvPhysicalGpuHandle,
+            flags: zluda_nvapi_compute_flags(),
+        };
+    }
     0
 }
 
-#[repr(transparent)]
-struct NvComputeGpuSync(NV_COMPUTE_GPU);
+struct NvComputeGpuArray(Box<[NV_COMPUTE_GPU]>);
 
-unsafe impl Sync for NvComputeGpuSync {}
+// The array is allocated once, never mutated and lives for the process lifetime.
+unsafe impl Send for NvComputeGpuArray {}
+unsafe impl Sync for NvComputeGpuArray {}
 
 #[allow(non_snake_case)]
 unsafe fn NvAPI_GPU_CudaEnumComputeCapableGpus_v2(
     compute_topo: &mut NV_COMPUTE_GPU_TOPOLOGY_V2,
 ) -> i32 {
-    static mut FAKE_GPU: NvComputeGpuSync = NvComputeGpuSync(NV_COMPUTE_GPU {
-        hPhysicalGpu: 1 as _,
-        flags: NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_CAPABLE
-            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_ENABLE
-            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_RECOMMENDED
-            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_AVAILABLE
-            | NV_COMPUTE_GPU_TOPOLOGY_CUDA_CAPABLE
-            | NV_COMPUTE_GPU_TOPOLOGY_PHYSICS_AVAILABLE,
-    });
-    compute_topo.gpuCount = 1;
-    compute_topo.computeGpus = (&raw mut FAKE_GPU).cast();
+    static COMPUTE_GPUS: std::sync::OnceLock<NvComputeGpuArray> = std::sync::OnceLock::new();
+    let gpu_count = match zluda_nvapi_cuda_count() {
+        Ok(count) => count,
+        Err(error) => return error,
+    };
+    let entries = &COMPUTE_GPUS.get_or_init(|| {
+        let gpus = (0..ZLUDA_NVAPI_MAX_PHYSICAL_GPUS)
+            .map(|index| NV_COMPUTE_GPU {
+                hPhysicalGpu: (index + 1) as NvPhysicalGpuHandle,
+                flags: zluda_nvapi_compute_flags(),
+            })
+            .collect::<Vec<_>>();
+        NvComputeGpuArray(gpus.into_boxed_slice())
+    }).0;
+    compute_topo.gpuCount = gpu_count as NvU32;
+    compute_topo.computeGpus = entries.as_ptr() as *mut NV_COMPUTE_GPU;
+    0
+}
+
+// NVAPI physical handles are process-local, non-null, 1-based CUDA ordinals.
+// Use the same encoding as the existing NVAPI CUDA-topology implementation.
+const ZLUDA_NVAPI_MAX_PHYSICAL_GPUS: usize = 64;
+
+type ZludaCudaInit = unsafe extern "system" fn(u32) -> i32;
+type ZludaCudaGetCount = unsafe extern "system" fn(*mut i32) -> i32;
+type ZludaCudaGetName = unsafe extern "system" fn(*mut std::ffi::c_char, i32, i32) -> i32;
+type ZludaCudaGetAttribute = unsafe extern "system" fn(*mut i32, i32, i32) -> i32;
+type ZludaCudaGetTotalMem = unsafe extern "system" fn(*mut usize, i32) -> i32;
+
+struct ZludaCudaDriver {
+    _library: libloading::Library,
+    init: ZludaCudaInit,
+    get_count: ZludaCudaGetCount,
+    get_name: ZludaCudaGetName,
+    get_attribute: ZludaCudaGetAttribute,
+    get_total_mem: ZludaCudaGetTotalMem,
+}
+
+fn zluda_nvapi_cuda() -> Option<&'static ZludaCudaDriver> {
+    static CUDA_DRIVER: std::sync::OnceLock<ZludaCudaDriver> = std::sync::OnceLock::new();
+    if let Some(driver) = CUDA_DRIVER.get() {
+        return Some(driver);
+    }
+    // Retry on later calls when the DLL is not yet available; do not cache failure.
+    let library = unsafe { libloading::Library::new("nvcuda.dll") }.ok()?;
+    let driver = unsafe {
+        ZludaCudaDriver {
+            init: *library.get(b"cuInit\0").ok()?,
+            get_count: *library.get(b"cuDeviceGetCount\0").ok()?,
+            get_name: *library.get(b"cuDeviceGetName\0").ok()?,
+            get_attribute: *library.get(b"cuDeviceGetAttribute\0").ok()?,
+            get_total_mem: *library.get(b"cuDeviceTotalMem_v2\0").ok()?,
+            _library: library,
+        }
+    };
+    let _ = CUDA_DRIVER.set(driver);
+    CUDA_DRIVER.get()
+}
+
+fn zluda_nvapi_cuda_count() -> Result<usize, i32> {
+    let driver = zluda_nvapi_cuda().ok_or(_NvAPI_Status_NVAPI_NVIDIA_DEVICE_NOT_FOUND)?;
+    let mut count = 0i32;
+    if unsafe { (driver.init)(0) } != 0
+        || unsafe { (driver.get_count)(&mut count) } != 0
+    {
+        return Err(_NvAPI_Status_NVAPI_NVIDIA_DEVICE_NOT_FOUND);
+    }
+    Ok((count.max(0) as usize).min(ZLUDA_NVAPI_MAX_PHYSICAL_GPUS))
+}
+
+fn zluda_nvapi_cuda_ordinal(gpu: NvPhysicalGpuHandle) -> Result<i32, i32> {
+    let ordinal = (gpu as usize)
+        .checked_sub(1)
+        .ok_or(_NvAPI_Status_NVAPI_INVALID_HANDLE)?;
+    if ordinal >= zluda_nvapi_cuda_count()? {
+        return Err(_NvAPI_Status_NVAPI_INVALID_HANDLE);
+    }
+    Ok(ordinal as i32)
+}
+
+fn zluda_nvapi_device_name(gpu: NvPhysicalGpuHandle) -> Result<String, i32> {
+    let ordinal = zluda_nvapi_cuda_ordinal(gpu)?;
+    let driver = zluda_nvapi_cuda().ok_or(_NvAPI_Status_NVAPI_NVIDIA_DEVICE_NOT_FOUND)?;
+    let mut name = [0u8; 256];
+    if unsafe { (driver.get_name)(name.as_mut_ptr().cast(), name.len() as i32, ordinal) } != 0 {
+        return Err(_NvAPI_Status_NVAPI_ERROR);
+    }
+    let len = name.iter().position(|&byte| byte == 0).unwrap_or(name.len());
+    Ok(String::from_utf8_lossy(&name[..len]).into_owned())
+}
+
+fn zluda_nvapi_cuda_attribute(gpu: NvPhysicalGpuHandle, attribute: i32) -> Result<i32, i32> {
+    let ordinal = zluda_nvapi_cuda_ordinal(gpu)?;
+    let driver = zluda_nvapi_cuda().ok_or(_NvAPI_Status_NVAPI_NVIDIA_DEVICE_NOT_FOUND)?;
+    let mut value = 0;
+    if unsafe { (driver.get_attribute)(&mut value, attribute, ordinal) } != 0 {
+        return Err(_NvAPI_Status_NVAPI_NOT_SUPPORTED);
+    }
+    Ok(value)
+}
+
+fn zluda_nvapi_total_memory(gpu: NvPhysicalGpuHandle) -> Result<usize, i32> {
+    let ordinal = zluda_nvapi_cuda_ordinal(gpu)?;
+    let driver = zluda_nvapi_cuda().ok_or(_NvAPI_Status_NVAPI_NVIDIA_DEVICE_NOT_FOUND)?;
+    let mut total = 0usize;
+    if unsafe { (driver.get_total_mem)(&mut total, ordinal) } != 0 {
+        return Err(_NvAPI_Status_NVAPI_ERROR);
+    }
+    Ok(total)
+}
+
+// DXGI supplies actual PCI vendor/device/subsystem/revision IDs on Windows.
+// If two adapters share the same name, return NOT_SUPPORTED rather than
+// inventing an identifier for an arbitrary adapter.
+fn zluda_nvapi_dxgi_pci_ids(cuda_name: &str) -> Option<(u32, u32, u32, u32)> {
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1};
+
+    let gpu_name = cuda_name
+        .strip_suffix(" [ZLUDA]")
+        .unwrap_or(cuda_name)
+        .trim();
+    let factory: IDXGIFactory1 = unsafe { CreateDXGIFactory1() }.ok()?;
+    let mut found = None;
+    for index in 0..256u32 {
+        let Ok(adapter) = (unsafe { factory.EnumAdapters1(index) }) else {
+            break;
+        };
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        let description = String::from_utf16_lossy(&desc.Description);
+        let description = description.trim_end_matches('\0').trim();
+        if !description.eq_ignore_ascii_case(gpu_name) {
+            continue;
+        }
+        let ids = (desc.VendorId, desc.DeviceId, desc.SubSysId, desc.Revision);
+        if found.replace(ids).is_some() {
+            return None;
+        }
+    }
+    found
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_EnumPhysicalGPUs(
+    handles: *mut NvPhysicalGpuHandle,
+    count: *mut NvU32,
+) -> i32 {
+    if handles.is_null() || count.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let gpu_count = match zluda_nvapi_cuda_count() {
+        Ok(count) => count,
+        Err(error) => return error,
+    };
+    for index in 0..gpu_count {
+        *handles.add(index) = (index + 1) as NvPhysicalGpuHandle;
+    }
+    *count = gpu_count as NvU32;
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetFullName(
+    gpu: NvPhysicalGpuHandle,
+    name: *mut NvAPI_ShortString,
+) -> i32 {
+    if name.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let full_name = match zluda_nvapi_device_name(gpu) {
+        Ok(name) => name,
+        Err(error) => return error,
+    };
+    let full_name = if full_name.ends_with(" [ZLUDA]") {
+        full_name
+    } else {
+        format!("{full_name} [ZLUDA]")
+    };
+    let out = &mut *name;
+    out.fill(0);
+    for (dst, src) in out.iter_mut().take(63).zip(full_name.bytes()) {
+        *dst = src as i8;
+    }
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetBusId(
+    gpu: NvPhysicalGpuHandle,
+    bus: *mut NvU32,
+) -> i32 {
+    if bus.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    const CU_DEVICE_ATTRIBUTE_PCI_BUS_ID: i32 = 33;
+    let bus_id = match zluda_nvapi_cuda_attribute(gpu, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID) {
+        Ok(bus_id) => bus_id,
+        Err(error) => return error,
+    };
+    *bus = bus_id as NvU32;
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetBusSlotId(
+    gpu: NvPhysicalGpuHandle,
+    slot: *mut NvU32,
+) -> i32 {
+    if slot.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    const CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID: i32 = 34;
+    let slot_id = match zluda_nvapi_cuda_attribute(gpu, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID) {
+        Ok(slot_id) => slot_id,
+        Err(error) => return error,
+    };
+    *slot = slot_id as NvU32;
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetGPUType(
+    gpu: NvPhysicalGpuHandle,
+    gpu_type: *mut NV_GPU_TYPE,
+) -> i32 {
+    if gpu_type.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    const CU_DEVICE_ATTRIBUTE_INTEGRATED: i32 = 18;
+    let integrated = zluda_nvapi_cuda_attribute(gpu, CU_DEVICE_ATTRIBUTE_INTEGRATED)
+        .unwrap_or(0);
+    *gpu_type = if integrated != 0 { 1 } else { 2 };
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetPCIIdentifiers(
+    gpu: NvPhysicalGpuHandle,
+    device: *mut NvU32,
+    subsystem: *mut NvU32,
+    revision: *mut NvU32,
+    external_device: *mut NvU32,
+) -> i32 {
+    if device.is_null() || subsystem.is_null() || revision.is_null() || external_device.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let name = match zluda_nvapi_device_name(gpu) {
+        Ok(name) => name,
+        Err(error) => return error,
+    };
+    let Some((vendor_id, device_id, subsystem_id, revision_id)) =
+        zluda_nvapi_dxgi_pci_ids(&name)
+    else {
+        return _NvAPI_Status_NVAPI_NOT_SUPPORTED;
+    };
+    *device = (device_id << 16) | (vendor_id & 0xffff);
+    *subsystem = subsystem_id;
+    *revision = revision_id;
+    *external_device = device_id;
+    0
+}
+
+#[allow(non_snake_case)]
+unsafe extern "C" fn NvAPI_GPU_GetMemoryInfo(
+    gpu: NvPhysicalGpuHandle,
+    info: *mut NV_DISPLAY_DRIVER_MEMORY_INFO_V3,
+) -> i32 {
+    if info.is_null() {
+        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    }
+    let vram = match zluda_nvapi_total_memory(gpu) {
+        Ok(bytes) => bytes,
+        Err(error) => return error,
+    };
+    let vram_kb = (vram / 1024).min(NvU32::MAX as usize) as NvU32;
+    let version = (*info).version;
+    if version == make_nvapi_version::<NV_DISPLAY_DRIVER_MEMORY_INFO_V1>(1) {
+        let v = &mut *(info.cast::<NV_DISPLAY_DRIVER_MEMORY_INFO_V1>());
+        v.dedicatedVideoMemory = vram_kb;
+        v.availableDedicatedVideoMemory = vram_kb;
+        v.systemVideoMemory = 0;
+        v.sharedSystemMemory = 0;
+    } else if version == make_nvapi_version::<NV_DISPLAY_DRIVER_MEMORY_INFO_V2>(2) {
+        let v = &mut *(info.cast::<NV_DISPLAY_DRIVER_MEMORY_INFO_V2>());
+        v.dedicatedVideoMemory = vram_kb;
+        v.availableDedicatedVideoMemory = vram_kb;
+        v.systemVideoMemory = 0;
+        v.sharedSystemMemory = 0;
+        v.curAvailableDedicatedVideoMemory = vram_kb;
+    } else if version == make_nvapi_version::<NV_DISPLAY_DRIVER_MEMORY_INFO_V3>(3) {
+        let v = &mut *info;
+        v.dedicatedVideoMemory = vram_kb;
+        v.availableDedicatedVideoMemory = vram_kb;
+        v.systemVideoMemory = 0;
+        v.sharedSystemMemory = 0;
+        v.curAvailableDedicatedVideoMemory = vram_kb;
+        v.dedicatedVideoMemoryEvictionsSize = 0;
+        v.dedicatedVideoMemoryEvictionCount = 0;
+    } else {
+        return _NvAPI_Status_NVAPI_INCOMPATIBLE_STRUCT_VERSION;
+    }
     0
 }
 
@@ -662,12 +964,13 @@ unsafe extern "C" fn NvAPI_GetGPUIDfromPhysicalGPU(
     physical_gpu: NvPhysicalGpuHandle,
     gpu_id: *mut NvU32,
 ) -> i32 {
-    if physical_gpu != 1 as _ {
-        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
-    }
+    let ordinal = match zluda_nvapi_cuda_ordinal(physical_gpu) {
+        Ok(ordinal) => ordinal,
+        Err(error) => return error,
+    };
     let gpu_id = gpu_id.as_mut();
     let gpu_id = unwrap_or::unwrap_some_or!(gpu_id, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
-    *gpu_id = 1;
+    *gpu_id = ordinal as NvU32 + 1;
     0
 }
 
@@ -676,13 +979,16 @@ unsafe extern "C" fn NvAPI_GetPhysicalGPUFromGPUID(
     gpu_id: NvU32,
     physical_gpu: *mut NvPhysicalGpuHandle,
 ) -> i32 {
-    if gpu_id != 1 {
-        return _NvAPI_Status_NVAPI_INVALID_ARGUMENT;
+    if gpu_id == 0 || (gpu_id as usize) > match zluda_nvapi_cuda_count() {
+        Ok(count) => count,
+        Err(error) => return error,
+    } {
+        return _NvAPI_Status_NVAPI_INVALID_HANDLE;
     }
     let physical_gpu = physical_gpu.as_mut();
     let physical_gpu =
         unwrap_or::unwrap_some_or!(physical_gpu, return _NvAPI_Status_NVAPI_INVALID_ARGUMENT);
-    *physical_gpu = 1 as _;
+    *physical_gpu = gpu_id as NvPhysicalGpuHandle;
     0
 }
 

@@ -8,7 +8,6 @@ use std::{
     ffi::{c_void, CStr, CString},
     mem, ptr, slice,
     sync::{Mutex, OnceLock},
-    usize,
 };
 use zluda_common::{constants, FromCuda, LiveCheck};
 

@@ -325,6 +325,8 @@ from_cuda_transmute!(
     CUaddress_mode => hipTextureAddressMode,
     CUfilter_mode => hipTextureFilterMode,
     cufftType_t => hipfft_sys::hipfftType,
+    CUmemoryPool => hipMemPool_t,
+    CUmemPool_attribute => hipMemPoolAttr,
     CUgraphicsResource => hipGraphicsResource_t
 );
 

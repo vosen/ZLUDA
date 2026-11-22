@@ -78,11 +78,29 @@ macro_rules! implemented_windows {
     }
 }
 
+// DaVinci Resolve 21: CUDA stream callback requires ABI and error-status translation.
+macro_rules! implemented_stream_callback {
+    ($($abi:literal fn $fn_name:ident( $($arg_id:ident : $arg_type:ty),* ) -> $ret_type:ty;)*) => {
+        $(
+            #[cfg_attr(not(test), no_mangle)]
+            #[allow(improper_ctypes)]
+            #[allow(improper_ctypes_definitions)]
+            pub unsafe extern $abi fn $fn_name ( $( $arg_id : $arg_type),* ) -> $ret_type {
+                if !initialized() {
+                    return Err(CUerror::DEINITIALIZED);
+                }
+                crate::r#impl::stream::add_callback($($arg_id),*)
+            }
+        )*
+    };
+}
+
 cuda_macros::cuda_function_declarations!(
     unimplemented,
     implemented
         <= [
             cuArray3DCreate_v2,
+            cuArray3DGetDescriptor_v2,
             cuArrayCreate_v2,
             cuArrayDestroy,
             cuCtxCreate_v2,
@@ -111,6 +129,9 @@ cuda_macros::cuda_function_declarations!(
             cuDeviceGet,
             cuDeviceGetAttribute,
             cuDeviceGetCount,
+            cuDeviceGetMemPool,
+            cuDeviceGetDefaultMemPool,
+            cuDeviceSetMemPool,
             cuDeviceGetLuid,
             cuDeviceGetName,
             cuDeviceGetPCIBusId,
@@ -163,8 +184,10 @@ cuda_macros::cuda_function_declarations!(
             cuMemAllocHost_v2,
             cuMemAllocPitch_v2,
             cuMemcpy2D_v2,
+            cuMemcpy2DAsync_v2,
             cuMemcpy2DUnaligned_v2,
             cuMemcpy3D_v2,
+            cuMemcpy3DAsync_v2,
             cuMemcpyAsync,
             cuMemcpyAtoH_v2,
             cuMemcpyDtoD_v2,
@@ -181,6 +204,8 @@ cuda_macros::cuda_function_declarations!(
             cuMemGetAddressRange_v2,
             cuMemGetAllocationGranularity,
             cuMemGetInfo_v2,
+            cuMemPoolSetAttribute,
+            cuMemPoolGetAttribute,
             cuMemHostAlloc,
             cuMemHostGetDevicePointer_v2,
             cuMemRetainAllocationHandle,
@@ -233,11 +258,14 @@ cuda_macros::cuda_function_declarations!(
             cuTexRefSetFormat,
             cuThreadExchangeStreamCaptureMode,
         ],
+    implemented_stream_callback <= [cuStreamAddCallback,],
     implemented_in_function <= [cuLaunchKernel,],
     implemented_windows
         <= [
             cuD3D11GetDevice,
             cuGraphicsD3D11RegisterResource,
+            cuGraphicsGLRegisterImage,
+            cuGraphicsGLRegisterBuffer,
             cuGraphicsMapResources,
             cuGraphicsResourceSetMapFlags_v2,
             cuGraphicsSubResourceGetMappedArray,

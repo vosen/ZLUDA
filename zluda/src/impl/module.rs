@@ -42,6 +42,7 @@ impl ModuleMutable {
                 unsafe { hipModuleGetFunction(&mut func_handle, module, entry.key().as_ptr()) }?;
                 let func = Box::new(Function {
                     base: func_handle,
+                    name: entry.key().to_owned(),
                     sm_version,
                     explicit_args_size_align,
                 });

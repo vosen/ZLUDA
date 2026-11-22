@@ -112,6 +112,12 @@ pub fn compile(
     linked.link(ptx_impl)?;
     linked.link(ockl)?;
 
+    // AMDGPU uses an "amdgcn" target triple. gfx1200 is the target CPU,
+    // not a separate LLVM target triple or a subarchitecture suffix.
+    unsafe {
+        LLVMSetTarget(linked.get(), c"amdgcn-amd-amdhsa".as_ptr());
+    }
+
     linked.verify()?;
 
     if let Some(hook) = compiler_hook {

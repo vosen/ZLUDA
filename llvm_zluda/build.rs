@@ -117,15 +117,19 @@ fn try_use_ninja(cmake: &mut Config) {
 // We resort to this garbage because Cargo is ideologically opposed to
 // being useful, see here: https://github.com/rust-lang/cargo/issues/11054
 fn try_get_build_profile_name() -> String {
-    let mut path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    path.pop();
-    path.pop();
-    path.pop();
-    let name = path.file_name().unwrap().to_str().unwrap();
-    if !["debug", "dev-llvm", "release", "release-lto"].contains(&name) {
-        panic!("Unknown build profile: {}", name);
-    }
-    name.to_string()
+    let out_dir = env::var("OUT_DIR").expect("OUT_DIR is not set");
+    let known_profiles = ["debug", "dev-llvm", "release", "release-lto"];
+    let path = PathBuf::from(&out_dir);
+
+    path.ancestors()
+        .filter_map(|ancestor| {
+            ancestor.file_name().and_then(|name| name.to_str())
+        })
+        .find(|name| known_profiles.contains(name))
+        .unwrap_or_else(|| {
+            panic!("Unknown build profile in OUT_DIR: {out_dir}")
+        })
+        .to_owned()
 }
 
 fn get_llvm_build_path(llvm_build_dir: &PathBuf, cmake_profile: &str) -> PathBuf {

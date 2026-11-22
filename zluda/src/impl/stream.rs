@@ -90,3 +90,61 @@ pub(crate) fn wait_event(
 pub(crate) fn query(stream: hipStream_t) -> hipError_t {
     unsafe { hipStreamQuery(stream) }
 }
+
+// Keep CUDA's callback ABI and original CUDA stream handle across the HIP callback.
+struct CudaStreamCallbackPayload {
+    callback: unsafe extern "system" fn(
+        cuda_types::cuda::CUstream,
+        cuda_types::cuda::CUresult,
+        *mut ::core::ffi::c_void,
+    ),
+    cuda_stream: cuda_types::cuda::CUstream,
+    user_data: *mut ::core::ffi::c_void,
+}
+
+unsafe extern "C" fn hip_stream_callback_trampoline(
+    _hip_stream: hipStream_t,
+    status: hipError_t,
+    user_data: *mut ::core::ffi::c_void,
+) {
+    let payload = unsafe { Box::from_raw(user_data.cast::<CudaStreamCallbackPayload>()) };
+    let cuda_status: cuda_types::cuda::CUresult =
+        status.map_err(|_| cuda_types::cuda::CUerror::UNKNOWN);
+    unsafe { (payload.callback)(payload.cuda_stream, cuda_status, payload.user_data) };
+}
+
+pub(crate) unsafe fn add_callback(
+    cuda_stream: cuda_types::cuda::CUstream,
+    callback: cuda_types::cuda::CUstreamCallback,
+    user_data: *mut ::core::ffi::c_void,
+    flags: ::core::ffi::c_uint,
+) -> cuda_types::cuda::CUresult {
+    use cuda_types::cuda::CUerror;
+    if flags != 0 {
+        return Err(CUerror::INVALID_VALUE);
+    }
+    let callback = callback.ok_or(CUerror::INVALID_VALUE)?;
+    let stream: hipStream_t =
+        zluda_common::FromCuda::<_, CUerror>::from_cuda(&cuda_stream)?;
+
+    let payload = Box::new(CudaStreamCallbackPayload {
+        callback,
+        cuda_stream,
+        user_data,
+    });
+    let raw = Box::into_raw(payload);
+    match unsafe {
+        hipStreamAddCallback(
+            stream,
+            Some(hip_stream_callback_trampoline),
+            raw.cast::<::core::ffi::c_void>(),
+            flags,
+        )
+    } {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            unsafe { drop(Box::from_raw(raw)) };
+            Err(CUerror::from(error))
+        }
+    }
+}

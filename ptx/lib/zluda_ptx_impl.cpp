@@ -370,7 +370,11 @@ extern "C"
                             uint64_t char_size)
     {
         (void)char_size;
-        [[clang::noinline]] __assert_fail((const char *)message, (const char *)file, line, (const char *)function);
+        (void)message;
+        (void)file;
+        (void)line;
+        (void)function;
+        __builtin_trap();
     }
 
     // * Smallest denormal is 1.4 × 10^-45
@@ -1479,6 +1483,28 @@ T surface_load(uint64_t raw_surfobj, Coord raw_coord) __device__
     return zext_or_trunc<T, surface_pixel_type_t<T>>(surface_load_impl<surface_pixel_type_t<T>>(*(GLOBAL_SPACE v8s32 *)surfobj, coord));
 }
 
+
+// ZLUDA_PREVIEW_RGBA8_UNORM_V1: experimental RGBA8 UNORM store for Resolve preview.
+// For 4-channel 8-bit GL textures: write four normalized float channels through
+// the AMD typed image-store instruction, rather than one packed bit-pattern.
+static void zluda_store_rgba8_normalized_2d(uint64_t surfobj_raw, v2s32 raw_coord, uint32_t packed) __device__
+{
+    auto [surfobj, shift, coord] = unpack_coord(surfobj_raw, raw_coord);
+    (void)shift;
+    __attribute__((device)) void image_store_rgba8_normalized(
+        v4f32, uint32_t, int32_t, int32_t, v8s32, int32_t, int32_t)
+        __asm("llvm.amdgcn.image.store.2d.v4f32.i32");
+    constexpr float one_over_255 = 1.0f / 255.0f;
+    v4f32 rgba = {
+        float(packed & 255u) * one_over_255,
+        float((packed >> 8) & 255u) * one_over_255,
+        float((packed >> 16) & 255u) * one_over_255,
+        float((packed >> 24) & 255u) * one_over_255
+    };
+    image_store_rgba8_normalized(
+        rgba, 0xf, coord.x, coord.y, *(GLOBAL_SPACE v8s32*)surfobj, 0, 0);
+}
+
 extern "C"
 {
 #define SULD_ARGS_1d int32_t
@@ -1611,7 +1637,28 @@ extern "C"
     sust(v2, b8, 2d);
     sust(v2, b8, 3d);
     sust(v4, b8, 1d);
-    sust(v4, b8, 2d);
+
+    // ZLUDA_PREVIEW_RGBA8_UNORM_V1: only the v4.b8 2D store path.
+    // The byte-coordinate shift is carried in the low three bits of surfobj.
+    void FUNC(sustobj_b_2d_v4_b8)(uint64_t surfobj, v2s32 coord, v4_b8 value)
+    {
+        if ((surfobj & 7ULL) == 2ULL)
+        {
+            uint32_t packed = uint32_t(value[0])
+                | (uint32_t(value[1]) << 8)
+                | (uint32_t(value[2]) << 16)
+                | (uint32_t(value[3]) << 24);
+            zluda_store_rgba8_normalized_2d(surfobj, coord, packed);
+        }
+        else
+        {
+            surface_store(surfobj, coord, value);
+        }
+    }
+    void FUNC(sustref_b_2d_v4_b8)(struct textureReference GLOBAL_SPACE* texref, v2s32 coord, v4_b8 value)
+    {
+        FUNC_CALL(sustobj_b_2d_v4_b8)(uint64_t(texref->textureObject), coord, value);
+    }
     sust(v4, b8, 3d);
     sust(v1, b16, 1d);
     sust(v1, b16, 2d);

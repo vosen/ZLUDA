@@ -279,6 +279,31 @@ pub(crate) unsafe fn alloc_pitch_v2(
     Ok(())
 }
 
+pub(crate) unsafe fn copy_2d_async_v2(
+    memcpy: hip_Memcpy2D,
+    stream: hipStream_t,
+) -> hipError_t {
+    if memcpy.srcMemoryType == hipMemoryType::hipMemoryTypeDevice
+        && memcpy.dstMemoryType == hipMemoryType::hipMemoryTypeDevice
+        && memcpy.srcXInBytes == 0
+        && memcpy.srcY == 0
+        && memcpy.dstXInBytes == 0
+        && memcpy.dstY == 0
+    {
+        return hipMemcpy2DAsync(
+            memcpy.dstDevice.0,
+            memcpy.dstPitch,
+            memcpy.srcDevice.0,
+            memcpy.srcPitch,
+            memcpy.WidthInBytes,
+            memcpy.Height,
+            hipMemcpyKind::hipMemcpyDeviceToDevice,
+            stream,
+        );
+    }
+    hipMemcpyParam2DAsync(&memcpy, stream)
+}
+
 pub(crate) unsafe fn copy_2d_v2(memcpy: hip_Memcpy2D) -> CUresult {
     hipMemcpyParam2D(&memcpy)?;
     Ok(())
@@ -340,9 +365,30 @@ pub(crate) unsafe fn copy_3d_v2(memcpy: HIP_MEMCPY3D) -> hipError_t {
     hipDrvMemcpy3D(&memcpy)
 }
 
+pub(crate) unsafe fn copy_3d_async_v2(memcpy: HIP_MEMCPY3D, stream: hipStream_t) -> hipError_t {
+    hipDrvMemcpy3DAsync(&memcpy, stream)
+}
+
 pub(crate) unsafe fn alloc_host_v2(
     pp: *mut *mut ::core::ffi::c_void,
     bytesize: usize,
 ) -> hipError_t {
     hipHostMalloc(pp, bytesize, 0)
+}
+
+// Retain actual HIP status: on Windows these APIs can be unsupported by AMD HIP.
+pub(crate) unsafe fn pool_set_attribute(
+    pool: hipMemPool_t,
+    attr: hipMemPoolAttr,
+    value: *mut ::core::ffi::c_void,
+) -> hipError_t {
+    hipMemPoolSetAttribute(pool, attr, value)
+}
+
+pub(crate) unsafe fn pool_get_attribute(
+    pool: hipMemPool_t,
+    attr: hipMemPoolAttr,
+    value: *mut ::core::ffi::c_void,
+) -> hipError_t {
+    hipMemPoolGetAttribute(pool, attr, value)
 }
