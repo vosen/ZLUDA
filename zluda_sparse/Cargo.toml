@@ -20,7 +20,7 @@ windows_paths = ["cusparse64_10.dll", "cusparse64_11.dll", "cusparse64_12.dll"]
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
-libloading = "0.8"
+libloading = "0.9"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3.0"

@@ -13,6 +13,7 @@ trie-hard = "0.2.0"
 widestring = "1.2.1"
 alloca = "0.4.0"
 winnow = { version =  "1.0.5" }
+bytemuck = "1.25.2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

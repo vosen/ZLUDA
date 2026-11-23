@@ -1,18 +1,14 @@
 use crate::args;
 use crate::args::{Arguments, LibraryWithPath};
-use bpaf::Parser;
 use rustc_hash::FxHashSet;
 use std::error::Error;
-use std::ffi::{CString, OsStr};
-use std::os::windows::ffi::OsStrExt;
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::{env, mem, process, ptr};
-use windows::Win32::Foundation::{ERROR_CANCELLED, HANDLE, WAIT_FAILED};
-use windows::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+use windows::Win32::Foundation::{HANDLE, WAIT_FAILED};
 use windows::Win32::System::Threading::{
     self, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_DEFAULT_ERROR_MODE,
-    CREATE_NEW_CONSOLE, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, DETACHED_PROCESS,
-    PROCESS_CREATION_FLAGS,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, DETACHED_PROCESS, PROCESS_CREATION_FLAGS,
 };
 use zluda_windows::LibraryInfo;
 
@@ -45,11 +41,7 @@ pub fn main_impl(args: args::Arguments, detached: bool) -> Result<(), Box<dyn Er
     let mut startup_info = unsafe { mem::zeroed::<detours_sys::_STARTUPINFOW>() };
     let mut proc_info = unsafe { mem::zeroed::<detours_sys::_PROCESS_INFORMATION>() };
     let mut env_vars_block = injection_env.get_env_variables_block()?;
-    let dlls_to_inject = injection_env.get_injection_paths_zero_terminated()?;
-    let mut dll_to_inject_pointers = dlls_to_inject
-        .iter()
-        .map(|p| p.as_ptr())
-        .collect::<Vec<_>>();
+    let mut redirect_dll_path_ptr = injection_env.redirect_dll_path.as_ptr().cast::<i8>();
     os_call! {
         detours_sys::DetourCreateProcessWithDllsW(
             ptr::null_mut(),
@@ -63,12 +55,12 @@ pub fn main_impl(args: args::Arguments, detached: bool) -> Result<(), Box<dyn Er
             ptr::null(),
             std::ptr::from_mut(&mut startup_info),
             std::ptr::from_mut(&mut proc_info),
-            dll_to_inject_pointers.len() as u32,
-            dll_to_inject_pointers.as_mut_ptr(),
+            1,
+            &mut redirect_dll_path_ptr,
             Option::None
         )
     };
-    zluda_windows::kill_child_on_process_exit(proc_info.hProcess)?;
+    zluda_windows::kill_child_on_process_exit(HANDLE(proc_info.hProcess))?;
     injection_env.copy_payloads_to_process(proc_info.hProcess)?;
     os_call! { ResumeThread(HANDLE(proc_info.hThread)), |x| x == -1i32 as u32 };
     os_call! { WaitForSingleObject(HANDLE(proc_info.hProcess), Threading::INFINITE), |x| x == WAIT_FAILED };
@@ -79,73 +71,45 @@ pub fn main_impl(args: args::Arguments, detached: bool) -> Result<(), Box<dyn Er
 
 #[derive(Debug)]
 struct InjectionConfig {
-    redirect_dll_path: PathBuf,
-    dll_paths: Vec<LibraryWithPath>,
+    dll_paths32: Vec<Option<LibraryWithPath>>,
+    dll_paths64: Vec<Option<LibraryWithPath>>,
+    redirect_dll_path: String,
     env_vars: Vec<(&'static str, PathBuf)>,
 }
 
 impl InjectionConfig {
-    fn get_injection_paths_zero_terminated(&self) -> Result<Vec<CString>, Box<dyn Error>> {
-        let mut injection_paths = self
-            .dll_paths
-            .iter()
-            .map(|lib| {
-                let path_utf16 = lib.path.as_os_str().to_str().ok_or_else(|| {
-                    let err: Box<dyn Error> = format!(
-                        "Failed to convert path {:?} to UTF-8 string",
-                        lib.path.as_os_str()
-                    )
-                    .into();
-                    err
-                })?;
-                Ok::<_, Box<dyn Error>>(unsafe {
-                    CString::from_vec_unchecked(path_utf16.as_bytes().to_vec())
-                })
-            })
-            .collect::<Result<Vec<CString>, _>>()?;
-        injection_paths.push(CString::new(self.redirect_dll_path.to_str().ok_or_else(
-            || {
-                let err: Box<dyn Error> = format!(
-                    "Failed to convert path {:?} to UTF-8 string",
-                    self.redirect_dll_path.as_os_str()
-                )
-                .into();
-                err
-            },
-        )?)?);
-        Ok(injection_paths)
-    }
-
     fn new(args: Arguments) -> Result<Self, Box<dyn Error>> {
         match args.paths {
-            args::ConfigSet::Custom(libs) => Self::custom(libs),
+            args::ConfigSet::Custom {
+                dll_paths32,
+                dll_paths64,
+            } => Self::custom(dll_paths32, dll_paths64),
             args::ConfigSet::Zluda => Self::zluda(),
             args::ConfigSet::ZludaTrace => Self::zluda_trace(),
             args::ConfigSet::NvidiaTrace => Self::nvidia_trace(),
         }
     }
 
-    fn custom(libs: Vec<LibraryWithPath>) -> Result<Self, Box<dyn Error>> {
+    fn custom(
+        dll_paths32: Vec<Option<LibraryWithPath>>,
+        dll_paths64: Vec<Option<LibraryWithPath>>,
+    ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(Self::current_exe_dir()?),
-            dll_paths: libs,
+            dll_paths32,
+            dll_paths64,
             env_vars: Vec::new(),
         })
     }
 
     fn zluda() -> Result<Self, Box<dyn Error>> {
         let current_exe_dir = Self::current_exe_dir()?;
-        let dll_paths = zluda_windows::LIBRARIES
-            .iter()
-            .map(|lib| {
-                let mut path = current_exe_dir.clone();
-                path.push(lib.ascii_name);
-                LibraryWithPath { library: lib, path }
-            })
-            .collect();
+        let dll_paths32 = Self::get_paths(&current_exe_dir, &zluda_windows::LIBRARIES32[..]);
+        let dll_paths64 = Self::get_paths(&current_exe_dir, &zluda_windows::LIBRARIES64[..]);
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(current_exe_dir),
-            dll_paths,
+            dll_paths32,
+            dll_paths64,
             env_vars: Vec::new(),
         })
     }
@@ -153,24 +117,17 @@ impl InjectionConfig {
     fn zluda_trace() -> Result<Self, Box<dyn Error>> {
         let current_exe_dir = Self::current_exe_dir()?;
         let trace_dir = Self::trace_dir()?;
-        let dll_paths = zluda_windows::LIBRARIES
+        let libraries = zluda_windows::LIBRARIES32
             .iter()
-            .map(|lib| {
-                let mut path = trace_dir.clone();
-                path.push(lib.ascii_name);
-                LibraryWithPath { library: lib, path }
-            })
-            .collect::<Vec<_>>();
-        let mut env_vars = zluda_windows::LIBRARIES
-            .iter()
+            .chain(zluda_windows::LIBRARIES64.iter());
+        let dll_paths32 = Self::get_paths(&trace_dir, &zluda_windows::LIBRARIES32[..]);
+        let dll_paths64 = Self::get_paths(&trace_dir, &zluda_windows::LIBRARIES64[..]);
+        let mut env_vars = libraries
             .filter_map(|lib| {
-                if lib.is_alias {
-                    None
-                } else {
-                    let mut path = current_exe_dir.clone();
-                    path.push(lib.ascii_name);
-                    Some((lib.trace_env_var, path))
-                }
+                let redirect = lib.redirect.as_ref()?;
+                let mut path = current_exe_dir.clone();
+                path.push(redirect.zluda_dll_name);
+                Some((redirect.trace_env_var, path))
             })
             .collect::<Vec<_>>();
         let mut temp_dir = std::env::temp_dir();
@@ -178,57 +135,13 @@ impl InjectionConfig {
         env_vars.push(("ZLUDA_LOG_DIR", temp_dir));
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(current_exe_dir),
-            dll_paths,
+            dll_paths32,
+            dll_paths64,
             env_vars,
         })
     }
 
     fn nvidia_trace() -> Result<Self, Box<dyn Error>> {
-        fn check_single_library(
-            trace_dir: &PathBuf,
-            cuda_install_lib_path: &Option<PathBuf>,
-            lib: &'static LibraryInfo,
-        ) -> Result<Option<(LibraryWithPath, &'static str, PathBuf)>, Box<dyn Error>> {
-            let path = if lib.in_system32 {
-                Some((
-                    PathBuf::from_iter(["C:\\Windows", "System32", lib.ascii_name]),
-                    true,
-                ))
-            } else {
-                cuda_install_lib_path.clone().map(|mut path| {
-                    path.push(lib.ascii_name);
-                    (path, false)
-                })
-            };
-            let dll_path = match path {
-                Some((path, mandatory)) => {
-                    if !path.exists() {
-                        if mandatory {
-                            return Err(format!(
-                                "DLL {} not found at path {:?}",
-                                lib.ascii_name, path
-                            )
-                            .into());
-                        } else {
-                            return Ok(None);
-                        }
-                    } else {
-                        path
-                    }
-                }
-                _ => return Ok(None),
-            };
-            let mut trace_path = trace_dir.clone();
-            trace_path.push(lib.ascii_name);
-            Ok(Some((
-                LibraryWithPath {
-                    library: lib,
-                    path: trace_path,
-                },
-                lib.trace_env_var,
-                dll_path,
-            )))
-        }
         let trace_dir = Self::trace_dir()?;
         let cuda_install_lib_path =
             std::env::var("CUDA_PATH")
@@ -239,32 +152,26 @@ impl InjectionConfig {
                     path.push("x64");
                     path
                 });
-        let (dll_paths, mut env_vars) = zluda_windows::LIBRARIES.iter().try_fold(
-            (Vec::new(), Vec::new()),
-            |(mut dll_paths, mut env_vars), lib| {
-                Ok::<_, Box<dyn Error>>(
-                    match check_single_library(&trace_dir, &cuda_install_lib_path, lib)? {
-                        Some((dll_path, env_var, trace_path)) => (
-                            {
-                                dll_paths.push(dll_path);
-                                dll_paths
-                            },
-                            {
-                                env_vars.push((env_var, trace_path));
-                                env_vars
-                            },
-                        ),
-                        None => (dll_paths, env_vars),
-                    },
-                )
-            },
+        let (dll_paths32, env_vars32) = Self::collect_nvidia_libraries(
+            &zluda_windows::LIBRARIES32[..],
+            &trace_dir,
+            &cuda_install_lib_path,
+        )?;
+        let (dll_paths64, env_vars64) = Self::collect_nvidia_libraries(
+            &zluda_windows::LIBRARIES64[..],
+            &trace_dir,
+            &cuda_install_lib_path,
         )?;
         let mut temp_dir = std::env::temp_dir();
         temp_dir.push("zluda");
+        let mut env_vars = Vec::new();
+        env_vars.extend(env_vars32);
+        env_vars.extend(env_vars64);
         env_vars.push(("ZLUDA_LOG_DIR", temp_dir));
         Ok(Self {
             redirect_dll_path: Self::redirect_dll_path(Self::current_exe_dir()?),
-            dll_paths,
+            dll_paths32,
+            dll_paths64,
             env_vars,
         })
     }
@@ -282,35 +189,48 @@ impl InjectionConfig {
         Ok(trace_dir)
     }
 
-    fn redirect_dll_path(mut current_exe_dir: PathBuf) -> PathBuf {
-        current_exe_dir.push("zluda_redirect.dll");
-        current_exe_dir
+    fn redirect_dll_path(mut current_exe_dir: PathBuf) -> String {
+        current_exe_dir.push("zluda_redirect.dll\0");
+        current_exe_dir.to_string_lossy().into_owned()
+    }
+
+    fn get_paths(
+        base_dir: &PathBuf,
+        libraries: &'static [LibraryInfo],
+    ) -> Vec<Option<LibraryWithPath>> {
+        libraries
+            .iter()
+            .map(|lib| {
+                let zluda_name = lib.redirect.as_ref()?.zluda_dll_name;
+                let mut path = base_dir.clone();
+                path.push(zluda_name);
+                Some(LibraryWithPath { library: lib, path })
+            })
+            .collect()
     }
 
     fn copy_payloads_to_process(
         self,
         h_process: *mut std::ffi::c_void,
     ) -> Result<(), Box<dyn Error>> {
-        for LibraryWithPath { library, path } in self.dll_paths {
-            let path = path.to_str().ok_or_else(|| {
-                let err: Box<dyn Error> = format!(
-                    "Failed to convert path {:?} to UTF-8 string",
-                    path.as_os_str()
-                )
-                .into();
-                err
-            })?;
-            let mut path = path.as_bytes().to_vec();
-            path.push(0);
-            os_call! {
-                detours_sys::DetourCopyPayloadToProcess(
-                    h_process,
-                    std::ptr::from_ref(&library.guid).cast(),
-                    path.as_mut_ptr().cast(),
-                    path.len() as u32
-                )
-            };
-        }
+        let mut path_block = zluda_windows::detours::pack_paths(
+            self.dll_paths32
+                .iter()
+                .map(|library| Some(library.as_ref()?.path.as_os_str())),
+            self.dll_paths64
+                .iter()
+                .map(|library| Some(library.as_ref()?.path.as_os_str())),
+            &self.redirect_dll_path,
+        );
+        let path_block = bytemuck::cast_slice_mut::<_, u8>(&mut path_block[..]);
+        os_call! {
+            detours_sys::DetourCopyPayloadToProcess(
+                h_process,
+                &mem::transmute(zluda_windows::detours::GUID),
+                path_block.as_mut_ptr().cast(),
+                path_block.len() as u32
+            )
+        };
         Ok(())
     }
 
@@ -335,5 +255,86 @@ impl InjectionConfig {
         result.push_char('\0');
         result.push_char('\0');
         Ok(result.into_vec())
+    }
+
+    fn collect_nvidia_libraries(
+        libraries: &'static [LibraryInfo],
+        trace_dir: &PathBuf,
+        cuda_install_lib_path: &Option<PathBuf>,
+    ) -> Result<
+        (Vec<Option<LibraryWithPath>>, Vec<(&'static str, PathBuf)>),
+        Box<dyn Error + 'static>,
+    > {
+        fn check_single_library(
+            trace_dir: &PathBuf,
+            cuda_install_lib_path: &Option<PathBuf>,
+            lib: &'static LibraryInfo,
+        ) -> Result<Option<(LibraryWithPath, &'static str, PathBuf)>, Box<dyn Error>> {
+            let Some(redirect) = lib.redirect.as_ref() else {
+                return Ok(None);
+            };
+            let path = if lib.in_system32 {
+                Some((
+                    PathBuf::from_iter(["C:\\Windows", "System32", redirect.zluda_dll_name]),
+                    true,
+                ))
+            } else {
+                cuda_install_lib_path.clone().map(|mut path| {
+                    path.push(redirect.zluda_dll_name);
+                    (path, false)
+                })
+            };
+            let dll_path = match path {
+                Some((path, mandatory)) => {
+                    if !path.exists() {
+                        if mandatory {
+                            return Err(format!(
+                                "DLL {} not found at path {:?}",
+                                redirect.zluda_dll_name, path
+                            )
+                            .into());
+                        } else {
+                            return Ok(None);
+                        }
+                    } else {
+                        path
+                    }
+                }
+                _ => return Ok(None),
+            };
+            let mut trace_path = trace_dir.clone();
+            trace_path.push(redirect.zluda_dll_name);
+            Ok(Some((
+                LibraryWithPath {
+                    library: lib,
+                    path: trace_path,
+                },
+                redirect.trace_env_var,
+                dll_path,
+            )))
+        }
+        libraries.iter().try_fold(
+            (Vec::new(), Vec::new()),
+            |(mut dll_paths, mut env_vars), lib| {
+                Ok::<_, Box<dyn Error>>(
+                    match check_single_library(&trace_dir, &cuda_install_lib_path, lib)? {
+                        Some((dll_path, env_var, trace_path)) => (
+                            {
+                                dll_paths.push(Some(dll_path));
+                                dll_paths
+                            },
+                            {
+                                env_vars.push((env_var, trace_path));
+                                env_vars
+                            },
+                        ),
+                        None => {
+                            dll_paths.push(None);
+                            (dll_paths, env_vars)
+                        }
+                    },
+                )
+            },
+        )
     }
 }

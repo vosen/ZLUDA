@@ -30,4 +30,3 @@ embed-resource = "3.0"
 
 [package.metadata.zluda]
 windows_only = true
-32bit = true

@@ -18,8 +18,8 @@ fn libraries() -> impl Parser<Vec<&'static LibraryInfo>> {
     zluda_windows::LIBRARIES64.iter().fold(
         Parser::boxed(pure(Vec::with_capacity(zluda_windows::LIBRARIES64.len()))),
         |parser, library| {
-            let arg = bpaf::long(library.display)
-                .help(&*format!("Look for {}", library.display))
+            let arg = bpaf::long(library.short_name)
+                .help(&*format!("Look for {}", library.short_name))
                 .switch();
             construct!(parser, arg)
                 .map(move |(mut acc, cur)| {
@@ -46,7 +46,7 @@ pub fn main() {
         remainder.shuffle(&mut rand::rng());
     }
     for lib in lib_set {
-        print_result(lib.display, unsafe { try_load_library(lib) });
+        print_result(lib.short_name, unsafe { try_load_library(lib) });
     }
 }
 
@@ -70,7 +70,7 @@ fn print_result(short_name: &str, lib: Result<Option<OsString>, Error>) {
 }
 
 unsafe fn try_load_library(lib: &LibraryInfo) -> Result<Option<OsString>, Error> {
-    let (dllname, checker) = match lib.display {
+    let (dllname, checker) = match lib.short_name {
         "nvcuda" => (
             "nvcuda.dll",
             check_cuda as unsafe fn(libloading::Library) -> Result<Option<OsString>, Error>,
@@ -84,7 +84,7 @@ unsafe fn try_load_library(lib: &LibraryInfo) -> Result<Option<OsString>, Error>
         "cufft" => ("cufft64_13.dll", check_cufft as _),
         _ => {
             return Err(Error::Initialization(
-                format!("Library check not implemented for {}", lib.display),
+                format!("Library check not implemented for {}", lib.short_name),
                 0,
             ))
         }

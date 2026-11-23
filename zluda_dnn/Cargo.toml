@@ -17,4 +17,4 @@ static_assertions = "1.1.0"
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
-libloading = "0.8"
+libloading = "0.9"

@@ -56,6 +56,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         zluda_inject::args::Arguments {
             paths: config,
             exe: executable,
+            args: Vec::new(),
         },
         true,
     )

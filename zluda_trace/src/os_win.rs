@@ -1,50 +1,10 @@
 use cuda_types::cuda::CUuuid;
-use std::borrow::Cow;
 use std::os::windows::io::AsRawHandle;
-use std::ptr::NonNull;
-use std::{
-    ffi::{c_void, CStr},
-    mem, ptr,
-    sync::LazyLock,
-};
+use std::{ffi::c_void, mem, ptr};
 use windows::core::PCSTR;
 use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
 
-#[link(name = "kernel32")]
-unsafe extern "system" {
-    fn GetProcAddress(hModule: *mut c_void, lpProcName: *const i8) -> *mut c_void;
-}
-
 pub(crate) const LIBCUDA_DEFAULT_PATH: &'static str = "C:\\Windows\\System32\\nvcuda.dll";
-const GET_PROC_ADDRESS_NO_REDIRECT: &'static [u8] = b"ZludaGetProcAddress_NoRedirect\0";
-
-pub fn dlopen_local_noredirect<'a>(
-    path: impl Into<Cow<'a, str>>,
-) -> Result<NonNull<c_void>, libloading::Error> {
-    let lib: libloading::os::windows::Library =
-        zluda_trace_common::dlopen_local_noredirect(path)?.into();
-    NonNull::new(lib.into_raw() as *mut _).ok_or(libloading::Error::DlOpenUnknown)
-}
-
-pub unsafe fn get_proc_address(handle: *mut c_void, func: &CStr) -> *mut c_void {
-    use libloading::os::windows;
-    static ZLUDA_REDIRECT: LazyLock<
-        Option<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>,
-    > = LazyLock::new(|| {
-        let lib = match windows::Library::open_already_loaded("zluda_redirect") {
-            Ok(lib) => lib,
-            Err(_) => return Some(GetProcAddress),
-        };
-        unsafe {
-            lib.get::<unsafe extern "system" fn(*mut c_void, *const i8) -> *mut c_void>(
-                GET_PROC_ADDRESS_NO_REDIRECT,
-            )
-        }
-        .ok()
-        .map(|symbol| *symbol)
-    });
-    unwrap_or::unwrap_some_or!(&*ZLUDA_REDIRECT, return ptr::null_mut())(handle, func.as_ptr())
-}
 
 #[macro_export]
 macro_rules! os_log {

@@ -27,6 +27,7 @@ bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 detours-sys = { path = "../detours-sys" }
 rustc-hash = "2.0.0"
 widestring = "1.2.1"
+bytemuck = "1.25.2"
 
 [dev-dependencies]
 # all of those are used in integration tests
@@ -36,4 +37,3 @@ zluda_ml = { path = "../zluda_ml" }
 
 [package.metadata.zluda]
 windows_only = true
-32bit = true

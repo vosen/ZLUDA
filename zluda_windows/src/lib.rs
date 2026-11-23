@@ -40,6 +40,8 @@ use windows::{
     },
 };
 
+pub mod detours;
+
 pub static LIBRARIES32: [LibraryInfo; 2] = [NVCUDA32, NVAPI32];
 
 pub static LIBRARIES64: [LibraryInfo; 10] = [
@@ -47,108 +49,168 @@ pub static LIBRARIES64: [LibraryInfo; 10] = [
 ];
 
 pub const NVCUDA: LibraryInfo = LibraryInfo {
+    short_name: "nvcuda",
     name: u16str!("nvcuda.dll"),
-    zluda_name: Some(u16str!("nvcuda.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_CUDA_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "nvcuda.dll",
+        zluda_dll_name_utf16: u16str!("nvcuda.dll"),
+        trace_env_var: "ZLUDA_CUDA_LIB",
+    }),
     in_system32: true,
 };
 
 pub const NVCUDA32: LibraryInfo = LibraryInfo {
+    short_name: "nvcuda",
     name: u16str!("nvcuda.dll"),
-    zluda_name: Some(u16str!("nvcuda32.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_CUDA32_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "nvcuda32.dll",
+        zluda_dll_name_utf16: u16str!("nvcuda32.dll"),
+        trace_env_var: "ZLUDA_CUDA32_LIB",
+    }),
     in_system32: true,
 };
 
 pub const NVML: LibraryInfo = LibraryInfo {
+    short_name: "nvml",
     name: u16str!("nvml.dll"),
-    zluda_name: Some(u16str!("nvml.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_ML_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "nvml.dll",
+        zluda_dll_name_utf16: u16str!("nvml.dll"),
+        trace_env_var: "ZLUDA_ML_LIB",
+    }),
     in_system32: true,
 };
 
 pub const DNN8: LibraryInfo = LibraryInfo {
+    short_name: "cudnn8",
     name: u16str!("cudnn64_8.dll"),
-    zluda_name: Some(u16str!("cudnn64_8.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_DNN8_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cudnn64_8.dll",
+        zluda_dll_name_utf16: u16str!("cudnn64_8.dll"),
+        trace_env_var: "ZLUDA_DNN8_LIB",
+    }),
     in_system32: false,
 };
 
 pub const DNN9: LibraryInfo = LibraryInfo {
+    short_name: "cudnn9",
     name: u16str!("cudnn64_9.dll"),
-    zluda_name: Some(u16str!("cudnn64_9.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_DNN9_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cudnn64_9.dll",
+        zluda_dll_name_utf16: u16str!("cudnn64_9.dll"),
+        trace_env_var: "ZLUDA_DNN9_LIB",
+    }),
     in_system32: false,
 };
 
 pub const BLAS: LibraryInfo = LibraryInfo {
+    short_name: "cublas",
     name: u16str!("cublas64_"),
-    zluda_name: Some(u16str!("cublas.dll")),
     name_kind: LibraryNameKind::Versioned,
-    trace_env_var: Some("ZLUDA_BLAS_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cublas.dll",
+        zluda_dll_name_utf16: u16str!("cublas.dll"),
+        trace_env_var: "ZLUDA_BLAS_LIB",
+    }),
     in_system32: false,
 };
 
 pub const BLASLT: LibraryInfo = LibraryInfo {
+    short_name: "cublaslt",
     name: u16str!("cublaslt64_"),
-    zluda_name: Some(u16str!("cublaslt.dll")),
     name_kind: LibraryNameKind::Versioned,
-    trace_env_var: Some("ZLUDA_BLASLT_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cublaslt.dll",
+        zluda_dll_name_utf16: u16str!("cublaslt.dll"),
+        trace_env_var: "ZLUDA_BLASLT_LIB",
+    }),
     in_system32: false,
 };
 
 pub const SPARSE: LibraryInfo = LibraryInfo {
+    short_name: "cusparse",
     name: u16str!("cusparse64_"),
-    zluda_name: Some(u16str!("cusparse.dll")),
     name_kind: LibraryNameKind::Versioned,
-    trace_env_var: Some("ZLUDA_SPARSE_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cusparse.dll",
+        zluda_dll_name_utf16: u16str!("cusparse.dll"),
+        trace_env_var: "ZLUDA_SPARSE_LIB",
+    }),
     in_system32: false,
 };
 
 pub const FFT: LibraryInfo = LibraryInfo {
+    short_name: "cufft",
     name: u16str!("cufft64_"),
-    zluda_name: Some(u16str!("cufft.dll")),
     name_kind: LibraryNameKind::Versioned,
-    trace_env_var: Some("ZLUDA_FFT_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "cufft.dll",
+        zluda_dll_name_utf16: u16str!("cufft.dll"),
+        trace_env_var: "ZLUDA_FFT_LIB",
+    }),
     in_system32: false,
 };
 
 pub const NVAPI: LibraryInfo = LibraryInfo {
+    short_name: "nvapi",
     name: u16str!("nvapi64.dll"),
-    zluda_name: Some(u16str!("nvapi64.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_NVAPI_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "nvapi64.dll",
+        zluda_dll_name_utf16: u16str!("nvapi64.dll"),
+        trace_env_var: "ZLUDA_NVAPI_LIB",
+    }),
     in_system32: true,
 };
 
 pub const NVAPI32: LibraryInfo = LibraryInfo {
+    short_name: "nvapi32",
     name: u16str!("nvapi.dll"),
-    zluda_name: Some(u16str!("nvapi.dll")),
     name_kind: LibraryNameKind::Exact,
-    trace_env_var: Some("ZLUDA_NVAPI32_LIB"),
+    redirect: Some(LibraryRedirectInfo {
+        zluda_dll_name: "nvapi.dll",
+        zluda_dll_name_utf16: u16str!("nvapi.dll"),
+        trace_env_var: "ZLUDA_NVAPI32_LIB",
+    }),
     in_system32: true,
 };
 
 pub const NVRTC: LibraryInfo = LibraryInfo {
+    short_name: "nvrtc",
     name: u16str!("nvrtc64_"),
-    zluda_name: None,
-    trace_env_var: None,
     name_kind: LibraryNameKind::Versioned,
+    redirect: None,
     in_system32: false,
 };
 
 #[derive(Debug)]
 pub struct LibraryInfo {
+    pub short_name: &'static str,
     pub name: &'static U16Str,
-    pub zluda_name: Option<&'static U16Str>,
     name_kind: LibraryNameKind,
-    pub trace_env_var: Option<&'static str>,
+    pub redirect: Option<LibraryRedirectInfo>,
     pub in_system32: bool,
+}
+
+#[derive(Debug)]
+pub struct LibraryRedirectInfo {
+    pub zluda_dll_name: &'static str,
+    pub zluda_dll_name_utf16: &'static U16Str,
+    pub trace_env_var: &'static str,
+}
+
+impl LibraryInfo {
+    pub fn display_name(&self) -> String {
+        match self.name_kind {
+            LibraryNameKind::Exact => self.name.to_string().unwrap(),
+            LibraryNameKind::Versioned => format!("{}*.dll", self.name.display()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,22 +219,14 @@ enum LibraryNameKind {
     Versioned,
 }
 
-pub struct DllLookup {
-    is_64: bool,
+pub struct DllLookup<const LIBRARIES_COUNT: usize> {
+    libraries: &'static [LibraryInfo; LIBRARIES_COUNT],
     max_dll_len: usize,
     trie: TrieHard<'static, usize>,
 }
 
-impl DllLookup {
-    pub fn new32() -> Self {
-        Self::new(&LIBRARIES32, false)
-    }
-
-    pub fn new64() -> Self {
-        Self::new(&LIBRARIES64, true)
-    }
-
-    fn new(libraries: &[LibraryInfo], is_64: bool) -> Self {
+impl<const N: usize> DllLookup<N> {
+    pub fn new(libraries: &'static [LibraryInfo; N]) -> Self {
         let library_names = libraries
             .iter()
             .enumerate()
@@ -185,7 +239,7 @@ impl DllLookup {
             .max()
             .unwrap_or(0);
         Self {
-            is_64,
+            libraries,
             max_dll_len,
             trie,
         }
@@ -202,14 +256,9 @@ impl DllLookup {
             file_name,
             library_index,
         } = self.find(dll_name)?;
-        let libraries = if self.is_64 {
-            &LIBRARIES64[..]
-        } else {
-            &LIBRARIES32[..]
-        };
-        match libraries[library_index].name_kind {
+        match self.libraries[library_index].name_kind {
             LibraryNameKind::Exact => {
-                if file_name.len() == libraries[library_index].name.as_slice().len() {
+                if file_name.len() == self.libraries[library_index].name.as_slice().len() {
                     Some(library_index)
                 } else {
                     None
@@ -217,7 +266,7 @@ impl DllLookup {
             }
             LibraryNameKind::Versioned => {
                 if parser::is_version_dll(
-                    &file_name[libraries[library_index].name.as_slice().len()..],
+                    &file_name[self.libraries[library_index].name.as_slice().len()..],
                 ) {
                     Some(library_index)
                 } else {
@@ -571,7 +620,7 @@ pub fn get_module_path_utf16(hm: HMODULE) -> OsString {
     OsString::from_wide(&buffer)
 }
 
-pub fn kill_child_on_process_exit(child: *mut c_void) -> windows::core::Result<()> {
+pub fn kill_child_on_process_exit(child: HANDLE) -> windows::core::Result<()> {
     let job_handle = unsafe { windows::Win32::System::JobObjects::CreateJobObjectA(None, None) }?;
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -583,7 +632,7 @@ pub fn kill_child_on_process_exit(child: *mut c_void) -> windows::core::Result<(
             size_of_val(&info) as u32,
         )
     }?;
-    unsafe { AssignProcessToJobObject(job_handle, HANDLE(child)) }?;
+    unsafe { AssignProcessToJobObject(job_handle, child) }?;
     Ok(())
 }
 
@@ -691,62 +740,62 @@ mod tests {
 
     #[test]
     fn can_look_up_from_full_path() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!(r#"C:\Windows\System32\nvml.dll"#);
         assert_eq!(
             u16str!("nvml.dll"),
             LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
-                .zluda_name
+                .zluda_name_utf16
                 .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_from_just_file_name() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!(r#"cusparse64_11.dll"#);
         assert_eq!(
             u16str!("cusparse.dll"),
             LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
-                .zluda_name
+                .zluda_name_utf16
                 .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_utf16() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!("\\cublaslt64_13.dll");
         assert_eq!(
             u16str!("cublaslt.dll"),
             LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
-                .zluda_name
+                .zluda_name_utf16
                 .unwrap()
         );
     }
 
     #[test]
     fn can_look_up_utf16_case_insensitive() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!("\\CUBLASLT64_13.dll");
         assert_eq!(
             u16str!("cublaslt.dll"),
             LIBRARIES64[lookup.lookup(path.as_slice()).unwrap()]
-                .zluda_name
+                .zluda_name_utf16
                 .unwrap()
         );
     }
 
     #[test]
     fn fails_on_mismatch() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!("cusparse64_99.dllb");
         assert!(lookup.lookup(path.as_slice()).is_none());
     }
 
     #[test]
     fn does_not_explode_on_utf16() {
-        let lookup = DllLookup::new64();
+        let lookup = DllLookup::new(&LIBRARIES64);
         let path = u16str!("🇧🇴");
         assert_eq!(path.chars().count(), 2);
         assert_eq!(path.as_slice().len(), 4);

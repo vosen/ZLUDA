@@ -14,4 +14,3 @@ bpaf = { version = "0.9.19", features = ["derive", "bright-color"] }
 
 [package.metadata.zluda]
 windows_only = true
-32bit = true

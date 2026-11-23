@@ -33,6 +33,10 @@ unwrap_or = "1.0.1"
 widestring = "1.2.1"
 winnow = { version =  "0.6.18" }
 rustc-hash = "2.0.0"
+ntapi = { version = "0.4.3", features = ["func-types"] }
+# required for some types used by ntapi
+winapi = "0.3.9"
+scopeguard = "1.2.0"
 
 [package.metadata.zluda]
 windows_only = true
