@@ -1,5 +1,5 @@
 use bpaf::{choice, construct, pure, Bpaf, Parser};
-use std::{ffi::OsString, os::windows::ffi::OsStrExt, path::PathBuf};
+use std::{ffi::OsString, iter, os::windows::ffi::OsStrExt, path::PathBuf};
 
 /// Launch an application and redirect its CUDA calls
 #[derive(Debug, Clone, Bpaf)]
@@ -19,14 +19,17 @@ pub struct Arguments {
 
 impl Arguments {
     pub fn command_line_zero_terminated(&self) -> Vec<u16> {
-        let mut cmdline = Vec::with_capacity(1 + self.exe.len());
-        cmdline.extend(self.exe.encode_wide());
-        for arg in self.args.iter() {
-            cmdline.push(' ' as u16);
-            cmdline.extend(arg.encode_wide());
-        }
-        cmdline.push(0);
-        cmdline
+        let mut result = iter::once(self.exe.encode_wide())
+            .chain(self.args.iter().map(|s| s.encode_wide()))
+            .fold(Vec::new(), |mut acc, cur| {
+                if !acc.is_empty() {
+                    acc.push(b' ' as u16);
+                }
+                acc.extend(cur);
+                acc
+            });
+        result.push(0);
+        result
     }
 }
 
@@ -35,7 +38,10 @@ pub enum ConfigSet {
     Zluda,
     ZludaTrace,
     NvidiaTrace,
-    Custom(Vec<LibraryWithPath>),
+    Custom {
+        dll_paths32: Vec<Option<LibraryWithPath>>,
+        dll_paths64: Vec<Option<LibraryWithPath>>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -71,37 +77,49 @@ pub fn config_set() -> impl Parser<ConfigSet> {
         zluda,
         zluda_trace,
         nvidia_trace,
-        custom_args().map(ConfigSet::Custom).boxed(),
+        custom_args()
+            .map(|(dll_paths32, dll_paths64)| ConfigSet::Custom {
+                dll_paths32,
+                dll_paths64,
+            })
+            .boxed(),
     ])
     .fallback(ConfigSet::Zluda)
 }
 
-pub fn custom_args() -> impl Parser<Vec<LibraryWithPath>> {
-    zluda_windows::LIBRARIES.iter().fold(
-        pure(Vec::with_capacity(zluda_windows::LIBRARIES.len())).boxed(),
-        |parser, library| {
-            let dlls = library.ascii_name;
-            let arg = bpaf::long(library.short_name)
-                .help(&*format!("Path to file {dlls}"))
-                .argument::<PathBuf>("PATH")
-                .optional()
-                .hide()
-                .map(|path| path.map(|path| LibraryWithPath { library, path }));
-            construct!(parser, arg)
-                .map(|(mut acc, cur)| {
-                    if let Some(cur) = cur {
+pub fn custom_args() -> impl Parser<(Vec<Option<LibraryWithPath>>, Vec<Option<LibraryWithPath>>)> {
+    fn libraries_to_parser(
+        libraries: &'static [zluda_windows::LibraryInfo],
+    ) -> impl Parser<Vec<Option<LibraryWithPath>>> {
+        libraries.iter().fold(
+            pure(Vec::with_capacity(libraries.len())).boxed(),
+            |parser, library| {
+                let short_name = library.short_name;
+                let display_name = library.display_name();
+                let arg = bpaf::long(short_name)
+                    .help(&*format!("Path to file {display_name}"))
+                    .argument::<PathBuf>("PATH")
+                    .optional()
+                    .hide()
+                    .map(|path| path.map(|path| LibraryWithPath { library, path }));
+                construct!(parser, arg)
+                    .map(|(mut acc, cur)| {
                         acc.push(cur);
-                    }
-                    acc
-                })
-                .boxed()
-        },
-    )
+                        acc
+                    })
+                    .boxed()
+            },
+        )
+    }
+    let parser32 = libraries_to_parser(&zluda_windows::LIBRARIES32);
+    let parser64 = libraries_to_parser(&zluda_windows::LIBRARIES64);
+    construct!(parser32, parser64)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bpaf::ParseFailure;
 
     #[test]
     fn fail_on_duplicate_config_sets() {
@@ -128,7 +146,7 @@ mod tests {
         ];
         let parser = config_set().to_options();
         let result = parser.run_inner(&args[..]).unwrap();
-        assert!(matches!(result, ConfigSet::Custom(_)));
+        assert!(matches!(result, ConfigSet::Custom { .. }));
     }
 
     #[test]
@@ -140,5 +158,23 @@ mod tests {
         let parser = config_set().to_options();
         let err = parser.run_inner(&args[..]).unwrap_err();
         assert!(format!("{:?}", err).contains("cufoobar"));
+    }
+
+    #[test]
+    fn empty_args() {
+        let args: [&str; 0] = [];
+        let parser = arguments().to_options();
+        let empty_parse = parser.run_inner(&args[..]);
+        assert!(matches!(empty_parse, Err(ParseFailure::Stderr(_))));
+    }
+
+    #[test]
+    fn parse_positional_args() {
+        let args = ["--", "foobar.exe", "--param"];
+        let parser = arguments().to_options();
+        let parsed_args = parser.run_inner(&args[..]).unwrap();
+        assert!(matches!(parsed_args.paths, ConfigSet::Zluda));
+        assert_eq!(parsed_args.exe, OsString::from("foobar.exe"));
+        assert_eq!(parsed_args.args, [OsString::from("--param")]);
     }
 }

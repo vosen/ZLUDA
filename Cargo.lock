@@ -301,9 +301,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.25.0"
+version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
+checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -477,7 +477,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading",
+ "libloading 0.8.6",
 ]
 
 [[package]]
@@ -501,7 +501,7 @@ version = "0.0.0"
 dependencies = [
  "bpaf",
  "kernel_metadata",
- "libloading",
+ "libloading 0.9.1",
  "llvm_zluda",
  "ptx",
  "ptx_parser",
@@ -767,7 +767,7 @@ version = "0.0.0"
 dependencies = [
  "bpaf",
  "cuda_types",
- "libloading",
+ "libloading 0.9.1",
  "owo-colors",
  "rand",
  "windows",
@@ -2733,6 +2733,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1832accd5a4ca2795ace4d05d15c4039be15b62d3b950eff99746a990e3cc10"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2988,6 +2998,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9737e026353e5cd0736f98eddae28665118eb6f6600902a7f50db585621fecb6"
 
 [[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3115,7 +3134,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "rustc-hash 2.1.2",
  "unwrap_or",
@@ -3133,7 +3152,7 @@ dependencies = [
  "dynasm",
  "dynasmrt",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "rustc-hash 2.1.2",
  "unwrap_or",
@@ -3254,6 +3273,35 @@ checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "phf_codegen"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49aa7f9d80421bca176ca8dbfebe668cc7a2684708594ec9f3c0db0805d5d6e1"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
+dependencies = [
+ "fastrand",
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
+dependencies = [
+ "siphasher",
 ]
 
 [[package]]
@@ -3449,7 +3497,7 @@ dependencies = [
  "hip_runtime-sys",
  "int-enum",
  "kernel_metadata",
- "libloading",
+ "libloading 0.9.1",
  "llvm_zluda",
  "paste",
  "petgraph",
@@ -4017,6 +4065,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "siphasher"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4431,9 +4485,12 @@ dependencies = [
 
 [[package]]
 name = "trie-hard"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9bd82ef455bc8dc4951d95d3857abb8742a207032305df96a8dc6ed6649ac79"
+checksum = "d370e60398049ec1af98c64da635dc8bc43e1b5501e53f97079cd261864b7487"
+dependencies = [
+ "phf_codegen",
+]
 
 [[package]]
 name = "twox-hash"
@@ -4932,6 +4989,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "winnow"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "winreg"
 version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5099,7 +5165,7 @@ dependencies = [
  "kernel_metadata",
  "lazy_static",
  "libc",
- "libloading",
+ "libloading 0.9.1",
  "llvm_zluda",
  "lz4-sys",
  "num_enum",
@@ -5163,7 +5229,7 @@ dependencies = [
  "bindgen 0.70.1",
  "bpaf",
  "cuda_types",
- "libloading",
+ "libloading 0.9.1",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -5179,7 +5245,7 @@ dependencies = [
  "cuda_types",
  "embed-resource",
  "hip_runtime-sys",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "rocblas-sys",
  "zluda_blaslt",
@@ -5196,7 +5262,7 @@ dependencies = [
  "embed-resource",
  "hip_runtime-sys",
  "hipblaslt-sys",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "zluda_common",
  "zluda_windows",
@@ -5222,7 +5288,7 @@ dependencies = [
  "hip_runtime-sys",
  "hipblaslt-sys",
  "hipfft-sys",
- "libloading",
+ "libloading 0.9.1",
  "miopen-sys",
  "rocblas-sys",
  "rocsparse-sys",
@@ -5238,7 +5304,7 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "hip_runtime-sys",
- "libloading",
+ "libloading 0.9.1",
  "miopen-sys",
  "rustc-hash 2.1.2",
  "static_assertions",
@@ -5266,7 +5332,7 @@ dependencies = [
  "cuda_types",
  "embed-resource",
  "half",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "rand",
  "rand_chacha",
@@ -5285,7 +5351,7 @@ dependencies = [
  "embed-resource",
  "hip_runtime-sys",
  "hipfft-sys",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "rustc-hash 2.1.2",
  "unwrap_or",
@@ -5299,6 +5365,7 @@ version = "0.0.0"
 dependencies = [
  "argh",
  "bpaf",
+ "bytemuck",
  "detours-sys",
  "rustc-hash 2.1.2",
  "tempfile",
@@ -5309,6 +5376,24 @@ dependencies = [
  "zluda_redirect",
  "zluda_trace",
  "zluda_windows",
+]
+
+[[package]]
+name = "zluda_inject_console"
+version = "0.0.0"
+dependencies = [
+ "bpaf",
+ "zluda_inject",
+]
+
+[[package]]
+name = "zluda_inject_gui"
+version = "0.0.0"
+dependencies = [
+ "bpaf",
+ "embed-resource",
+ "windows",
+ "zluda_inject",
 ]
 
 [[package]]
@@ -5334,7 +5419,7 @@ dependencies = [
  "cuda_types",
  "goblin",
  "indicatif",
- "libloading",
+ "libloading 0.9.1",
  "rayon",
  "unwrap_or",
  "walkdir",
@@ -5345,9 +5430,12 @@ name = "zluda_redirect"
 version = "0.0.0"
 dependencies = [
  "detours-sys",
+ "ntapi",
  "rustc-hash 2.1.2",
+ "scopeguard",
  "unwrap_or",
  "widestring",
+ "winapi",
  "windows",
  "windows-sys 0.61.2",
  "winnow 0.6.20",
@@ -5377,7 +5465,7 @@ dependencies = [
  "cuda_macros",
  "cuda_types",
  "embed-resource",
- "libloading",
+ "libloading 0.9.1",
  "rocsparse-sys",
  "unwrap_or",
  "zluda_common",
@@ -5398,7 +5486,7 @@ dependencies = [
  "format",
  "goblin",
  "libc",
- "libloading",
+ "libloading 0.9.1",
  "parking_lot",
  "paste",
  "ptx_parser",
@@ -5420,7 +5508,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5435,7 +5523,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5450,7 +5538,7 @@ dependencies = [
  "dark_api",
  "format",
  "libc",
- "libloading",
+ "libloading 0.9.1",
 ]
 
 [[package]]
@@ -5462,7 +5550,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5477,7 +5565,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5492,7 +5580,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5507,7 +5595,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5522,7 +5610,7 @@ dependencies = [
  "cuda_types",
  "dark_api",
  "format",
- "libloading",
+ "libloading 0.9.1",
  "paste",
  "unwrap_or",
  "zluda_trace_common",
@@ -5533,10 +5621,12 @@ name = "zluda_windows"
 version = "0.0.0"
 dependencies = [
  "alloca",
+ "bytemuck",
  "trie-hard",
  "uuid",
  "widestring",
  "windows",
+ "winnow 1.0.5",
 ]
 
 [[package]]

@@ -18,13 +18,13 @@ unwrap_or = "1.0.1"
 
 [target.'cfg(windows)'.dependencies]
 zluda_windows = { path = "../zluda_windows" }
-libloading = "0.8"
+libloading = "0.9"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3.0"
 
 [dev-dependencies]
-libloading = "0.8"
+libloading = "0.9"
 paste = "1.0"
 
 [package.metadata.zluda]

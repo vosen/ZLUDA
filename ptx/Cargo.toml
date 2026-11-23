@@ -32,7 +32,7 @@ cuda_macros = { path = "../cuda_macros" }
 tempfile = "3"
 paste = "1.0"
 pretty_assertions = "1.4.1"
-libloading = "0.8"
+libloading = "0.9"
 
 [features]
 ci_build = []

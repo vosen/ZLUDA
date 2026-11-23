@@ -17,6 +17,6 @@ walkdir = "2"
 indicatif = "0.18.3"
 goblin = { version = "0.9", default-features = false, features = ["elf32", "elf64", "pe64"] }
 unwrap_or = "1.0.1"
-libloading = "0.8"
+libloading = "0.9"
 
 [package.metadata.zluda]

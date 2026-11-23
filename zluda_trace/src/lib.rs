@@ -8,7 +8,6 @@ use regex::Regex;
 use std::cell::{RefCell, RefMut};
 use std::ffi::{c_void, CStr};
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 use std::sync::LazyLock;
 use std::{env, error::Error, fs, path::PathBuf, sync::Mutex};
 use std::{io, mem, ptr, usize};
@@ -30,15 +29,19 @@ impl<T> Default for DynamicFn<T> {
 }
 
 impl<T> DynamicFn<T> {
-    unsafe fn get(&mut self, lib: *mut c_void, name: &[u8]) -> Option<T> {
+    unsafe fn get(&mut self, lib: &libloading::Library, name: &[u8]) -> Option<T> {
         match self.pointer {
             0 => {
-                let addr = os::get_proc_address(lib, CStr::from_bytes_with_nul_unchecked(name));
-                if addr == ptr::null_mut() {
-                    self.pointer = 1;
-                    return None;
-                } else {
-                    self.pointer = addr as _;
+                let addr = lib.get::<usize>(CStr::from_bytes_with_nul_unchecked(name));
+                let addr = addr.map(|x| *x);
+                match addr {
+                    Err(_) | Ok(0) => {
+                        self.pointer = 1;
+                        return None;
+                    }
+                    Ok(symbol) => {
+                        self.pointer = symbol;
+                    }
                 }
             }
             1 => return None,
@@ -49,35 +52,17 @@ impl<T> DynamicFn<T> {
 }
 
 pub(crate) struct CudaDynamicFns {
-    lib_handle: NonNull<::std::ffi::c_void>,
+    lib_handle: libloading::Library,
     fn_table: CudaFnTable,
 }
 
 impl CudaDynamicFns {
     pub(crate) unsafe fn load_library(path: &str) -> Option<Self> {
-        let lib_handle = os::dlopen_local_noredirect(path).ok()?;
+        let lib_handle = zluda_trace_common::dlopen_local_noredirect(path).ok()?;
         Some(CudaDynamicFns {
             lib_handle,
             fn_table: CudaFnTable::default(),
         })
-    }
-}
-
-#[cfg(unix)]
-impl Drop for CudaDynamicFns {
-    fn drop(&mut self) {
-        unsafe {
-            libloading::os::unix::Library::from_raw(self.lib_handle.as_ptr() as _);
-        }
-    }
-}
-
-#[cfg(windows)]
-impl Drop for CudaDynamicFns {
-    fn drop(&mut self) {
-        unsafe {
-            libloading::os::windows::Library::from_raw(self.lib_handle.as_ptr() as _);
-        }
     }
 }
 
@@ -97,7 +82,7 @@ macro_rules! emit_cuda_fn_table {
             $(
                 #[allow(dead_code)]
                 pub(crate) fn $fn_name(&mut self, $($arg_id : $arg_type),*) -> Option<$ret_type> {
-                    let func = unsafe { self.fn_table.$fn_name.get(self.lib_handle.as_ptr(), concat!(stringify!($fn_name), "\0").as_bytes()) };
+                    let func = unsafe { self.fn_table.$fn_name.get(&self.lib_handle, concat!(stringify!($fn_name), "\0").as_bytes()) };
                     func.map(|f| f($($arg_id),*) )
                 }
 
@@ -105,7 +90,7 @@ macro_rules! emit_cuda_fn_table {
                     #[allow(dead_code)]
                     #[allow(non_snake_case)]
                     pub(crate) fn  [<get_ $fn_name>] (&mut self) -> Option<extern $abi fn ( $($arg_type),* ) -> $ret_type> {
-                        let func = unsafe { self.fn_table.$fn_name.get(self.lib_handle.as_ptr(), concat!(stringify!($fn_name), "\0").as_bytes()) };
+                        let func = unsafe { self.fn_table.$fn_name.get(&self.lib_handle, concat!(stringify!($fn_name), "\0").as_bytes()) };
                         func
                     }
                 }
